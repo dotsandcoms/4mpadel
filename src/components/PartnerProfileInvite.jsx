@@ -83,7 +83,7 @@ const PartnerProfileInvite = ({
                 <button
                     type="submit"
                     disabled={sending || !email.trim()}
-                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-[#0F172A] text-white disabled:opacity-50 shrink-0"
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-[#0a0a0a] text-white disabled:opacity-50 shrink-0"
                 >
                     {sending ? 'Sending…' : <><Send size={12} /> Send Invite</>}
                 </button>

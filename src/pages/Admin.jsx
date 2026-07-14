@@ -162,7 +162,7 @@ const Admin = () => {
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="max-w-md w-full bg-[#0F172A]/80 backdrop-blur-xl p-8 rounded-3xl border border-white/10 relative z-10 shadow-2xl shadow-padel-green/10"
+                    className="max-w-md w-full bg-[#0a0a0a]/80 backdrop-blur-xl p-8 rounded-3xl border border-white/10 relative z-10 shadow-2xl shadow-padel-green/10"
                 >
                     <div className="text-center mb-8">
                         <h2 className="text-4xl font-bold text-white mb-2">Admin Access</h2>
@@ -255,7 +255,7 @@ const Admin = () => {
                                         initial={{ opacity: 0, y: 10 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         exit={{ opacity: 0, y: 10 }}
-                                        className="absolute top-full right-0 mt-2 w-72 bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl z-[9999] overflow-hidden"
+                                        className="absolute top-full right-0 mt-2 w-72 bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl z-[9999] overflow-hidden"
                                     >
                                         <div className="p-4 border-b border-white/10 flex items-center justify-between">
                                             <h3 className="font-bold text-sm text-white">Admin Activity</h3>
@@ -326,7 +326,7 @@ const Admin = () => {
                 badgeCounts={{ organisations: orgBadgeCount }}
             />
 
-            <main className={`flex-1 transition-all duration-300 ${isDesktopCollapsed ? 'lg:ml-20' : 'lg:ml-64'} p-4 md:p-8 lg:p-12 overflow-y-auto min-h-screen lg:h-screen bg-gradient-to-br from-black to-[#0F172A]`}>
+            <main className={`flex-1 transition-all duration-300 ${isDesktopCollapsed ? 'lg:ml-20' : 'lg:ml-64'} p-4 md:p-8 lg:p-12 overflow-y-auto min-h-screen lg:h-screen bg-gradient-to-br from-black to-[#0a0a0a]`}>
                 <div className="max-w-7xl mx-auto">
                     {/* Desktop Header Actions */}
                     <div className="hidden lg:flex justify-end mb-8 gap-4 items-center">
@@ -357,7 +357,7 @@ const Admin = () => {
                                             initial={{ opacity: 0, y: 10 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             exit={{ opacity: 0, y: 10 }}
-                                            className="absolute top-full right-0 mt-2 w-80 bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl z-[9999] overflow-hidden"
+                                            className="absolute top-full right-0 mt-2 w-80 bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl z-[9999] overflow-hidden"
                                         >
                                             <div className="p-4 border-b border-white/10 flex items-center justify-between">
                                                 <h3 className="font-bold text-sm text-white">Admin Activity</h3>

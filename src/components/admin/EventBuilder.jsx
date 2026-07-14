@@ -124,7 +124,7 @@ const STEPS = [
 
 const inputClass = "w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none";
 const labelClass = "block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wide";
-const menuClass = "absolute z-30 left-0 right-0 mt-1 bg-[#1E293B] border border-white/10 rounded-lg max-h-52 overflow-y-auto shadow-xl custom-scrollbar";
+const menuClass = "absolute z-30 left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-lg max-h-52 overflow-y-auto shadow-xl custom-scrollbar";
 const menuItemClass = "w-full text-left px-4 py-2.5 text-sm text-white hover:bg-padel-green hover:text-black transition-colors";
 
 const parseCoAdminEmails = (value) =>
@@ -1523,7 +1523,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                     initial={{ opacity: 0, scale: 0.97, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.97, y: 20 }}
-                    className="bg-[#0F172A] border border-white/10 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden"
+                    className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden"
                     onClick={(e) => e.stopPropagation()}
                 >
                     {/* Header */}
@@ -1635,7 +1635,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                     </p>
                                                 )}
                                                 {!organization && orgSearchOpen && (orgSuggestions.length > 0 || searchingOrgs) && (
-                                                    <div className="absolute z-30 left-0 right-0 mt-1 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
+                                                    <div className="absolute z-30 left-0 right-0 mt-1 bg-[#0a0a0a] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
                                                         {searchingOrgs && orgSuggestions.length === 0 ? (
                                                             <p className="px-4 py-3 text-xs text-gray-500">Searching…</p>
                                                         ) : (
@@ -1739,7 +1739,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                     className={inputClass}
                                                 />
                                                 {venueOpen && filteredClubs.length > 0 && (
-                                                    <div className="absolute z-20 left-0 right-0 mt-1 bg-[#1E293B] border border-white/10 rounded-lg max-h-52 overflow-y-auto shadow-xl custom-scrollbar">
+                                                    <div className="absolute z-20 left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-lg max-h-52 overflow-y-auto shadow-xl custom-scrollbar">
                                                         {filteredClubs.map((c) => (
                                                             <button
                                                                 key={c.id}
@@ -1913,12 +1913,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                     {openPanels.entryPayment && (
                                         <div className="space-y-4 p-4 rounded-xl border border-white/10 bg-black/20">
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                <label className="flex items-center justify-between bg-[#1E293B] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
+                                                <label className="flex items-center justify-between bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
                                                     <span className="text-sm font-medium text-gray-200">Allow payments</span>
                                                     <input type="checkbox" name="allow_payments" checked={!!form.allow_payments} onChange={handleInput} className="accent-padel-green w-5 h-5" />
                                                 </label>
                                                 {!organization && (
-                                                    <label className="flex items-center justify-between bg-[#1E293B] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
+                                                    <label className="flex items-center justify-between bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
                                                         <span className="text-sm font-medium text-gray-200">Payment / finance manager</span>
                                                         <input type="checkbox" name="finance_managed" checked={!!form.finance_managed} onChange={handleInput} className="accent-padel-green w-5 h-5" />
                                                     </label>
@@ -2016,7 +2016,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                 >
                                                     Apply scoring to all divisions
                                                 </button>
-                                                <label className="flex items-center justify-between bg-[#1E293B] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
+                                                <label className="flex items-center justify-between bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
                                                     <span className="text-sm font-medium text-gray-200">League format</span>
                                                     <input type="checkbox" name="is_league" checked={!!form.is_league} onChange={handleInput} className="accent-padel-green w-5 h-5" />
                                                 </label>
@@ -2031,11 +2031,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                     {openPanels.licenseDefaults && (
                                         <div className="space-y-4 p-4 rounded-xl border border-white/10 bg-black/20">
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                <label className="flex items-center justify-between bg-[#1E293B] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
+                                                <label className="flex items-center justify-between bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
                                                     <span className="text-sm font-medium text-gray-200">License required for event</span>
                                                     <input type="checkbox" name="license_required_default" checked={!!form.license_required_default} onChange={handleInput} className="accent-padel-green w-5 h-5" />
                                                 </label>
-                                                <label className="flex items-center justify-between bg-[#1E293B] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
+                                                <label className="flex items-center justify-between bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
                                                     <span className="text-sm font-medium text-gray-200">Allow temporary license</span>
                                                     <input type="checkbox" name="allow_temporary_license" checked={!!form.allow_temporary_license} onChange={handleInput} className="accent-padel-green w-5 h-5" />
                                                 </label>
@@ -2110,7 +2110,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                     ? d.entries_close_at.replace('T', ' ')
                                                     : (form.registration_closes_at ? `Global · ${form.registration_closes_at.replace('T', ' ')}` : '—');
                                                 return (
-                                                    <div key={d._key} className={['border rounded-xl overflow-hidden transition-colors bg-[#1E293B]', expanded ? 'border-padel-green/40' : 'border-white/10'].join(' ')}>
+                                                    <div key={d._key} className={['border rounded-xl overflow-hidden transition-colors bg-[#1a1a1a]', expanded ? 'border-padel-green/40' : 'border-white/10'].join(' ')}>
                                                         {/* Compact card summary */}
                                                         <div className="flex items-center gap-2 px-4 py-3">
                                                             <button
@@ -2229,7 +2229,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                                         />
                                                                     </div>
                                                                     <div className="flex items-end">
-                                                                        <label className="flex items-center justify-between w-full bg-[#0F172A] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
+                                                                        <label className="flex items-center justify-between w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
                                                                             <span className="text-sm font-medium text-gray-200">License required</span>
                                                                             <input type="checkbox" checked={d.license_required} onChange={(e) => updateDivision(d._key, { license_required: e.target.checked })} className="accent-padel-green w-4 h-4" />
                                                                         </label>
@@ -2566,7 +2566,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                         ['show_in_recent_results', 'Show in recent results'],
                                                         ['is_visible', 'Visible on website'],
                                                     ].map(([key, label]) => (
-                                                        <label key={key} className="flex items-center justify-between bg-[#1E293B] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
+                                                        <label key={key} className="flex items-center justify-between bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
                                                             <span className="text-sm font-medium text-gray-200">{label}</span>
                                                             <input type="checkbox" name={key} checked={!!form[key]} onChange={handleInput} className="accent-padel-green w-5 h-5" />
                                                         </label>
@@ -2786,7 +2786,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                         onClick={() => setShowPreview(false)}
                     >
                         <div
-                            className="bg-[#0F172A] border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl"
+                            className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl"
                             onClick={(e) => e.stopPropagation()}
                         >
                             {form.custom_image_url ? (

@@ -48,11 +48,11 @@ const ResetPassword = () => {
     };
 
     return (
-        <div className="bg-[#0F172A] min-h-screen text-white font-sans selection:bg-padel-green selection:text-black">
+        <div className="bg-[#0a0a0a] min-h-screen text-white font-sans selection:bg-padel-green selection:text-black">
 
             <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-padel-green/10 blur-[150px] rounded-full" />
-                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/10 blur-[150px] rounded-full" />
+                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-white/5 blur-[150px] rounded-full" />
                 <img src={heroBg} className="absolute inset-0 w-full h-full object-cover opacity-[0.05] pointer-events-none" alt="" />
             </div>
 

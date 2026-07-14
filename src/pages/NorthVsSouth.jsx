@@ -1032,7 +1032,7 @@ const ResultsSection = () => {
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
               transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-              className="relative max-w-4xl w-full bg-[#0F172A]/95 border border-white/10 rounded-[32px] p-6 md:p-10 shadow-2xl backdrop-blur-xl z-10 flex flex-col mb-12"
+              className="relative max-w-4xl w-full bg-[#0a0a0a]/95 border border-white/10 rounded-[32px] p-6 md:p-10 shadow-2xl backdrop-blur-xl z-10 flex flex-col mb-12"
             >
               {/* Close Button */}
               <button

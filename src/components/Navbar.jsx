@@ -522,7 +522,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 26, stiffness: 220 }}
-              className="fixed top-0 right-0 bottom-0 w-[310px] sm:w-[360px] bg-slate-950/98 backdrop-blur-2xl border-l border-white/10 z-[1001] shadow-2xl flex flex-col justify-between overflow-hidden"
+              className="fixed top-0 right-0 bottom-0 w-[310px] sm:w-[360px] bg-black/98 backdrop-blur-2xl border-l border-white/10 z-[1001] shadow-2xl flex flex-col justify-between overflow-hidden"
             >
               <div className="flex items-center justify-between px-6 py-5 border-b border-white/5">
                 <span className="text-[10px] font-black text-padel-green uppercase tracking-widest">Navigation</span>
@@ -647,7 +647,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
                 </div>
               )}
 
-              <div className="p-5 border-t border-white/5 bg-slate-950 flex flex-col gap-2">
+              <div className="p-5 border-t border-white/5 bg-black flex flex-col gap-2">
                 {isLoggedIn && (
                   <>
                     {isSuperAdmin && (

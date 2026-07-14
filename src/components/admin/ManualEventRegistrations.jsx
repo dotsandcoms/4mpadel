@@ -99,7 +99,7 @@ const PaymentNoteButton = ({ note, regId, openId, onOpen }) => {
                         aria-label="Close payment note"
                         onClick={() => onOpen(null)}
                     />
-                    <div className="absolute left-0 bottom-full mb-1.5 z-[101] min-w-[180px] max-w-[260px] rounded-lg border border-white/10 bg-[#0F172A] px-2.5 py-2 text-[10px] text-gray-200 shadow-2xl">
+                    <div className="absolute left-0 bottom-full mb-1.5 z-[101] min-w-[180px] max-w-[260px] rounded-lg border border-white/10 bg-[#0a0a0a] px-2.5 py-2 text-[10px] text-gray-200 shadow-2xl">
                         <p className="text-[9px] font-bold uppercase tracking-wider text-gray-500 mb-1">Payment note</p>
                         <p className="leading-snug whitespace-pre-wrap">{note}</p>
                     </div>
@@ -1568,7 +1568,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const panelContent = (
         <>
                     {/* Header */}
-                    <div className={`${isInline ? 'bg-[#1E293B]/50 backdrop-blur-md rounded-3xl border border-white/10' : ''} px-6 pt-4 ${isInline ? 'pb-0' : 'border-b border-white/10'}`}>
+                    <div className={`${isInline ? 'bg-[#1a1a1a]/50 backdrop-blur-md rounded-3xl border border-white/10' : ''} px-6 pt-4 ${isInline ? 'pb-0' : 'border-b border-white/10'}`}>
                         {isInline && onBack && (
                             <button
                                 onClick={onBack}
@@ -1641,7 +1641,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                 >
                                     <motion.div
                                         whileHover={{ y: -5, scale: 1.02 }}
-                                        className="bg-gradient-to-br from-[#1E293B]/80 to-[#0F172A]/80 backdrop-blur-xl p-6 rounded-3xl border border-white/10 flex flex-col gap-2 relative overflow-hidden group shadow-2xl"
+                                        className="bg-gradient-to-br from-[#1a1a1a]/80 to-[#0a0a0a]/80 backdrop-blur-xl p-6 rounded-3xl border border-white/10 flex flex-col gap-2 relative overflow-hidden group shadow-2xl"
                                     >
                                         <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 group-hover:rotate-12 transition-all duration-500">
                                             <Users size={120} />
@@ -1655,7 +1655,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
                                     <motion.div
                                         whileHover={{ y: -5, scale: 1.02 }}
-                                        className="bg-gradient-to-br from-padel-green/20 via-[#1E293B]/80 to-[#0F172A]/80 backdrop-blur-xl p-6 rounded-3xl border border-padel-green/30 flex flex-col gap-2 relative overflow-hidden group shadow-[0_0_30px_rgba(190,255,0,0.1)]"
+                                        className="bg-gradient-to-br from-padel-green/20 via-[#1a1a1a]/80 to-[#0a0a0a]/80 backdrop-blur-xl p-6 rounded-3xl border border-padel-green/30 flex flex-col gap-2 relative overflow-hidden group shadow-[0_0_30px_rgba(190,255,0,0.1)]"
                                     >
                                         <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:opacity-20 group-hover:scale-110 transition-all duration-500 text-padel-green">
                                             <DollarSign size={120} />
@@ -1686,7 +1686,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
                                     <motion.div
                                         whileHover={{ y: -5, scale: 1.02 }}
-                                        className="bg-gradient-to-br from-[#1E293B]/80 to-[#0F172A]/80 backdrop-blur-xl p-6 rounded-3xl border border-white/10 flex flex-col gap-2 relative overflow-hidden group shadow-2xl"
+                                        className="bg-gradient-to-br from-[#1a1a1a]/80 to-[#0a0a0a]/80 backdrop-blur-xl p-6 rounded-3xl border border-white/10 flex flex-col gap-2 relative overflow-hidden group shadow-2xl"
                                     >
                                         <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 group-hover:-rotate-12 transition-all duration-500">
                                             <Trophy size={120} />
@@ -1719,7 +1719,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
                                     <motion.div
                                         whileHover={{ y: -5, scale: 1.02 }}
-                                        className="bg-gradient-to-br from-[#1E293B]/80 to-[#0F172A]/80 backdrop-blur-xl p-6 rounded-3xl border border-white/10 flex flex-col gap-2 relative overflow-hidden group shadow-2xl"
+                                        className="bg-gradient-to-br from-[#1a1a1a]/80 to-[#0a0a0a]/80 backdrop-blur-xl p-6 rounded-3xl border border-white/10 flex flex-col gap-2 relative overflow-hidden group shadow-2xl"
                                     >
                                         <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 group-hover:scale-110 transition-all duration-500">
                                             <CheckCircle size={120} />
@@ -1752,24 +1752,24 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         Financial Summary
                                     </h3>
                                     <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                                        <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
+                                        <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
                                             <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Entries Paid to 4m</p>
                                             <span className="text-xl font-black text-white">{overviewStats.paid4M}</span>
                                         </div>
-                                        <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
+                                        <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
                                             <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Entry Payments (Manual)</p>
                                             <span className="text-xl font-black text-white">{overviewStats.paidClub}</span>
                                         </div>
-                                        <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
+                                        <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
                                             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Collected by 4M</p>
                                             <span className="text-xl font-black text-padel-green">{fmtR(overviewStats.collected4M)}</span>
                                             <p className="text-[9px] text-gray-500 mt-1">Entry fees via Paystack only</p>
                                         </div>
-                                        <div className="bg-[#1E293B]/50 border border-emerald-500/30 bg-emerald-500/5 rounded-xl p-4 md:row-span-2 flex flex-col justify-center">
+                                        <div className="bg-[#1a1a1a]/50 border border-emerald-500/30 bg-emerald-500/5 rounded-xl p-4 md:row-span-2 flex flex-col justify-center">
                                             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Due to organiser</p>
                                             <span className="text-3xl font-black text-padel-green">{fmtR(overviewStats.dueToOrg)}</span>
                                         </div>
-                                        <div className="bg-[#1E293B]/50 border border-red-500/20 rounded-xl p-4 md:col-span-3">
+                                        <div className="bg-[#1a1a1a]/50 border border-red-500/20 rounded-xl p-4 md:col-span-3">
                                             <p className="text-[10px] font-bold uppercase tracking-widest text-red-400 mb-1">5% Commission to 4M</p>
                                             <span className="text-lg font-black text-red-400">{fmtR(overviewStats.commission)}</span>
                                             {overviewStats.licenseRevenue4M > 0 && (
@@ -1806,7 +1806,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                     const teamsCount = soloCount > 0 ? pairedCount : clsTeams.length;
                                     if (playerSearch.trim() && clsTeams.length === 0) return null;
                                     return (
-                                        <div key={cls.id} className="bg-[#1E293B]/30 rounded-2xl border border-white/10 overflow-hidden">
+                                        <div key={cls.id} className="bg-[#1a1a1a]/30 rounded-2xl border border-white/10 overflow-hidden">
                                             <div
                                                 onClick={() => setExpandedDivisions(prev => ({...prev, [cls.id]: !isExpanded}))}
                                                 className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 cursor-pointer hover:bg-white/5 transition-colors border-b border-white/5"
@@ -2086,7 +2086,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         </div>
                                     ) : (
                                         <table className="w-full text-sm">
-                                            <thead className="sticky top-0 bg-[#0F172A] z-10">
+                                            <thead className="sticky top-0 bg-[#0a0a0a] z-10">
                                                 <tr className="text-left text-[10px] font-bold uppercase tracking-widest text-gray-500 border-b border-white/10">
                                                     <th className="py-3 px-6">Player</th>
                                                     <th className="py-3 px-4">4M Profile</th>
@@ -2182,7 +2182,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                         const partner = partnerRegOf(removeTarget);
                         return (
                             <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/60" onClick={() => !removeBusy && setRemoveTarget(null)}>
-                                <div className="bg-[#0F172A] border border-white/10 rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+                                <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
                                     <div className="flex items-start gap-3 mb-4">
                                         <div className="w-9 h-9 rounded-xl bg-red-500/10 flex items-center justify-center shrink-0">
                                             <Trash2 size={16} className="text-red-400" />
@@ -2232,7 +2232,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
                     {linkTarget && (
                         <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/60" onClick={() => !linkBusy && setLinkTarget(null)}>
-                            <div className="bg-[#0F172A] border border-white/10 rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+                            <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-start gap-3 mb-4">
                                     <div className="w-9 h-9 rounded-xl bg-sky-500/10 flex items-center justify-center shrink-0">
                                         <UserPlus size={16} className="text-sky-400" />
@@ -2329,7 +2329,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
                     {unmarkTarget && (
                         <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/60" onClick={() => !unmarkBusy && setUnmarkTarget(null)}>
-                            <div className="bg-[#0F172A] border border-white/10 rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+                            <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-start gap-3 mb-4">
                                     <div className="w-9 h-9 rounded-xl bg-red-500/10 flex items-center justify-center shrink-0">
                                         <RotateCcw size={16} className="text-red-400" />
@@ -2367,7 +2367,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
                     {markPaidTarget && (
                         <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/60" onClick={() => !markPaidBusy && closeMarkPaidModal()}>
-                            <div className="bg-[#0F172A] border border-white/10 rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+                            <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-start gap-3 mb-4">
                                     <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
                                         <Check size={16} className="text-emerald-400" />
@@ -2427,7 +2427,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
                     {matchingProfileReg && (
                         <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/60" onClick={() => !profileLinkBusy && setMatchingProfileReg(null)}>
-                            <div className="bg-[#0F172A] border border-white/10 rounded-2xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                            <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                                 <h3 className="text-xl font-black text-white mb-1">Link 4M Padel Profile</h3>
                                 <p className="text-gray-400 text-sm mb-5">
                                     Linking: <span className="text-padel-green font-bold">{matchingProfileReg.full_name}</span>
@@ -2497,7 +2497,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                         const isTeamMove = moveTeamTogether && playersToMove.length > 1;
                         return (
                             <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/60" onClick={() => !moveBusy && closeMoveModal()}>
-                                <div className="bg-[#0F172A] border border-white/10 rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+                                <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
                                     <div className="flex items-start gap-3 mb-4">
                                         <div className="w-9 h-9 rounded-xl bg-violet-500/10 flex items-center justify-center shrink-0">
                                             <ArrowRightLeft size={16} className="text-violet-300" />
@@ -2605,7 +2605,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             >
                 <motion.div
                     initial={{ opacity: 0, scale: 0.97, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97, y: 20 }}
-                    className="bg-[#0F172A] border border-white/10 rounded-2xl w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden relative"
+                    className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden relative"
                     onClick={(e) => e.stopPropagation()}
                 >
                     {panelContent}

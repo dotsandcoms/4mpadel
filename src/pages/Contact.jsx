@@ -51,7 +51,7 @@ const Contact = () => {
     };
 
     return (
-        <div className="pt-20 min-h-screen bg-[#0F172A] text-white">
+        <div className="pt-20 min-h-screen bg-[#0a0a0a] text-white">
             {/* Hero Section */}
             <section className="relative h-[40vh] min-h-[400px] flex items-center justify-center overflow-hidden">
                 <div className="absolute inset-0 z-0">
@@ -60,7 +60,7 @@ const Contact = () => {
                         alt="Contact Hero"
                         className="w-full h-full object-cover opacity-40 scale-105"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-b from-[#0F172A]/80 via-transparent to-[#0F172A]" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a0a]/80 via-transparent to-[#0a0a0a]" />
                 </div>
 
                 <div className="container mx-auto px-6 relative z-10 text-center">
@@ -87,7 +87,7 @@ const Contact = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 bg-black/40 backdrop-blur-xl border border-white/5 rounded-[40px] overflow-hidden shadow-2xl">
 
                         {/* Contact Info Sidebar */}
-                        <div className="lg:col-span-5 p-8 md:p-12 bg-gradient-to-br from-[#1E293B] to-[#0F172A] border-r border-white/5">
+                        <div className="lg:col-span-5 p-8 md:p-12 bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] border-r border-white/5">
                             <h2 className="text-3xl font-black uppercase tracking-tight mb-8">Connect with <span className="text-padel-green text-shadow-glow">4M Padel</span></h2>
 
                             <div className="space-y-8">
@@ -188,7 +188,7 @@ const Contact = () => {
                                                 value={formData.name}
                                                 onChange={handleChange}
                                                 placeholder="John Doe"
-                                                className="w-full bg-[#0F172A]/50 border border-white/5 rounded-2xl px-6 py-4 focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 transition-all font-medium placeholder:text-gray-700"
+                                                className="w-full bg-[#0a0a0a]/50 border border-white/5 rounded-2xl px-6 py-4 focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 transition-all font-medium placeholder:text-gray-700"
                                             />
                                         </div>
                                         <div className="space-y-2">
@@ -200,7 +200,7 @@ const Contact = () => {
                                                 value={formData.email}
                                                 onChange={handleChange}
                                                 placeholder="john@example.com"
-                                                className="w-full bg-[#0F172A]/50 border border-white/5 rounded-2xl px-6 py-4 focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 transition-all font-medium placeholder:text-gray-700"
+                                                className="w-full bg-[#0a0a0a]/50 border border-white/5 rounded-2xl px-6 py-4 focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 transition-all font-medium placeholder:text-gray-700"
                                             />
                                         </div>
                                     </div>
@@ -214,7 +214,7 @@ const Contact = () => {
                                             value={formData.subject}
                                             onChange={handleChange}
                                             placeholder="Tournament Inquiry"
-                                            className="w-full bg-[#0F172A]/50 border border-white/5 rounded-2xl px-6 py-4 focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 transition-all font-medium placeholder:text-gray-700"
+                                            className="w-full bg-[#0a0a0a]/50 border border-white/5 rounded-2xl px-6 py-4 focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 transition-all font-medium placeholder:text-gray-700"
                                         />
                                     </div>
 
@@ -227,7 +227,7 @@ const Contact = () => {
                                             onChange={handleChange}
                                             rows="5"
                                             placeholder="Tell us what's on your mind..."
-                                            className="w-full bg-[#0F172A]/50 border border-white/5 rounded-2xl px-6 py-4 focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 transition-all font-medium placeholder:text-gray-700 resize-none"
+                                            className="w-full bg-[#0a0a0a]/50 border border-white/5 rounded-2xl px-6 py-4 focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 transition-all font-medium placeholder:text-gray-700 resize-none"
                                         ></textarea>
                                     </div>
 

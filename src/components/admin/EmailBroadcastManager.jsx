@@ -249,7 +249,7 @@ const EmailBroadcastManager = () => {
                 {/* LEFT COLUMN: Configuration */}
                 <div className="lg:col-span-2 space-y-6">
                     {/* Event Selection */}
-                    <div className="bg-[#0F172A] border border-white/5 p-6 rounded-2xl shadow-xl">
+                    <div className="bg-[#0a0a0a] border border-white/5 p-6 rounded-2xl shadow-xl">
                         <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                             <Users className="w-5 h-5 text-padel-green" />
                             Target Audience
@@ -316,7 +316,7 @@ const EmailBroadcastManager = () => {
                     </div>
 
                     {/* Email Composer */}
-                    <div className="bg-[#0F172A] border border-white/5 p-6 rounded-2xl shadow-xl">
+                    <div className="bg-[#0a0a0a] border border-white/5 p-6 rounded-2xl shadow-xl">
                         <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                             <Mail className="w-5 h-5 text-padel-green" />
                             Email Message
@@ -349,7 +349,7 @@ const EmailBroadcastManager = () => {
                 {/* RIGHT COLUMN: Preview & Send */}
                 <div className="space-y-6">
                     {/* Test Email Section */}
-                    <div className="bg-[#0F172A] border border-white/5 p-6 rounded-2xl shadow-xl">
+                    <div className="bg-[#0a0a0a] border border-white/5 p-6 rounded-2xl shadow-xl">
                         <h3 className="font-bold text-white mb-4 uppercase tracking-widest text-xs border-b border-white/10 pb-2">Send Test Email</h3>
                         <div className="space-y-4">
                             <div>

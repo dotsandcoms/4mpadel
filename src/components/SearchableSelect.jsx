@@ -76,7 +76,7 @@ const SearchableSelect = ({
                         animate={{ opacity: 1, y: 0, scaleY: 1 }}
                         exit={{ opacity: 0, y: -10, scaleY: 0.95 }}
                         transition={{ duration: 0.15 }}
-                        className="absolute z-[9999] w-full mt-2 bg-[#0F172A] border border-white/10 rounded-xl overflow-hidden shadow-2xl origin-top"
+                        className="absolute z-[9999] w-full mt-2 bg-[#0a0a0a] border border-white/10 rounded-xl overflow-hidden shadow-2xl origin-top"
                     >
                         <div className="p-2 border-b border-white/5 bg-black/20">
                             <div className="relative">

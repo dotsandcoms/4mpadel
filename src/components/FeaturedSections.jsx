@@ -134,7 +134,7 @@ const FallbackImage = ({ src, alt, className, title }) => {
     if (hasError || !src) {
         const initials = title ? title.substring(0, 2).toUpperCase() : '4M';
         return (
-            <div className={`flex items-center justify-center bg-gradient-to-br from-[#0B1121] to-black absolute inset-0 w-full h-full`}>
+            <div className={`flex items-center justify-center bg-gradient-to-br from-[#141414] to-black absolute inset-0 w-full h-full`}>
                 <div className="absolute inset-0 opacity-[0.03] mix-blend-overlay"></div>
                 <span className="text-4xl font-black text-white/5 font-display tracking-widest">{initials}</span>
                 <Trophy className="absolute inset-0 m-auto w-24 h-24 text-white/[0.02]" />
@@ -298,7 +298,7 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
         >
             <Link
                 to={linkPath}
-                className={`group relative flex flex-row items-stretch h-full min-h-[140px] sm:min-h-[160px] bg-[#060913] rounded-[20px] sm:rounded-[24px] overflow-hidden border-2 ${tierColor} transition-all duration-500 hover:scale-[1.02] shadow-xl ${glowColor}`}
+                className={`group relative flex flex-row items-stretch h-full min-h-[140px] sm:min-h-[160px] bg-[#0a0a0a] rounded-[20px] sm:rounded-[24px] overflow-hidden border-2 ${tierColor} transition-all duration-500 hover:scale-[1.02] shadow-xl ${glowColor}`}
             >
                 {/* Poster Image Container */}
                 <div className="relative w-[100px] sm:w-[130px] shrink-0 overflow-hidden bg-black/40 border-r border-white/5">
@@ -319,11 +319,11 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
                             />
                         </>
                     ) : (
-                        <div className="w-full h-full bg-[#0A0F1C] flex items-center justify-center">
+                        <div className="w-full h-full bg-[#141414] flex items-center justify-center">
                             <Calendar className="w-6 h-6 text-white/10" />
                         </div>
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#060913] opacity-40 z-20" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#0a0a0a] opacity-40 z-20" />
 
                     {isLive && (
                         <div className="absolute top-2 left-2 z-30 flex items-center gap-1.5 bg-red-600 text-white px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest animate-pulse shadow-lg shadow-red-600/30">
@@ -422,7 +422,7 @@ const RecentResultCard = ({ title, label, startDateStr, linkPath, status, winner
                 className="absolute inset-0 animate-spin opacity-60 group-hover:opacity-100 transition-opacity duration-300 [animation-duration:6s] pointer-events-none"
                 style={{ background: 'conic-gradient(from 0deg, transparent 0%, transparent 78%, rgba(204,255,0,0.9) 88%, transparent 96%)' }}
             />
-            <Link to={linkPath} className="relative z-10 flex items-center gap-4 p-4 bg-[#0A0F1C] rounded-[15px] transition-colors duration-300">
+            <Link to={linkPath} className="relative z-10 flex items-center gap-4 p-4 bg-[#141414] rounded-[15px] transition-colors duration-300">
                 {/* Date block */}
                 {startDateStr && (
                     <div className="flex flex-col items-center justify-center w-14 h-14 sm:w-16 sm:h-16 shrink-0 rounded-xl border border-padel-green/30">
@@ -484,7 +484,7 @@ const UpcomingEventListItem = ({ title, label, startDateStr, linkPath, status, v
                 className="absolute inset-0 animate-spin opacity-60 group-hover:opacity-100 transition-opacity duration-300 [animation-duration:6s] pointer-events-none"
                 style={{ background: 'conic-gradient(from 0deg, transparent 0%, transparent 78%, rgba(204,255,0,0.9) 88%, transparent 96%)' }}
             />
-            <Link to={linkPath} className="relative z-10 flex items-center py-3 px-4 bg-[#0A0F1C] rounded-[15px] transition-colors duration-300">
+            <Link to={linkPath} className="relative z-10 flex items-center py-3 px-4 bg-[#141414] rounded-[15px] transition-colors duration-300">
                 <div className="flex flex-col items-center justify-center text-center w-14 sm:w-16 shrink-0 border-r border-white/10 pr-3 sm:pr-4 mr-3 sm:mr-4">
                     <span className="text-[9px] sm:text-[10px] font-black text-padel-green uppercase tracking-widest mb-0.5">{month}</span>
                     <span className="text-xl sm:text-2xl font-bold text-white leading-none mb-0.5">{day}</span>
@@ -601,9 +601,9 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     const isFeatured = data.id === 'upcoming-events'; // Only upcoming-events uses dark text theme
     const isLiveSection = data.id === 'featured-live';
     const bgColors = [
-        'bg-[#080C17]',
-        'bg-[#05070A]',
-        'bg-[#080C17]'
+        'bg-[#000000]',
+        'bg-[#000000]',
+        'bg-[#000000]'
     ];
     const bgColor = isFeatured ? 'bg-padel-green' : bgColors[index % bgColors.length];
     const Icon = data.icon || PlayCircle;
@@ -697,7 +697,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
 
     const imageContent = data.id === 'recent-results' ? (
         <div className="relative z-10 w-full mt-4 lg:mt-0">
-            <div className="group relative flex flex-col gap-4 w-full bg-[#060913] rounded-3xl p-4 sm:p-6 shadow-2xl border border-white/5">
+            <div className="group relative flex flex-col gap-4 w-full bg-[#0a0a0a] rounded-3xl p-4 sm:p-6 shadow-2xl border border-white/5">
                 {items?.slice(recentResultsPage, recentResultsPage + 1).map((t, i) => (
                     <RecentResultCard
                         key={t.id || t.eventId}
@@ -717,14 +717,14 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                         <button
                             onClick={() => setRecentResultsPage(p => Math.max(0, p - 1))}
                             disabled={recentResultsPage === 0}
-                            className={`absolute -left-2 sm:-left-4 lg:-left-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border border-white/10 bg-[#060913] flex items-center justify-center transition-all duration-300 md:opacity-0 md:group-hover:opacity-100 text-white shadow-xl z-50 ${recentResultsPage === 0 ? 'opacity-50 cursor-not-allowed md:opacity-0 md:pointer-events-none' : 'hover:bg-padel-green hover:text-black hover:border-padel-green'}`}
+                            className={`absolute -left-2 sm:-left-4 lg:-left-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border border-white/10 bg-[#0a0a0a] flex items-center justify-center transition-all duration-300 md:opacity-0 md:group-hover:opacity-100 text-white shadow-xl z-50 ${recentResultsPage === 0 ? 'opacity-50 cursor-not-allowed md:opacity-0 md:pointer-events-none' : 'hover:bg-padel-green hover:text-black hover:border-padel-green'}`}
                         >
                             <ChevronLeft className="w-4 h-4" />
                         </button>
                         <button
                             onClick={() => setRecentResultsPage(p => Math.min(maxResultsPage, p + 1))}
                             disabled={recentResultsPage === maxResultsPage}
-                            className={`absolute -right-2 sm:-right-4 lg:-right-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border border-white/10 bg-[#060913] flex items-center justify-center transition-all duration-300 md:opacity-0 md:group-hover:opacity-100 text-white shadow-xl z-50 ${recentResultsPage === maxResultsPage ? 'opacity-50 cursor-not-allowed md:opacity-0 md:pointer-events-none' : 'hover:bg-padel-green hover:text-black hover:border-padel-green'}`}
+                            className={`absolute -right-2 sm:-right-4 lg:-right-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border border-white/10 bg-[#0a0a0a] flex items-center justify-center transition-all duration-300 md:opacity-0 md:group-hover:opacity-100 text-white shadow-xl z-50 ${recentResultsPage === maxResultsPage ? 'opacity-50 cursor-not-allowed md:opacity-0 md:pointer-events-none' : 'hover:bg-padel-green hover:text-black hover:border-padel-green'}`}
                         >
                             <ChevronRight className="w-4 h-4" />
                         </button>
@@ -819,7 +819,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             whileInView={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
             viewport={{ once: true, margin: "-100px" }}
             transition={{ duration: 0.8, ease: "easeOut" }}
-            className={`relative w-full min-h-[400px] md:min-h-[440px] h-auto max-w-[540px] mx-auto lg:mx-0 ${isLeft ? 'lg:ml-auto' : 'lg:mr-auto'} rounded-[28px] overflow-hidden group cursor-pointer border-2 ${statusColors.border} ${statusColors.hover} transition-all duration-700 bg-[#05070A] z-10 mt-4 lg:mt-0 shadow-2xl flex flex-col`}
+            className={`relative w-full min-h-[400px] md:min-h-[440px] h-auto max-w-[540px] mx-auto lg:mx-0 ${isLeft ? 'lg:ml-auto' : 'lg:mr-auto'} rounded-[28px] overflow-hidden group cursor-pointer border-2 ${statusColors.border} ${statusColors.hover} transition-all duration-700 bg-[#000000] z-10 mt-4 lg:mt-0 shadow-2xl flex flex-col`}
             onClick={() => data.linkPath && navigate(data.linkPath)}
         >
             {/* Corner Ribbon */}
@@ -842,8 +842,8 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             </div>
 
             {/* Background Gradient & Overlays (kept on top of the image for text legibility) */}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#05070A] via-[#05070A]/75 to-[#05070A]/25" />
-            <div className="absolute inset-0 bg-gradient-to-br from-[#0A0F1F]/50 via-transparent to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#000000] via-[#000000]/75 to-[#000000]/25" />
+            <div className="absolute inset-0 bg-gradient-to-br from-[#141414]/50 via-transparent to-transparent" />
             <div className="absolute inset-0 bg-white/[0.01]" />
 
             {(data.isLive || data.id === 'live-events' || data.id === 'featured-live') && (
@@ -978,7 +978,7 @@ const FeaturedTournamentHero = ({ event }) => {
     const linkPath = `/calendar/${event.slug || event.id}`;
 
     return (
-        <section className="relative pt-4 pb-3 lg:pt-5 lg:pb-4 border-t border-white/5 bg-[#05070A]">
+        <section className="relative pt-4 pb-3 lg:pt-5 lg:pb-4 border-t border-white/5 bg-[#000000]">
             <div className="w-full max-w-[1500px] mx-auto px-4 md:px-8 relative z-10">
                 <h2 className="text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest truncate text-white/80 mb-3">
                     Event Spotlight
@@ -1226,7 +1226,7 @@ const FeaturedSections = ({ session = null }) => {
     }, [getRecentTournaments]);
 
     const loggedOutCta = !session ? (
-        <section className="relative border-t border-white/5 bg-[#05070A] pt-3 pb-4 lg:pt-4 lg:pb-4">
+        <section className="relative border-t border-white/5 bg-[#000000] pt-3 pb-4 lg:pt-4 lg:pb-4">
             <div className="w-full max-w-[1500px] mx-auto px-4 md:px-8">
                 <CommunityCtaBanner fullWidth />
             </div>

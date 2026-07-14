@@ -12,7 +12,7 @@ const CommunityCtaBanner = ({ className = '', fullWidth = false }) => {
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                className={`group bg-[#111827] p-4 sm:p-5 border border-white/5 flex flex-row items-center justify-between gap-4 relative overflow-hidden shadow-2xl rounded-2xl transition-all duration-300 hover:-translate-y-0.5 hover:border-padel-green/25 hover:shadow-[0_8px_32px_rgba(154,233,0,0.12)] ${
+                className={`group bg-[#141414] p-4 sm:p-5 border border-white/5 flex flex-row items-center justify-between gap-4 relative overflow-hidden shadow-2xl rounded-2xl transition-all duration-300 hover:-translate-y-0.5 hover:border-padel-green/25 hover:shadow-[0_8px_32px_rgba(154,233,0,0.12)] ${
                     fullWidth ? 'w-full max-w-none' : 'max-w-3xl'
                 } ${className}`}
             >

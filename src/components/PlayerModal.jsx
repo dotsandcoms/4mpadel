@@ -149,7 +149,7 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
         try {
             const dataUrl = await htmlToImage.toPng(printRef.current, {
                 quality: 1.0,
-                backgroundColor: '#0F172A',
+                backgroundColor: '#0a0a0a',
                 cacheBust: true,
                 pixelRatio: 4,
             });
@@ -202,7 +202,7 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                 <motion.div
                     layoutId={`card-${player.id}`}
                     ref={cardRef}
-                    className="w-full min-w-0 max-w-lg md:max-w-4xl bg-[#0a0f1d] border border-white/10 backdrop-blur-2xl rounded-[2rem] md:rounded-[2.5rem] overflow-y-auto md:overflow-hidden shadow-2xl pointer-events-auto relative max-h-[90vh] md:max-h-[85vh] flex flex-col my-auto"
+                    className="w-full min-w-0 max-w-lg md:max-w-4xl bg-[#141414] border border-white/10 backdrop-blur-2xl rounded-[2rem] md:rounded-[2.5rem] overflow-y-auto md:overflow-hidden shadow-2xl pointer-events-auto relative max-h-[90vh] md:max-h-[85vh] flex flex-col my-auto"
                 >
                     {/* Floating Close Button */}
                     <button
@@ -240,24 +240,24 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                                         </svg>
                                     </motion.div>
                                 )}
-                                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f1d] via-[#0a0f1d]/30 to-black/30" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/30 to-black/30" />
 
                                 {/* Skill Rating Badge Overlay */}
-                                <motion.div layoutId={`level-${player.id}`} className="absolute top-6 left-6 bg-padel-green text-black font-black min-w-14 h-14 px-1.5 rounded-2xl flex flex-col items-center justify-center border-4 border-[#0a0f1d] shadow-2xl z-20 hover:scale-105 transition-transform duration-300">
+                                <motion.div layoutId={`level-${player.id}`} className="absolute top-6 left-6 bg-padel-green text-black font-black min-w-14 h-14 px-1.5 rounded-2xl flex flex-col items-center justify-center border-4 border-[#141414] shadow-2xl z-20 hover:scale-105 transition-transform duration-300">
                                     <span className="text-[9px] uppercase font-black opacity-60">SKILL</span>
                                     <span className="text-lg leading-none tabular-nums">{player.skill_rating != null && player.skill_rating !== '' ? Number(player.skill_rating).toFixed(2) : '-'}</span>
                                 </motion.div>
 
                                 {/* Rankedin ID Overlay */}
                                 {player.rankedin_id && (
-                                    <div className="absolute top-6 right-16 bg-[#0a0f1d]/75 backdrop-blur-md border border-white/10 text-white font-bold px-3.5 h-14 rounded-2xl flex flex-col items-center justify-center shadow-xl z-20">
+                                    <div className="absolute top-6 right-16 bg-[#141414]/75 backdrop-blur-md border border-white/10 text-white font-bold px-3.5 h-14 rounded-2xl flex flex-col items-center justify-center shadow-xl z-20">
                                         <span className="text-[8px] uppercase font-black text-padel-green mb-0.5 tracking-wider">Rankedin ID</span>
                                         <span className="text-[10px] opacity-70 font-mono tracking-tight">{player.rankedin_id}</span>
                                     </div>
                                 )}
 
                                 {/* High-Contrast Name Overlay */}
-                                <div className="absolute bottom-0 left-0 w-full p-6 md:p-8 bg-gradient-to-t from-[#0a0f1d] via-[#0a0f1d]/40 to-transparent">
+                                <div className="absolute bottom-0 left-0 w-full p-6 md:p-8 bg-gradient-to-t from-[#141414] via-[#141414]/40 to-transparent">
                                     <motion.h2 layoutId={`name-${player.id}`} className="text-3xl md:text-[2.65rem] font-black text-white leading-[0.88] tracking-tighter uppercase mb-3">
                                         {player.name?.split(' ').map((n, i) => (
                                             <span key={i} className="block">{n}</span>
@@ -285,7 +285,7 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
 
                             {/* Gallery Thumbnail Shelf */}
                             {gallery.length > 1 && (
-                                <div className="p-6 bg-[#060a14]/60 flex flex-col gap-2.5 md:flex-1 md:justify-center border-t border-white/5 shrink-0 md:shrink">
+                                <div className="p-6 bg-[#000000]/60 flex flex-col gap-2.5 md:flex-1 md:justify-center border-t border-white/5 shrink-0 md:shrink">
                                     <span className="text-[8px] font-black text-padel-green uppercase tracking-[0.25em] leading-none mb-1">
                                         Player Gallery ({gallery.length})
                                     </span>
@@ -310,7 +310,7 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                         </div>
 
                         {/* RIGHT COLUMN: Spacious & Structured Information Pane */}
-                        <div className="flex-1 min-w-0 p-6 pt-20 md:p-10 md:pt-20 flex flex-col h-auto md:h-auto min-h-0 bg-[#0a0f1d]/50 backdrop-blur-md">
+                        <div className="flex-1 min-w-0 p-6 pt-20 md:p-10 md:pt-20 flex flex-col h-auto md:h-auto min-h-0 bg-[#141414]/50 backdrop-blur-md">
                             
                             {/* Tabs Header */}
                             <div className="flex gap-2 border-b border-white/5 pb-4 mb-6 overflow-x-auto hide-scrollbar shrink-0">
@@ -636,7 +636,7 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
             <div className="fixed -left-[2000px] top-0 pointer-events-none">
                 <div
                     ref={printRef}
-                    className="w-[600px] bg-[#0F172A] text-white rounded-[40px] overflow-hidden"
+                    className="w-[600px] bg-[#0a0a0a] text-white rounded-[40px] overflow-hidden"
                     style={{ fontFamily: "'Inter', sans-serif" }}
                 >
                     {/* Header Image Area */}
@@ -649,7 +649,7 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                             </div>
                         )}
                         {/* Overlays */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A] via-transparent to-black/30" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-black/30" />
 
                         {/* Badges */}
                         <div className="absolute top-10 left-10 bg-padel-green text-black font-black min-w-24 h-24 px-2 rounded-3xl flex flex-col items-center justify-center border-[6px] border-black shadow-2xl">
@@ -677,7 +677,7 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                     </div>
 
                     {/* Stats and Info Area */}
-                    <div className="p-12 space-y-12 border-t border-white/5 bg-[#0F172A]">
+                    <div className="p-12 space-y-12 border-t border-white/5 bg-[#0a0a0a]">
                         {/* Bio Section */}
                         {player.bio && (
                             <div>

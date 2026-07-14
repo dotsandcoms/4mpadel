@@ -126,7 +126,7 @@ const PwaInstallPrompt = () => {
             role="dialog"
             aria-label="Add app to home screen"
         >
-            <div className="pointer-events-auto w-full max-w-[390px] bg-slate-950/90 backdrop-blur-xl border border-[#CCFF00]/30 rounded-2xl p-4 shadow-[0_15px_40px_rgba(0,0,0,0.7)] ring-1 ring-black/30">
+            <div className="pointer-events-auto w-full max-w-[390px] bg-black/90 backdrop-blur-xl border border-[#CCFF00]/30 rounded-2xl p-4 shadow-[0_15px_40px_rgba(0,0,0,0.7)] ring-1 ring-black/30">
                 <div className="flex items-start gap-3">
                     <div className="shrink-0 w-10 h-10 rounded-xl bg-[#CCFF00]/15 border border-[#CCFF00]/30 flex items-center justify-center">
                         {mode === 'ios' ? (

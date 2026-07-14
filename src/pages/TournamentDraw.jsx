@@ -263,7 +263,7 @@ const TournamentDraw = () => {
             />
 
 
-            <main className="min-h-screen bg-[#0F172A] pb-20">
+            <main className="min-h-screen bg-[#0a0a0a] pb-20">
                 {/* Hero */}
                 <div className="relative h-[20vh] md:h-[30vh] min-h-[250px] w-full overflow-hidden bg-slate-900 flex items-center justify-center">
                     <img
@@ -272,7 +272,7 @@ const TournamentDraw = () => {
                         className="absolute inset-0 w-full h-full object-cover opacity-60 contrast-125 saturate-50"
                         onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1554068865-c7211fa4d4ab?q=80&w=1470&auto=format&fit=crop'; }}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/40 to-[#0F172A]" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/40 to-[#0a0a0a]" />
 
                     <div className="relative z-10 w-full overflow-hidden select-none pointer-events-none translate-y-1/4">
                         <motion.h1

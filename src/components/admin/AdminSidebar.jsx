@@ -45,7 +45,7 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDe
                 )}
             </AnimatePresence>
 
-            <aside className={`${isDesktopCollapsed ? 'w-20' : 'w-64'} bg-[#0F172A] lg:bg-black/90 backdrop-blur-xl border-r border-white/10 h-screen fixed left-0 top-0 flex flex-col z-[60] transition-all duration-300 lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+            <aside className={`${isDesktopCollapsed ? 'w-20' : 'w-64'} bg-[#0a0a0a] lg:bg-black/90 backdrop-blur-xl border-r border-white/10 h-screen fixed left-0 top-0 flex flex-col z-[60] transition-all duration-300 lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
                 }`}>
                 <div className={`p-6 flex items-center ${isDesktopCollapsed ? 'justify-center' : 'justify-between'}`}>
                     <div className="flex items-center gap-2 overflow-hidden">
@@ -73,7 +73,7 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDe
                 {/* Desktop Collapse Toggle */}
                 <button
                     onClick={() => setIsDesktopCollapsed(!isDesktopCollapsed)}
-                    className="hidden lg:flex absolute -right-3 top-8 w-6 h-6 bg-[#0F172A] border border-white/10 rounded-full items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 z-[70] transition-colors"
+                    className="hidden lg:flex absolute -right-3 top-8 w-6 h-6 bg-[#0a0a0a] border border-white/10 rounded-full items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 z-[70] transition-colors"
                 >
                     {isDesktopCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
                 </button>

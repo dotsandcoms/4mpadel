@@ -248,7 +248,7 @@ const AdminManager = () => {
                 </button>
             </div>
 
-            <div className="bg-[#1E293B]/50 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden">
+            <div className="bg-[#1a1a1a]/50 backdrop-blur-xl rounded-3xl border border-white/10 overflow-hidden">
                 <div className="p-6 border-b border-white/10 flex flex-col md:flex-row gap-4 justify-between">
                     <div className="relative flex-1 max-w-md">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
@@ -355,7 +355,7 @@ const AdminManager = () => {
             {isModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-                    <div className="bg-[#1E293B] border border-white/10 w-full max-w-xl rounded-3xl overflow-hidden relative z-10 shadow-2xl max-h-[90vh] flex flex-col">
+                    <div className="bg-[#1a1a1a] border border-white/10 w-full max-w-xl rounded-3xl overflow-hidden relative z-10 shadow-2xl max-h-[90vh] flex flex-col">
                         <div className="p-6 border-b border-white/10 flex items-center justify-between">
                             <h2 className="text-xl font-bold text-white">
                                 {editingAdmin ? 'Edit Permissions' : 'Add New Admin'}

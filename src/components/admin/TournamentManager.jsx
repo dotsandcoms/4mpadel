@@ -169,7 +169,7 @@ const TournamentManager = () => {
     const uniqueCategories = ['Major', 'Gold', 'Social', 'League'];
 
     return (
-        <div className="bg-[#0F172A] p-6 rounded-2xl border border-white/10 relative">
+        <div className="bg-[#0a0a0a] p-6 rounded-2xl border border-white/10 relative">
             {/* Toast Container */}
             <div className="fixed bottom-6 right-6 z-[1100] flex flex-col gap-2 pointer-events-none">
                 <AnimatePresence>
@@ -204,7 +204,7 @@ const TournamentManager = () => {
 
             {/* Filters */}
             <div className="flex flex-wrap gap-4 mb-6 bg-black/20 p-4 rounded-xl border border-white/5">
-                <div className="flex items-center bg-[#1E293B] border border-white/10 rounded-lg px-3 py-2 flex-1 min-w-[200px]">
+                <div className="flex items-center bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 flex-1 min-w-[200px]">
                     <Search size={18} className="text-gray-400 mr-2" />
                     <input
                         type="text"
@@ -219,7 +219,7 @@ const TournamentManager = () => {
                     <select
                         value={filterCity}
                         onChange={(e) => setFilterCity(e.target.value)}
-                        className="bg-[#1E293B] text-white border border-white/10 rounded-lg px-3 py-2 text-sm outline-none cursor-pointer"
+                        className="bg-[#1a1a1a] text-white border border-white/10 rounded-lg px-3 py-2 text-sm outline-none cursor-pointer"
                     >
                         <option value="All">All Cities</option>
                         {uniqueCities.map(c => <option key={c} value={c}>{c}</option>)}
@@ -228,7 +228,7 @@ const TournamentManager = () => {
                     <select
                         value={filterCategory}
                         onChange={(e) => setFilterCategory(e.target.value)}
-                        className="bg-[#1E293B] text-white border border-white/10 rounded-lg px-3 py-2 text-sm outline-none cursor-pointer"
+                        className="bg-[#1a1a1a] text-white border border-white/10 rounded-lg px-3 py-2 text-sm outline-none cursor-pointer"
                     >
                         <option value="All">All Categories</option>
                         {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -313,14 +313,14 @@ const TournamentManager = () => {
                         <button
                             onClick={() => setPage(p => Math.max(1, p - 1))}
                             disabled={page === 1}
-                            className="p-2 rounded-lg bg-[#1E293B] border border-white/10 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/10"
+                            className="p-2 rounded-lg bg-[#1a1a1a] border border-white/10 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/10"
                         >
                             <ChevronLeft size={20} />
                         </button>
                         <button
                             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                             disabled={page === totalPages}
-                            className="p-2 rounded-lg bg-[#1E293B] border border-white/10 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/10"
+                            className="p-2 rounded-lg bg-[#1a1a1a] border border-white/10 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/10"
                         >
                             <ChevronRight size={20} />
                         </button>
@@ -341,7 +341,7 @@ const TournamentManager = () => {
                             initial={{ scale: 0.95, opacity: 0, y: 20 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
                             exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                            className="bg-[#1E293B] w-full max-w-2xl rounded-2xl border border-white/10 overflow-hidden shadow-2xl"
+                            className="bg-[#1a1a1a] w-full max-w-2xl rounded-2xl border border-white/10 overflow-hidden shadow-2xl"
                         >
                             <div className="flex justify-between items-center p-6 border-b border-white/10">
                                 <h3 className="text-xl font-bold text-white">{currentEvent ? 'Edit Event' : 'New Event'}</h3>

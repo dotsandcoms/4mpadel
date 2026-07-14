@@ -144,12 +144,12 @@ const AdminPlayerProfileModal = ({
     return (
         <div className="fixed inset-0 z-[1200] flex items-end sm:items-center justify-center p-0 sm:p-3 bg-black/70 backdrop-blur-[2px]" onClick={onClose}>
             <div
-                className="bg-[#0B1220] border border-white/10 rounded-t-2xl sm:rounded-xl w-full max-w-lg md:max-w-3xl max-h-[90vh] flex flex-col shadow-2xl shadow-black/50"
+                className="bg-[#141414] border border-white/10 rounded-t-2xl sm:rounded-xl w-full max-w-lg md:max-w-3xl max-h-[90vh] flex flex-col shadow-2xl shadow-black/50"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
                 <div className="relative shrink-0 overflow-hidden rounded-t-2xl sm:rounded-t-xl">
-                    <div className="absolute inset-0 bg-gradient-to-br from-padel-green/15 via-[#1E293B] to-[#0B1220]" />
+                    <div className="absolute inset-0 bg-gradient-to-br from-padel-green/15 via-[#1a1a1a] to-[#141414]" />
                     <div className="relative px-4 py-3 border-b border-white/10 flex items-center gap-3 pr-12">
                         <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/20 bg-black/40 shrink-0">
                             {player?.image_url ? (
@@ -310,7 +310,7 @@ const AdminPlayerProfileModal = ({
                 </div>
 
                 {!loading && (
-                    <div className="shrink-0 border-t border-white/10 bg-[#0B1220] px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] flex flex-col sm:flex-row gap-2">
+                    <div className="shrink-0 border-t border-white/10 bg-[#141414] px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] flex flex-col sm:flex-row gap-2">
                         {hasLinkedProfile && (
                             <a
                                 href={`/players?id=${player.id}`}

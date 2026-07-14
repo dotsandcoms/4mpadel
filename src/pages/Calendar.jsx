@@ -164,7 +164,7 @@ const FeaturedEventCard = ({ event, index }) => {
             {/* Soft Glow Behind the Card */}
             <div className={`absolute -inset-1 sm:-inset-1.5 rounded-[28px] blur-xl opacity-20 sm:opacity-30 group-hover:opacity-50 transition-opacity duration-700 ${glowBgColor} -z-10`} />
 
-            <div className={`relative flex flex-row items-stretch min-h-[180px] sm:min-h-[220px] bg-[#0F1420] rounded-[24px] overflow-hidden border ${tierColor} shadow-2xl [transform:translateZ(0)]`}>
+            <div className={`relative flex flex-row items-stretch min-h-[180px] sm:min-h-[220px] bg-[#141414] rounded-[24px] overflow-hidden border ${tierColor} shadow-2xl [transform:translateZ(0)]`}>
 
                 {/* Shimmer Effect */}
                 <motion.div
@@ -223,7 +223,7 @@ const FeaturedEventCard = ({ event, index }) => {
                 </div>
 
                 {/* Gradient overlay for fade effect to image */}
-                <div className="absolute inset-y-0 right-[100px] sm:right-[280px] w-16 sm:w-32 bg-gradient-to-l from-transparent to-[#0F1420] z-10 pointer-events-none" />
+                <div className="absolute inset-y-0 right-[100px] sm:right-[280px] w-16 sm:w-32 bg-gradient-to-l from-transparent to-[#141414] z-10 pointer-events-none" />
 
                 {/* Right Image Container */}
                 <div className="relative w-[110px] sm:w-[320px] shrink-0 bg-black overflow-hidden rounded-r-[24px] z-0 flex items-center justify-center p-0">
@@ -385,7 +385,7 @@ const CalendarEventItem = ({ event, index }) => {
             <Link
                 to={detailsPath}
                 target={event.slug ? "_self" : (event.eventId ? "_blank" : "_self")}
-                className={`group block bg-[#0F1420] hover:bg-[#151A27] border ${tierColor} rounded-2xl py-3 px-4 transition-all duration-300 shadow-xl overflow-hidden relative cursor-pointer`}
+                className={`group block bg-[#141414] hover:bg-[#1a1a1a] border ${tierColor} rounded-2xl py-3 px-4 transition-all duration-300 shadow-xl overflow-hidden relative cursor-pointer`}
             >
                 <div className={`absolute inset-0 ${bgGradient} opacity-10 group-hover:opacity-30 transition-opacity`}></div>
 
@@ -838,12 +838,12 @@ const Calendar = () => {
     };
 
     return (
-        <div className="bg-[#080C17] min-h-screen text-white font-sans selection:bg-padel-green selection:text-black">
+        <div className="bg-[#000000] min-h-screen text-white font-sans selection:bg-padel-green selection:text-black">
 
             {/* Background elements matched from Rankings */}
             <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-padel-green/10 blur-[150px] rounded-full" />
-                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/10 blur-[150px] rounded-full" />
+                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-white/5 blur-[150px] rounded-full" />
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03]" />
             </div>
 
@@ -872,7 +872,7 @@ const Calendar = () => {
                         {/* Soft vignette pulling focus to the centre */}
                         <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, transparent 48%, rgba(0,0,0,0.5) 100%)' }} />
                         {/* Gradient overlay for text readability, fading into page colour */}
-                        <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-[#080C17]/40 to-[#080C17]" />
+                        <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-[#000000]/40 to-[#000000]" />
                     </div>
 
                     <div className="relative z-10 px-5 sm:px-0">
@@ -898,7 +898,7 @@ const Calendar = () => {
                         className="relative z-10 flex gap-1.5 md:gap-0 items-center max-w-4xl mx-auto px-5 sm:px-0 mt-5 md:mt-6"
                     >
                         {/* Search Input Container */}
-                        <div className="relative flex-1 bg-[#121620] border border-white/5 rounded-full shadow-lg">
+                        <div className="relative flex-1 bg-[#181818] border border-white/5 rounded-full shadow-lg">
                             <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4 md:w-5 md:h-5" />
                             <input
                                 type="text"
@@ -912,7 +912,7 @@ const Calendar = () => {
                         {/* Filters Button */}
                         <button
                             onClick={() => setShowFilters(true)}
-                            className="relative flex items-center justify-center gap-2 bg-[#121620] border border-white/5 hover:bg-white/10 rounded-full px-5 md:px-6 py-3 md:py-4 text-gray-300 hover:text-white transition-all font-semibold text-sm md:text-base shrink-0 group shadow-lg"
+                            className="relative flex items-center justify-center gap-2 bg-[#181818] border border-white/5 hover:bg-white/10 rounded-full px-5 md:px-6 py-3 md:py-4 text-gray-300 hover:text-white transition-all font-semibold text-sm md:text-base shrink-0 group shadow-lg"
                         >
                             <Filter className="w-4 h-4 md:w-5 md:h-5 text-gray-400 group-hover:text-white transition-colors" />
                             <span className="hidden sm:block">Filters</span>
@@ -944,7 +944,7 @@ const Calendar = () => {
                                 animate={{ y: 0 }}
                                 exit={{ y: '100%' }}
                                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                                className="fixed bottom-0 left-0 right-0 z-[1001] bg-[#0a0f1d] border-t border-white/10 rounded-t-3xl p-6 pb-28 md:pb-6 shadow-2xl flex flex-col gap-6 max-h-[85vh] overflow-y-auto md:max-w-md md:left-1/2 md:-translate-x-1/2 md:bottom-4 md:border md:rounded-3xl"
+                                className="fixed bottom-0 left-0 right-0 z-[1001] bg-[#141414] border-t border-white/10 rounded-t-3xl p-6 pb-28 md:pb-6 shadow-2xl flex flex-col gap-6 max-h-[85vh] overflow-y-auto md:max-w-md md:left-1/2 md:-translate-x-1/2 md:bottom-4 md:border md:rounded-3xl"
                             >
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-xl font-bold text-white">Filters</h3>
@@ -964,9 +964,9 @@ const Calendar = () => {
                                                 onChange={(e) => setLeagueFilter(e.target.value)}
                                                 className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-12 pr-10 text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green transition-colors font-semibold text-sm"
                                             >
-                                                <option value="All" className="bg-[#0a0f1d]">All Types</option>
-                                                <option value="League" className="bg-[#0a0f1d]">League Only</option>
-                                                <option value="Tournaments" className="bg-[#0a0f1d]">Tournaments</option>
+                                                <option value="All" className="bg-[#141414]">All Types</option>
+                                                <option value="League" className="bg-[#141414]">League Only</option>
+                                                <option value="Tournaments" className="bg-[#141414]">Tournaments</option>
                                             </select>
                                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
                                                 <ChevronDown className="w-4 h-4 text-gray-400" />
@@ -987,9 +987,9 @@ const Calendar = () => {
                                                 }}
                                                 className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-12 pr-10 text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green transition-colors font-semibold text-sm"
                                             >
-                                                <option value="All" className="bg-[#0a0f1d]">All Statuses</option>
+                                                <option value="All" className="bg-[#141414]">All Statuses</option>
                                                 {uniqueStatuses.filter(s => s !== 'All').map(s => (
-                                                    <option key={s} value={s} className="bg-[#0a0f1d]">{s}</option>
+                                                    <option key={s} value={s} className="bg-[#141414]">{s}</option>
                                                 ))}
                                             </select>
                                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
@@ -1009,7 +1009,7 @@ const Calendar = () => {
                                                 className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-12 pr-10 text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green transition-colors font-semibold text-sm"
                                             >
                                                 {uniqueCities.map(city => (
-                                                    <option key={city} value={city} className="bg-[#0a0f1d]">{city === 'All' ? 'All Cities' : city}</option>
+                                                    <option key={city} value={city} className="bg-[#141414]">{city === 'All' ? 'All Cities' : city}</option>
                                                 ))}
                                             </select>
                                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">

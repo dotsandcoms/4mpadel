@@ -437,7 +437,7 @@ const RegisterOrganisationForm = ({
                 </div>
 
                 {showSuggestions && nameSuggestions.length > 0 && (
-                    <div className="absolute z-30 left-0 right-0 mt-1 bg-[#1E293B] border border-white/10 rounded-xl max-h-52 overflow-y-auto shadow-xl">
+                    <div className="absolute z-30 left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-xl max-h-52 overflow-y-auto shadow-xl">
                         {nameSuggestions.map((p) => (
                             <button
                                 key={p.id}

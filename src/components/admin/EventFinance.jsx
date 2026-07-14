@@ -1456,7 +1456,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         <div className="space-y-6">
             {/* Header & Managed Events List - Only visible in 'list' mode */}
             {viewMode === 'list' && (
-            <div className="bg-[#1E293B]/50 backdrop-blur-md p-8 rounded-3xl border border-white/10">
+            <div className="bg-[#1a1a1a]/50 backdrop-blur-md p-8 rounded-3xl border border-white/10">
                 {/* Search & Bulk Action Header */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
                     <div className="flex items-center gap-4">
@@ -1495,7 +1495,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 <div className="bg-black/20 rounded-2xl border border-white/5 overflow-hidden">
                     <div className="max-h-[320px] overflow-y-auto no-scrollbar">
                         <table className="w-full text-left border-collapse">
-                            <thead className="sticky top-0 bg-[#1E293B] text-[10px] font-black uppercase text-gray-500 border-b border-white/5 z-10">
+                            <thead className="sticky top-0 bg-[#1a1a1a] text-[10px] font-black uppercase text-gray-500 border-b border-white/5 z-10">
                                 <tr>
                                     <th className="px-6 py-3">Event Date</th>
                                     <th className="px-6 py-3">Tournament Name</th>
@@ -1636,7 +1636,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     >
                         <motion.div 
                             whileHover={{ y: -5, scale: 1.02 }}
-                            className="bg-gradient-to-br from-[#1E293B]/80 to-[#0F172A]/80 backdrop-blur-xl p-6 rounded-3xl border border-white/10 flex flex-col gap-2 relative overflow-hidden group shadow-2xl"
+                            className="bg-gradient-to-br from-[#1a1a1a]/80 to-[#0a0a0a]/80 backdrop-blur-xl p-6 rounded-3xl border border-white/10 flex flex-col gap-2 relative overflow-hidden group shadow-2xl"
                         >
                             <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 group-hover:rotate-12 transition-all duration-500">
                                 <Users size={120} />
@@ -1650,7 +1650,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         
                         <motion.div 
                             whileHover={{ y: -5, scale: 1.02 }}
-                            className="bg-gradient-to-br from-padel-green/20 via-[#1E293B]/80 to-[#0F172A]/80 backdrop-blur-xl p-6 rounded-3xl border border-padel-green/30 flex flex-col gap-2 relative overflow-hidden group shadow-[0_0_30px_rgba(190,255,0,0.1)]"
+                            className="bg-gradient-to-br from-padel-green/20 via-[#1a1a1a]/80 to-[#0a0a0a]/80 backdrop-blur-xl p-6 rounded-3xl border border-padel-green/30 flex flex-col gap-2 relative overflow-hidden group shadow-[0_0_30px_rgba(190,255,0,0.1)]"
                         >
                             <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:opacity-20 group-hover:scale-110 transition-all duration-500 text-padel-green">
                                 <DollarSign size={120} />
@@ -1681,7 +1681,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         
                         <motion.div 
                             whileHover={{ y: -5, scale: 1.02 }}
-                            className="bg-gradient-to-br from-[#1E293B]/80 to-[#0F172A]/80 backdrop-blur-xl p-6 rounded-3xl border border-white/10 flex flex-col gap-2 relative overflow-hidden group shadow-2xl"
+                            className="bg-gradient-to-br from-[#1a1a1a]/80 to-[#0a0a0a]/80 backdrop-blur-xl p-6 rounded-3xl border border-white/10 flex flex-col gap-2 relative overflow-hidden group shadow-2xl"
                         >
                             <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 group-hover:-rotate-12 transition-all duration-500">
                                 <Trophy size={120} />
@@ -1708,7 +1708,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         
                         <motion.div 
                             whileHover={{ y: -5, scale: 1.02 }}
-                            className="bg-gradient-to-br from-[#1E293B]/80 to-[#0F172A]/80 backdrop-blur-xl p-6 rounded-3xl border border-white/10 flex flex-col gap-2 relative overflow-hidden group shadow-2xl"
+                            className="bg-gradient-to-br from-[#1a1a1a]/80 to-[#0a0a0a]/80 backdrop-blur-xl p-6 rounded-3xl border border-white/10 flex flex-col gap-2 relative overflow-hidden group shadow-2xl"
                         >
                             <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 group-hover:scale-110 transition-all duration-500">
                                 <CheckCircle size={120} />
@@ -1742,24 +1742,24 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             Financial Summary
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                            <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
+                            <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
                                 <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Entries Paid to 4m</p>
                                 <span className="text-xl font-black text-white">{financialSummary.paid4M}</span>
                             </div>
-                            <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
+                            <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
                                 <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Entry Payments (Manual)</p>
                                 <span className="text-xl font-black text-white">{financialSummary.paidClub}</span>
                             </div>
-                            <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
+                            <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Collected by 4M</p>
                                 <span className="text-xl font-black text-padel-green">{fmtR(financialSummary.collected4M)}</span>
                                 <p className="text-[9px] text-gray-500 mt-1">Entry fees via Paystack only</p>
                             </div>
-                            <div className="bg-[#1E293B]/50 border border-emerald-500/30 bg-emerald-500/5 rounded-xl p-4 md:row-span-2 flex flex-col justify-center">
+                            <div className="bg-[#1a1a1a]/50 border border-emerald-500/30 bg-emerald-500/5 rounded-xl p-4 md:row-span-2 flex flex-col justify-center">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Due to organiser</p>
                                 <span className="text-3xl font-black text-padel-green">{fmtR(financialSummary.dueToOrg)}</span>
                             </div>
-                            <div className="bg-[#1E293B]/50 border border-red-500/20 rounded-xl p-4 md:col-span-3">
+                            <div className="bg-[#1a1a1a]/50 border border-red-500/20 rounded-xl p-4 md:col-span-3">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-red-400 mb-1">5% Commission to 4M</p>
                                 <span className="text-lg font-black text-red-400">{fmtR(financialSummary.commission)}</span>
                                 {financialSummary.licenseRevenue4M > 0 && (
@@ -1895,20 +1895,20 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             </div>
                         </div>
 
-                        <div className="bg-[#1E293B]/50 backdrop-blur-md rounded-3xl border border-white/10">
+                        <div className="bg-[#1a1a1a]/50 backdrop-blur-md rounded-3xl border border-white/10">
                         {/* DESKTOP TABLE VIEW */}
                         <div className="hidden lg:block overflow-x-auto max-h-[75vh] overflow-y-auto custom-scrollbar border border-white/5 rounded-2xl">
                             <table className="w-full text-left border-collapse">
                                 <thead className="sticky top-0 z-20">
-                                    <tr className="bg-[#1E293B]">
-                                        <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm w-full">Participant (Rankedin)</th>
-                                        <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">Division</th>
-                                        <th className="sticky top-0 bg-[#1E293B] px-2 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm w-[160px]">System Profile Match</th>
-                                        <th className="sticky top-0 bg-[#1E293B] px-2 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm w-[120px]">Contact Number</th>
-                                        <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">License Status</th>
-                                        <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">WhatsApp</th>
-                                        <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">Entry Fee</th>
-                                        <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm text-right">Actions</th>
+                                    <tr className="bg-[#1a1a1a]">
+                                        <th className="sticky top-0 bg-[#1a1a1a] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm w-full">Participant (Rankedin)</th>
+                                        <th className="sticky top-0 bg-[#1a1a1a] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">Division</th>
+                                        <th className="sticky top-0 bg-[#1a1a1a] px-2 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm w-[160px]">System Profile Match</th>
+                                        <th className="sticky top-0 bg-[#1a1a1a] px-2 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm w-[120px]">Contact Number</th>
+                                        <th className="sticky top-0 bg-[#1a1a1a] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">License Status</th>
+                                        <th className="sticky top-0 bg-[#1a1a1a] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">WhatsApp</th>
+                                        <th className="sticky top-0 bg-[#1a1a1a] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">Entry Fee</th>
+                                        <th className="sticky top-0 bg-[#1a1a1a] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
@@ -2068,7 +2068,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                     className={`relative overflow-hidden rounded-2xl border transition-all duration-300 ${
                                         p.is_paid 
                                         ? 'bg-padel-green/5 border-padel-green/20' 
-                                        : 'bg-[#1E293B]/80 border-white/5 shadow-xl'
+                                        : 'bg-[#1a1a1a]/80 border-white/5 shadow-xl'
                                     }`}
                                 >
                                     {/* Top Status Bar */}
@@ -2215,7 +2215,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         />
                         <motion.div 
                             initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-                            className="bg-[#0F172A] border border-white/10 rounded-3xl p-8 w-full max-w-xl relative overflow-hidden"
+                            className="bg-[#0a0a0a] border border-white/10 rounded-3xl p-8 w-full max-w-xl relative overflow-hidden"
                         >
                             <h3 className="text-2xl font-black text-white mb-2">Link 4m Padel Profile</h3>
                             <p className="text-gray-400 text-sm mb-6">Linking: <span className="text-padel-green font-bold">{matchingProfile.full_name}</span></p>

@@ -205,7 +205,7 @@ const HappeningNowWidget = () => {
                                                             window.open(event.rankedin_url, '_blank');
                                                         }
                                                     }}
-                                                    className="relative z-10 flex items-center py-3 px-4 w-full text-left bg-[#0A0F1C] rounded-[15px] transition-colors duration-300"
+                                                    className="relative z-10 flex items-center py-3 px-4 w-full text-left bg-[#141414] rounded-[15px] transition-colors duration-300"
                                                 >
                                                     {isLive && (
                                                         <span className="absolute top-3 right-4 inline-flex items-center gap-1.5 text-red-400 text-[8px] font-black uppercase tracking-widest">

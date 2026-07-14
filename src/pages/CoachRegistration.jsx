@@ -11,7 +11,7 @@ const CoachRegistration = () => (
                 </h1>
                 <p className="text-gray-400 text-sm">Join our network of approved 4M Padel coaches.</p>
             </div>
-            <div className="bg-[#1E293B]/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl">
+            <div className="bg-[#1a1a1a]/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl">
                 <RegisterCoachForm onClose={() => { window.location.href = '/'; }} />
             </div>
         </div>

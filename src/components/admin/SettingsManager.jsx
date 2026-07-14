@@ -103,7 +103,7 @@ const SettingsManager = () => {
                 <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-[#1E293B]/50 backdrop-blur-md p-8 rounded-3xl border border-white/10"
+                    className="bg-[#1a1a1a]/50 backdrop-blur-md p-8 rounded-3xl border border-white/10"
                 >
                     <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
                         <Globe size={20} className="text-padel-green" /> Social Media Links
@@ -172,7 +172,7 @@ const SettingsManager = () => {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="bg-[#1E293B]/50 backdrop-blur-md p-8 rounded-3xl border border-white/10"
+                    className="bg-[#1a1a1a]/50 backdrop-blur-md p-8 rounded-3xl border border-white/10"
                 >
                     <h3 className="text-xl font-bold text-white mb-6">Site Configuration</h3>
                     <div className="space-y-6">

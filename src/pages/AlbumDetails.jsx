@@ -356,7 +356,7 @@ const AlbumDetails = () => {
                             >
                                 {/* Masonry / Grid Layout - 8 columns on desktop */}
                                 {images.length === 0 ? (
-                                    <div className="text-center py-10 bg-[#1E293B]/10 rounded-2xl border border-white/5">
+                                    <div className="text-center py-10 bg-[#1a1a1a]/10 rounded-2xl border border-white/5">
                                         <ImageIcon className="w-8 h-8 text-gray-700 mx-auto mb-2" />
                                         <h3 className="text-sm font-bold text-white uppercase">Archive is Empty</h3>
                                     </div>

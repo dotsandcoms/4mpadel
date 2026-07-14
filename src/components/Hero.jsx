@@ -661,7 +661,7 @@ const Hero = () => {
                             type="button"
                             onClick={() => setPage((p) => Math.max(0, p - 1))}
                             disabled={page === 0}
-                            className={`absolute -left-2 sm:-left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border border-white/10 bg-[#060913] flex items-center justify-center transition-all duration-300 md:opacity-0 md:group-hover:opacity-100 text-white shadow-xl z-50 ${page === 0 ? 'opacity-50 cursor-not-allowed md:opacity-0 md:pointer-events-none' : 'hover:bg-padel-green hover:text-black hover:border-padel-green'}`}
+                            className={`absolute -left-2 sm:-left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border border-white/10 bg-[#0a0a0a] flex items-center justify-center transition-all duration-300 md:opacity-0 md:group-hover:opacity-100 text-white shadow-xl z-50 ${page === 0 ? 'opacity-50 cursor-not-allowed md:opacity-0 md:pointer-events-none' : 'hover:bg-padel-green hover:text-black hover:border-padel-green'}`}
                         >
                             <ChevronLeft className="w-4 h-4" />
                         </button>
@@ -669,7 +669,7 @@ const Hero = () => {
                             type="button"
                             onClick={() => setPage((p) => Math.min(maxPage, p + 1))}
                             disabled={page === maxPage}
-                            className={`absolute -right-2 sm:-right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border border-white/10 bg-[#060913] flex items-center justify-center transition-all duration-300 md:opacity-0 md:group-hover:opacity-100 text-white shadow-xl z-50 ${page === maxPage ? 'opacity-50 cursor-not-allowed md:opacity-0 md:pointer-events-none' : 'hover:bg-padel-green hover:text-black hover:border-padel-green'}`}
+                            className={`absolute -right-2 sm:-right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border border-white/10 bg-[#0a0a0a] flex items-center justify-center transition-all duration-300 md:opacity-0 md:group-hover:opacity-100 text-white shadow-xl z-50 ${page === maxPage ? 'opacity-50 cursor-not-allowed md:opacity-0 md:pointer-events-none' : 'hover:bg-padel-green hover:text-black hover:border-padel-green'}`}
                         >
                             <ChevronRight className="w-4 h-4" />
                         </button>
@@ -710,7 +710,7 @@ const Hero = () => {
                     className="absolute inset-0 animate-spin opacity-60 group-hover:opacity-100 transition-opacity duration-300 [animation-duration:6s] pointer-events-none"
                     style={{ background: 'conic-gradient(from 0deg, transparent 0%, transparent 78%, rgba(249,115,22,0.9) 88%, transparent 96%)' }}
                 />
-                <div className="relative z-10 w-full bg-[#0A0F1C] rounded-[15px] p-3.5 sm:p-4 text-left flex flex-col justify-between min-h-[125px] overflow-hidden">
+                <div className="relative z-10 w-full bg-[#141414] rounded-[15px] p-3.5 sm:p-4 text-left flex flex-col justify-between min-h-[125px] overflow-hidden">
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.08)_0%,transparent_75%)] pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                     <div className="flex justify-between items-start gap-3 border-b border-white/5 pb-2 relative z-20">
                         <div className="flex items-center gap-1.5 min-w-0">
@@ -864,7 +864,7 @@ const Hero = () => {
                 onMouseMove={handleMouseMove}
             >
                 {/* Solid base background — text sits on this, never on the photo */}
-                <div className="absolute inset-0 z-0 bg-[#060913]" />
+                <div className="absolute inset-0 z-0 bg-[#0a0a0a]" />
 
                 {/* Photo panel — anchored to the right, shown in the space the text doesn't use (not stretched as a full-bleed cover) */}
                 <div
@@ -876,12 +876,12 @@ const Hero = () => {
                         className="w-full h-full object-cover saturate-[0.45] contrast-[1.08]"
                     />
                     {/* Navy colour tint so the photo reads as part of the dark theme rather than its own warm/teal palette */}
-                    <div className="absolute inset-0 bg-[#0B1730]/35 mix-blend-multiply" />
-                    <div className="absolute inset-0 bg-[#060913]/10" />
+                    <div className="absolute inset-0 bg-[#141414]/35 mix-blend-multiply" />
+                    <div className="absolute inset-0 bg-[#0a0a0a]/10" />
                     {/* Fade the panel's left edge into the solid background so the crop doesn't read as a hard rectangle */}
-                    <div className="absolute inset-0 bg-gradient-to-r from-[#060913] from-0% via-[#060913]/40 via-25% to-transparent to-65%" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] from-0% via-[#0a0a0a]/40 via-25% to-transparent to-65%" />
                     {/* Fade the bottom edge so it dissolves into the solid background instead of ending abruptly */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#060913]" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#0a0a0a]" />
                 </div>
 
                 {/* Floating Orbs (Ambient for Mobile) */}
@@ -925,7 +925,7 @@ const Hero = () => {
                                 ease: "easeInOut",
                                 delay: 1
                             }}
-                            className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/80 rounded-full blur-[100px] mix-blend-screen z-10 pointer-events-none"
+                            className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-white/10 rounded-full blur-[100px] mix-blend-screen z-10 pointer-events-none"
                         />
                     </>
                 )}

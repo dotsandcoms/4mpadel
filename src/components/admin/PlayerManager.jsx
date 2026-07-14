@@ -29,7 +29,7 @@ const StatCard = ({ title, value, subtext, icon: Icon, color = 'padel-green', de
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay, duration: 0.3 }}
-            className="bg-[#1E293B]/50 backdrop-blur-md p-5 rounded-2xl border border-white/10 hover:border-white/20 transition-colors"
+            className="bg-[#1a1a1a]/50 backdrop-blur-md p-5 rounded-2xl border border-white/10 hover:border-white/20 transition-colors"
         >
             <div className="flex items-start justify-between">
                 <div>
@@ -774,7 +774,7 @@ const PlayerManager = () => {
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: 0.2 }}
-                                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
+                                    className="bg-[#1a1a1a]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
                                 >
                                     <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Payment Status</h3>
                                     {loading ? (
@@ -797,7 +797,7 @@ const PlayerManager = () => {
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: 0.25 }}
-                                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
+                                    className="bg-[#1a1a1a]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
                                 >
                                     <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">By Category</h3>
                                     {loading ? (
@@ -808,7 +808,7 @@ const PlayerManager = () => {
                                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                                                 <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
                                                 <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                                                <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
                                                 <Bar dataKey="count" fill="#beff00" radius={[4, 4, 0, 0]} />
                                             </BarChart>
                                         </ResponsiveContainer>
@@ -819,7 +819,7 @@ const PlayerManager = () => {
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: 0.3 }}
-                                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
+                                    className="bg-[#1a1a1a]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
                                 >
                                     <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">By Region</h3>
                                     {loading ? (
@@ -830,7 +830,7 @@ const PlayerManager = () => {
                                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                                                 <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
                                                 <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                                                <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
                                                 <Bar dataKey="count" fill="#38bdf8" radius={[4, 4, 0, 0]} />
                                             </BarChart>
                                         </ResponsiveContainer>
@@ -841,7 +841,7 @@ const PlayerManager = () => {
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: 0.35 }}
-                                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
+                                    className="bg-[#1a1a1a]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
                                 >
                                     <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Gender Distribution</h3>
                                     {loading ? (
@@ -874,7 +874,7 @@ const PlayerManager = () => {
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: 0.4 }}
-                                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
+                                    className="bg-[#1a1a1a]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
                                 >
                                     <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider text-padel-green">Registrations</h3>
                                     {loading ? (
@@ -885,7 +885,7 @@ const PlayerManager = () => {
                                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                                                 <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
                                                 <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                                                <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
                                                 <Bar dataKey="registrations" fill="#beff00" radius={[4, 4, 0, 0]} />
                                             </BarChart>
                                         </ResponsiveContainer>
@@ -896,7 +896,7 @@ const PlayerManager = () => {
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: 0.45 }}
-                                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
+                                    className="bg-[#1a1a1a]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
                                 >
                                     <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider text-green-400">Full License Sales</h3>
                                     {loading ? (
@@ -907,7 +907,7 @@ const PlayerManager = () => {
                                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                                                 <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
                                                 <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                                                <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
                                                 <Bar dataKey="licenses" fill="#22c55e" radius={[4, 4, 0, 0]} />
                                             </BarChart>
                                         </ResponsiveContainer>
@@ -972,7 +972,7 @@ const PlayerManager = () => {
             </div>
 
             {/* Players Table */}
-            <div className="bg-[#1E293B]/30 rounded-2xl border border-white/10 overflow-hidden">
+            <div className="bg-[#1a1a1a]/30 rounded-2xl border border-white/10 overflow-hidden">
                 <div className="overflow-x-auto max-h-[60vh] overflow-y-auto custom-scrollbar">
                     <table className="w-full text-left border-collapse">
                         <thead className="sticky top-0 z-10">
@@ -1118,9 +1118,9 @@ const PlayerManager = () => {
                             initial={{ scale: 0.95, opacity: 0, y: 20 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
                             exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                            className="bg-[#1E293B] w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 shadow-2xl"
+                            className="bg-[#1a1a1a] w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 shadow-2xl"
                         >
-                            <div className="flex justify-between items-center p-6 border-b border-white/10 sticky top-0 bg-[#1E293B] z-10">
+                            <div className="flex justify-between items-center p-6 border-b border-white/10 sticky top-0 bg-[#1a1a1a] z-10">
                                 <h3 className="text-xl font-bold text-white">{currentPlayer ? 'Edit Player' : 'New Player'}</h3>
                                 <button onClick={() => setIsEditing(false)} className="text-gray-400 hover:text-white"><X size={24} /></button>
                             </div>
@@ -1137,14 +1137,14 @@ const PlayerManager = () => {
                                                     className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none appearance-none cursor-pointer font-bold"
                                                 >
                                                     <option value="">Select Category</option>
-                                                    <optgroup label="Men's" className="bg-[#1E293B]">
+                                                    <optgroup label="Men's" className="bg-[#1a1a1a]">
                                                         <option value="Men's Open (Pro/Elite)">Men's Open (Pro/Elite)</option>
                                                         <option value="Men's Advanced">Men's Advanced</option>
                                                         <option value="Men's Intermediate">Men's Intermediate</option>
                                                         <option value="Men's 35+">Men's 35+</option>
                                                         <option value="Men's Juniors">Men's Juniors</option>
                                                     </optgroup>
-                                                    <optgroup label="Ladies" className="bg-[#1E293B]">
+                                                    <optgroup label="Ladies" className="bg-[#1a1a1a]">
                                                         <option value="Ladies Open (Pro/Elite)">Ladies Open (Pro/Elite)</option>
                                                         <option value="Ladies Advanced">Ladies Advanced</option>
                                                         <option value="Ladies Intermediate">Ladies Intermediate</option>
@@ -1377,7 +1377,7 @@ const PlayerManager = () => {
                             initial={{ scale: 0.95, opacity: 0, y: 20 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
                             exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                            className="bg-[#1E293B] w-full max-w-md rounded-2xl border border-white/10 shadow-2xl"
+                            className="bg-[#1a1a1a] w-full max-w-md rounded-2xl border border-white/10 shadow-2xl"
                         >
                             <div className="flex justify-between items-center p-6 border-b border-white/10">
                                 <h3 className="text-xl font-bold text-white">Reset Password</h3>
@@ -1426,7 +1426,7 @@ const PlayerManager = () => {
                             initial={{ scale: 0.95, opacity: 0, y: 20 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
                             exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                            className="bg-[#1E293B] w-full max-w-md rounded-2xl border border-white/10 shadow-2xl overflow-hidden"
+                            className="bg-[#1a1a1a] w-full max-w-md rounded-2xl border border-white/10 shadow-2xl overflow-hidden"
                         >
                             <div className="p-6 border-b border-white/10 flex justify-between items-center">
                                 <h3 className="text-xl font-bold text-white">Assign Temp License</h3>

@@ -58,7 +58,7 @@ const waLink = (num) => num ? `https://wa.me/${num.replace(/[^0-9]/g, '').replac
 
 /** Section wrapper with brand-accented header */
 const Section = ({ title, accent, action, children, id }) => (
-    <div id={id} className="bg-[#0F172A]/50 border border-white/5 rounded-3xl p-5 md:p-6">
+    <div id={id} className="bg-[#0a0a0a]/50 border border-white/5 rounded-3xl p-5 md:p-6">
         <div className="flex items-center justify-between mb-4">
             <h2 className="text-[10px] font-black uppercase tracking-[0.25em]" style={{ color: accent }}>{title}</h2>
             {action}
@@ -245,7 +245,7 @@ const OrganisationPage = () => {
                             {org.logo_url ? (
                                 <img src={org.logo_url} alt={org.name} className="w-24 h-24 md:w-32 md:h-32 rounded-3xl object-cover bg-white border-4 border-black shadow-2xl shrink-0" />
                             ) : (
-                                <div className="w-24 h-24 md:w-32 md:h-32 rounded-3xl bg-[#0F172A] border-4 border-black flex items-center justify-center shadow-2xl shrink-0" style={{ color: accent }}>
+                                <div className="w-24 h-24 md:w-32 md:h-32 rounded-3xl bg-[#0a0a0a] border-4 border-black flex items-center justify-center shadow-2xl shrink-0" style={{ color: accent }}>
                                     <Building size={40} />
                                 </div>
                             )}
@@ -280,7 +280,7 @@ const OrganisationPage = () => {
 
             <div className="w-full max-w-[1440px] mx-auto px-4 xl:px-8 mt-7 space-y-6">
                 {/* ===== STAT STRIP ===== */}
-                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="bg-[#0F172A]/50 border border-white/5 rounded-3xl p-4 md:p-5 grid grid-cols-4 divide-x divide-white/5">
+                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="bg-[#0a0a0a]/50 border border-white/5 rounded-3xl p-4 md:p-5 grid grid-cols-4 divide-x divide-white/5">
                     {stats.map((s, i) => (
                         <div key={i} className="flex flex-col items-center text-center px-1">
                             <s.icon size={15} className="mb-1.5" style={{ color: accent }} />
@@ -291,7 +291,7 @@ const OrganisationPage = () => {
                 </motion.div>
 
                 {/* ===== INFO CARD ===== */}
-                <div className="bg-[#0F172A]/50 border border-white/5 rounded-3xl p-5 md:p-6 space-y-3.5">
+                <div className="bg-[#0a0a0a]/50 border border-white/5 rounded-3xl p-5 md:p-6 space-y-3.5">
                     {org.website_url && (
                         <a href={safeUrl(org.website_url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-sm text-gray-200 hover:text-white group">
                             <Globe size={16} style={{ color: accent }} className="shrink-0" />
@@ -546,7 +546,7 @@ const OrganisationPage = () => {
 
                 {/* ===== BOTTOM CONTACT STRIP ===== */}
                 {(org.contact_phone || org.contact_email) && (
-                    <div className="bg-[#0F172A]/50 border border-white/5 rounded-3xl p-4 md:p-5 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-8">
+                    <div className="bg-[#0a0a0a]/50 border border-white/5 rounded-3xl p-4 md:p-5 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-8">
                         <span className="text-[10px] font-black uppercase tracking-[0.25em] text-gray-500">Contact</span>
                         {org.contact_phone && (
                             <a href={`tel:${org.contact_phone}`} className="flex items-center gap-2 text-sm font-bold text-white hover:opacity-80">

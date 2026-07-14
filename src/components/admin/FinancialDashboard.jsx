@@ -33,7 +33,7 @@ const fetchAllSuccessPayments = async () => {
 const KPICard = ({ title, value, icon: Icon, trend, trendValue, color }) => (
     <motion.div 
         whileHover={{ y: -5 }}
-        className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-3xl border border-white/10 relative overflow-hidden group"
+        className="bg-[#1a1a1a]/50 backdrop-blur-md p-6 rounded-3xl border border-white/10 relative overflow-hidden group"
     >
         <div className={`absolute top-0 right-0 w-24 h-24 bg-${color}/10 blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-${color}/20 transition-all`} />
         <div className="flex justify-between items-start mb-4">
@@ -298,7 +298,7 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Main Revenue Chart */}
-                <div className="lg:col-span-2 bg-[#1E293B]/50 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl">
+                <div className="lg:col-span-2 bg-[#1a1a1a]/50 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl">
                     <div className="flex justify-between items-center mb-8">
                         <div>
                             <h3 className="text-xl font-bold text-white">Revenue Growth</h3>
@@ -318,7 +318,7 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
                                 <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
                                 <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `R${v/1000}k`} />
                                 <Tooltip 
-                                    contentStyle={{ background: '#0F172A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px' }}
+                                    contentStyle={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px' }}
                                     itemStyle={{ color: '#9AE900', fontWeight: 'bold' }}
                                 />
                                 <Area type="monotone" dataKey="revenue" stroke="#9AE900" strokeWidth={4} fillOpacity={1} fill="url(#colorRev)" />
@@ -328,7 +328,7 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
                 </div>
 
                 {/* Revenue Split Pie Chart */}
-                <div className="bg-[#1E293B]/50 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl flex flex-col">
+                <div className="bg-[#1a1a1a]/50 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl flex flex-col">
                     <h3 className="text-xl font-bold text-white mb-2">Revenue Breakdown</h3>
                     <p className="text-gray-400 text-sm mb-6">Distribution by payment type</p>
                     <div className="h-[250px] w-full mt-auto relative">
@@ -348,7 +348,7 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
                                     ))}
                                 </Pie>
                                 <Tooltip 
-                                    contentStyle={{ background: '#0F172A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px' }}
+                                    contentStyle={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px' }}
                                 />
                             </PieChart>
                         </ResponsiveContainer>
@@ -374,7 +374,7 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
             </div>
 
             {/* Event Revenue Details */}
-            <div className="bg-[#1E293B]/50 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl">
+            <div className="bg-[#1a1a1a]/50 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl">
                 <div className="flex justify-between items-center mb-8">
                     <div>
                         <h3 className="text-xl font-bold text-white uppercase tracking-tighter">Revenue by Event</h3>
@@ -418,7 +418,7 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
                                 <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
                                 <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R${v/1000}k`} />
                                 <Tooltip 
-                                    contentStyle={{ background: '#0F172A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px' }}
+                                    contentStyle={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px' }}
                                     itemStyle={{ fontWeight: 'bold' }}
                                 />
                                 <Bar dataKey="entries" name="Event Entries" stackId="a" fill="#beff00" radius={[0, 0, 0, 0]} />

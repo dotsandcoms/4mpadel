@@ -13,7 +13,7 @@ const EventManagement = ({ allowedEvents }) => {
 
     return (
         <div className="space-y-6">
-            <div className="bg-[#1E293B]/50 backdrop-blur-md rounded-3xl border border-white/10 p-4">
+            <div className="bg-[#1a1a1a]/50 backdrop-blur-md rounded-3xl border border-white/10 p-4">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-padel-green/20 text-padel-green rounded-xl flex items-center justify-center shrink-0">

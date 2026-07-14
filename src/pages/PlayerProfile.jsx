@@ -1086,7 +1086,7 @@ const PlayerProfile = () => {
                                 initial={{ opacity: 0, scale: 0.9, y: 20 }}
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                                className="w-full max-w-lg bg-[#0F172A] border border-white/10 p-8 md:p-12 rounded-[2.5rem] shadow-2xl relative overflow-hidden"
+                                className="w-full max-w-lg bg-[#0a0a0a] border border-white/10 p-8 md:p-12 rounded-[2.5rem] shadow-2xl relative overflow-hidden"
                             >
                                 <div className="absolute top-0 right-0 w-64 h-64 bg-padel-green/5 rounded-full blur-[80px] -mr-32 -mt-32" />
 
@@ -1160,7 +1160,7 @@ const PlayerProfile = () => {
                     <div className="px-5 -mt-14 relative z-20 space-y-3 pb-6">
                         <OrgHostBanner player={player} variant="top" />
 
-                        <div className="bg-[#0F172A]/70 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 shadow-2xl flex items-center gap-4 sm:gap-6">
+                        <div className="bg-[#0a0a0a]/70 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 shadow-2xl flex items-center gap-4 sm:gap-6">
                             {/* Avatar Column */}
                             <div className="relative group shrink-0">
                                 <div
@@ -1252,7 +1252,7 @@ const PlayerProfile = () => {
 
                         {/* Mobile License Purchase / Upgrade CTA */}
                         {player && player.license_type !== 'full' && (
-                            <div className={`bg-[#0F172A]/70 backdrop-blur-2xl border rounded-3xl p-4 shadow-2xl relative overflow-hidden ${
+                            <div className={`bg-[#0a0a0a]/70 backdrop-blur-2xl border rounded-3xl p-4 shadow-2xl relative overflow-hidden ${
                                 player.license_type === 'temporary'
                                     ? 'border-blue-500/30 border-l-2 border-l-blue-500'
                                     : 'border-white/10 border-l-2 border-l-gray-500'
@@ -1324,7 +1324,7 @@ const PlayerProfile = () => {
                         )}
 
                         {/* Performance Statistics Card */}
-                        <div className="bg-[#0F172A]/70 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 shadow-2xl space-y-4">
+                        <div className="bg-[#0a0a0a]/70 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 shadow-2xl space-y-4">
                             <div className="grid grid-cols-4 gap-2 text-center">
                                 <div className="flex flex-col p-1.5 bg-white/[0.02] border border-white/5 rounded-xl">
                                     <span className="text-[7px] font-black text-gray-500 uppercase tracking-widest">Total Match</span>
@@ -1383,7 +1383,7 @@ const PlayerProfile = () => {
 
                         {/* Mobile Horizontally Scrollable Tabs */}
                         <div className="relative">
-                            <div className="flex gap-1.5 bg-[#0F172A]/70 backdrop-blur-2xl border border-white/10 p-1 rounded-2xl overflow-x-auto no-scrollbar scrollbar-none pr-8">
+                            <div className="flex gap-1.5 bg-[#0a0a0a]/70 backdrop-blur-2xl border border-white/10 p-1 rounded-2xl overflow-x-auto no-scrollbar scrollbar-none pr-8">
                                 {[
                                     { id: 'events', label: 'My Events' },
                                     { id: 'matches', label: 'My Matches' },
@@ -1427,11 +1427,11 @@ const PlayerProfile = () => {
                                 })}
                             </div>
                             {/* Visual hint for scrolling */}
-                            <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-[#0F172A] to-transparent pointer-events-none rounded-r-2xl" />
+                            <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-[#0a0a0a] to-transparent pointer-events-none rounded-r-2xl" />
                         </div>
 
                         {/* Mobile Tab Contents Grid rendering directly underneath */}
-                        <div className={`p-4 rounded-3xl bg-[#0F172A]/40 backdrop-blur-2xl border transition-all duration-500 space-y-4 ${
+                        <div className={`p-4 rounded-3xl bg-[#0a0a0a]/40 backdrop-blur-2xl border transition-all duration-500 space-y-4 ${
                             activeTab === 'events' ? 'border-purple-500/35 shadow-[0_0_20px_rgba(168,85,247,0.12)]' :
                             activeTab === 'matches' ? 'border-orange-500/35 shadow-[0_0_20px_rgba(249,115,22,0.12)]' :
                             activeTab === 'rankings' ? 'border-yellow-500/35 shadow-[0_0_20px_rgba(234,179,8,0.12)]' :
@@ -1947,7 +1947,7 @@ const PlayerProfile = () => {
                                             {/* Stats / Info Grid */}
                                             <div className="grid grid-cols-2 gap-3">
                                                 {/* Contact Number */}
-                                                <div className="bg-[#0F172A]/70 border border-white/10 rounded-2xl p-3.5 flex flex-col justify-between min-h-[75px] shadow-lg backdrop-blur-xl">
+                                                <div className="bg-[#0a0a0a]/70 border border-white/10 rounded-2xl p-3.5 flex flex-col justify-between min-h-[75px] shadow-lg backdrop-blur-xl">
                                                     <span className="text-[7.5px] font-black text-padel-green uppercase tracking-widest flex items-center gap-1">
                                                         <Phone size={9} />
                                                         Contact
@@ -1958,7 +1958,7 @@ const PlayerProfile = () => {
                                                 </div>
 
                                                 {/* Age */}
-                                                <div className="bg-[#0F172A]/70 border border-white/10 rounded-2xl p-3.5 flex flex-col justify-between min-h-[75px] shadow-lg backdrop-blur-xl">
+                                                <div className="bg-[#0a0a0a]/70 border border-white/10 rounded-2xl p-3.5 flex flex-col justify-between min-h-[75px] shadow-lg backdrop-blur-xl">
                                                     <span className="text-[7.5px] font-black text-padel-green uppercase tracking-widest flex items-center gap-1">
                                                         <CalendarIcon size={9} />
                                                         Age
@@ -1969,7 +1969,7 @@ const PlayerProfile = () => {
                                                 </div>
 
                                                 {/* Home Club */}
-                                                <div className="bg-[#0F172A]/70 border border-white/10 rounded-2xl p-3.5 flex flex-col justify-between min-h-[75px] shadow-lg backdrop-blur-xl">
+                                                <div className="bg-[#0a0a0a]/70 border border-white/10 rounded-2xl p-3.5 flex flex-col justify-between min-h-[75px] shadow-lg backdrop-blur-xl">
                                                     <span className="text-[7.5px] font-black text-padel-green uppercase tracking-widest flex items-center gap-1">
                                                         <Trophy size={9} />
                                                         Home Club
@@ -1980,7 +1980,7 @@ const PlayerProfile = () => {
                                                 </div>
 
                                                 {/* Racket Brand */}
-                                                <div className="bg-[#0F172A]/70 border border-white/10 rounded-2xl p-3.5 flex flex-col justify-between min-h-[75px] shadow-lg backdrop-blur-xl">
+                                                <div className="bg-[#0a0a0a]/70 border border-white/10 rounded-2xl p-3.5 flex flex-col justify-between min-h-[75px] shadow-lg backdrop-blur-xl">
                                                     <span className="text-[7.5px] font-black text-padel-green uppercase tracking-widest flex items-center gap-1">
                                                         <ShieldCheck size={9} />
                                                         Racket
@@ -1991,7 +1991,7 @@ const PlayerProfile = () => {
                                                 </div>
 
                                                 {/* Region */}
-                                                <div className="bg-[#0F172A]/70 border border-white/10 rounded-2xl p-3.5 flex flex-col justify-between min-h-[75px] shadow-lg backdrop-blur-xl">
+                                                <div className="bg-[#0a0a0a]/70 border border-white/10 rounded-2xl p-3.5 flex flex-col justify-between min-h-[75px] shadow-lg backdrop-blur-xl">
                                                     <span className="text-[7.5px] font-black text-padel-green uppercase tracking-widest flex items-center gap-1">
                                                         <MapPin size={9} />
                                                         Region
@@ -2002,7 +2002,7 @@ const PlayerProfile = () => {
                                                 </div>
 
                                                 {/* Category */}
-                                                <div className="bg-[#0F172A]/70 border border-white/10 rounded-2xl p-3.5 flex flex-col justify-between min-h-[75px] shadow-lg backdrop-blur-xl">
+                                                <div className="bg-[#0a0a0a]/70 border border-white/10 rounded-2xl p-3.5 flex flex-col justify-between min-h-[75px] shadow-lg backdrop-blur-xl">
                                                     <span className="text-[7.5px] font-black text-padel-green uppercase tracking-widest flex items-center gap-1">
                                                         <Briefcase size={9} />
                                                         Division
@@ -2014,7 +2014,7 @@ const PlayerProfile = () => {
                                             </div>
 
                                             {/* Biography Block */}
-                                            <div className="bg-[#0F172A]/70 border border-white/10 rounded-3xl p-4 shadow-lg backdrop-blur-xl space-y-2">
+                                            <div className="bg-[#0a0a0a]/70 border border-white/10 rounded-3xl p-4 shadow-lg backdrop-blur-xl space-y-2">
                                                 <span className="text-[7.5px] font-black text-padel-green uppercase tracking-[0.2em] block">Player Biography</span>
                                                 <p className="text-[10px] text-gray-300 font-medium leading-relaxed">
                                                     {player.bio || "No biography added yet. Update your profile to tell us about your padel journey!"}
@@ -2027,7 +2027,7 @@ const PlayerProfile = () => {
                                                     href={player.instagram_link.startsWith('http') ? player.instagram_link : `https://instagram.com/${player.instagram_link.replace('@', '')}`}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
-                                                    className="bg-[#0F172A]/70 border border-white/10 rounded-2xl p-3.5 flex items-center justify-between shadow-lg backdrop-blur-xl hover:bg-white/[0.02] transition-all cursor-pointer"
+                                                    className="bg-[#0a0a0a]/70 border border-white/10 rounded-2xl p-3.5 flex items-center justify-between shadow-lg backdrop-blur-xl hover:bg-white/[0.02] transition-all cursor-pointer"
                                                 >
                                                     <div className="flex items-center gap-2.5">
                                                         <Instagram size={14} className="text-[#CCFF00]" />
@@ -2041,7 +2041,7 @@ const PlayerProfile = () => {
                                             )}
 
                                             {/* Sponsors Block */}
-                                            <div className="bg-[#0F172A]/70 border border-white/10 rounded-3xl p-4 shadow-lg backdrop-blur-xl space-y-3">
+                                            <div className="bg-[#0a0a0a]/70 border border-white/10 rounded-3xl p-4 shadow-lg backdrop-blur-xl space-y-3">
                                                 <span className="text-[7.5px] font-black text-padel-green uppercase tracking-[0.2em] block">Sponsors & Partners</span>
                                                 {player.sponsors ? (
                                                     <div className="flex flex-wrap gap-1.5">
@@ -2174,17 +2174,17 @@ const PlayerProfile = () => {
                                                             }}
                                                             className="w-full bg-white/[0.03] border border-white/10 rounded-xl pl-4 pr-10 py-2.5 text-xs text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold appearance-none cursor-pointer"
                                                         >
-                                                            <option value="" disabled className="bg-[#0F172A] text-white">Select Brand</option>
-                                                            <option value="Adidas" className="bg-[#0F172A] text-white">Adidas</option>
-                                                            <option value="Babolat" className="bg-[#0F172A] text-white">Babolat</option>
-                                                            <option value="Bull Padel" className="bg-[#0F172A] text-white">Bull Padel</option>
-                                                            <option value="Nox" className="bg-[#0F172A] text-white">Nox</option>
-                                                            <option value="Varlion" className="bg-[#0F172A] text-white">Varlion</option>
-                                                            <option value="Oxdog" className="bg-[#0F172A] text-white">Oxdog</option>
-                                                            <option value="Wilson" className="bg-[#0F172A] text-white">Wilson</option>
-                                                            <option value="Head" className="bg-[#0F172A] text-white">Head</option>
-                                                            <option value="Siux" className="bg-[#0F172A] text-white">Siux</option>
-                                                            <option value="Other" className="bg-[#0F172A] text-white">Other</option>
+                                                            <option value="" disabled className="bg-[#0a0a0a] text-white">Select Brand</option>
+                                                            <option value="Adidas" className="bg-[#0a0a0a] text-white">Adidas</option>
+                                                            <option value="Babolat" className="bg-[#0a0a0a] text-white">Babolat</option>
+                                                            <option value="Bull Padel" className="bg-[#0a0a0a] text-white">Bull Padel</option>
+                                                            <option value="Nox" className="bg-[#0a0a0a] text-white">Nox</option>
+                                                            <option value="Varlion" className="bg-[#0a0a0a] text-white">Varlion</option>
+                                                            <option value="Oxdog" className="bg-[#0a0a0a] text-white">Oxdog</option>
+                                                            <option value="Wilson" className="bg-[#0a0a0a] text-white">Wilson</option>
+                                                            <option value="Head" className="bg-[#0a0a0a] text-white">Head</option>
+                                                            <option value="Siux" className="bg-[#0a0a0a] text-white">Siux</option>
+                                                            <option value="Other" className="bg-[#0a0a0a] text-white">Other</option>
                                                         </select>
                                                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/75 pointer-events-none w-3.5 h-3.5" />
                                                     </div>
@@ -2212,16 +2212,16 @@ const PlayerProfile = () => {
                                                         onChange={(e) => setFormData({ ...formData, region: e.target.value })}
                                                         className="w-full bg-white/[0.03] border border-white/10 rounded-xl pl-11 pr-10 py-2.5 text-xs text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold appearance-none cursor-pointer"
                                                     >
-                                                        <option value="" disabled className="bg-[#0F172A] text-white">Select Region</option>
-                                                        <option value="Eastern Cape" className="bg-[#0F172A] text-white">Eastern Cape</option>
-                                                        <option value="Free State" className="bg-[#0F172A] text-white">Free State</option>
-                                                        <option value="Gauteng" className="bg-[#0F172A] text-white">Gauteng</option>
-                                                        <option value="KwaZulu-Natal" className="bg-[#0F172A] text-white">KwaZulu-Natal</option>
-                                                        <option value="Limpopo" className="bg-[#0F172A] text-white">Limpopo</option>
-                                                        <option value="Mpumalanga" className="bg-[#0F172A] text-white">Mpumalanga</option>
-                                                        <option value="Northern Cape" className="bg-[#0F172A] text-white">Northern Cape</option>
-                                                        <option value="North West" className="bg-[#0F172A] text-white">North West</option>
-                                                        <option value="Western Cape" className="bg-[#0F172A] text-white">Western Cape</option>
+                                                        <option value="" disabled className="bg-[#0a0a0a] text-white">Select Region</option>
+                                                        <option value="Eastern Cape" className="bg-[#0a0a0a] text-white">Eastern Cape</option>
+                                                        <option value="Free State" className="bg-[#0a0a0a] text-white">Free State</option>
+                                                        <option value="Gauteng" className="bg-[#0a0a0a] text-white">Gauteng</option>
+                                                        <option value="KwaZulu-Natal" className="bg-[#0a0a0a] text-white">KwaZulu-Natal</option>
+                                                        <option value="Limpopo" className="bg-[#0a0a0a] text-white">Limpopo</option>
+                                                        <option value="Mpumalanga" className="bg-[#0a0a0a] text-white">Mpumalanga</option>
+                                                        <option value="Northern Cape" className="bg-[#0a0a0a] text-white">Northern Cape</option>
+                                                        <option value="North West" className="bg-[#0a0a0a] text-white">North West</option>
+                                                        <option value="Western Cape" className="bg-[#0a0a0a] text-white">Western Cape</option>
                                                     </select>
                                                     <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/75 pointer-events-none w-3.5 h-3.5" />
                                                 </div>
@@ -2282,7 +2282,7 @@ const PlayerProfile = () => {
                         {/* Career Overview Card (Mobile) - Positioned below tab contents */}
                         <div
                             onClick={() => setIsCareerAccordionOpen(!isCareerAccordionOpen)}
-                            className="bg-[#0F172A]/70 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 shadow-2xl space-y-4 cursor-pointer"
+                            className="bg-[#0a0a0a]/70 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 shadow-2xl space-y-4 cursor-pointer"
                         >
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
@@ -2417,7 +2417,7 @@ const PlayerProfile = () => {
                         </div>
 
                         {/* Player Photo Gallery Row (Mobile) - Positioned below tab contents */}
-                        <div className="bg-[#0F172A]/70 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 shadow-2xl space-y-3">
+                        <div className="bg-[#0a0a0a]/70 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 shadow-2xl space-y-3">
                             <div className="flex justify-between items-center">
                                 <div className="flex items-center gap-2">
                                     <h4 className="text-[10px] font-black uppercase tracking-[0.25em] text-padel-green flex items-center gap-1.5">
@@ -2441,7 +2441,7 @@ const PlayerProfile = () => {
                                     <div
                                         key={index}
                                         onClick={() => setActiveLightboxImg(imgUrl)}
-                                        className="w-18 h-18 shrink-0 rounded-2xl border border-white/10 overflow-hidden relative group cursor-pointer bg-[#0F172A] transition-all hover:border-padel-green/50"
+                                        className="w-18 h-18 shrink-0 rounded-2xl border border-white/10 overflow-hidden relative group cursor-pointer bg-[#0a0a0a] transition-all hover:border-padel-green/50"
                                     >
                                         <img src={imgUrl} alt={`Gallery ${index + 1}`} className="w-full h-full object-cover" />
                                         <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -2990,7 +2990,7 @@ const PlayerProfile = () => {
                                         <div
                                             key={index}
                                             onClick={() => setActiveLightboxImg(imgUrl)}
-                                            className="w-20 h-20 sm:w-24 sm:h-24 shrink-0 rounded-2xl border border-white/10 overflow-hidden relative group cursor-pointer bg-[#0F172A] transition-all hover:border-[#beff00]/50 hover:shadow-lg hover:shadow-[#beff00]/5"
+                                            className="w-20 h-20 sm:w-24 sm:h-24 shrink-0 rounded-2xl border border-white/10 overflow-hidden relative group cursor-pointer bg-[#0a0a0a] transition-all hover:border-[#beff00]/50 hover:shadow-lg hover:shadow-[#beff00]/5"
                                         >
                                             <img src={imgUrl} alt={`Gallery ${index + 1}`} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -3048,13 +3048,13 @@ const PlayerProfile = () => {
                             >
                                 <button
                                     onClick={() => setActiveTab('events')}
-                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'events' ? 'bg-purple-500 border border-purple-500 text-white shadow-xl shadow-purple-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-purple-500/15 hover:text-purple-300 hover:border-purple-500/40'}`}
+                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'events' ? 'bg-purple-500 border border-purple-500 text-white shadow-xl shadow-purple-500/20' : 'bg-[#0a0a0a]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-purple-500/15 hover:text-purple-300 hover:border-purple-500/40'}`}
                                 >
                                     <CalendarIcon size={16} /> My Events
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('matches')}
-                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'matches' ? 'bg-orange-500 border border-orange-500 text-white shadow-xl shadow-orange-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-orange-500/15 hover:text-orange-300 hover:border-orange-500/40'}`}
+                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'matches' ? 'bg-orange-500 border border-orange-500 text-white shadow-xl shadow-orange-500/20' : 'bg-[#0a0a0a]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-orange-500/15 hover:text-orange-300 hover:border-orange-500/40'}`}
                                 >
                                     <Trophy size={16} /> My Matches
                                 </button>
@@ -3065,13 +3065,13 @@ const PlayerProfile = () => {
                                             setSelectedRankingForBreakdown(player.rankings[0]);
                                         }
                                     }}
-                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'rankings' ? 'bg-yellow-500 border border-yellow-500 text-black shadow-xl shadow-yellow-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-yellow-500/15 hover:text-yellow-300 hover:border-yellow-500/40'}`}
+                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'rankings' ? 'bg-yellow-500 border border-yellow-500 text-black shadow-xl shadow-yellow-500/20' : 'bg-[#0a0a0a]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-yellow-500/15 hover:text-yellow-300 hover:border-yellow-500/40'}`}
                                 >
                                     <TrendingUp size={16} /> My Rankings
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('payments')}
-                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'payments' ? 'bg-blue-500 border border-blue-500 text-white shadow-xl shadow-blue-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-blue-500/15 hover:text-blue-300 hover:border-blue-500/40'}`}
+                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'payments' ? 'bg-blue-500 border border-blue-500 text-white shadow-xl shadow-blue-500/20' : 'bg-[#0a0a0a]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-blue-500/15 hover:text-blue-300 hover:border-blue-500/40'}`}
                                 >
                                     <CreditCard size={16} /> Payments
                                 </button>
@@ -3085,7 +3085,7 @@ const PlayerProfile = () => {
                                 )}
                                 <button
                                     onClick={() => setActiveTab('personal')}
-                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'personal' ? 'bg-padel-green border border-padel-green text-black shadow-xl shadow-padel-green/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-padel-green/15 hover:text-[#beff00] hover:border-padel-green/30'}`}
+                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'personal' ? 'bg-padel-green border border-padel-green text-black shadow-xl shadow-padel-green/20' : 'bg-[#0a0a0a]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-padel-green/15 hover:text-[#beff00] hover:border-padel-green/30'}`}
                                 >
                                     <User size={16} /> My Profile
                                 </button>
@@ -3514,12 +3514,12 @@ const PlayerProfile = () => {
                                                                             className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-10 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold appearance-none cursor-pointer"
                                                                         >
                                                                             <option value="" disabled>Select Category</option>
-                                                                            <optgroup label="Men's" className="bg-[#0F172A]">
+                                                                            <optgroup label="Men's" className="bg-[#0a0a0a]">
                                                                                 <option value="Men's Open (Pro/Elite)">Men's Open (Pro/Elite)</option>
                                                                                 <option value="Men's Advanced">Men's Advanced</option>
                                                                                 <option value="Men's Intermediate">Men's Intermediate</option>
                                                                             </optgroup>
-                                                                            <optgroup label="Ladies" className="bg-[#0F172A]">
+                                                                            <optgroup label="Ladies" className="bg-[#0a0a0a]">
                                                                                 <option value="Ladies Open (Pro/Elite)">Ladies Open (Pro/Elite)</option>
                                                                                 <option value="Ladies Advanced">Ladies Advanced</option>
                                                                                 <option value="Ladies Intermediate">Ladies Intermediate</option>
@@ -4492,7 +4492,7 @@ const PlayerProfile = () => {
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
                                 transition={{ type: 'spring', duration: 0.5 }}
-                                className="relative w-full max-w-4xl max-h-[85vh] md:max-h-[90vh] bg-[#0F172A]/95 border border-white/10 backdrop-blur-xl rounded-[2rem] md:rounded-[2.5rem] p-5 md:p-10 shadow-2xl z-10 flex flex-col my-auto overflow-hidden"
+                                className="relative w-full max-w-4xl max-h-[85vh] md:max-h-[90vh] bg-[#0a0a0a]/95 border border-white/10 backdrop-blur-xl rounded-[2rem] md:rounded-[2.5rem] p-5 md:p-10 shadow-2xl z-10 flex flex-col my-auto overflow-hidden"
                             >
                                 {/* Glow accent */}
                                 <div className="absolute top-0 right-0 w-64 h-64 bg-padel-green/5 rounded-full blur-[80px] -mr-32 -mt-32 pointer-events-none" />
@@ -4578,9 +4578,9 @@ const PlayerProfile = () => {
                                                             onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
                                                             className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl px-4 md:px-6 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold appearance-none cursor-pointer text-xs md:text-sm"
                                                         >
-                                                            <option value="" disabled className="bg-[#0F172A] text-white">Select Gender</option>
-                                                            <option value="Male" className="bg-[#0F172A] text-white">Male</option>
-                                                            <option value="Female" className="bg-[#0F172A] text-white">Female</option>
+                                                            <option value="" disabled className="bg-[#0a0a0a] text-white">Select Gender</option>
+                                                            <option value="Male" className="bg-[#0a0a0a] text-white">Male</option>
+                                                            <option value="Female" className="bg-[#0a0a0a] text-white">Female</option>
                                                         </select>
                                                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/75 pointer-events-none w-4 h-4 md:w-5 md:h-5" />
                                                     </div>
@@ -4694,16 +4694,16 @@ const PlayerProfile = () => {
                                                             onChange={(e) => setFormData({ ...formData, region: e.target.value })}
                                                             className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-10 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold appearance-none cursor-pointer text-xs md:text-sm"
                                                         >
-                                                            <option value="" disabled className="bg-[#0F172A] text-white">Select Region</option>
-                                                            <option value="Eastern Cape" className="bg-[#0F172A] text-white">Eastern Cape</option>
-                                                            <option value="Free State" className="bg-[#0F172A] text-white">Free State</option>
-                                                            <option value="Gauteng" className="bg-[#0F172A] text-white">Gauteng</option>
-                                                            <option value="KwaZulu-Natal" className="bg-[#0F172A] text-white">KwaZulu-Natal</option>
-                                                            <option value="Limpopo" className="bg-[#0F172A] text-white">Limpopo</option>
-                                                            <option value="Mpumalanga" className="bg-[#0F172A] text-white">Mpumalanga</option>
-                                                            <option value="Northern Cape" className="bg-[#0F172A] text-white">Northern Cape</option>
-                                                            <option value="North West" className="bg-[#0F172A] text-white">North West</option>
-                                                            <option value="Western Cape" className="bg-[#0F172A] text-white">Western Cape</option>
+                                                            <option value="" disabled className="bg-[#0a0a0a] text-white">Select Region</option>
+                                                            <option value="Eastern Cape" className="bg-[#0a0a0a] text-white">Eastern Cape</option>
+                                                            <option value="Free State" className="bg-[#0a0a0a] text-white">Free State</option>
+                                                            <option value="Gauteng" className="bg-[#0a0a0a] text-white">Gauteng</option>
+                                                            <option value="KwaZulu-Natal" className="bg-[#0a0a0a] text-white">KwaZulu-Natal</option>
+                                                            <option value="Limpopo" className="bg-[#0a0a0a] text-white">Limpopo</option>
+                                                            <option value="Mpumalanga" className="bg-[#0a0a0a] text-white">Mpumalanga</option>
+                                                            <option value="Northern Cape" className="bg-[#0a0a0a] text-white">Northern Cape</option>
+                                                            <option value="North West" className="bg-[#0a0a0a] text-white">North West</option>
+                                                            <option value="Western Cape" className="bg-[#0a0a0a] text-white">Western Cape</option>
                                                         </select>
                                                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/75 pointer-events-none w-4 h-4 md:w-5 md:h-5" />
                                                     </div>
@@ -4727,17 +4727,17 @@ const PlayerProfile = () => {
                                                                 }}
                                                                 className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl px-4 md:px-6 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold appearance-none cursor-pointer text-xs md:text-sm"
                                                             >
-                                                                <option value="" disabled className="bg-[#0F172A] text-white">Select Brand</option>
-                                                                <option value="Adidas" className="bg-[#0F172A] text-white">Adidas</option>
-                                                                <option value="Babolat" className="bg-[#0F172A] text-white">Babolat</option>
-                                                                <option value="Bull Padel" className="bg-[#0F172A] text-white">Bull Padel</option>
-                                                                <option value="Nox" className="bg-[#0F172A] text-white">Nox</option>
-                                                                <option value="Varlion" className="bg-[#0F172A] text-white">Varlion</option>
-                                                                <option value="Oxdog" className="bg-[#0F172A] text-white">Oxdog</option>
-                                                                <option value="Wilson" className="bg-[#0F172A] text-white">Wilson</option>
-                                                                <option value="Head" className="bg-[#0F172A] text-white">Head</option>
-                                                                <option value="Siux" className="bg-[#0F172A] text-white">Siux</option>
-                                                                <option value="Other" className="bg-[#0F172A] text-white">Other</option>
+                                                                <option value="" disabled className="bg-[#0a0a0a] text-white">Select Brand</option>
+                                                                <option value="Adidas" className="bg-[#0a0a0a] text-white">Adidas</option>
+                                                                <option value="Babolat" className="bg-[#0a0a0a] text-white">Babolat</option>
+                                                                <option value="Bull Padel" className="bg-[#0a0a0a] text-white">Bull Padel</option>
+                                                                <option value="Nox" className="bg-[#0a0a0a] text-white">Nox</option>
+                                                                <option value="Varlion" className="bg-[#0a0a0a] text-white">Varlion</option>
+                                                                <option value="Oxdog" className="bg-[#0a0a0a] text-white">Oxdog</option>
+                                                                <option value="Wilson" className="bg-[#0a0a0a] text-white">Wilson</option>
+                                                                <option value="Head" className="bg-[#0a0a0a] text-white">Head</option>
+                                                                <option value="Siux" className="bg-[#0a0a0a] text-white">Siux</option>
+                                                                <option value="Other" className="bg-[#0a0a0a] text-white">Other</option>
                                                             </select>
                                                             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/75 pointer-events-none w-4 h-4 md:w-5 md:h-5" />
                                                         </div>
@@ -4764,16 +4764,16 @@ const PlayerProfile = () => {
                                                             onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                                                             className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-10 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold appearance-none cursor-pointer text-xs md:text-sm"
                                                         >
-                                                            <option value="" disabled className="bg-[#0F172A] text-white">Select Category</option>
-                                                            <optgroup label="Men's" className="bg-[#0F172A]">
-                                                                <option value="Men's Open (Pro/Elite)" className="bg-[#0F172A] text-white">Men's Open (Pro/Elite)</option>
-                                                                <option value="Men's Advanced" className="bg-[#0F172A] text-white">Men's Advanced</option>
-                                                                <option value="Men's Intermediate" className="bg-[#0F172A] text-white">Men's Intermediate</option>
+                                                            <option value="" disabled className="bg-[#0a0a0a] text-white">Select Category</option>
+                                                            <optgroup label="Men's" className="bg-[#0a0a0a]">
+                                                                <option value="Men's Open (Pro/Elite)" className="bg-[#0a0a0a] text-white">Men's Open (Pro/Elite)</option>
+                                                                <option value="Men's Advanced" className="bg-[#0a0a0a] text-white">Men's Advanced</option>
+                                                                <option value="Men's Intermediate" className="bg-[#0a0a0a] text-white">Men's Intermediate</option>
                                                             </optgroup>
-                                                            <optgroup label="Ladies" className="bg-[#0F172A]">
-                                                                <option value="Ladies Open (Pro/Elite)" className="bg-[#0F172A] text-white">Ladies Open (Pro/Elite)</option>
-                                                                <option value="Ladies Advanced" className="bg-[#0F172A] text-white">Ladies Advanced</option>
-                                                                <option value="Ladies Intermediate" className="bg-[#0F172A] text-white">Ladies Intermediate</option>
+                                                            <optgroup label="Ladies" className="bg-[#0a0a0a]">
+                                                                <option value="Ladies Open (Pro/Elite)" className="bg-[#0a0a0a] text-white">Ladies Open (Pro/Elite)</option>
+                                                                <option value="Ladies Advanced" className="bg-[#0a0a0a] text-white">Ladies Advanced</option>
+                                                                <option value="Ladies Intermediate" className="bg-[#0a0a0a] text-white">Ladies Intermediate</option>
                                                             </optgroup>
                                                         </select>
                                                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/75 pointer-events-none w-4 h-4 md:w-5 md:h-5" />
@@ -4811,7 +4811,7 @@ const PlayerProfile = () => {
                                     </div>
 
                                     {/* Fixed Footer */}
-                                    <div className="pt-4 mt-3 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 flex-shrink-0 relative z-10 bg-[#0F172A]/40 backdrop-blur-md">
+                                    <div className="pt-4 mt-3 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 flex-shrink-0 relative z-10 bg-[#0a0a0a]/40 backdrop-blur-md">
                                         <p className="text-[8px] md:text-[9px] font-medium text-gray-500 uppercase tracking-widest leading-relaxed text-center sm:text-left">
                                             By saving, you agree to updated profile data being <br className="hidden sm:block" /> displayed on public leaderboards.
                                         </p>

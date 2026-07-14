@@ -141,7 +141,7 @@ const OrgMembersManager = ({ org, onClose }) => {
             <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 15 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                className="max-w-lg w-full bg-[#0F172A] border border-white/10 rounded-3xl p-6 relative shadow-2xl space-y-6 text-left max-h-[90vh] overflow-y-auto custom-scrollbar"
+                className="max-w-lg w-full bg-[#0a0a0a] border border-white/10 rounded-3xl p-6 relative shadow-2xl space-y-6 text-left max-h-[90vh] overflow-y-auto custom-scrollbar"
             >
                 <button
                     onClick={onClose}
@@ -249,7 +249,7 @@ const OrgMembersManager = ({ org, onClose }) => {
                                     onChange={(e) => handleChangeRole(m, e.target.value)}
                                     className={`border rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-wider cursor-pointer focus:outline-none bg-transparent ${roleBadgeClass(m.role)}`}
                                 >
-                                    {ROLES.map(r => <option key={r} value={r} className="bg-[#0F172A] text-white">{r}</option>)}
+                                    {ROLES.map(r => <option key={r} value={r} className="bg-[#0a0a0a] text-white">{r}</option>)}
                                 </select>
                                 <button
                                     onClick={() => handleRemove(m)}

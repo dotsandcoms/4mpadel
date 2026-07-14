@@ -29,7 +29,7 @@ const StatCard = ({ title, value, subtext, icon: Icon, color = 'padel-green', de
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay, duration: 0.3 }}
-            className="bg-[#1E293B]/50 backdrop-blur-md p-5 rounded-2xl border border-white/10 hover:border-white/20 transition-colors"
+            className="bg-[#1a1a1a]/50 backdrop-blur-md p-5 rounded-2xl border border-white/10 hover:border-white/20 transition-colors"
         >
             <div className="flex items-start justify-between">
                 <div>
@@ -1055,7 +1055,7 @@ const CalendarManager = () => {
                     <button
                         onClick={handleSyncRankedin}
                         disabled={isSyncing}
-                        className={`bg-[#1E293B] text-white border border-white/20 px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10 transition-colors ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`bg-[#1a1a1a] text-white border border-white/20 px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10 transition-colors ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                         <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
                         {isSyncing ? 'Syncing...' : 'Sync Event List'}
@@ -1084,7 +1084,7 @@ const CalendarManager = () => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
-                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10 flex flex-col"
+                    className="bg-[#1a1a1a]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10 flex flex-col"
                 >
                     <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Events by Status</h3>
                     {loading ? (
@@ -1097,7 +1097,7 @@ const CalendarManager = () => {
                                         <Cell key={i} fill={entry.color} />
                                     ))}
                                 </Pie>
-                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                                <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
                             </PieChart>
                         </ResponsiveContainer>
                     )}
@@ -1107,7 +1107,7 @@ const CalendarManager = () => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.25 }}
-                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10 flex flex-col"
+                    className="bg-[#1a1a1a]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10 flex flex-col"
                 >
                     <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Events by Month (Current Year)</h3>
                     {loading ? (
@@ -1118,7 +1118,7 @@ const CalendarManager = () => {
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                                 <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 10 }} />
                                 <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} allowDecimals={false} />
-                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                                <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
                                 <Bar dataKey="count" fill="#beff00" radius={[4, 4, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>
@@ -1174,7 +1174,7 @@ const CalendarManager = () => {
             </div>
 
             {/* Events Table Container */}
-            <div className="bg-[#1E293B]/30 rounded-2xl border border-white/10 overflow-hidden">
+            <div className="bg-[#1a1a1a]/30 rounded-2xl border border-white/10 overflow-hidden">
                 <div className="overflow-x-auto max-h-[60vh] overflow-y-auto custom-scrollbar">
                     <table className="w-full text-left border-collapse">
                         <thead className="sticky top-0 z-10">
@@ -1335,7 +1335,7 @@ const CalendarManager = () => {
 
             {/* Pagination Controls */}
             {totalPages > 1 && (
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-[#1E293B]/30 p-4 rounded-2xl border border-white/10">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-[#1a1a1a]/30 p-4 rounded-2xl border border-white/10">
                     <p className="text-sm text-gray-400">
                         Showing <span className="text-white font-bold">{Math.min((currentPage - 1) * itemsPerPage + 1, filteredEvents.length)}</span> to <span className="text-white font-bold">{Math.min(currentPage * itemsPerPage, filteredEvents.length)}</span> of <span className="text-white font-bold">{filteredEvents.length}</span> events
                     </p>
@@ -1398,7 +1398,7 @@ const CalendarManager = () => {
                             exit={{ opacity: 0, scale: 0.95 }}
                             className="fixed inset-0 z-[1100] flex items-center justify-center pointer-events-none p-4"
                         >
-                            <div className="bg-[#1E293B] w-full max-w-4xl rounded-2xl border border-white/10 shadow-2xl pointer-events-auto p-6 max-h-[90vh] overflow-y-auto">
+                            <div className="bg-[#1a1a1a] w-full max-w-4xl rounded-2xl border border-white/10 shadow-2xl pointer-events-auto p-6 max-h-[90vh] overflow-y-auto">
                                 <div className="flex justify-between items-center mb-6">
                                     <h3 className="text-xl font-bold text-white">
                                         {editingEvent ? 'Edit Event' : 'Add New Event'}
@@ -1689,7 +1689,7 @@ const CalendarManager = () => {
                                             </p>
                                         )}
                                         {orgSearchOpen && (orgSuggestions.length > 0 || searchingOrgs) && (
-                                            <div className="absolute z-30 left-4 right-4 mt-1 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
+                                            <div className="absolute z-30 left-4 right-4 mt-1 bg-[#0a0a0a] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
                                                 {searchingOrgs && orgSuggestions.length === 0 ? (
                                                     <p className="px-4 py-3 text-xs text-gray-500">Searching…</p>
                                                 ) : (
@@ -2009,7 +2009,7 @@ const CalendarManager = () => {
                                         </div>
                                     </div>
 
-                                    <div className="pt-4 flex justify-end gap-3 sticky bottom-0 bg-[#1E293B] pb-2">
+                                    <div className="pt-4 flex justify-end gap-3 sticky bottom-0 bg-[#1a1a1a] pb-2">
                                         <button
                                             type="button"
                                             onClick={() => setIsModalOpen(false)}

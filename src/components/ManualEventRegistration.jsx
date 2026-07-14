@@ -274,7 +274,7 @@ const ProgressBar = ({ step, theme }) => (
             const active = step === s.id;
             const done = step > s.id;
             const accentColor = theme.fill || '#CCFF00';
-            const activeTextColor = theme.primaryText?.includes('text-white') ? '#fff' : '#0F172A';
+            const activeTextColor = theme.primaryText?.includes('text-white') ? '#fff' : '#0a0a0a';
             return (
                 <React.Fragment key={s.id}>
                     <div className="flex flex-col items-center min-w-0 shrink-0" style={{ width: `${100 / STEPS.length}%` }}>
@@ -357,7 +357,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const [isCalendarMenuOpen, setIsCalendarMenuOpen] = useState(false);
 
     const accent = theme?.fill || '#CCFF00';
-    const btnTextColor = theme?.primaryText?.includes('text-white') ? '#ffffff' : '#0F172A';
+    const btnTextColor = theme?.primaryText?.includes('text-white') ? '#ffffff' : '#0a0a0a';
     // Tier-aware gradient shared with the hero "Registered" chip on EventDetails —
     // used for all primary CTA buttons so logged-in/out states look identical.
     const accentGradientStyle = {
@@ -2579,7 +2579,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 </>
             );
             const eventPosterImage = (className = '') => (
-                <div className={`shrink-0 rounded-xl overflow-hidden bg-[#0F172A] aspect-[3/4] ${className}`}>
+                <div className={`shrink-0 rounded-xl overflow-hidden bg-[#0a0a0a] aspect-[3/4] ${className}`}>
                     <img src={eventPoster} alt={event.event_name} className="w-full h-full object-cover" />
                 </div>
             );
@@ -2656,7 +2656,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             <Card className={`shadow-sm ${compact ? 'mb-4' : ''} ${accentClass}`}>
                 <CardHeader title="Event Summary" soft />
                 <CardBody className="space-y-2.5">
-                    <div className="relative rounded-xl overflow-hidden bg-[#0F172A] aspect-[16/7]">
+                    <div className="relative rounded-xl overflow-hidden bg-[#0a0a0a] aspect-[16/7]">
                         <img src={eventPoster} alt={event.event_name} className="w-full h-full object-cover" />
                         {event.sapa_status && event.sapa_status !== 'None' && (
                             <span
@@ -3746,7 +3746,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 >
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${accent}20` }}>
-                            <Trophy className="w-4 h-4 text-[#0F172A]" />
+                            <Trophy className="w-4 h-4 text-[#0a0a0a]" />
                         </div>
                         <h2 className="text-sm font-semibold text-slate-900 tracking-normal">
                             {hasAnyRegistration
@@ -3857,7 +3857,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                 <Users className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
                                                 <div className="min-w-0 flex-1">
                                                     <div className="flex items-start justify-between gap-3">
-                                                        <p className="font-bold text-[#0F172A] text-sm leading-snug min-w-0">
+                                                        <p className="font-bold text-[#0a0a0a] text-sm leading-snug min-w-0">
                                                             {d.name}
                                                         </p>
                                                         <span
@@ -3900,7 +3900,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     <button type="button" onClick={closeWizard} className="p-2 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100">
                                         <X size={22} />
                                     </button>
-                                    <p className="font-black text-[#0F172A] text-sm truncate flex-1 text-center">{event.event_name}</p>
+                                    <p className="font-black text-[#0a0a0a] text-sm truncate flex-1 text-center">{event.event_name}</p>
                                     <div className="w-10" />
                                 </div>
                                 <div className="max-w-xl mx-auto mt-3">

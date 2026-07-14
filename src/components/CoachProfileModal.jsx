@@ -190,7 +190,7 @@ const CoachProfileModal = ({
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.95, opacity: 0 }}
                     onClick={handleModalClick}
-                    className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl relative"
+                    className="bg-[#0a0a0a] border border-white/10 rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl relative"
                 >
                     <button
                         onClick={handleClose}
@@ -201,7 +201,7 @@ const CoachProfileModal = ({
 
                     <div className="flex flex-col md:flex-row">
                         {/* Left Sidebar: Image & Actions */}
-                        <div className="md:w-1/3 bg-[#1E293B]/50 p-8 flex flex-col">
+                        <div className="md:w-1/3 bg-[#1a1a1a]/50 p-8 flex flex-col">
                             <div className="relative w-48 h-48 mx-auto rounded-full overflow-hidden border-4 border-padel-green shadow-xl mb-6 flex-shrink-0 bg-black group">
                                 {isEditing ? (
                                     <>
@@ -397,19 +397,19 @@ const CoachProfileModal = ({
                                     <h3 className="text-xl font-bold text-padel-green mb-6 border-b border-white/10 pb-4">Social & Web Links</h3>
                                     <div className="flex flex-wrap gap-4 mb-10">
                                         {app.website_link && (
-                                            <a href={app.website_link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-[#1E293B] hover:bg-white/10 px-4 py-2 rounded-lg text-white transition-colors border border-white/10">
+                                            <a href={app.website_link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-white/10 px-4 py-2 rounded-lg text-white transition-colors border border-white/10">
                                                 <ExternalLink className="text-blue-400" size={18} /> Website <ExternalLink size={14} className="text-gray-500" />
                                             </a>
                                         )}
 
                                         {app.instagram_link && (
-                                            <a href={app.instagram_link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-[#1E293B] hover:bg-white/10 px-4 py-2 rounded-lg text-white transition-colors border border-white/10">
+                                            <a href={app.instagram_link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-white/10 px-4 py-2 rounded-lg text-white transition-colors border border-white/10">
                                                 <Instagram className="text-pink-500" size={18} /> Instagram <ExternalLink size={14} className="text-gray-500" />
                                             </a>
                                         )}
 
                                         {app.youtube_link && (
-                                            <a href={app.youtube_link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-[#1E293B] hover:bg-white/10 px-4 py-2 rounded-lg text-white transition-colors border border-white/10">
+                                            <a href={app.youtube_link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-[#1a1a1a] hover:bg-white/10 px-4 py-2 rounded-lg text-white transition-colors border border-white/10">
                                                 <Youtube className="text-red-500" size={18} /> YouTube <ExternalLink size={14} className="text-gray-500" />
                                             </a>
                                         )}
@@ -420,7 +420,7 @@ const CoachProfileModal = ({
                                     </div>
 
                                     <h3 className="text-xl font-bold text-padel-green mb-6 border-b border-white/10 pb-4">Coaching Bio</h3>
-                                    <div className="bg-[#1E293B]/30 p-6 rounded-2xl border border-white/5">
+                                    <div className="bg-[#1a1a1a]/30 p-6 rounded-2xl border border-white/5">
                                         <p className="text-gray-300 leading-relaxed whitespace-pre-wrap">{app.bio}</p>
                                     </div>
                                 </>

@@ -456,7 +456,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }) => {
                     initial={{ opacity: 0, scale: 0.95, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                    className={`relative w-full max-h-[90vh] flex flex-col bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden ${
+                    className={`relative w-full max-h-[90vh] flex flex-col bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden ${
                         activeTab === 'register' && (registerType === 'organisation' || registerType === 'coach')
                             ? 'max-w-lg'
                             : 'max-w-md'
@@ -768,12 +768,12 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }) => {
                                                 required
                                             >
                                                 <option value="" disabled>Select Category</option>
-                                                <optgroup label="Men's" className="bg-[#0F172A]">
+                                                <optgroup label="Men's" className="bg-[#0a0a0a]">
                                                     <option value="Men's Open (Pro/Elite)">Men's Open (Pro/Elite)</option>
                                                     <option value="Men's Advanced">Men's Advanced</option>
                                                     <option value="Men's Intermediate">Men's Intermediate</option>
                                                 </optgroup>
-                                                <optgroup label="Ladies" className="bg-[#0F172A]">
+                                                <optgroup label="Ladies" className="bg-[#0a0a0a]">
                                                     <option value="Ladies Open (Pro/Elite)">Ladies Open (Pro/Elite)</option>
                                                     <option value="Ladies Advanced">Ladies Advanced</option>
                                                     <option value="Ladies Intermediate">Ladies Intermediate</option>
@@ -1196,7 +1196,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }) => {
                                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                                className="absolute z-[102] w-full max-w-lg max-h-[85vh] bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+                                className="absolute z-[102] w-full max-w-lg max-h-[85vh] bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
                             >
                                 <div className="flex items-center justify-between p-4 border-b border-white/10 bg-white/5">
                                     <h3 className="text-lg font-bold text-white">Terms & Conditions</h3>

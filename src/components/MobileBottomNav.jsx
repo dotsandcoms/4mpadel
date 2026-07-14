@@ -43,7 +43,7 @@ const MobileBottomNav = ({ session, authLoading, onRestrictedNav }) => {
   return (
     <div className="fixed bottom-4 left-4 right-4 z-[999] md:hidden flex justify-center">
       {/* iOS Liquid Glass Container */}
-      <div className="relative w-full max-w-[390px] bg-slate-950/90 backdrop-blur-xl border border-white/5 rounded-2xl p-1 flex items-center justify-around shadow-[0_10px_30px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.1)] ring-1 ring-black/20">
+      <div className="relative w-full max-w-[390px] bg-black/90 backdrop-blur-xl border border-white/5 rounded-2xl p-1 flex items-center justify-around shadow-[0_10px_30px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.1)] ring-1 ring-black/20">
         
         {/* Subtle glass reflection highlight across the top half of the bar */}
         <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/[0.08] to-transparent rounded-t-2xl pointer-events-none" />

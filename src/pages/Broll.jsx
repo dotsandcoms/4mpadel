@@ -483,8 +483,8 @@ const Broll = () => {
                                                     }}
                                                     >
                                                     <div className="relative mb-2 w-16 h-16 sm:w-20 sm:h-20 md:w-32 md:h-32">
-                                                        <div className="absolute -top-2 -left-2 w-6 h-6 rounded bg-[#E4E4E4] text-[#1E293B] flex items-center justify-center font-black text-xs z-10 border border-[#CBD5E1]">2</div>
-                                                        <div className="w-full h-full rounded-xl overflow-hidden border-2 border-[#E4E4E4]/50 bg-[#1E293B]">
+                                                        <div className="absolute -top-2 -left-2 w-6 h-6 rounded bg-[#E4E4E4] text-[#1a1a1a] flex items-center justify-center font-black text-xs z-10 border border-[#CBD5E1]">2</div>
+                                                        <div className="w-full h-full rounded-xl overflow-hidden border-2 border-[#E4E4E4]/50 bg-[#1a1a1a]">
                                                         {paginatedData[1].image && !imageErrors[paginatedData[1].id] ? (
                                                             <img src={paginatedData[1].image} alt={paginatedData[1].name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [paginatedData[1].id]: true }))} />
                                                         ) : (
@@ -514,7 +514,7 @@ const Broll = () => {
                                                     >
                                                     <div className="relative mb-3 w-20 h-20 sm:w-24 sm:h-24 md:w-40 md:h-40">
                                                         <div className="absolute -top-2 -left-2 w-7 h-7 rounded bg-[#F40020] text-white flex items-center justify-center font-black text-sm z-10 shadow-[0_0_15px_rgba(244,0,32,0.5)]">1</div>
-                                                        <div className="w-full h-full rounded-xl overflow-hidden border-[3px] border-[#F40020] shadow-lg shadow-[#F40020]/20 bg-[#1E293B]">
+                                                        <div className="w-full h-full rounded-xl overflow-hidden border-[3px] border-[#F40020] shadow-lg shadow-[#F40020]/20 bg-[#1a1a1a]">
                                                         {paginatedData[0].image && !imageErrors[paginatedData[0].id] ? (
                                                             <img src={paginatedData[0].image} alt={paginatedData[0].name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [paginatedData[0].id]: true }))} />
                                                         ) : (
@@ -544,7 +544,7 @@ const Broll = () => {
                                                     >
                                                     <div className="relative mb-2 w-16 h-16 sm:w-20 sm:h-20 md:w-32 md:h-32">
                                                         <div className="absolute -top-2 -left-2 w-6 h-6 rounded bg-[#B45309] text-white flex items-center justify-center font-black text-xs z-10 border border-[#F59E0B]/50">3</div>
-                                                        <div className="w-full h-full rounded-xl overflow-hidden border-2 border-[#B45309]/50 bg-[#1E293B]">
+                                                        <div className="w-full h-full rounded-xl overflow-hidden border-2 border-[#B45309]/50 bg-[#1a1a1a]">
                                                         {paginatedData[2].image && !imageErrors[paginatedData[2].id] ? (
                                                             <img src={paginatedData[2].image} alt={paginatedData[2].name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [paginatedData[2].id]: true }))} />
                                                         ) : (

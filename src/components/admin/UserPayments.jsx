@@ -236,7 +236,7 @@ const UserPayments = ({ allowedEvents = [] }) => {
     return (
         <div className="space-y-6">
             {/* Action Bar */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-3xl border border-white/10">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#1a1a1a]/50 backdrop-blur-md p-6 rounded-3xl border border-white/10">
                 <div className="relative w-full md:w-96">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
                     <input
@@ -264,7 +264,7 @@ const UserPayments = ({ allowedEvents = [] }) => {
             </div>
 
             {/* Players Ledger Table */}
-            <div className="bg-[#1E293B]/50 backdrop-blur-md rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl">
+            <div className="bg-[#1a1a1a]/50 backdrop-blur-md rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl">
                 <div className="overflow-x-auto max-h-[60vh] overflow-y-auto custom-scrollbar">
                     <table className="w-full text-left border-collapse">
                         <thead className="sticky top-0 z-10">
@@ -341,7 +341,7 @@ const UserPayments = ({ allowedEvents = [] }) => {
                     />
                     <motion.div 
                         initial={{ x: '100%' }} animate={{ x: 0 }}
-                        className="bg-[#0F172A] w-full max-w-lg h-full p-10 pointer-events-auto border-l border-white/10 relative overflow-y-auto no-scrollbar"
+                        className="bg-[#0a0a0a] w-full max-w-lg h-full p-10 pointer-events-auto border-l border-white/10 relative overflow-y-auto no-scrollbar"
                     >
                         <div className="flex justify-between items-start mb-10">
                             <div className="w-20 h-20 rounded-3xl bg-padel-green text-black font-black text-4xl flex items-center justify-center shadow-2xl shadow-padel-green/30">

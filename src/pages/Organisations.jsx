@@ -108,22 +108,22 @@ const Organisations = () => {
                             >
                                 <Link
                                     to={`/organisations/${org.slug}`}
-                                    className="block bg-[#0F172A]/60 hover:bg-[#0F172A] border border-white/5 hover:border-padel-green/30 rounded-3xl overflow-hidden transition-all duration-300 group"
+                                    className="block bg-[#0a0a0a]/60 hover:bg-[#0a0a0a] border border-white/5 hover:border-padel-green/30 rounded-3xl overflow-hidden transition-all duration-300 group"
                                 >
                                     {/* Cover strip */}
                                     <div className="h-24 relative overflow-hidden bg-gradient-to-r from-padel-green/10 via-[#0B0F19] to-blue-500/10">
                                         {org.cover_image_url && (
                                             <img src={org.cover_image_url} alt="" className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-500" />
                                         )}
-                                        <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A] to-transparent" />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] to-transparent" />
                                     </div>
 
                                     <div className="p-5 -mt-10 relative">
                                         <div className="flex items-end justify-between">
                                             {org.logo_url ? (
-                                                <img src={org.logo_url} alt={org.name} className="w-16 h-16 rounded-2xl object-cover border-2 border-[#0F172A] bg-white shadow-xl" />
+                                                <img src={org.logo_url} alt={org.name} className="w-16 h-16 rounded-2xl object-cover border-2 border-[#0a0a0a] bg-white shadow-xl" />
                                             ) : (
-                                                <div className="w-16 h-16 rounded-2xl bg-padel-green/10 border-2 border-[#0F172A] flex items-center justify-center text-padel-green shadow-xl">
+                                                <div className="w-16 h-16 rounded-2xl bg-padel-green/10 border-2 border-[#0a0a0a] flex items-center justify-center text-padel-green shadow-xl">
                                                     <Building size={26} />
                                                 </div>
                                             )}

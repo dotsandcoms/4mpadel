@@ -151,7 +151,7 @@ const RankingSlider = ({ title, playersData, onPlayerClick }) => {
               className={`w-[170px] md:w-[200px] relative group rounded-2xl overflow-hidden snap-center shadow-xl border border-white/5 bg-black/40 flex-shrink-0 ${player.hasLocalProfile ? 'cursor-pointer hover:border-padel-green/50' : ''}`}
               onClick={() => handleCardClick(player)}
             >
-              <div className="slider-card-media h-[200px] md:h-[230px] w-full relative bg-gradient-to-br from-[#1E293B] to-[#0F172A] flex items-center justify-center">
+              <div className="slider-card-media h-[200px] md:h-[230px] w-full relative bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] flex items-center justify-center">
                 {player.image && !player._imgError ? (
                   <img
                     src={player.image}
@@ -463,7 +463,7 @@ const FullRankingsTable = ({
         </div>
 
         {/* Mobile App-like Card List View */}
-        <div className="block md:hidden bg-[#0A0F1D]">
+        <div className="block md:hidden bg-[#141414]">
 
           {/* List Header */}
           <div className="grid grid-cols-[10%_45%_25%_20%] gap-2 px-4 py-3 text-[9px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5 border-t">
@@ -607,7 +607,7 @@ const PodiumCoverflow = ({ data, onPlayerClick, imageErrors, setImageErrors, get
   const top10 = data.slice(0, 10);
 
   return (
-    <div className="relative w-full bg-[#0A0F1D] md:bg-transparent border-b border-white/5 overflow-hidden">
+    <div className="relative w-full bg-[#141414] md:bg-transparent border-b border-white/5 overflow-hidden">
       <div
         ref={scrollRef}
         onScroll={handleScroll}
@@ -648,7 +648,7 @@ const PodiumCoverflow = ({ data, onPlayerClick, imageErrors, setImageErrors, get
                 }
               }}
             >
-              <div className={`relative w-full rounded-lg md:rounded-xl overflow-hidden transition-all duration-300 bg-[#0B1220]
+              <div className={`relative w-full rounded-lg md:rounded-xl overflow-hidden transition-all duration-300 bg-[#141414]
                   ${medal ? `border-2 md:border-[3px] ${medal.border} ${medal.glow}` : isActive ? 'border-2 md:border-[3px] border-padel-green shadow-[0_0_20px_rgba(190,255,0,0.3)]' : 'border border-gray-600/50 md:border-2'}`}>
 
                 <div className={`absolute top-1 left-1 md:top-1.5 md:left-1.5 w-5 h-5 md:w-7 md:h-7 rounded flex items-center justify-center font-black text-[10px] md:text-xs z-10 transition-colors
@@ -656,7 +656,7 @@ const PodiumCoverflow = ({ data, onPlayerClick, imageErrors, setImageErrors, get
                   {actualRank}
                 </div>
 
-                <div className="w-full aspect-[4/3] bg-[#1E293B]">
+                <div className="w-full aspect-[4/3] bg-[#1a1a1a]">
                   {player.image && !imageErrors[player.id] ? (
                     <img src={player.image} alt={player.name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [player.id]: true }))} />
                   ) : (
@@ -965,7 +965,7 @@ const Rankings = () => {
   }, [filteredData, currentPage]);
 
   return (
-    <div className="relative bg-[#0F172A] min-h-screen text-white font-sans selection:bg-padel-green selection:text-black pt-[53px] md:pt-0">
+    <div className="relative bg-[#0a0a0a] min-h-screen text-white font-sans selection:bg-padel-green selection:text-black pt-[53px] md:pt-0">
       {/* Background elements */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-padel-green/10 blur-[150px] rounded-full" />
@@ -986,7 +986,7 @@ const Rankings = () => {
             </div>
             <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.28) 100%)' }} />
             <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-black/90 via-black/40 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-[#0F172A]" />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-[#0a0a0a]" />
           </div>
 
           <div className="relative z-10">
@@ -1018,7 +1018,7 @@ const Rankings = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="bg-[#0a0f1d]/80 border border-white/10 backdrop-blur-2xl p-3 md:p-4 rounded-2xl md:rounded-3xl shadow-2xl max-w-4xl mx-auto md:max-w-none md:mx-0"
+            className="bg-[#141414]/80 border border-white/10 backdrop-blur-2xl p-3 md:p-4 rounded-2xl md:rounded-3xl shadow-2xl max-w-4xl mx-auto md:max-w-none md:mx-0"
           >
             {/* Search Input Container — full width on its own row */}
             <div className="relative w-full">
@@ -1062,9 +1062,9 @@ const Rankings = () => {
                 onChange={(e) => setSelectedOrgId(Number(e.target.value))}
                 className="w-[150px] sm:w-auto md:w-full h-11 md:h-12 bg-white/5 border border-white/10 hover:bg-white/10 rounded-lg md:rounded-2xl py-0 pl-8 md:pl-12 pr-6 md:pr-10 text-xs md:text-base text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all font-semibold"
               >
-                <option value={15809} className="bg-[#0a0f1d]">Official SAPA Rankings</option>
-                <option value={16317} className="bg-[#0a0f1d]">Official Broll Pro Tour Rankings</option>
-                <option value={11706} className="bg-[#0a0f1d]">Official SA Grand Tour Rankings</option>
+                <option value={15809} className="bg-[#141414]">Official SAPA Rankings</option>
+                <option value={16317} className="bg-[#141414]">Official Broll Pro Tour Rankings</option>
+                <option value={11706} className="bg-[#141414]">Official SA Grand Tour Rankings</option>
               </select>
               <div className="absolute inset-y-0 right-1.5 md:right-4 flex items-center pointer-events-none">
                 <ChevronDown className="w-3.5 h-3.5 md:w-4 md:h-4 text-gray-400" />

@@ -116,7 +116,7 @@ const UpcomingEventsWidget = ({ session }) => {
     if (loading) {
         return (
             <section className="px-4 md:px-6 pb-6">
-                <div className="bg-[#0F172A] border border-white/10 rounded-[2rem] p-6 md:p-10 animate-pulse">
+                <div className="bg-[#0a0a0a] border border-white/10 rounded-[2rem] p-6 md:p-10 animate-pulse">
                     <div className="h-4 w-48 bg-white/10 rounded-full mb-6" />
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {[1, 2].map(i => (
@@ -138,7 +138,7 @@ const UpcomingEventsWidget = ({ session }) => {
             transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
             className="px-4 md:px-6 pb-6"
         >
-            <div className="bg-[#0F172A]/90 backdrop-blur-xl border border-purple-500/25 rounded-[2rem] p-6 md:p-10 relative overflow-hidden">
+            <div className="bg-[#0a0a0a]/90 backdrop-blur-xl border border-purple-500/25 rounded-[2rem] p-6 md:p-10 relative overflow-hidden">
                 {/* Background glow */}
                 <div className="absolute top-0 right-0 w-80 h-80 bg-purple-500/5 rounded-full blur-[100px] -mr-40 -mt-40 pointer-events-none" />
 

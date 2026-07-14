@@ -44,7 +44,7 @@ const getRegisteredStatusStyle = (theme) => {
     return {
         background: `linear-gradient(145deg, color-mix(in srgb, ${fill} 68%, white 32%) 0%, ${fill} 50%, color-mix(in srgb, ${fill} 82%, black 18%) 100%)`,
         borderColor: fill,
-        color: isLightText ? '#ffffff' : '#0F172A',
+        color: isLightText ? '#ffffff' : '#0a0a0a',
         boxShadow: `inset 0 1px 0 rgba(255,255,255,${isLightText ? 0.28 : 0.45}), 0 2px 12px color-mix(in srgb, ${fill} 40%, transparent)`,
     };
 };
@@ -400,7 +400,7 @@ const EventHeroBranding = ({ event, theme, variant = 'hero', centered = false, d
         return metaRow(
             <span
                 className={`inline-block text-[10px] font-semibold uppercase tracking-wide px-3 py-1 rounded-full shadow-md w-fit ${theme.badgeBg}`}
-                style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0a0a0a' }}
             >
                 {event.sapa_status}
             </span>
@@ -423,7 +423,7 @@ const InfoSection = ({ title, icon: Icon, accent = '#9AE900', defaultOpen = fals
             >
                 <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: accent + '20' }}>
-                        {Icon && <Icon className="w-4 h-4 text-[#0F172A]" />}
+                        {Icon && <Icon className="w-4 h-4 text-[#0a0a0a]" />}
                     </div>
                     <h2 className="text-sm font-semibold text-slate-900 tracking-normal">{title}</h2>
                 </div>
@@ -855,12 +855,12 @@ const EventDetails = () => {
         }
         if (status === 'Super Gold' || status === 'S Gold') {
             return {
-                primary: 'bg-amber-500 hover:bg-amber-600 text-[#0F172A]',
-                primaryText: 'text-[#0F172A]',
+                primary: 'bg-amber-500 hover:bg-amber-600 text-[#0a0a0a]',
+                primaryText: 'text-[#0a0a0a]',
                 accentText: 'text-amber-500',
                 accentBg: 'bg-amber-500/10 border-amber-500/20',
-                badgeBg: 'bg-amber-500 text-[#0F172A]',
-                badgeText: 'text-[#0F172A]',
+                badgeBg: 'bg-amber-500 text-[#0a0a0a]',
+                badgeText: 'text-[#0a0a0a]',
                 glow: 'shadow-lg shadow-amber-500/20',
                 border: 'border-amber-500',
                 fill: '#F59E0B'
@@ -868,12 +868,12 @@ const EventDetails = () => {
         }
         if (status === 'Gold') {
             return {
-                primary: 'bg-yellow-500 hover:bg-yellow-600 text-[#0F172A]',
-                primaryText: 'text-[#0F172A]',
+                primary: 'bg-yellow-500 hover:bg-yellow-600 text-[#0a0a0a]',
+                primaryText: 'text-[#0a0a0a]',
                 accentText: 'text-yellow-500',
                 accentBg: 'bg-yellow-500/10 border-yellow-500/20',
-                badgeBg: 'bg-yellow-500 text-[#0F172A]',
-                badgeText: 'text-[#0F172A]',
+                badgeBg: 'bg-yellow-500 text-[#0a0a0a]',
+                badgeText: 'text-[#0a0a0a]',
                 glow: 'shadow-lg shadow-yellow-500/20',
                 border: 'border-yellow-500',
                 fill: '#EAB308'
@@ -881,12 +881,12 @@ const EventDetails = () => {
         }
         if (status === 'Silver') {
             return {
-                primary: 'bg-gray-400 hover:bg-gray-500 text-[#0F172A]',
-                primaryText: 'text-[#0F172A]',
+                primary: 'bg-gray-400 hover:bg-gray-500 text-[#0a0a0a]',
+                primaryText: 'text-[#0a0a0a]',
                 accentText: 'text-gray-400',
                 accentBg: 'bg-gray-400/10 border-gray-400/20',
-                badgeBg: 'bg-gray-400 text-[#0F172A]',
-                badgeText: 'text-[#0F172A]',
+                badgeBg: 'bg-gray-400 text-[#0a0a0a]',
+                badgeText: 'text-[#0a0a0a]',
                 glow: 'shadow-lg shadow-gray-400/20',
                 border: 'border-gray-400',
                 fill: '#9CA3AF'
@@ -919,12 +919,12 @@ const EventDetails = () => {
             };
         }
         return {
-            primary: 'bg-[#CCFF00] hover:bg-[#CCFF00]/80 text-[#0F172A]',
-            primaryText: 'text-[#0F172A]',
+            primary: 'bg-[#CCFF00] hover:bg-[#CCFF00]/80 text-[#0a0a0a]',
+            primaryText: 'text-[#0a0a0a]',
             accentText: 'text-[#CCFF00]',
             accentBg: 'bg-[#CCFF00]/10 border-[#CCFF00]/20',
-            badgeBg: 'bg-[#CCFF00] text-[#0F172A]',
-            badgeText: 'text-[#0F172A]',
+            badgeBg: 'bg-[#CCFF00] text-[#0a0a0a]',
+            badgeText: 'text-[#0a0a0a]',
             glow: 'shadow-lg shadow-[#CCFF00]/20',
             border: 'border-[#CCFF00]',
             fill: '#CCFF00'
@@ -932,7 +932,7 @@ const EventDetails = () => {
     };
 
     const theme = getTierTheme();
-    const registerNowStyle = { color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' };
+    const registerNowStyle = { color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0a0a0a' };
     const registeredStatusStyle = getRegisteredStatusStyle(theme);
     const { promptMembersOnly } = useMembersOnly();
 
@@ -2940,7 +2940,7 @@ const EventDetails = () => {
                         initial={{ opacity: 0, y: -8, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                        className="absolute top-full mt-2 right-0 left-auto w-56 bg-[#1E293B] rounded-2xl shadow-2xl border border-white/10 overflow-hidden z-[110] animate-scale-up"
+                        className="absolute top-full mt-2 right-0 left-auto w-56 bg-[#1a1a1a] rounded-2xl shadow-2xl border border-white/10 overflow-hidden z-[110] animate-scale-up"
                     >
                         {[
                             {
@@ -3021,7 +3021,7 @@ const EventDetails = () => {
                                 const status = getDivisionStatus(div);
                                 return (
                                     <div key={div} className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                        <span className="text-sm font-semibold text-[#0F172A] leading-tight">
+                                        <span className="text-sm font-semibold text-[#0a0a0a] leading-tight">
                                             {div}
                                         </span>
                                         <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md ${status.className}`}>
@@ -3032,7 +3032,7 @@ const EventDetails = () => {
                             })
                         ) : (
                             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                <span className="text-sm font-semibold text-[#0F172A] leading-tight">
+                                <span className="text-sm font-semibold text-[#0a0a0a] leading-tight">
                                     Main Event
                                 </span>
                                 <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md ${isPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
@@ -3123,7 +3123,7 @@ const EventDetails = () => {
                                 type="button"
                                 onClick={() => manualRegActionsRef.current?.openPayFlow?.()}
                                 className="flex w-full items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm transition-opacity hover:opacity-90"
-                                style={{ backgroundColor: theme?.fill || '#CCFF00', color: theme?.primaryText?.includes('text-white') ? '#ffffff' : '#0F172A' }}
+                                style={{ backgroundColor: theme?.fill || '#CCFF00', color: theme?.primaryText?.includes('text-white') ? '#ffffff' : '#0a0a0a' }}
                             >
                                 Pay Entry <CreditCard className="w-4 h-4" />
                             </button>
@@ -3164,7 +3164,7 @@ const EventDetails = () => {
         : '';
 
     const readyToCompeteBlock = showReadyToCompete && (
-        <div className="bg-[#0F172A] rounded-2xl p-5 shadow-lg border border-white/5 animate-fade-in">
+        <div className="bg-[#0a0a0a] rounded-2xl p-5 shadow-lg border border-white/5 animate-fade-in">
             <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: theme.fill }}>Ready to compete?</p>
             <p className="text-xs text-gray-400 mb-4">Secure your spot at {event.event_name}.</p>
             <div className="space-y-2">
@@ -3213,7 +3213,7 @@ const EventDetails = () => {
             <div className="min-h-screen bg-gray-50 font-sans relative">
 
                 {event.is_visible === false && (
-                    <div className="relative z-[110] bg-amber-400 text-[#0F172A] text-center text-xs sm:text-sm font-medium py-2.5 px-4">
+                    <div className="relative z-[110] bg-amber-400 text-[#0a0a0a] text-center text-xs sm:text-sm font-medium py-2.5 px-4">
                         {event.is_manual
                             ? 'This event is hidden from the public calendar — only people with this link can view it.'
                             : 'Preview mode — this event is hidden from the public calendar.'}
@@ -3261,7 +3261,7 @@ const EventDetails = () => {
                 </div>
 
                 {/* ── HERO ── */}
-                <div className="relative w-full bg-[#0F172A]">
+                <div className="relative w-full bg-[#0a0a0a]">
                     {/* Full width foreground flyer image */}
                     <div className="absolute inset-0 z-0 h-[55vw] max-h-[480px] min-h-[280px] overflow-hidden">
                         <img
@@ -3277,7 +3277,7 @@ const EventDetails = () => {
                         {/* Soft vignette pulling focus to the centre */}
                         <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, transparent 48%, rgba(0,0,0,0.5) 100%)' }} />
                         {/* Gradient overlay for blending and text readability (fading to blue) */}
-                        <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-[#0F172A]/40 to-[#0F172A]" />
+                        <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-[#0a0a0a]/40 to-[#0a0a0a]" />
                         {/* Tier accent glow rising from the fade line */}
                         <div
                             className="absolute bottom-0 left-0 right-0 h-28 pointer-events-none"
@@ -3480,7 +3480,7 @@ const EventDetails = () => {
                                     key={id}
                                     onClick={() => setActiveTab(id)}
                                     className={`flex-1 py-4 text-sm font-semibold border-b-2 transition-all whitespace-nowrap text-center ${active
-                                        ? 'text-[#0F172A] border-[#0F172A]'
+                                        ? 'text-[#0a0a0a] border-[#0a0a0a]'
                                         : 'border-transparent text-gray-400 hover:text-gray-700 hover:border-gray-300'
                                         }`}
                                 >
@@ -3510,9 +3510,9 @@ const EventDetails = () => {
                                             <div className="w-12 h-12 mx-auto rounded-2xl bg-gray-100 flex items-center justify-center mb-3">
                                                 <Clock className="w-6 h-6 text-gray-400" />
                                             </div>
-                                            <h3 className="text-lg font-bold text-[#0F172A]">Registration Not Open Yet</h3>
+                                            <h3 className="text-lg font-bold text-[#0a0a0a]">Registration Not Open Yet</h3>
                                             <p className="text-sm text-gray-500 mt-1.5">
-                                                Entries for this event open on <span className="font-bold text-[#0F172A]">{registrationOpensLabel}</span>. Check back then!
+                                                Entries for this event open on <span className="font-bold text-[#0a0a0a]">{registrationOpensLabel}</span>. Check back then!
                                             </p>
                                         </div>
                                     )}
@@ -3540,7 +3540,7 @@ const EventDetails = () => {
                                             )}
                                             <div className="flex items-center justify-between px-6 py-5 border-b border-gray-50">
                                                 <h2 className="text-base font-semibold text-slate-900">Divisions</h2>
-                                                <button onClick={() => setActiveTab('players')} className="text-[13px] font-bold text-[#0F172A] hover:text-gray-600 flex items-center gap-1">
+                                                <button onClick={() => setActiveTab('players')} className="text-[13px] font-bold text-[#0a0a0a] hover:text-gray-600 flex items-center gap-1">
                                                     View All Divisions <ChevronRight className="w-4 h-4" />
                                                 </button>
                                             </div>
@@ -3551,7 +3551,7 @@ const EventDetails = () => {
                                                         <div key={idx} onClick={() => { setActiveTab('players'); toggleDivision(cls.Id); }} className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors">
                                                             <div className="flex items-center gap-4">
                                                                 <Users className="w-5 h-5 text-gray-400" strokeWidth={1.5} />
-                                                                <span className="font-medium text-[#0F172A] text-[15px]">{cls.Name}</span>
+                                                                <span className="font-medium text-[#0a0a0a] text-[15px]">{cls.Name}</span>
                                                             </div>
                                                             <div className="flex items-center gap-3">
                                                                 <span className="text-[13px] text-gray-500 font-medium">{clsParticipants.length} Teams</span>
@@ -3562,7 +3562,7 @@ const EventDetails = () => {
                                                 }) : (
                                                     <div className="px-6 py-8 flex flex-col items-center justify-center text-center">
                                                         <Users className="w-10 h-10 text-gray-200 mb-3" />
-                                                        <h3 className="text-sm font-bold text-[#0F172A] mb-1">No divisions setup yet</h3>
+                                                        <h3 className="text-sm font-bold text-[#0a0a0a] mb-1">No divisions setup yet</h3>
                                                         <p className="text-xs text-gray-400">Divisions will appear here once they are created.</p>
                                                     </div>
                                                 )}
@@ -3613,7 +3613,7 @@ const EventDetails = () => {
                                                                     <span className="text-[14px] text-gray-700 font-medium">{item.label}</span>
                                                                 </div>
                                                                 <div className="flex items-center gap-3">
-                                                                    <span className={`text-[14px] font-medium text-right max-w-[150px] truncate ${item.valueColor || 'text-[#0F172A]'}`}>{item.value}</span>
+                                                                    <span className={`text-[14px] font-medium text-right max-w-[150px] truncate ${item.valueColor || 'text-[#0a0a0a]'}`}>{item.value}</span>
                                                                     <ChevronRight className="w-4 h-4 text-gray-300" />
                                                                 </div>
                                                             </div>
@@ -3630,8 +3630,8 @@ const EventDetails = () => {
                                                 {/* Top Seeds */}
                                                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                                                     <div className="flex items-center justify-between px-6 py-5 border-b border-gray-50">
-                                                        <h2 className="font-bold text-[#0F172A] text-lg">Top Seeds</h2>
-                                                        <Link to="/rankings" className="text-[13px] font-bold text-[#0F172A] hover:text-gray-600 flex items-center gap-1">
+                                                        <h2 className="font-bold text-[#0a0a0a] text-lg">Top Seeds</h2>
+                                                        <Link to="/rankings" className="text-[13px] font-bold text-[#0a0a0a] hover:text-gray-600 flex items-center gap-1">
                                                             View Rankings <ChevronRight className="w-4 h-4" />
                                                         </Link>
                                                     </div>
@@ -3719,7 +3719,7 @@ const EventDetails = () => {
                                                                 <div key={idx} className="flex items-center justify-between py-4">
                                                                     <div className="flex items-center gap-4">
                                                                         <span className="font-semibold text-yellow-500 w-4 flex-shrink-0">{idx + 1}</span>
-                                                                        <span className="font-medium text-[#0F172A] text-[14px] max-w-[180px] truncate" title={seed.name}>
+                                                                        <span className="font-medium text-[#0a0a0a] text-[14px] max-w-[180px] truncate" title={seed.name}>
                                                                             {seed.name} {seed.rank !== Infinity && <span className="text-gray-500 ml-1 text-[13px]">(#{seed.rank})</span>}
                                                                         </span>
                                                                     </div>
@@ -3745,7 +3745,7 @@ const EventDetails = () => {
                                                     >
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
-                                                                <Crown className="w-4 h-4 text-[#0F172A]" />
+                                                                <Crown className="w-4 h-4 text-[#0a0a0a]" />
                                                             </div>
                                                             <h2 className="text-sm font-semibold text-slate-900 tracking-normal">Top Seeds</h2>
                                                         </div>
@@ -3753,14 +3753,14 @@ const EventDetails = () => {
                                                             <div className="flex bg-gray-100 rounded-full p-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                                                                 <button
                                                                     onClick={() => setTopSeedsGender('men')}
-                                                                    style={topSeedsGender === 'men' ? { backgroundColor: theme.fill, color: '#0F172A' } : undefined}
+                                                                    style={topSeedsGender === 'men' ? { backgroundColor: theme.fill, color: '#0a0a0a' } : undefined}
                                                                     className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide rounded-full transition-all ${topSeedsGender === 'men' ? '' : 'text-gray-500 hover:text-gray-700'}`}
                                                                 >
                                                                     Men
                                                                 </button>
                                                                 <button
                                                                     onClick={() => setTopSeedsGender('women')}
-                                                                    style={topSeedsGender === 'women' ? { backgroundColor: theme.fill, color: '#0F172A' } : undefined}
+                                                                    style={topSeedsGender === 'women' ? { backgroundColor: theme.fill, color: '#0a0a0a' } : undefined}
                                                                     className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide rounded-full transition-all ${topSeedsGender === 'women' ? '' : 'text-gray-500 hover:text-gray-700'}`}
                                                                 >
                                                                     Women
@@ -3802,7 +3802,7 @@ const EventDetails = () => {
                                                                             <div key={team.id} className="flex items-center justify-between py-4 gap-3">
                                                                                 <div className="flex items-center gap-4 min-w-0">
                                                                                     <span className="font-semibold text-yellow-500 w-4 flex-shrink-0">{idx + 1}</span>
-                                                                                    <span className="font-medium text-[#0F172A] text-[14px] truncate" title={team.name}>
+                                                                                    <span className="font-medium text-[#0a0a0a] text-[14px] truncate" title={team.name}>
                                                                                         {team.name} <span className="text-gray-500 ml-1 text-[13px]">({team.totalPoints.toLocaleString()} pts)</span>
                                                                                     </span>
                                                                                 </div>
@@ -3847,7 +3847,7 @@ const EventDetails = () => {
                                                                         dangerouslySetInnerHTML={{ __html: sanitizeHtml(text) }}
                                                                     />
                                                                 ) : (
-                                                                    <span className="text-[#0F172A] font-semibold text-right">{text}</span>
+                                                                    <span className="text-[#0a0a0a] font-semibold text-right">{text}</span>
                                                                 )}
                                                             </div>
                                                         );
@@ -3868,7 +3868,7 @@ const EventDetails = () => {
                                                     >
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
-                                                                <FileText className="w-4 h-4 text-[#0F172A]" />
+                                                                <FileText className="w-4 h-4 text-[#0a0a0a]" />
                                                             </div>
                                                             <h2 className="font-semibold text-slate-900 text-sm tracking-normal">About This Event</h2>
                                                         </div>
@@ -3904,7 +3904,7 @@ const EventDetails = () => {
                                                             <a
                                                                 href={`tel:${event.organizer_phone}`}
                                                                 className="flex items-center gap-2 font-semibold !text-slate-800 hover:!text-black"
-                                                                style={{ color: '#1e293b' }}
+                                                                style={{ color: '#1a1a1a' }}
                                                             >
                                                                 <Phone className="w-4 h-4 shrink-0 text-slate-500" />
                                                                 {event.organizer_phone}
@@ -3914,7 +3914,7 @@ const EventDetails = () => {
                                                             <a
                                                                 href={`mailto:${event.organizer_email}`}
                                                                 className="flex items-center gap-2 font-semibold !text-slate-800 hover:!text-black"
-                                                                style={{ color: '#1e293b' }}
+                                                                style={{ color: '#1a1a1a' }}
                                                             >
                                                                 <Mail className="w-4 h-4 shrink-0 text-slate-500" />
                                                                 {event.organizer_email}
@@ -3933,7 +3933,7 @@ const EventDetails = () => {
                                                     >
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
-                                                                <MapPin className="w-4 h-4 text-[#0F172A]" />
+                                                                <MapPin className="w-4 h-4 text-[#0a0a0a]" />
                                                             </div>
                                                             <h2 className="font-semibold text-slate-900 text-sm tracking-normal">Location</h2>
                                                         </div>
@@ -3943,7 +3943,7 @@ const EventDetails = () => {
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
                                                                 className={`text-[10px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-lg transition-colors shrink-0 ${theme.primary}`}
-                                                                style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                                style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0a0a0a' }}
                                                                 onClick={(e) => e.stopPropagation()}
                                                             >
                                                                 Directions
@@ -4008,7 +4008,7 @@ const EventDetails = () => {
                                                                     {prizeBreakdown.map((row, i) => (
                                                                         <div key={i} className="flex items-center justify-between gap-4 py-2.5 text-sm first:pt-0">
                                                                             <span className="text-slate-600 font-medium">{row.label}</span>
-                                                                            <span className="font-semibold text-[#0F172A] shrink-0">{formatPrizeAmount(row.amount)}</span>
+                                                                            <span className="font-semibold text-[#0a0a0a] shrink-0">{formatPrizeAmount(row.amount)}</span>
                                                                         </div>
                                                                     ))}
                                                                 </div>
@@ -4037,7 +4037,7 @@ const EventDetails = () => {
                                                     >
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
-                                                                <ImageIcon className="w-4 h-4 text-[#0F172A]" />
+                                                                <ImageIcon className="w-4 h-4 text-[#0a0a0a]" />
                                                             </div>
                                                             <h2 className="font-semibold text-slate-900 text-sm tracking-normal">Sponsors</h2>
                                                         </div>
@@ -4074,7 +4074,7 @@ const EventDetails = () => {
                                                     >
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
-                                                                <Cloud className="w-4 h-4 text-[#0F172A]" />
+                                                                <Cloud className="w-4 h-4 text-[#0a0a0a]" />
                                                             </div>
                                                             <h2 className="font-semibold text-slate-900 text-sm tracking-normal">Weather Forecast</h2>
                                                         </div>
@@ -4091,7 +4091,7 @@ const EventDetails = () => {
                                                             >
                                                                 <div className="px-6 py-5 flex items-center gap-4">
                                                                     <div className="w-14 h-14 rounded-xl flex items-center justify-center" style={{ backgroundColor: theme.fill + '15' }}>
-                                                                        <Cloud className="w-7 h-7 text-[#0F172A]" />
+                                                                        <Cloud className="w-7 h-7 text-[#0a0a0a]" />
                                                                     </div>
                                                                     <div>
                                                                         <p className="text-2xl font-semibold text-slate-900">{Math.round(weather.temp)}°C</p>
@@ -4121,7 +4121,7 @@ const EventDetails = () => {
                                 <div className="space-y-4">
                                     {fetchingParticipants && playerDivisions.length === 0 ? (
                                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 flex flex-col items-center">
-                                            <Loader className="w-8 h-8 animate-spin text-[#0F172A] mb-4" />
+                                            <Loader className="w-8 h-8 animate-spin text-[#0a0a0a] mb-4" />
                                             <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Loading Players...</p>
                                         </div>
                                     ) : playerDivisions.length > 0 ? (
@@ -4136,7 +4136,7 @@ const EventDetails = () => {
                                                     >
                                                         <h3 className="font-semibold text-slate-900 text-base tracking-normal">{cls.Name}</h3>
                                                         <div className="flex items-center gap-3">
-                                                            <span className="text-[10px] font-semibold uppercase tracking-wide bg-[#CCFF00] text-[#0F172A] px-3 py-1.5 rounded-full">
+                                                            <span className="text-[10px] font-semibold uppercase tracking-wide bg-[#CCFF00] text-[#0a0a0a] px-3 py-1.5 rounded-full">
                                                                 {clsParticipants.length} Teams
                                                             </span>
                                                             <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
@@ -4220,7 +4220,7 @@ const EventDetails = () => {
                                                                                     <div key={pIdx} className="bg-white px-4 py-2.5 sm:px-5 sm:py-3 border-b border-gray-100 last:border-0 hover:bg-gray-50/50 transition-colors">
                                                                                         <div className="flex items-center gap-3 sm:gap-4">
                                                                                             <div className="flex-shrink-0 w-8 sm:w-9 text-center self-center">
-                                                                                                <span className="text-lg sm:text-xl font-black text-[#0F172A] tabular-nums leading-none">
+                                                                                                <span className="text-lg sm:text-xl font-black text-[#0a0a0a] tabular-nums leading-none">
                                                                                                     {displayNumber}
                                                                                                 </span>
                                                                                             </div>
@@ -4241,7 +4241,7 @@ const EventDetails = () => {
                                                                                                             </div>
                                                                                                             <span className="text-sm font-bold text-slate-800 mt-1.5 text-center max-w-[96px] truncate">{pName}</span>
                                                                                                             {hasPts && (
-                                                                                                                <span className="mt-1 bg-[#CCFF00] text-[#0F172A] text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm">
+                                                                                                                <span className="mt-1 bg-[#CCFF00] text-[#0a0a0a] text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm">
                                                                                                                     {pts.toLocaleString()}
                                                                                                                 </span>
                                                                                                             )}
@@ -4256,7 +4256,7 @@ const EventDetails = () => {
                                                                                                         <div className="flex flex-wrap justify-end gap-1 mb-1">
                                                                                                             {rank && <span className="text-[8px] font-semibold uppercase tracking-wide bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Rank {rank}</span>}
                                                                                                             {(seed || manualSeedInfo?.seed) && (
-                                                                                                                <span className="text-[8px] font-semibold uppercase tracking-wide bg-[#CCFF00] text-[#0F172A] px-2 py-0.5 rounded-full">
+                                                                                                                <span className="text-[8px] font-semibold uppercase tracking-wide bg-[#CCFF00] text-[#0a0a0a] px-2 py-0.5 rounded-full">
                                                                                                                     Seed {manualSeedInfo?.seed || seed}
                                                                                                                 </span>
                                                                                                             )}
@@ -4306,7 +4306,7 @@ const EventDetails = () => {
                                     {hasDraw || hasResults ? (
                                         <Link
                                             to={`/draws/${event.slug || event.rankedin_id || extractRankedinId(event.rankedin_url)}`}
-                                            className="flex items-center justify-between p-6 bg-[#0F172A] rounded-2xl shadow-lg hover:bg-[#0F172A]/90 transition-all group"
+                                            className="flex items-center justify-between p-6 bg-[#0a0a0a] rounded-2xl shadow-lg hover:bg-[#0a0a0a]/90 transition-all group"
                                         >
                                             <div className="flex items-center gap-4">
                                                 <div className="w-12 h-12 rounded-xl bg-[#CCFF00]/10 flex items-center justify-center">
@@ -4336,7 +4336,7 @@ const EventDetails = () => {
                                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                                             <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
                                                 <div className="w-8 h-8 rounded-lg bg-[#CCFF00]/20 flex items-center justify-center">
-                                                    <Trophy className="w-4 h-4 text-[#0F172A]" />
+                                                    <Trophy className="w-4 h-4 text-[#0a0a0a]" />
                                                 </div>
                                                 <h2 className="font-semibold text-slate-900 text-sm tracking-normal">Champions</h2>
                                             </div>
@@ -4350,10 +4350,10 @@ const EventDetails = () => {
                                                                     onClick={() => setExpandedResults(prev => ({ ...prev, [idx]: !prev[idx] }))}
                                                                     className="w-full flex items-center justify-between group"
                                                                 >
-                                                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[#CCFF00] bg-[#0F172A] px-2 py-1 rounded-md inline-block">
+                                                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[#CCFF00] bg-[#0a0a0a] px-2 py-1 rounded-md inline-block">
                                                                         {winner.CategoryName || winner.className || 'Unknown Division'}
                                                                     </p>
-                                                                    <div className="text-gray-400 group-hover:text-[#0F172A] transition-colors">
+                                                                    <div className="text-gray-400 group-hover:text-[#0a0a0a] transition-colors">
                                                                         {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                                                                     </div>
                                                                 </button>
@@ -4436,7 +4436,7 @@ const EventDetails = () => {
                                 <div className="space-y-6">
                                     {/* Gallery card */}
                                     {albumInfo && (
-                                        <div className="bg-[#0F172A] rounded-2xl shadow-lg overflow-hidden">
+                                        <div className="bg-[#0a0a0a] rounded-2xl shadow-lg overflow-hidden">
                                             {albumPhotos.length > 0 && (
                                                 <div className="grid grid-cols-3 h-48">
                                                     {albumPhotos.slice(0, 3).map((photo, i) => (
@@ -4471,7 +4471,7 @@ const EventDetails = () => {
                                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                                             <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
                                                 <div className="w-8 h-8 rounded-lg bg-[#CCFF00]/20 flex items-center justify-center">
-                                                    <PlayCircle className="w-4 h-4 text-[#0F172A]" />
+                                                    <PlayCircle className="w-4 h-4 text-[#0a0a0a]" />
                                                 </div>
                                                 <h2 className="font-semibold text-slate-900 text-sm tracking-normal">Event Highlights</h2>
                                             </div>
@@ -4491,12 +4491,12 @@ const EventDetails = () => {
                                                                 <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover" />
                                                                 <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/10 transition-colors">
                                                                     <div className="w-11 h-11 rounded-full bg-[#CCFF00] flex items-center justify-center shadow-lg">
-                                                                        <Play className="w-5 h-5 text-[#0F172A] fill-current ml-0.5" />
+                                                                        <Play className="w-5 h-5 text-[#0a0a0a] fill-current ml-0.5" />
                                                                     </div>
                                                                 </div>
                                                             </div>
                                                             <div className="p-3">
-                                                                <p className="text-xs font-bold text-[#0F172A] line-clamp-2 leading-tight group-hover:text-gray-600 transition-colors">{video.title}</p>
+                                                                <p className="text-xs font-bold text-[#0a0a0a] line-clamp-2 leading-tight group-hover:text-gray-600 transition-colors">{video.title}</p>
                                                             </div>
                                                         </div>
                                                     ))}
@@ -4570,7 +4570,7 @@ const EventDetails = () => {
                             exit={{ opacity: 0, y: 100 }}
                             className="fixed inset-0 z-[1100] flex items-end sm:items-center justify-center pointer-events-none sm:p-6 md:p-8"
                         >
-                            <div className="bg-[#0F172A] w-[95vw] md:w-[90vw] max-w-5xl rounded-t-3xl sm:rounded-3xl shadow-2xl pointer-events-auto flex flex-col max-h-[90vh] sm:max-h-[92vh] border border-white/10 overflow-hidden">
+                            <div className="bg-[#0a0a0a] w-[95vw] md:w-[90vw] max-w-5xl rounded-t-3xl sm:rounded-3xl shadow-2xl pointer-events-auto flex flex-col max-h-[90vh] sm:max-h-[92vh] border border-white/10 overflow-hidden">
                                 {/* Modal Header */}
                                 <div className="bg-black/20 backdrop-blur-xl px-6 py-4 flex justify-between items-center border-b border-white/5 sticky top-0 z-10">
                                     <h3 className="text-white font-bold text-lg">
@@ -4594,7 +4594,7 @@ const EventDetails = () => {
                                                     <button
                                                         type="button"
                                                         onClick={() => setIsMobilePlayerInfoOpen(!isMobilePlayerInfoOpen)}
-                                                        className="w-full bg-[#0F172A] shadow-sm border border-white/10 rounded-xl p-4 flex items-center justify-between transition-colors"
+                                                        className="w-full bg-[#0a0a0a] shadow-sm border border-white/10 rounded-xl p-4 flex items-center justify-between transition-colors"
                                                     >
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-8 h-8 rounded-lg bg-padel-green/20 flex items-center justify-center">
@@ -4663,7 +4663,7 @@ const EventDetails = () => {
 
 
                                                     <div className="space-y-3">
-                                                        <div className="hidden items-center justify-between bg-[#0F172A] p-5 rounded-2xl border border-white/10 shadow-sm group">
+                                                        <div className="hidden items-center justify-between bg-[#0a0a0a] p-5 rounded-2xl border border-white/10 shadow-sm group">
                                                             <div className="flex items-center gap-3">
                                                                 <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-all duration-500">
                                                                     <Users size={20} />
@@ -4689,7 +4689,7 @@ const EventDetails = () => {
                                                             >
                                                                 <span
                                                                     aria-hidden="true"
-                                                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-[#0F172A] shadow-xl ring-0 transition duration-300 ease-in-out ${hasPartner ? 'translate-x-5' : 'translate-x-0'}`}
+                                                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-[#0a0a0a] shadow-xl ring-0 transition duration-300 ease-in-out ${hasPartner ? 'translate-x-5' : 'translate-x-0'}`}
                                                                 />
                                                             </button>
                                                         </div>
@@ -4734,7 +4734,7 @@ const EventDetails = () => {
                                                                                         initial={{ opacity: 0, y: -5 }}
                                                                                         animate={{ opacity: 1, y: 0 }}
                                                                                         exit={{ opacity: 0, y: -5 }}
-                                                                                        className="absolute top-full left-0 right-0 mt-1 bg-[#0F172A] rounded-xl border border-white/5 shadow-2xl z-[1200] overflow-hidden p-1 max-h-48 overflow-y-auto"
+                                                                                        className="absolute top-full left-0 right-0 mt-1 bg-[#0a0a0a] rounded-xl border border-white/5 shadow-2xl z-[1200] overflow-hidden p-1 max-h-48 overflow-y-auto"
                                                                                     >
                                                                                         {partnerSearchResults.map((player) => (
                                                                                             <button
@@ -4774,7 +4774,7 @@ const EventDetails = () => {
                                                                                 className="bg-blue-50 border border-blue-100 p-4 rounded-[1.5rem] flex items-center justify-between group hover:bg-blue-100 transition-colors"
                                                                             >
                                                                                 <div className="flex items-center gap-3">
-                                                                                    <div className="w-10 h-10 bg-[#0F172A] rounded-xl flex items-center justify-center text-blue-500 shadow-sm">
+                                                                                    <div className="w-10 h-10 bg-[#0a0a0a] rounded-xl flex items-center justify-center text-blue-500 shadow-sm">
                                                                                         <CreditCard className="w-5 h-5" />
                                                                                     </div>
                                                                                     <div>
@@ -4791,7 +4791,7 @@ const EventDetails = () => {
                                                                                 >
                                                                                     <span
                                                                                         aria-hidden="true"
-                                                                                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-[#0F172A] shadow ring-0 transition duration-200 ease-in-out ${payForPartner ? 'translate-x-5' : 'translate-x-0'}`}
+                                                                                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-[#0a0a0a] shadow ring-0 transition duration-200 ease-in-out ${payForPartner ? 'translate-x-5' : 'translate-x-0'}`}
                                                                                     />
                                                                                 </button>
                                                                             </motion.div>
@@ -4804,7 +4804,7 @@ const EventDetails = () => {
                                                                                         exit={{ opacity: 0, height: 0, marginTop: 0 }}
                                                                                         className="overflow-hidden"
                                                                                     >
-                                                                                        <div className="flex items-center justify-between bg-[#0F172A] p-4 rounded-2xl border border-white/10 shadow-sm group">
+                                                                                        <div className="flex items-center justify-between bg-[#0a0a0a] p-4 rounded-2xl border border-white/10 shadow-sm group">
                                                                                             <div className="flex items-center gap-2">
                                                                                                 <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-500">
                                                                                                     <CreditCard size={16} />
@@ -4825,7 +4825,7 @@ const EventDetails = () => {
                                                                                                 <button
                                                                                                     type="button"
                                                                                                     onClick={() => setPartnerLicenseChoice('full')}
-                                                                                                    className={`text-[10px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'full' ? 'bg-[#0F172A] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                                                                                                    className={`text-[10px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'full' ? 'bg-[#0a0a0a] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                                                                                 >
                                                                                                     Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
                                                                                                 </button>
@@ -4844,7 +4844,7 @@ const EventDetails = () => {
                                                             <motion.div
                                                                 initial={{ opacity: 0, y: 5 }}
                                                                 animate={{ opacity: 1, y: 0 }}
-                                                                className="flex items-center justify-between bg-[#0F172A] p-4 rounded-2xl border border-white/10 shadow-sm group mt-3"
+                                                                className="flex items-center justify-between bg-[#0a0a0a] p-4 rounded-2xl border border-white/10 shadow-sm group mt-3"
                                                             >
                                                                 <div className="flex items-center gap-2">
                                                                     <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-500">
@@ -4866,7 +4866,7 @@ const EventDetails = () => {
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => setLicenseChoice('full')}
-                                                                        className={`text-[10px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'full' ? 'bg-[#0F172A] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                                                                        className={`text-[10px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'full' ? 'bg-[#0a0a0a] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                                                     >
                                                                         Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
                                                                     </button>
@@ -4927,7 +4927,7 @@ const EventDetails = () => {
                                                                         const pState = divisionPartners[div] || {};
                                                                         const pProf = pState.partnerProfile;
                                                                         return (
-                                                                            <div key={`div-${div}`} className="flex flex-col gap-2 bg-[#0F172A] p-3 rounded-xl border border-white/10 shadow-sm">
+                                                                            <div key={`div-${div}`} className="flex flex-col gap-2 bg-[#0a0a0a] p-3 rounded-xl border border-white/10 shadow-sm">
                                                                                 <div className="flex justify-between items-center">
                                                                                     <div className="flex items-center gap-3">
                                                                                         <div className="w-6 h-6 rounded-full bg-padel-green/20 flex items-center justify-center border border-padel-green/30 text-padel-green font-semibold text-[9px]">
@@ -4988,7 +4988,7 @@ const EventDetails = () => {
                                                                                                     </div>
                                                                                                 )}
                                                                                                 {pState.partnerSearchResults?.length > 0 && (
-                                                                                                    <div className="absolute top-full left-0 right-0 mt-2 bg-[#0F172A] border border-slate-200 rounded-xl shadow-2xl overflow-hidden z-[1150]">
+                                                                                                    <div className="absolute top-full left-0 right-0 mt-2 bg-[#0a0a0a] border border-slate-200 rounded-xl shadow-2xl overflow-hidden z-[1150]">
                                                                                                         <div className="max-h-48 overflow-y-auto p-1.5 custom-scrollbar space-y-1">
                                                                                                             {pState.partnerSearchResults.map(player => (
                                                                                                                 <button
@@ -5037,7 +5037,7 @@ const EventDetails = () => {
                                                                                                             onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], payForPartner: !pState.payForPartner } }))}
                                                                                                             className={`relative inline-flex h-5 w-9 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${pState.payForPartner ? 'bg-blue-400' : 'bg-gray-300'}`}
                                                                                                         >
-                                                                                                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-[#0F172A] shadow transition ${pState.payForPartner ? 'translate-x-4' : 'translate-x-0'}`} />
+                                                                                                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-[#0a0a0a] shadow transition ${pState.payForPartner ? 'translate-x-4' : 'translate-x-0'}`} />
                                                                                                         </button>
                                                                                                     </div>
                                                                                                     {pState.payForPartner && !pProf.paid_registration && (
@@ -5049,7 +5049,7 @@ const EventDetails = () => {
                                                                                                                     onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], payForPartnerLicense: !pState.payForPartnerLicense } }))}
                                                                                                                     className={`relative inline-flex h-5 w-9 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${pState.payForPartnerLicense ? 'bg-blue-400' : 'bg-gray-300'}`}
                                                                                                                 >
-                                                                                                                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-[#0F172A] shadow transition ${pState.payForPartnerLicense ? 'translate-x-4' : 'translate-x-0'}`} />
+                                                                                                                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-[#0a0a0a] shadow transition ${pState.payForPartnerLicense ? 'translate-x-4' : 'translate-x-0'}`} />
                                                                                                                 </button>
                                                                                                             </div>
                                                                                                             {pState.payForPartnerLicense && (
@@ -5057,7 +5057,7 @@ const EventDetails = () => {
                                                                                                                     <span className="text-[9px] font-bold text-gray-400 uppercase">License Choice</span>
                                                                                                                     <div className="flex bg-white/10 rounded-full p-0.5 border border-white/10">
                                                                                                                         <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'temporary' } }))} className={`text-[8px] font-semibold uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice !== 'full' ? 'bg-blue-400 text-white' : 'text-gray-400'}`}>Temp</button>
-                                                                                                                        <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'full' } }))} className={`text-[8px] font-semibold uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice === 'full' ? 'bg-[#0F172A] text-white shadow-sm' : 'text-gray-400'}`}>Full</button>
+                                                                                                                        <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'full' } }))} className={`text-[8px] font-semibold uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice === 'full' ? 'bg-[#0a0a0a] text-white shadow-sm' : 'text-gray-400'}`}>Full</button>
                                                                                                                     </div>
                                                                                                                 </div>
                                                                                                             )}
@@ -5179,7 +5179,7 @@ const EventDetails = () => {
                                         <>
                                             {/* Ambient Glows */}
                                             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 bg-padel-green/10 blur-[120px] rounded-full pointer-events-none" />
-                                            <div className="absolute bottom-0 right-0 w-32 h-32 bg-blue-500/10 blur-[80px] rounded-full pointer-events-none" />
+                                            <div className="absolute bottom-0 right-0 w-32 h-32 bg-white/5 blur-[80px] rounded-full pointer-events-none" />
 
                                             <div className="relative mb-10">
                                                 <div className="w-28 h-28 bg-padel-green/20 rounded-full flex items-center justify-center mx-auto relative z-10 animate-in zoom-in duration-500 delay-150 shadow-2xl shadow-padel-green/40">

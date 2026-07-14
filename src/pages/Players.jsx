@@ -167,11 +167,11 @@ const Players = () => {
           </>
         )}
       </Helmet>
-      <main className="bg-[#060a14] min-h-screen pb-24 text-white relative overflow-hidden pt-[53px] md:pt-0">
+      <main className="bg-[#000000] min-h-screen pb-24 text-white relative overflow-hidden pt-[53px] md:pt-0">
 
         {/* Ambient Neon Glow Bubbles */}
         <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-padel-green/5 rounded-full blur-[150px] pointer-events-none" />
-        <div className="absolute top-[40vh] right-1/4 w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-[150px] pointer-events-none" />
+        <div className="absolute top-[40vh] right-1/4 w-[500px] h-[500px] bg-white/5 rounded-full blur-[150px] pointer-events-none" />
 
         {/* Hero — full-bleed photo with title/search overlaid (same pattern as Calendar) */}
         <section className="relative z-20 w-full max-w-[1440px] mx-auto px-4 xl:px-8 pt-12 md:pt-28 lg:pt-32 pb-4 md:pb-6 mb-3 md:mb-4">
@@ -186,7 +186,7 @@ const Players = () => {
             <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, transparent 48%, rgba(0,0,0,0.5) 100%)' }} />
             {/* Left-side black wash so hero copy stays readable over the player photo */}
             <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-black via-black/70 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-[#060a14]/40 to-[#060a14]" />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-[#000000]/40 to-[#000000]" />
           </div>
 
           <div className="relative z-10">
@@ -216,7 +216,7 @@ const Players = () => {
             transition={{ delay: 0.4 }}
             className="relative z-10 flex gap-1.5 md:gap-0 items-center w-full mt-5 md:mt-6"
           >
-            <div className="relative flex-1 bg-[#121620] border border-white/5 rounded-full shadow-lg">
+            <div className="relative flex-1 bg-[#181818] border border-white/5 rounded-full shadow-lg">
               <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4 md:w-5 md:h-5" />
               <input
                 type="text"
@@ -229,7 +229,7 @@ const Players = () => {
 
             <button
               onClick={() => setShowFilters(true)}
-              className="relative flex items-center justify-center gap-2 bg-[#121620] border border-white/5 hover:bg-white/10 rounded-full px-5 md:px-6 py-3 md:py-4 text-gray-300 hover:text-white transition-all font-semibold text-sm md:text-base shrink-0 group shadow-lg"
+              className="relative flex items-center justify-center gap-2 bg-[#181818] border border-white/5 hover:bg-white/10 rounded-full px-5 md:px-6 py-3 md:py-4 text-gray-300 hover:text-white transition-all font-semibold text-sm md:text-base shrink-0 group shadow-lg"
             >
               <Filter className="w-4 h-4 md:w-5 md:h-5 text-gray-400 group-hover:text-white transition-colors" />
               <span className="hidden sm:block">Filters</span>
@@ -282,7 +282,7 @@ const Players = () => {
                 animate={{ y: 0 }}
                 exit={{ y: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                className="fixed bottom-0 left-0 right-0 z-[1001] bg-[#0a0f1d] border-t border-white/10 rounded-t-3xl p-6 pb-28 md:pb-6 shadow-2xl flex flex-col gap-6 max-h-[85vh] overflow-y-auto md:max-w-md md:left-1/2 md:-translate-x-1/2 md:bottom-4 md:border md:rounded-3xl"
+                className="fixed bottom-0 left-0 right-0 z-[1001] bg-[#141414] border-t border-white/10 rounded-t-3xl p-6 pb-28 md:pb-6 shadow-2xl flex flex-col gap-6 max-h-[85vh] overflow-y-auto md:max-w-md md:left-1/2 md:-translate-x-1/2 md:bottom-4 md:border md:rounded-3xl"
               >
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-bold text-white">Filters</h3>
@@ -301,7 +301,7 @@ const Players = () => {
                         className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-4 pr-10 text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green transition-colors font-semibold text-sm"
                       >
                         {categories.map(cat => (
-                          <option key={cat} value={cat} className="bg-[#0a0f1d] text-white">
+                          <option key={cat} value={cat} className="bg-[#141414] text-white">
                             {cat === 'All' ? 'All Categories' : cat}
                           </option>
                         ))}
@@ -323,7 +323,7 @@ const Players = () => {
                         className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-4 pr-10 text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green transition-colors font-semibold text-sm"
                       >
                         {clubs.map(club => (
-                          <option key={club} value={club} className="bg-[#0a0f1d] text-white">
+                          <option key={club} value={club} className="bg-[#141414] text-white">
                             {club === 'All' ? 'All Clubs' : club}
                           </option>
                         ))}
@@ -377,7 +377,7 @@ const Players = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: Math.min((index % 24) * 0.02, 0.15) }}
                   onClick={() => handleSetSelectedPlayer(player)}
-                  className="w-full group flex items-center gap-3 sm:gap-4 bg-[#0d121f] border border-white/8 hover:border-padel-green/40 rounded-2xl px-3 py-3 sm:px-4 sm:py-3.5 text-left transition-all cursor-pointer shadow-sm"
+                  className="w-full group flex items-center gap-3 sm:gap-4 bg-[#141414] border border-white/8 hover:border-padel-green/40 rounded-2xl px-3 py-3 sm:px-4 sm:py-3.5 text-left transition-all cursor-pointer shadow-sm"
                 >
                   {/* Rank */}
                   <div className="shrink-0 w-11 sm:w-12 flex flex-col items-center justify-center rounded-xl bg-black/40 border border-white/5 py-1.5">
@@ -388,7 +388,7 @@ const Players = () => {
                   </div>
 
                   {/* Avatar */}
-                  <div className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden bg-gradient-to-br from-gray-800 to-[#0a0f1d] border border-white/10">
+                  <div className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden bg-gradient-to-br from-gray-800 to-[#141414] border border-white/10">
                     {player.image_url ? (
                       <img
                         src={player.image_url}

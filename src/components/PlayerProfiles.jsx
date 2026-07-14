@@ -91,7 +91,7 @@ const PlayerProfiles = () => {
                             transition={{ delay: Math.min(index * 0.1, 0.5) }}
                             className="min-w-[280px] md:min-w-[320px] relative group rounded-3xl overflow-hidden snap-center shadow-xl border border-white/5 bg-black/40"
                         >
-                            <div className="h-[380px] w-full relative bg-gradient-to-br from-[#1E293B] to-[#0F172A] flex items-center justify-center">
+                            <div className="h-[380px] w-full relative bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] flex items-center justify-center">
                                 {!imageErrors[player.id] ? (
                                     <img
                                         src={player.image}
@@ -136,7 +136,7 @@ const PlayerProfiles = () => {
     };
 
     return (
-        <section className="py-24 bg-[#0F172A] overflow-hidden">
+        <section className="py-24 bg-[#0a0a0a] overflow-hidden">
             <div className="container mx-auto px-6 md:px-20 mb-12">
                 <span className="text-padel-green font-bold tracking-widest uppercase text-sm">Our Talent</span>
                 <h2 className="text-4xl md:text-5xl font-bold text-white mt-4">SAPA Official Top Rankings</h2>

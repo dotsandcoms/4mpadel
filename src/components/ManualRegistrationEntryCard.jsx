@@ -60,7 +60,7 @@ const ManualRegistrationEntryCard = ({
     partnerAvatar,
     variant = 'panel',
     accent = '#CCFF00',
-    btnTextColor = '#0F172A',
+    btnTextColor = '#0a0a0a',
     onAddPartner,
     onPay,
     onWithdraw,

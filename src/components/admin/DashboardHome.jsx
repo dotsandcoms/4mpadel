@@ -16,7 +16,7 @@ const StatCard = ({ title, value, subtext, icon: Icon, delay, loading, onClick, 
         className="relative group cursor-pointer"
     >
         <div className="absolute -inset-0.5 bg-gradient-to-r from-padel-green/20 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition duration-500 blur"></div>
-        <div className="relative bg-[#1E293B]/40 backdrop-blur-xl p-6 rounded-2xl border border-white/10 overflow-hidden hover:border-padel-green/50 transition-all hover:bg-[#1E293B]/60 h-full">
+        <div className="relative bg-[#1a1a1a]/40 backdrop-blur-xl p-6 rounded-2xl border border-white/10 overflow-hidden hover:border-padel-green/50 transition-all hover:bg-[#1a1a1a]/60 h-full">
             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-20 group-hover:scale-110 transition-all duration-500">
                 <Icon size={64} className="text-padel-green" />
             </div>
@@ -262,7 +262,7 @@ const DashboardHome = ({ onTabChange }) => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5, duration: 0.6 }}
-                className="bg-[#1E293B]/40 backdrop-blur-xl p-8 rounded-3xl border border-white/10 relative overflow-hidden min-h-[400px]"
+                className="bg-[#1a1a1a]/40 backdrop-blur-xl p-8 rounded-3xl border border-white/10 relative overflow-hidden min-h-[400px]"
             >
 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4 px-2">
@@ -303,7 +303,7 @@ const DashboardHome = ({ onTabChange }) => {
                             />
                             <Tooltip 
                                 contentStyle={{ 
-                                    backgroundColor: '#0F172A', 
+                                    backgroundColor: '#0a0a0a', 
                                     border: '1px solid rgba(255,255,255,0.1)',
                                     borderRadius: '16px',
                                     color: '#fff',
@@ -330,7 +330,7 @@ const DashboardHome = ({ onTabChange }) => {
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mt-12 min-h-[600px]">
                 {/* Upcoming Schedule - Left 2 Columns */}
-                <div className="xl:col-span-2 bg-[#1E293B]/40 backdrop-blur-xl p-8 rounded-3xl border border-white/10">
+                <div className="xl:col-span-2 bg-[#1a1a1a]/40 backdrop-blur-xl p-8 rounded-3xl border border-white/10">
 
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="text-xl md:text-2xl font-bold text-white uppercase tracking-tight flex items-center gap-3">
@@ -368,7 +368,7 @@ const DashboardHome = ({ onTabChange }) => {
                                         className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-black/40 hover:bg-white/5 border border-white/5 hover:border-padel-green/30 transition-all group cursor-pointer"
                                     >
                                         <div className="flex items-center gap-6">
-                                            <div className="flex w-16 h-16 rounded-2xl bg-[#0F172A] border border-white/10 flex-col items-center justify-center flex-shrink-0 group-hover:border-padel-green/50 transition-colors">
+                                            <div className="flex w-16 h-16 rounded-2xl bg-[#0a0a0a] border border-white/10 flex-col items-center justify-center flex-shrink-0 group-hover:border-padel-green/50 transition-colors">
                                                 <span className="text-[10px] font-bold text-padel-green uppercase tracking-tighter">{new Date(event.start_date || new Date()).toLocaleString('default', { month: 'short' })}</span>
                                                 <span className="text-2xl font-bold text-white leading-none">{new Date(event.start_date || new Date()).getDate()}</span>
                                             </div>
@@ -405,7 +405,7 @@ const DashboardHome = ({ onTabChange }) => {
                 </div>
 
                 {/* Recent Players - Right Column */}
-                <div className="bg-[#1E293B]/40 backdrop-blur-xl p-8 rounded-3xl border border-white/10 flex flex-col h-full min-h-[500px]">
+                <div className="bg-[#1a1a1a]/40 backdrop-blur-xl p-8 rounded-3xl border border-white/10 flex flex-col h-full min-h-[500px]">
 
                     <div className="flex items-center justify-between mb-10">
                         <h3 className="text-xl md:text-2xl font-bold text-white uppercase tracking-tight flex items-center gap-3">

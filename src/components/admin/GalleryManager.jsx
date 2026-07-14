@@ -579,7 +579,7 @@ const GalleryManager = ({ permissions }) => {
                         <div className="w-12 h-12 border-4 border-white/10 border-t-padel-green rounded-full animate-spin"></div>
                     </div>
                 ) : images.length === 0 ? (
-                    <div className="text-center py-12 bg-[#1E293B]/50 rounded-2xl border border-white/10">
+                    <div className="text-center py-12 bg-[#1a1a1a]/50 rounded-2xl border border-white/10">
                         <ImageIcon className="w-12 h-12 text-gray-500 mx-auto mb-4" />
                         <p className="text-gray-400 font-medium">No images in this album. Upload some above!</p>
                     </div>
@@ -666,7 +666,7 @@ const GalleryManager = ({ permissions }) => {
                     <div className="w-12 h-12 border-4 border-white/10 border-t-padel-green rounded-full animate-spin"></div>
                 </div>
             ) : displayedAlbums.length === 0 ? (
-                <div className="text-center py-12 bg-[#1E293B]/50 rounded-2xl border border-white/10">
+                <div className="text-center py-12 bg-[#1a1a1a]/50 rounded-2xl border border-white/10">
                     <ImageIcon className="w-12 h-12 text-gray-500 mx-auto mb-4" />
                     <p className="text-gray-400 font-medium">No albums found</p>
                 </div>
@@ -677,7 +677,7 @@ const GalleryManager = ({ permissions }) => {
                             key={album.id}
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            className="bg-[#1E293B]/50 backdrop-blur-md rounded-2xl border border-white/10 overflow-hidden group hover:border-padel-green/30 transition-all flex flex-col"
+                            className="bg-[#1a1a1a]/50 backdrop-blur-md rounded-2xl border border-white/10 overflow-hidden group hover:border-padel-green/30 transition-all flex flex-col"
                         >
                             <div className="h-48 relative border-b border-white/10 bg-black/50 flex items-center justify-center">
                                 {album.cover_image_url ? (
@@ -774,7 +774,7 @@ const GalleryManager = ({ permissions }) => {
                             initial={{ scale: 0.95, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.95, opacity: 0 }}
-                            className="bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col"
+                            className="bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col"
                         >
                             <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
                                 <h3 className="text-2xl font-bold text-white">

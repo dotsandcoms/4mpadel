@@ -358,7 +358,7 @@ const KnockoutBracket = ({ matches, forcedViewMode, allMatches }) => {
                                                         >
                                                             <div className={`flex justify-between items-center pb-3 border-b border-white/5 mb-3 ${hasScore && isFirstWinner ? 'text-white font-bold' : 'text-gray-400'}`}>
                                                                 <div className="flex items-center gap-3">
-                                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center font-display text-[10px] shrink-0 ${hasScore && isFirstWinner ? 'bg-padel-green text-black' : 'bg-[#1e293b] text-white'}`}>
+                                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center font-display text-[10px] shrink-0 ${hasScore && isFirstWinner ? 'bg-padel-green text-black' : 'bg-[#1a1a1a] text-white'}`}>
                                                                         {(cellIndex * 2) + 1}
                                                                     </div>
                                                                     <div className="flex flex-col gap-1">
@@ -374,7 +374,7 @@ const KnockoutBracket = ({ matches, forcedViewMode, allMatches }) => {
 
                                                             <div className={`flex justify-between items-center ${hasScore && isSecondWinner ? 'text-white font-bold' : 'text-gray-400'}`}>
                                                                 <div className="flex items-center gap-3">
-                                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center font-display text-[10px] shrink-0 ${hasScore && isSecondWinner ? 'bg-padel-green text-black' : 'bg-[#1e293b] text-white'}`}>
+                                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center font-display text-[10px] shrink-0 ${hasScore && isSecondWinner ? 'bg-padel-green text-black' : 'bg-[#1a1a1a] text-white'}`}>
                                                                         {(cellIndex * 2) + 2}
                                                                     </div>
                                                                     <div className="flex flex-col gap-1">

@@ -231,7 +231,7 @@ const BlogManager = () => {
             </div>
 
             {/* Search & Filter */}
-            <div className="bg-[#1E293B]/50 backdrop-blur-md p-4 rounded-2xl border border-white/10 flex flex-col md:flex-row gap-4">
+            <div className="bg-[#1a1a1a]/50 backdrop-blur-md p-4 rounded-2xl border border-white/10 flex flex-col md:flex-row gap-4">
                 <div className="flex-1 relative">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                     <input
@@ -260,7 +260,7 @@ const BlogManager = () => {
                     <div className="w-12 h-12 border-4 border-white/10 border-t-padel-green rounded-full animate-spin"></div>
                 </div>
             ) : filteredPosts.length === 0 ? (
-                <div className="text-center py-12 bg-[#1E293B]/50 rounded-2xl border border-white/10">
+                <div className="text-center py-12 bg-[#1a1a1a]/50 rounded-2xl border border-white/10">
                     <FileText className="w-12 h-12 text-gray-500 mx-auto mb-4" />
                     <p className="text-gray-400 font-medium">No blog posts found</p>
                 </div>
@@ -271,7 +271,7 @@ const BlogManager = () => {
                             key={post.id}
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10 flex flex-col md:flex-row md:items-center justify-between group hover:border-padel-green/30 transition-all gap-4 md:gap-0"
+                            className="bg-[#1a1a1a]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10 flex flex-col md:flex-row md:items-center justify-between group hover:border-padel-green/30 transition-all gap-4 md:gap-0"
                         >
                             <div className="flex items-center gap-6">
                                 <div className="w-16 h-16 bg-white/5 rounded-xl flex items-center justify-center text-padel-green border border-white/10 flex-shrink-0 overflow-hidden">
@@ -376,7 +376,7 @@ const BlogManager = () => {
                             initial={{ scale: 0.95, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.95, opacity: 0 }}
-                            className="bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
+                            className="bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
                         >
                             <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5 sticky top-0 z-10">
                                 <h3 className="text-2xl font-bold text-white">

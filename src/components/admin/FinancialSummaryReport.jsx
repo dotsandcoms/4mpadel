@@ -301,7 +301,7 @@ const FinancialSummaryReport = ({ allowedEvents = [] }) => {
     return (
         <div className="space-y-6">
             {/* Report Controls */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#1E293B]/50 p-6 rounded-3xl border border-white/10">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#1a1a1a]/50 p-6 rounded-3xl border border-white/10">
                 <div className="flex bg-black/40 p-1 rounded-2xl border border-white/5">
                     <button 
                         onClick={() => setViewMode('events')}
@@ -349,7 +349,7 @@ const FinancialSummaryReport = ({ allowedEvents = [] }) => {
             </div>
 
             {/* Report Table */}
-            <div className="bg-[#1E293B]/50 backdrop-blur-md rounded-3xl border border-white/10 overflow-hidden shadow-2xl">
+            <div className="bg-[#1a1a1a]/50 backdrop-blur-md rounded-3xl border border-white/10 overflow-hidden shadow-2xl">
                 <div className="overflow-x-auto max-h-[60vh] overflow-y-auto custom-scrollbar">
                     <table className="w-full text-left border-collapse">
                         <thead className="sticky top-0 z-10">
@@ -469,14 +469,14 @@ const FinancialSummaryReport = ({ allowedEvents = [] }) => {
 
             {/* Summary Footer Widget */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-[#0F172A] border border-white/10 p-6 rounded-[2rem] shadow-xl">
+                <div className="bg-[#0a0a0a] border border-white/10 p-6 rounded-[2rem] shadow-xl">
                     <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mb-2">Total Participants</p>
                     <div className="flex items-end gap-2">
                         <span className="text-3xl font-black text-white">{registrations.length}</span>
                         <span className="text-gray-600 text-xs font-bold mb-1.5 pb-0.5">Across all events</span>
                     </div>
                 </div>
-                <div className="bg-[#0F172A] border border-white/10 p-6 rounded-[2rem] shadow-xl">
+                <div className="bg-[#0a0a0a] border border-white/10 p-6 rounded-[2rem] shadow-xl">
                     <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mb-2">Financial Compliance</p>
                     <div className="flex items-end gap-2">
                         <span className="text-3xl font-black text-padel-green">
@@ -485,7 +485,7 @@ const FinancialSummaryReport = ({ allowedEvents = [] }) => {
                         <span className="text-gray-600 text-xs font-bold mb-1.5 pb-0.5 text-padel-green/60">Entry fees settled</span>
                     </div>
                 </div>
-                <div className="bg-[#0F172A] border border-white/10 p-6 rounded-[2rem] shadow-xl">
+                <div className="bg-[#0a0a0a] border border-white/10 p-6 rounded-[2rem] shadow-xl">
                     <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mb-2">Total Revenue (Ledger)</p>
                     <div className="flex items-end gap-2">
                         <span className="text-2xl font-black text-white">{formatCurrency(payments.reduce((s, p) => s + (p.amount || 0), 0))}</span>

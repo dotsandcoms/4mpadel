@@ -46,7 +46,7 @@ const Gallery = () => {
                 to={`/gallery/${album.slug || album.id}`}
                 className="group relative block bg-slate-900/60 border border-white/5 rounded-2xl md:rounded-[3rem] overflow-hidden hover:border-padel-green/40 transition-all duration-700 shadow-xl h-full flex flex-col"
             >
-                <div className="relative aspect-[16/11] overflow-hidden bg-slate-950">
+                <div className="relative aspect-[16/11] overflow-hidden bg-black">
                     {album.cover_image_url ? (
                         <img
                             src={album.cover_image_url}
@@ -119,7 +119,7 @@ const Gallery = () => {
     );
 
     return (
-        <div className="pb-4 md:pb-2 min-h-screen relative overflow-hidden bg-[#0F172A] text-white font-sans selection:bg-padel-green selection:text-black">
+        <div className="pb-4 md:pb-2 min-h-screen relative overflow-hidden bg-[#0a0a0a] text-white font-sans selection:bg-padel-green selection:text-black">
             <Helmet>
                 <title>Gallery | 4M Padel</title>
                 <meta name="description" content="View our latest photo galleries from 4M Padel tournaments and events." />

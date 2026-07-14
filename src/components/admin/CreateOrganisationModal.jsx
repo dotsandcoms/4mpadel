@@ -358,7 +358,7 @@ const CreateOrganisationModal = ({ isOpen, onClose, onCreated }) => {
                 initial={{ opacity: 0, scale: 0.95, y: 12 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 12 }}
-                className="max-w-lg w-full bg-[#0F172A] border border-white/10 rounded-3xl p-6 relative shadow-2xl text-left max-h-[90vh] overflow-y-auto custom-scrollbar"
+                className="max-w-lg w-full bg-[#0a0a0a] border border-white/10 rounded-3xl p-6 relative shadow-2xl text-left max-h-[90vh] overflow-y-auto custom-scrollbar"
             >
                 <button
                     type="button"
@@ -414,7 +414,7 @@ const CreateOrganisationModal = ({ isOpen, onClose, onCreated }) => {
                         </div>
 
                         {showSuggestions && nameSuggestions.length > 0 && (
-                            <div className="absolute z-30 left-0 right-0 mt-1 bg-[#1E293B] border border-white/10 rounded-xl max-h-52 overflow-y-auto shadow-xl">
+                            <div className="absolute z-30 left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-xl max-h-52 overflow-y-auto shadow-xl">
                                 {nameSuggestions.map((p) => (
                                     <button
                                         key={p.id}

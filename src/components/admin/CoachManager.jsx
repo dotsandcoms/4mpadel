@@ -26,7 +26,7 @@ const StatCard = ({ title, value, subtext, icon: Icon, color = 'padel-green', de
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay, duration: 0.3 }}
-            className="bg-[#1E293B]/50 backdrop-blur-md p-5 rounded-2xl border border-white/10 hover:border-white/20 transition-colors"
+            className="bg-[#1a1a1a]/50 backdrop-blur-md p-5 rounded-2xl border border-white/10 hover:border-white/20 transition-colors"
         >
             <div className="flex items-start justify-between">
                 <div>
@@ -340,7 +340,7 @@ const CoachManager = () => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
-                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10 flex flex-col"
+                    className="bg-[#1a1a1a]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10 flex flex-col"
                 >
                     <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Application Status</h3>
                     {loading ? (
@@ -353,7 +353,7 @@ const CoachManager = () => {
                                         <Cell key={i} fill={entry.color} />
                                     ))}
                                 </Pie>
-                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                                <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
                             </PieChart>
                         </ResponsiveContainer>
                     )}
@@ -363,7 +363,7 @@ const CoachManager = () => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.25 }}
-                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10 flex flex-col"
+                    className="bg-[#1a1a1a]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10 flex flex-col"
                 >
                     <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Recent Applications (14 Days)</h3>
                     {loading ? (
@@ -380,7 +380,7 @@ const CoachManager = () => {
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                                 <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 10 }} />
                                 <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} allowDecimals={false} />
-                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                                <Tooltip contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
                                 <Area type="monotone" dataKey="applications" stroke="#beff00" fillOpacity={1} fill="url(#colorApps)" />
                             </AreaChart>
                         </ResponsiveContainer>
@@ -422,7 +422,7 @@ const CoachManager = () => {
             </div>
 
             {/* Applications Table */}
-            <div className="bg-[#1E293B]/30 rounded-2xl border border-white/10 overflow-hidden">
+            <div className="bg-[#1a1a1a]/30 rounded-2xl border border-white/10 overflow-hidden">
                 <div className="overflow-x-auto max-h-[60vh] overflow-y-auto custom-scrollbar">
                     <table className="w-full text-left border-collapse">
                         <thead className="sticky top-0 z-10">

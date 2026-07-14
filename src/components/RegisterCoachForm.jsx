@@ -226,9 +226,9 @@ const RegisterCoachForm = ({ onBack, onClose }) => {
                             onChange={handleInputChange}
                             className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white text-sm focus:outline-none focus:border-padel-green appearance-none cursor-pointer"
                         >
-                            <option value="" disabled className="bg-[#1E293B]">Select Gender</option>
-                            <option value="Male" className="bg-[#1E293B]">Male</option>
-                            <option value="Female" className="bg-[#1E293B]">Female</option>
+                            <option value="" disabled className="bg-[#1a1a1a]">Select Gender</option>
+                            <option value="Male" className="bg-[#1a1a1a]">Male</option>
+                            <option value="Female" className="bg-[#1a1a1a]">Female</option>
                         </select>
                         <button
                             type="button"

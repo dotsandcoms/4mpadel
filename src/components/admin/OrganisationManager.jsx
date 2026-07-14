@@ -1902,7 +1902,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                             initial={{ opacity: 0, scale: 0.95, y: 15 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                            className="max-w-6xl w-full bg-[#0F172A] border border-white/10 rounded-3xl p-6 md:p-10 relative shadow-2xl my-8 max-h-[90vh] overflow-y-auto custom-scrollbar text-left"
+                            className="max-w-6xl w-full bg-[#0a0a0a] border border-white/10 rounded-3xl p-6 md:p-10 relative shadow-2xl my-8 max-h-[90vh] overflow-y-auto custom-scrollbar text-left"
                         >
                             {/* Close Button */}
                             <button
@@ -2297,7 +2297,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                             initial={{ opacity: 0, scale: 0.95, y: 15 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                            className={`w-full bg-[#0F172A] border border-white/10 rounded-3xl p-6 relative shadow-2xl space-y-6 text-left ${
+                            className={`w-full bg-[#0a0a0a] border border-white/10 rounded-3xl p-6 relative shadow-2xl space-y-6 text-left ${
                                 orgDetailsMode === 'edit' ? 'max-w-4xl max-h-[90vh] overflow-y-auto custom-scrollbar' : 'max-w-md'
                             }`}
                         >
@@ -2510,7 +2510,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                             initial={{ opacity: 0, scale: 0.95, y: 15 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                            className="max-w-2xl w-full bg-[#0F172A] border border-white/10 rounded-3xl p-6 relative shadow-2xl space-y-5 text-left max-h-[90vh] overflow-y-auto custom-scrollbar"
+                            className="max-w-2xl w-full bg-[#0a0a0a] border border-white/10 rounded-3xl p-6 relative shadow-2xl space-y-5 text-left max-h-[90vh] overflow-y-auto custom-scrollbar"
                         >
                             <button
                                 onClick={() => setAmendmentDiff(null)}
@@ -2586,7 +2586,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                             initial={{ opacity: 0, scale: 0.95, y: 15 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                            className="max-w-md w-full bg-[#0F172A] border border-white/10 rounded-3xl p-6 relative shadow-2xl"
+                            className="max-w-md w-full bg-[#0a0a0a] border border-white/10 rounded-3xl p-6 relative shadow-2xl"
                         >
                             <button
                                 onClick={() => setRejectionModal({ isOpen: false, type: '', targetId: null, targetEmail: '', targetName: '', notes: '' })}

@@ -38,13 +38,13 @@ const Services = () => {
     ];
 
     return (
-        <section id="platform" className="relative py-12 md:py-16 px-4 md:px-8 lg:px-16 mx-auto overflow-hidden bg-[#0A0F1C]">
+        <section id="platform" className="relative py-12 md:py-16 px-4 md:px-8 lg:px-16 mx-auto overflow-hidden bg-[#000000]">
             {/* Background image on the right */}
             <div className="absolute top-0 right-0 w-[85%] sm:w-[50%] md:w-[45%] lg:w-[40%] h-[350px] md:h-full z-0 overflow-hidden opacity-90 md:opacity-100 pointer-events-none">
                 {/* Fade left edge - wider on mobile to ensure text legibility */}
-                <div className="absolute inset-y-0 left-0 w-[60%] md:w-32 bg-gradient-to-r from-[#0A0F1C] via-[#0A0F1C]/90 to-transparent z-10" />
+                <div className="absolute inset-y-0 left-0 w-[60%] md:w-32 bg-gradient-to-r from-[#000000] via-[#000000]/90 to-transparent z-10" />
                 {/* Fade bottom edge */}
-                <div className="absolute inset-x-0 bottom-0 h-40 md:h-0 bg-gradient-to-t from-[#0A0F1C] via-[#0A0F1C]/80 to-transparent z-10 md:hidden" />
+                <div className="absolute inset-x-0 bottom-0 h-40 md:h-0 bg-gradient-to-t from-[#000000] via-[#000000]/80 to-transparent z-10 md:hidden" />
                 
                 <img 
                     src={padelBg} 
@@ -79,7 +79,7 @@ const Services = () => {
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
                             transition={{ delay: index * 0.1 }}
-                            className="bg-[#111827] rounded-2xl md:rounded-3xl p-4 sm:p-6 md:p-8 border border-white/5 hover:border-padel-green/30 transition-colors group shadow-2xl flex flex-col"
+                            className="bg-[#141414] rounded-2xl md:rounded-3xl p-4 sm:p-6 md:p-8 border border-white/5 hover:border-padel-green/30 transition-colors group shadow-2xl flex flex-col"
                         >
                             <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl border border-padel-green/20 bg-padel-green/5 flex items-center justify-center mb-4 md:mb-6 group-hover:scale-110 transition-transform">
                                 <div className="text-padel-green flex items-center justify-center">

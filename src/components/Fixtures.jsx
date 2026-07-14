@@ -35,7 +35,7 @@ const Fixtures = () => {
 
 
     return (
-        <section className="py-24 bg-[#0F172A] border-t border-white/5 relative overflow-hidden">
+        <section className="py-24 bg-[#0a0a0a] border-t border-white/5 relative overflow-hidden">
             {/* Background Elements */}
             <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
                 <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-[var(--sa-blue)] rounded-full blur-[120px] opacity-10" />
@@ -293,7 +293,7 @@ const Fixtures = () => {
                         </div>
 
                         {/* Weekly Highest Jump */}
-                        <div className="bg-gradient-to-b from-[#1E293B] to-[#0F172A] border border-white/10 rounded-3xl p-8 text-center relative overflow-hidden group">
+                        <div className="bg-gradient-to-b from-[#1a1a1a] to-[#0a0a0a] border border-white/10 rounded-3xl p-8 text-center relative overflow-hidden group">
                             {/* Decorative background element */}
                             <div className="absolute top-0 left-0 w-full h-1 bg-padel-green shadow-[0_0_20px_rgba(163,230,53,0.5)]" />
                             <div className="absolute -top-10 -right-10 w-32 h-32 bg-padel-green/10 rounded-full blur-3xl group-hover:bg-padel-green/20 transition-all duration-700" />
@@ -304,7 +304,7 @@ const Fixtures = () => {
 
                             <div className="relative inline-block mb-4 group-hover:scale-105 transition-transform duration-500">
                                 <div className="w-24 h-24 rounded-full p-1 bg-gradient-to-br from-padel-green to-transparent mx-auto">
-                                    <div className="w-full h-full rounded-full overflow-hidden border-2 border-[#0F172A] bg-[#1E293B] flex items-center justify-center">
+                                    <div className="w-full h-full rounded-full overflow-hidden border-2 border-[#0a0a0a] bg-[#1a1a1a] flex items-center justify-center">
                                         <User size={48} className="text-gray-400" />
                                     </div>
                                 </div>

@@ -956,11 +956,11 @@ const FinanceManager = () => {
                         <div className="space-y-6">
                             {/* Original Paystack Transaction View Integrated Here */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="bg-[#1E293B]/50 p-6 rounded-2xl border border-white/10">
+                                <div className="bg-[#1a1a1a]/50 p-6 rounded-2xl border border-white/10">
                                     <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">Live Revenue</p>
                                     <h3 className="text-3xl font-black text-white mt-1">{stats.totalRevenue}</h3>
                                 </div>
-                                <div className="bg-[#1E293B]/50 p-6 rounded-2xl border border-white/10">
+                                <div className="bg-[#1a1a1a]/50 p-6 rounded-2xl border border-white/10">
                                     <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">Payouts</p>
                                     <h3 className="text-3xl font-black text-blue-400 mt-1">{stats.successfulPayouts}</h3>
                                 </div>
@@ -970,7 +970,7 @@ const FinanceManager = () => {
                                 </div>
                             </div>
 
-                            <div className="bg-[#1E293B]/50 backdrop-blur-md rounded-3xl border border-white/10 overflow-hidden">
+                            <div className="bg-[#1a1a1a]/50 backdrop-blur-md rounded-3xl border border-white/10 overflow-hidden">
                                 <div className="p-6 border-b border-white/10 flex flex-col md:flex-row justify-between items-center gap-4">
                                     <div className="flex flex-col gap-2">
                                         <div className="flex bg-black/20 p-1 rounded-xl w-fit">
@@ -1126,7 +1126,7 @@ const FinanceManager = () => {
                     )}
 
                     {activeTab === 'settings' && (
-                        <div className="bg-[#1E293B]/50 p-8 rounded-3xl border border-white/10 max-w-2xl">
+                        <div className="bg-[#1a1a1a]/50 p-8 rounded-3xl border border-white/10 max-w-2xl">
                              <h3 className="text-xl font-bold text-white mb-6">Payment Configurations</h3>
                              <div className="space-y-6">
                                  <div className="flex justify-between items-center bg-black/20 p-4 rounded-xl border border-white/5">

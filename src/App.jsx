@@ -115,7 +115,7 @@ function AppContent() {
 
   return (
     <MembersOnlyProvider promptMembersOnly={() => setMembersOnlyPrompt(true)}>
-    <div className="bg-gray-900 min-h-screen text-white font-sans overflow-x-hidden">
+    <div className="bg-[#0a0a0a] min-h-screen text-white font-sans overflow-x-hidden">
       <GoogleAnalytics />
       <Analytics />
       <SpeedInsights />

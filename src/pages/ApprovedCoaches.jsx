@@ -31,7 +31,7 @@ const CoachCard = ({ coach, index, onSelect }) => {
                         <span className="text-sm font-bold uppercase">No Image</span>
                     </div>
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A] via-transparent to-transparent opacity-60" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent opacity-60" />
 
                 {/* Level Badge (Mocked for now) */}
                 <div className="absolute top-6 left-6 px-4 py-2 bg-padel-green text-black text-xs font-black uppercase tracking-widest rounded-full shadow-lg">
@@ -157,11 +157,11 @@ const ApprovedCoaches = () => {
     }, [searchParams]);
 
     return (
-        <div className="bg-[#0F172A] min-h-screen pb-12 font-sans relative">
+        <div className="bg-[#0a0a0a] min-h-screen pb-12 font-sans relative">
             {/* Background elements */}
             <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-padel-green/10 blur-[150px] rounded-full" />
-                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/10 blur-[150px] rounded-full" />
+                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-white/5 blur-[150px] rounded-full" />
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03]" />
             </div>
 
@@ -190,7 +190,7 @@ const ApprovedCoaches = () => {
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="bg-[#0a0f1d]/80 border border-white/10 backdrop-blur-2xl p-3 md:p-4 rounded-2xl md:rounded-3xl flex gap-3 items-center shadow-2xl max-w-4xl mx-auto"
+                            className="bg-[#141414]/80 border border-white/10 backdrop-blur-2xl p-3 md:p-4 rounded-2xl md:rounded-3xl flex gap-3 items-center shadow-2xl max-w-4xl mx-auto"
                         >
                             {/* Search Input Container */}
                             <div className="relative flex-1">
@@ -248,7 +248,7 @@ const ApprovedCoaches = () => {
                                 animate={{ y: 0 }}
                                 exit={{ y: '100%' }}
                                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                                className="fixed bottom-0 left-0 right-0 z-[1001] bg-[#0a0f1d] border-t border-white/10 rounded-t-3xl p-6 pb-28 md:pb-6 shadow-2xl flex flex-col gap-6 max-h-[85vh] overflow-y-auto md:max-w-md md:left-1/2 md:-translate-x-1/2 md:bottom-4 md:border md:rounded-3xl"
+                                className="fixed bottom-0 left-0 right-0 z-[1001] bg-[#141414] border-t border-white/10 rounded-t-3xl p-6 pb-28 md:pb-6 shadow-2xl flex flex-col gap-6 max-h-[85vh] overflow-y-auto md:max-w-md md:left-1/2 md:-translate-x-1/2 md:bottom-4 md:border md:rounded-3xl"
                             >
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-xl font-bold text-white">Filters</h3>
@@ -269,7 +269,7 @@ const ApprovedCoaches = () => {
                                                 className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-12 pr-10 text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green transition-colors font-semibold text-sm"
                                             >
                                                 {cities.map(city => (
-                                                    <option key={city} value={city} className="bg-[#0a0f1d]">{city === 'All' ? 'All Cities' : city}</option>
+                                                    <option key={city} value={city} className="bg-[#141414]">{city === 'All' ? 'All Cities' : city}</option>
                                                 ))}
                                             </select>
                                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
@@ -288,9 +288,9 @@ const ApprovedCoaches = () => {
                                                 onChange={(e) => setGenderFilter(e.target.value)}
                                                 className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-12 pr-10 text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green transition-colors font-semibold text-sm"
                                             >
-                                                <option value="All" className="bg-[#0a0f1d]">All Genders</option>
-                                                <option value="Male" className="bg-[#0a0f1d]">Male</option>
-                                                <option value="Female" className="bg-[#0a0f1d]">Female</option>
+                                                <option value="All" className="bg-[#141414]">All Genders</option>
+                                                <option value="Male" className="bg-[#141414]">Male</option>
+                                                <option value="Female" className="bg-[#141414]">Female</option>
                                             </select>
                                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
                                                 <ChevronDown className="w-4 h-4 text-gray-400" />
