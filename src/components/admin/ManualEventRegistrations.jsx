@@ -22,6 +22,8 @@ import {
 } from '../../utils/paymentRegistrationMatch';
 import { sendEmail } from '../../utils/emails';
 import AdminPlayerProfileModal from './AdminPlayerProfileModal';
+import EventActivityLog from './EventActivityLog';
+import { logEventActivity } from '../../utils/eventActivityLog';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
@@ -163,7 +165,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const [profileLinkResults, setProfileLinkResults] = useState([]);
     const [profileLinkBusy, setProfileLinkBusy] = useState(false);
     const [searchingProfiles, setSearchingProfiles] = useState(false);
-    const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'players', 'list'
+    const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'players', 'list', 'activity'
     const [expandedDivisions, setExpandedDivisions] = useState({});
     const [openPaymentNoteId, setOpenPaymentNoteId] = useState(null);
     const [updatingWhatsApp, setUpdatingWhatsApp] = useState(null);
@@ -377,6 +379,19 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 if (payErr) throw payErr;
             }
 
+            await logEventActivity({
+                eventId: event.id,
+                action: 'admin.unmarked_paid',
+                category: 'ADMIN',
+                summary: `Unmarked ${reg.full_name} as paid`,
+                details: {
+                    registration_id: reg.id,
+                    player_name: reg.full_name,
+                    player_email: reg.email,
+                    division: reg.division,
+                },
+            });
+
             toast.success(`Unmarked ${reg.full_name} as paid — back to pending`);
             setUnmarkTarget(null);
             load();
@@ -442,6 +457,21 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 }]);
                 if (payErr) throw payErr;
             }
+
+            await logEventActivity({
+                eventId: event.id,
+                action: 'admin.marked_paid',
+                category: 'ADMIN',
+                summary: `Marked ${reg.full_name} as paid (${labelPaymentMethod(markPaidMethod) || 'manual'})`,
+                details: {
+                    registration_id: reg.id,
+                    player_name: reg.full_name,
+                    player_email: reg.email,
+                    division: reg.division,
+                    note,
+                    method: markPaidMethod,
+                },
+            });
 
             toast.success(`Marked ${reg.full_name} as paid — ${note}`);
             closeMarkPaidModal();
@@ -847,6 +877,21 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 ? `team (${toMove.map((p) => p.full_name).join(' & ')})`
                 : moveTarget.full_name;
             const anyOwesMore = toMove.some((reg) => newFee > oldFee && reg.payment_status === 'paid');
+
+            await logEventActivity({
+                eventId: event.id,
+                action: 'admin.moved_entries',
+                category: 'ADMIN',
+                summary: `Moved ${teamLabel} from ${sourceDivision} to ${targetDiv.name}`,
+                details: {
+                    from_division: sourceDivision,
+                    to_division: targetDiv.name,
+                    players: toMove.map((p) => p.full_name),
+                    registration_ids: movingIds,
+                    fee_changed: anyOwesMore,
+                },
+            });
+
             toast.success(anyOwesMore
                 ? `Moved ${teamLabel} to ${targetDiv.name} — marked pending payment where owed`
                 : `Moved ${teamLabel} to ${targetDiv.name}`);
@@ -906,6 +951,20 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 const res = await invokeAdminRefund({ action: 'admin_remove', registration_id: t.id, ...flags });
                 totalRefunded += Number(res?.total_refunded_rands || 0);
             }
+
+            await logEventActivity({
+                eventId: event.id,
+                action: 'admin.removed',
+                category: 'ADMIN',
+                summary: `Removed ${toRemove.map((t) => t.full_name).join(' & ')}${totalRefunded > 0 ? ` · refunded ${fmtR(totalRefunded)}` : mode === 'no_refund' ? ' · no refund' : ''}`,
+                details: {
+                    players: toRemove.map((t) => t.full_name),
+                    registration_ids: toRemove.map((t) => t.id),
+                    mode,
+                    refunded: totalRefunded,
+                    division: reg.division,
+                },
+            });
 
             toast.success(totalRefunded > 0 ? `Removed — ${fmtR(totalRefunded)} refunded` : 'Removed');
             setRemoveTarget(null);
@@ -1250,6 +1309,19 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 .update({ email: player.email, full_name: player.name })
                 .eq('id', reg.id);
             if (error) throw error;
+            await logEventActivity({
+                eventId: event.id,
+                action: 'admin.linked_profile',
+                category: 'ADMIN',
+                summary: `Linked registration to profile ${player.name}`,
+                details: {
+                    registration_id: reg.id,
+                    from_name: reg.full_name,
+                    to_name: player.name,
+                    to_email: player.email,
+                },
+            });
+
             toast.success(`Linked ${reg.full_name} to ${player.name}`);
             setMatchingProfileReg(null);
             setProfileLinkSearch('');
@@ -1618,13 +1690,18 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                             </div>
                         )}
                         <div className="flex gap-6 overflow-x-auto no-scrollbar border-b border-white/10">
-                            {['overview', 'players', 'list'].map(tab => (
+                            {[
+                                { id: 'overview', label: 'Overview' },
+                                { id: 'players', label: 'Players' },
+                                { id: 'list', label: 'Registrations List' },
+                                { id: 'activity', label: 'Activity Log' },
+                            ].map((tab) => (
                                 <button
-                                    key={tab}
-                                    onClick={() => setActiveTab(tab)}
-                                    className={`py-3 text-sm font-bold capitalize border-b-2 transition-colors whitespace-nowrap ${activeTab === tab ? 'border-padel-green text-padel-green' : 'border-transparent text-gray-400 hover:text-white'}`}
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`py-3 text-sm font-bold border-b-2 transition-colors whitespace-nowrap ${activeTab === tab.id ? 'border-padel-green text-padel-green' : 'border-transparent text-gray-400 hover:text-white'}`}
                                 >
-                                    {tab === 'list' ? 'Registrations List' : tab}
+                                    {tab.label}
                                 </button>
                             ))}
                         </div>
@@ -2571,7 +2648,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                         );
                     })()}
 
-                    {(stats.activeCheckoutCount > 0 || stats.abandonedCheckoutCount > 0) && (
+                    {activeTab === 'activity' && (
+                        <EventActivityLog eventId={event?.id} eventName={event?.event_name || ''} />
+                    )}
+
+                    {(stats.activeCheckoutCount > 0 || stats.abandonedCheckoutCount > 0) && activeTab !== 'activity' && (
                         <div className="px-6 py-2 border-t border-white/5 text-[11px] space-y-1">
                             {stats.activeCheckoutCount > 0 && (
                                 <p className="text-amber-400">
