@@ -5,6 +5,7 @@ import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, Calenda
 import { supabase } from '../../supabaseClient';
 import { useRankedin } from '../../hooks/useRankedin';
 import EventBuilder from './EventBuilder';
+import { getDefaultBackgroundForStatus } from '../../utils/imageUtils';
 import {
     PieChart,
     Pie,
@@ -1924,6 +1925,11 @@ const CalendarManager = () => {
                                                     </>
                                                 ) : (
                                                     <>
+                                                        <img
+                                                            src={getDefaultBackgroundForStatus(formData.sapa_status)}
+                                                            alt={`${formData.sapa_status || 'Default'} hero`}
+                                                            className="absolute inset-0 w-full h-full object-cover opacity-60"
+                                                        />
                                                         <input
                                                             type="file"
                                                             accept="image/*"
@@ -1932,25 +1938,33 @@ const CalendarManager = () => {
                                                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                                                         />
                                                         {isUploadingPoster ? (
-                                                            <div className="flex flex-col items-center gap-2">
+                                                            <div className="relative z-20 flex flex-col items-center gap-2">
                                                                 <Loader2 className="w-8 h-8 animate-spin text-padel-green" />
                                                                 <span className="text-xs text-gray-400 font-bold uppercase">Uploading...</span>
                                                             </div>
                                                         ) : (
-                                                            <div className="flex flex-col items-center gap-2 text-center">
+                                                            <div className="relative z-20 flex flex-col items-center gap-2 text-center px-2">
                                                                 <div className="w-12 h-12 rounded-full bg-padel-green/10 flex items-center justify-center text-padel-green mb-1">
                                                                     <UploadCloud size={24} />
                                                                 </div>
                                                                 <span className="text-sm text-white font-bold">Upload Custom Poster</span>
-                                                                <span className="text-[10px] text-gray-500 uppercase tracking-wider">JPG or PNG • Max 2MB recommended</span>
+                                                                <span className="text-[10px] text-gray-300 uppercase tracking-wider">
+                                                                    {formData.sapa_status && formData.sapa_status !== 'None'
+                                                                        ? `${formData.sapa_status} B&W default active`
+                                                                        : 'Default hero active'}
+                                                                </span>
                                                             </div>
                                                         )}
                                                     </>
                                                 )}
                                             </div>
-                                            {formData.custom_image_url && (
+                                            {formData.custom_image_url ? (
                                                 <p className="text-[10px] text-padel-green font-bold uppercase tracking-widest text-center mt-2 flex items-center justify-center gap-1">
                                                     <Star size={10} className="fill-padel-green" /> Custom Poster Active
+                                                </p>
+                                            ) : (
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest text-center mt-2">
+                                                    Site uses SAPA tier default hero when no custom poster
                                                 </p>
                                             )}
                                         </div>

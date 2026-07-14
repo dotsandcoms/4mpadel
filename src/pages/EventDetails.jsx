@@ -20,6 +20,7 @@ import { PAYSTACK_PUBLIC_KEY, isPaystackTestMode as isTestMode } from '../utils/
 
 const tournamentHero = 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format&fit=crop&q=80';
 import logo4m from '../assets/logo_4m_lowercase.png';
+import sapaLogo from '../assets/sapa-logo.svg';
 import { getEventImage, getDefaultEventBackground } from '../utils/imageUtils';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
 
@@ -136,7 +137,15 @@ const EventSponsorStrip = ({ logos, className = '' }) => {
 };
 
 // mode: 'closes' (counts down to registration close) or 'opens' (counts down to registration opening)
-const RegistrationCountdown = ({ closesAt, accentColor = '#CCFF00', mode = 'closes' }) => {
+const RegistrationCountdown = ({
+    closesAt,
+    accentColor = '#CCFF00',
+    mode = 'closes',
+    ctaLabel = null,
+    onCtaClick = null,
+    ctaDisabled = false,
+    ctaStyle = null,
+}) => {
     const [now, setNow] = useState(() => Date.now());
 
     useEffect(() => {
@@ -166,45 +175,76 @@ const RegistrationCountdown = ({ closesAt, accentColor = '#CCFF00', mode = 'clos
 
     const formattedDate = closeDate.toLocaleDateString('en-ZA', {
         day: 'numeric',
-        month: 'long',
+        month: 'short',
         year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+    // Compact mobile date — day + month + time only
+    const compactDate = closeDate.toLocaleDateString('en-ZA', {
+        day: 'numeric',
+        month: 'short',
         hour: '2-digit',
         minute: '2-digit',
     });
 
     const pad = (n) => String(n).padStart(2, '0');
+    // Only render an actionable CTA (skip disabled placeholders that leave empty space)
+    const showCta = Boolean(ctaLabel) && !ctaDisabled;
 
     return (
-        <div className="mt-2 rounded-2xl border border-white/10 bg-black/30 backdrop-blur-sm px-4 py-4 flex items-center gap-4">
-            <div
-                className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 border"
-                style={{ backgroundColor: `${accentColor}20`, borderColor: `${accentColor}40` }}
-            >
-                <Clock className="w-5 h-5" style={{ color: accentColor }} />
-            </div>
-            <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-white/60 mb-0.5">
-                    {label}
-                </p>
-                <p className="text-sm font-bold leading-tight truncate" style={{ color: accentColor }}>
-                    {formattedDate}
-                </p>
-            </div>
-            {!isClosed && (
-                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                    {[
-                        { value: pad(parts.days), label: 'DAYS' },
-                        { value: pad(parts.hours), label: 'HRS' },
-                        { value: pad(parts.mins), label: 'MINS' },
-                        { value: pad(parts.secs), label: 'SECS' },
-                    ].map(({ value, label }) => (
-                        <div key={label} className="text-center min-w-[2rem]">
-                            <p className="text-base sm:text-lg font-bold text-white leading-none tabular-nums">{value}</p>
-                            <p className="text-[8px] sm:text-[9px] font-bold text-white/50 tracking-wider mt-0.5">{label}</p>
-                        </div>
-                    ))}
+        <div className="mt-2 rounded-2xl border border-white/10 bg-black/30 backdrop-blur-sm pl-3 pr-3.5 py-3 sm:px-4 sm:py-4 flex items-center gap-2.5 sm:gap-4">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 shrink-0">
+                <div
+                    className="w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center shrink-0 border"
+                    style={{ backgroundColor: `${accentColor}20`, borderColor: `${accentColor}40` }}
+                >
+                    <Clock className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: accentColor }} />
                 </div>
-            )}
+                <div className="min-w-0">
+                    <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider sm:tracking-widest text-white/60 mb-0.5 leading-none">
+                        {label}
+                    </p>
+                    <p className="text-xs sm:text-sm font-bold leading-tight whitespace-nowrap" style={{ color: accentColor }}>
+                        <span className="sm:hidden">{compactDate}</span>
+                        <span className="hidden sm:inline">{formattedDate}</span>
+                    </p>
+                </div>
+            </div>
+
+            <div className={`flex items-center gap-2 sm:gap-3 min-w-0 ${showCta ? 'ml-auto' : 'flex-1 justify-end'}`}>
+                {!isClosed && (
+                    <div className={`flex items-center gap-2 sm:gap-3 ${showCta ? 'shrink-0' : 'flex-1 justify-evenly max-w-xs sm:max-w-sm ml-auto'}`}>
+                        {[
+                            { value: pad(parts.days), label: 'DAYS' },
+                            { value: pad(parts.hours), label: 'HRS' },
+                            { value: pad(parts.mins), label: 'MINS' },
+                            { value: pad(parts.secs), label: 'SECS' },
+                        ].map(({ value, label: unitLabel }) => (
+                            <div key={unitLabel} className="text-center min-w-[1.75rem] sm:min-w-[2rem]">
+                                <p className="text-base sm:text-lg font-bold text-white leading-none tabular-nums">{value}</p>
+                                <p className="text-[8px] sm:text-[9px] font-bold text-white/50 tracking-wider mt-0.5">{unitLabel}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {showCta && (
+                    <button
+                        type="button"
+                        onClick={onCtaClick}
+                        className="relative overflow-hidden shrink-0 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-wide border transition-all hover:brightness-110"
+                        style={ctaStyle || {
+                            background: `linear-gradient(145deg, color-mix(in srgb, ${accentColor} 68%, white 32%) 0%, ${accentColor} 50%, color-mix(in srgb, ${accentColor} 82%, black 18%) 100%)`,
+                            borderColor: accentColor,
+                            color: '#ffffff',
+                            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.28), 0 2px 12px color-mix(in srgb, ${accentColor} 40%, transparent)`,
+                        }}
+                    >
+                        <span className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/22 via-white/6 to-transparent rounded-full" />
+                        <span className="relative z-10">{ctaLabel}</span>
+                    </button>
+                )}
+            </div>
         </div>
     );
 };
@@ -305,49 +345,56 @@ const formatPrizeAmount = (amount) => {
 };
 
 const EventHeroBranding = ({ event, theme, variant = 'hero', centered = false, dateLabel = null, locationLabel = null }) => {
-    const logoUrl = event?.organizer_logo_url?.trim();
-    const badgeText = event?.organizer_badge_text?.trim();
-    const hasOrgBranding = logoUrl || badgeText;
+    const badgeText = event?.organizer_badge_text?.trim()
+        || (event?.sapa_status && event.sapa_status !== 'None'
+            ? `SAPA ${event.sapa_status}${event?.points ? ` ${event.points}` : ''}`.trim()
+            : '');
+    const showSapaBranding = Boolean(badgeText);
     const dateRow = dateLabel ? (
         <div className="flex items-center gap-1.5 text-white/90 text-sm font-normal shrink-0">
             <CalendarIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/70 shrink-0" />
             <span className="whitespace-nowrap">{dateLabel}</span>
         </div>
     ) : null;
-    const locationDesktop = locationLabel ? (
-        <div className="hidden md:flex items-center gap-1.5 text-white/90 text-sm font-normal min-w-0">
+    const locationRow = locationLabel ? (
+        <div className="flex items-center gap-1.5 text-white/90 text-sm font-normal min-w-0 max-w-full">
             <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/70 shrink-0" />
             <span className="truncate">{locationLabel}</span>
         </div>
     ) : null;
-    const locationMobile = locationLabel ? (
-        <div className={`flex md:hidden items-center gap-1.5 text-white/90 text-sm font-normal mt-1 min-w-0 ${centered ? 'justify-center' : ''}`}>
-            <MapPin className="w-3.5 h-3.5 text-white/70 shrink-0" />
-            <span className="leading-snug">{locationLabel}</span>
+    const sep = <span className="text-white/35 text-sm font-light select-none shrink-0" aria-hidden>|</span>;
+
+    const sapaBadge = showSapaBranding ? (
+        <div className="flex items-center gap-2 min-w-0 shrink-0">
+            <img
+                src={sapaLogo}
+                alt="SAPA"
+                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-contain bg-white border border-white/30 shrink-0 shadow-md p-0.5"
+            />
+            <span
+                className="text-sm sm:text-base font-bold uppercase tracking-wide truncate drop-shadow-md"
+                style={{ color: theme.fill }}
+            >
+                {badgeText}
+            </span>
         </div>
     ) : null;
-    const sep = <span className="text-white/35 text-sm font-light select-none shrink-0" aria-hidden>|</span>;
-    const sepDesktop = <span className="hidden md:inline text-white/35 text-sm font-light select-none shrink-0" aria-hidden>|</span>;
 
     if (variant === 'nav') {
-        if (!hasOrgBranding) return null;
+        if (!showSapaBranding) return null;
         return (
-            <div className="flex items-center gap-2.5 min-w-0">
-                {logoUrl && (
-                    <img
-                        src={logoUrl}
-                        alt=""
-                        className="w-8 h-8 md:w-9 md:h-9 rounded-full object-cover border border-white/30 bg-white shrink-0"
-                    />
-                )}
-                {badgeText && (
-                    <span
-                        className="text-xs md:text-sm font-bold uppercase tracking-wide truncate drop-shadow-md"
-                        style={{ color: theme.fill }}
-                    >
-                        {badgeText}
-                    </span>
-                )}
+            <div className="flex items-center gap-2 min-w-0">
+                <img
+                    src={sapaLogo}
+                    alt="SAPA"
+                    className="w-8 h-8 md:w-9 md:h-9 rounded-full object-contain bg-white border border-white/30 shrink-0 p-0.5"
+                />
+                <span
+                    className="text-xs md:text-sm font-bold uppercase tracking-wide truncate drop-shadow-md"
+                    style={{ color: theme.fill }}
+                >
+                    {badgeText}
+                </span>
             </div>
         );
     }
@@ -356,55 +403,25 @@ const EventHeroBranding = ({ event, theme, variant = 'hero', centered = false, d
         <div className="mt-1">
             <div className={`flex items-center gap-2.5 min-w-0 flex-wrap ${centered ? 'justify-center' : ''}`}>
                 {leading}
-                {dateRow && (
-                    <>
-                        {(logoUrl || badgeText || (event?.sapa_status && event.sapa_status !== 'None')) ? sep : null}
+                {(dateRow || locationRow) && (
+                    <div className="flex items-center gap-2.5 min-w-0 max-w-full">
                         {dateRow}
-                    </>
-                )}
-                {locationDesktop && (
-                    <>
-                        {sepDesktop}
-                        {locationDesktop}
-                    </>
+                        {locationRow && (
+                            <>
+                                {dateRow ? sep : null}
+                                {locationRow}
+                            </>
+                        )}
+                    </div>
                 )}
             </div>
-            {locationMobile}
         </div>
     );
 
-    // Under the event title: logo + badge | date (| location on desktop)
-    if (hasOrgBranding) {
-        return metaRow(
-            <>
-                {logoUrl && (
-                    <img
-                        src={logoUrl}
-                        alt=""
-                        className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border border-white/30 bg-white shrink-0 shadow-md"
-                    />
-                )}
-                {badgeText && (
-                    <span
-                        className="text-sm sm:text-base font-bold uppercase tracking-wide truncate drop-shadow-md"
-                        style={{ color: theme.fill }}
-                    >
-                        {badgeText}
-                    </span>
-                )}
-            </>
-        );
-    }
-
-    if (event?.sapa_status && event.sapa_status !== 'None') {
-        return metaRow(
-            <span
-                className={`inline-block text-[10px] font-semibold uppercase tracking-wide px-3 py-1 rounded-full shadow-md w-fit ${theme.badgeBg}`}
-                style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0a0a0a' }}
-            >
-                {event.sapa_status}
-            </span>
-        );
+    // Under the event title: SAPA logo + badge | date | location
+    // Organisation logo is reserved for the sponsors strip (first).
+    if (showSapaBranding) {
+        return metaRow(sapaBadge);
     }
 
     if (dateRow || locationLabel) {
@@ -743,11 +760,38 @@ const EventDetails = () => {
         });
     }, [event]);
 
+    // Linked organisation logo (not event.organizer_logo_url — that field often holds a SAPA mark)
+    const [linkedOrgLogoUrl, setLinkedOrgLogoUrl] = useState('');
+
+    useEffect(() => {
+        let cancelled = false;
+        const orgId = event?.organisation_id;
+        if (!orgId) {
+            setLinkedOrgLogoUrl('');
+            return undefined;
+        }
+        (async () => {
+            const { data } = await supabase
+                .from('organisations')
+                .select('logo_url')
+                .eq('id', orgId)
+                .maybeSingle();
+            if (!cancelled) setLinkedOrgLogoUrl((data?.logo_url || '').trim());
+        })();
+        return () => { cancelled = true; };
+    }, [event?.organisation_id]);
+
     const eventSponsorLogos = useMemo(() => {
-        const logos = event?.sponsor_logos;
-        if (!Array.isArray(logos)) return [];
-        return logos.filter((url) => typeof url === 'string' && url.trim());
-    }, [event?.sponsor_logos]);
+        // SAPA is shown in the hero badge row — never in the sponsor strip.
+        // Organisation logo comes from the linked organisations record (not organizer_logo_url).
+        const orgLogo = linkedOrgLogoUrl;
+        const sponsors = Array.isArray(event?.sponsor_logos)
+            ? event.sponsor_logos.filter((url) => typeof url === 'string' && url.trim())
+            : [];
+        if (!orgLogo) return sponsors;
+        const deduped = sponsors.filter((url) => url.trim() !== orgLogo);
+        return [orgLogo, ...deduped];
+    }, [linkedOrgLogoUrl, event?.sponsor_logos]);
 
     const computedEventStatus = useMemo(() => {
         if (event?.status && event.status.toLowerCase() !== 'published' && event.status !== 'Date available' && event.status !== 'Date available offered to R&B') return event.status;
@@ -3267,22 +3311,12 @@ const EventDetails = () => {
                         <img
                             src={heroBackgroundUrl}
                             alt={event.event_name}
-                            className="w-full h-full object-cover object-center animate-hero-zoom saturate-[1.35] contrast-[1.12] brightness-[1.06]"
+                            className="w-full h-[118%] object-cover origin-top animate-hero-zoom-out saturate-[1.45] contrast-[1.28] brightness-[1.18] mt-[10%] md:mt-0"
+                            style={{ objectPosition: 'center top' }}
                         />
-                        {/* Tier-coloured ambience lifting the artwork */}
-                        <div
-                            className="absolute inset-0 mix-blend-overlay pointer-events-none"
-                            style={{ background: `radial-gradient(ellipse at 50% -10%, ${theme.fill}66, transparent 62%)` }}
-                        />
-                        {/* Soft vignette pulling focus to the centre */}
+                        {/* Soft vignette + bottom fade for text readability (no tier colour glow) */}
                         <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, transparent 48%, rgba(0,0,0,0.5) 100%)' }} />
-                        {/* Gradient overlay for blending and text readability (fading to blue) */}
                         <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-[#0a0a0a]/40 to-[#0a0a0a]" />
-                        {/* Tier accent glow rising from the fade line */}
-                        <div
-                            className="absolute bottom-0 left-0 right-0 h-28 pointer-events-none"
-                            style={{ background: `linear-gradient(to top, ${theme.fill}2e, transparent)` }}
-                        />
                     </div>
 
                     {/* Live badge */}
@@ -3299,6 +3333,14 @@ const EventDetails = () => {
                         <div className="max-w-5xl mx-auto px-5 w-full relative">
                             <div className="w-full flex flex-col mt-2">
                                 <div className="w-full flex flex-col gap-1">
+                                {event.sapa_status && event.sapa_status !== 'None' && (
+                                    <span
+                                        className="inline-flex self-start items-center px-3 py-1 mb-1 rounded-full border text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.14em] bg-black/50 backdrop-blur-sm shadow-md"
+                                        style={{ color: theme.fill, borderColor: theme.fill }}
+                                    >
+                                        {event.sapa_status === 'Major' ? 'Major Event' : event.sapa_status}
+                                    </span>
+                                )}
                                 <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white leading-tight drop-shadow-lg">
                                     {event.event_name}
                                 </h1>
@@ -3319,6 +3361,10 @@ const EventDetails = () => {
                                 </div>
 
                                 {(() => {
+                                        // Temporarily hide hero Register / Pay CTA — countdown row handles it.
+                                        const SHOW_HERO_REGISTER_CTA = false;
+                                        if (!SHOW_HERO_REGISTER_CTA) return null;
+
                                         const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
                                         let cta = null;
 
@@ -3426,7 +3472,7 @@ const EventDetails = () => {
 
                                 {/* Quick Stats */}
                                 <div className="mt-2 rounded-2xl border border-white/10 bg-black/30 backdrop-blur-sm overflow-hidden flex divide-x divide-white/10">
-                                    <div className="flex-1 py-4 px-1 flex flex-col items-center justify-center text-center min-w-0">
+                                    <div className="hidden md:flex flex-1 py-4 px-1 flex-col items-center justify-center text-center min-w-0">
                                         <CheckCircle className="w-4 h-4 mb-1" style={{ color: theme.fill }} />
                                         <p className="text-[9px] font-bold uppercase tracking-wider text-white/50 mb-1">Status</p>
                                         <p className="text-[11px] sm:text-xs font-semibold leading-tight px-1" style={{ color: theme.fill }}>
@@ -3454,11 +3500,42 @@ const EventDetails = () => {
                                     <EventSponsorStrip logos={eventSponsorLogos} className="w-full mt-3" />
                                 )}
 
-                                <RegistrationCountdown
-                                    closesAt={registrationNotYetOpen ? event.registration_opens_at : event.registration_closes_at}
-                                    mode={registrationNotYetOpen ? 'opens' : 'closes'}
-                                    accentColor={theme.fill}
-                                />
+                                {(() => {
+                                    // Only actionable CTAs — no disabled placeholders in the countdown row
+                                    let countdownCta = null;
+                                    if (!isEventPassed) {
+                                        if (event.is_manual) {
+                                            if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
+                                                countdownCta = null;
+                                            } else if (manualRegStatus.hasPendingPayment) {
+                                                countdownCta = { label: 'Pay', onClick: openManualPayFlow };
+                                            } else if (!registrationNotYetOpen && !registrationClosed) {
+                                                countdownCta = { label: 'Register', onClick: openManualRegistration };
+                                            }
+                                        } else if (isRegistered && isPaid && registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) {
+                                            countdownCta = null;
+                                        } else if (!isRegistered && !isLive && !isRankedinRegistrationClosed && !registrationNotYetOpen) {
+                                            countdownCta = { label: 'Register', onClick: handleRankedinRedirect };
+                                        } else if (
+                                            event?.allow_payments === true
+                                            && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0)
+                                            && isRegistered
+                                            && (!isPaid || !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div))))
+                                        ) {
+                                            countdownCta = { label: 'Pay', onClick: openRegistrationModal };
+                                        }
+                                    }
+                                    return (
+                                        <RegistrationCountdown
+                                            closesAt={registrationNotYetOpen ? event.registration_opens_at : event.registration_closes_at}
+                                            mode={registrationNotYetOpen ? 'opens' : 'closes'}
+                                            accentColor={theme.fill}
+                                            ctaLabel={countdownCta?.label || null}
+                                            onCtaClick={countdownCta?.onClick || undefined}
+                                            ctaStyle={registeredStatusStyle}
+                                        />
+                                    );
+                                })()}
                             </div>
                         </div>
                     </div>
@@ -4029,7 +4106,7 @@ const EventDetails = () => {
                                             )}
 
                                             {/* Sponsors */}
-                                            {event.sponsor_logos && event.sponsor_logos.length > 0 && (
+                                            {eventSponsorLogos.length > 0 && (
                                                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
                                                     <div
                                                         onClick={() => toggleSection('sponsors')}
@@ -4053,8 +4130,8 @@ const EventDetails = () => {
                                                                 className="overflow-hidden"
                                                             >
                                                                 <div className="px-6 py-5 grid grid-cols-3 md:grid-cols-4 gap-4">
-                                                                    {event.sponsor_logos.map((logo, i) => (
-                                                                        <div key={i} className="aspect-[3/2] bg-gray-50 rounded-xl flex items-center justify-center p-3 border border-gray-100 hover:scale-[1.03] transition-transform">
+                                                                    {eventSponsorLogos.map((logo, i) => (
+                                                                        <div key={`${logo}-${i}`} className="aspect-[3/2] bg-gray-50 rounded-xl flex items-center justify-center p-3 border border-gray-100 hover:scale-[1.03] transition-transform">
                                                                             <img src={logo} alt={`Sponsor ${i + 1}`} className="max-w-full max-h-full object-contain" />
                                                                         </div>
                                                                     ))}

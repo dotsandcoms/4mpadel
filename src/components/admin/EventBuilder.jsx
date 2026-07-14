@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useClubs } from '../../hooks/useClubs';
+import { getDefaultBackgroundForStatus } from '../../utils/imageUtils';
 
 const STANDARD_DIVISIONS = [
     "Men's Open", "Men's Advanced", "Men's Intermediate", "Men's A", "Men's B", "Men's C", "Men's D",
@@ -972,6 +973,20 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             entry_fee_notes: ev.entry_fee_notes || '',
             organisation_id: ev.organisation_id || null,
         });
+        // Prefer the linked organisation profile logo over a stale event.organizer_logo_url
+        // (that field often still holds a SAPA mark from older edits).
+        if (ev.organisation_id) {
+            const { data: linkedOrg } = await supabase
+                .from('organisations')
+                .select('logo_url')
+                .eq('id', ev.organisation_id)
+                .maybeSingle();
+            if (linkedOrg?.logo_url) {
+                setForm((prev) => ({ ...prev, organizer_logo_url: linkedOrg.logo_url }));
+            }
+        } else if (organization?.logo_url) {
+            setForm((prev) => ({ ...prev, organizer_logo_url: organization.logo_url }));
+        }
         if (draftDivisions && draftDivisions.length > 0) {
             setDivisions(draftDivisions.map((d, i) => mapDivisionRow(d, d.id || `draft_${i}`)));
             return;
@@ -1302,7 +1317,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                 warnings.push(`Low entry fee on ${d.name} (R${d.entry_fee})`);
             }
         });
-        if (!form.custom_image_url) warnings.push('No event poster uploaded');
+        if (!form.custom_image_url) {
+            warnings.push('No custom poster uploaded — SAPA tier default hero will be used on the site');
+        }
         if (!form.organizer_badge_text?.trim() && form.sapa_status && form.sapa_status !== 'None') {
             warnings.push('No event subtitle / badge text set');
         }
@@ -1669,16 +1686,24 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                 <label className={labelClass}>Organisation Logo</label>
                                                 {(organization || form.organisation_id) ? (
                                                     <>
-                                                        <p className="text-[11px] text-gray-500 mb-2">Using the linked organisation logo.</p>
-                                                        {form.organizer_logo_url ? (
-                                                            <img src={form.organizer_logo_url} alt="Organisation logo" className="w-14 h-14 rounded-full object-cover border border-white/10" />
+                                                        <p className="text-[11px] text-gray-500 mb-2">
+                                                            Linked org logo — shown first in the sponsor strip. SAPA branding appears next to the badge text on the event page.
+                                                        </p>
+                                                        {(organization?.logo_url || form.organizer_logo_url) ? (
+                                                            <img
+                                                                src={organization?.logo_url || form.organizer_logo_url}
+                                                                alt="Organisation logo"
+                                                                className="w-14 h-14 rounded-full object-cover border border-white/10 bg-white"
+                                                            />
                                                         ) : (
                                                             <p className="text-xs text-gray-500 italic">This organisation has no logo yet — add one on their profile.</p>
                                                         )}
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <p className="text-[11px] text-gray-500 mb-2">Shown above the event title on the public event page.</p>
+                                                        <p className="text-[11px] text-gray-500 mb-2">
+                                                            Shown first in the sponsor strip. SAPA branding appears next to the badge text on the event page.
+                                                        </p>
                                                         <div className="flex items-center gap-4">
                                                             {form.organizer_logo_url && (
                                                                 <div className="relative group">
@@ -1783,12 +1808,24 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                             <div>
                                                 <label className={labelClass}>Event Poster</label>
                                                 <div className="flex items-center gap-4">
-                                                    {form.custom_image_url && (
-                                                        <img src={form.custom_image_url} alt="Poster" className="w-24 h-32 object-cover rounded-lg border border-white/10" />
-                                                    )}
+                                                    <div className="relative shrink-0">
+                                                        <img
+                                                            src={form.custom_image_url || getDefaultBackgroundForStatus(form.sapa_status)}
+                                                            alt="Poster"
+                                                            className="w-24 h-32 object-cover rounded-lg border border-white/10"
+                                                        />
+                                                        {!form.custom_image_url && (
+                                                            <span className="absolute bottom-1 left-1 right-1 text-center text-[8px] font-bold uppercase tracking-wider bg-black/70 text-padel-green rounded px-1 py-0.5">
+                                                                {form.sapa_status && form.sapa_status !== 'None' ? `${form.sapa_status} default` : 'Default hero'}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <label className="cursor-pointer bg-white/5 border border-dashed border-white/20 rounded-xl px-5 py-6 flex flex-col items-center gap-2 text-gray-300 hover:border-padel-green hover:text-padel-green transition-colors">
                                                         {uploadingPoster ? <Loader2 className="animate-spin" size={20} /> : <UploadCloud size={20} />}
                                                         <span className="text-xs font-bold">{uploadingPoster ? 'Uploading...' : 'Upload Poster'}</span>
+                                                        <span className="text-[10px] text-gray-500 text-center max-w-[140px]">
+                                                            Optional — SAPA tier default used on the site when empty
+                                                        </span>
                                                         <input type="file" accept="image/*" className="hidden" onChange={handlePosterUpload} disabled={uploadingPoster} />
                                                     </label>
                                                 </div>
@@ -2623,13 +2660,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                 <div className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
                                     <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">Event Summary</p>
                                     <div className="flex gap-4">
-                                        {form.custom_image_url ? (
-                                            <img src={form.custom_image_url} alt="Poster" className="w-24 h-32 object-cover rounded-lg border border-white/10 shrink-0" />
-                                        ) : (
-                                            <div className="w-24 h-32 rounded-lg border border-dashed border-white/15 bg-white/5 flex items-center justify-center text-[10px] text-gray-500 text-center px-2 shrink-0">
-                                                No poster
-                                            </div>
-                                        )}
+                                        <img
+                                            src={form.custom_image_url || getDefaultBackgroundForStatus(form.sapa_status)}
+                                            alt="Poster"
+                                            className="w-24 h-32 object-cover rounded-lg border border-white/10 shrink-0"
+                                        />
                                         <div className="min-w-0 flex-1 space-y-2 text-sm">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <p className="text-white font-bold text-lg leading-tight">{form.event_name || 'Untitled event'}</p>
@@ -2789,11 +2824,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                             className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            {form.custom_image_url ? (
-                                <img src={form.custom_image_url} alt="Poster" className="w-full h-48 object-cover" />
-                            ) : (
-                                <div className="w-full h-48 bg-white/5 flex items-center justify-center text-gray-500 text-sm">No poster</div>
-                            )}
+                            <img
+                                src={form.custom_image_url || getDefaultBackgroundForStatus(form.sapa_status)}
+                                alt="Poster"
+                                className="w-full h-48 object-cover"
+                            />
                             <div className="p-4 space-y-2">
                                 <div className="flex items-center gap-2 flex-wrap">
                                     <h3 className="text-white font-bold text-lg">{form.event_name || 'Untitled event'}</h3>
