@@ -1225,7 +1225,16 @@ const CalendarManager = () => {
                                                     )}
                                                 </div>
                                             ) : (
-                                                <span className="px-2 py-0.5 rounded bg-gray-500/10 text-gray-400 border border-gray-500/20 text-[10px] font-bold uppercase w-fit">Manual</span>
+                                                <div className="flex flex-col gap-1">
+                                                    <span className="px-2 py-0.5 rounded bg-gray-500/10 text-gray-400 border border-gray-500/20 text-[10px] font-bold uppercase w-fit">Manual</span>
+                                                    {event.organisations?.name ? (
+                                                        <span className="text-[10px] text-padel-green font-bold truncate max-w-[140px]" title={event.organisations.name}>
+                                                            → {event.organisations.name}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[9px] text-amber-500/80 font-medium">No org mapped</span>
+                                                    )}
+                                                </div>
                                             )}
                                         </td>
                                         <td className="py-3 px-4 align-top">
