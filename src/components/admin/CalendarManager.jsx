@@ -96,6 +96,7 @@ const CalendarManager = () => {
     const [orgSuggestions, setOrgSuggestions] = useState([]);
     const [orgSearchOpen, setOrgSearchOpen] = useState(false);
     const [searchingOrgs, setSearchingOrgs] = useState(false);
+    const [orgSearchQuery, setOrgSearchQuery] = useState('');
     const orgSearchRef = useRef(null);
     const orgSelectedRef = useRef(false);
 
@@ -154,7 +155,7 @@ const CalendarManager = () => {
     // Type-ahead organisation search for the legacy edit modal
     useEffect(() => {
         if (!isModalOpen) return undefined;
-        const q = (formData.organizer_name || '').trim();
+        const q = (orgSearchQuery || '').trim();
         if (orgSelectedRef.current) {
             orgSelectedRef.current = false;
             return undefined;
@@ -185,7 +186,7 @@ const CalendarManager = () => {
             }
         }, 300);
         return () => clearTimeout(timer);
-    }, [formData.organizer_name, isModalOpen]);
+    }, [orgSearchQuery, isModalOpen]);
 
     useEffect(() => {
         const onDown = (e) => {
@@ -201,6 +202,7 @@ const CalendarManager = () => {
         orgSelectedRef.current = true;
         setOrgSuggestions([]);
         setOrgSearchOpen(false);
+        setOrgSearchQuery(org.name || '');
         setFormData((prev) => ({
             ...prev,
             organisation_id: org.id,
@@ -218,7 +220,7 @@ const CalendarManager = () => {
             setLoading(true);
             const { data, error } = await supabase
                 .from('calendar')
-                .select('*')
+                .select('*, organisations:organisation_id(id, name, logo_url)')
                 .order('start_date', { ascending: true }) // Order by start_date 
                 .order('id', { ascending: true }); // Fallback
 
@@ -529,6 +531,9 @@ const CalendarManager = () => {
             allow_payments: false,
             points: '1000'
         });
+        setOrgSearchQuery('');
+        setOrgSuggestions([]);
+        setOrgSearchOpen(false);
     }
 
     // Helper: Resize image for posters
@@ -635,6 +640,9 @@ const CalendarManager = () => {
             allow_payments: event.allow_payments || false,
             points: event.points || '1000'
         });
+        setOrgSearchQuery(event.organisations?.name || event.organizer_name || '');
+        setOrgSuggestions([]);
+        setOrgSearchOpen(false);
         setIsModalOpen(true);
     };
 
@@ -1207,6 +1215,13 @@ const CalendarManager = () => {
                                                 <div className="flex flex-col gap-1">
                                                     <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold uppercase w-fit">RankedIn</span>
                                                     <span className="text-[9px] text-gray-500 font-mono">ID: {event.rankedin_id}</span>
+                                                    {event.organisations?.name ? (
+                                                        <span className="text-[10px] text-padel-green font-bold truncate max-w-[140px]" title={event.organisations.name}>
+                                                            → {event.organisations.name}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[9px] text-amber-500/80 font-medium">No org mapped</span>
+                                                    )}
                                                 </div>
                                             ) : (
                                                 <span className="px-2 py-0.5 rounded bg-gray-500/10 text-gray-400 border border-gray-500/20 text-[10px] font-bold uppercase w-fit">Manual</span>
@@ -1628,6 +1643,81 @@ const CalendarManager = () => {
                                         </div>
                                     </div>
 
+                                    {/* Map RankedIn (or any) event to a local organisation */}
+                                    <div className="relative rounded-xl border border-padel-green/20 bg-padel-green/5 p-4" ref={orgSearchRef}>
+                                        <label className="block text-xs font-bold text-padel-green mb-1 uppercase">
+                                            Organisation
+                                        </label>
+                                        <p className="text-[11px] text-gray-400 mb-2">
+                                            Map this event to one of our organisations so it appears on their public page.
+                                        </p>
+                                        <input
+                                            type="text"
+                                            value={orgSearchQuery}
+                                            onChange={(e) => {
+                                                orgSelectedRef.current = false;
+                                                setOrgSearchQuery(e.target.value);
+                                                setFormData((prev) => ({
+                                                    ...prev,
+                                                    organisation_id: null,
+                                                }));
+                                            }}
+                                            onFocus={() => {
+                                                if (orgSuggestions.length > 0) setOrgSearchOpen(true);
+                                            }}
+                                            placeholder="Type to search organisations…"
+                                            autoComplete="off"
+                                            className="w-full bg-black/40 border border-padel-green/30 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none"
+                                        />
+                                        {formData.organisation_id ? (
+                                            <div className="mt-1.5 flex items-center justify-between gap-2">
+                                                <p className="text-[11px] text-padel-green font-bold">Linked to organisation page</p>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setFormData((prev) => ({ ...prev, organisation_id: null }));
+                                                        setOrgSearchQuery('');
+                                                    }}
+                                                    className="text-[10px] font-black uppercase tracking-wider text-gray-500 hover:text-red-400"
+                                                >
+                                                    Unlink
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <p className="text-[11px] text-amber-500/90 mt-1.5">
+                                                Not mapped — search and select an organisation above.
+                                            </p>
+                                        )}
+                                        {orgSearchOpen && (orgSuggestions.length > 0 || searchingOrgs) && (
+                                            <div className="absolute z-30 left-4 right-4 mt-1 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
+                                                {searchingOrgs && orgSuggestions.length === 0 ? (
+                                                    <p className="px-4 py-3 text-xs text-gray-500">Searching…</p>
+                                                ) : (
+                                                    orgSuggestions.map((org) => (
+                                                        <button
+                                                            key={org.id}
+                                                            type="button"
+                                                            onClick={() => selectOrganisation(org)}
+                                                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-left transition-colors"
+                                                        >
+                                                            {org.logo_url ? (
+                                                                <img src={org.logo_url} alt="" className="w-8 h-8 rounded-lg object-cover bg-white/5 shrink-0" />
+                                                            ) : (
+                                                                <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-padel-green shrink-0 text-xs font-black">
+                                                                    {(org.name || '?')[0]}
+                                                                </div>
+                                                            )}
+                                                            <div className="min-w-0">
+                                                                <p className="text-sm font-bold text-white truncate">{org.name}</p>
+                                                                {org.slug && <p className="text-[10px] text-gray-500 truncate">/{org.slug}</p>}
+                                                            </div>
+                                                        </button>
+                                                    ))
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+
                                     {/* Entry Fee */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
@@ -1869,71 +1959,22 @@ const CalendarManager = () => {
                                     {/* Organizer Info */}
                                     <div className="border-t border-white/10 pt-4">
                                         <h4 className="text-sm font-bold text-gray-300 mb-3 uppercase">Organizer Details</h4>
+                                        {formData.organisation_id && (
+                                            <p className="text-[11px] text-padel-green font-bold mb-3">
+                                                Linked organisation set above — contact fields below can still be overridden.
+                                            </p>
+                                        )}
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="relative" ref={orgSearchRef}>
-                                                <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Organiser</label>
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Display Name</label>
                                                 <input
                                                     type="text"
                                                     name="organizer_name"
                                                     value={formData.organizer_name}
-                                                    onChange={(e) => {
-                                                        orgSelectedRef.current = false;
-                                                        setFormData((prev) => ({
-                                                            ...prev,
-                                                            organizer_name: e.target.value,
-                                                            organisation_id: null,
-                                                        }));
-                                                    }}
-                                                    onFocus={() => {
-                                                        if (orgSuggestions.length > 0) setOrgSearchOpen(true);
-                                                    }}
-                                                    placeholder="Type to search organisations…"
-                                                    autoComplete="off"
+                                                    onChange={handleInputChange}
+                                                    placeholder="Shown on the event page"
                                                     className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none"
                                                 />
-                                                {formData.organisation_id && (
-                                                    <div className="mt-1.5 flex items-center justify-between gap-2">
-                                                        <p className="text-[11px] text-padel-green font-bold">Linked to organisation page</p>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setFormData((prev) => ({ ...prev, organisation_id: null }))}
-                                                            className="text-[10px] font-black uppercase tracking-wider text-gray-500 hover:text-red-400"
-                                                        >
-                                                            Unlink
-                                                        </button>
-                                                    </div>
-                                                )}
-                                                {!formData.organisation_id && (
-                                                    <p className="text-[11px] text-gray-500 mt-1">Select an organisation to show this event on their public page.</p>
-                                                )}
-                                                {orgSearchOpen && (orgSuggestions.length > 0 || searchingOrgs) && (
-                                                    <div className="absolute z-30 left-0 right-0 mt-1 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
-                                                        {searchingOrgs && orgSuggestions.length === 0 ? (
-                                                            <p className="px-4 py-3 text-xs text-gray-500">Searching…</p>
-                                                        ) : (
-                                                            orgSuggestions.map((org) => (
-                                                                <button
-                                                                    key={org.id}
-                                                                    type="button"
-                                                                    onClick={() => selectOrganisation(org)}
-                                                                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-left transition-colors"
-                                                                >
-                                                                    {org.logo_url ? (
-                                                                        <img src={org.logo_url} alt="" className="w-8 h-8 rounded-lg object-cover bg-white/5 shrink-0" />
-                                                                    ) : (
-                                                                        <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-padel-green shrink-0 text-xs font-black">
-                                                                            {(org.name || '?')[0]}
-                                                                        </div>
-                                                                    )}
-                                                                    <div className="min-w-0">
-                                                                        <p className="text-sm font-bold text-white truncate">{org.name}</p>
-                                                                        {org.slug && <p className="text-[10px] text-gray-500 truncate">/{org.slug}</p>}
-                                                                    </div>
-                                                                </button>
-                                                            ))
-                                                        )}
-                                                    </div>
-                                                )}
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Phone</label>
