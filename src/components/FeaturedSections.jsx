@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
-import { Calendar, ChevronLeft, ChevronRight, ChevronDown, Play, PlayCircle, Trophy, GitBranch, Users, X, MapPin, Shield, ArrowRight } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, ChevronDown, Play, PlayCircle, Trophy, GitBranch, Users, X, MapPin, Shield, ArrowRight, BarChart2, Search, User, HelpCircle } from 'lucide-react';
 import VideoModal, { getYoutubeEmbedUrl } from './VideoModal';
 import { getEventImage, getDefaultEventBackground } from '../utils/imageUtils';
 import CommunityCtaBanner from './CommunityCtaBanner';
@@ -107,7 +107,7 @@ const featuredDataTemplate = [
     },
     {
         id: 'recent-results',
-        title: 'Recent Featured Results',
+        title: 'Recent Results',
         highlight: 'Results',
         description: 'Relive the highlights and unbelievable moments from last weekend\'s finals. Upsets, brilliant plays, and unmatched sportsmanship on display.',
         cardLabel: 'Tournament Champions',
@@ -968,6 +968,69 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     );
 };
 
+const HOME_QUICK_LINKS = [
+    { label: 'Player Rankings', href: '/rankings', icon: BarChart2 },
+    { label: 'Find Tournaments', href: '/calendar', icon: Search },
+    { label: 'My Profile', href: '/profile', icon: User },
+    { label: 'Help & Support', href: '/contact', icon: HelpCircle },
+];
+
+const HomeQuickLinks = () => {
+    const navigate = useNavigate();
+    const [open, setOpen] = useState(true);
+
+    return (
+        <section className={`relative border-t border-white/5 bg-[#000000] ${open ? 'pt-3 pb-3 lg:pt-4 lg:pb-4' : 'py-2 lg:py-3'}`}>
+            <div className="w-full max-w-[1500px] mx-auto px-4 md:px-8">
+                <button
+                    type="button"
+                    onClick={() => setOpen((v) => !v)}
+                    aria-expanded={open}
+                    className={`flex w-full items-center justify-between px-1 text-left group ${open ? 'mb-3' : 'mb-0'}`}
+                >
+                    <h2 className="text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest text-white/80">
+                        Quick Links
+                    </h2>
+                    <ChevronDown
+                        size={16}
+                        className={`text-white/50 shrink-0 transition-transform duration-300 group-hover:text-white/70 ${open ? '' : '-rotate-90'}`}
+                    />
+                </button>
+
+                <AnimatePresence initial={false}>
+                    {open && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden"
+                        >
+                            <div className="rounded-2xl bg-[#141414] border border-white/10 overflow-hidden divide-y divide-white/10">
+                                {HOME_QUICK_LINKS.map((link) => {
+                                    const Icon = link.icon;
+                                    return (
+                                        <button
+                                            key={link.href}
+                                            type="button"
+                                            onClick={() => navigate(link.href)}
+                                            className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left hover:bg-white/[0.04] transition-colors group"
+                                        >
+                                            <Icon className="w-[18px] h-[18px] text-white/50 shrink-0" strokeWidth={1.75} />
+                                            <span className="flex-1 text-sm font-medium text-white">{link.label}</span>
+                                            <ChevronRight className="w-4 h-4 text-white/35 group-hover:text-white/60 transition-colors" />
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+        </section>
+    );
+};
+
 const pad2 = (n) => String(n).padStart(2, '0');
 
 /** Live countdown for featured event registration opens/closes */
@@ -1589,15 +1652,17 @@ const FeaturedSections = ({ session = null }) => {
             {loggedOutCta}
             <FeaturedTournamentHero events={featuredTournaments} session={session} />
             {sections.map((section, index) => (
-                <FeaturedSectionBlock
-                    key={section.id}
-                    data={section}
-                    index={index}
-                    liveTournaments={section.id === 'recent-results' ? liveTournaments : null}
-                    featuredTournaments={null}
-                    liveFeaturedTournaments={section.id === 'featured-live' ? liveFeaturedTournaments : null}
-                    onWatchLive={openVideoModal}
-                />
+                <React.Fragment key={section.id}>
+                    <FeaturedSectionBlock
+                        data={section}
+                        index={index}
+                        liveTournaments={section.id === 'recent-results' ? liveTournaments : null}
+                        featuredTournaments={null}
+                        liveFeaturedTournaments={section.id === 'featured-live' ? liveFeaturedTournaments : null}
+                        onWatchLive={openVideoModal}
+                    />
+                    {section.id === 'recent-results' && <HomeQuickLinks />}
+                </React.Fragment>
             ))}
             <VideoModal
                 isOpen={videoModal.isOpen}
