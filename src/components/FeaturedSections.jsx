@@ -3,10 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
-import { Calendar, ChevronLeft, ChevronRight, Play, PlayCircle, Trophy, GitBranch, Users, X, MapPin, Shield, ArrowRight } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, ChevronDown, Play, PlayCircle, Trophy, GitBranch, Users, X, MapPin, Shield, ArrowRight } from 'lucide-react';
 import VideoModal, { getYoutubeEmbedUrl } from './VideoModal';
-import { getEventImage } from '../utils/imageUtils';
-import featuredBg from '../assets/featuredbg.jpeg';
+import { getEventImage, getDefaultEventBackground } from '../utils/imageUtils';
 import CommunityCtaBanner from './CommunityCtaBanner';
 
 const getStatusColors = (status) => {
@@ -18,7 +17,8 @@ const getStatusColors = (status) => {
         hover: 'hover:border-[#F40020]',
         glow: 'shadow-[#F40020]/20',
         solid: 'bg-[#F40020]',
-        solidText: 'text-white'
+        solidText: 'text-white',
+        fill: '#F40020',
     };
     if (s.includes('major')) return {
         text: 'text-red-500',
@@ -27,7 +27,8 @@ const getStatusColors = (status) => {
         hover: 'hover:border-red-500',
         glow: 'shadow-red-500/20',
         solid: 'bg-red-600',
-        solidText: 'text-white'
+        solidText: 'text-white',
+        fill: '#DC2626',
     };
     if (s.includes('super gold') || s === 's gold') return {
         text: 'text-amber-500',
@@ -36,7 +37,8 @@ const getStatusColors = (status) => {
         hover: 'hover:border-amber-500',
         glow: 'shadow-amber-500/20',
         solid: 'bg-amber-500',
-        solidText: 'text-black'
+        solidText: 'text-black',
+        fill: '#F59E0B',
     };
     if (s.includes('gold')) return {
         text: 'text-yellow-400',
@@ -45,7 +47,8 @@ const getStatusColors = (status) => {
         hover: 'hover:border-yellow-400',
         glow: 'shadow-yellow-400/20',
         solid: 'bg-yellow-400',
-        solidText: 'text-black'
+        solidText: 'text-black',
+        fill: '#EAB308',
     };
     if (s.includes('silver')) return {
         text: 'text-gray-400',
@@ -54,7 +57,8 @@ const getStatusColors = (status) => {
         hover: 'hover:border-gray-400',
         glow: 'shadow-gray-400/20',
         solid: 'bg-gray-400',
-        solidText: 'text-black'
+        solidText: 'text-black',
+        fill: '#9CA3AF',
     };
     if (s.includes('bronze')) return {
         text: 'text-orange-700',
@@ -63,7 +67,8 @@ const getStatusColors = (status) => {
         hover: 'hover:border-orange-700',
         glow: 'shadow-orange-700/20',
         solid: 'bg-orange-700',
-        solidText: 'text-white'
+        solidText: 'text-white',
+        fill: '#C2410C',
     };
     if (s.includes('fip')) return {
         text: 'text-blue-500',
@@ -72,7 +77,8 @@ const getStatusColors = (status) => {
         hover: 'hover:border-blue-500',
         glow: 'shadow-blue-500/20',
         solid: 'bg-blue-500',
-        solidText: 'text-white'
+        solidText: 'text-white',
+        fill: '#2563EB',
     };
     return {
         text: 'text-padel-green',
@@ -81,7 +87,8 @@ const getStatusColors = (status) => {
         hover: 'hover:border-padel-green',
         glow: 'shadow-padel-green/20',
         solid: 'bg-padel-green',
-        solidText: 'text-black'
+        solidText: 'text-black',
+        fill: '#CCFF00',
     };
 };
 
@@ -961,67 +968,404 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     );
 };
 
-// Standalone "Featured Tournament" hero card — sits above Recent Featured Results.
-// Background is always the featuredbg photo; the event's own uploaded poster (if any)
-// is shown as a distinct insert on the right, not as the background.
-const FeaturedTournamentHero = ({ event }) => {
-    const navigate = useNavigate();
+const pad2 = (n) => String(n).padStart(2, '0');
 
-    if (!event) return null;
+/** Live countdown for featured event registration opens/closes */
+const FeaturedRegCountdown = ({ opensAt, closesAt, accent = '#EAB308' }) => {
+    const [now, setNow] = useState(() => Date.now());
 
-    const statusColors = getStatusColors(event.sapa_status || event.tournament_tag);
-    const dateLabel = formatTournamentDate(event.start_date, event.end_date);
-    const location = [event.venue || event.clubName, event.city].filter(Boolean).join(', ');
-    const locationWords = location.split(' ');
-    const locationShort = locationWords.length > 3 ? `${locationWords.slice(0, 3).join(' ')}…` : location;
-    const posterImage = event.image || event.custom_image_url;
-    const linkPath = `/calendar/${event.slug || event.id}`;
+    useEffect(() => {
+        const id = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(id);
+    }, []);
+
+    const opens = opensAt ? new Date(opensAt) : null;
+    const closes = closesAt ? new Date(closesAt) : null;
+    const opensValid = opens && !Number.isNaN(opens.getTime());
+    const closesValid = closes && !Number.isNaN(closes.getTime());
+
+    let mode = null;
+    let target = null;
+    if (opensValid && opens.getTime() > now) {
+        mode = 'opens';
+        target = opens;
+    } else if (closesValid && closes.getTime() > now) {
+        mode = 'closes';
+        target = closes;
+    }
+    if (!mode || !target) return null;
+
+    const diff = Math.max(0, target.getTime() - now);
+    const parts = {
+        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+        mins: Math.floor((diff / (1000 * 60)) % 60),
+        secs: Math.floor((diff / 1000) % 60),
+    };
+    const label = mode === 'opens' ? 'Registration opens in' : 'Registration closes in';
 
     return (
-        <section className="relative pt-4 pb-3 lg:pt-5 lg:pb-4 border-t border-white/5 bg-[#000000]">
-            <div className="w-full max-w-[1500px] mx-auto px-4 md:px-8 relative z-10">
-                <h2 className="text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest truncate text-white/80 mb-3">
-                    Event Spotlight
-                </h2>
+        <div
+            className="relative w-fit max-w-full rounded-lg border px-2.5 pt-2.5 pb-1.5"
+            style={{ borderColor: `${accent}80` }}
+        >
+            <span
+                className="absolute -top-1.5 left-2 px-1 text-[8px] font-bold uppercase tracking-wider bg-[#0a0a0a]"
+                style={{ color: accent }}
+            >
+                {label}
+            </span>
+            <div className="flex items-end gap-1.5 sm:gap-2">
+                {[
+                    { value: pad2(parts.days), unit: 'DAYS' },
+                    { value: pad2(parts.hours), unit: 'HRS' },
+                    { value: pad2(parts.mins), unit: 'MINS' },
+                    { value: pad2(parts.secs), unit: 'SECS' },
+                ].map(({ value, unit }, i) => (
+                    <React.Fragment key={unit}>
+                        {i > 0 && <span className="text-white/40 font-bold text-xs sm:text-sm pb-2">:</span>}
+                        <div className="text-center min-w-[1.6rem]">
+                            <p className="text-sm sm:text-base font-black text-white leading-none tabular-nums">{value}</p>
+                            <p className="text-[7px] font-bold text-white/50 tracking-wider mt-0.5">{unit}</p>
+                        </div>
+                    </React.Fragment>
+                ))}
+            </div>
+        </div>
+    );
+};
 
-                <div
-                    onClick={() => navigate(linkPath)}
-                    className="relative w-full min-h-[170px] sm:min-h-[200px] md:min-h-[260px] rounded-[28px] overflow-hidden cursor-pointer group border border-white/10"
-                >
-                    {/* Background is always the ambient default photo — the poster (if any) is its own insert graphic below */}
-                    <img src={featuredBg} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/70 to-black/20" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
+const FeaturedEventSlide = ({ event, cta, onCta }) => {
+    const navigate = useNavigate();
+    const statusColors = getStatusColors(event.sapa_status || event.tournament_tag);
+    const accent = statusColors.fill || '#EAB308';
+    const dateLabel = formatTournamentDate(event.start_date, event.end_date);
+    const city = event.city || '';
+    const badgeText = (event.organizer_badge_text || '').trim()
+        || (event.sapa_status && event.sapa_status !== 'None'
+            ? `SAPA ${event.sapa_status}${event.points ? ` ${event.points}` : ''}`
+            : '');
+    const linkPath = `/calendar/${event.slug || event.id}`;
+    const bgUrl = getDefaultEventBackground(event);
 
-                    <div className="relative z-10 flex flex-col h-full p-5 sm:p-6 md:p-8 justify-center max-w-[58%] sm:max-w-md">
+    return (
+        <div
+            className="relative w-full rounded-2xl overflow-hidden border snap-center shrink-0 min-h-[190px] md:min-h-[220px] lg:min-h-[240px]"
+            style={{ borderColor: `${accent}66` }}
+        >
+            <img
+                src={bgUrl}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover object-[center_35%] md:object-[82%_28%] saturate-[1.35] contrast-[1.3] brightness-[1.2]"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/85 to-black/40 md:from-black md:via-black/75 md:to-black/15" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/15" />
+
+            <div className="relative z-10 flex flex-col justify-between min-h-[190px] md:min-h-[220px] lg:min-h-[240px] p-3.5 sm:p-4 md:p-5 lg:p-6 md:pr-28 lg:pr-32">
+                <div className="md:max-w-[55%] lg:max-w-[48%]">
+                    <div className="flex items-start justify-between gap-2 mb-1.5 md:mb-2 md:justify-start">
                         {(event.sapa_status || event.tournament_tag) && (
-                            <span className={`inline-flex w-fit px-3 py-1 rounded-full border ${statusColors.border} ${statusColors.text} bg-transparent text-[10px] font-black uppercase tracking-widest mb-4`}>
+                            <span
+                                className="inline-flex w-fit px-2 py-0.5 rounded-full border text-[8px] sm:text-[9px] font-black uppercase tracking-widest bg-black/40"
+                                style={{ color: accent, borderColor: accent }}
+                            >
                                 {event.sapa_status || event.tournament_tag}
                             </span>
                         )}
-                        <h3 className="text-base sm:text-lg md:text-2xl font-bold text-white mb-3 uppercase tracking-tight leading-tight line-clamp-2">
-                            {event.event_name}
-                        </h3>
-                        {dateLabel && (
-                            <div className="flex items-center gap-2 text-padel-green font-bold text-xs sm:text-sm md:text-base mb-2">
-                                <Calendar className="w-4 h-4 shrink-0" /> {dateLabel}
-                            </div>
-                        )}
-                        {location && (
-                            <div className="flex items-center gap-2 text-white/60 text-[11px] sm:text-xs md:text-sm truncate">
-                                <MapPin className="w-4 h-4 shrink-0" />
-                                <span className="truncate sm:hidden">{locationShort}</span>
-                                <span className="hidden sm:inline truncate">{location}</span>
-                            </div>
+                        {badgeText && (
+                            <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-wide text-right md:text-left shrink-0 md:hidden">
+                                {badgeText.split(/\s+/).map((word, i) => {
+                                    const isTier = /^(gold|silver|bronze|major|super)$/i.test(word);
+                                    return (
+                                        <span key={`${word}-${i}`} className={isTier ? '' : 'text-white'} style={isTier ? { color: accent } : undefined}>
+                                            {i > 0 ? ' ' : ''}{word}
+                                        </span>
+                                    );
+                                })}
+                            </p>
                         )}
                     </div>
 
-                    {posterImage && (
-                        <div className="absolute right-3 sm:right-6 md:right-10 top-1/2 -translate-y-1/2 w-24 sm:w-36 md:w-52 aspect-[4/5] rounded-xl overflow-hidden shadow-2xl border border-white/10 group-hover:scale-105 transition-transform duration-500">
-                            <img src={posterImage} alt={event.event_name} className="w-full h-full object-cover" />
-                        </div>
+                    {badgeText && (
+                        <p className="hidden md:block text-[10px] font-black uppercase tracking-wide mb-1.5">
+                            {badgeText.split(/\s+/).map((word, i) => {
+                                const isTier = /^(gold|silver|bronze|major|super)$/i.test(word);
+                                return (
+                                    <span key={`${word}-${i}`} className={isTier ? '' : 'text-white'} style={isTier ? { color: accent } : undefined}>
+                                        {i > 0 ? ' ' : ''}{word}
+                                    </span>
+                                );
+                            })}
+                        </p>
+                    )}
+
+                    <button
+                        type="button"
+                        onClick={() => navigate(linkPath)}
+                        className="text-left"
+                    >
+                        <h3 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-white uppercase tracking-tight leading-snug line-clamp-2 mb-1.5 md:mb-2">
+                            {event.event_name}
+                        </h3>
+                    </button>
+
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2.5 md:mb-3">
+                        {dateLabel && (
+                            <div className="flex items-center gap-1 text-[11px] sm:text-xs font-bold uppercase" style={{ color: accent }}>
+                                <Calendar className="w-3 h-3 shrink-0" /> {dateLabel}
+                            </div>
+                        )}
+                        {city && (
+                            <div className="flex items-center gap-1 text-[11px] sm:text-xs font-bold uppercase" style={{ color: accent }}>
+                                <MapPin className="w-3 h-3 shrink-0" /> {city}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap items-end justify-between gap-2.5 mt-1 md:mt-0 md:max-w-[55%] lg:max-w-[48%]">
+                    <FeaturedRegCountdown
+                        opensAt={event.registration_opens_at}
+                        closesAt={event.registration_closes_at}
+                        accent={accent}
+                    />
+                    {cta && (
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onCta?.(cta, event);
+                            }}
+                            disabled={cta.disabled}
+                            className={`shrink-0 inline-flex items-center gap-1 px-3.5 py-1.5 md:px-5 md:py-2.5 rounded-full text-[10px] sm:text-[11px] md:text-xs font-black uppercase tracking-wide transition-all md:absolute md:right-5 md:bottom-5 lg:right-6 lg:bottom-6 ${
+                                cta.disabled
+                                    ? 'bg-white/10 text-white/50 cursor-not-allowed border border-white/15'
+                                    : 'bg-padel-green text-black hover:brightness-110'
+                            }`}
+                        >
+                            {cta.label} {!cta.disabled && <ArrowRight className="w-3 h-3" />}
+                        </button>
                     )}
                 </div>
+            </div>
+        </div>
+    );
+};
+
+// Featured Events accordion + slider — uses SAPA tier default B&W heroes,
+// registration countdown, and profile-aware Register / Pay CTAs.
+const FeaturedTournamentHero = ({ events = [], session = null }) => {
+    const navigate = useNavigate();
+    const [featuredOpen, setFeaturedOpen] = useState(true);
+    const [activeIndex, setActiveIndex] = useState(0);
+    const [ctaByEventId, setCtaByEventId] = useState({});
+    const sliderRef = useRef(null);
+
+    const list = Array.isArray(events) ? events.filter(Boolean) : [];
+    const eventKey = list.map((e) => e.id).join(',');
+
+    useEffect(() => {
+        setActiveIndex(0);
+        if (sliderRef.current) sliderRef.current.scrollLeft = 0;
+    }, [eventKey]);
+
+    // Resolve Register / Pay CTA per featured event for the logged-in user
+    useEffect(() => {
+        let cancelled = false;
+        const resolveCtas = async () => {
+            if (!list.length) {
+                setCtaByEventId({});
+                return;
+            }
+
+            const email = session?.user
+                ? (sessionStorage.getItem('admin_test_login_email') || session.user.email)
+                : null;
+            const next = {};
+
+            if (!email) {
+                list.forEach((ev) => {
+                    const notOpen = ev.registration_opens_at && new Date(ev.registration_opens_at) > new Date();
+                    const closed = ev.registration_closes_at && new Date(ev.registration_closes_at) <= new Date();
+                    next[ev.id] = notOpen || closed
+                        ? { label: 'View', action: 'view' }
+                        : { label: 'Register', action: 'register' };
+                });
+                if (!cancelled) setCtaByEventId(next);
+                return;
+            }
+
+            const ids = list.map((e) => e.id);
+            const [{ data: regs }, { data: unpaidParts }] = await Promise.all([
+                supabase
+                    .from('event_registrations')
+                    .select('event_id, email, partner_email, payment_status, partner_payment_status, status')
+                    .in('event_id', ids)
+                    .or(`email.ilike.${email},partner_email.ilike.${email}`)
+                    .neq('status', 'withdrawn'),
+                supabase
+                    .from('tournament_participants')
+                    .select('event_id, is_paid, email')
+                    .in('event_id', ids)
+                    .ilike('email', email)
+                    .neq('is_paid', true),
+            ]);
+
+            const emailLc = email.toLowerCase();
+            list.forEach((ev) => {
+                const notOpen = ev.registration_opens_at && new Date(ev.registration_opens_at) > new Date();
+                const closed = ev.registration_closes_at && new Date(ev.registration_closes_at) <= new Date();
+                const myRegs = (regs || []).filter((r) => r.event_id === ev.id);
+                const needsPayFromReg = myRegs.some((r) => {
+                    const isRegistrant = (r.email || '').toLowerCase() === emailLc;
+                    const isPartner = (r.partner_email || '').toLowerCase() === emailLc;
+                    return (isRegistrant && ['pending', 'failed'].includes(r.payment_status))
+                        || (isPartner && ['pending', 'failed'].includes(r.partner_payment_status));
+                });
+                const needsPayFromPart = (unpaidParts || []).some((p) => p.event_id === ev.id);
+                const isRegistered = myRegs.length > 0;
+                const allPaid = isRegistered && myRegs.every((r) => {
+                    const isRegistrant = (r.email || '').toLowerCase() === emailLc;
+                    const isPartner = (r.partner_email || '').toLowerCase() === emailLc;
+                    if (isRegistrant) return r.payment_status === 'paid';
+                    if (isPartner) return r.partner_payment_status === 'paid';
+                    return true;
+                });
+
+                if (needsPayFromReg || needsPayFromPart) {
+                    next[ev.id] = { label: 'Pay', action: 'pay' };
+                } else if (isRegistered && allPaid) {
+                    next[ev.id] = { label: 'View', action: 'view' };
+                } else if (notOpen) {
+                    next[ev.id] = { label: 'View', action: 'view' };
+                } else if (closed) {
+                    next[ev.id] = { label: 'View', action: 'view' };
+                } else {
+                    next[ev.id] = { label: 'Register', action: 'register' };
+                }
+            });
+
+            if (!cancelled) setCtaByEventId(next);
+        };
+
+        resolveCtas();
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [eventKey, session?.user?.email]);
+
+    if (!list.length) return null;
+
+    const scrollToIndex = (idx) => {
+        const el = sliderRef.current;
+        if (!el) return;
+        const clamped = Math.max(0, Math.min(list.length - 1, idx));
+        const child = el.children[clamped];
+        if (child) {
+            child.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }
+        setActiveIndex(clamped);
+    };
+
+    const handleScroll = () => {
+        const el = sliderRef.current;
+        if (!el || !el.children.length) return;
+        const center = el.scrollLeft + el.clientWidth / 2;
+        let best = 0;
+        let bestDist = Infinity;
+        Array.from(el.children).forEach((child, i) => {
+            const mid = child.offsetLeft + child.offsetWidth / 2;
+            const dist = Math.abs(mid - center);
+            if (dist < bestDist) {
+                bestDist = dist;
+                best = i;
+            }
+        });
+        setActiveIndex(best);
+    };
+
+    const handleCta = (cta, event) => {
+        const path = `/calendar/${event.slug || event.id}`;
+        navigate(path);
+    };
+
+    return (
+        <section className={`relative pt-4 lg:pt-5 border-t border-white/5 bg-[#000000] ${featuredOpen ? 'pb-3 lg:pb-4' : 'pb-2 lg:pb-3'}`}>
+            <div className="w-full max-w-[1500px] mx-auto px-4 md:px-8 relative z-10">
+                <button
+                    type="button"
+                    onClick={() => setFeaturedOpen((open) => !open)}
+                    aria-expanded={featuredOpen}
+                    className={`flex w-full items-center justify-between px-1 text-left group ${featuredOpen ? 'mb-3' : 'mb-0'}`}
+                >
+                    <h2 className="text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest truncate text-white/80">
+                        Featured Events
+                    </h2>
+                    <ChevronDown
+                        size={16}
+                        className={`text-white/50 shrink-0 transition-transform duration-300 group-hover:text-white/70 ${featuredOpen ? '' : '-rotate-90'}`}
+                    />
+                </button>
+
+                <AnimatePresence initial={false}>
+                    {featuredOpen && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden"
+                        >
+                            <div className="relative w-full group/featured-slider">
+                                <div
+                                    ref={sliderRef}
+                                    onScroll={handleScroll}
+                                    className="w-full flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-none"
+                                >
+                                    {list.map((event) => (
+                                        <div key={event.id} className="w-full min-w-full">
+                                            <FeaturedEventSlide
+                                                event={event}
+                                                cta={ctaByEventId[event.id] || { label: 'Register', action: 'register' }}
+                                                onCta={handleCta}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {list.length > 1 && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={() => scrollToIndex(activeIndex - 1)}
+                                            disabled={activeIndex <= 0}
+                                            aria-label="Previous featured event"
+                                            className={`absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-all duration-300 ${
+                                                activeIndex <= 0
+                                                    ? 'opacity-30 cursor-not-allowed text-white/50'
+                                                    : 'bg-transparent text-white hover:text-padel-green cursor-pointer'
+                                            }`}
+                                        >
+                                            <ChevronLeft className="w-5 h-5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => scrollToIndex(activeIndex + 1)}
+                                            disabled={activeIndex >= list.length - 1}
+                                            aria-label="Next featured event"
+                                            className={`absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-all duration-300 ${
+                                                activeIndex >= list.length - 1
+                                                    ? 'opacity-30 cursor-not-allowed text-white/50'
+                                                    : 'bg-transparent text-white hover:text-padel-green cursor-pointer'
+                                            }`}
+                                        >
+                                            <ChevronRight className="w-5 h-5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]" />
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
         </section>
     );
@@ -1233,51 +1577,24 @@ const FeaturedSections = ({ session = null }) => {
         </section>
     ) : null;
 
-    if (liveFeaturedTournaments.length === 0) {
-        // Hide the live section if no live events are found
-        return (
-            <>
-                <div className="flex flex-col w-full">
-                    {loggedOutCta}
-                    <FeaturedTournamentHero event={featuredTournaments[0]} />
-                    {featuredData
-                        .filter(section => section.id !== 'featured-live')
-                        .filter(section => !(section.id === 'upcoming-events' && featuredTournaments.length <= 1))
-                        .map((section, index) => (
-                            <FeaturedSectionBlock
-                                key={section.id}
-                                data={section}
-                                index={index}
-                                liveTournaments={section.id === 'recent-results' ? liveTournaments : null}
-                                featuredTournaments={section.id === 'upcoming-events' ? featuredTournaments.slice(1) : null}
-                                liveFeaturedTournaments={null}
-                                onWatchLive={openVideoModal}
-                            />
-                        ))}
-                </div>
-                <VideoModal
-                    isOpen={videoModal.isOpen}
-                    onClose={closeVideoModal}
-                    videoUrl={videoModal.url}
-                    title={videoModal.title}
-                />
-            </>
-        );
-    }
+    // Featured Events slider covers all featured/spotlight events — hide the old upcoming-events block.
+    const sections = featuredData.filter((section) => {
+        if (section.id === 'upcoming-events') return false;
+        if (liveFeaturedTournaments.length === 0 && section.id === 'featured-live') return false;
+        return true;
+    });
 
     return (
         <div className="flex flex-col w-full">
             {loggedOutCta}
-            <FeaturedTournamentHero event={featuredTournaments[0]} />
-            {featuredData
-                .filter(section => !(section.id === 'upcoming-events' && featuredTournaments.length <= 1))
-                .map((section, index) => (
+            <FeaturedTournamentHero events={featuredTournaments} session={session} />
+            {sections.map((section, index) => (
                 <FeaturedSectionBlock
                     key={section.id}
                     data={section}
                     index={index}
                     liveTournaments={section.id === 'recent-results' ? liveTournaments : null}
-                    featuredTournaments={section.id === 'upcoming-events' ? featuredTournaments.slice(1) : null}
+                    featuredTournaments={null}
                     liveFeaturedTournaments={section.id === 'featured-live' ? liveFeaturedTournaments : null}
                     onWatchLive={openVideoModal}
                 />

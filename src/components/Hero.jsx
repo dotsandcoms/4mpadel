@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import heroBg from '../assets/herobg.jpeg';
 import AuthModal from './AuthModal';
 import { supabase } from '../supabaseClient';
-import { PlayCircle, Calendar, ChevronLeft, ChevronRight, ChevronDown, CheckCircle2, ExternalLink, Trophy, MapPin, Swords, Star, BarChart2, Bell } from 'lucide-react';
+import { PlayCircle, Calendar, ChevronLeft, ChevronRight, ChevronDown, CheckCircle2, ExternalLink, Trophy, MapPin, Swords, Star, BarChart2, CreditCard } from 'lucide-react';
 import VideoModal from './VideoModal';
 import { useRankedin } from '../hooks/useRankedin';
 import { usePendingPayments } from '../hooks/usePendingPayments';
@@ -69,30 +69,42 @@ const Hero = () => {
     const [pastEventSlide, setPastEventSlide] = useState(0);
     const [pastMatchSlide, setPastMatchSlide] = useState(0);
     const [scheduleOpen, setScheduleOpen] = useState(true);
+    const [pendingActionsOpen, setPendingActionsOpen] = useState(true);
     const [player, setPlayer] = useState(null);
-    const { getPlayerEventsAsync, getPlayerMatches, getPlayerProfile } = useRankedin();
+    const { getPlayerEventsAsync, getPlayerMatches, getPlayerProfile, getOrganisationRankings } = useRankedin();
 
     const scheduleEmail = session?.user
         ? (sessionStorage.getItem('admin_test_login_email') || session.user.email)
         : null;
     const { pendingPayments } = usePendingPayments(scheduleEmail);
 
-    const primaryScheduleNotification = useMemo(() => {
-        if (pendingPayments.length > 0) {
-            const payment = pendingPayments[0];
-            return {
-                label: `You have a pending payment — ${payment.name}`,
-                href: `/calendar/${payment.slug}?register=true`,
-            };
-        }
+    const pendingActions = useMemo(() => {
+        const actions = pendingPayments.map((payment) => ({
+            key: `pay_${payment.id}_${payment.division || 'N/A'}`,
+            type: 'payment',
+            title: 'Complete payment',
+            subtitle: payment.name,
+            detail: payment.amount > 0
+                ? `R${Number(payment.amount).toLocaleString('en-ZA')} outstanding`
+                : 'Payment outstanding',
+            href: `/calendar/${payment.slug}?register=true`,
+        }));
+
         if (player && !player.region) {
-            return {
-                label: 'Please complete your profile — region missing',
+            actions.push({
+                key: 'profile_region',
+                type: 'profile',
+                title: 'Complete profile',
+                subtitle: 'Region missing',
+                detail: 'Required to continue',
                 href: '/profile?edit=true',
-            };
+            });
         }
-        return null;
+
+        return actions;
     }, [pendingPayments, player]);
+
+    const hasPendingActions = pendingActions.length > 0;
 
     const hasScheduleContent = upcomingEvents.length > 0
         || pastEvents.length > 0
@@ -535,25 +547,56 @@ const Hero = () => {
         // Respect admin impersonation so the greeting/stats reflect the impersonated user, not the admin
         const impersonationEmail = sessionStorage.getItem('admin_test_login_email');
         const email = impersonationEmail || session.user.email;
-        const CACHE_KEY = `hero_player_stats_${email}`;
+        const CACHE_KEY = `hero_player_stats_v2_${email}`;
+        let cancelled = false;
 
         try {
             const cached = localStorage.getItem(CACHE_KEY);
             if (cached) setPlayer(JSON.parse(cached));
         } catch (_) { }
 
+        const resolveRankingChange = async (playerData) => {
+            if (!playerData?.rankedin_id) return null;
+            if (!playerData.rank_label || playerData.rank_label === 'Unranked') return null;
+
+            const isWoman = /women|ladies|female/i.test(playerData.category || '');
+            const lists = isWoman
+                ? [{ rankingType: 4, ageGroup: 83 }, { rankingType: 3, ageGroup: 82 }]
+                : [{ rankingType: 3, ageGroup: 82 }, { rankingType: 4, ageGroup: 83 }];
+            const rankNum = parseInt(playerData.rank_label, 10);
+            const take = Number.isFinite(rankNum) ? Math.min(1000, Math.max(50, rankNum + 25)) : 200;
+            const rid = String(playerData.rankedin_id);
+            const nameKey = (playerData.name || '').trim().toLowerCase();
+
+            for (const list of lists) {
+                try {
+                    const rows = await getOrganisationRankings(list.rankingType, list.ageGroup, take, 15809);
+                    const hit = (rows || []).find((r) => String(r.RankedinId) === rid)
+                        || (rows || []).find((r) => (r.Name || '').trim().toLowerCase() === nameKey);
+                    if (hit && hit.StandingDiff !== undefined && hit.StandingDiff !== null) {
+                        return Number(hit.StandingDiff) || 0;
+                    }
+                } catch (_) { /* try next list */ }
+            }
+            return null;
+        };
+
         supabase
             .from('players')
-            .select('name, rank_label, points, region')
+            .select('name, rank_label, points, region, rankedin_id, category')
             .ilike('email', email)
             .maybeSingle()
-            .then(({ data, error }) => {
-                if (data && !error) {
-                    setPlayer(data);
-                    try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch (_) { }
-                }
+            .then(async ({ data, error }) => {
+                if (!data || error || cancelled) return;
+                const rankingChange = await resolveRankingChange(data);
+                if (cancelled) return;
+                const next = { ...data, rankingChange };
+                setPlayer(next);
+                try { localStorage.setItem(CACHE_KEY, JSON.stringify(next)); } catch (_) { }
             });
-    }, [session]);
+
+        return () => { cancelled = true; };
+    }, [session, getOrganisationRankings]);
 
     useEffect(() => {
         setPastEventSlide(0);
@@ -985,6 +1028,21 @@ const Hero = () => {
                                     <p className="text-white font-black text-base leading-none">
                                         {player.rank_label && player.rank_label !== 'Unranked' ? `#${player.rank_label}` : '—'}
                                     </p>
+                                    {typeof player.rankingChange === 'number' && (
+                                        <span
+                                            className={`inline-flex items-center gap-0.5 text-[10px] font-black leading-none ${
+                                                player.rankingChange > 0
+                                                    ? 'text-padel-green'
+                                                    : player.rankingChange < 0
+                                                        ? 'text-red-500'
+                                                        : 'text-gray-500'
+                                            }`}
+                                        >
+                                            {player.rankingChange > 0 && <>▲ {player.rankingChange}</>}
+                                            {player.rankingChange < 0 && <>▼ {Math.abs(player.rankingChange)}</>}
+                                            {player.rankingChange === 0 && <>-</>}
+                                        </span>
+                                    )}
                                     <p className="text-white/40 text-[8px] font-medium leading-none truncate">National Ranking</p>
                                 </div>
                                 <div className="flex flex-col items-center text-center gap-1 px-3 py-3">
@@ -1055,10 +1113,10 @@ const Hero = () => {
                     )}
                 </motion.div>
 
-                <div className={`relative z-30 px-4 w-full lg:px-8 flex flex-col container mx-auto ${session ? (scheduleOpen ? 'gap-2 pb-0' : 'pb-2') : 'pb-0'}`}>
+                <div className={`relative z-30 px-4 w-full lg:px-8 flex flex-col container mx-auto ${session ? ((scheduleOpen || pendingActionsOpen) ? 'gap-2 pb-0' : 'pb-2') : 'pb-0'}`}>
 
                     <AnimatePresence>
-                        {session && (hasScheduleContent || primaryScheduleNotification) && (
+                        {session && (hasScheduleContent || hasPendingActions) && (
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -1066,15 +1124,56 @@ const Hero = () => {
                                 transition={{ delay: 1.1, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                                 className="w-full"
                             >
-                                {primaryScheduleNotification && (
-                                    <a
-                                        href={primaryScheduleNotification.href}
-                                        className="flex items-center gap-2.5 px-3 py-2.5 mb-3 rounded-xl bg-rose-500/10 !text-rose-600 hover:!text-rose-500 hover:bg-rose-500/15 transition-colors group"
-                                    >
-                                        <Bell size={16} className="shrink-0 !text-rose-600 group-hover:animate-pulse" />
-                                        <span className="text-sm font-semibold truncate !text-rose-600">{primaryScheduleNotification.label}</span>
-                                        <ChevronRight size={14} className="shrink-0 !text-rose-600 opacity-80" />
-                                    </a>
+                                {hasPendingActions && (
+                                <div className={hasScheduleContent ? (pendingActionsOpen ? 'mb-5' : 'mb-4') : ''}>
+                                <button
+                                    type="button"
+                                    onClick={() => setPendingActionsOpen((open) => !open)}
+                                    aria-expanded={pendingActionsOpen}
+                                    className={`flex w-full items-center justify-between px-1 text-left group ${pendingActionsOpen ? 'mb-3' : 'mb-0'}`}
+                                >
+                                    <h2 className="text-white/80 font-bold text-xs uppercase tracking-[0.2em]">Pending Actions</h2>
+                                    <ChevronDown
+                                        size={16}
+                                        className={`text-white/50 shrink-0 transition-transform duration-300 group-hover:text-white/70 ${pendingActionsOpen ? '' : '-rotate-90'}`}
+                                    />
+                                </button>
+                                <AnimatePresence initial={false}>
+                                {pendingActionsOpen && (
+                                <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="overflow-hidden"
+                                >
+                                    <div className="space-y-2">
+                                        {pendingActions.map((action) => (
+                                            <a
+                                                key={action.key}
+                                                href={action.href}
+                                                className="flex items-center gap-3 px-3.5 py-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/[0.08] transition-colors group"
+                                            >
+                                                <div className="w-9 h-9 rounded-full border border-padel-green/50 bg-padel-green/10 flex items-center justify-center shrink-0">
+                                                    {action.type === 'payment' ? (
+                                                        <CreditCard size={16} className="text-padel-green" strokeWidth={2} />
+                                                    ) : (
+                                                        <MapPin size={16} className="text-padel-green" strokeWidth={2} />
+                                                    )}
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm font-bold text-white leading-tight truncate">{action.title}</p>
+                                                    <p className="text-xs text-white/50 font-medium truncate mt-0.5">{action.subtitle}</p>
+                                                    <p className="text-xs font-bold text-padel-green truncate mt-0.5">{action.detail}</p>
+                                                </div>
+                                                <ChevronRight size={16} className="shrink-0 text-padel-green opacity-80 group-hover:translate-x-0.5 transition-transform" />
+                                            </a>
+                                        ))}
+                                    </div>
+                                </motion.div>
+                                )}
+                                </AnimatePresence>
+                                </div>
                                 )}
                                 {hasScheduleContent && (
                                 <>

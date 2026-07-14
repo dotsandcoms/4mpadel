@@ -93,6 +93,18 @@ export const usePendingPayments = (email) => {
                 if (pError) console.error("Error fetching participants:", pError);
                 if (rError) console.error("Error fetching registrations:", rError);
 
+                const resolveAmount = (cal, division) => {
+                    const fees = cal.category_fees;
+                    if (fees && typeof fees === 'object' && division) {
+                        const direct = fees[division];
+                        if (direct != null && direct !== '') return Number(direct) || 0;
+                        const normDiv = normalizeDivision(division);
+                        const matchedKey = Object.keys(fees).find((k) => normalizeDivision(k) === normDiv);
+                        if (matchedKey != null && fees[matchedKey] !== '') return Number(fees[matchedKey]) || 0;
+                    }
+                    return Number(cal.entry_fee) || 0;
+                };
+
                 const processEvent = (record) => {
                     if (!record.calendar) return;
                     const cal = record.calendar;
@@ -107,7 +119,8 @@ export const usePendingPayments = (email) => {
                             name: cal.event_name,
                             division: division,
                             slug: cal.slug || cal.id,
-                            start_date: cal.start_date
+                            start_date: cal.start_date,
+                            amount: resolveAmount(cal, division),
                         });
                     }
                 };
