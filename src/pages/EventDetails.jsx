@@ -193,8 +193,8 @@ const RegistrationCountdown = ({
     const showCta = Boolean(ctaLabel) && !ctaDisabled;
 
     return (
-        <div className="mt-2 rounded-2xl border border-white/10 bg-black/30 backdrop-blur-sm pl-3 pr-3.5 py-3 sm:px-4 sm:py-4 flex items-center gap-2.5 sm:gap-4">
-            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 shrink-0">
+        <div className="mt-2 rounded-2xl border border-white/10 bg-black/30 backdrop-blur-sm pl-3 pr-4 py-3 sm:pl-4 sm:pr-5 sm:py-4 flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink">
                 <div
                     className="w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center shrink-0 border"
                     style={{ backgroundColor: `${accentColor}20`, borderColor: `${accentColor}40` }}
@@ -212,16 +212,16 @@ const RegistrationCountdown = ({
                 </div>
             </div>
 
-            <div className={`flex items-center gap-2 sm:gap-3 min-w-0 ${showCta ? 'ml-auto' : 'flex-1 justify-end'}`}>
+            <div className={`flex items-center gap-2 sm:gap-3 min-w-0 ${showCta ? 'ml-auto shrink-0' : 'flex-1 justify-end'}`}>
                 {!isClosed && (
-                    <div className={`flex items-center gap-2 sm:gap-3 ${showCta ? 'shrink-0' : 'flex-1 justify-evenly max-w-xs sm:max-w-sm ml-auto'}`}>
+                    <div className={`flex items-center gap-1.5 sm:gap-3 ${showCta ? 'shrink-0' : 'flex-1 justify-evenly max-w-xs sm:max-w-sm ml-auto'}`}>
                         {[
                             { value: pad(parts.days), label: 'DAYS' },
                             { value: pad(parts.hours), label: 'HRS' },
                             { value: pad(parts.mins), label: 'MINS' },
                             { value: pad(parts.secs), label: 'SECS' },
                         ].map(({ value, label: unitLabel }) => (
-                            <div key={unitLabel} className="text-center min-w-[1.75rem] sm:min-w-[2rem]">
+                            <div key={unitLabel} className="text-center min-w-[1.5rem] sm:min-w-[2rem]">
                                 <p className="text-base sm:text-lg font-bold text-white leading-none tabular-nums">{value}</p>
                                 <p className="text-[8px] sm:text-[9px] font-bold text-white/50 tracking-wider mt-0.5">{unitLabel}</p>
                             </div>
@@ -233,11 +233,13 @@ const RegistrationCountdown = ({
                         type="button"
                         onClick={onCtaClick}
                         className="relative overflow-hidden shrink-0 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-wide border transition-all hover:brightness-110"
-                        style={ctaStyle || {
-                            background: `linear-gradient(145deg, color-mix(in srgb, ${accentColor} 68%, white 32%) 0%, ${accentColor} 50%, color-mix(in srgb, ${accentColor} 82%, black 18%) 100%)`,
-                            borderColor: accentColor,
-                            color: '#ffffff',
-                            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.28), 0 2px 12px color-mix(in srgb, ${accentColor} 40%, transparent)`,
+                        style={{
+                            ...(ctaStyle || {
+                                background: `linear-gradient(145deg, color-mix(in srgb, ${accentColor} 68%, white 32%) 0%, ${accentColor} 50%, color-mix(in srgb, ${accentColor} 82%, black 18%) 100%)`,
+                                borderColor: accentColor,
+                                color: '#ffffff',
+                            }),
+                            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.28), 0 1px 6px color-mix(in srgb, ${accentColor} 35%, transparent)`,
                         }}
                     >
                         <span className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/22 via-white/6 to-transparent rounded-full" />
