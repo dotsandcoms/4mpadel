@@ -346,41 +346,25 @@ const formatPrizeAmount = (amount) => {
     return `R ${raw}`;
 };
 
-const EventHeroBranding = ({ event, theme, variant = 'hero', centered = false, dateLabel = null, locationLabel = null }) => {
+const EventHeroBranding = ({ event, theme, variant = 'hero', title = null, centered = false, dateLabel = null, locationLabel = null }) => {
     const badgeText = event?.organizer_badge_text?.trim()
         || (event?.sapa_status && event.sapa_status !== 'None'
             ? `SAPA ${event.sapa_status}${event?.points ? ` ${event.points}` : ''}`.trim()
             : '');
     const showSapaBranding = Boolean(badgeText);
     const dateRow = dateLabel ? (
-        <div className="flex items-center gap-1.5 text-white/90 text-sm font-normal shrink-0">
-            <CalendarIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/70 shrink-0" />
+        <div className="flex items-center gap-1 sm:gap-1.5 text-white/90 text-xs sm:text-sm font-normal shrink-0">
+            <CalendarIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" style={{ color: theme.fill }} />
             <span className="whitespace-nowrap">{dateLabel}</span>
         </div>
     ) : null;
     const locationRow = locationLabel ? (
-        <div className="flex items-center gap-1.5 text-white/90 text-sm font-normal min-w-0 max-w-full">
-            <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/70 shrink-0" />
+        <div className="flex items-center gap-1 sm:gap-1.5 text-white/90 text-xs sm:text-sm font-normal min-w-0 flex-1">
+            <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" style={{ color: theme.fill }} />
             <span className="truncate">{locationLabel}</span>
         </div>
     ) : null;
-    const sep = <span className="text-white/35 text-sm font-light select-none shrink-0" aria-hidden>|</span>;
-
-    const sapaBadge = showSapaBranding ? (
-        <div className="flex items-center gap-2 min-w-0 shrink-0">
-            <img
-                src={sapaLogo}
-                alt="SAPA"
-                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-contain bg-white border border-white/30 shrink-0 shadow-md p-0.5"
-            />
-            <span
-                className="text-sm sm:text-base font-bold uppercase tracking-wide truncate drop-shadow-md"
-                style={{ color: theme.fill }}
-            >
-                {badgeText}
-            </span>
-        </div>
-    ) : null;
+    const sep = <span className="text-white/35 text-xs sm:text-sm font-light select-none shrink-0" aria-hidden>|</span>;
 
     if (variant === 'nav') {
         if (!showSapaBranding) return null;
@@ -401,35 +385,48 @@ const EventHeroBranding = ({ event, theme, variant = 'hero', centered = false, d
         );
     }
 
-    const metaRow = (leading) => (
-        <div className="mt-1">
-            <div className={`flex items-center gap-2.5 min-w-0 flex-wrap ${centered ? 'justify-center' : ''}`}>
-                {leading}
-                {(dateRow || locationRow) && (
-                    <div className="flex items-center gap-2.5 min-w-0 max-w-full">
-                        {dateRow}
-                        {locationRow && (
-                            <>
-                                {dateRow ? sep : null}
-                                {locationRow}
-                            </>
-                        )}
-                    </div>
+    // Hero: large SAPA logo left, title + badge text right; date/location below.
+    // Organisation logo is reserved for the sponsors strip (first).
+    return (
+        <div className={`flex flex-col gap-2.5 min-w-0 ${centered ? 'items-center' : ''}`}>
+            <div className={`flex items-center gap-3.5 sm:gap-4 min-w-0 ${centered ? 'justify-center' : ''}`}>
+                {showSapaBranding && (
+                    <img
+                        src={sapaLogo}
+                        alt="SAPA"
+                        className="w-16 h-16 sm:w-[4.5rem] sm:h-[4.5rem] md:w-20 md:h-20 rounded-full object-contain bg-white border border-white/30 shrink-0 shadow-md p-1"
+                    />
                 )}
+                <div className={`min-w-0 flex-1 ${centered ? 'text-center' : ''}`}>
+                    {title && (
+                        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white leading-tight drop-shadow-lg">
+                            {title}
+                        </h1>
+                    )}
+                    {showSapaBranding && (
+                        <p
+                            className={`text-sm sm:text-base font-bold uppercase tracking-wide drop-shadow-md ${title ? 'mt-1' : ''}`}
+                            style={{ color: theme.fill }}
+                        >
+                            {badgeText}
+                        </p>
+                    )}
+                </div>
             </div>
+
+            {(dateRow || locationRow) && (
+                <div className={`flex items-center gap-1.5 sm:gap-2.5 min-w-0 w-full flex-nowrap overflow-hidden ${centered ? 'justify-center' : ''}`}>
+                    {dateRow}
+                    {locationRow && (
+                        <>
+                            {dateRow ? sep : null}
+                            {locationRow}
+                        </>
+                    )}
+                </div>
+            )}
         </div>
     );
-
-    // Under the event title: SAPA logo + badge | date | location
-    // Organisation logo is reserved for the sponsors strip (first).
-    if (showSapaBranding) {
-        return metaRow(sapaBadge);
-    }
-
-    if (dateRow || locationLabel) {
-        return metaRow(null);
-    }
-    return null;
 };
 
 const InfoSection = ({ title, icon: Icon, accent = '#9AE900', defaultOpen = false, text = null, children, className = "" }) => {
@@ -3337,20 +3334,18 @@ const EventDetails = () => {
                                 <div className="w-full flex flex-col gap-1">
                                 {event.sapa_status && event.sapa_status !== 'None' && (
                                     <span
-                                        className="inline-flex self-start items-center px-2 py-0.5 mb-0.5 rounded-full border text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.12em] bg-black/50 backdrop-blur-sm shadow-md"
+                                        className="inline-flex self-start items-center px-2 py-0.5 mb-1.5 rounded-full border text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.12em] bg-black/50 backdrop-blur-sm shadow-md"
                                         style={{ color: theme.fill, borderColor: theme.fill }}
                                     >
                                         {event.sapa_status === 'Major' ? 'Major Event' : event.sapa_status}
                                     </span>
                                 )}
-                                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white leading-tight drop-shadow-lg">
-                                    {event.event_name}
-                                </h1>
 
                                 <EventHeroBranding
                                     event={event}
                                     theme={theme}
                                     variant="hero"
+                                    title={event.event_name}
                                     dateLabel={event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}
                                     locationLabel={
                                         [event.venue, event.city && !(event.venue || '').toLowerCase().includes((event.city || '').toLowerCase()) ? event.city : null]
