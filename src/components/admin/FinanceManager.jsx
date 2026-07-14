@@ -889,10 +889,10 @@ const FinanceManager = () => {
 
     const allTabs = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'transactions', label: 'Live Paystack', icon: CreditCard },
         { id: 'events', label: 'Event Finance', icon: Trophy },
         { id: 'summary', label: 'Summary Rep', icon: FileText },
         { id: 'users', label: 'User Ledger', icon: Users },
-        { id: 'transactions', label: 'Live Paystack', icon: CreditCard },
         { id: 'settings', label: 'Settings', icon: Settings },
     ];
 
