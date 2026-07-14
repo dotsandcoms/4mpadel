@@ -611,11 +611,11 @@ const PodiumCoverflow = ({ data, onPlayerClick, imageErrors, setImageErrors, get
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar nice-scrollbar items-center py-10 md:py-14"
+        className="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar nice-scrollbar items-center py-6 md:py-14"
         style={{ scrollBehavior: 'smooth' }}
       >
         {/* Left padding to center the first item */}
-        <div className="w-[calc(50vw-80px)] md:w-[calc(50%-112px)] flex-shrink-0" />
+        <div className="w-[calc(50vw-55px)] md:w-[calc(50%-112px)] flex-shrink-0" />
 
         {top10.map((player, index) => {
           const isActive = index === activeIndex;
@@ -632,8 +632,8 @@ const PodiumCoverflow = ({ data, onPlayerClick, imageErrors, setImageErrors, get
             <div
               key={player.id || index}
               data-index={index}
-              className={`flex-shrink-0 snap-center transition-all duration-300 ease-in-out cursor-pointer mx-2 md:mx-5 w-[140px] md:w-[192px]
-                ${isActive ? 'scale-[1.15] z-10 opacity-100' : 'scale-90 opacity-60 hover:opacity-80 z-0'}`}
+              className={`flex-shrink-0 snap-center transition-all duration-300 ease-in-out cursor-pointer mx-1.5 md:mx-5 w-[95px] md:w-[192px]
+                ${isActive ? 'scale-[1.1] md:scale-[1.15] z-10 opacity-100' : 'scale-90 opacity-60 hover:opacity-80 z-0'}`}
               onClick={() => {
                 if (!isActive && scrollRef.current) {
                   const child = scrollRef.current.children[index + 1]; // +1 because of padding div
@@ -648,10 +648,10 @@ const PodiumCoverflow = ({ data, onPlayerClick, imageErrors, setImageErrors, get
                 }
               }}
             >
-              <div className={`relative w-full rounded-xl overflow-hidden transition-all duration-300 bg-[#0B1220]
-                  ${medal ? `border-[3px] ${medal.border} ${medal.glow}` : isActive ? 'border-[3px] border-padel-green shadow-[0_0_20px_rgba(190,255,0,0.3)]' : 'border-2 border-gray-600/50'}`}>
+              <div className={`relative w-full rounded-lg md:rounded-xl overflow-hidden transition-all duration-300 bg-[#0B1220]
+                  ${medal ? `border-2 md:border-[3px] ${medal.border} ${medal.glow}` : isActive ? 'border-2 md:border-[3px] border-padel-green shadow-[0_0_20px_rgba(190,255,0,0.3)]' : 'border border-gray-600/50 md:border-2'}`}>
 
-                <div className={`absolute top-1.5 left-1.5 w-6 h-6 md:w-7 md:h-7 rounded flex items-center justify-center font-black text-xs z-10 transition-colors
+                <div className={`absolute top-1 left-1 md:top-1.5 md:left-1.5 w-5 h-5 md:w-7 md:h-7 rounded flex items-center justify-center font-black text-[10px] md:text-xs z-10 transition-colors
                     ${medal ? medal.badge : isActive ? 'bg-padel-green text-black' : 'bg-gray-700 text-white'}`}>
                   {actualRank}
                 </div>
@@ -660,27 +660,27 @@ const PodiumCoverflow = ({ data, onPlayerClick, imageErrors, setImageErrors, get
                   {player.image && !imageErrors[player.id] ? (
                     <img src={player.image} alt={player.name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [player.id]: true }))} />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-sm font-black text-gray-400 bg-black/40">{getInitials(player.name)}</div>
+                    <div className="w-full h-full flex items-center justify-center text-[10px] md:text-sm font-black text-gray-400 bg-black/40">{getInitials(player.name)}</div>
                   )}
                 </div>
 
-                <div className="px-2 py-2 text-center">
+                <div className="px-1.5 py-1.5 md:px-2 md:py-2 text-center">
                   <h4 className={`font-black text-white leading-tight uppercase line-clamp-1 transition-all
-                    ${isActive ? 'text-xs md:text-base' : 'text-[10px] md:text-sm'}`}>
+                    ${isActive ? 'text-[9px] md:text-base' : 'text-[8px] md:text-sm'}`}>
                     {player.name}
                   </h4>
-                  <div className="flex items-center justify-center gap-1.5 mt-1">
-                    <p className={`font-bold transition-all ${isActive ? 'text-padel-green text-sm md:text-base' : 'text-gray-400 text-xs md:text-sm'}`}>
+                  <div className="flex items-center justify-center gap-1 md:gap-1.5 mt-0.5 md:mt-1">
+                    <p className={`font-bold transition-all ${isActive ? 'text-padel-green text-[11px] md:text-base' : 'text-gray-400 text-[10px] md:text-sm'}`}>
                       {player.points.toLocaleString()}
                     </p>
-                    <span className={`font-black transition-all ${isActive ? 'text-[10px] md:text-xs' : 'text-[9px] md:text-[10px]'}
+                    <span className={`font-black transition-all ${isActive ? 'text-[8px] md:text-xs' : 'text-[7px] md:text-[10px]'}
                       ${player.change > 0 ? 'text-padel-green' : player.change < 0 ? 'text-red-500' : 'text-gray-500'}`}>
                       {player.change > 0 && `▲ ${player.change}`}
                       {player.change < 0 && `▼ ${Math.abs(player.change)}`}
                       {player.change === 0 && `-`}
                     </span>
                   </div>
-                  <p className="text-[8px] font-black text-gray-500 tracking-widest mt-0.5 uppercase">Points</p>
+                  <p className="text-[7px] md:text-[8px] font-black text-gray-500 tracking-widest mt-0.5 uppercase">Points</p>
                 </div>
               </div>
             </div>
@@ -688,12 +688,12 @@ const PodiumCoverflow = ({ data, onPlayerClick, imageErrors, setImageErrors, get
         })}
 
         {/* Right padding to center the last item */}
-        <div className="w-[calc(50vw-80px)] md:w-[calc(50%-112px)] flex-shrink-0" />
+        <div className="w-[calc(50vw-55px)] md:w-[calc(50%-112px)] flex-shrink-0" />
       </div>
 
       {/* Scroll Hint */}
-      <div className="absolute bottom-2 left-0 w-full text-center pointer-events-none">
-        <p className="text-[10px] text-gray-500 uppercase tracking-widest flex items-center justify-center gap-2">
+      <div className="absolute bottom-1.5 md:bottom-2 left-0 w-full text-center pointer-events-none">
+        <p className="text-[9px] md:text-[10px] text-gray-500 uppercase tracking-widest flex items-center justify-center gap-2">
           <span>&larr;</span> Swipe to explore Top 10 <span>&rarr;</span>
         </p>
       </div>
@@ -975,7 +975,7 @@ const Rankings = () => {
 
       <main className="relative z-10 pb-2 md:pb-6 w-full max-w-[1440px] mx-auto px-4 xl:px-8">
         {/* Hero — full-bleed B&W photo with title overlaid */}
-        <section className="relative z-20 pt-24 md:pt-28 lg:pt-32 pb-4 md:pb-6 mb-3 md:mb-4">
+        <section className="relative z-20 pt-12 md:pt-28 lg:pt-32 pb-4 md:pb-6 mb-3 md:mb-4">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 z-0 w-screen h-[62vw] max-h-[420px] md:h-[38vw] md:max-h-[560px] lg:max-h-[600px] min-h-[260px] overflow-hidden">
             <div className="absolute inset-0">
               <img

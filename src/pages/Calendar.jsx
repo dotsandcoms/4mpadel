@@ -856,7 +856,7 @@ const Calendar = () => {
                     whole block, and the title/paragraph/search render in normal flow on top of
                     it (relative z-10). The photo only covers the top portion of the block; the
                     filter tabs and event list below continue on the plain page background. */}
-                <section className="relative w-full -mx-4 xl:-mx-8 pt-24 md:pt-28 lg:pt-32 pb-4 md:pb-6 mb-3 md:mb-4">
+                <section className="relative w-full -mx-4 xl:-mx-8 pt-12 md:pt-28 lg:pt-32 pb-4 md:pb-6 mb-3 md:mb-4">
                     {/* Full-bleed photo — breaks out of main's max-width/padding to span the viewport.
                         Desktop is taller / less aggressive crop so more of the photo stays visible. */}
                     <div className="absolute top-0 left-1/2 -translate-x-1/2 z-0 w-screen h-[62vw] max-h-[420px] md:h-[38vw] md:max-h-[560px] lg:max-h-[600px] min-h-[260px] overflow-hidden">

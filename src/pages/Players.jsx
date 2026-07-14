@@ -45,7 +45,7 @@ const Players = () => {
           .from('players')
           .select('*')
           .eq('approved', true)
-          .order('points', { ascending: false })
+          .order('name', { ascending: true })
           .order('id', { ascending: true })
           .range(from, from + PAGE - 1);
         if (pageError) { error = pageError; break; }
@@ -55,7 +55,22 @@ const Players = () => {
 
 
       if (!error && data) {
-        const categoryCounts = {};
+        // Top-10 highlight is by points within each category, independent of list sort
+        const top10ByCategory = new Set();
+        const byCategory = {};
+        data.forEach((player) => {
+          const cat = player.category;
+          if (!cat) return;
+          if (!byCategory[cat]) byCategory[cat] = [];
+          byCategory[cat].push(player);
+        });
+        Object.values(byCategory).forEach((list) => {
+          [...list]
+            .sort((a, b) => (Number(b.points) || 0) - (Number(a.points) || 0))
+            .slice(0, 10)
+            .forEach((p) => top10ByCategory.add(p.id));
+        });
+
         const processedPlayers = data.map(player => {
           let sponsorsList = [];
           if (player.sponsors) {
@@ -81,23 +96,13 @@ const Players = () => {
             }
           }
 
-          // Check top 10 status
-          const cat = player.category;
-          let isTop10 = false;
-          if (cat) {
-            categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
-            if (categoryCounts[cat] <= 10) {
-              isTop10 = true;
-            }
-          }
-
           return {
             ...player,
             image_url: player.image_url || '',
             sponsors: sponsorsList,
             additional_images: safeAdditionalImages,
             hasGallery: safeAdditionalImages.length > 0,
-            isTop10,
+            isTop10: top10ByCategory.has(player.id),
           };
         });
         setPlayers(processedPlayers);
@@ -169,7 +174,7 @@ const Players = () => {
         <div className="absolute top-[40vh] right-1/4 w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-[150px] pointer-events-none" />
 
         {/* Hero — full-bleed photo with title/search overlaid (same pattern as Calendar) */}
-        <section className="relative z-20 w-full max-w-[1440px] mx-auto px-4 xl:px-8 pt-24 md:pt-28 lg:pt-32 pb-4 md:pb-6 mb-3 md:mb-4">
+        <section className="relative z-20 w-full max-w-[1440px] mx-auto px-4 xl:px-8 pt-12 md:pt-28 lg:pt-32 pb-4 md:pb-6 mb-3 md:mb-4">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 z-0 w-screen h-[62vw] max-h-[420px] md:h-[38vw] md:max-h-[560px] lg:max-h-[600px] min-h-[260px] overflow-hidden">
             <div className="absolute inset-0">
               <img
@@ -358,7 +363,7 @@ const Players = () => {
         <section className="w-full max-w-[1440px] mx-auto px-4 xl:px-8 relative z-20">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-gray-300 text-[11px] sm:text-sm font-black uppercase tracking-widest">
-              Top Ranked Players
+              All Players
             </h2>
           </div>
 
