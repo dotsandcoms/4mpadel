@@ -11,11 +11,25 @@ import { useClubs } from '../../hooks/useClubs';
 import { getDefaultBackgroundForStatus } from '../../utils/imageUtils';
 
 const STANDARD_DIVISIONS = [
-    "Men's Open", "Men's Advanced", "Men's Intermediate", "Men's A", "Men's B", "Men's C", "Men's D",
-    "Ladies Open", "Ladies Advanced", "Ladies Intermediate", "Ladies A", "Ladies B", "Ladies C",
-    "Mixed Open", "Mixed Advanced", "Mixed A", "Mixed B", "Mixed C",
-    "Men's 40+", "Men's 45+", "Men's 50+", "Ladies 40+", "Ladies 45+",
-    "Juniors U12", "Juniors U14", "Juniors U16", "Juniors U18"
+    // Men / Ladies / Mixed — levels
+    "Men's Elite", "Men's Open", "Men's Advanced", "Men's Intermediate",
+    "Ladies Elite", "Ladies Open", "Ladies Advanced", "Ladies Intermediate",
+    "Mixed", "Mixed Elite", "Mixed Open", "Mixed Advanced", "Mixed Intermediate",
+    // Open (elite / advanced)
+    "Men's Open Elite", "Men's Open Advanced",
+    "Ladies Open Elite", "Ladies Open Advanced",
+    // Masters + age groups
+    "Men's Masters", "Ladies Masters",
+    "Men's 35+", "Ladies 35+",
+    "Men's 40+", "Ladies 40+",
+    "Men's 45+", "Ladies 45+",
+    "Men's 50+", "Ladies 50+",
+    "Men's 55+", "Ladies 55+",
+    // Juniors
+    "Juniors",
+    "Juniors U12", "Juniors U14", "Juniors U16", "Juniors U18",
+    "Juniors U19", "Juniors U19 Boys", "Juniors U19 Girls",
+    "Juniors U21", "Juniors U21 Boys", "Juniors U21 Girls",
 ];
 
 const FORMATS = ['TBC','Knockout', 'Groups', 'Groups + Knockout', 'Round Robin', 'Americano', 'Mexicano'];
@@ -83,7 +97,7 @@ const sapaBadgeClass = (status) => {
     }
 };
 const GENDERS = ['', 'Men', 'Ladies', 'Mixed', 'Junior'];
-const AGE_CATEGORIES = ['', 'Open', '35+', '40+', 'Junior'];
+const AGE_CATEGORIES = ['', 'Open', '35+', '40+', '45+', '50+', '55+', 'Masters', 'Junior'];
 const TOURNAMENT_TAGS = ['None', 'Broll', 'SAPA', 'Club', 'Social', 'Internal', '360 Padel', 'SA Grand'];
 
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
@@ -668,19 +682,25 @@ const opensOneMonthBefore = (startDateStr) => {
 
 const genderFromDivisionName = (name) => {
     const n = (name || '').toLowerCase();
-    if (n.includes('ladies') || n.includes('women')) return 'Ladies';
+    if (n.includes('ladies') || n.includes('women') || n.includes('girls')) return 'Ladies';
     if (n.includes('mixed')) return 'Mixed';
+    if (n.includes('junior') && !n.includes('boys') && !n.includes('girls')) return 'Junior';
+    if (n.includes('boys') || n.includes("men's") || n.includes('men ')) return 'Men';
     if (n.includes('junior')) return 'Junior';
-    if (n.includes("men")) return 'Men';
+    if (n.includes('men')) return 'Men';
     return '';
 };
 
 const ageFromDivisionName = (name) => {
     const n = (name || '').toLowerCase();
-    if (n.includes('junior') || n.includes('u1') || n.includes('u2')) return 'Junior';
-    if (n.includes('35+')) return '35+';
-    if (n.includes('40+') || n.includes('45+') || n.includes('50+')) return '40+';
-    if (n.includes('open')) return 'Open';
+    if (n.includes('junior') || n.includes('boys') || n.includes('girls') || /\bu\d+/.test(n)) return 'Junior';
+    if (n.includes('masters')) return 'Masters';
+    if (n.includes('55+') || n.includes('over 55')) return '55+';
+    if (n.includes('50+') || n.includes('over 50')) return '50+';
+    if (n.includes('45+') || n.includes('over 45')) return '45+';
+    if (n.includes('40+') || n.includes('over 40')) return '40+';
+    if (n.includes('35+') || n.includes('over 35')) return '35+';
+    if (n.includes('open') || n.includes('elite') || n.includes('advanced') || n.includes('intermediate')) return 'Open';
     return '';
 };
 
@@ -2193,11 +2213,17 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                                                     <div className="md:col-span-1">
                                                                         <label className={labelClass}>Division name</label>
-                                                                        <ComboBox value={d.name} onChange={(v) => updateDivision(d._key, {
-                                                                            name: v,
-                                                                            gender: d.gender || genderFromDivisionName(v),
-                                                                            age_category: d.age_category || ageFromDivisionName(v),
-                                                                        })} options={STANDARD_DIVISIONS} placeholder="e.g. Men's Open" />
+                                                                        <ComboBox value={d.name} onChange={(v) => {
+                                                                            const inferredGender = genderFromDivisionName(v);
+                                                                            const inferredAge = ageFromDivisionName(v);
+                                                                            updateDivision(d._key, {
+                                                                                name: v,
+                                                                                // Always re-derive from the selected name so switching
+                                                                                // divisions updates Gender / Age Category automatically.
+                                                                                ...(inferredGender ? { gender: inferredGender } : {}),
+                                                                                ...(inferredAge ? { age_category: inferredAge } : {}),
+                                                                            });
+                                                                        }} options={STANDARD_DIVISIONS} placeholder="e.g. Men's Open" />
                                                                     </div>
                                                                     <div>
                                                                         <label className={labelClass}>Gender</label>
