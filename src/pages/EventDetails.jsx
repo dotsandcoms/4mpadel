@@ -21,7 +21,7 @@ import { PAYSTACK_PUBLIC_KEY, isPaystackTestMode as isTestMode } from '../utils/
 const tournamentHero = 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format&fit=crop&q=80';
 import logo4m from '../assets/logo_4m_lowercase.png';
 import sapaLogo from '../assets/sapa-logo.svg';
-import { getEventImage, getDefaultEventBackground } from '../utils/imageUtils';
+import { getEventImage } from '../utils/imageUtils';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
 
 const formatPlayerName = (fullName) => {
@@ -116,21 +116,52 @@ const CountUp = ({ end, duration = 1.5 }) => {
     return <span>{count.toLocaleString()}</span>;
 };
 
-const EventSponsorStrip = ({ logos, className = '' }) => {
-    if (!logos?.length) return null;
+const EventSponsorStrip = ({ items, className = '', onPosterClick }) => {
+    if (!items?.length) return null;
     return (
         <div className={`rounded-2xl border border-white/10 bg-black/30 backdrop-blur-sm overflow-hidden ${className}`}>
             <div className="flex items-center justify-center divide-x divide-white/10">
-                {logos.map((logo, i) => (
-                    <div key={`${logo}-${i}`} className="flex-1 flex items-center justify-center px-3 py-3.5 min-w-0">
+                {items.map((item, i) => {
+                    const img = (
                         <img
-                            src={logo}
-                            alt=""
+                            src={item.url}
+                            alt={item.label || ''}
                             className="h-8 sm:h-10 w-auto max-w-full object-contain"
                             onError={(e) => { e.currentTarget.style.display = 'none'; }}
                         />
-                    </div>
-                ))}
+                    );
+                    const cellClass = 'flex-1 flex items-center justify-center px-3 py-3.5 min-w-0';
+                    if (item.type === 'org' && item.href) {
+                        return (
+                            <Link
+                                key={`org-${i}`}
+                                to={item.href}
+                                className={`${cellClass} hover:bg-white/5 transition-colors`}
+                                title={item.label || 'Organiser'}
+                            >
+                                {img}
+                            </Link>
+                        );
+                    }
+                    if (item.type === 'poster' && onPosterClick) {
+                        return (
+                            <button
+                                key={`poster-${i}`}
+                                type="button"
+                                onClick={() => onPosterClick(item.url)}
+                                className={`${cellClass} hover:bg-white/5 transition-colors cursor-pointer`}
+                                title="View event poster"
+                            >
+                                {img}
+                            </button>
+                        );
+                    }
+                    return (
+                        <div key={`${item.url}-${i}`} className={cellClass}>
+                            {img}
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
@@ -761,36 +792,69 @@ const EventDetails = () => {
 
     // Linked organisation logo (not event.organizer_logo_url — that field often holds a SAPA mark)
     const [linkedOrgLogoUrl, setLinkedOrgLogoUrl] = useState('');
+    const [linkedOrgSlug, setLinkedOrgSlug] = useState('');
+    const [linkedOrgName, setLinkedOrgName] = useState('');
+    const [posterModalUrl, setPosterModalUrl] = useState(null);
 
     useEffect(() => {
         let cancelled = false;
         const orgId = event?.organisation_id;
         if (!orgId) {
             setLinkedOrgLogoUrl('');
+            setLinkedOrgSlug('');
+            setLinkedOrgName('');
             return undefined;
         }
         (async () => {
             const { data } = await supabase
                 .from('organisations')
-                .select('logo_url')
+                .select('logo_url, slug, name')
                 .eq('id', orgId)
                 .maybeSingle();
-            if (!cancelled) setLinkedOrgLogoUrl((data?.logo_url || '').trim());
+            if (!cancelled) {
+                setLinkedOrgLogoUrl((data?.logo_url || '').trim());
+                setLinkedOrgSlug((data?.slug || '').trim());
+                setLinkedOrgName((data?.name || '').trim());
+            }
         })();
         return () => { cancelled = true; };
     }, [event?.organisation_id]);
 
-    const eventSponsorLogos = useMemo(() => {
-        // SAPA is shown in the hero badge row — never in the sponsor strip.
-        // Organisation logo comes from the linked organisations record (not organizer_logo_url).
+    // Order: 1) organiser logo → org page, 2) event poster (modal), 3) sponsor logos in configured order
+    const eventSponsorItems = useMemo(() => {
+        const items = [];
         const orgLogo = linkedOrgLogoUrl;
+        const posterUrl = String(event?.poster_image_url || '').trim();
+        const coverUrl = String(event?.custom_image_url || '').trim();
         const sponsors = Array.isArray(event?.sponsor_logos)
             ? event.sponsor_logos.filter((url) => typeof url === 'string' && url.trim())
             : [];
-        if (!orgLogo) return sponsors;
-        const deduped = sponsors.filter((url) => url.trim() !== orgLogo);
-        return [orgLogo, ...deduped];
-    }, [linkedOrgLogoUrl, event?.sponsor_logos]);
+
+        if (orgLogo) {
+            items.push({
+                type: 'org',
+                url: orgLogo,
+                href: linkedOrgSlug ? `/organisations/${linkedOrgSlug}` : null,
+                label: linkedOrgName || 'Organiser',
+            });
+        }
+        if (posterUrl) {
+            items.push({
+                type: 'poster',
+                url: posterUrl,
+                label: 'Event poster',
+            });
+        }
+        for (const url of sponsors) {
+            const trimmed = url.trim();
+            if (!trimmed) continue;
+            if (orgLogo && trimmed === orgLogo) continue;
+            if (posterUrl && trimmed === posterUrl) continue;
+            if (coverUrl && trimmed === coverUrl) continue;
+            items.push({ type: 'sponsor', url: trimmed, label: 'Sponsor' });
+        }
+        return items;
+    }, [linkedOrgLogoUrl, linkedOrgSlug, linkedOrgName, event?.poster_image_url, event?.custom_image_url, event?.sponsor_logos]);
 
     const computedEventStatus = useMemo(() => {
         if (event?.status && event.status.toLowerCase() !== 'published' && event.status !== 'Date available' && event.status !== 'Date available offered to R&B') return event.status;
@@ -2960,7 +3024,8 @@ const EventDetails = () => {
         setIsModalOpen(true);
     };
 
-    const heroBackgroundUrl = getDefaultEventBackground(event);
+    // Prefer uploaded custom cover; fall back to SAPA tier default.
+    const heroBackgroundUrl = getEventImage(event);
 
     const renderCalendarButton = (wrapperClass = '', iconOnly = false) => (
         <div ref={calendarMenuRef} className={`relative ${wrapperClass}`}>
@@ -3493,8 +3558,12 @@ const EventDetails = () => {
                                     ))}
                                 </div>
 
-                                {eventSponsorLogos.length > 0 && (
-                                    <EventSponsorStrip logos={eventSponsorLogos} className="w-full mt-3" />
+                                {eventSponsorItems.length > 0 && (
+                                    <EventSponsorStrip
+                                        items={eventSponsorItems}
+                                        className="w-full mt-3"
+                                        onPosterClick={(url) => setPosterModalUrl(url)}
+                                    />
                                 )}
 
                                 {(() => {
@@ -4103,7 +4172,7 @@ const EventDetails = () => {
                                             )}
 
                                             {/* Sponsors */}
-                                            {eventSponsorLogos.length > 0 && (
+                                            {eventSponsorItems.length > 0 && (
                                                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
                                                     <div
                                                         onClick={() => toggleSection('sponsors')}
@@ -4127,11 +4196,42 @@ const EventDetails = () => {
                                                                 className="overflow-hidden"
                                                             >
                                                                 <div className="px-6 py-5 grid grid-cols-3 md:grid-cols-4 gap-4">
-                                                                    {eventSponsorLogos.map((logo, i) => (
-                                                                        <div key={`${logo}-${i}`} className="aspect-[3/2] bg-gray-50 rounded-xl flex items-center justify-center p-3 border border-gray-100 hover:scale-[1.03] transition-transform">
-                                                                            <img src={logo} alt={`Sponsor ${i + 1}`} className="max-w-full max-h-full object-contain" />
-                                                                        </div>
-                                                                    ))}
+                                                                    {eventSponsorItems.map((item, i) => {
+                                                                        const tile = (
+                                                                            <div className="aspect-[3/2] bg-gray-50 rounded-xl flex items-center justify-center p-3 border border-gray-100 hover:scale-[1.03] transition-transform">
+                                                                                <img
+                                                                                    src={item.url}
+                                                                                    alt={item.label || `Sponsor ${i + 1}`}
+                                                                                    className="max-w-full max-h-full object-contain"
+                                                                                />
+                                                                            </div>
+                                                                        );
+                                                                        if (item.type === 'org' && item.href) {
+                                                                            return (
+                                                                                <Link key={`org-${i}`} to={item.href} title={item.label || 'Organiser'}>
+                                                                                    {tile}
+                                                                                </Link>
+                                                                            );
+                                                                        }
+                                                                        if (item.type === 'poster') {
+                                                                            return (
+                                                                                <button
+                                                                                    key={`poster-${i}`}
+                                                                                    type="button"
+                                                                                    onClick={() => setPosterModalUrl(item.url)}
+                                                                                    className="text-left cursor-pointer"
+                                                                                    title="View event poster"
+                                                                                >
+                                                                                    {tile}
+                                                                                </button>
+                                                                            );
+                                                                        }
+                                                                        return (
+                                                                            <div key={`${item.url}-${i}`}>
+                                                                                {tile}
+                                                                            </div>
+                                                                        );
+                                                                    })}
                                                                 </div>
                                                             </motion.div>
                                                         )}
@@ -5310,6 +5410,40 @@ const EventDetails = () => {
                 videoUrl={videoModal.url}
                 title={videoModal.title}
             />
+
+            <AnimatePresence>
+                {posterModalUrl && (
+                    <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 md:p-8">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setPosterModalUrl(null)}
+                            className="absolute inset-0 bg-black/90 backdrop-blur-sm"
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.94, y: 16 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.96, y: 8 }}
+                            className="relative z-10 w-full max-w-3xl max-h-[90vh] flex flex-col items-center"
+                        >
+                            <button
+                                type="button"
+                                onClick={() => setPosterModalUrl(null)}
+                                className="absolute -top-2 -right-2 sm:top-0 sm:right-0 z-20 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full border border-white/10 transition-colors"
+                                aria-label="Close poster"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                            <img
+                                src={posterModalUrl}
+                                alt="Event poster"
+                                className="w-full h-auto max-h-[85vh] object-contain rounded-2xl border border-white/10 shadow-2xl bg-black/40"
+                            />
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </>
     );
 };

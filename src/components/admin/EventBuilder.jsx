@@ -627,7 +627,8 @@ const blankForm = {
     organizer_email: '',
     organizer_website: '',
     // media
-    custom_image_url: '',
+    custom_image_url: '', // cover / hero
+    poster_image_url: '', // event poster (sponsors strip / modal)
     sponsor_logos: [],
     // settings
     registration_opens_at: '',
@@ -717,6 +718,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
     const [bulkCloseDate, setBulkCloseDate] = useState('');
     const [showPrizeBreakdown, setShowPrizeBreakdown] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [uploadingCover, setUploadingCover] = useState(false);
     const [uploadingPoster, setUploadingPoster] = useState(false);
     const [uploadingOrgLogo, setUploadingOrgLogo] = useState(false);
     const [uploadingSponsor, setUploadingSponsor] = useState(false);
@@ -1182,18 +1184,35 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         });
     };
 
+    const handleCoverUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            setUploadingCover(true);
+            const url = await uploadToGallery(file, 'covers');
+            setField('custom_image_url', url);
+            toast.success('Cover photo uploaded');
+        } catch (err) {
+            toast.error('Failed to upload cover photo');
+        } finally {
+            setUploadingCover(false);
+            e.target.value = '';
+        }
+    };
+
     const handlePosterUpload = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
         try {
             setUploadingPoster(true);
             const url = await uploadToGallery(file, 'posters');
-            setField('custom_image_url', url);
-            toast.success('Poster uploaded');
+            setField('poster_image_url', url);
+            toast.success('Event poster uploaded');
         } catch (err) {
-            toast.error('Failed to upload poster');
+            toast.error('Failed to upload event poster');
         } finally {
             setUploadingPoster(false);
+            e.target.value = '';
         }
     };
 
@@ -1396,6 +1415,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             license_required_default: !!form.license_required_default,
             collect_tshirt_size: !!form.collect_tshirt_size,
             entry_fee_notes: form.entry_fee_notes || null,
+            custom_image_url: form.custom_image_url || null,
+            poster_image_url: form.poster_image_url || null,
             scoring_point: form.scoring_point || 'golden',
             // Keep legacy boolean in sync for older UI / EventDetails fallback
             golden_point: (form.scoring_point || 'golden') === 'golden',
@@ -1830,29 +1851,83 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                     <PanelHeader id="display" title="Public Display" />
                                     {openPanels.display && (
                                         <div className="grid grid-cols-1 gap-4 p-4 rounded-xl border border-white/10 bg-black/20">
-                                            <div>
-                                                <label className={labelClass}>Event Poster</label>
-                                                <div className="flex items-center gap-4">
-                                                    <div className="relative shrink-0">
-                                                        <img
-                                                            src={form.custom_image_url || getDefaultBackgroundForStatus(form.sapa_status)}
-                                                            alt="Poster"
-                                                            className="w-24 h-32 object-cover rounded-lg border border-white/10"
-                                                        />
-                                                        {!form.custom_image_url && (
-                                                            <span className="absolute bottom-1 left-1 right-1 text-center text-[8px] font-bold uppercase tracking-wider bg-black/70 text-padel-green rounded px-1 py-0.5">
-                                                                {form.sapa_status && form.sapa_status !== 'None' ? `${form.sapa_status} default` : 'Default hero'}
-                                                            </span>
-                                                        )}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className={labelClass}>Cover Photo</label>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="relative shrink-0">
+                                                            <img
+                                                                src={form.custom_image_url || getDefaultBackgroundForStatus(form.sapa_status)}
+                                                                alt="Cover"
+                                                                className="w-20 h-28 object-cover rounded-lg border border-white/10"
+                                                            />
+                                                            {!form.custom_image_url && (
+                                                                <span className="absolute bottom-1 left-1 right-1 text-center text-[8px] font-bold uppercase tracking-wider bg-black/70 text-padel-green rounded px-1 py-0.5">
+                                                                    Default
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex flex-col gap-2 min-w-0">
+                                                            <label className="cursor-pointer bg-white/5 border border-dashed border-white/20 rounded-xl px-4 py-4 flex flex-col items-center gap-1.5 text-gray-300 hover:border-padel-green hover:text-padel-green transition-colors">
+                                                                {uploadingCover ? <Loader2 className="animate-spin" size={18} /> : <UploadCloud size={18} />}
+                                                                <span className="text-xs font-bold">
+                                                                    {uploadingCover ? 'Uploading...' : (form.custom_image_url ? 'Replace Cover' : 'Upload Cover')}
+                                                                </span>
+                                                                <span className="text-[10px] text-gray-500 text-center">
+                                                                    Event page hero / calendar card
+                                                                </span>
+                                                                <input type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} disabled={uploadingCover} />
+                                                            </label>
+                                                            {form.custom_image_url && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setField('custom_image_url', '')}
+                                                                    className="text-[11px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 transition-colors text-left"
+                                                                >
+                                                                    Use tier default
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                    <label className="cursor-pointer bg-white/5 border border-dashed border-white/20 rounded-xl px-5 py-6 flex flex-col items-center gap-2 text-gray-300 hover:border-padel-green hover:text-padel-green transition-colors">
-                                                        {uploadingPoster ? <Loader2 className="animate-spin" size={20} /> : <UploadCloud size={20} />}
-                                                        <span className="text-xs font-bold">{uploadingPoster ? 'Uploading...' : 'Upload Poster'}</span>
-                                                        <span className="text-[10px] text-gray-500 text-center max-w-[140px]">
-                                                            Optional — SAPA tier default used on the site when empty
-                                                        </span>
-                                                        <input type="file" accept="image/*" className="hidden" onChange={handlePosterUpload} disabled={uploadingPoster} />
-                                                    </label>
+                                                </div>
+                                                <div>
+                                                    <label className={labelClass}>Event Poster</label>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="relative shrink-0">
+                                                            {form.poster_image_url ? (
+                                                                <img
+                                                                    src={form.poster_image_url}
+                                                                    alt="Poster"
+                                                                    className="w-20 h-28 object-cover rounded-lg border border-white/10"
+                                                                />
+                                                            ) : (
+                                                                <div className="w-20 h-28 rounded-lg border border-dashed border-white/15 bg-black/30 flex items-center justify-center">
+                                                                    <ImageIcon size={18} className="text-gray-600" />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex flex-col gap-2 min-w-0">
+                                                            <label className="cursor-pointer bg-white/5 border border-dashed border-white/20 rounded-xl px-4 py-4 flex flex-col items-center gap-1.5 text-gray-300 hover:border-padel-green hover:text-padel-green transition-colors">
+                                                                {uploadingPoster ? <Loader2 className="animate-spin" size={18} /> : <UploadCloud size={18} />}
+                                                                <span className="text-xs font-bold">
+                                                                    {uploadingPoster ? 'Uploading...' : (form.poster_image_url ? 'Replace Poster' : 'Upload Poster')}
+                                                                </span>
+                                                                <span className="text-[10px] text-gray-500 text-center">
+                                                                    Sponsors strip — opens in a modal
+                                                                </span>
+                                                                <input type="file" accept="image/*" className="hidden" onChange={handlePosterUpload} disabled={uploadingPoster} />
+                                                            </label>
+                                                            {form.poster_image_url && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setField('poster_image_url', '')}
+                                                                    className="text-[11px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 transition-colors text-left"
+                                                                >
+                                                                    Remove poster
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                             <div>
