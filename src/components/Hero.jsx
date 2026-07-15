@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import heroBg from '../assets/herobg.jpeg';
 import AuthModal from './AuthModal';
 import { supabase } from '../supabaseClient';
-import { PlayCircle, Calendar, ChevronLeft, ChevronRight, ChevronDown, CheckCircle2, ExternalLink, Trophy, MapPin, Swords, Star, BarChart2, CreditCard } from 'lucide-react';
+import { PlayCircle, Calendar, ChevronLeft, ChevronRight, ChevronDown, CheckCircle2, ExternalLink, Trophy, MapPin, Swords, Star, BarChart2, CreditCard, User } from 'lucide-react';
 import VideoModal from './VideoModal';
 import { useRankedin } from '../hooks/useRankedin';
 import { usePendingPayments } from '../hooks/usePendingPayments';
@@ -547,7 +547,7 @@ const Hero = () => {
         // Respect admin impersonation so the greeting/stats reflect the impersonated user, not the admin
         const impersonationEmail = sessionStorage.getItem('admin_test_login_email');
         const email = impersonationEmail || session.user.email;
-        const CACHE_KEY = `hero_player_stats_v2_${email}`;
+        const CACHE_KEY = `hero_player_stats_v3_${email}`;
         let cancelled = false;
 
         try {
@@ -581,9 +581,10 @@ const Hero = () => {
             return null;
         };
 
+        // Same core fields as PlayerProfile so the hero card stays in sync.
         supabase
             .from('players')
-            .select('name, rank_label, points, region, rankedin_id, category')
+            .select('id, name, rank_label, points, region, rankedin_id, category, image_url, license_type, paid_registration')
             .ilike('email', email)
             .maybeSingle()
             .then(async ({ data, error }) => {
@@ -1009,62 +1010,102 @@ const Hero = () => {
                         <strong className="text-white font-medium">Events, rankings, clubs, players and organisers — all in one place</strong>.
                     </motion.p>
 
-                    {/* Personalized Greeting + Stats — visible only when logged in */}
+                    {/* Personalized profile card — same source data as /profile */}
                     {session && player && (
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.9, duration: 0.8 }}
-                            className="mb-6"
+                            className="mb-6 w-full"
                         >
                             <p className="text-white text-base md:text-lg font-bold mb-3">
                                 {getGreeting()}{firstName && <>, <span className="text-padel-green">{firstName}</span></>} <span aria-hidden="true">👋</span>
                             </p>
-                            <div className="grid grid-cols-3 divide-x divide-white/10 max-w-[21rem] sm:max-w-[23rem] bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl overflow-hidden">
-                                <div className="flex flex-col items-center text-center gap-1 px-3 py-3">
-                                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center mb-0.5 shadow-[0_0_10px_rgba(255,255,255,0.15)]">
-                                        <Trophy size={14} strokeWidth={1.75} className="text-white" />
+                            <div className="w-full text-left bg-[#0a0a0a]/70 backdrop-blur-xl border border-white/10 rounded-2xl p-3.5 sm:p-5">
+                                <div className="flex items-stretch gap-4 sm:gap-5">
+                                    <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full overflow-hidden border-2 border-white/10 bg-white/5 shrink-0 flex items-center justify-center shadow-lg self-center">
+                                        {player.image_url ? (
+                                            <img src={player.image_url} alt="" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <User size={32} className="text-white/40" />
+                                        )}
                                     </div>
-                                    <p className="text-white/60 text-[9px] font-semibold leading-none uppercase tracking-wider">Ranking</p>
-                                    <p className="text-white font-black text-base leading-none">
-                                        {player.rank_label && player.rank_label !== 'Unranked' ? `#${player.rank_label}` : '—'}
-                                    </p>
-                                    {typeof player.rankingChange === 'number' && (
-                                        <span
-                                            className={`inline-flex items-center gap-0.5 text-[10px] font-black leading-none ${
-                                                player.rankingChange > 0
-                                                    ? 'text-padel-green'
-                                                    : player.rankingChange < 0
-                                                        ? 'text-red-500'
-                                                        : 'text-gray-500'
-                                            }`}
-                                        >
-                                            {player.rankingChange > 0 && <>▲ {player.rankingChange}</>}
-                                            {player.rankingChange < 0 && <>▼ {Math.abs(player.rankingChange)}</>}
-                                            {player.rankingChange === 0 && <>-</>}
-                                        </span>
-                                    )}
-                                    <p className="text-white/40 text-[8px] font-medium leading-none truncate">National Ranking</p>
-                                </div>
-                                <div className="flex flex-col items-center text-center gap-1 px-3 py-3">
-                                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center mb-0.5 shadow-[0_0_10px_rgba(255,255,255,0.15)]">
-                                        <Star size={14} strokeWidth={1.75} className="text-white" />
+
+                                    <div className="min-w-0 flex-1 flex flex-col justify-start space-y-1.5 sm:space-y-2">
+                                        {player.license_type && (
+                                            <span className={`inline-flex items-center gap-1.5 border rounded-full px-2 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-wider w-fit ${
+                                                player.license_type === 'full'
+                                                    ? 'bg-padel-green/10 border-padel-green/30 text-padel-green'
+                                                    : player.license_type === 'temporary'
+                                                        ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                                                        : 'bg-white/5 border-white/10 text-gray-400'
+                                            }`}>
+                                                {player.license_type === 'full' && (
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-padel-green animate-pulse" />
+                                                )}
+                                                {player.license_type === 'full'
+                                                    ? 'Full License Player'
+                                                    : player.license_type === 'temporary'
+                                                        ? 'Temporary License Player'
+                                                        : 'No License'}
+                                            </span>
+                                        )}
+
+                                        <h3 className="text-white font-extrabold text-lg sm:text-2xl uppercase tracking-tight truncate leading-none">
+                                            {player.name || 'Player'}
+                                        </h3>
+
+                                        <div className="flex items-stretch pt-0.5 w-full">
+                                            <div className="flex flex-col items-start text-left flex-1 min-w-0 pr-3">
+                                                <p className="text-yellow-500 font-extrabold text-base sm:text-xl leading-none">
+                                                    {player.rank_label && player.rank_label !== 'Unranked' ? `#${player.rank_label}` : '—'}
+                                                </p>
+                                                {typeof player.rankingChange === 'number' && (
+                                                    <span
+                                                        className={`inline-flex items-center gap-0.5 text-[9px] font-black leading-none mt-0.5 ${
+                                                            player.rankingChange > 0
+                                                                ? 'text-padel-green'
+                                                                : player.rankingChange < 0
+                                                                    ? 'text-red-500'
+                                                                    : 'text-gray-500'
+                                                        }`}
+                                                    >
+                                                        {player.rankingChange > 0 && <>▲ {player.rankingChange}</>}
+                                                        {player.rankingChange < 0 && <>▼ {Math.abs(player.rankingChange)}</>}
+                                                        {player.rankingChange === 0 && <>-</>}
+                                                    </span>
+                                                )}
+                                                <p className="text-gray-500 text-[8px] sm:text-[9px] font-black uppercase tracking-widest mt-0.5">Rank</p>
+                                            </div>
+                                            <div className="w-px bg-white/10 shrink-0 self-stretch my-0.5" />
+                                            <div className="flex flex-col items-start text-left flex-1 min-w-0 px-3">
+                                                <p className="text-padel-green font-extrabold text-base sm:text-xl leading-none">
+                                                    {player.points !== undefined && player.points !== null
+                                                        ? Number(player.points).toLocaleString()
+                                                        : '—'}
+                                                </p>
+                                                <p className="text-gray-500 text-[8px] sm:text-[9px] font-black uppercase tracking-widest mt-0.5">Points</p>
+                                            </div>
+                                            <div className="w-px bg-white/10 shrink-0 self-stretch my-0.5" />
+                                            <div className="flex flex-col items-start text-left flex-1 min-w-0 pl-3">
+                                                <p className="text-white font-extrabold text-base sm:text-xl leading-none">
+                                                    {typeof winLossStats === 'string'
+                                                        ? winLossStats
+                                                        : (winLossStats ? `${winLossStats.wins}-${winLossStats.losses}` : '—')}
+                                                </p>
+                                                <p className="text-gray-500 text-[8px] sm:text-[9px] font-black uppercase tracking-widest mt-0.5">W-L</p>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <p className="text-white/60 text-[9px] font-semibold leading-none uppercase tracking-wider">Points</p>
-                                    <p className="text-white font-black text-base leading-none">
-                                        {player.points !== undefined && player.points !== null ? player.points.toLocaleString() : '—'}
-                                    </p>
-                                    <p className="text-white/40 text-[8px] font-medium leading-none truncate">Total Points</p>
-                                </div>
-                                <div className="flex flex-col items-center text-center gap-1 px-3 py-3">
-                                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center mb-0.5 shadow-[0_0_10px_rgba(255,255,255,0.15)]">
-                                        <BarChart2 size={14} strokeWidth={1.75} className="text-white" />
-                                    </div>
-                                    <p className="text-white/60 text-[9px] font-semibold leading-none uppercase tracking-wider">{new Date().getFullYear()}</p>
-                                    <p className="text-white font-black text-base leading-none">
-                                        {typeof winLossStats === 'string' ? winLossStats : (winLossStats ? `${winLossStats.wins}-${winLossStats.losses}` : '—')}
-                                    </p>
-                                    <p className="text-white/40 text-[8px] font-medium leading-none truncate">W-L</p>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate('/profile')}
+                                        aria-label="View profile"
+                                        className="self-center shrink-0 p-2 -mr-1 rounded-full text-white/50 hover:text-white hover:bg-white/5 transition-colors"
+                                    >
+                                        <ChevronRight size={22} />
+                                    </button>
                                 </div>
                             </div>
                         </motion.div>
