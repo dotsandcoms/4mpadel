@@ -35,7 +35,7 @@ const ApplyOrganisationModal = ({ isOpen, onClose, playerProfile, onSuccess }) =
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.96, y: 24 }}
                         transition={{ duration: 0.2 }}
-                        className="relative z-10 w-full max-w-md max-h-[min(82dvh,calc(100dvh-6rem))] flex flex-col bg-[#0a0a0a]/95 border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+                        className="relative z-10 w-full max-w-lg max-h-[min(90dvh,calc(100dvh-5rem))] flex flex-col bg-[#0a0a0a]/95 border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="absolute top-0 right-0 w-24 h-24 bg-padel-green/5 blur-3xl rounded-full pointer-events-none" />
