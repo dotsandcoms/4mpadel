@@ -639,6 +639,7 @@ const blankForm = {
     show_in_recent_results: false,
     allow_temporary_license: true,
     license_required_default: false,
+    collect_tshirt_size: false,
     entry_fee_notes: '',
     // format & capacity
     golden_point: true,
@@ -723,6 +724,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
     const [openPanels, setOpenPanels] = useState({
         identity: true, venue: false, display: false,
         regWindow: true, entryPayment: false, partnerCapacity: false, licenseDefaults: false,
+        playerGifts: false,
         divTools: false, divisions: true,
         operations: true, points: false, rules: false, contact: false,
         sponsors: true, websiteDisplay: false,
@@ -882,6 +884,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         setOpenPanels({
             identity: true, venue: false, display: false,
             regWindow: true, entryPayment: false, partnerCapacity: false, licenseDefaults: false,
+            playerGifts: false,
             divTools: false, divisions: true,
             operations: true, points: false, rules: false, contact: false,
             sponsors: true, websiteDisplay: false,
@@ -990,6 +993,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             courts_count: ev.courts_count != null && ev.courts_count !== '' ? String(ev.courts_count) : '',
             allow_temporary_license: ev.allow_temporary_license !== false,
             license_required_default: !!ev.license_required_default,
+            collect_tshirt_size: !!ev.collect_tshirt_size,
             entry_fee_notes: ev.entry_fee_notes || '',
             organisation_id: ev.organisation_id || null,
         });
@@ -1390,6 +1394,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                 .filter(Boolean),
             allow_temporary_license: !!form.allow_temporary_license,
             license_required_default: !!form.license_required_default,
+            collect_tshirt_size: !!form.collect_tshirt_size,
             entry_fee_notes: form.entry_fee_notes || null,
             scoring_point: form.scoring_point || 'golden',
             // Keep legacy boolean in sync for older UI / EventDetails fallback
@@ -2104,6 +2109,24 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                             >
                                                 <Shield size={16} /> Apply license requirement to all divisions
                                             </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Player gifts */}
+                                <div className="space-y-2">
+                                    <PanelHeader id="playerGifts" title="Player Gifts" />
+                                    {openPanels.playerGifts && (
+                                        <div className="space-y-3 p-4 rounded-xl border border-white/10 bg-black/20">
+                                            <label className="flex items-center justify-between bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
+                                                <div className="pr-3">
+                                                    <span className="text-sm font-medium text-gray-200 block">Collect T-shirt size</span>
+                                                    <span className="text-[11px] text-gray-500">
+                                                        Ask players for Men / Ladies / Juniors size during registration
+                                                    </span>
+                                                </div>
+                                                <input type="checkbox" name="collect_tshirt_size" checked={!!form.collect_tshirt_size} onChange={handleInput} className="accent-padel-green w-5 h-5 shrink-0" />
+                                            </label>
                                         </div>
                                     )}
                                 </div>

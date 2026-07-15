@@ -1605,7 +1605,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     }, [activeRegistrations, payments, divFee, formatPaymentMethodForExport, formatLicenseForExport, findPaymentForReg, refundByReg]);
 
     const exportCsv = () => {
-        const headers = ['Name', 'Email', 'Phone', 'Division', 'Partner', 'Partner Email', 'License', 'Payment Status', 'Payment Channel', 'Payment Note', 'Registration Status', 'Registered'];
+        const headers = ['Name', 'Email', 'Phone', 'Division', 'Partner', 'Partner Email', 'T-Shirt Size', 'License', 'Payment Status', 'Payment Channel', 'Payment Note', 'Registration Status', 'Registered'];
         const lines = [headers.join(',')];
         for (const r of registrations) {
             const details = getPaymentDetails(r);
@@ -1617,6 +1617,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             }
             const row = [
                 r.full_name, r.email, r.phone || '', r.division, r.partner_name || '', r.partner_email || '',
+                r.tshirt_size || '',
                 formatLicenseForExport(r), formatPaymentStatusForExport(r), channel,
                 details?.note || '',
                 r.status || '',

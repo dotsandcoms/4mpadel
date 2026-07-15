@@ -803,7 +803,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
         'organizer_email', 'organizer_website', 'custom_image_url', 'sponsor_logos',
         'registration_closes_at', 'registration_opens_at', 'event_dates', 'golden_point', 'scoring_point', 'is_league',
         'max_teams_capacity', 'partner_requirement', 'back_draw_options', 'event_co_admins',
-        'allow_payments', 'allow_temporary_license', 'license_required_default', 'entry_fee_notes',
+        'allow_payments', 'allow_temporary_license', 'license_required_default', 'collect_tshirt_size', 'entry_fee_notes',
         'indoor_outdoor', 'courts_count'
     ];
 

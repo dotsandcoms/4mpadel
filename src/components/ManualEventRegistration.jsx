@@ -32,6 +32,42 @@ const STEPS = [
 /** Incomplete Paystack checkouts older than this are marked abandoned. */
 const ABANDONED_CHECKOUT_AFTER_MS = 24 * 60 * 60 * 1000;
 
+const TSHIRT_SIZES = {
+    Men: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'],
+    Ladies: ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
+    Juniors: ['Youth XS', 'Youth S', 'Youth M', 'Youth L', 'Youth XL', 'XS', 'S', 'M'],
+};
+
+const isJuniorDivision = (division) => {
+    const gender = String(division?.gender || '').toLowerCase();
+    const name = String(division?.name || '').toLowerCase();
+    const age = String(division?.age_category || '').toLowerCase();
+    return gender === 'junior'
+        || age === 'junior'
+        || name.includes('junior')
+        || name.includes('boys')
+        || name.includes('girls')
+        || /\bu\d+/.test(name);
+};
+
+/**
+ * Pick Men / Ladies / Juniors size chart from player gender + selected divisions.
+ */
+const resolveTshirtChart = (player, divisions = []) => {
+    const list = Array.isArray(divisions) ? divisions : [];
+    if (list.length > 0 && list.every(isJuniorDivision)) return 'Juniors';
+    if (list.some(isJuniorDivision) && list.every((d) => isJuniorDivision(d) || !d.gender || d.gender === 'Mixed')) {
+        return 'Juniors';
+    }
+    const gender = String(player?.gender || '').toLowerCase();
+    if (gender === 'female' || gender === 'f' || gender === 'lady' || gender === 'ladies') return 'Ladies';
+    if (gender === 'male' || gender === 'm' || gender === 'men' || gender === "men's") return 'Men';
+    if (list.some((d) => String(d.gender || '').toLowerCase() === 'ladies')) return 'Ladies';
+    if (list.some((d) => String(d.gender || '').toLowerCase() === 'men')) return 'Men';
+    if (list.some(isJuniorDivision)) return 'Juniors';
+    return 'Men';
+};
+
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmtRWhole = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
@@ -338,6 +374,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const [agreeComplete, setAgreeComplete] = useState(false);
     const [agreeSapa, setAgreeSapa] = useState(false);
     const [showRulesModal, setShowRulesModal] = useState(false);
+    const [tshirtSize, setTshirtSize] = useState('');
+    const [partnerTshirtSizes, setPartnerTshirtSizes] = useState({});
 
     const [partnerSearch, setPartnerSearch] = useState({ query: '', results: [] });
     const [expandedDivisions, setExpandedDivisions] = useState({});
@@ -745,6 +783,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setAgreeRules(false);
         setAgreeComplete(false);
         setAgreeSapa(false);
+        setTshirtSize('');
+        setPartnerTshirtSizes({});
         await loadProfile();
         setWizardStep(4);
         setShowWizard(true);
@@ -791,6 +831,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setAgreeRules(false);
         setAgreeComplete(false);
         setAgreeSapa(false);
+        setTshirtSize('');
+        setPartnerTshirtSizes({});
         await loadProfile();
         await loadDivisionRegs();
         setWizardStep(2);
@@ -868,6 +910,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setAgreeRules(false);
         setAgreeComplete(false);
         setAgreeSapa(false);
+        setTshirtSize('');
+        setPartnerTshirtSizes({});
         setBuyLicenseSelf(false);
         setBuyLicensePartner(false);
         setPartnerLicenseOption('none');
@@ -897,6 +941,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setAgreeRules(false);
         setAgreeComplete(false);
         setAgreeSapa(false);
+        setTshirtSize('');
+        setPartnerTshirtSizes({});
         loadProfile();
         loadDivisionRegs();
         loadDivisions();
@@ -1350,6 +1396,39 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         [divisions, selected]
     );
 
+    const collectTshirtSize = !!event?.collect_tshirt_size;
+
+    const selfTshirtChart = useMemo(
+        () => resolveTshirtChart(displayProfile || profile, selectedDivisions),
+        [displayProfile, profile, selectedDivisions],
+    );
+
+    /** Partners we are creating as new registration rows (need their own size). */
+    const partnersNeedingTshirt = useMemo(() => {
+        if (!collectTshirtSize) return [];
+        const seen = new Map();
+        for (const d of selectedDivisions) {
+            const sel = selected[d.id];
+            if (!sel?.partnerName || !sel?.partnerEmail) continue;
+            const existingPartnerReg = divisionRegs.find(
+                (r) => r.division_id === d.id
+                    && String(r.email || '').toLowerCase() === String(sel.partnerEmail).toLowerCase()
+                    && r.status !== 'withdrawn',
+            );
+            if (existingPartnerReg || sel.linkSoloRegId) continue;
+            const key = String(sel.partnerEmail).toLowerCase();
+            if (seen.has(key)) continue;
+            seen.set(key, {
+                email: sel.partnerEmail,
+                name: sel.partnerName,
+                chart: resolveTshirtChart(sel.partnerProfile, [d]),
+            });
+        }
+        return Array.from(seen.values());
+    }, [collectTshirtSize, selectedDivisions, selected, divisionRegs]);
+
+    const needsSelfTshirt = collectTshirtSize && wizardMode === 'register';
+
     useEffect(() => {
         selectedDivisions.forEach((d) => {
             const sel = selected[d.id];
@@ -1763,6 +1842,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     : null,
                 status: 'registered',
                 registered_by: existingSelfReg?.registered_by || userEmail,
+                tshirt_size: tshirtSize || existingSelfReg?.tshirt_size || null,
             });
             if (selfPays && fee > 0) covers.push({ email: userEmail, division: d.name, type: 'entry' });
 
@@ -1804,6 +1884,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         }
                     }
                 } else {
+                    const partnerEmailKey = String(sel.partnerEmail).toLowerCase();
                     rows.push({
                         event_id: event.id,
                         division_id: d.id,
@@ -1816,6 +1897,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         payment_status: 'pending',
                         status: 'registered',
                         registered_by: userEmail,
+                        tshirt_size: partnerTshirtSizes[partnerEmailKey] || null,
                     });
                     if (partnerPays && fee > 0) covers.push({ email: sel.partnerEmail, division: d.name, type: 'entry' });
                 }
@@ -2198,6 +2280,16 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (!agreeRules || !agreeComplete || !agreeSapa) {
             toast.error('Please accept all agreements'); return;
         }
+        if (needsSelfTshirt && !tshirtSize) {
+            toast.error('Please select your T-shirt size'); return;
+        }
+        for (const partner of partnersNeedingTshirt) {
+            const key = String(partner.email).toLowerCase();
+            if (!partnerTshirtSizes[key]) {
+                toast.error(`Please select a T-shirt size for ${partner.name}`);
+                return;
+            }
+        }
 
         setProcessing(true);
         try {
@@ -2520,6 +2612,16 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             toast.error('Search and select your partner from their 4M profile'); return;
         }
         if (wizardStep === 4) {
+            if (needsSelfTshirt && !tshirtSize) {
+                toast.error('Please select your T-shirt size'); return;
+            }
+            for (const partner of partnersNeedingTshirt) {
+                const key = String(partner.email).toLowerCase();
+                if (!partnerTshirtSizes[key]) {
+                    toast.error(`Please select a T-shirt size for ${partner.name}`);
+                    return;
+                }
+            }
             const hasPayableSelection = selectedDivisions.some((d) => {
                 const sel = selected[d.id];
                 const fee = Number(d.entry_fee || 0);
@@ -3449,6 +3551,59 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 <span className="text-xl font-bold text-slate-900 tabular-nums">{fmtR(reviewPaySummary.totalPayable)}</span>
                             </CardBody>
                         </Card>
+
+                        {(needsSelfTshirt || partnersNeedingTshirt.length > 0) && (
+                            <Card>
+                                <CardHeader title="T-shirt size" soft />
+                                <CardBody className="space-y-4">
+                                    <p className="text-[11px] text-slate-600 font-normal leading-snug">
+                                        This event gifts a T-shirt to entrants. Select the correct size chart for each player.
+                                    </p>
+                                    {needsSelfTshirt && (
+                                        <div>
+                                            <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
+                                                Your size ({selfTshirtChart})
+                                            </label>
+                                            <select
+                                                value={tshirtSize}
+                                                onChange={(e) => setTshirtSize(e.target.value)}
+                                                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-offset-0"
+                                                style={{ accentColor: accent }}
+                                            >
+                                                <option value="">Select size</option>
+                                                {(TSHIRT_SIZES[selfTshirtChart] || TSHIRT_SIZES.Men).map((size) => (
+                                                    <option key={size} value={size}>{size}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+                                    {partnersNeedingTshirt.map((partner) => {
+                                        const key = String(partner.email).toLowerCase();
+                                        return (
+                                            <div key={key}>
+                                                <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
+                                                    {partner.name} ({partner.chart})
+                                                </label>
+                                                <select
+                                                    value={partnerTshirtSizes[key] || ''}
+                                                    onChange={(e) => setPartnerTshirtSizes((prev) => ({
+                                                        ...prev,
+                                                        [key]: e.target.value,
+                                                    }))}
+                                                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-offset-0"
+                                                    style={{ accentColor: accent }}
+                                                >
+                                                    <option value="">Select size</option>
+                                                    {(TSHIRT_SIZES[partner.chart] || TSHIRT_SIZES.Men).map((size) => (
+                                                        <option key={size} value={size}>{size}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        );
+                                    })}
+                                </CardBody>
+                            </Card>
+                        )}
 
                         <div className="space-y-2.5 pt-1">
                             {[
