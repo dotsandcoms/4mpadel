@@ -104,6 +104,27 @@ function coversOf(payment: PaymentRow): Cover[] {
     return Array.isArray(meta.covers) ? (meta.covers as Cover[]) : [];
 }
 
+/**
+ * Paystack only knows about the original checkout reference. License splits
+ * create ledger-only rows (`LIC-<parent>` with metadata.parent_reference) that
+ * must never be sent to Paystack's refund/verify APIs.
+ */
+export function resolvePaystackGatewayReference(payment: PaymentRow): string {
+    const meta = parseMeta(payment.metadata);
+    const parent = String(meta.parent_reference || '').trim();
+    if (parent) return parent;
+    const ref = String(payment.reference || '');
+    if (ref.startsWith('LIC-')) return ref.slice(4);
+    return ref;
+}
+
+/** True when this payments row is a bookkeeping split, not a gateway charge. */
+export function isLedgerSplitPayment(payment: PaymentRow): boolean {
+    const meta = parseMeta(payment.metadata);
+    if (String(meta.parent_reference || '').trim()) return true;
+    return String(payment.reference || '').startsWith('LIC-');
+}
+
 function divisionFeesOf(payment: PaymentRow): Record<string, number> {
     const meta = parseMeta(payment.metadata);
     return (meta.division_entry_fees as Record<string, number>) || {};
@@ -211,7 +232,8 @@ export function resolveRefundableItems(
         const amount = Math.min(entryFee, remaining);
         items.push({
             payment_id: p.id,
-            reference: p.reference,
+            // Always the Paystack checkout ref (parent), never LIC-* ledger refs.
+            reference: resolvePaystackGatewayReference(p),
             refund_amount_rands: amount,
             cover_type: 'entry',
             already_refunded_rands: drawnByPayment.get(p.id) || 0,
@@ -241,7 +263,8 @@ export function resolveRefundableItems(
         if (amount <= 0) continue;
         items.push({
             payment_id: p.id,
-            reference: p.reference,
+            // LIC-* rows are ledger splits — refund against the parent Paystack charge.
+            reference: resolvePaystackGatewayReference(p),
             refund_amount_rands: amount,
             cover_type: 'license',
             already_refunded_rands: drawnByPayment.get(p.id) || 0,
@@ -445,6 +468,9 @@ export async function switchRegistrationDivision(
         .eq('status', 'registered');
 
     // 2. Move the registration row to the new division (solo, partner cleared).
+    //    Reset registered_by to the player themselves: the moved entry is now a
+    //    fresh solo self-entry, not an invite. Leaving the old inviter here makes
+    //    it look perpetually "added by partner" and falsely blocks re-pairing.
     const { error } = await supabaseAdmin
         .from('event_registrations')
         .update({
@@ -453,6 +479,7 @@ export async function switchRegistrationDivision(
             partner_name: null,
             partner_email: null,
             partner_payment_status: null,
+            registered_by: reg.email,
         })
         .eq('id', reg.id);
     if (error) throw error;

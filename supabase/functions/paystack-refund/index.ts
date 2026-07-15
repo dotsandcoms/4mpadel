@@ -9,7 +9,9 @@ import {
     applyRegistrationWithdrawal,
     cancelEventTempLicense,
     checkRefundEligibility,
+    isLedgerSplitPayment,
     resolveIsAdmin,
+    resolvePaystackGatewayReference,
     resolveRefundableItems,
     roundRands,
     switchRegistrationDivision,
@@ -85,11 +87,13 @@ async function paystackRefund(
 }
 
 /**
- * Before refunding, confirm the ledger reference is actually successful on
- * Paystack. Abandoned / duplicate checkout rows can be marked success locally
- * (e.g. after a bad sync) while a later REGEV-* reference is the real charge.
- * When that happens, demote the bad row and switch to a sibling payment that
- * covers the same entry and verifies as success.
+ * Before refunding, confirm the gateway reference is actually successful on
+ * Paystack. Ledger-split rows (LIC-* with parent_reference) are not real
+ * Paystack transactions — verify/refund against the parent checkout instead.
+ *
+ * Abandoned / duplicate checkout rows can be marked success locally while a
+ * later REGEV-* reference is the real charge. When that happens, demote the
+ * bad row (never a LIC-* split) and switch to a verified sibling.
  */
 async function resolvePaystackRefundTarget(
     supabaseAdmin: SupabaseClient,
@@ -112,21 +116,33 @@ async function resolvePaystackRefundTarget(
         return { ok: false, payment_id: item.payment_id, reference: item.reference, message: 'Payment row missing' };
     }
 
+    const ledgerSplit = isLedgerSplitPayment(payment);
+    const gatewayRef = resolvePaystackGatewayReference(payment) || item.reference;
+
     const { secrets, configError } = resolvePaystackVerifySecrets(payment as unknown as Record<string, unknown>);
     if (secrets.length === 0) {
-        return { ok: false, payment_id: item.payment_id, reference: item.reference, message: configError || 'Paystack not configured' };
+        return { ok: false, payment_id: item.payment_id, reference: gatewayRef, message: configError || 'Paystack not configured' };
     }
 
-    const primary = await verifyPaystackReference(item.reference, secrets);
+    const primary = await verifyPaystackReference(gatewayRef, secrets);
     if (primary.ok) {
-        return { ok: true, payment_id: item.payment_id, reference: item.reference };
+        return {
+            ok: true,
+            payment_id: item.payment_id,
+            reference: gatewayRef,
+            remapped: gatewayRef !== String(payment.reference || ''),
+            message: gatewayRef !== String(payment.reference || '')
+                ? `Ledger ${payment.reference} → Paystack ${gatewayRef}`
+                : undefined,
+        };
     }
 
     const paystackStatus = String(primary.status || '').toLowerCase();
-    // Demote local success that Paystack never settled — stops future refunds
-    // from picking the abandoned checkout again.
-    if (['abandoned', 'failed', 'reversed', 'ongoing', 'pending', 'processing', 'queued', 'unknown'].includes(paystackStatus)
-        || primary.message) {
+    // Demote local success that Paystack never settled — but never demote
+    // LIC-* ledger splits (they are not gateway charges).
+    if (!ledgerSplit
+        && (['abandoned', 'failed', 'reversed', 'ongoing', 'pending', 'processing', 'queued', 'unknown'].includes(paystackStatus)
+            || primary.message)) {
         await supabaseAdmin
             .from('payments')
             .update({
@@ -146,9 +162,13 @@ async function resolvePaystackRefundTarget(
 
     const regEmail = normEmail(reg.email);
     const regDivision = String(reg.division || '');
+    const parentRef = String(parseMeta(payment.metadata).parent_reference || '').trim();
+
     const candidates = ctx.payments
         .filter((p) => p.id !== payment.id && p.status === 'success')
         .filter((p) => {
+            // Prefer the parent checkout that the LIC-* row was split from.
+            if (parentRef && p.reference === parentRef) return true;
             const covers = parseMeta(p.metadata).covers;
             if (!Array.isArray(covers)) return false;
             if (item.cover_type === 'license') {
@@ -162,31 +182,42 @@ async function resolvePaystackRefundTarget(
                 && normEmail(c.email) === regEmail
                 && String(c.division || '') === regDivision);
         })
-        .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+        .sort((a, b) => {
+            // Parent of a ledger split first, then most recent.
+            if (parentRef) {
+                if (a.reference === parentRef && b.reference !== parentRef) return -1;
+                if (b.reference === parentRef && a.reference !== parentRef) return 1;
+            }
+            return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+        });
 
     for (const candidate of candidates) {
         const { secrets: candSecrets } = resolvePaystackVerifySecrets(candidate as unknown as Record<string, unknown>);
         if (candSecrets.length === 0) continue;
-        const verified = await verifyPaystackReference(candidate.reference, candSecrets);
+        const candGateway = resolvePaystackGatewayReference(candidate);
+        const verified = await verifyPaystackReference(candGateway, candSecrets);
         if (!verified.ok) continue;
-        ctx.paymentById.set(candidate.id, candidate);
+        // Keep ledger attribution on the original split row when we only needed
+        // its parent gateway ref; remap payment_id only for true sibling swaps.
+        const keepLedgerRow = ledgerSplit && candidate.reference === parentRef;
+        if (!keepLedgerRow) ctx.paymentById.set(candidate.id, candidate);
         console.warn(
-            `Refund remapped from unverified ${item.reference} → verified ${candidate.reference} for ${reg.email} / ${reg.division}`,
+            `Refund remapped from unverified ${payment.reference} → verified ${candGateway} for ${reg.email} / ${reg.division}`,
         );
         return {
             ok: true,
-            payment_id: candidate.id,
-            reference: candidate.reference,
+            payment_id: keepLedgerRow ? item.payment_id : candidate.id,
+            reference: candGateway,
             remapped: true,
-            message: `Remapped from ${item.reference} (Paystack: ${paystackStatus})`,
+            message: `Remapped from ${payment.reference} (Paystack: ${paystackStatus})`,
         };
     }
 
     return {
         ok: false,
         payment_id: item.payment_id,
-        reference: item.reference,
-        message: `Paystack has no successful charge for ${item.reference} (${paystackStatus}: ${primary.message}). No verified sibling payment found.`,
+        reference: gatewayRef,
+        message: `Paystack has no successful charge for ${gatewayRef} (${paystackStatus}: ${primary.message}). No verified sibling payment found.`,
     };
 }
 
@@ -197,6 +228,8 @@ type RefundSummaryItem = {
     paystack: boolean;
     status: string;
     reason: RefundReason;
+    /** Paystack gateway references actually refunded (never LIC-* ledger refs). */
+    references: string[];
 };
 
 /**
@@ -230,6 +263,7 @@ async function processRegistration(
     let refundedTotal = 0;
     let anyPaystack = false;
     let aggregateStatus = items.length === 0 ? 'no_refund' : 'processing';
+    const refundedReferences: string[] = [];
 
     for (const item of items) {
         let payment = ctx.paymentById.get(item.payment_id);
@@ -310,13 +344,14 @@ async function processRegistration(
 
         if (useCash) {
             refundedTotal = roundRands(refundedTotal + item.refund_amount_rands);
+            if (refundReference) refundedReferences.push(refundReference);
             if (item.cover_type === 'license') {
                 await cancelEventTempLicense(supabaseAdmin, reg.email, ctx.eventId);
             }
             continue;
         }
 
-        // 2. Call Paystack against the verified reference.
+        // 2. Call Paystack against the verified gateway reference (never LIC-*).
         const secret = getPaystackSecretForPayment((payment ?? {}) as Record<string, unknown>);
         const result = await paystackRefund(secret, refundReference, toPaystackCents(item.refund_amount_rands));
 
@@ -327,6 +362,7 @@ async function processRegistration(
                 cover_type: item.cover_type,
                 is_test: item.is_test,
                 method,
+                ledger_reference: payment?.reference || item.reference,
                 ...verifyMeta,
                 ...(result.ok ? {} : { paystack_error: result.message }),
             },
@@ -336,6 +372,7 @@ async function processRegistration(
         if (result.ok) {
             anyPaystack = true;
             refundedTotal = roundRands(refundedTotal + item.refund_amount_rands);
+            if (refundReference) refundedReferences.push(refundReference);
             if (item.cover_type === 'license') {
                 await cancelEventTempLicense(supabaseAdmin, reg.email, ctx.eventId);
             }
@@ -375,6 +412,7 @@ async function processRegistration(
         paystack: anyPaystack,
         status: aggregateStatus,
         reason: ctx.reason,
+        references: [...new Set(refundedReferences)],
     };
 }
 
@@ -491,10 +529,11 @@ async function handleSwitchDivision(
         if (coveringPayment) {
             const method = String((coveringPayment as unknown as Record<string, unknown>).payment_method || 'paystack');
             const isCash = method === 'cash' || method === 'manual';
+            const gatewayRef = resolvePaystackGatewayReference(coveringPayment);
             const { data: refundRow } = await supabaseAdmin.from('payment_refunds').insert([{
                 payment_id: coveringPayment.id,
                 event_registration_id: reg.id,
-                paystack_reference: coveringPayment.reference,
+                paystack_reference: gatewayRef,
                 amount: refundAmount,
                 currency: 'ZAR',
                 status: isCash ? 'processed' : 'pending',
@@ -506,7 +545,7 @@ async function handleSwitchDivision(
 
             if (!isCash) {
                 const secret = getPaystackSecretForPayment(coveringPayment as unknown as Record<string, unknown>);
-                const r = await paystackRefund(secret, coveringPayment.reference, toPaystackCents(refundAmount));
+                const r = await paystackRefund(secret, gatewayRef, toPaystackCents(refundAmount));
                 await supabaseAdmin.from('payment_refunds')
                     .update({ paystack_refund_id: r.refundId, status: r.ok ? 'processing' : 'failed' })
                     .eq('id', refundRow?.id);
@@ -740,6 +779,7 @@ serve(async (req: Request) => {
                     paystack: false,
                     status: `skipped:${elig.reason}`,
                     reason: 'owner_withdraw',
+                    references: [],
                 });
                 continue;
             }
@@ -811,7 +851,7 @@ serve(async (req: Request) => {
                         eventName: event?.event_name || 'Tournament',
                         division: reg.division,
                         amount: fmtR(summary.refunded_rands),
-                        reference: results.length ? (successPayments[0]?.reference || '') : '',
+                        reference: summary.references.join(', ') || '',
                         eventUrl,
                     },
                 });
