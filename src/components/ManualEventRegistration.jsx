@@ -892,6 +892,15 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     const reg = myRegs.find((r) => r.id === regId);
                     if (reg) setRemovePartnerTarget(reg);
                 },
+                openManageEntry: () => {
+                    setDivisionsBlockOpen(true);
+                    requestAnimationFrame(() => {
+                        document.getElementById('manual-registration')?.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start',
+                        });
+                    });
+                },
                 openRegistration: () => {
                     if (!userEmail) {
                         promptMembersOnly();

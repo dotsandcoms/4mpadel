@@ -128,8 +128,14 @@ const EventSponsorStrip = ({ items, className = '', onPosterClick, accentColor =
     const poster = items.find((item) => item.type === 'poster') || null;
     const sponsors = items.filter((item) => item.type === 'sponsor');
 
-    const sectionLabelClass = 'text-[9px] sm:text-[10px] font-bold uppercase tracking-wider leading-none mb-2';
-    const cellClass = 'flex-1 flex flex-col items-center justify-center px-3 py-3 sm:py-3.5 min-w-0';
+    const hasOrg = Boolean(org);
+    const hasPoster = Boolean(poster);
+    const hasSponsors = sponsors.length > 0;
+    if (!hasOrg && !hasPoster && !hasSponsors) return null;
+
+    // Fixed-height labels keep Organisation / Event Poster / Sponsors on one baseline
+    const labelClass = 'h-4 flex items-center justify-center text-[9px] sm:text-[10px] font-bold uppercase tracking-wider leading-none whitespace-nowrap';
+    const sideColClass = 'shrink-0 w-[5.75rem] sm:w-[6.5rem] flex flex-col items-center pt-3 pb-3 sm:pb-3.5 px-2 sm:px-2.5';
 
     const canSlideSponsors = sponsors.length > SPONSOR_SLIDE_SIZE;
     const visibleSponsors = canSlideSponsors
@@ -141,106 +147,104 @@ const EventSponsorStrip = ({ items, className = '', onPosterClick, accentColor =
         setSponsorOffset((prev) => (prev + 1) % sponsors.length);
     };
 
-    const sections = [];
-
-    if (org) {
-        const orgImg = (
-            <img
-                src={org.url}
-                alt={org.label || 'Organisation'}
-                className="h-8 sm:h-10 w-auto max-w-full object-contain"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-            />
-        );
-        sections.push(
-            org.href ? (
-                <Link
-                    key="org"
-                    to={org.href}
-                    className={`${cellClass} hover:bg-white/5 transition-colors`}
-                    title={org.label || 'Organisation'}
-                >
-                    <span className={sectionLabelClass} style={{ color: accentColor }}>Organisation</span>
-                    {orgImg}
-                </Link>
-            ) : (
-                <div key="org" className={cellClass}>
-                    <span className={sectionLabelClass} style={{ color: accentColor }}>Organisation</span>
-                    {orgImg}
-                </div>
-            ),
-        );
-    }
-
-    if (poster) {
-        const posterImg = (
-            <img
-                src={poster.url}
-                alt={poster.label || 'Event poster'}
-                className="h-10 sm:h-12 w-auto max-w-[3.5rem] sm:max-w-[4.5rem] object-cover rounded-sm"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-            />
-        );
-        sections.push(
-            onPosterClick ? (
-                <button
-                    key="poster"
-                    type="button"
-                    onClick={() => onPosterClick(poster.url)}
-                    className={`${cellClass} hover:bg-white/5 transition-colors cursor-pointer`}
-                    title="View event poster"
-                >
-                    <span className={sectionLabelClass} style={{ color: accentColor }}>Event Poster</span>
-                    {posterImg}
-                </button>
-            ) : (
-                <div key="poster" className={cellClass}>
-                    <span className={sectionLabelClass} style={{ color: accentColor }}>Event Poster</span>
-                    {posterImg}
-                </div>
-            ),
-        );
-    }
-
-    if (sponsors.length > 0) {
-        sections.push(
-            <div key="sponsors" className={`${cellClass} relative`}>
-                <span className={sectionLabelClass} style={{ color: accentColor }}>Sponsors</span>
-                <div className="w-full flex items-center gap-1.5 sm:gap-2">
-                    <div className="flex-1 min-w-0 flex items-center justify-center gap-3 sm:gap-4 overflow-hidden">
-                        {visibleSponsors.map((item, i) => (
-                            <img
-                                key={`${item.url}-${sponsorOffset}-${i}`}
-                                src={item.url}
-                                alt={item.label || `Sponsor ${i + 1}`}
-                                className="h-7 sm:h-9 w-auto max-w-[4rem] sm:max-w-[5rem] object-contain shrink-0"
-                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                            />
-                        ))}
-                    </div>
-                    {canSlideSponsors && (
-                        <button
-                            type="button"
-                            onClick={advanceSponsors}
-                            className="shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full border flex items-center justify-center hover:bg-white/10 transition-colors"
-                            style={{ borderColor: accentColor, color: accentColor }}
-                            aria-label="Next sponsors"
-                            title="Next sponsors"
-                        >
-                            <ChevronRight className="w-4 h-4" />
-                        </button>
-                    )}
-                </div>
-            </div>,
-        );
-    }
-
-    if (!sections.length) return null;
-
     return (
         <div className={`rounded-2xl border border-white/10 bg-black/30 backdrop-blur-sm overflow-hidden ${className}`}>
-            <div className="flex items-stretch justify-center divide-x divide-white/10">
-                {sections}
+            <div className="flex items-stretch divide-x divide-white/10">
+                {hasOrg && (
+                    org.href ? (
+                        <Link
+                            to={org.href}
+                            className={`${sideColClass} hover:bg-white/5 transition-colors`}
+                            title={org.label || 'Organisation'}
+                        >
+                            <p className={`${labelClass} mb-2`} style={{ color: accentColor }}>Organisation</p>
+                            <div className="flex-1 flex items-center justify-center">
+                                <img
+                                    src={org.url}
+                                    alt={org.label || 'Organisation'}
+                                    className="h-8 sm:h-10 w-auto max-w-full object-contain"
+                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                            </div>
+                        </Link>
+                    ) : (
+                        <div className={sideColClass}>
+                            <p className={`${labelClass} mb-2`} style={{ color: accentColor }}>Organisation</p>
+                            <div className="flex-1 flex items-center justify-center">
+                                <img
+                                    src={org.url}
+                                    alt={org.label || 'Organisation'}
+                                    className="h-8 sm:h-10 w-auto max-w-full object-contain"
+                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                            </div>
+                        </div>
+                    )
+                )}
+
+                {hasPoster && (
+                    onPosterClick ? (
+                        <button
+                            type="button"
+                            onClick={() => onPosterClick(poster.url)}
+                            className={`${sideColClass} hover:bg-white/5 transition-colors cursor-pointer`}
+                            title="View event poster"
+                        >
+                            <p className={`${labelClass} mb-2`} style={{ color: accentColor }}>Event Poster</p>
+                            <div className="flex-1 flex items-center justify-center">
+                                <img
+                                    src={poster.url}
+                                    alt={poster.label || 'Event poster'}
+                                    className="h-10 sm:h-12 w-auto max-w-[3.25rem] sm:max-w-[3.75rem] object-cover rounded-sm"
+                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                            </div>
+                        </button>
+                    ) : (
+                        <div className={sideColClass}>
+                            <p className={`${labelClass} mb-2`} style={{ color: accentColor }}>Event Poster</p>
+                            <div className="flex-1 flex items-center justify-center">
+                                <img
+                                    src={poster.url}
+                                    alt={poster.label || 'Event poster'}
+                                    className="h-10 sm:h-12 w-auto max-w-[3.25rem] sm:max-w-[3.75rem] object-cover rounded-sm"
+                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                            </div>
+                        </div>
+                    )
+                )}
+
+                {hasSponsors && (
+                    <div className="flex-1 min-w-0 flex flex-col items-center pt-3 pb-3 sm:pb-3.5 px-3">
+                        <p className={`${labelClass} mb-2`} style={{ color: accentColor }}>Sponsors</p>
+                        <div className="flex-1 w-full flex items-center gap-1.5 sm:gap-2 min-w-0">
+                            <div className="flex-1 min-w-0 flex items-center justify-center gap-3 sm:gap-5 overflow-hidden">
+                                {visibleSponsors.map((item, i) => (
+                                    <img
+                                        key={`${item.url}-${sponsorOffset}-${i}`}
+                                        src={item.url}
+                                        alt={item.label || `Sponsor ${i + 1}`}
+                                        className="h-7 sm:h-9 w-auto max-w-[4.5rem] sm:max-w-[6rem] object-contain shrink-0"
+                                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                    />
+                                ))}
+                            </div>
+                            {canSlideSponsors && (
+                                <button
+                                    type="button"
+                                    onClick={advanceSponsors}
+                                    className="shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full border flex items-center justify-center hover:bg-white/10 transition-colors"
+                                    style={{ borderColor: accentColor, color: accentColor }}
+                                    aria-label="Next sponsors"
+                                    title="Next sponsors"
+                                >
+                                    <ChevronRight className="w-4 h-4" />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -342,7 +346,7 @@ const RegistrationCountdown = ({
                     <button
                         type="button"
                         onClick={onCtaClick}
-                        className="relative overflow-hidden shrink-0 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-wide border transition-all hover:brightness-110"
+                        className="relative overflow-hidden shrink-0 whitespace-nowrap px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-wide border transition-all hover:brightness-110"
                         style={{
                             ...(ctaStyle || {
                                 background: `linear-gradient(145deg, color-mix(in srgb, ${accentColor} 68%, white 32%) 0%, ${accentColor} 50%, color-mix(in srgb, ${accentColor} 82%, black 18%) 100%)`,
@@ -3172,6 +3176,37 @@ const EventDetails = () => {
         manualRegActionsRef.current?.openPayFlow?.();
     };
 
+    /** Open the "You are registered" accordion and scroll it into view. */
+    const openManageEntry = () => {
+        if (!manualUserEmail) {
+            promptMembersOnly();
+            return;
+        }
+        setActiveTab('overview');
+        const run = (attempt = 0) => {
+            if (event?.is_manual) {
+                if (manualRegActionsRef.current?.openManageEntry) {
+                    manualRegActionsRef.current.openManageEntry();
+                    return;
+                }
+                if (attempt < 5) {
+                    setTimeout(() => run(attempt + 1), 50);
+                    return;
+                }
+                document.getElementById('manual-registration')?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start',
+                });
+                return;
+            }
+            document.getElementById('event-registration')?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+            });
+        };
+        requestAnimationFrame(() => setTimeout(() => run(), 50));
+    };
+
     const openRegistrationModal = () => {
         if (!manualUserEmail) {
             promptMembersOnly();
@@ -3735,14 +3770,14 @@ const EventDetails = () => {
                                     if (!isEventPassed) {
                                         if (event.is_manual) {
                                             if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
-                                                countdownCta = null;
+                                                countdownCta = { label: 'Manage Entry', onClick: openManageEntry };
                                             } else if (manualRegStatus.hasPendingPayment) {
                                                 countdownCta = { label: 'Pay', onClick: openManualPayFlow };
                                             } else if (!registrationNotYetOpen && !registrationClosed) {
                                                 countdownCta = { label: 'Register', onClick: openManualRegistration };
                                             }
                                         } else if (isRegistered && isPaid && registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) {
-                                            countdownCta = null;
+                                            countdownCta = { label: 'Manage Entry', onClick: openManageEntry };
                                         } else if (!isRegistered && !isLive && !isRankedinRegistrationClosed && !registrationNotYetOpen) {
                                             countdownCta = { label: 'Register', onClick: handleRankedinRedirect };
                                         } else if (
@@ -3838,7 +3873,7 @@ const EventDetails = () => {
                                         </div>
                                     )}
                                     {!event.is_manual && (
-                                        <div className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden ${registrationHighlightClass}`}>
+                                        <div id="event-registration" className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden ${registrationHighlightClass}`}>
                                             {(activeRegistrationBlock || readyToCompeteBlock) && (
                                                 <div className="p-4 sm:p-5 border-b border-gray-50">
                                                     {activeRegistrationBlock || readyToCompeteBlock}
