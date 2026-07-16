@@ -1605,13 +1605,15 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     }, [activeRegistrations, payments, divFee, formatPaymentMethodForExport, formatLicenseForExport, findPaymentForReg, refundByReg]);
 
     const exportCsv = () => {
+        // Export the same rows currently shown (withdrawn excluded unless that filter is on).
+        const rowsToExport = filtered;
         const headers = [
             'Name', 'Email', 'Phone', 'Division', 'Partner', 'Partner Email',
             'T-Shirt Size', 'T-Shirt Sponsor', 'T-Shirt Logo URL',
             'License', 'Payment Status', 'Payment Channel', 'Payment Note', 'Registration Status', 'Registered',
         ];
         const lines = [headers.join(',')];
-        for (const r of registrations) {
+        for (const r of rowsToExport) {
             const details = getPaymentDetails(r);
             let channel = '';
             if (details) {
