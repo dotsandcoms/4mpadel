@@ -1,8 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../supabaseClient';
 import { toast } from 'sonner';
-import { Mail, Users, Send, AlertCircle, Loader, CheckCircle, Search, Bold, Italic, Underline, List, ListOrdered, Link as LinkIcon, RemoveFormatting } from 'lucide-react';
+import { Mail, Users, UserPlus, Send, AlertCircle, Loader, CheckCircle, Search, Bold, Italic, Underline, List, ListOrdered, Link as LinkIcon, RemoveFormatting, X } from 'lucide-react';
 import { motion } from 'framer-motion';
+
+const parseEmailList = (text) =>
+    (text || '')
+        .split(/[,\n]/)
+        .map(e => e.trim())
+        .filter(e => e && e.includes('@'));
 
 const CustomWysiwyg = ({ value, onChange }) => {
     const editorRef = React.useRef(null);
@@ -60,9 +66,39 @@ const EmailBroadcastManager = () => {
     const [bodyHtml, setBodyHtml] = useState('');
     const [isSending, setIsSending] = useState(false);
     const [isTesting, setIsTesting] = useState(false);
-    
-    const [recipients, setRecipients] = useState([]);
+
+    const [eventRecipients, setEventRecipients] = useState([]);
     const [loadingRecipients, setLoadingRecipients] = useState(false);
+    const [paymentFilter, setPaymentFilter] = useState('all'); // 'all' | 'paid' | 'pending'
+    const [partnerFilter, setPartnerFilter] = useState('all'); // 'all' | 'has_partner' | 'solo'
+
+    const [manualEnabled, setManualEnabled] = useState(false);
+    const [manualEmailsText, setManualEmailsText] = useState('');
+
+    const [excludedEmails, setExcludedEmails] = useState([]);
+
+    const filtersActive = paymentFilter !== 'all' || partnerFilter !== 'all';
+
+    const manualRecipients = useMemo(() => {
+        if (!manualEnabled) return [];
+        return [...new Set(parseEmailList(manualEmailsText))];
+    }, [manualEnabled, manualEmailsText]);
+
+    const recipients = useMemo(() => {
+        const combined = new Set([...eventRecipients, ...manualRecipients]);
+        excludedEmails.forEach(e => combined.delete(e));
+        return [...combined];
+    }, [eventRecipients, manualRecipients, excludedEmails]);
+
+    const removeRecipient = (email) => {
+        setExcludedEmails(prev => (prev.includes(email) ? prev : [...prev, email]));
+    };
+
+    // Drop exclusions for emails that fell out of the audience (event/filter change,
+    // or manual list edit) so the "N removed" count never references someone no longer in the pool.
+    useEffect(() => {
+        setExcludedEmails(prev => prev.filter(e => eventRecipients.includes(e) || manualRecipients.includes(e)));
+    }, [eventRecipients, manualRecipients]);
 
     useEffect(() => {
         fetchEvents();
@@ -91,40 +127,63 @@ const EmailBroadcastManager = () => {
         );
     };
 
-    // Whenever selected events change, fetch the unique emails
+    // Whenever selected events or filters change, fetch the unique emails
     useEffect(() => {
         if (selectedEvents.length === 0) {
-            setRecipients([]);
+            setEventRecipients([]);
             return;
         }
 
         const fetchRecipients = async () => {
             setLoadingRecipients(true);
             try {
-                // Get local registrations
+                // Get local registrations (only source that carries payment/partner status)
                 const { data: regData, error: regError } = await supabase
                     .from('event_registrations')
-                    .select('email')
+                    .select('email, payment_status, partner_name, partner_email, status')
                     .in('event_id', selectedEvents);
 
                 if (regError) console.error("Error fetching event_registrations:", regError);
 
-                // Get rankedin participants
-                const { data: tpData, error: tpError } = await supabase
-                    .from('tournament_participants')
-                    .select('email')
-                    .in('event_id', selectedEvents);
+                const activeRegs = (regData || []).filter(
+                    r => String(r.status || '').toLowerCase() !== 'withdrawn'
+                );
 
-                if (tpError) console.error("Error fetching tournament_participants:", tpError);
+                const filtersOn = paymentFilter !== 'all' || partnerFilter !== 'all';
 
-                // Extract and deduplicate unique emails
-                const allEmails = [
-                    ...(regData || []).map(r => r.email),
-                    ...(tpData || []).map(r => r.email)
-                ].filter(e => e && e.includes('@'));
+                const filteredRegs = filtersOn
+                    ? activeRegs.filter(r => {
+                        if (paymentFilter !== 'all') {
+                            const isPaid = String(r.payment_status || 'pending').toLowerCase() === 'paid';
+                            if (paymentFilter === 'paid' && !isPaid) return false;
+                            if (paymentFilter === 'pending' && isPaid) return false;
+                        }
+                        if (partnerFilter !== 'all') {
+                            const hasPartner = !!(r.partner_name?.trim() || r.partner_email?.trim());
+                            if (partnerFilter === 'has_partner' && !hasPartner) return false;
+                            if (partnerFilter === 'solo' && hasPartner) return false;
+                        }
+                        return true;
+                    })
+                    : activeRegs;
 
-                const uniqueEmails = [...new Set(allEmails)];
-                setRecipients(uniqueEmails);
+                let allEmails = filteredRegs.map(r => r.email);
+
+                // Rankedin-synced participants have no payment/partner status, so they're
+                // only included when no filter is active (matches the old unfiltered behavior).
+                if (!filtersOn) {
+                    const { data: tpData, error: tpError } = await supabase
+                        .from('tournament_participants')
+                        .select('email')
+                        .in('event_id', selectedEvents);
+
+                    if (tpError) console.error("Error fetching tournament_participants:", tpError);
+
+                    allEmails = [...allEmails, ...(tpData || []).map(r => r.email)];
+                }
+
+                const uniqueEmails = [...new Set(allEmails.filter(e => e && e.includes('@')))];
+                setEventRecipients(uniqueEmails);
             } catch (error) {
                 console.error("Error fetching recipients:", error);
                 toast.error("Failed to load participants");
@@ -134,14 +193,14 @@ const EmailBroadcastManager = () => {
         };
 
         fetchRecipients();
-    }, [selectedEvents]);
+    }, [selectedEvents, paymentFilter, partnerFilter]);
 
     const handleSendTest = async () => {
         if (!subject.trim()) return toast.error("Please enter a subject line");
         if (!bodyHtml.trim()) return toast.error("Please enter the email message");
         if (!testEmails.trim()) return toast.error("Please enter at least one test email");
 
-        const emails = testEmails.split(',').map(e => e.trim()).filter(e => e && e.includes('@'));
+        const emails = parseEmailList(testEmails);
         if (emails.length === 0) return toast.error("Please enter valid email addresses");
 
         setIsTesting(true);
@@ -222,6 +281,11 @@ const EmailBroadcastManager = () => {
                 setSubject('');
                 setBodyHtml('');
                 setSelectedEvents([]);
+                setPaymentFilter('all');
+                setPartnerFilter('all');
+                setManualEnabled(false);
+                setManualEmailsText('');
+                setExcludedEmails([]);
             }
 
         } catch (error) {
@@ -298,6 +362,43 @@ const EmailBroadcastManager = () => {
                             )}
                         </div>
 
+                        {/* Payment / Partner filters */}
+                        {selectedEvents.length > 0 && (
+                            <div className="grid grid-cols-2 gap-3 mt-4">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Payment Status</label>
+                                    <select
+                                        value={paymentFilter}
+                                        onChange={(e) => setPaymentFilter(e.target.value)}
+                                        className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all"
+                                    >
+                                        <option value="all">All</option>
+                                        <option value="paid">Paid</option>
+                                        <option value="pending">Pending</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Partner Status</label>
+                                    <select
+                                        value={partnerFilter}
+                                        onChange={(e) => setPartnerFilter(e.target.value)}
+                                        className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all"
+                                    >
+                                        <option value="all">All</option>
+                                        <option value="has_partner">Has Partner</option>
+                                        <option value="solo">Solo / No Partner</option>
+                                    </select>
+                                </div>
+                            </div>
+                        )}
+
+                        {filtersActive && (
+                            <p className="text-[11px] text-amber-400/80 mt-3 flex items-start gap-1">
+                                <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                                Filtering by payment/partner status only applies to site registrations — Rankedin-synced participants are excluded while a filter is active.
+                            </p>
+                        )}
+
                         {/* Audience Stats */}
                         <div className="mt-4 flex items-center justify-between bg-black/50 p-4 rounded-xl border border-white/5">
                             <div>
@@ -306,6 +407,9 @@ const EmailBroadcastManager = () => {
                                     <span className="text-2xl font-black text-white">{loadingRecipients ? <Loader className="w-5 h-5 animate-spin text-padel-green" /> : recipients.length}</span>
                                     <span className="text-sm text-gray-400">Unique Emails</span>
                                 </div>
+                                {eventRecipients.length > 0 && manualRecipients.length > 0 && (
+                                    <p className="text-[11px] text-gray-500 mt-1">{eventRecipients.length} from tournaments + {manualRecipients.length} manual</p>
+                                )}
                             </div>
                             {recipients.length > 0 && (
                                 <div className="bg-padel-green/10 text-padel-green px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
@@ -313,6 +417,38 @@ const EmailBroadcastManager = () => {
                                 </div>
                             )}
                         </div>
+                    </div>
+
+                    {/* Manual Recipients */}
+                    <div className="bg-[#0a0a0a] border border-white/5 p-6 rounded-2xl shadow-xl">
+                        <div className="flex items-center justify-between mb-2">
+                            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                                <UserPlus className="w-5 h-5 text-padel-green" />
+                                Manual Recipients
+                            </h2>
+                            <button
+                                type="button"
+                                onClick={() => setManualEnabled(prev => !prev)}
+                                className={`relative w-11 h-6 rounded-full transition-colors ${manualEnabled ? 'bg-padel-green' : 'bg-white/10'}`}
+                                aria-pressed={manualEnabled}
+                            >
+                                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-black rounded-full transition-transform ${manualEnabled ? 'translate-x-5' : ''}`} />
+                            </button>
+                        </div>
+                        <p className="text-sm text-gray-400 mb-4">Add individual email addresses on top of the tournament audience above — useful for one-off follow-ups.</p>
+
+                        {manualEnabled && (
+                            <div>
+                                <textarea
+                                    value={manualEmailsText}
+                                    onChange={(e) => setManualEmailsText(e.target.value)}
+                                    placeholder="jane@example.com, john@example.com"
+                                    rows={3}
+                                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all resize-none"
+                                />
+                                <p className="text-[11px] text-gray-500 mt-2">Comma or newline separated. {manualRecipients.length} valid email{manualRecipients.length === 1 ? '' : 's'} detected.</p>
+                            </div>
+                        )}
                     </div>
 
                     {/* Email Composer */}
@@ -390,14 +526,39 @@ const EmailBroadcastManager = () => {
                                         </button>
                                     )}
                                 </p>
-                                <p className="text-sm text-white font-medium">{recipients.length} participants (BCC)</p>
-                                
+                                <p className="text-sm text-white font-medium">
+                                    {recipients.length} participants (BCC)
+                                    {excludedEmails.length > 0 && (
+                                        <span className="text-gray-500 font-normal"> · {excludedEmails.length} removed</span>
+                                    )}
+                                </p>
+
                                 {showRecipientsList && recipients.length > 0 && (
                                     <div className="mt-2 max-h-40 overflow-y-auto custom-scrollbar bg-black/50 border border-white/10 rounded-xl p-3 text-xs text-gray-400 space-y-1">
                                         {recipients.map(email => (
-                                            <div key={email} className="truncate">{email}</div>
+                                            <div key={email} className="group flex items-center justify-between gap-2">
+                                                <span className="truncate">{email}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeRecipient(email)}
+                                                    className="shrink-0 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    title="Remove from recipients"
+                                                >
+                                                    <X className="w-3 h-3" />
+                                                </button>
+                                            </div>
                                         ))}
                                     </div>
+                                )}
+
+                                {excludedEmails.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setExcludedEmails([])}
+                                        className="text-[11px] text-padel-green hover:text-white transition-colors mt-1"
+                                    >
+                                        Restore {excludedEmails.length} removed
+                                    </button>
                                 )}
                             </div>
                             <div>
