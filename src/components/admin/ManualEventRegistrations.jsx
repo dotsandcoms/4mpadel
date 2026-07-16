@@ -148,6 +148,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const [removeTarget, setRemoveTarget] = useState(null);
     const [removePair, setRemovePair] = useState(false);
     const [removeBusy, setRemoveBusy] = useState(false);
+    const [retryRefundId, setRetryRefundId] = useState(null);
     const [linkTarget, setLinkTarget] = useState(null); // solo entry we're adding a partner to
     const [linkSearch, setLinkSearch] = useState('');
     const [linkBusy, setLinkBusy] = useState(false);
@@ -262,13 +263,24 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         for (const rf of refunds) {
             const id = rf.event_registration_id;
             if (!id) continue;
-            const cur = m.get(id) || { amount: 0, statuses: [] };
+            const cur = m.get(id) || { amount: 0, statuses: [], rows: [] };
             cur.amount += Number(rf.amount || 0);
             cur.statuses.push(rf.status);
+            cur.rows.push(rf);
             m.set(id, cur);
         }
         return m;
     }, [refunds]);
+
+    const parseRefundMeta = (raw) => {
+        if (!raw) return {};
+        if (typeof raw === 'object') return raw;
+        try {
+            return JSON.parse(raw);
+        } catch {
+            return {};
+        }
+    };
 
     const stats = useMemo(() => {
         const active = registrations.filter((r) => !isWithdrawnRegistration(r));
@@ -302,7 +314,14 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         let status = 'pending';
         if (e.statuses.some((s) => s === 'failed' || s === 'needs_attention')) status = 'failed';
         else if (e.statuses.length && e.statuses.every((s) => s === 'processed')) status = 'processed';
-        return { amount: e.amount, status };
+        const failedRow = (e.rows || []).find((row) => String(row.status || '').toLowerCase() === 'failed');
+        const failedMeta = failedRow ? parseRefundMeta(failedRow.metadata) : {};
+        return {
+            amount: e.amount,
+            status,
+            failedRefundId: failedRow?.id || null,
+            failedError: failedMeta.paystack_error || failedMeta.error || null,
+        };
     };
 
     const openMarkPaidModal = (reg) => {
@@ -919,6 +938,29 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         }
         if (data?.error) throw new Error(data.message || data.error);
         return data;
+    };
+
+    const retryFailedRefund = async (paymentRefundId) => {
+        if (!paymentRefundId || retryRefundId) return;
+        setRetryRefundId(paymentRefundId);
+        try {
+            const res = await invokeAdminRefund({
+                action: 'retry_failed',
+                payment_refund_id: paymentRefundId,
+            });
+            if (res?.status === 'processed' || res?.retried) {
+                toast.success(res.settled_without_paystack_call
+                    ? 'Refund marked processed (already settled on Paystack)'
+                    : `Refund re-initiated${res.amount_rands ? ` — R ${Number(res.amount_rands).toFixed(2)}` : ''}`);
+            } else {
+                toast.success('Refund retry submitted');
+            }
+            load();
+        } catch (err) {
+            toast.error(err.message || 'Failed to retry refund');
+        } finally {
+            setRetryRefundId(null);
+        }
     };
 
     const partnerRegOf = (reg) => {
@@ -2213,8 +2255,26 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                                         ? { cls: 'bg-red-500/10 text-red-400', text: 'Refund failed' }
                                                                         : { cls: 'bg-sky-500/10 text-sky-400', text: `Refund pending ${fmtR(rf.amount)}` };
                                                                 return (
-                                                                    <div className={`mt-1 inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${cfg.cls}`}>
-                                                                        {cfg.text}
+                                                                    <div className="mt-1 space-y-1">
+                                                                        <div className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${cfg.cls}`}>
+                                                                            {cfg.text}
+                                                                        </div>
+                                                                        {rf.status === 'failed' && rf.failedError && (
+                                                                            <p className="text-[10px] text-red-400/80 leading-snug max-w-[200px]">{rf.failedError}</p>
+                                                                        )}
+                                                                        {rf.status === 'failed' && rf.failedRefundId && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => retryFailedRefund(rf.failedRefundId)}
+                                                                                disabled={retryRefundId === rf.failedRefundId}
+                                                                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-red-500/15 text-red-300 border border-red-500/25 hover:bg-red-500 hover:text-white disabled:opacity-50"
+                                                                            >
+                                                                                {retryRefundId === rf.failedRefundId
+                                                                                    ? <Loader2 size={10} className="animate-spin" />
+                                                                                    : <RotateCcw size={10} />}
+                                                                                Retry refund
+                                                                            </button>
+                                                                        )}
                                                                     </div>
                                                                 );
                                                             })()}
