@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
-    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy, Link2, Info, MessageCircle, XCircle, Pencil
+    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy, Link2, Info, MessageCircle, XCircle, Pencil, FileText, ArrowRight, ArrowDownLeft, ArrowUpRight
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
@@ -27,10 +27,19 @@ import { logEventActivity } from '../../utils/eventActivityLog';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
+const successPaymentsOnly = (payments) => (payments || []).filter((p) => p.status === 'success');
+
+/** True if this registration has a successful Paystack entry payment on record (even if later refunded). */
+const hasPaystackEntryPaymentRecord = (reg, payments) =>
+    registrationHasPaystackEntryPayment(reg, successPaymentsOnly(payments));
+
 const isPaystackEntryPayment = (reg, payments, refundByRegMap = null) => {
     if (!registrationCountsAsPaid(reg, refundByRegMap)) return false;
-    return registrationHasPaystackEntryPayment(reg, (payments || []).filter((p) => p.status === 'success'));
+    return hasPaystackEntryPaymentRecord(reg, payments);
 };
+
+const PLATFORM_COMMISSION_RATE = 0.05;
+const PAYOUT_ADMIN_EMAIL = 'markstillerman@gmail.com';
 
 const ABANDONED_CHECKOUT_AFTER_MS = 24 * 60 * 60 * 1000;
 const ACTIVE_CHECKOUT_WINDOW_MS = 60 * 60 * 1000;
@@ -166,10 +175,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const [profileLinkResults, setProfileLinkResults] = useState([]);
     const [profileLinkBusy, setProfileLinkBusy] = useState(false);
     const [searchingProfiles, setSearchingProfiles] = useState(false);
-    const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'players', 'list', 'activity'
+    const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'players', 'list', 'activity', 'statement'
     const [expandedDivisions, setExpandedDivisions] = useState({});
     const [openPaymentNoteId, setOpenPaymentNoteId] = useState(null);
     const [updatingWhatsApp, setUpdatingWhatsApp] = useState(null);
+    const [requestingPayout, setRequestingPayout] = useState(false);
+    const [statementSearch, setStatementSearch] = useState('');
 
     const load = useCallback(async () => {
         if (!event?.id) return;
@@ -1598,53 +1609,206 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             paidCount: stats.paid,
             totalEntries: stats.total,
         };
-    }, [activeRegistrations, divFee, formatLicenseForExport, refundByReg, refunds, stats.paid, stats.total]);
+    }, [activeRegistrations, divFee, playersByEmail, payments, event?.id, refundByReg, refunds, stats.paid, stats.total]);
 
     const overviewStats = useMemo(() => {
         let paid4M = 0;
         let paidClub = 0;
-        let collected4M = 0;
+        let grossCollected4M = 0;
         let licenseRevenue4M = 0;
-        let unique = new Set(activeRegistrations.map(r => r.email)).size;
+        const unique = new Set(activeRegistrations.map((r) => r.email)).size;
         let fullLicenses = 0;
         let tempLicenses = 0;
         let noLicenses = 0;
-        
-        activeRegistrations.forEach(r => {
+
+        activeRegistrations.forEach((r) => {
+            // Gross Paystack entry fees: count whenever a successful Paystack entry payment exists,
+            // including registrations later refunded/withdrawn — refunds are subtracted separately.
+            if (hasPaystackEntryPaymentRecord(r, payments)) {
+                grossCollected4M += divFee(r.division);
+            }
+
             if (!registrationCountsAsPaid(r, refundByReg)) return;
 
-            const payment = findPaymentForReg(r);
             const method = formatPaymentMethodForExport(r);
-            if (method === 'Paystack') {
-                paid4M++;
-            } else {
-                paidClub++;
-            }
-            if (isPaystackEntryPayment(r, payments, refundByReg)) {
-                collected4M += divFee(r.division);
-            }
-            
+            if (method === 'Paystack') paid4M++;
+            else paidClub++;
+
             const license = formatLicenseForExport(r);
             if (license.includes('Full')) fullLicenses++;
             else if (license.includes('Temporary')) tempLicenses++;
             else noLicenses++;
         });
-        
-        payments.forEach(p => {
+
+        payments.forEach((p) => {
             if (p.status !== 'success') return;
             if (String(p.payment_method || '').toLowerCase() === 'manual') return;
             if (isLicensePaymentRow(p)) {
                 licenseRevenue4M += Number(p.amount || 0);
             }
         });
-        
-        const commission = collected4M * 0.05;
-        const dueToOrg = collected4M - commission;
-        
+
+        // Entry-fee refunds only (exclude failed). These are Paystack refunds against entry payments.
+        const entryFeesRefunded = refunds
+            .filter((r) => r.status !== 'failed')
+            .reduce((sum, r) => sum + Number(r.amount || 0), 0);
+
+        const entryFeeBalance = Math.max(0, grossCollected4M - entryFeesRefunded);
+        // Platform fee is 5% of gross entry fees collected via 4M (before refunds), per settlement model.
+        const commission = grossCollected4M * PLATFORM_COMMISSION_RATE;
+        const dueToOrg = Math.max(0, entryFeeBalance - commission);
+
         return {
-            unique, paid4M, paidClub, collected4M, licenseRevenue4M, commission, dueToOrg, fullLicenses, tempLicenses, noLicenses
+            unique,
+            paid4M,
+            paidClub,
+            collected4M: grossCollected4M,
+            entryFeesRefunded,
+            entryFeeBalance,
+            licenseRevenue4M,
+            commission,
+            dueToOrg,
+            fullLicenses,
+            tempLicenses,
+            noLicenses,
         };
-    }, [activeRegistrations, payments, divFee, formatPaymentMethodForExport, formatLicenseForExport, findPaymentForReg, refundByReg]);
+    }, [activeRegistrations, payments, divFee, formatPaymentMethodForExport, formatLicenseForExport, refundByReg, refunds]);
+
+    const incomeStatementRows = useMemo(() => {
+        const rows = [];
+
+        activeRegistrations.forEach((r) => {
+            if (!hasPaystackEntryPaymentRecord(r, payments)) return;
+            const payment = findPaymentForReg(r);
+            const fee = divFee(r.division);
+            if (fee <= 0) return;
+            rows.push({
+                id: `pay-${r.id}`,
+                date: payment?.created_at || r.paid_at || r.created_at,
+                description: `${r.division || 'Entry'} — Entry Fee`,
+                type: 'payment',
+                player: [r.full_name, r.partner_name].filter(Boolean).join(' / ') || r.email || '—',
+                amount: fee,
+                status: registrationCountsAsPaid(r, refundByReg)
+                    ? 'paid'
+                    : (String(r.payment_status || '').toLowerCase() === 'refunded' || hasProcessedRefund(r.id, refundByReg)
+                        ? 'refunded'
+                        : (isWithdrawnRegistration(r) ? 'withdrawn' : 'paid')),
+                method: 'Paystack',
+            });
+        });
+
+        refunds.forEach((rf) => {
+            if (rf.status === 'failed') return;
+            const reg = registrations.find((r) => r.id === rf.event_registration_id);
+            rows.push({
+                id: `refund-${rf.id}`,
+                date: rf.processed_at || rf.created_at,
+                description: reg?.division
+                    ? `${reg.division} — Entry Fee Refund`
+                    : 'Entry Fee Refund',
+                type: 'refund',
+                player: reg
+                    ? ([reg.full_name, reg.partner_name].filter(Boolean).join(' / ') || reg.email || '—')
+                    : '—',
+                amount: -Math.abs(Number(rf.amount || 0)),
+                status: rf.status === 'processed' ? 'processed' : (rf.status || 'pending'),
+                method: 'Card reversal',
+            });
+        });
+
+        if (overviewStats.commission > 0) {
+            rows.push({
+                id: 'platform-fee',
+                date: null,
+                description: `Platform Fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}%)`,
+                type: 'fee',
+                player: '—',
+                amount: -overviewStats.commission,
+                status: 'processed',
+                method: '—',
+            });
+        }
+
+        rows.sort((a, b) => {
+            if (!a.date && !b.date) return 0;
+            if (!a.date) return 1;
+            if (!b.date) return -1;
+            return new Date(b.date) - new Date(a.date);
+        });
+
+        return rows;
+    }, [activeRegistrations, payments, divFee, findPaymentForReg, refundByReg, refunds, registrations, overviewStats.commission]);
+
+    const filteredIncomeStatementRows = useMemo(() => {
+        const q = statementSearch.trim().toLowerCase();
+        if (!q) return incomeStatementRows;
+        return incomeStatementRows.filter((row) => {
+            const haystack = [
+                row.description,
+                row.type,
+                row.player,
+                row.status,
+                row.method,
+                row.amount != null ? String(row.amount) : '',
+                row.date
+                    ? new Date(row.date).toLocaleString('en-GB', {
+                        day: 'numeric', month: 'short', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit',
+                    })
+                    : '',
+            ].join(' ').toLowerCase();
+            return haystack.includes(q);
+        });
+    }, [incomeStatementRows, statementSearch]);
+
+    const handleRequestPayout = async () => {
+        if (requestingPayout) return;
+        if (overviewStats.dueToOrg <= 0) {
+            toast.error('Nothing due to organiser yet');
+            return;
+        }
+        setRequestingPayout(true);
+        try {
+            const result = await sendEmail(PAYOUT_ADMIN_EMAIL, 'organiser_payout_request', {
+                eventName: event?.event_name || 'Tournament',
+                eventId: event?.id,
+                organiserName: event?.organizer_name || 'Organiser',
+                organiserEmail: event?.organizer_email || '',
+                collected: fmtR(overviewStats.collected4M),
+                refunded: fmtR(overviewStats.entryFeesRefunded),
+                balance: fmtR(overviewStats.entryFeeBalance),
+                commission: fmtR(overviewStats.commission),
+                dueToOrganiser: fmtR(overviewStats.dueToOrg),
+                licenseRevenue: fmtR(overviewStats.licenseRevenue4M),
+                paidEntries: overviewStats.paid4M,
+                requestedAt: new Date().toLocaleString('en-ZA', {
+                    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+                }),
+            });
+            if (!result.success) throw new Error(result.error || 'Email failed');
+            toast.success('Payout request sent to 4M admin');
+            try {
+                await logEventActivity({
+                    eventId: event.id,
+                    action: 'payout_requested',
+                    category: 'FINANCE',
+                    summary: `Payout requested: ${fmtR(overviewStats.dueToOrg)} due to organiser`,
+                    details: {
+                        dueToOrganiser: overviewStats.dueToOrg,
+                        collected: overviewStats.collected4M,
+                        refunded: overviewStats.entryFeesRefunded,
+                        commission: overviewStats.commission,
+                    },
+                });
+            } catch (_) { /* non-blocking */ }
+        } catch (err) {
+            console.error('Payout request failed:', err);
+            toast.error(err.message || 'Failed to send payout request');
+        } finally {
+            setRequestingPayout(false);
+        }
+    };
 
     const exportCsv = () => {
         // Export the same rows currently shown (withdrawn excluded unless that filter is on).
@@ -1745,6 +1909,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                 { id: 'overview', label: 'Overview' },
                                 { id: 'players', label: 'Players' },
                                 { id: 'list', label: 'Registrations List' },
+                                { id: 'statement', label: 'Income Statement' },
                                 { id: 'activity', label: 'Activity Log' },
                             ].map((tab) => (
                                 <button
@@ -1804,9 +1969,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             {dashboardStats.outstanding > 0 && (
                                                 <p className="text-[10px] text-red-400 font-bold uppercase mt-1">Outstanding R {dashboardStats.outstanding.toLocaleString()}</p>
                                             )}
-                                            {dashboardStats.totalRefunded > 0 && (
+                                            {overviewStats.entryFeesRefunded > 0 && (
                                                 <p className="text-[10px] text-sky-400 font-bold uppercase mt-1">
-                                                    Refunded R {dashboardStats.totalRefunded.toLocaleString()} · Net R {(dashboardStats.collected - dashboardStats.totalRefunded).toLocaleString()}
+                                                    Refunded R {overviewStats.entryFeesRefunded.toLocaleString()} · Net entry fees R {overviewStats.entryFeeBalance.toLocaleString()}
                                                 </p>
                                             )}
                                         </div>
@@ -1868,18 +2033,28 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                     </motion.div>
                                 </motion.div>
 
-                                {/* Financial Summary */}
+                                {/* Financial Summary — settlement model */}
                                 <motion.div
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ duration: 0.4, delay: 0.15 }}
                                     className="space-y-3"
                                 >
-                                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                                        <div className="w-1 h-4 bg-emerald-500 rounded-full" />
-                                        Financial Summary
-                                    </h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                            <div className="w-1 h-4 bg-emerald-500 rounded-full" />
+                                            Financial Summary
+                                        </h3>
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveTab('statement')}
+                                            className="text-[11px] font-bold text-padel-green hover:text-white transition-colors flex items-center gap-1"
+                                        >
+                                            <FileText size={12} /> View income statement
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                         <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
                                             <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Entries Paid to 4m</p>
                                             <span className="text-xl font-black text-white">{overviewStats.paid4M}</span>
@@ -1888,24 +2063,57 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Entry Payments (Manual)</p>
                                             <span className="text-xl font-black text-white">{overviewStats.paidClub}</span>
                                         </div>
-                                        <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
-                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Collected by 4M</p>
+                                        <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4 col-span-2">
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Collected by 4M (gross)</p>
                                             <span className="text-xl font-black text-padel-green">{fmtR(overviewStats.collected4M)}</span>
-                                            <p className="text-[9px] text-gray-500 mt-1">Entry fees via Paystack only</p>
+                                            <p className="text-[9px] text-gray-500 mt-1">Entry fees via Paystack before refunds</p>
                                         </div>
-                                        <div className="bg-[#1a1a1a]/50 border border-emerald-500/30 bg-emerald-500/5 rounded-xl p-4 md:row-span-2 flex flex-col justify-center">
-                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Due to organiser</p>
-                                            <span className="text-3xl font-black text-padel-green">{fmtR(overviewStats.dueToOrg)}</span>
+                                    </div>
+
+                                    <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-2xl p-5 space-y-3">
+                                        <div className="flex items-center justify-between gap-4 text-sm">
+                                            <span className="text-gray-400">Funds collected for entry fees</span>
+                                            <span className="font-bold text-white">{fmtR(overviewStats.collected4M)}</span>
                                         </div>
-                                        <div className="bg-[#1a1a1a]/50 border border-red-500/20 rounded-xl p-4 md:col-span-3">
-                                            <p className="text-[10px] font-bold uppercase tracking-widest text-red-400 mb-1">5% Commission to 4M</p>
-                                            <span className="text-lg font-black text-red-400">{fmtR(overviewStats.commission)}</span>
-                                            {overviewStats.licenseRevenue4M > 0 && (
-                                                <p className="text-[9px] text-gray-500 mt-2">
-                                                    SAPA license revenue via 4M (not paid to organiser): {fmtR(overviewStats.licenseRevenue4M)}
+                                        <div className="flex items-center justify-between gap-4 text-sm">
+                                            <span className="text-gray-400">Funds refunded for entry fees</span>
+                                            <span className="font-bold text-red-400">−{fmtR(overviewStats.entryFeesRefunded)}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between gap-4 text-sm border-t border-white/10 pt-3">
+                                            <span className="text-gray-300 font-semibold">Balance of entry fee funds</span>
+                                            <span className="font-black text-white">{fmtR(overviewStats.entryFeeBalance)}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between gap-4 text-sm">
+                                            <span className="text-red-400">Platform fees @ {Math.round(PLATFORM_COMMISSION_RATE * 100)}%</span>
+                                            <span className="font-bold text-red-400">−{fmtR(overviewStats.commission)}</span>
+                                        </div>
+                                        {overviewStats.licenseRevenue4M > 0 && (
+                                            <p className="text-[10px] text-gray-500">
+                                                SAPA license revenue via 4M (not paid to organiser): {fmtR(overviewStats.licenseRevenue4M)}
+                                            </p>
+                                        )}
+                                        <div className="rounded-xl border border-padel-green/30 bg-padel-green/5 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-2">
+                                            <div>
+                                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Amount due to organiser</p>
+                                                <span className="text-3xl font-black text-padel-green">{fmtR(overviewStats.dueToOrg)}</span>
+                                                <p className="text-[9px] text-gray-500 mt-1">
+                                                    (Collected − Refunded) − {Math.round(PLATFORM_COMMISSION_RATE * 100)}% commission
                                                 </p>
-                                            )}
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={handleRequestPayout}
+                                                disabled={requestingPayout || overviewStats.dueToOrg <= 0}
+                                                className="inline-flex items-center justify-center gap-2 bg-padel-green text-black px-5 py-3 rounded-xl text-sm font-black hover:bg-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                                            >
+                                                {requestingPayout ? <Loader2 size={16} className="animate-spin" /> : null}
+                                                Request Payout
+                                                <ArrowRight size={16} />
+                                            </button>
                                         </div>
+                                        <p className="text-[10px] text-gray-500">
+                                            Summary based on entry-fee transactions only. Requesting payout emails 4M admin to arrange settlement.
+                                        </p>
                                     </div>
                                 </motion.div>
                             </div>
@@ -2716,6 +2924,136 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                             </div>
                         );
                     })()}
+
+                    {activeTab === 'statement' && (
+                        <div className="p-6 space-y-6">
+                            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                                <div>
+                                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                        <div className="w-1 h-4 bg-emerald-500 rounded-full" />
+                                        Income Statement
+                                    </h3>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Line-by-line entry-fee transactions for {event?.event_name || 'this event'}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleRequestPayout}
+                                    disabled={requestingPayout || overviewStats.dueToOrg <= 0}
+                                    className="inline-flex items-center justify-center gap-2 bg-padel-green text-black px-5 py-2.5 rounded-xl text-sm font-black hover:bg-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                                >
+                                    {requestingPayout ? <Loader2 size={16} className="animate-spin" /> : null}
+                                    Request Payout
+                                    <ArrowRight size={16} />
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                                {[
+                                    { label: 'Total Collected', value: fmtR(overviewStats.collected4M), color: 'text-padel-green' },
+                                    { label: 'Total Refunded', value: `−${fmtR(overviewStats.entryFeesRefunded)}`, color: 'text-red-400' },
+                                    { label: 'Platform Fees', value: `−${fmtR(overviewStats.commission)}`, color: 'text-red-400' },
+                                    { label: 'Net Payout to Organiser', value: fmtR(overviewStats.dueToOrg), color: 'text-padel-green' },
+                                ].map((card) => (
+                                    <div key={card.label} className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">{card.label}</p>
+                                        <span className={`text-lg font-black ${card.color}`}>{card.value}</span>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="relative max-w-md">
+                                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                                <input
+                                    value={statementSearch}
+                                    onChange={(e) => setStatementSearch(e.target.value)}
+                                    placeholder="Search player, division, type, status..."
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-white text-sm focus:border-padel-green focus:outline-none"
+                                />
+                            </div>
+                            {statementSearch.trim() && (
+                                <p className="text-xs text-gray-500 -mt-3">
+                                    Showing {filteredIncomeStatementRows.length} of {incomeStatementRows.length} transactions
+                                </p>
+                            )}
+
+                            <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-2xl overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm min-w-[720px]">
+                                        <thead>
+                                            <tr className="border-b border-white/10 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                                                <th className="px-4 py-3">Date</th>
+                                                <th className="px-4 py-3">Description</th>
+                                                <th className="px-4 py-3">Type</th>
+                                                <th className="px-4 py-3">Player / Team</th>
+                                                <th className="px-4 py-3 text-right">Amount</th>
+                                                <th className="px-4 py-3">Status</th>
+                                                <th className="px-4 py-3">Method</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/5">
+                                            {incomeStatementRows.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={7} className="px-4 py-10 text-center text-gray-500 text-sm">
+                                                        No entry-fee transactions yet.
+                                                    </td>
+                                                </tr>
+                                            ) : filteredIncomeStatementRows.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={7} className="px-4 py-10 text-center text-gray-500 text-sm">
+                                                        No transactions match “{statementSearch.trim()}”.
+                                                    </td>
+                                                </tr>
+                                            ) : filteredIncomeStatementRows.map((row) => {
+                                                const isCredit = row.amount >= 0;
+                                                const typeIcon = row.type === 'payment'
+                                                    ? <ArrowDownLeft size={12} className="text-padel-green" />
+                                                    : <ArrowUpRight size={12} className="text-red-400" />;
+                                                const statusClass = {
+                                                    paid: 'bg-emerald-500/15 text-emerald-400',
+                                                    pending: 'bg-amber-500/15 text-amber-400',
+                                                    processing: 'bg-amber-500/15 text-amber-400',
+                                                    refunded: 'bg-sky-500/15 text-sky-400',
+                                                    processed: 'bg-sky-500/15 text-sky-400',
+                                                    withdrawn: 'bg-gray-500/15 text-gray-400',
+                                                }[row.status] || 'bg-gray-500/15 text-gray-400';
+                                                return (
+                                                    <tr key={row.id} className="hover:bg-white/[0.02]">
+                                                        <td className="px-4 py-3 text-gray-400 whitespace-nowrap text-xs">
+                                                            {row.date
+                                                                ? new Date(row.date).toLocaleString('en-GB', {
+                                                                    day: 'numeric', month: 'short', year: 'numeric',
+                                                                    hour: '2-digit', minute: '2-digit',
+                                                                })
+                                                                : '—'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-white font-medium">{row.description}</td>
+                                                        <td className="px-4 py-3">
+                                                            <span className="inline-flex items-center gap-1.5 text-xs text-gray-300 capitalize">
+                                                                {typeIcon}
+                                                                {row.type}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-gray-300 text-xs max-w-[180px] truncate" title={row.player}>{row.player}</td>
+                                                        <td className={`px-4 py-3 text-right font-bold whitespace-nowrap ${isCredit ? 'text-padel-green' : 'text-red-400'}`}>
+                                                            {isCredit ? fmtR(row.amount) : `−${fmtR(Math.abs(row.amount))}`}
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-md ${statusClass}`}>
+                                                                {row.status}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-gray-400 text-xs">{row.method}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {activeTab === 'activity' && (
                         <EventActivityLog eventId={event?.id} eventName={event?.event_name || ''} />

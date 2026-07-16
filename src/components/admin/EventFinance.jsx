@@ -247,12 +247,34 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
     }, [localParticipants, selectedEvent, totalCollected, getResolvedLicenseType]);
 
     const financialSummary = useMemo(() => {
-        if (!selectedEvent) return { paid4M: 0, paidClub: 0, collected4M: 0, licenseRevenue4M: 0, commission: 0, dueToOrg: 0 };
+        if (!selectedEvent) {
+            return {
+                paid4M: 0, paidClub: 0, collected4M: 0, entryFeesRefunded: 0,
+                entryFeeBalance: 0, licenseRevenue4M: 0, commission: 0, dueToOrg: 0,
+            };
+        }
 
         let paid4M = 0;
         let paidClub = 0;
+        let grossCollected4M = 0;
 
         localParticipants.forEach((p) => {
+            const reg = p._reg || {
+                id: p.id,
+                email: p.email,
+                division: p.class_name,
+                payment_status: p.is_paid ? 'paid' : 'pending',
+                payment_method: p.registration_payment_method,
+                status: p.status,
+            };
+            const successPayments = (eventPayments || []).filter((pay) => pay.status === 'success');
+            const hasPaystackRecord = registrationHasPaystackEntryPayment(reg, successPayments)
+                || (String(p.registration_payment_method || '').toLowerCase() === 'paystack' && Number(p.is_paid) === 1);
+
+            if (hasPaystackRecord) {
+                grossCollected4M += getParticipantEntryFee(p, selectedEvent);
+            }
+
             if (p._isManualReg && p._reg && !registrationCountsAsPaid(p._reg, refundByReg)) return;
             if (!p.is_paid) return;
             if (isPaystackEntryPayment(p, eventPayments, refundByReg)) {
@@ -262,23 +284,27 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             }
         });
 
-        const collected4M = localParticipants
-            .filter((p) => {
-                if (p._isManualReg && p._reg && !registrationCountsAsPaid(p._reg, refundByReg)) return false;
-                return p.is_paid && isPaystackEntryPayment(p, eventPayments, refundByReg);
-            })
-            .reduce((sum, p) => sum + getParticipantEntryFee(p, selectedEvent), 0);
-
         const licenseRevenue4M = (eventPayments || [])
             .filter((p) => p.status === 'success' && String(p.payment_method || '').toLowerCase() !== 'manual')
             .filter((p) => isLicensePaymentRow(p))
             .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
-        const commission = collected4M * 0.05;
-        const dueToOrg = collected4M - commission;
+        const entryFeesRefunded = totalRefunded;
+        const entryFeeBalance = Math.max(0, grossCollected4M - entryFeesRefunded);
+        const commission = grossCollected4M * 0.05;
+        const dueToOrg = Math.max(0, entryFeeBalance - commission);
 
-        return { paid4M, paidClub, collected4M, licenseRevenue4M, commission, dueToOrg };
-    }, [localParticipants, selectedEvent, eventPayments, refundByReg]);
+        return {
+            paid4M,
+            paidClub,
+            collected4M: grossCollected4M,
+            entryFeesRefunded,
+            entryFeeBalance,
+            licenseRevenue4M,
+            commission,
+            dueToOrg,
+        };
+    }, [localParticipants, selectedEvent, eventPayments, refundByReg, totalRefunded]);
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -1750,23 +1776,38 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                 <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Entry Payments (Manual)</p>
                                 <span className="text-xl font-black text-white">{financialSummary.paidClub}</span>
                             </div>
-                            <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Collected by 4M</p>
+                            <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4 col-span-1 md:col-span-2">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Collected by 4M (gross)</p>
                                 <span className="text-xl font-black text-padel-green">{fmtR(financialSummary.collected4M)}</span>
-                                <p className="text-[9px] text-gray-500 mt-1">Entry fees via Paystack only</p>
+                                <p className="text-[9px] text-gray-500 mt-1">Entry fees via Paystack before refunds</p>
                             </div>
-                            <div className="bg-[#1a1a1a]/50 border border-emerald-500/30 bg-emerald-500/5 rounded-xl p-4 md:row-span-2 flex flex-col justify-center">
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Due to organiser</p>
+                        </div>
+                        <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-2xl p-5 space-y-3">
+                            <div className="flex items-center justify-between gap-4 text-sm">
+                                <span className="text-gray-400">Funds collected for entry fees</span>
+                                <span className="font-bold text-white">{fmtR(financialSummary.collected4M)}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-4 text-sm">
+                                <span className="text-gray-400">Funds refunded for entry fees</span>
+                                <span className="font-bold text-red-400">−{fmtR(financialSummary.entryFeesRefunded)}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-4 text-sm border-t border-white/10 pt-3">
+                                <span className="text-gray-300 font-semibold">Balance of entry fee funds</span>
+                                <span className="font-black text-white">{fmtR(financialSummary.entryFeeBalance)}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-4 text-sm">
+                                <span className="text-red-400">Platform fees @ 5%</span>
+                                <span className="font-bold text-red-400">−{fmtR(financialSummary.commission)}</span>
+                            </div>
+                            {financialSummary.licenseRevenue4M > 0 && (
+                                <p className="text-[10px] text-gray-500">
+                                    SAPA license revenue via 4M (not paid to organiser): {fmtR(financialSummary.licenseRevenue4M)}
+                                </p>
+                            )}
+                            <div className="rounded-xl border border-padel-green/30 bg-padel-green/5 p-4">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Amount due to organiser</p>
                                 <span className="text-3xl font-black text-padel-green">{fmtR(financialSummary.dueToOrg)}</span>
-                            </div>
-                            <div className="bg-[#1a1a1a]/50 border border-red-500/20 rounded-xl p-4 md:col-span-3">
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-red-400 mb-1">5% Commission to 4M</p>
-                                <span className="text-lg font-black text-red-400">{fmtR(financialSummary.commission)}</span>
-                                {financialSummary.licenseRevenue4M > 0 && (
-                                    <p className="text-[9px] text-gray-500 mt-2">
-                                        SAPA license revenue via 4M (not paid to organiser): {fmtR(financialSummary.licenseRevenue4M)}
-                                    </p>
-                                )}
+                                <p className="text-[9px] text-gray-500 mt-1">(Collected − Refunded) − 5% commission</p>
                             </div>
                         </div>
                     </motion.div>
