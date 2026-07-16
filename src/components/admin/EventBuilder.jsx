@@ -2330,7 +2330,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                 <div className="pr-3">
                                                     <span className="text-sm font-medium text-gray-200 block">Collect T-shirt size</span>
                                                     <span className="text-[11px] text-gray-500">
-                                                        Ask players for Men / Ladies / Juniors size during registration
+                                                        Ask players for Men / Ladies / Juniors size, optional sponsor name, and logo during registration
                                                     </span>
                                                 </div>
                                                 <input type="checkbox" name="collect_tshirt_size" checked={!!form.collect_tshirt_size} onChange={handleInput} className="accent-padel-green w-5 h-5 shrink-0" />

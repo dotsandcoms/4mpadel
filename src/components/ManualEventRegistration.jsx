@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import {
     X, Check, CreditCard, Loader2, Users, Calendar as CalendarIcon, Trophy,
     AlertCircle, ChevronRight, ChevronDown, ChevronUp, ArrowRight, Award, MapPin, User,
-    Search, ChevronLeft, Info, Layout
+    Search, ChevronLeft, Info, Layout, Upload, Image as ImageIcon
 } from 'lucide-react';
 import PaystackPop from '@paystack/inline-js';
 import { supabase } from '../supabaseClient';
@@ -70,6 +70,29 @@ const resolveTshirtChart = (player, divisions = []) => {
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmtRWhole = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
+
+/**
+ * Upload a T-shirt sponsor logo to public storage and return its public URL.
+ * @param {File} file
+ * @param {{ eventId: string|number, emailKey: string }} opts
+ */
+const uploadTshirtLogo = async (file, { eventId, emailKey }) => {
+    if (!file?.type?.startsWith('image/')) {
+        throw new Error('Please choose an image file (PNG, JPG, or SVG).');
+    }
+    if (file.size > 2 * 1024 * 1024) {
+        throw new Error('Logo must be smaller than 2MB.');
+    }
+    const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+    const safeEmail = String(emailKey || 'player').replace(/[^a-z0-9@._-]/gi, '_').slice(0, 80);
+    const filePath = `tshirt-logos/${eventId}/${safeEmail}_${Date.now()}.${ext}`;
+    const { error } = await supabase.storage
+        .from('profile-pics')
+        .upload(filePath, file, { cacheControl: '3600', upsert: true });
+    if (error) throw error;
+    const { data } = supabase.storage.from('profile-pics').getPublicUrl(filePath);
+    return data?.publicUrl || '';
+};
 
 const stripHtml = (html) => {
     if (!html) return '';
@@ -375,7 +398,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const [agreeSapa, setAgreeSapa] = useState(false);
     const [showRulesModal, setShowRulesModal] = useState(false);
     const [tshirtSize, setTshirtSize] = useState('');
+    const [tshirtSponsorName, setTshirtSponsorName] = useState('');
+    const [tshirtLogoUrl, setTshirtLogoUrl] = useState('');
+    const [tshirtLogoUploading, setTshirtLogoUploading] = useState(false);
     const [partnerTshirtSizes, setPartnerTshirtSizes] = useState({});
+    const [partnerTshirtSponsors, setPartnerTshirtSponsors] = useState({});
+    const [partnerTshirtLogos, setPartnerTshirtLogos] = useState({});
+    const [partnerTshirtLogoUploading, setPartnerTshirtLogoUploading] = useState({});
 
     const [partnerSearch, setPartnerSearch] = useState({ query: '', results: [] });
     const [expandedDivisions, setExpandedDivisions] = useState({});
@@ -1843,6 +1872,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 status: 'registered',
                 registered_by: existingSelfReg?.registered_by || userEmail,
                 tshirt_size: tshirtSize || existingSelfReg?.tshirt_size || null,
+                tshirt_sponsor_name: (tshirtSponsorName || existingSelfReg?.tshirt_sponsor_name || '').trim() || null,
+                tshirt_logo_url: tshirtLogoUrl || existingSelfReg?.tshirt_logo_url || null,
             });
             if (selfPays && fee > 0) covers.push({ email: userEmail, division: d.name, type: 'entry' });
 
@@ -1898,6 +1929,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         status: 'registered',
                         registered_by: userEmail,
                         tshirt_size: partnerTshirtSizes[partnerEmailKey] || null,
+                        tshirt_sponsor_name: (partnerTshirtSponsors[partnerEmailKey] || '').trim() || null,
+                        tshirt_logo_url: partnerTshirtLogos[partnerEmailKey] || null,
                     });
                     if (partnerPays && fee > 0) covers.push({ email: sel.partnerEmail, division: d.name, type: 'entry' });
                 }
@@ -1969,6 +2002,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         buyLicenseSelf,
         licenseSelfChoice,
         partnerLicensePurchases,
+        tshirtSize,
+        tshirtSponsorName,
+        tshirtLogoUrl,
+        partnerTshirtSizes,
+        partnerTshirtSponsors,
+        partnerTshirtLogos,
     ]);
 
     const persistRegistrations = async (rows, soloLinks = [], covers = []) => {
@@ -3558,46 +3597,198 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 <CardBody className="space-y-4">
                                     <p className="text-[11px] text-slate-600 font-normal leading-snug">
                                         This event gifts a T-shirt to entrants. Select the correct size chart for each player.
+                                        Optionally add a sponsor name and/or logo for the shirt.
                                     </p>
                                     {needsSelfTshirt && (
-                                        <div>
-                                            <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
-                                                Your size ({selfTshirtChart})
-                                            </label>
-                                            <select
-                                                value={tshirtSize}
-                                                onChange={(e) => setTshirtSize(e.target.value)}
-                                                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-offset-0"
-                                                style={{ accentColor: accent }}
-                                            >
-                                                <option value="">Select size</option>
-                                                {(TSHIRT_SIZES[selfTshirtChart] || TSHIRT_SIZES.Men).map((size) => (
-                                                    <option key={size} value={size}>{size}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    )}
-                                    {partnersNeedingTshirt.map((partner) => {
-                                        const key = String(partner.email).toLowerCase();
-                                        return (
-                                            <div key={key}>
+                                        <div className="space-y-3">
+                                            <div>
                                                 <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
-                                                    {partner.name} ({partner.chart})
+                                                    Your size ({selfTshirtChart})
                                                 </label>
                                                 <select
-                                                    value={partnerTshirtSizes[key] || ''}
-                                                    onChange={(e) => setPartnerTshirtSizes((prev) => ({
-                                                        ...prev,
-                                                        [key]: e.target.value,
-                                                    }))}
+                                                    value={tshirtSize}
+                                                    onChange={(e) => setTshirtSize(e.target.value)}
                                                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-offset-0"
                                                     style={{ accentColor: accent }}
                                                 >
                                                     <option value="">Select size</option>
-                                                    {(TSHIRT_SIZES[partner.chart] || TSHIRT_SIZES.Men).map((size) => (
+                                                    {(TSHIRT_SIZES[selfTshirtChart] || TSHIRT_SIZES.Men).map((size) => (
                                                         <option key={size} value={size}>{size}</option>
                                                     ))}
                                                 </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
+                                                    Sponsor name <span className="font-normal text-slate-500">(optional)</span>
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={tshirtSponsorName}
+                                                    onChange={(e) => setTshirtSponsorName(e.target.value)}
+                                                    placeholder="e.g. NOX"
+                                                    maxLength={80}
+                                                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
+                                                    Logo <span className="font-normal text-slate-500">(optional)</span>
+                                                </label>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-14 h-14 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
+                                                        {tshirtLogoUrl ? (
+                                                            <img src={tshirtLogoUrl} alt="T-shirt logo" className="w-full h-full object-contain" />
+                                                        ) : (
+                                                            <ImageIcon className="w-5 h-5 text-slate-400" />
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0 space-y-1.5">
+                                                        <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">
+                                                            {tshirtLogoUploading ? (
+                                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                            ) : (
+                                                                <Upload className="w-3.5 h-3.5" />
+                                                            )}
+                                                            {tshirtLogoUploading ? 'Uploading…' : (tshirtLogoUrl ? 'Replace logo' : 'Upload logo')}
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                className="hidden"
+                                                                disabled={tshirtLogoUploading}
+                                                                onChange={async (e) => {
+                                                                    const file = e.target.files?.[0];
+                                                                    e.target.value = '';
+                                                                    if (!file) return;
+                                                                    setTshirtLogoUploading(true);
+                                                                    try {
+                                                                        const url = await uploadTshirtLogo(file, {
+                                                                            eventId: event.id,
+                                                                            emailKey: userEmail || 'self',
+                                                                        });
+                                                                        setTshirtLogoUrl(url);
+                                                                        toast.success('Logo uploaded');
+                                                                    } catch (err) {
+                                                                        toast.error(err.message || 'Logo upload failed');
+                                                                    } finally {
+                                                                        setTshirtLogoUploading(false);
+                                                                    }
+                                                                }}
+                                                            />
+                                                        </label>
+                                                        {tshirtLogoUrl && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setTshirtLogoUrl('')}
+                                                                className="block text-[11px] text-slate-500 underline hover:text-slate-800"
+                                                            >
+                                                                Remove logo
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {partnersNeedingTshirt.map((partner) => {
+                                        const key = String(partner.email).toLowerCase();
+                                        const partnerLogo = partnerTshirtLogos[key] || '';
+                                        const partnerUploading = !!partnerTshirtLogoUploading[key];
+                                        return (
+                                            <div key={key} className="space-y-3 pt-2 border-t border-slate-100">
+                                                <div>
+                                                    <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
+                                                        {partner.name} ({partner.chart})
+                                                    </label>
+                                                    <select
+                                                        value={partnerTshirtSizes[key] || ''}
+                                                        onChange={(e) => setPartnerTshirtSizes((prev) => ({
+                                                            ...prev,
+                                                            [key]: e.target.value,
+                                                        }))}
+                                                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-offset-0"
+                                                        style={{ accentColor: accent }}
+                                                    >
+                                                        <option value="">Select size</option>
+                                                        {(TSHIRT_SIZES[partner.chart] || TSHIRT_SIZES.Men).map((size) => (
+                                                            <option key={size} value={size}>{size}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
+                                                        Sponsor name for {partner.name}{' '}
+                                                        <span className="font-normal text-slate-500">(optional)</span>
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={partnerTshirtSponsors[key] || ''}
+                                                        onChange={(e) => setPartnerTshirtSponsors((prev) => ({
+                                                            ...prev,
+                                                            [key]: e.target.value,
+                                                        }))}
+                                                        placeholder="e.g. NOX"
+                                                        maxLength={80}
+                                                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
+                                                        Logo for {partner.name}{' '}
+                                                        <span className="font-normal text-slate-500">(optional)</span>
+                                                    </label>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-14 h-14 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
+                                                            {partnerLogo ? (
+                                                                <img src={partnerLogo} alt="" className="w-full h-full object-contain" />
+                                                            ) : (
+                                                                <ImageIcon className="w-5 h-5 text-slate-400" />
+                                                            )}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0 space-y-1.5">
+                                                            <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">
+                                                                {partnerUploading ? (
+                                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                                ) : (
+                                                                    <Upload className="w-3.5 h-3.5" />
+                                                                )}
+                                                                {partnerUploading ? 'Uploading…' : (partnerLogo ? 'Replace logo' : 'Upload logo')}
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    className="hidden"
+                                                                    disabled={partnerUploading}
+                                                                    onChange={async (e) => {
+                                                                        const file = e.target.files?.[0];
+                                                                        e.target.value = '';
+                                                                        if (!file) return;
+                                                                        setPartnerTshirtLogoUploading((prev) => ({ ...prev, [key]: true }));
+                                                                        try {
+                                                                            const url = await uploadTshirtLogo(file, {
+                                                                                eventId: event.id,
+                                                                                emailKey: key,
+                                                                            });
+                                                                            setPartnerTshirtLogos((prev) => ({ ...prev, [key]: url }));
+                                                                            toast.success(`Logo uploaded for ${partner.name}`);
+                                                                        } catch (err) {
+                                                                            toast.error(err.message || 'Logo upload failed');
+                                                                        } finally {
+                                                                            setPartnerTshirtLogoUploading((prev) => ({ ...prev, [key]: false }));
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            </label>
+                                                            {partnerLogo && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setPartnerTshirtLogos((prev) => ({ ...prev, [key]: '' }))}
+                                                                    className="block text-[11px] text-slate-500 underline hover:text-slate-800"
+                                                                >
+                                                                    Remove logo
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         );
                                     })}

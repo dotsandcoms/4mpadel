@@ -1605,7 +1605,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     }, [activeRegistrations, payments, divFee, formatPaymentMethodForExport, formatLicenseForExport, findPaymentForReg, refundByReg]);
 
     const exportCsv = () => {
-        const headers = ['Name', 'Email', 'Phone', 'Division', 'Partner', 'Partner Email', 'T-Shirt Size', 'License', 'Payment Status', 'Payment Channel', 'Payment Note', 'Registration Status', 'Registered'];
+        const headers = [
+            'Name', 'Email', 'Phone', 'Division', 'Partner', 'Partner Email',
+            'T-Shirt Size', 'T-Shirt Sponsor', 'T-Shirt Logo URL',
+            'License', 'Payment Status', 'Payment Channel', 'Payment Note', 'Registration Status', 'Registered',
+        ];
         const lines = [headers.join(',')];
         for (const r of registrations) {
             const details = getPaymentDetails(r);
@@ -1618,6 +1622,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             const row = [
                 r.full_name, r.email, r.phone || '', r.division, r.partner_name || '', r.partner_email || '',
                 r.tshirt_size || '',
+                r.tshirt_sponsor_name || '',
+                r.tshirt_logo_url || '',
                 formatLicenseForExport(r), formatPaymentStatusForExport(r), channel,
                 details?.note || '',
                 r.status || '',
