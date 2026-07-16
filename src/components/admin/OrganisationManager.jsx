@@ -899,8 +899,9 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
     };
 
     // Fired when the EventBuilder saves an org event
-    const handleBuilderSaved = ({ isNew, isAmendment, eventName } = {}) => {
-        setBuilderEvent(null);
+    const handleBuilderSaved = ({ isNew, isAmendment, eventName, stayOpen } = {}) => {
+        // Keep the builder open when the user is save-and-continuing.
+        if (!stayOpen) setBuilderEvent(null);
         fetchHostData();
         if (!currentOrg) return;
         if (isNew) {

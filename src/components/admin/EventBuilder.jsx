@@ -10,27 +10,45 @@ import { supabase } from '../../supabaseClient';
 import { useClubs } from '../../hooks/useClubs';
 import { getDefaultBackgroundForStatus } from '../../utils/imageUtils';
 
-const STANDARD_DIVISIONS = [
-    // Men / Ladies / Mixed — levels
-    "Men's Elite", "Men's Open", "Men's Advanced", "Men's Intermediate",
-    "Ladies Elite", "Ladies Open", "Ladies Advanced", "Ladies Intermediate",
-    "Mixed", "Mixed Elite", "Mixed Open", "Mixed Advanced", "Mixed Intermediate",
-    // Open (elite / advanced)
-    "Men's Open Elite", "Men's Open Advanced",
-    "Ladies Open Elite", "Ladies Open Advanced",
-    // Masters + age groups
-    "Men's Masters", "Ladies Masters",
-    "Men's 35+", "Ladies 35+",
-    "Men's 40+", "Ladies 40+",
-    "Men's 45+", "Ladies 45+",
-    "Men's 50+", "Ladies 50+",
-    "Men's 55+", "Ladies 55+",
-    // Juniors
-    "Juniors",
-    "Juniors U12", "Juniors U14", "Juniors U16", "Juniors U18",
-    "Juniors U19", "Juniors U19 Boys", "Juniors U19 Girls",
-    "Juniors U21", "Juniors U21 Boys", "Juniors U21 Girls",
+const DIVISION_GROUPS = [
+    {
+        label: 'Men / Ladies / Mixed',
+        items: [
+            "Men's Elite", "Men's Open", "Men's Advanced", "Men's Intermediate",
+            "Ladies Elite", "Ladies Open", "Ladies Advanced", "Ladies Intermediate",
+            "Mixed", "Mixed Elite", "Mixed Open", "Mixed Advanced", "Mixed Intermediate",
+        ],
+    },
+    {
+        label: 'Open (Elite / Advanced)',
+        items: [
+            "Men's Open Elite", "Men's Open Advanced",
+            "Ladies Open Elite", "Ladies Open Advanced",
+        ],
+    },
+    {
+        label: 'Masters & Age Groups',
+        items: [
+            "Men's Masters", "Ladies Masters",
+            "Men's 35+", "Ladies 35+",
+            "Men's 40+", "Ladies 40+",
+            "Men's 45+", "Ladies 45+",
+            "Men's 50+", "Ladies 50+",
+            "Men's 55+", "Ladies 55+",
+        ],
+    },
+    {
+        label: 'Juniors',
+        items: [
+            "Juniors",
+            "Juniors U12", "Juniors U14", "Juniors U16", "Juniors U18",
+            "Juniors U19", "Juniors U19 Boys", "Juniors U19 Girls",
+            "Juniors U21", "Juniors U21 Boys", "Juniors U21 Girls",
+        ],
+    },
 ];
+
+const STANDARD_DIVISIONS = DIVISION_GROUPS.flatMap((g) => g.items);
 
 const FORMATS = ['TBC','Knockout', 'Groups', 'Groups + Knockout', 'Round Robin', 'Americano', 'Mexicano'];
 const SAPA_STATUSES = ['None', 'Bronze', 'Silver', 'Gold', 'Super Gold', 'Major'];
@@ -707,9 +725,14 @@ const ageFromDivisionName = (name) => {
 };
 
 const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organization = null }) => {
+    // Tracks the event currently being edited inside this session (survives first create
+    // when the parent still has editingEvent=null, so Save can keep the modal open).
+    const [workingEvent, setWorkingEvent] = useState(null);
+    const activeEvent = workingEvent;
     // Org editing an already-sanctioned event → changes become a draft
     // amendment that a 4M admin must approve (event stays live meanwhile).
-    const isAmendment = !!(organization && editingEvent && editingEvent.sanction_status === 'approved');
+    const isAmendment = !!(organization && activeEvent && activeEvent.sanction_status === 'approved');
+    const isEditing = !!activeEvent?.id;
     const [step, setStep] = useState(1);
     const [form, setForm] = useState(blankForm);
     const [divisions, setDivisions] = useState([emptyDivision()]);
@@ -723,6 +746,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
     const [uploadingOrgLogo, setUploadingOrgLogo] = useState(false);
     const [uploadingSponsor, setUploadingSponsor] = useState(false);
     const [expandedDivisionKey, setExpandedDivisionKey] = useState(null);
+    const [divisionMultiOpen, setDivisionMultiOpen] = useState(false);
+    const [pendingDivisionPicks, setPendingDivisionPicks] = useState([]);
+    const divisionMultiRef = useRef(null);
     const [openPanels, setOpenPanels] = useState({
         identity: true, venue: false, display: false,
         regWindow: true, entryPayment: false, partnerCapacity: false, licenseDefaults: false,
@@ -877,7 +903,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
     }, [isOpen, step, openPanels.venue]);
 
     useEffect(() => {
-        if (!isOpen) return;
+        if (!isOpen) {
+            setWorkingEvent(null);
+            return;
+        }
+        setWorkingEvent(editingEvent);
         setStep(1);
         setRemovedDivisionIds([]);
         setStandardPrice('');
@@ -922,8 +952,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             setDivisions([emptyDivision(base.license_required_default)]);
             setShowPrizeBreakdown(false);
         }
+        // Only re-init when the modal opens or a different event is loaded — not after in-session saves.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen, editingEvent]);
+    }, [isOpen, editingEvent?.id]);
 
     const parsePrizeBreakdownField = (raw) => {
         if (Array.isArray(raw)) return raw;
@@ -1039,14 +1070,14 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         if (name === 'points') pointsTouchedRef.current = true;
         setForm((prev) => {
             const next = { ...prev, [name]: val };
-            if (name === 'event_name' && !editingEvent) next.slug = slugify(value);
+            if (name === 'event_name' && !isEditing) next.slug = slugify(value);
             // When start date changes, default the end date to match so the picker
             // opens on the right month (only if empty or before the new start date).
             if (name === 'start_date' && val && (!prev.end_date || prev.end_date < val)) {
                 next.end_date = val;
             }
             // Auto-set registration opens/closes for new events until user edits them.
-            if (name === 'start_date' && val && !editingEvent) {
+            if (name === 'start_date' && val && !isEditing) {
                 if (!regCloseTouchedRef.current) next.registration_closes_at = mondayCloseFor(val);
                 if (!regOpenTouchedRef.current) next.registration_opens_at = opensOneMonthBefore(val);
             }
@@ -1057,7 +1088,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
     const handleSapaStatusChange = (v) => {
         setForm((prev) => {
             const next = { ...prev, sapa_status: v };
-            if (!editingEvent || !prev.points) {
+            if (!isEditing || !prev.points) {
                 if (!pointsTouchedRef.current) {
                     next.points = SAPA_WINNER_POINTS[v] ?? '';
                 }
@@ -1136,32 +1167,96 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         toast.success('Close date applied to all divisions');
     };
 
-    const createStandardSapaDivisions = () => {
+    const buildDivisionFromName = (name) => {
         const status = form.sapa_status || 'None';
         const forceLicense = ['Major', 'Super Gold', 'Gold'].includes(status);
         const license = forceLicense ? true : !!form.license_required_default;
-        const fee = standardPrice;
-        let names;
-        if (status === 'None') {
-            names = ["Men's Open", "Ladies Open"];
-        } else {
-            names = [
-                "Men's Open", "Men's Advanced", "Men's Intermediate",
-                "Ladies Open", "Ladies Advanced", "Ladies Intermediate",
-            ];
-        }
-        const rows = names.map((name) => ({
+        return {
             ...emptyDivision(license, form.scoring_point || 'golden'),
             name,
-            entry_fee: fee,
+            entry_fee: standardPrice !== '' ? standardPrice : '',
             gender: genderFromDivisionName(name),
             age_category: ageFromDivisionName(name) || 'Open',
             format: 'Knockout',
-        }));
-        setDivisions(rows);
-        setExpandedDivisionKey(rows[0]?._key || null);
-        toast.success(`Created ${rows.length} standard SAPA divisions`);
+        };
     };
+
+    const namedDivisionCount = useMemo(
+        () => divisions.filter((d) => d.name.trim()).length,
+        [divisions],
+    );
+
+    const openDivisionMultiSelect = () => {
+        const current = divisions.map((d) => d.name.trim()).filter(Boolean);
+        setPendingDivisionPicks(current.filter((n) => STANDARD_DIVISIONS.includes(n)));
+        setDivisionMultiOpen(true);
+    };
+
+    const togglePendingDivision = (name) => {
+        setPendingDivisionPicks((prev) => (
+            prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
+        ));
+    };
+
+    const applyPendingDivisions = () => {
+        if (pendingDivisionPicks.length === 0) {
+            toast.error('Select at least one division');
+            return;
+        }
+        const pickSet = new Set(pendingDivisionPicks);
+        const removedIds = divisions
+            .filter((d) => {
+                const name = d.name.trim();
+                return d.id && STANDARD_DIVISIONS.includes(name) && !pickSet.has(name);
+            })
+            .map((d) => d.id);
+        if (removedIds.length) {
+            setRemovedDivisionIds((ids) => [...new Set([...ids, ...removedIds])]);
+        }
+
+        const customOrKept = divisions.filter((d) => {
+            const name = d.name.trim();
+            if (!name) return false;
+            if (!STANDARD_DIVISIONS.includes(name)) return true;
+            return pickSet.has(name);
+        });
+        const existingNames = new Set(customOrKept.map((d) => d.name.trim()));
+        const toAdd = pendingDivisionPicks
+            .filter((n) => !existingNames.has(n))
+            .map(buildDivisionFromName);
+        const next = [...customOrKept, ...toAdd];
+        setDivisions(
+            next.length
+                ? next
+                : [emptyDivision(form.license_required_default, form.scoring_point || 'golden')],
+        );
+        setDivisionMultiOpen(false);
+        setExpandedDivisionKey(null);
+        toast.success(`${pendingDivisionPicks.length} division${pendingDivisionPicks.length === 1 ? '' : 's'} ready — edit details below`);
+    };
+
+    const createStandardSapaDivisions = () => {
+        const status = form.sapa_status || 'None';
+        const names = status === 'None'
+            ? ["Men's Open", "Ladies Open"]
+            : [
+                "Men's Open", "Men's Advanced", "Men's Intermediate",
+                "Ladies Open", "Ladies Advanced", "Ladies Intermediate",
+            ];
+        setPendingDivisionPicks(names);
+        setDivisionMultiOpen(true);
+    };
+
+    useEffect(() => {
+        if (!divisionMultiOpen) return undefined;
+        const onDown = (e) => {
+            if (divisionMultiRef.current && !divisionMultiRef.current.contains(e.target)) {
+                setDivisionMultiOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', onDown);
+        return () => document.removeEventListener('mousedown', onDown);
+    }, [divisionMultiOpen]);
 
     // Prize money breakdown rows
     const addPrizeRow = () =>
@@ -1425,7 +1520,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             // Org-created events: tie to the org and stay hidden until a 4M
             // admin sanctions them (DB trigger also forces sanction_status).
             payload.organisation_id = organization.id;
-            if (!editingEvent) {
+            if (!isEditing) {
                 payload.is_visible = false;
                 payload.featured_event = false;
                 payload.show_in_recent_results = false;
@@ -1433,7 +1528,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         } else {
             // Admin calendar: link to selected organisation (or clear)
             payload.organisation_id = form.organisation_id || null;
-            if (!editingEvent) {
+            if (!isEditing) {
                 // Admin create: draft stays hidden; publish is visible.
                 payload.is_visible = mode === 'publish';
             } else if (mode === 'publish') {
@@ -1477,7 +1572,27 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         }
     };
 
-    const handleSave = async (mode = 'publish') => {
+    const reloadDivisionsForEvent = async (eventId) => {
+        const { data, error } = await supabase
+            .from('tournament_divisions')
+            .select('*')
+            .eq('event_id', eventId)
+            .order('sort_order', { ascending: true });
+        if (!error && data) {
+            setDivisions(
+                data.length > 0
+                    ? data.map((d) => mapDivisionRow(d, d.id))
+                    : [emptyDivision(!!form.license_required_default, form.scoring_point || 'golden')],
+            );
+        }
+        setRemovedDivisionIds([]);
+    };
+
+    /**
+     * @param {'draft'|'publish'} mode
+     * @param {{ stayOpen?: boolean }} options - stayOpen (default true) keeps the builder open after save
+     */
+    const handleSave = async (mode = 'publish', { stayOpen = true } = {}) => {
         if (mode === 'draft') {
             if (!validateDraft()) return;
         } else {
@@ -1486,9 +1601,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         if (!confirmLowFees()) return;
 
         setSaving(true);
+        const wasNew = !activeEvent?.id;
         try {
             const payload = buildPayload(mode);
-            let eventId = editingEvent?.id;
+            let eventId = activeEvent?.id;
 
             if (isAmendment) {
                 // Store draft amendment only — live event data stays untouched
@@ -1512,24 +1628,28 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                         pending_changes_notes: null,
                         pending_changes_submitted_at: new Date().toISOString(),
                     })
-                    .eq('id', editingEvent.id);
+                    .eq('id', activeEvent.id);
                 if (error) throw error;
 
-                toast.success('Amendment submitted — awaiting 4M Padel approval. Your event stays live with its current details.');
-                onSaved?.({ eventId, isNew: false, isAmendment: true, eventName: payload.event_name });
-                onClose?.();
+                toast.success(
+                    stayOpen
+                        ? 'Amendment saved — awaiting 4M Padel approval. You can keep editing.'
+                        : 'Amendment submitted — awaiting 4M Padel approval. Your event stays live with its current details.',
+                );
+                onSaved?.({ eventId, isNew: false, isAmendment: true, eventName: payload.event_name, stayOpen, mode });
+                if (!stayOpen) onClose?.();
                 return;
             }
 
-            if (editingEvent) {
+            if (activeEvent?.id) {
                 // Keep existing slug on edit unless it's empty; if regenerating, stay unique
                 if (!payload.slug) {
                     payload.slug = await ensureUniqueSlug(form.event_name, {
-                        excludeId: editingEvent.id,
+                        excludeId: activeEvent.id,
                         startDate: form.start_date,
                     });
                 }
-                const { error } = await supabase.from('calendar').update(payload).eq('id', editingEvent.id);
+                const { error } = await supabase.from('calendar').update(payload).eq('id', activeEvent.id);
                 if (error) throw error;
             } else {
                 payload.slug = await ensureUniqueSlug(payload.slug || form.event_name, {
@@ -1540,15 +1660,28 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                 eventId = data.id;
             }
             await persistDivisions(eventId);
+
+            // Stay in edit mode for this session and sync division IDs so the next save updates rows.
+            setWorkingEvent((prev) => ({
+                ...(prev || activeEvent || {}),
+                id: eventId,
+                event_name: payload.event_name,
+                slug: payload.slug,
+                sanction_status: prev?.sanction_status || activeEvent?.sanction_status || (organization ? 'pending' : undefined),
+            }));
+            await reloadDivisionsForEvent(eventId);
+
             toast.success(
                 organization
-                    ? (editingEvent ? 'Event updated — pending 4M Padel sanctioning' : 'Event submitted for 4M Padel sanctioning')
+                    ? (wasNew
+                        ? (stayOpen ? 'Event saved — pending 4M Padel sanctioning. You can keep editing.' : 'Event submitted for 4M Padel sanctioning')
+                        : (stayOpen ? 'Event saved — you can keep editing.' : 'Event updated — pending 4M Padel sanctioning'))
                     : (mode === 'draft'
-                        ? (editingEvent ? 'Draft saved' : 'Draft created')
-                        : (editingEvent ? 'Manual event updated' : 'Manual event created'))
+                        ? (stayOpen ? 'Draft saved — you can keep editing.' : (wasNew ? 'Draft created' : 'Draft saved'))
+                        : (stayOpen ? 'Event saved — you can keep editing.' : (wasNew ? 'Manual event created' : 'Manual event updated')))
             );
-            onSaved?.({ eventId, isNew: !editingEvent, eventName: payload.event_name, mode });
-            onClose?.();
+            onSaved?.({ eventId, isNew: wasNew, eventName: payload.event_name, mode, stayOpen });
+            if (!stayOpen) onClose?.();
         } catch (err) {
             console.error('Error saving manual event:', err);
             toast.error(`Failed to save: ${err.message}`);
@@ -1593,7 +1726,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                     <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
                         <div>
                             <h2 className="text-xl font-bold text-white">
-                                {editingEvent ? 'Edit Event' : 'Create Event'}
+                                {isEditing ? 'Edit Event' : 'Create Event'}
                             </h2>
                             <p className="text-xs text-gray-400">Step {step} of 6 — {STEPS[step - 1].label}</p>
                         </div>
@@ -2211,8 +2344,133 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                         {step === 3 && (
                             <div className="space-y-4">
                                 <p className="text-xs text-gray-400">
-                                    Compact cards by default — expand a division only when you need to edit it.
+                                    1) Multi-select the divisions you want. 2) Edit fees, format and close dates on each card below.
                                 </p>
+
+                                {/* Multi-select divisions dropdown */}
+                                <div className="space-y-2" ref={divisionMultiRef}>
+                                    <label className={labelClass}>Add divisions</label>
+                                    <button
+                                        type="button"
+                                        onClick={() => (divisionMultiOpen ? setDivisionMultiOpen(false) : openDivisionMultiSelect())}
+                                        className="w-full flex items-center justify-between gap-3 bg-black/40 border border-white/10 hover:border-padel-green/40 rounded-xl px-4 py-3.5 text-left transition-colors"
+                                    >
+                                        <span className={`text-sm ${namedDivisionCount ? 'text-white font-semibold' : 'text-gray-500'}`}>
+                                            {namedDivisionCount
+                                                ? `${namedDivisionCount} division${namedDivisionCount === 1 ? '' : 's'} selected — click to change`
+                                                : 'Select multiple divisions…'}
+                                        </span>
+                                        <ChevronDown size={16} className={`text-gray-400 shrink-0 transition-transform ${divisionMultiOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+
+                                    {namedDivisionCount > 0 && !divisionMultiOpen && (
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {divisions.filter((d) => d.name.trim()).map((d) => (
+                                                <span
+                                                    key={d._key}
+                                                    className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide bg-padel-green/10 border border-padel-green/25 text-padel-green px-2 py-1 rounded-lg"
+                                                >
+                                                    {d.name}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {divisionMultiOpen && (
+                                        <div className="rounded-xl border border-padel-green/30 bg-[#0f0f0f] shadow-2xl overflow-hidden">
+                                            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-white/10 bg-padel-green/5">
+                                                <p className="text-xs text-gray-300 font-semibold">
+                                                    {pendingDivisionPicks.length} selected
+                                                </p>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={createStandardSapaDivisions}
+                                                        className="text-[10px] font-black uppercase tracking-wider text-padel-green hover:text-white transition-colors flex items-center gap-1"
+                                                    >
+                                                        <Layers size={12} /> Standard SAPA
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setPendingDivisionPicks([])}
+                                                        className="text-[10px] font-black uppercase tracking-wider text-gray-500 hover:text-white transition-colors"
+                                                    >
+                                                        Clear
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div className="max-h-72 overflow-y-auto p-3 space-y-4 custom-scrollbar">
+                                                {DIVISION_GROUPS.map((group) => {
+                                                    const groupSelected = group.items.filter((n) => pendingDivisionPicks.includes(n)).length;
+                                                    const allSelected = groupSelected === group.items.length;
+                                                    return (
+                                                        <div key={group.label}>
+                                                            <div className="flex items-center justify-between mb-2 px-1">
+                                                                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">
+                                                                    {group.label}
+                                                                </p>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (allSelected) {
+                                                                            setPendingDivisionPicks((prev) => prev.filter((n) => !group.items.includes(n)));
+                                                                        } else {
+                                                                            setPendingDivisionPicks((prev) => [
+                                                                                ...new Set([...prev, ...group.items]),
+                                                                            ]);
+                                                                        }
+                                                                    }}
+                                                                    className="text-[10px] font-bold uppercase tracking-wider text-gray-500 hover:text-padel-green"
+                                                                >
+                                                                    {allSelected ? 'Clear' : 'All'}
+                                                                </button>
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                {group.items.map((name) => {
+                                                                    const checked = pendingDivisionPicks.includes(name);
+                                                                    return (
+                                                                        <label
+                                                                            key={name}
+                                                                            className={`flex items-center gap-3 rounded-lg px-3 py-2 cursor-pointer transition-colors ${
+                                                                                checked ? 'bg-padel-green/10 text-white' : 'hover:bg-white/5 text-gray-300'
+                                                                            }`}
+                                                                        >
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={checked}
+                                                                                onChange={() => togglePendingDivision(name)}
+                                                                                className="accent-padel-green w-4 h-4 shrink-0"
+                                                                            />
+                                                                            <span className="text-sm font-medium">{name}</span>
+                                                                        </label>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                            <div className="flex items-center gap-2 p-3 border-t border-white/10 bg-black/40">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setDivisionMultiOpen(false)}
+                                                    className="px-4 py-2.5 rounded-xl text-xs font-bold text-gray-300 border border-white/10 hover:bg-white/5"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={applyPendingDivisions}
+                                                    disabled={pendingDivisionPicks.length === 0}
+                                                    className="flex-1 bg-padel-green text-black px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider hover:bg-white transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+                                                >
+                                                    <Check size={14} />
+                                                    Add {pendingDivisionPicks.length || ''} division{pendingDivisionPicks.length === 1 ? '' : 's'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
 
                                 {/* Quick tools */}
                                 <div className="space-y-2">
@@ -2243,23 +2501,21 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                 </div>
                                                 <button type="button" onClick={applyCloseDateToAll} className="bg-white/10 text-white px-3 py-3 rounded-lg text-xs font-bold hover:bg-white/20">Apply close</button>
                                             </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => { createStandardSapaDivisions(); setExpandedDivisionKey(null); }}
-                                                className="w-full border border-dashed border-padel-green/40 text-padel-green rounded-xl py-3 font-bold flex items-center justify-center gap-2 hover:bg-padel-green/10 transition-colors"
-                                            >
-                                                <Layers size={16} /> Create standard SAPA divisions
-                                            </button>
                                         </div>
                                     )}
                                 </div>
 
                                 {/* Divisions list */}
                                 <div className="space-y-2">
-                                    <PanelHeader id="divisions" title={`Divisions (${divisions.length})`} />
+                                    <PanelHeader id="divisions" title={`Divisions (${namedDivisionCount})`} />
                                     {openPanels.divisions && (
                                         <div className="space-y-3">
-                                            {divisions.map((d) => {
+                                            {namedDivisionCount === 0 && (
+                                                <p className="text-xs text-gray-500 bg-black/20 border border-dashed border-white/10 rounded-xl px-4 py-6 text-center">
+                                                    No divisions yet — use the multi-select above to add several at once.
+                                                </p>
+                                            )}
+                                            {divisions.filter((d) => d.name.trim() || expandedDivisionKey === d._key || d.id).map((d) => {
                                                 const expanded = expandedDivisionKey === d._key;
                                                 const closeLabel = d.entries_close_at
                                                     ? d.entries_close_at.replace('T', ' ')
@@ -2418,7 +2674,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                 );
                                             })}
                                             <button type="button" onClick={addDivision} className="w-full border border-dashed border-white/20 text-gray-300 rounded-xl py-3 font-bold flex items-center justify-center gap-2 hover:border-padel-green hover:text-padel-green transition-colors">
-                                                <Plus size={16} /> Add Division
+                                                <Plus size={16} /> Add custom division
                                             </button>
                                         </div>
                                     )}
@@ -2869,8 +3125,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                 {organization && (
                                     <div className="bg-padel-green/5 border border-padel-green/20 rounded-xl px-4 py-3 text-xs text-padel-green font-semibold">
                                         {isAmendment
-                                            ? 'Save Draft and Publish both submit an amendment for 4M Padel approval. Publish runs full validation.'
-                                            : 'Save Draft and Publish both submit this event for 4M Padel sanctioning. Publish runs full validation.'}
+                                            ? 'Save and Publish both submit an amendment for 4M Padel approval. You stay on this page so you can keep editing.'
+                                            : 'Save and Publish both submit this event for 4M Padel sanctioning. You stay on this page so you can keep editing.'}
                                     </div>
                                 )}
                             </div>
@@ -2891,12 +3147,13 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                 <>
                                     <button
                                         type="button"
-                                        onClick={() => handleSave('draft')}
+                                        onClick={() => handleSave('draft', { stayOpen: true })}
                                         disabled={saving}
+                                        title="Save progress and keep editing"
                                         className="px-4 py-2 rounded-xl font-bold text-gray-200 border border-white/15 hover:bg-white/5 flex items-center gap-2 transition-colors disabled:opacity-50"
                                     >
                                         {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                                        {saving ? 'Saving...' : 'Save Draft'}
+                                        {saving ? 'Saving...' : 'Save'}
                                     </button>
                                     <button type="button" onClick={next} className="bg-padel-green text-black px-5 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white transition-colors">
                                         Next <ChevronRight size={16} />
@@ -2907,12 +3164,13 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                 <>
                                     <button
                                         type="button"
-                                        onClick={() => handleSave('draft')}
+                                        onClick={() => handleSave('draft', { stayOpen: true })}
                                         disabled={saving}
+                                        title="Save progress and keep editing"
                                         className="px-4 py-2 rounded-xl font-bold text-gray-200 border border-white/15 hover:bg-white/5 flex items-center gap-2 transition-colors disabled:opacity-50"
                                     >
                                         {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                                        {saving ? 'Saving...' : 'Save Draft'}
+                                        {saving ? 'Saving...' : 'Save'}
                                     </button>
                                     <button
                                         type="button"
@@ -2923,13 +3181,13 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => handleSave('publish')}
+                                        onClick={() => handleSave('publish', { stayOpen: true })}
                                         disabled={saving || reviewIssues.errors.length > 0}
-                                        title={reviewIssues.errors.length > 0 ? 'Fix blocking issues before publishing' : undefined}
+                                        title={reviewIssues.errors.length > 0 ? 'Fix blocking issues before publishing' : 'Publish and keep editing'}
                                         className="bg-padel-green text-black px-5 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white transition-colors disabled:opacity-50"
                                     >
                                         {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                                        {saving ? 'Saving...' : editingEvent ? 'Update Event' : 'Publish Event'}
+                                        {saving ? 'Saving...' : isEditing ? 'Update Event' : 'Publish Event'}
                                     </button>
                                 </>
                             )}
