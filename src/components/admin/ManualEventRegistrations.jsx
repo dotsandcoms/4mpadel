@@ -82,6 +82,18 @@ const registrationCountsAsPaid = (reg, refundByRegMap = null) => {
     return true;
 };
 
+/** Income-statement label for a registration payment row — never invents 'paid'. */
+const resolveIncomeStatementPaymentStatus = (reg, refundByRegMap = null) => {
+    if (!reg) return 'pending';
+    if (isWithdrawnRegistration(reg)) return 'withdrawn';
+    const paymentStatus = String(reg.payment_status || 'pending').toLowerCase();
+    if (paymentStatus === 'refunded' || hasProcessedRefund(reg.id, refundByRegMap)) return 'refunded';
+    if (registrationCountsAsPaid(reg, refundByRegMap)) return 'paid';
+    if (paymentStatus === 'unpaid') return 'pending';
+    if (NON_CONFIRMED_PAYMENT_STATUSES.has(paymentStatus)) return paymentStatus;
+    return paymentStatus || 'pending';
+};
+
 const buildPlayersByEmail = buildPlayersByEmailMap;
 
 const PaymentNoteButton = ({ note, regId, openId, onOpen }) => {
@@ -1689,11 +1701,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 type: 'payment',
                 player: [r.full_name, r.partner_name].filter(Boolean).join(' / ') || r.email || '—',
                 amount: fee,
-                status: registrationCountsAsPaid(r, refundByReg)
-                    ? 'paid'
-                    : (String(r.payment_status || '').toLowerCase() === 'refunded' || hasProcessedRefund(r.id, refundByReg)
-                        ? 'refunded'
-                        : (isWithdrawnRegistration(r) ? 'withdrawn' : 'paid')),
+                status: resolveIncomeStatementPaymentStatus(r, refundByReg),
                 method: 'Paystack',
             });
         });
@@ -3013,7 +3021,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                 const statusClass = {
                                                     paid: 'bg-emerald-500/15 text-emerald-400',
                                                     pending: 'bg-amber-500/15 text-amber-400',
+                                                    unpaid: 'bg-amber-500/15 text-amber-400',
                                                     processing: 'bg-amber-500/15 text-amber-400',
+                                                    failed: 'bg-red-500/15 text-red-400',
+                                                    cancelled: 'bg-gray-500/15 text-gray-400',
+                                                    abandoned: 'bg-gray-500/15 text-gray-400',
                                                     refunded: 'bg-sky-500/15 text-sky-400',
                                                     processed: 'bg-sky-500/15 text-sky-400',
                                                     withdrawn: 'bg-gray-500/15 text-gray-400',
