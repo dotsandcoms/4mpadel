@@ -3176,9 +3176,11 @@ const EventDetails = () => {
         manualRegActionsRef.current?.openPayFlow?.();
     };
 
-    /** Open the "You are registered" accordion and scroll it into view. */
+    /** Open the "You are registered" accordion / scroll to registration status. */
     const openManageEntry = () => {
-        if (!manualUserEmail) {
+        // Manual events need a logged-in email for withdraw/partner/manage actions.
+        // Non-manual Manage Entry only scrolls to the status block — do not gate on manualUserEmail.
+        if (event?.is_manual && !manualUserEmail) {
             promptMembersOnly();
             return;
         }
