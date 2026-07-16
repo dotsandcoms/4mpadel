@@ -606,6 +606,34 @@ const uploadToGallery = async (file, prefix) => {
     return publicUrl;
 };
 
+/** Unique trimmed venue names, order preserved. */
+const normalizeVenues = (list) => {
+    const seen = new Set();
+    const out = [];
+    for (const raw of Array.isArray(list) ? list : []) {
+        const name = String(raw || '').trim();
+        if (!name) continue;
+        const key = name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(name);
+    }
+    return out;
+};
+
+const venuesDisplayLabel = (venues, city) => {
+    const list = normalizeVenues(venues);
+    const venuePart = list.join(' / ');
+    return [venuePart, city].filter(Boolean).join(', ');
+};
+
+/** Prefer venues[]; fall back to single venue string. */
+const venuesFromEvent = (ev) => {
+    if (Array.isArray(ev?.venues) && ev.venues.length > 0) return normalizeVenues(ev.venues);
+    if (ev?.venue?.trim()) return [ev.venue.trim()];
+    return [];
+};
+
 const blankForm = {
     event_name: '',
     slug: '',
@@ -615,6 +643,7 @@ const blankForm = {
     organizer_badge_text: '',
     city: '',
     venue: '',
+    venues: [],
     address: '',
     start_date: '',
     end_date: '',
@@ -761,6 +790,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
 
     const { clubs } = useClubs();
     const [venueOpen, setVenueOpen] = useState(false);
+    const [venueQuery, setVenueQuery] = useState('');
     const [orgSuggestions, setOrgSuggestions] = useState([]);
     const [orgSearchOpen, setOrgSearchOpen] = useState(false);
     const [searchingOrgs, setSearchingOrgs] = useState(false);
@@ -775,9 +805,38 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
     const regOpenTouchedRef = useRef(false);
     const pointsTouchedRef = useRef(false);
 
-    const filteredClubs = clubs.filter(
-        (c) => !form.venue || c.name.toLowerCase().includes(form.venue.toLowerCase())
+    const selectedVenues = useMemo(() => normalizeVenues(form.venues), [form.venues]);
+    const selectedVenueKeys = useMemo(
+        () => new Set(selectedVenues.map((v) => v.toLowerCase())),
+        [selectedVenues],
     );
+    const filteredClubs = useMemo(() => {
+        const q = venueQuery.trim().toLowerCase();
+        return clubs.filter((c) => {
+            if (selectedVenueKeys.has(String(c.name || '').toLowerCase())) return false;
+            if (!q) return true;
+            return String(c.name || '').toLowerCase().includes(q);
+        });
+    }, [clubs, venueQuery, selectedVenueKeys]);
+
+    const addVenue = (name) => {
+        const trimmed = String(name || '').trim();
+        if (!trimmed) return;
+        setForm((prev) => {
+            const next = normalizeVenues([...(prev.venues || []), trimmed]);
+            return { ...prev, venues: next, venue: next.join(' / ') };
+        });
+        setVenueQuery('');
+        setVenueOpen(false);
+    };
+
+    const removeVenue = (name) => {
+        const key = String(name || '').toLowerCase();
+        setForm((prev) => {
+            const next = normalizeVenues(prev.venues).filter((v) => v.toLowerCase() !== key);
+            return { ...prev, venues: next, venue: next.join(' / ') };
+        });
+    };
 
     // Admin calendar: type-ahead search for organisations to link the event
     useEffect(() => {
@@ -885,12 +944,20 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                         const comps = place.address_components || [];
                         const get = (type) => comps.find((c) => c.types.includes(type))?.long_name || '';
                         const city = get('locality') || get('administrative_area_level_2') || get('administrative_area_level_1');
-                        setForm((prev) => ({
-                            ...prev,
-                            address: place.formatted_address || prev.address,
-                            city: city || prev.city,
-                            venue: prev.venue || place.name || prev.venue,
-                        }));
+                        setForm((prev) => {
+                            const existing = normalizeVenues(prev.venues);
+                            // Only seed the first venue from Places when none selected yet.
+                            const nextVenues = existing.length > 0
+                                ? existing
+                                : normalizeVenues(place.name ? [place.name] : []);
+                            return {
+                                ...prev,
+                                address: place.formatted_address || prev.address,
+                                city: city || prev.city,
+                                venues: nextVenues,
+                                venue: nextVenues.join(' / '),
+                            };
+                        });
                     });
                 })
                 .catch((err) => { console.warn('Google Maps failed to load:', err); });
@@ -922,6 +989,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             sponsors: true, websiteDisplay: false,
         });
         setShowPreview(false);
+        setVenueQuery('');
+        setVenueOpen(false);
         if (editingEvent) {
             regCloseTouchedRef.current = true;
             regOpenTouchedRef.current = true;
@@ -1029,6 +1098,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             collect_tshirt_size: !!ev.collect_tshirt_size,
             entry_fee_notes: ev.entry_fee_notes || '',
             organisation_id: ev.organisation_id || null,
+            venues: venuesFromEvent(ev),
+            venue: venuesFromEvent(ev).join(' / ') || ev.venue || '',
         });
         // Prefer the linked organisation profile logo over a stale event.organizer_logo_url
         // (that field often still holds a SAPA mark from older edits).
@@ -1395,7 +1466,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         if (!form.event_name.trim()) { toast.error('Event name is required'); return false; }
         if (!form.start_date) { toast.error('Start date is required'); return false; }
         if (!form.end_date) { toast.error('End date is required'); return false; }
-        if (!form.venue.trim()) { toast.error('Venue is required'); return false; }
+        if (!normalizeVenues(form.venues).length) { toast.error('Add at least one venue'); return false; }
         if (!form.city.trim()) { toast.error('City is required'); return false; }
         if (!validateDivisionsNamed()) return false;
         return true;
@@ -1436,7 +1507,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         if (!form.event_name?.trim()) errors.push('Event name is required');
         if (!form.start_date) errors.push('Start date is required');
         if (!form.end_date) errors.push('End date is required');
-        if (!form.venue?.trim()) errors.push('Venue is required');
+        if (!normalizeVenues(form.venues).length) errors.push('Add at least one venue');
         if (!form.city?.trim()) errors.push('City is required');
         if (!form.registration_opens_at) errors.push('Registration opens date is required');
         if (!form.registration_closes_at) errors.push('Registration closes date is required');
@@ -1480,10 +1551,13 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
     const back = () => setStep((s) => Math.max(1, s - 1));
 
     const buildPayload = (mode = 'publish') => {
+        const venues = normalizeVenues(form.venues);
         const payload = {
             ...form,
             is_manual: true,
             slug: form.slug || slugify(form.event_name),
+            venues,
+            venue: venues.join(' / '),
             event_dates: formatEventDates(form.start_date, form.end_date),
             points: form.points === '' || form.points == null ? null : String(form.points),
             prize_money_total: form.prize_money_total === '' ? null : Number(form.prize_money_total),
@@ -1931,30 +2005,66 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                 <input type="time" name="end_time" value={form.end_time} onChange={handleInput} className={inputClass} />
                                             </div>
                                             <div className="relative md:col-span-2">
-                                                <label className={labelClass}>Venue / Club</label>
+                                                <label className={labelClass}>Venues / Clubs *</label>
+                                                {selectedVenues.length > 0 && (
+                                                    <div className="flex flex-wrap gap-2 mb-2">
+                                                        {selectedVenues.map((name) => (
+                                                            <span
+                                                                key={name}
+                                                                className="inline-flex items-center gap-1.5 rounded-full border border-padel-green/40 bg-padel-green/10 text-padel-green px-2.5 py-1 text-xs font-semibold"
+                                                            >
+                                                                {name}
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => removeVenue(name)}
+                                                                    className="rounded-full p-0.5 hover:bg-white/10 text-padel-green/80 hover:text-white"
+                                                                    aria-label={`Remove ${name}`}
+                                                                >
+                                                                    <X className="w-3 h-3" />
+                                                                </button>
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
                                                 <input
-                                                    name="venue"
-                                                    value={form.venue}
-                                                    onChange={(e) => { setField('venue', e.target.value); setVenueOpen(true); }}
+                                                    value={venueQuery}
+                                                    onChange={(e) => { setVenueQuery(e.target.value); setVenueOpen(true); }}
                                                     onFocus={() => setVenueOpen(true)}
                                                     onBlur={() => setTimeout(() => setVenueOpen(false), 150)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            if (venueQuery.trim()) addVenue(venueQuery);
+                                                        }
+                                                    }}
                                                     placeholder="Select a club or type a venue"
                                                     autoComplete="off"
                                                     className={inputClass}
                                                 />
-                                                {venueOpen && filteredClubs.length > 0 && (
+                                                <p className="text-[11px] text-gray-500 mt-1">Add one or more clubs. Press Enter to add a custom venue.</p>
+                                                {venueOpen && (filteredClubs.length > 0 || venueQuery.trim()) && (
                                                     <div className="absolute z-20 left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-lg max-h-52 overflow-y-auto shadow-xl custom-scrollbar">
                                                         {filteredClubs.map((c) => (
                                                             <button
                                                                 key={c.id}
                                                                 type="button"
                                                                 onMouseDown={(e) => e.preventDefault()}
-                                                                onClick={() => { setField('venue', c.name); setVenueOpen(false); }}
+                                                                onClick={() => addVenue(c.name)}
                                                                 className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-padel-green hover:text-black transition-colors"
                                                             >
                                                                 {c.name}
                                                             </button>
                                                         ))}
+                                                        {venueQuery.trim() && !selectedVenueKeys.has(venueQuery.trim().toLowerCase()) && (
+                                                            <button
+                                                                type="button"
+                                                                onMouseDown={(e) => e.preventDefault()}
+                                                                onClick={() => addVenue(venueQuery)}
+                                                                className="w-full text-left px-4 py-2.5 text-sm text-padel-green hover:bg-padel-green hover:text-black transition-colors border-t border-white/10"
+                                                            >
+                                                                Add “{venueQuery.trim()}”
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
@@ -1969,7 +2079,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                     autoComplete="off"
                                                     className={inputClass}
                                                 />
-                                                <p className="text-[11px] text-gray-500 mt-1">Powered by Google — selecting a result auto-fills city &amp; venue.</p>
+                                                <p className="text-[11px] text-gray-500 mt-1">Powered by Google — selecting a result auto-fills city (and venue if none selected yet).</p>
                                             </div>
                                             <div className="md:col-span-2">
                                                 <label className={labelClass}>City</label>
@@ -3060,7 +3170,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                             )}
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-gray-300">
                                                 <p><span className="text-gray-500">Dates:</span> {formatEventDates(form.start_date, form.end_date) || '—'}</p>
-                                                <p><span className="text-gray-500">Venue:</span> {[form.venue, form.city].filter(Boolean).join(', ') || '—'}</p>
+                                                <p><span className="text-gray-500">Venue:</span> {venuesDisplayLabel(form.venues, form.city) || '—'}</p>
                                                 <p><span className="text-gray-500">Reg opens:</span> {formatDateTimeLabel(form.registration_opens_at)}</p>
                                                 <p><span className="text-gray-500">Reg closes:</span> {formatDateTimeLabel(form.registration_closes_at)}</p>
                                             </div>
@@ -3219,7 +3329,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                     )}
                                 </div>
                                 <p className="text-gray-400 text-sm">{formatEventDates(form.start_date, form.end_date) || 'Dates TBC'}</p>
-                                <p className="text-gray-400 text-sm">{[form.venue, form.city].filter(Boolean).join(', ') || 'Venue TBC'}</p>
+                                <p className="text-gray-400 text-sm">{venuesDisplayLabel(form.venues, form.city) || 'Venue TBC'}</p>
                                 <button
                                     type="button"
                                     onClick={() => setShowPreview(false)}

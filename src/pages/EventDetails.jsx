@@ -11,6 +11,7 @@ import PaystackPop from '@paystack/inline-js';
 import { toPaystackAmount, FEES } from '../constants/fees';
 import ManualEventRegistration from '../components/ManualEventRegistration';
 import ManualRegistrationEntryCard from '../components/ManualRegistrationEntryCard';
+import PlayerModal from '../components/PlayerModal';
 import { toast } from 'sonner';
 import { sendEmail } from '../utils/emails';
 import { canAccessHiddenEvents } from '../hooks/useAdminPermissions';
@@ -684,6 +685,8 @@ const EventDetails = () => {
     const [participants, setParticipants] = useState({});
     const [playerDivisions, setPlayerDivisions] = useState([]);
     const [fourMPlayers, setFourMPlayers] = useState({});
+    const [selectedPlayer, setSelectedPlayer] = useState(null);
+    const [loadingPlayerProfile, setLoadingPlayerProfile] = useState(false);
     // Total registered entries for manual events (incl. pending payment, counts
     // each player's division entry separately; excludes withdrawn).
     const [manualEntriesCount, setManualEntriesCount] = useState(0);
@@ -1157,6 +1160,82 @@ const EventDetails = () => {
             window.dispatchEvent(new CustomEvent('4m:registrations-changed'));
         } catch (_) { /* ignore */ }
     }, [manualUserEmail]);
+
+    /**
+     * Open the public 4M player profile modal for a Players-tab entry.
+     * Resolves against the local players table by RankedIn id, then name.
+     */
+    const openPlayerProfile = useCallback(async (playerObj) => {
+        if (!playerObj || loadingPlayerProfile) return;
+        const rId = String(playerObj.RankedinId || playerObj.Id || '').trim();
+        const pName = String(playerObj.Name || '').trim();
+        if (!rId && !pName) return;
+
+        setLoadingPlayerProfile(true);
+        try {
+            const selectCols = 'id, name, email, image_url, rankedin_id, rankings, points, skill_rating, sponsors, additional_images, home_club, region, racket_brand, rank_label, category, active_ranking_label, contact_number, level';
+            let profile = null;
+
+            if (rId) {
+                const { data } = await supabase
+                    .from('players')
+                    .select(selectCols)
+                    .eq('rankedin_id', rId)
+                    .maybeSingle();
+                profile = data;
+            }
+
+            if (!profile && pName) {
+                const { data } = await supabase
+                    .from('players')
+                    .select(selectCols)
+                    .ilike('name', pName)
+                    .limit(5);
+                if (data?.length === 1) {
+                    profile = data[0];
+                } else if (data?.length > 1) {
+                    profile = data.find((row) => playerNamesMatch(row.name, pName)) || data[0];
+                }
+            }
+
+            if (!profile) {
+                toast.message('No 4M profile found for this player');
+                return;
+            }
+
+            let sponsorsList = profile.sponsors;
+            if (typeof sponsorsList === 'string') {
+                try {
+                    const parsed = JSON.parse(sponsorsList);
+                    sponsorsList = Array.isArray(parsed) ? parsed : [sponsorsList];
+                } catch {
+                    sponsorsList = sponsorsList.split(',').map((s) => s.trim()).filter(Boolean);
+                }
+            }
+
+            let additionalImages = profile.additional_images;
+            if (typeof additionalImages === 'string') {
+                try {
+                    additionalImages = JSON.parse(additionalImages);
+                } catch {
+                    additionalImages = [];
+                }
+            }
+
+            setSelectedPlayer({
+                ...profile,
+                image_url: profile.image_url || fourMPlayers[rId] || fourMPlayers[pName.toLowerCase()] || playerObj.Image || '',
+                sponsors: Array.isArray(sponsorsList) ? sponsorsList : [],
+                additional_images: Array.isArray(additionalImages) ? additionalImages : [],
+            });
+        } catch (err) {
+            console.error('Error loading player profile:', err);
+            toast.error('Could not load player profile');
+        } finally {
+            setLoadingPlayerProfile(false);
+        }
+    }, [loadingPlayerProfile, fourMPlayers]);
+
     useEffect(() => {
         let active = true;
         const applySession = (session) => {
@@ -3491,11 +3570,16 @@ const EventDetails = () => {
                                     title={event.event_name}
                                     dateLabel={event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}
                                     locationLabel={
-                                        [event.venue, event.city && !(event.venue || '').toLowerCase().includes((event.city || '').toLowerCase()) ? event.city : null]
-                                            .filter(Boolean)
-                                            .join(', ')
-                                        || event.address
-                                        || null
+                                        (() => {
+                                            const venuePart = Array.isArray(event.venues) && event.venues.length > 0
+                                                ? event.venues.join(' / ')
+                                                : event.venue;
+                                            return [venuePart, event.city && !(venuePart || '').toLowerCase().includes((event.city || '').toLowerCase()) ? event.city : null]
+                                                .filter(Boolean)
+                                                .join(', ')
+                                            || event.address
+                                            || null;
+                                        })()
                                     }
                                 />
                                 </div>
@@ -3802,7 +3886,13 @@ const EventDetails = () => {
                                                         const computedStatus = computedEventStatus;
 
                                                         return [
-                                                            { label: 'Venue', value: event.venue || 'Virgin Active Padel Club', icon: MapPin },
+                                                            {
+                                                                label: Array.isArray(event.venues) && event.venues.length > 1 ? 'Venues' : 'Venue',
+                                                                value: (Array.isArray(event.venues) && event.venues.length > 0
+                                                                    ? event.venues.join(' / ')
+                                                                    : event.venue) || 'Virgin Active Padel Club',
+                                                                icon: MapPin,
+                                                            },
                                                             ...(event.courts ? [{ label: 'Courts', value: event.courts, icon: Layout }] : []),
                                                             { label: 'Organiser', value: event.organizer_name || 'VAPC', icon: User },
                                                             { label: 'Tournament Tier', value: event.sapa_status || 'Gold 1000', icon: Award, valueColor: theme.accentText },
@@ -4182,8 +4272,26 @@ const EventDetails = () => {
                                                                 transition={{ duration: 0.2 }}
                                                                 className="overflow-hidden"
                                                             >
-                                                                <div className="px-6 py-3 bg-gray-50/30 border-b border-gray-100">
-                                                                    <p className="text-sm font-semibold text-slate-700">{[event.venue, event.address, event.city].filter(Boolean).join(' · ')}</p>
+                                                                <div className="px-6 py-3 bg-gray-50/30 border-b border-gray-100 space-y-2">
+                                                                    {Array.isArray(event.venues) && event.venues.length > 1 ? (
+                                                                        <ul className="space-y-1">
+                                                                            {event.venues.map((v) => (
+                                                                                <li key={v} className="text-sm font-semibold text-slate-700 flex items-start gap-2">
+                                                                                    <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400" />
+                                                                                    <span>{v}</span>
+                                                                                </li>
+                                                                            ))}
+                                                                        </ul>
+                                                                    ) : (
+                                                                        <p className="text-sm font-semibold text-slate-700">
+                                                                            {[event.venue, event.address, event.city].filter(Boolean).join(' · ')}
+                                                                        </p>
+                                                                    )}
+                                                                    {Array.isArray(event.venues) && event.venues.length > 1 && (event.address || event.city) && (
+                                                                        <p className="text-xs text-slate-500">
+                                                                            {[event.address, event.city].filter(Boolean).join(' · ')}
+                                                                        </p>
+                                                                    )}
                                                                 </div>
                                                                 <div className="h-[220px] w-full relative">
                                                                     <iframe
@@ -4483,22 +4591,32 @@ const EventDetails = () => {
                                                                                                     const pts = idx === 0 ? item._p1Points : item._p2Points;
                                                                                                     const hasPts = pts > 0;
                                                                                                     const pName = (player.Name || '').split(' ')[0];
+                                                                                                    const avatarUrl = getProfileImage(player);
                                                                                                     return (
-                                                                                                        <div key={idx} className="flex flex-col items-center min-w-[80px]">
-                                                                                                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-200 flex items-center justify-center shadow-sm">
-                                                                                                                {getProfileImage(player) ? (
-                                                                                                                    <img src={getProfileImage(player)} alt={player.Name} className="w-full h-full object-cover" />
+                                                                                                        <button
+                                                                                                            key={idx}
+                                                                                                            type="button"
+                                                                                                            onClick={() => openPlayerProfile(player)}
+                                                                                                            disabled={loadingPlayerProfile}
+                                                                                                            title={`View ${player.Name || 'player'} profile`}
+                                                                                                            className="flex flex-col items-center min-w-[80px] group cursor-pointer disabled:opacity-60 disabled:cursor-wait bg-transparent border-0 p-0"
+                                                                                                        >
+                                                                                                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-200 flex items-center justify-center shadow-sm transition-transform group-hover:scale-105 group-hover:border-slate-300 group-focus-visible:ring-2 group-focus-visible:ring-offset-2 group-focus-visible:ring-slate-400">
+                                                                                                                {avatarUrl ? (
+                                                                                                                    <img src={avatarUrl} alt={player.Name} className="w-full h-full object-cover" />
                                                                                                                 ) : (
                                                                                                                     <User className="w-7 h-7 text-gray-400" />
                                                                                                                 )}
                                                                                                             </div>
-                                                                                                            <span className="text-sm font-bold text-slate-800 mt-1.5 text-center max-w-[96px] truncate">{pName}</span>
+                                                                                                            <span className="text-sm font-bold text-slate-800 mt-1.5 text-center max-w-[96px] truncate group-hover:underline underline-offset-2">
+                                                                                                                {pName}
+                                                                                                            </span>
                                                                                                             {hasPts && (
                                                                                                                 <span className="mt-1 bg-[#CCFF00] text-[#0a0a0a] text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm">
                                                                                                                     {pts.toLocaleString()}
                                                                                                                 </span>
                                                                                                             )}
-                                                                                                        </div>
+                                                                                                        </button>
                                                                                                     );
                                                                                                 })}
                                                                                             </div>
@@ -5489,6 +5607,16 @@ const EventDetails = () => {
                 videoUrl={videoModal.url}
                 title={videoModal.title}
             />
+
+            <AnimatePresence>
+                {selectedPlayer && (
+                    <PlayerModal
+                        player={selectedPlayer}
+                        onClose={() => setSelectedPlayer(null)}
+                        userEmail={manualUserEmail}
+                    />
+                )}
+            </AnimatePresence>
 
             <AnimatePresence>
                 {posterModalUrl && (

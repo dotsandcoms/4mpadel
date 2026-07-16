@@ -795,7 +795,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
     // excluded so a crafted draft cannot escalate via the admin's session.
     const AMENDMENT_ALLOWED_KEYS = [
         'event_name', 'slug', 'organizer_name', 'organizer_logo_url', 'organizer_badge_text',
-        'city', 'venue', 'address', 'start_date', 'end_date', 'start_time', 'end_time',
+        'city', 'venue', 'venues', 'address', 'start_date', 'end_date', 'start_time', 'end_time',
         'sapa_status', 'tournament_tag', 'description', 'points', 'points_breakdown',
         'prize_money_total', 'prize_money_breakdown', 'balls', 'courts', 'tournament_director',
         'referees', 'sanctioning_details', 'rules_regs', 'withdrawal_substitution',
@@ -866,7 +866,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
 
     // Fields worth surfacing in the amendment review diff
     const AMENDMENT_DIFF_FIELDS = [
-        ['event_name', 'Event Name'], ['venue', 'Venue'], ['city', 'City'], ['address', 'Address'],
+        ['event_name', 'Event Name'], ['venue', 'Venue'], ['venues', 'Venues'], ['city', 'City'], ['address', 'Address'],
         ['start_date', 'Start Date'], ['end_date', 'End Date'], ['start_time', 'Start Time'], ['end_time', 'End Time'],
         ['sapa_status', 'Tier'], ['points', 'Points'], ['prize_money_total', 'Prize Money'],
         ['registration_closes_at', 'Registration Closes'], ['description', 'Description'],
