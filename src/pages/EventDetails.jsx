@@ -116,52 +116,130 @@ const CountUp = ({ end, duration = 1.5 }) => {
     return <span>{count.toLocaleString()}</span>;
 };
 
-const EventSponsorStrip = ({ items, className = '', onPosterClick }) => {
+const SPONSOR_SLIDE_SIZE = 3;
+
+const EventSponsorStrip = ({ items, className = '', onPosterClick, accentColor = '#CCFF00' }) => {
+    const [sponsorOffset, setSponsorOffset] = useState(0);
+
     if (!items?.length) return null;
+
+    const org = items.find((item) => item.type === 'org') || null;
+    const poster = items.find((item) => item.type === 'poster') || null;
+    const sponsors = items.filter((item) => item.type === 'sponsor');
+
+    const sectionLabelClass = 'text-[9px] sm:text-[10px] font-bold uppercase tracking-wider leading-none mb-2';
+    const cellClass = 'flex-1 flex flex-col items-center justify-center px-3 py-3 sm:py-3.5 min-w-0';
+
+    const canSlideSponsors = sponsors.length > SPONSOR_SLIDE_SIZE;
+    const visibleSponsors = canSlideSponsors
+        ? Array.from({ length: SPONSOR_SLIDE_SIZE }, (_, i) => sponsors[(sponsorOffset + i) % sponsors.length])
+        : sponsors;
+
+    const advanceSponsors = () => {
+        if (!canSlideSponsors) return;
+        setSponsorOffset((prev) => (prev + 1) % sponsors.length);
+    };
+
+    const sections = [];
+
+    if (org) {
+        const orgImg = (
+            <img
+                src={org.url}
+                alt={org.label || 'Organisation'}
+                className="h-8 sm:h-10 w-auto max-w-full object-contain"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+        );
+        sections.push(
+            org.href ? (
+                <Link
+                    key="org"
+                    to={org.href}
+                    className={`${cellClass} hover:bg-white/5 transition-colors`}
+                    title={org.label || 'Organisation'}
+                >
+                    <span className={sectionLabelClass} style={{ color: accentColor }}>Organisation</span>
+                    {orgImg}
+                </Link>
+            ) : (
+                <div key="org" className={cellClass}>
+                    <span className={sectionLabelClass} style={{ color: accentColor }}>Organisation</span>
+                    {orgImg}
+                </div>
+            ),
+        );
+    }
+
+    if (poster) {
+        const posterImg = (
+            <img
+                src={poster.url}
+                alt={poster.label || 'Event poster'}
+                className="h-10 sm:h-12 w-auto max-w-[3.5rem] sm:max-w-[4.5rem] object-cover rounded-sm"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+        );
+        sections.push(
+            onPosterClick ? (
+                <button
+                    key="poster"
+                    type="button"
+                    onClick={() => onPosterClick(poster.url)}
+                    className={`${cellClass} hover:bg-white/5 transition-colors cursor-pointer`}
+                    title="View event poster"
+                >
+                    <span className={sectionLabelClass} style={{ color: accentColor }}>Event Poster</span>
+                    {posterImg}
+                </button>
+            ) : (
+                <div key="poster" className={cellClass}>
+                    <span className={sectionLabelClass} style={{ color: accentColor }}>Event Poster</span>
+                    {posterImg}
+                </div>
+            ),
+        );
+    }
+
+    if (sponsors.length > 0) {
+        sections.push(
+            <div key="sponsors" className={`${cellClass} relative`}>
+                <span className={sectionLabelClass} style={{ color: accentColor }}>Sponsors</span>
+                <div className="w-full flex items-center gap-1.5 sm:gap-2">
+                    <div className="flex-1 min-w-0 flex items-center justify-center gap-3 sm:gap-4 overflow-hidden">
+                        {visibleSponsors.map((item, i) => (
+                            <img
+                                key={`${item.url}-${sponsorOffset}-${i}`}
+                                src={item.url}
+                                alt={item.label || `Sponsor ${i + 1}`}
+                                className="h-7 sm:h-9 w-auto max-w-[4rem] sm:max-w-[5rem] object-contain shrink-0"
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
+                        ))}
+                    </div>
+                    {canSlideSponsors && (
+                        <button
+                            type="button"
+                            onClick={advanceSponsors}
+                            className="shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full border flex items-center justify-center hover:bg-white/10 transition-colors"
+                            style={{ borderColor: accentColor, color: accentColor }}
+                            aria-label="Next sponsors"
+                            title="Next sponsors"
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
+            </div>,
+        );
+    }
+
+    if (!sections.length) return null;
+
     return (
         <div className={`rounded-2xl border border-white/10 bg-black/30 backdrop-blur-sm overflow-hidden ${className}`}>
-            <div className="flex items-center justify-center divide-x divide-white/10">
-                {items.map((item, i) => {
-                    const img = (
-                        <img
-                            src={item.url}
-                            alt={item.label || ''}
-                            className="h-8 sm:h-10 w-auto max-w-full object-contain"
-                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                        />
-                    );
-                    const cellClass = 'flex-1 flex items-center justify-center px-3 py-3.5 min-w-0';
-                    if (item.type === 'org' && item.href) {
-                        return (
-                            <Link
-                                key={`org-${i}`}
-                                to={item.href}
-                                className={`${cellClass} hover:bg-white/5 transition-colors`}
-                                title={item.label || 'Organiser'}
-                            >
-                                {img}
-                            </Link>
-                        );
-                    }
-                    if (item.type === 'poster' && onPosterClick) {
-                        return (
-                            <button
-                                key={`poster-${i}`}
-                                type="button"
-                                onClick={() => onPosterClick(item.url)}
-                                className={`${cellClass} hover:bg-white/5 transition-colors cursor-pointer`}
-                                title="View event poster"
-                            >
-                                {img}
-                            </button>
-                        );
-                    }
-                    return (
-                        <div key={`${item.url}-${i}`} className={cellClass}>
-                            {img}
-                        </div>
-                    );
-                })}
+            <div className="flex items-stretch justify-center divide-x divide-white/10">
+                {sections}
             </div>
         </div>
     );
@@ -3562,6 +3640,7 @@ const EventDetails = () => {
                                     <EventSponsorStrip
                                         items={eventSponsorItems}
                                         className="w-full mt-3"
+                                        accentColor={theme?.fill || '#CCFF00'}
                                         onPosterClick={(url) => setPosterModalUrl(url)}
                                     />
                                 )}
