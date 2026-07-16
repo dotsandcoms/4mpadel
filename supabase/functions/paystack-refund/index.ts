@@ -1111,7 +1111,7 @@ serve(async (req: Request) => {
 
         for (const reg of targets) {
             // Eligibility (close-date gate for non-admins).
-            const elig = checkRefundEligibility(reg, divisions || [], event || {}, user.email, isAdmin);
+            const elig = checkRefundEligibility(reg, divisions || [], event || {}, callerEmail, isAdmin);
             if (!elig.eligible) {
                 results.push({
                     registration_id: reg.id,

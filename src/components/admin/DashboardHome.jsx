@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
-import { Users, Calendar, Trophy, Star, Activity, UserPlus, MapPin, ExternalLink, Home, Plus, FileText, Settings, ArrowRight } from 'lucide-react';
+import { Users, Calendar, Trophy, Star, Activity, UserPlus, MapPin, ExternalLink, Home, Plus, FileText, Settings, ArrowRight, Building } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 import { supabase } from '../../supabaseClient';
@@ -62,6 +62,8 @@ const DashboardHome = ({ onTabChange }) => {
     const navigate = useNavigate();
     const [stats, setStats] = useState({
         totalPlayers: 0,
+        totalOrganisations: 0,
+        approvedOrganisations: 0,
         totalCoaches: 0,
         approvedCoaches: 0,
         upcomingEvents: 0,
@@ -123,7 +125,20 @@ const DashboardHome = ({ onTabChange }) => {
             if (trendError) console.error('Error fetching player trend:', trendError);
             setChartData(buildRegistrationTrend(trendPlayers));
 
-            // 1.5. Fetch Coach Stats
+            // 1.5. Fetch Organisation Stats
+            const { count: totalOrgCount, error: orgError } = await supabase
+                .from('organisations')
+                .select('*', { count: 'exact', head: true });
+
+            const { count: approvedOrgCount, error: approvedOrgError } = await supabase
+                .from('organisations')
+                .select('*', { count: 'exact', head: true })
+                .eq('status', 'approved');
+
+            if (orgError) console.error('Error fetching organisations:', orgError);
+            if (approvedOrgError) console.error('Error fetching approved organisations:', approvedOrgError);
+
+            // 1.6. Fetch Coach Stats
             const { count: totalCoachCount, error: coachError } = await supabase
                 .from('coach_applications')
                 .select('*', { count: 'exact', head: true });
@@ -174,6 +189,8 @@ const DashboardHome = ({ onTabChange }) => {
 
             setStats({
                 totalPlayers: playerCount || 0,
+                totalOrganisations: totalOrgCount || 0,
+                approvedOrganisations: approvedOrgCount || 0,
                 totalCoaches: totalCoachCount || 0,
                 approvedCoaches: approvedCoachCount || 0,
                 upcomingEvents: upcomingCount,
@@ -218,7 +235,7 @@ const DashboardHome = ({ onTabChange }) => {
 
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6">
                 <StatCard
                     title="Total Players"
                     value={stats.totalPlayers}
@@ -227,6 +244,15 @@ const DashboardHome = ({ onTabChange }) => {
                     delay={0.1}
                     loading={loading}
                     onClick={() => onTabChange?.('players')}
+                />
+                <StatCard
+                    title="Organisations"
+                    value={stats.totalOrganisations}
+                    subtext={`${stats.approvedOrganisations} Approved`}
+                    icon={Building}
+                    delay={0.15}
+                    loading={loading}
+                    onClick={() => onTabChange?.('organisations')}
                 />
                 <StatCard
                     title="Coaches"
