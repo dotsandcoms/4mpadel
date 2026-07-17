@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
-    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy, Link2, Info, MessageCircle, XCircle, Pencil, FileText, ArrowRight, ArrowDownLeft, ArrowUpRight
+    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy, Link2, Info, MessageCircle, XCircle, Pencil, FileText, ArrowRight, ArrowDownLeft, ArrowUpRight, Phone
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
@@ -1268,6 +1268,15 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         return Number(getPlayerProfile(reg)?.points || 0);
     }, [getPlayerProfile]);
 
+    const getPlayerPhone = useCallback((reg) => {
+        return (
+            reg?.phone
+            || reg?.contact_number
+            || getPlayerProfile(reg)?.contact_number
+            || null
+        );
+    }, [getPlayerProfile]);
+
     const openProfileLinkModal = useCallback((reg) => {
         const profile = getPlayerProfile(reg);
         setMatchingProfileReg(reg);
@@ -1322,16 +1331,34 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         );
     }, [getPlayerProfile, openProfileLinkModal]);
 
-    const renderPlayerNameButton = useCallback((reg, className = '') => (
-        <button
-            type="button"
-            onClick={() => setProfileViewTarget(reg)}
-            className={`text-left hover:text-padel-green hover:underline transition-colors ${className}`}
-            title="View profile"
-        >
-            {reg.full_name}
-        </button>
-    ), []);
+    const renderPlayerNameButton = useCallback((reg, className = '') => {
+        const phone = getPlayerPhone(reg);
+        return (
+            <div className="flex flex-col gap-0.5 min-w-0">
+                <button
+                    type="button"
+                    onClick={() => setProfileViewTarget(reg)}
+                    className={`text-left hover:text-padel-green hover:underline transition-colors ${className}`}
+                    title="View profile"
+                >
+                    {reg.full_name}
+                </button>
+                {phone ? (
+                    <a
+                        href={`tel:${phone}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 hover:text-padel-green transition-colors"
+                        title={`Call ${reg.full_name || ''}`}
+                    >
+                        <Phone size={10} className="shrink-0" />
+                        <span className="truncate">{phone}</span>
+                    </a>
+                ) : (
+                    <span className="text-[11px] text-gray-600 italic">No number</span>
+                )}
+            </div>
+        );
+    }, [getPlayerPhone]);
 
     const searchProfilesForLink = useCallback(async (query) => {
         const q = (query || '').trim();
