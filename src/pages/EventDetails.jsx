@@ -24,6 +24,7 @@ import logo4m from '../assets/logo_4m_lowercase.png';
 import sapaLogo from '../assets/sapa-logo.svg';
 import { getEventImage } from '../utils/imageUtils';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
+import { isRegistrationClosed } from '../utils/registrationClose';
 
 const formatPlayerName = (fullName) => {
     if (!fullName) return '';
@@ -1296,11 +1297,7 @@ const EventDetails = () => {
                 allRegistrationsPaid: false,
                 hasAnyRegistration: false,
                 entries: [],
-                canAddDivision: divisions.some((d) => {
-                    const closeAt = d.entries_close_at || event.registration_closes_at;
-                    if (!closeAt) return true;
-                    return new Date(closeAt).getTime() >= Date.now();
-                }),
+                canAddDivision: divisions.some((d) => !isRegistrationClosed(d, event)),
             });
             return;
         }
@@ -1361,8 +1358,7 @@ const EventDetails = () => {
             const addedByName = wasAddedByPartner
                 ? (reg._payerName || reg.partner_name || 'your partner')
                 : null;
-            const closeAt = div?.entries_close_at || event.registration_closes_at;
-            const divClosed = closeAt ? new Date(closeAt).getTime() < Date.now() : false;
+            const divClosed = isRegistrationClosed(div, event);
             const canWithdraw = !!div && !divClosed && reg.status !== 'withdrawn';
             const canAddPartner = isPaid
                 && !hasPartner
@@ -1397,9 +1393,7 @@ const EventDetails = () => {
 
         const canAddDivision = divisions.some((d) => {
             if (registeredDivisionIds.has(d.id)) return false;
-            const closeAt = d.entries_close_at || event.registration_closes_at;
-            if (!closeAt) return true;
-            return new Date(closeAt).getTime() >= Date.now();
+            return !isRegistrationClosed(d, event);
         });
 
         const confirmedRegs = enrichedRegs.filter((reg) => {
@@ -3176,11 +3170,9 @@ const EventDetails = () => {
         manualRegActionsRef.current?.openPayFlow?.();
     };
 
-    /** Open the "You are registered" accordion / scroll to registration status. */
+    /** Open the "You are registered" accordion and scroll it into view. */
     const openManageEntry = () => {
-        // Manual events need a logged-in email for withdraw/partner/manage actions.
-        // Non-manual Manage Entry only scrolls to the status block — do not gate on manualUserEmail.
-        if (event?.is_manual && !manualUserEmail) {
+        if (!manualUserEmail) {
             promptMembersOnly();
             return;
         }
@@ -3411,8 +3403,12 @@ const EventDetails = () => {
                             onAddPartner={entry.canAddPartner
                                 ? () => manualRegActionsRef.current?.openAddPartner?.(entry.id)
                                 : undefined}
-                            onWithdraw={() => manualRegActionsRef.current?.openWithdraw?.(entry.id)}
-                            onRemovePartner={() => manualRegActionsRef.current?.openRemovePartner?.(entry.id)}
+                            onWithdraw={entry.canWithdraw
+                                ? () => manualRegActionsRef.current?.openWithdraw?.(entry.id)
+                                : undefined}
+                            onRemovePartner={entry.canWithdraw
+                                ? () => manualRegActionsRef.current?.openRemovePartner?.(entry.id)
+                                : undefined}
                         />
                     ))}
                 </div>

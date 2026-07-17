@@ -523,9 +523,15 @@ type EventRow = {
 };
 
 function isClosed(division: DivisionRow | undefined, event: EventRow | undefined): boolean {
-    const closeAt = division?.entries_close_at || event?.registration_closes_at;
-    if (!closeAt) return false;
-    return new Date(closeAt).getTime() < Date.now();
+    const now = Date.now();
+    if (event?.registration_closes_at && new Date(event.registration_closes_at).getTime() < now) {
+        return true;
+    }
+    const divClose = division?.entries_close_at;
+    if (divClose && new Date(divClose).getTime() < now) {
+        return true;
+    }
+    return false;
 }
 
 /**

@@ -20,6 +20,7 @@ import PartnerProfileInvite from './PartnerProfileInvite';
 import ManualRegistrationEntryCard from './ManualRegistrationEntryCard';
 import { useMembersOnly } from '../context/MembersOnlyContext';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
+import { isRegistrationClosed } from '../utils/registrationClose';
 
 const STEPS = [
     { id: 1, label: 'Profile' },
@@ -183,11 +184,7 @@ const getEntryPaymentLabel = (reg, userEmail) => {
     return payerName ? `Paid for by ${payerName}` : 'Paid for by partner';
 };
 
-const isClosed = (division, event) => {
-    const closeAt = division?.entries_close_at || event?.registration_closes_at;
-    if (!closeAt) return false;
-    return new Date(closeAt).getTime() < Date.now();
-};
+const isClosed = (division, event) => isRegistrationClosed(division, event);
 
 const normEmail = (value) => (value || '').trim().toLowerCase();
 
@@ -886,11 +883,23 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 },
                 openWithdraw: (regId) => {
                     const reg = myRegs.find((r) => r.id === regId);
-                    if (reg) setWithdrawTarget(reg);
+                    if (!reg) return;
+                    const div = divisions.find((d) => d.id === reg.division_id);
+                    if (isClosed(div, event)) {
+                        toast.error('Registration has closed — withdrawals are no longer available.');
+                        return;
+                    }
+                    setWithdrawTarget(reg);
                 },
                 openRemovePartner: (regId) => {
                     const reg = myRegs.find((r) => r.id === regId);
-                    if (reg) setRemovePartnerTarget(reg);
+                    if (!reg) return;
+                    const div = divisions.find((d) => d.id === reg.division_id);
+                    if (isClosed(div, event)) {
+                        toast.error('Registration has closed — partner changes are no longer available.');
+                        return;
+                    }
+                    setRemovePartnerTarget(reg);
                 },
                 openManageEntry: () => {
                     setDivisionsBlockOpen(true);
@@ -936,6 +945,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         loadProfile,
         loadDivisionRegs,
         loadDivisions,
+        divisions,
+        event,
         promptMembersOnly,
         userEmail,
     ]);
@@ -2410,7 +2421,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (!reg || withdrawing) return;
 
         const div = divisions.find((d) => d.id === reg.division_id || d.name === reg.division);
-        if (div && isClosed(div, event)) {
+        if (isClosed(div, event)) {
             toast.error('Registration has closed — please contact the organiser.');
             return;
         }
@@ -2448,8 +2459,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (!reg || removingPartner) return;
 
         const div = divisions.find((d) => d.id === reg.division_id || d.name === reg.division);
-        if (div && isClosed(div, event)) {
-            toast.error('Registration has closed — please contact the organiser.');
+        if (isClosed(div, event)) {
+            toast.error('Registration has closed — partner changes are no longer available.');
             return;
         }
 
@@ -4161,7 +4172,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                             onAddPartner={() => openAddPartnerWizard(reg)}
                                             onPay={needsPay && !hasPendingPayment ? openPayWizard : undefined}
                                             onWithdraw={reg && entry.canWithdraw ? () => { setWithdrawAll(false); setSwitchMode(false); setSwitchTargetDivId(''); setWithdrawTarget(reg); } : undefined}
-                                            onRemovePartner={reg ? () => setRemovePartnerTarget(reg) : undefined}
+                                            onRemovePartner={reg && entry.canWithdraw ? () => setRemovePartnerTarget(reg) : undefined}
                                             withdrawLabel={entry.wasAddedByPartner && !entry.isPaid ? 'Decline' : 'Withdraw'}
                                         />
                                     );

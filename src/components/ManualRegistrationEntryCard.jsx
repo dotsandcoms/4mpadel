@@ -96,7 +96,7 @@ const ManualRegistrationEntryCard = ({
             <div className={`flex gap-3 ${entry.hasPartner || entry.canAddPartner ? '' : 'flex-col'}`}>
                 <div className={entry.hasPartner || entry.canAddPartner ? 'flex-1 min-w-0' : 'w-full'}>
                     <PersonCell role="Player" name={playerName} avatarUrl={playerAvatar} paid={playerPaid} label={playerLabel} />
-                    {showActions && onWithdraw && (
+                    {showActions && onWithdraw && entry.canWithdraw && (
                         <button
                             type="button"
                             onClick={onWithdraw}
