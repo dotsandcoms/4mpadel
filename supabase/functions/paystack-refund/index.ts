@@ -115,8 +115,12 @@ async function inspectPaystackTransaction(
                     found: true,
                     status,
                     amountCents: body.data.amount != null ? Number(body.data.amount) : null,
-                    // success = paid; reversed = refund activity exists (may still have balance)
-                    refundable: status === 'success' || status === 'reversed',
+                    // success = paid; reversed / reversal-pending = refund activity
+                    // exists (partial refund in flight) — remaining balance can still
+                    // be refundable, so do NOT treat these like abandoned checkouts.
+                    refundable: status === 'success'
+                        || status === 'reversed'
+                        || status === 'reversal-pending',
                 };
             }
             lastStatus = String(body?.data?.status || body?.status || lastStatus);

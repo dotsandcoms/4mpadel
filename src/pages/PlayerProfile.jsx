@@ -23,7 +23,20 @@ const REFUND_REASON_LABELS = {
     division_switch: 'Division switch',
 };
 
-const formatRefundReason = (reason) => REFUND_REASON_LABELS[reason] || reason?.replace(/_/g, ' ') || 'Refund';
+const formatRefundReason = (reason, coverType) => {
+    const base = REFUND_REASON_LABELS[reason] || reason?.replace(/_/g, ' ') || 'Refund';
+    if (String(coverType || '').toLowerCase() === 'license') return `${base} · temp license`;
+    return base;
+};
+
+/** Refunds that should count toward paid/refunded totals (Paystack accepted or settled). */
+const isCountableRefund = (rf) => {
+    const status = String(rf?.status || '').toLowerCase();
+    if (status === 'processed') return true;
+    // In-flight after Paystack accepted the refund request — still money back to the payer.
+    if ((status === 'pending' || status === 'processing') && rf?.paystack_refund_id) return true;
+    return false;
+};
 
 const parseProfileMatchDate = (dateStr) => {
     if (!dateStr) return null;
@@ -203,41 +216,45 @@ const PlayerProfile = () => {
                     setSelectedRankingForBreakdown(playerData.rankings[0]);
                 }
 
-                if (playerData.license_type === 'temporary') {
-                    const { data: tempLicenseData } = await supabase
+                // Temp licenses are per-event. An older expired event must not wipe a
+                // still-valid upcoming license (e.g. Aura expired, Traidcor still active).
+                {
+                    const { data: tempLicenseRows } = await supabase
                         .from('temporary_licenses')
                         .select('*')
                         .eq('player_id', playerData.id)
-                        .order('created_at', { ascending: false })
-                        .limit(1)
-                        .maybeSingle();
+                        .order('event_date', { ascending: false });
 
-                    if (tempLicenseData) {
-                        const eventDate = new Date(tempLicenseData.event_date);
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
 
-                        if (eventDate < today) {
-                            // License has expired!
-                            console.log('Temporary license expired, resetting status...');
+                    const validTemps = (tempLicenseRows || []).filter((row) => {
+                        if (!row.event_date) return false;
+                        const eventDate = new Date(row.event_date);
+                        return !Number.isNaN(eventDate.getTime()) && eventDate >= today;
+                    });
+
+                    if (validTemps.length > 0) {
+                        setTempLicenseDetails(validTemps[0]);
+                        if (playerData.license_type !== 'temporary' || !playerData.paid_registration) {
                             await supabase
                                 .from('players')
-                                .update({ license_type: 'none', paid_registration: false })
+                                .update({ license_type: 'temporary', paid_registration: true })
                                 .eq('id', playerData.id);
-
-                            // Update local state
-                            setPlayer(prev => ({ ...prev, license_type: 'none', paid_registration: false }));
-                            setTempLicenseDetails(null);
-                        } else {
-                            setTempLicenseDetails(tempLicenseData);
+                            setPlayer((prev) => ({
+                                ...prev,
+                                license_type: 'temporary',
+                                paid_registration: true,
+                            }));
                         }
-                    } else {
-                        // Marked as temporary but no record found - clean up
+                    } else if (playerData.license_type === 'temporary') {
+                        console.log('Temporary license expired, resetting status...');
                         await supabase
                             .from('players')
                             .update({ license_type: 'none', paid_registration: false })
                             .eq('id', playerData.id);
-                        setPlayer(prev => ({ ...prev, license_type: 'none', paid_registration: false }));
+                        setPlayer((prev) => ({ ...prev, license_type: 'none', paid_registration: false }));
+                        setTempLicenseDetails(null);
                     }
                 }
 
@@ -332,14 +349,30 @@ const PlayerProfile = () => {
                 if (error) throw error;
 
                 const paymentIds = (paymentsData || []).map((p) => p.id);
+                const paymentRefs = (paymentsData || [])
+                    .map((p) => p.reference)
+                    .filter(Boolean);
                 const refundQueries = [];
 
                 if (paymentIds.length > 0) {
                     refundQueries.push(
                         supabase
                             .from('payment_refunds')
-                            .select('*')
+                            .select('*, payments(*, calendar(event_name))')
                             .in('payment_id', paymentIds),
+                    );
+                }
+
+                // Partner temp-license (and other ledger splits) are stored on a child
+                // payment row attributed to the partner, but the Paystack charge/refund
+                // hits the payer's checkout reference. Include those refunds here so
+                // the person who paid sees the money coming back.
+                if (paymentRefs.length > 0) {
+                    refundQueries.push(
+                        supabase
+                            .from('payment_refunds')
+                            .select('*, payments(*, calendar(event_name))')
+                            .in('paystack_reference', paymentRefs),
                     );
                 }
 
@@ -387,7 +420,7 @@ const PlayerProfile = () => {
                 const paymentTxns = (paymentsData || []).map((t) => {
                     const refunds = refundsByPaymentId.get(t.id) || [];
                     const refundedTotal = refunds
-                        .filter((rf) => rf.status === 'processed')
+                        .filter(isCountableRefund)
                         .reduce((sum, rf) => sum + Number(rf.amount || 0), 0);
                     const isFullyRefunded = refundedTotal > 0 && refundedTotal >= Number(t.amount || 0);
 
@@ -408,6 +441,25 @@ const PlayerProfile = () => {
 
                 const refundTxns = allRefunds.map((rf) => {
                     const linkedPayment = paymentsById.get(rf.payment_id) || rf.payments;
+                    const parentRef = rf.metadata?.ledger_split_parent
+                        || linkedPayment?.metadata?.parent_reference
+                        || null;
+                    const parentPayment = parentRef
+                        ? [...paymentsById.values()].find((p) => p.reference === parentRef)
+                        : null;
+                    // Prefer the checkout the payer actually sees (parent), when the
+                    // refund row is on a partner-attributed license split.
+                    const displayRef = (linkedPayment?.reference && paymentRefs.includes(linkedPayment.reference)
+                        ? linkedPayment.reference
+                        : null)
+                        || (parentRef && paymentRefs.includes(parentRef) ? parentRef : null)
+                        || linkedPayment?.reference
+                        || rf.paystack_reference;
+                    const coverType = rf.metadata?.cover_type;
+                    // Prefer Refunded once Paystack has accepted the refund id.
+                    const displayStatus = isCountableRefund(rf) && rf.status !== 'failed'
+                        ? (rf.status === 'processed' ? 'processed' : 'processing')
+                        : rf.status;
                     return {
                         kind: 'refund',
                         id: rf.paystack_reference || rf.paystack_refund_id || rf.id,
@@ -418,11 +470,14 @@ const PlayerProfile = () => {
                             : new Date(rf.created_at).toLocaleDateString(),
                         sortDate: new Date(rf.processed_at || rf.created_at).getTime(),
                         amount: `-${formatTransactionAmount(rf.amount)}`,
-                        status: formatRefundStatus(rf.status),
+                        status: formatRefundStatus(displayStatus),
                         payment_type: 'refund',
-                        event_name: linkedPayment?.calendar?.event_name || linkedPayment?.metadata?.event_name,
-                        reason: formatRefundReason(rf.reason),
-                        relatedReference: linkedPayment?.reference,
+                        event_name: linkedPayment?.calendar?.event_name
+                            || linkedPayment?.metadata?.event_name
+                            || parentPayment?.calendar?.event_name
+                            || parentPayment?.metadata?.event_name,
+                        reason: formatRefundReason(rf.reason, coverType),
+                        relatedReference: displayRef,
                     };
                 });
 

@@ -68,6 +68,16 @@ const hasProcessedRefund = (regId, refundByRegMap) => {
     if (!regId || !refundByRegMap) return false;
     const entry = refundByRegMap.get(regId);
     if (!entry) return false;
+    const rows = entry.rows || [];
+    // Entry-fee refund processed counts even if a secondary license refund failed.
+    const entryFeeProcessed = rows.some((row) => {
+        if (String(row.status || '').toLowerCase() !== 'processed') return false;
+        const meta = typeof row.metadata === 'object' && row.metadata
+            ? row.metadata
+            : (() => { try { return JSON.parse(row.metadata || '{}'); } catch { return {}; } })();
+        return !meta.cover_type || meta.cover_type === 'entry';
+    });
+    if (entryFeeProcessed) return true;
     if (entry.statuses.some((s) => s === 'failed' || s === 'needs_attention')) return false;
     return entry.statuses.length > 0 && entry.statuses.every((s) => s === 'processed');
 };
@@ -415,16 +425,71 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const refundSummaryFor = (regId) => {
         const e = refundByReg.get(regId);
         if (!e) return null;
-        let status = 'pending';
-        if (e.statuses.some((s) => s === 'failed' || s === 'needs_attention')) status = 'failed';
-        else if (e.statuses.length && e.statuses.every((s) => s === 'processed')) status = 'processed';
-        const failedRow = (e.rows || []).find((row) => String(row.status || '').toLowerCase() === 'failed');
+        const rows = e.rows || [];
+        const processedRows = rows.filter((row) => String(row.status || '').toLowerCase() === 'processed');
+        const failedRows = rows.filter((row) => {
+            const s = String(row.status || '').toLowerCase();
+            return s === 'failed' || s === 'needs_attention';
+        });
+        const pendingRows = rows.filter((row) => {
+            const s = String(row.status || '').toLowerCase();
+            return s !== 'processed' && s !== 'failed' && s !== 'needs_attention';
+        });
+
+        const processedAmount = processedRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+        const failedRow = failedRows[0] || null;
         const failedMeta = failedRow ? parseRefundMeta(failedRow.metadata) : {};
+
+        const reg = registrations.find((r) => r.id === regId) || null;
+        const paymentId = processedRows[0]?.payment_id || failedRow?.payment_id || pendingRows[0]?.payment_id;
+        const payment = (paymentId && payments.find((p) => p.id === paymentId))
+            || (reg ? findPaymentForReg(reg) : null)
+            || null;
+        const { isPartnerPaid, payerName } = reg
+            ? resolvePaymentPayer(reg, payment)
+            : { isPartnerPaid: false, payerName: null };
+
+        const payerNote = isPartnerPaid && payerName
+            ? `Refunded to ${payerName} (paid for entry/license)`
+            : (isPartnerPaid ? 'Refunded to partner who paid' : null);
+
+        let status = 'pending';
+        let text = `Refund pending ${fmtR(e.amount)}`;
+        let note = null;
+
+        if (processedRows.length > 0 && failedRows.length === 0 && pendingRows.length === 0) {
+            status = 'processed';
+            text = `Refunded ${fmtR(processedAmount)}`;
+            note = payerNote;
+        } else if (processedRows.length > 0 && failedRows.length > 0) {
+            // Entry (or part) already refunded — don't bury that under REFUND FAILED.
+            status = 'partial';
+            text = `Refunded ${fmtR(processedAmount)}`;
+            const failedCover = failedMeta.cover_type === 'license' ? 'temp license' : 'remaining';
+            note = payerNote
+                ? `${payerNote}. ${failedCover} refund still needs retry.`
+                : `Entry refunded. ${failedCover} refund still needs retry.`;
+        } else if (processedRows.length > 0 && pendingRows.length > 0) {
+            status = 'pending';
+            text = `Refunded ${fmtR(processedAmount)}`;
+            note = payerNote
+                ? `${payerNote}. Further refund processing…`
+                : 'Further refund processing…';
+        } else if (failedRows.length > 0) {
+            status = 'failed';
+            text = 'Refund failed';
+            note = failedMeta.paystack_error || failedMeta.error || null;
+        }
+
         return {
             amount: e.amount,
+            processedAmount,
             status,
             failedRefundId: failedRow?.id || null,
-            failedError: failedMeta.paystack_error || failedMeta.error || null,
+            failedError: status === 'failed' ? (failedMeta.paystack_error || failedMeta.error || null) : null,
+            note,
+            isPartnerPaid,
+            payerName,
         };
     };
 
@@ -2611,19 +2676,28 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                                 const rf = refundSummaryFor(r.id);
                                                                 if (!rf) return null;
                                                                 const cfg = rf.status === 'processed'
-                                                                    ? { cls: 'bg-emerald-500/10 text-emerald-400', text: `Refunded ${fmtR(rf.amount)}` }
-                                                                    : rf.status === 'failed'
-                                                                        ? { cls: 'bg-red-500/10 text-red-400', text: 'Refund failed' }
-                                                                        : { cls: 'bg-sky-500/10 text-sky-400', text: `Refund pending ${fmtR(rf.amount)}` };
+                                                                    ? { cls: 'bg-emerald-500/10 text-emerald-400', text: rf.text || `Refunded ${fmtR(rf.amount)}` }
+                                                                    : rf.status === 'partial'
+                                                                        ? { cls: 'bg-emerald-500/10 text-emerald-400', text: rf.text || `Refunded ${fmtR(rf.processedAmount || rf.amount)}` }
+                                                                        : rf.status === 'failed'
+                                                                            ? { cls: 'bg-red-500/10 text-red-400', text: 'Refund failed' }
+                                                                            : { cls: 'bg-sky-500/10 text-sky-400', text: rf.text || `Refund pending ${fmtR(rf.amount)}` };
                                                                 return (
                                                                     <div className="mt-1 space-y-1">
                                                                         <div className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${cfg.cls}`}>
                                                                             {cfg.text}
                                                                         </div>
-                                                                        {rf.status === 'failed' && rf.failedError && (
+                                                                        {rf.note && (
+                                                                            <p className={`text-[10px] leading-snug max-w-[220px] ${
+                                                                                rf.status === 'failed' ? 'text-red-400/80' : 'text-gray-400'
+                                                                            }`}>
+                                                                                {rf.note}
+                                                                            </p>
+                                                                        )}
+                                                                        {rf.status === 'failed' && rf.failedError && !rf.note && (
                                                                             <p className="text-[10px] text-red-400/80 leading-snug max-w-[200px]">{rf.failedError}</p>
                                                                         )}
-                                                                        {rf.status === 'failed' && rf.failedRefundId && (
+                                                                        {rf.failedRefundId && (rf.status === 'failed' || rf.status === 'partial') && (
                                                                             <button
                                                                                 type="button"
                                                                                 onClick={() => retryFailedRefund(rf.failedRefundId)}

@@ -7,73 +7,116 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-    // Handle CORS preflight
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
 
     try {
-        // Initialize Supabase Admin Client to bypass RLS and edit players table
         const supabaseAdmin = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
 
-        // 1. Find all expired temporary licenses
-        // We use the date string to expire ONLY when the current date is AFTER the event date.
-        // We inner join and filter to only find records of players who currently have an active 'temporary' license.
-        const today = new Date().toISOString().split('T')[0];
+        const today = new Date().toISOString().split('T')[0]
 
-        const { data: expiredLicenses, error: fetchError } = await supabaseAdmin
+        // Players currently marked temporary who have at least one expired row.
+        // We must NOT clear them if they still hold a valid (non-expired) temp license.
+        const { data: expiredRows, error: fetchError } = await supabaseAdmin
             .from('temporary_licenses')
-            .select('player_id, players!inner(license_type)')
+            .select('player_id, event_id, event_date, players!inner(license_type)')
             .lt('event_date', today)
-            .eq('players.license_type', 'temporary');
+            .eq('players.license_type', 'temporary')
 
         if (fetchError) {
             throw new Error(`Failed to fetch expired licenses: ${fetchError.message}`)
         }
 
-        let expiredCount = 0;
+        const candidateIds = [...new Set((expiredRows || []).map((l) => l.player_id).filter(Boolean))]
+        let expiredCount = 0
+        const clearedIds: number[] = []
 
-        // 1. Pass 1: Handle date-expired licenses
-        if (expiredLicenses && expiredLicenses.length > 0) {
-            const playerIds = [...new Set(expiredLicenses.map(l => l.player_id))];
-            
-            // 2. Mark those players as having 'none' license_type
-            const { data: updatedPlayers, error: updateError } = await supabaseAdmin
-                .from('players')
-                .update({ license_type: 'none', paid_registration: false })
-                .in('id', playerIds)
-                .eq('license_type', 'temporary')
-                .select('id');
+        if (candidateIds.length > 0) {
+            const { data: stillValid, error: validError } = await supabaseAdmin
+                .from('temporary_licenses')
+                .select('player_id')
+                .in('player_id', candidateIds)
+                .gte('event_date', today)
 
-            if (updateError) {
-                throw new Error(`Failed to update players: ${updateError.message}`);
+            if (validError) {
+                throw new Error(`Failed to fetch valid licenses: ${validError.message}`)
             }
 
-            expiredCount = updatedPlayers?.length || 0;
+            const stillValidIds = new Set((stillValid || []).map((r) => r.player_id))
+            const toClear = candidateIds.filter((id) => !stillValidIds.has(id))
+
+            if (toClear.length > 0) {
+                const { data: updatedPlayers, error: updateError } = await supabaseAdmin
+                    .from('players')
+                    .update({ license_type: 'none', paid_registration: false })
+                    .in('id', toClear)
+                    .eq('license_type', 'temporary')
+                    .select('id')
+
+                if (updateError) {
+                    throw new Error(`Failed to update players: ${updateError.message}`)
+                }
+
+                expiredCount = updatedPlayers?.length || 0
+                clearedIds.push(...(updatedPlayers || []).map((p) => p.id))
+            }
         }
 
-        // Pass 2: The aggressive reconciliation pass was removed to prevent manual syncs 
-        // without event IDs from being cleared. Temporary licenses now only expire 
-        // if they have an EXPLICIT record in the temporary_licenses table that has expired.
-        let reconciledCount = 0;
+        // Heal: active temp license rows exist but profile still says none/unpaid
+        // (e.g. wiped earlier by the old expire job).
+        const { data: activeTemps, error: activeErr } = await supabaseAdmin
+            .from('temporary_licenses')
+            .select('player_id, players!inner(id, license_type, paid_registration)')
+            .gte('event_date', today)
 
+        if (activeErr) {
+            throw new Error(`Failed to fetch active licenses: ${activeErr.message}`)
+        }
+
+        const healIds = [...new Set(
+            (activeTemps || [])
+                .filter((row) => {
+                    const p = row.players as { license_type?: string; paid_registration?: boolean } | null
+                    if (!p || !row.player_id) return false
+                    const lt = String(p.license_type || '').toLowerCase()
+                    return lt === 'none' || lt === '' || p.paid_registration === false
+                })
+                .map((row) => row.player_id),
+        )]
+
+        let healedCount = 0
+        if (healIds.length > 0) {
+            const { data: healed, error: healError } = await supabaseAdmin
+                .from('players')
+                .update({ license_type: 'temporary', paid_registration: true })
+                .in('id', healIds)
+                .select('id')
+
+            if (healError) {
+                throw new Error(`Failed to heal active temp licenses: ${healError.message}`)
+            }
+            healedCount = healed?.length || 0
+        }
 
         return new Response(
             JSON.stringify({
-                message: "Successfully processed temporary licenses.",
+                message: 'Successfully processed temporary licenses.',
                 expiredCount,
-                reconciledCount
+                clearedIds,
+                healedCount,
+                healedIds: healIds,
+                reconciledCount: 0,
             }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
         )
-
     } catch (error) {
         return new Response(
             JSON.stringify({ error: error.message }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 },
         )
     }
 })
