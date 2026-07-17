@@ -6,7 +6,6 @@ import Services from '../components/Services';
 import Calendar from '../components/Calendar';
 import FAQ from '../components/FAQ';
 import Partners from '../components/Partners';
-import UpcomingEventsWidget from '../components/UpcomingEventsWidget';
 import dynamicsPlayer from '../assets/augustin.jpeg';
 import { motion } from 'framer-motion';
 import { supabase } from '../supabaseClient';
@@ -30,9 +29,6 @@ const Home = () => {
 
             <main className="bg-[#0a0a0a] text-white">
                 <Hero />
-
-                {/* Upcoming Events Widget — visible only when logged in */}
-                <UpcomingEventsWidget session={session} />
 
                 <FeaturedSections session={session} />
 
