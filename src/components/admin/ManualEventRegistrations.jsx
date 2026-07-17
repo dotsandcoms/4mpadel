@@ -2,10 +2,11 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
-    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy, Link2, Info, MessageCircle, XCircle, Pencil, FileText, ArrowRight, ArrowDownLeft, ArrowUpRight, Phone
+    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy, Link2, Info, MessageCircle, XCircle, Pencil, FileText, ArrowRight, ArrowDownLeft, ArrowUpRight, Phone, RefreshCcw, ExternalLink
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
+import { extractRankedinId } from '../../utils/rankedinLink';
 import {
     formatRegistrationLicenseLabel,
     resolveRegistrationLicenseCategory,
@@ -193,6 +194,16 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const [updatingWhatsApp, setUpdatingWhatsApp] = useState(null);
     const [requestingPayout, setRequestingPayout] = useState(false);
     const [statementSearch, setStatementSearch] = useState('');
+    const [syncingRankedin, setSyncingRankedin] = useState(false);
+    const [linkedRankedinId, setLinkedRankedinId] = useState(
+        () => extractRankedinId(event?.rankedin_id) || extractRankedinId(event?.rankedin_url) || '',
+    );
+    const [linkedRankedinUrl, setLinkedRankedinUrl] = useState(() => event?.rankedin_url || '');
+
+    useEffect(() => {
+        setLinkedRankedinId(extractRankedinId(event?.rankedin_id) || extractRankedinId(event?.rankedin_url) || '');
+        setLinkedRankedinUrl(event?.rankedin_url || '');
+    }, [event?.id, event?.rankedin_id, event?.rankedin_url]);
 
     const load = useCallback(async () => {
         if (!event?.id) return;
@@ -263,6 +274,76 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
         setLoading(false);
     }, [event?.id]);
+
+    const handleSyncToRankedin = useCallback(async () => {
+        if (!event?.id) return;
+        const rankedinId = linkedRankedinId || extractRankedinId(event.rankedin_id) || extractRankedinId(event.rankedin_url);
+        if (!rankedinId) {
+            toast.error('Link a RankedIn tournament ID in Event Builder first');
+            return;
+        }
+        setSyncingRankedin(true);
+        const toastId = toast.loading('Syncing with RankedIn…');
+        try {
+            const { data, error } = await supabase.functions.invoke('sync-to-rankedin', {
+                body: { eventId: event.id, rankedinId },
+            });
+            if (error) throw error;
+            if (!data?.ok) throw new Error(data?.error || 'Sync failed');
+
+            setLinkedRankedinId(String(data.rankedinId || rankedinId));
+            setLinkedRankedinUrl(data.rankedinUrl || linkedRankedinUrl);
+            await load();
+
+            const mappedCount = data.mapping?.mapped?.length || 0;
+            const missing = data.mapping?.unmatchedLocal || [];
+            const pushed = data.writePush?.pushed || 0;
+            const pushSkipped = data.writePush?.skipped || [];
+            const pushErrors = data.writePush?.errors || [];
+            const detailsUpdated = data.detailsPush?.updated || [];
+            const detailsErrors = data.detailsPush?.errors || [];
+            const skipCounts = pushSkipped.reduce((acc, s) => {
+                const key = s.reason || 'other';
+                acc[key] = (acc[key] || 0) + 1;
+                return acc;
+            }, {});
+            const skipSummary = Object.entries(skipCounts)
+                .map(([reason, count]) => `${count} ${reason}`)
+                .join(', ');
+            if ((pushErrors.length > 0 && pushed === 0) || (detailsErrors.length > 0 && detailsUpdated.length === 0 && data.detailsPush?.status === 'error')) {
+                toast.error(
+                    detailsErrors[0] || pushErrors[0] || 'Sync push failed',
+                    { id: toastId, duration: 8000 },
+                );
+            } else if (missing.length > 0) {
+                toast.warning(
+                    `Mapped ${mappedCount}. Create on RankedIn: ${missing.map((d) => d.divisionName).join(', ')}`,
+                    { id: toastId, duration: 8000 },
+                );
+            } else {
+                const detailsBit = detailsUpdated.length > 0
+                    ? ` — details: ${detailsUpdated.join(', ')}`
+                    : (data.detailsPush?.status === 'noop' ? ' — details up to date' : '');
+                const pushBit = data.writePush?.credentialsConfigured
+                    ? (pushed > 0
+                        ? ` — pushed ${pushed} paid team(s)${pushSkipped.length ? ` (${skipSummary})` : ''}`
+                        : (pushSkipped.length ? ` — no new teams (${skipSummary})` : ' — no paid doubles to push yet'))
+                    : ' — set RankedIn secrets to push entries';
+                toast.success(`RankedIn #${data.rankedinId} — ${mappedCount} division(s) mapped${detailsBit}${pushBit}`, {
+                    id: toastId,
+                    duration: 9000,
+                });
+            }
+            if (data.writePush || data.detailsPush) {
+                console.info('[sync-to-rankedin]', { writePush: data.writePush, detailsPush: data.detailsPush });
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Failed to sync to RankedIn', { id: toastId });
+        } finally {
+            setSyncingRankedin(false);
+        }
+    }, [event?.id, event?.rankedin_id, event?.rankedin_url, linkedRankedinId, linkedRankedinUrl, load]);
 
     useEffect(() => {
         if (isActive) {
@@ -1910,9 +1991,35 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             <Trophy size={12} /> Selected Tournament
                                         </div>
                                     </div>
-                                    <button onClick={exportCsv} className="bg-white/5 text-white border border-white/10 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-white/10 shrink-0">
-                                        <Download size={16} /> Export CSV
-                                    </button>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        {linkedRankedinId && (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSyncToRankedin}
+                                                    disabled={syncingRankedin}
+                                                    className="bg-padel-green text-black px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:brightness-110 disabled:opacity-40 shrink-0"
+                                                >
+                                                    {syncingRankedin ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}
+                                                    Sync to RankedIn
+                                                </button>
+                                                {linkedRankedinUrl && (
+                                                    <a
+                                                        href={linkedRankedinUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="p-2 bg-white/5 border border-white/10 rounded-lg text-white hover:text-padel-green hover:border-padel-green/40 transition-colors"
+                                                        title="Open on RankedIn"
+                                                    >
+                                                        <ExternalLink size={16} />
+                                                    </a>
+                                                )}
+                                            </>
+                                        )}
+                                        <button onClick={exportCsv} className="bg-white/5 text-white border border-white/10 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-white/10 shrink-0">
+                                            <Download size={16} /> Export CSV
+                                        </button>
+                                    </div>
                                 </div>
                                 {event.start_date && (
                                     <p className="text-gray-500 text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] flex items-center gap-2">
@@ -1930,6 +2037,17 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                     <p className="text-xs text-gray-400 truncate max-w-[60vw]">{event.event_name}</p>
                                 </div>
                                 <div className="flex items-center gap-2">
+                                    {linkedRankedinId && (
+                                        <button
+                                            type="button"
+                                            onClick={handleSyncToRankedin}
+                                            disabled={syncingRankedin}
+                                            className="bg-padel-green text-black px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:brightness-110 disabled:opacity-40"
+                                        >
+                                            {syncingRankedin ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}
+                                            Sync
+                                        </button>
+                                    )}
                                     <button onClick={exportCsv} className="bg-white/5 text-white border border-white/10 px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-white/10">
                                         <Download size={16} /> Export CSV
                                     </button>

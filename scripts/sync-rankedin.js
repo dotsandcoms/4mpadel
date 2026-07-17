@@ -205,6 +205,8 @@ async function syncRankedin() {
             const reNameNorm = normalizeStr(evName);
 
             const matchByName = !matchById && events.find(e => {
+                // Never attach a RankedIn import onto a 4M manual event by name alone.
+                if (e.is_manual) return false;
                 if (!e.event_name) return false;
                 const eNameNorm = normalizeStr(e.event_name);
                 // Match if names are identical after removing spaces/punctuation
@@ -246,6 +248,20 @@ async function syncRankedin() {
                     updates.rankedin_url = fullUrl;
                     needsUpdate = true;
                 }
+
+                // Manual events own their content in 4M — only keep the RankedIn link in sync.
+                if (existingEvent.is_manual) {
+                    if (needsUpdate) {
+                        const { error } = await supabase.from('calendar').update(updates).eq('id', existingEvent.id);
+                        if (error) {
+                            console.error(`Error updating manual event link ${existingEvent.id}:`, error);
+                        } else {
+                            updatedCount++;
+                        }
+                    }
+                    continue;
+                }
+
                 const newSDate = sDate ? sDate.substring(0, 10) : null;
                 const newEDate = eDate ? eDate.substring(0, 10) : newSDate;
 

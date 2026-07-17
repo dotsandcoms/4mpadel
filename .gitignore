@@ -28,6 +28,13 @@ yarn-error.log*
 
 # Puppeteer / Scraper items
 screenshots/
+scratch/rankedin*
+scratch/ri-*
+scratch/mainPwaApp*
+scratch/vendor.5*
+scratch/runtime-config.js
+scratch/missing-rankedin*
+exports/
 *.png
 !src/assets/**/*.png
 !public/**/*.png

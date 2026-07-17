@@ -4,11 +4,12 @@ import { toast } from 'sonner';
 import {
     X, Save, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Plus, Trash2, UploadCloud, Loader2,
     Info, Layers, FileText, ImageIcon, Check, Eye, Copy, Pencil, ClipboardList, Shield, AlertTriangle,
-    Bold, Italic, Underline, List, ListOrdered, Heading, UserPlus
+    Bold, Italic, Underline, List, ListOrdered, Heading, UserPlus, RefreshCcw, ExternalLink
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useClubs } from '../../hooks/useClubs';
 import { getDefaultBackgroundForStatus } from '../../utils/imageUtils';
+import { buildRankedinTournamentUrl, extractRankedinId } from '../../utils/rankedinLink';
 
 const DIVISION_GROUPS = [
     {
@@ -509,6 +510,7 @@ const emptyDivision = (licenseRequired = false, scoringPoint = 'golden') => ({
     entry_limit: '',
     details: '',
     is_active: true,
+    rankedin_class_id: null,
 });
 
 const slugify = (value) =>
@@ -697,6 +699,9 @@ const blankForm = {
     partner_requirement: 'Required',
     back_draw_options: 'Plate Included',
     event_co_admins: '',
+    // RankedIn link (manual events stay is_manual; used for draws/results sync)
+    rankedin_id: '',
+    rankedin_url: '',
 };
 
 const SAPA_DEFAULTS = {
@@ -779,7 +784,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
     const [pendingDivisionPicks, setPendingDivisionPicks] = useState([]);
     const divisionMultiRef = useRef(null);
     const [openPanels, setOpenPanels] = useState({
-        identity: true, venue: false, display: false,
+        identity: true, venue: false, display: false, rankedin: false,
         regWindow: true, entryPayment: false, partnerCapacity: false, licenseDefaults: false,
         playerGifts: false,
         divTools: false, divisions: true,
@@ -787,6 +792,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         sponsors: true, websiteDisplay: false,
     });
     const [showPreview, setShowPreview] = useState(false);
+    const [syncingRankedin, setSyncingRankedin] = useState(false);
 
     const { clubs } = useClubs();
     const [venueOpen, setVenueOpen] = useState(false);
@@ -1051,6 +1057,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         entry_limit: d.entry_limit != null && d.entry_limit !== '' ? String(d.entry_limit) : '',
         details: d.details || '',
         is_active: d.is_active !== false,
+        rankedin_class_id: d.rankedin_class_id || null,
     });
 
     const loadExisting = async (ev, draftDivisions = null) => {
@@ -1100,6 +1107,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             organisation_id: ev.organisation_id || null,
             venues: venuesFromEvent(ev),
             venue: venuesFromEvent(ev).join(' / ') || ev.venue || '',
+            rankedin_id: ev.rankedin_id ? String(ev.rankedin_id) : '',
+            rankedin_url: ev.rankedin_url || '',
         });
         // Prefer the linked organisation profile logo over a stale event.organizer_logo_url
         // (that field often still holds a SAPA mark from older edits).
@@ -1552,6 +1561,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
 
     const buildPayload = (mode = 'publish') => {
         const venues = normalizeVenues(form.venues);
+        const linkedRankedinId = extractRankedinId(form.rankedin_id) || extractRankedinId(form.rankedin_url);
         const payload = {
             ...form,
             is_manual: true,
@@ -1589,6 +1599,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             scoring_point: form.scoring_point || 'golden',
             // Keep legacy boolean in sync for older UI / EventDetails fallback
             golden_point: (form.scoring_point || 'golden') === 'golden',
+            rankedin_id: linkedRankedinId || null,
+            rankedin_url: linkedRankedinId
+                ? (form.rankedin_url?.includes(`/${linkedRankedinId}`)
+                    ? form.rankedin_url
+                    : buildRankedinTournamentUrl(linkedRankedinId, form.slug || form.event_name))
+                : null,
         };
         if (organization) {
             // Org-created events: tie to the org and stay hidden until a 4M
@@ -1626,7 +1642,110 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         details: d.details?.trim() || null,
         sort_order: i,
         is_active: d.is_active !== false,
+        // Preserve existing RankedIn class link; never clear on ordinary saves
+        ...(d.rankedin_class_id ? { rankedin_class_id: d.rankedin_class_id } : {}),
     });
+
+    const handleRankedinIdChange = (value) => {
+        const id = extractRankedinId(value);
+        setForm((prev) => ({
+            ...prev,
+            rankedin_id: id || value.trim(),
+            rankedin_url: id
+                ? buildRankedinTournamentUrl(id, prev.slug || prev.event_name)
+                : (prev.rankedin_url || ''),
+        }));
+    };
+
+    const handleSyncToRankedin = async () => {
+        const eventId = activeEvent?.id;
+        if (!eventId) {
+            toast.error('Save the event first, then sync to RankedIn');
+            return;
+        }
+        const rankedinId = extractRankedinId(form.rankedin_id) || extractRankedinId(form.rankedin_url);
+        if (!rankedinId) {
+            toast.error('Paste a RankedIn tournament ID or URL first');
+            setOpenPanels((p) => ({ ...p, rankedin: true }));
+            return;
+        }
+
+        setSyncingRankedin(true);
+        const toastId = toast.loading('Syncing with RankedIn…');
+        try {
+            // Persist the link before calling the edge function
+            await supabase
+                .from('calendar')
+                .update({
+                    rankedin_id: rankedinId,
+                    rankedin_url: buildRankedinTournamentUrl(rankedinId, form.slug || form.event_name),
+                })
+                .eq('id', eventId);
+
+            const { data, error } = await supabase.functions.invoke('sync-to-rankedin', {
+                body: { eventId, rankedinId },
+            });
+            if (error) throw error;
+            if (!data?.ok) throw new Error(data?.error || 'Sync failed');
+
+            setForm((prev) => ({
+                ...prev,
+                rankedin_id: String(data.rankedinId || rankedinId),
+                rankedin_url: data.rankedinUrl || prev.rankedin_url,
+            }));
+            await reloadDivisionsForEvent(eventId);
+
+            const mappedCount = data.mapping?.mapped?.length || 0;
+            const missing = data.mapping?.unmatchedLocal || [];
+            const pushed = data.writePush?.pushed || 0;
+            const pushSkipped = data.writePush?.skipped || [];
+            const pushErrors = data.writePush?.errors || [];
+            const detailsUpdated = data.detailsPush?.updated || [];
+            const detailsErrors = data.detailsPush?.errors || [];
+            const skipCounts = pushSkipped.reduce((acc, s) => {
+                const key = s.reason || 'other';
+                acc[key] = (acc[key] || 0) + 1;
+                return acc;
+            }, {});
+            const skipSummary = Object.entries(skipCounts)
+                .map(([reason, count]) => `${count} ${reason}`)
+                .join(', ');
+            if ((pushErrors.length > 0 && pushed === 0) || (detailsErrors.length > 0 && detailsUpdated.length === 0 && data.detailsPush?.status === 'error')) {
+                toast.error(
+                    detailsErrors[0] || pushErrors[0] || 'Sync push failed',
+                    { id: toastId, duration: 8000 },
+                );
+            } else if (missing.length > 0) {
+                toast.warning(
+                    `Linked RankedIn #${data.rankedinId}. Mapped ${mappedCount} division(s). Create on RankedIn: ${missing.map((d) => d.divisionName).join(', ')}`,
+                    { id: toastId, duration: 8000 },
+                );
+            } else {
+                const detailsBit = detailsUpdated.length > 0
+                    ? ` Details: ${detailsUpdated.join(', ')}.`
+                    : (data.detailsPush?.status === 'noop' ? ' Details already up to date.' : '');
+                const pushBit = data.writePush?.credentialsConfigured
+                    ? (pushed > 0
+                        ? ` Pushed ${pushed} paid team(s)${pushSkipped.length ? ` (${skipSummary})` : ''}.`
+                        : (pushSkipped.length
+                            ? ` No new teams pushed (${skipSummary}).`
+                            : ' No paid doubles teams to push yet.'))
+                    : ' Set RankedIn edge secrets to push paid entries.';
+                toast.success(
+                    `Linked RankedIn #${data.rankedinId} — ${mappedCount} division(s) mapped.${detailsBit}${pushBit}`,
+                    { id: toastId, duration: 9000 },
+                );
+            }
+            if (data.writePush || data.detailsPush) {
+                console.info('[sync-to-rankedin]', { writePush: data.writePush, detailsPush: data.detailsPush });
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Failed to sync to RankedIn', { id: toastId });
+        } finally {
+            setSyncingRankedin(false);
+        }
+    };
 
     const persistDivisions = async (eventId) => {
         if (removedDivisionIds.length) {
@@ -2085,6 +2204,79 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                 <label className={labelClass}>City</label>
                                                 <input name="city" value={form.city} onChange={handleInput} className={inputClass} />
                                             </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* RankedIn link (for draws & results) */}
+                                <div className="space-y-2">
+                                    <PanelHeader id="rankedin" title="RankedIn (Draws & Results)" />
+                                    {openPanels.rankedin && (
+                                        <div className="grid grid-cols-1 gap-4 p-4 rounded-xl border border-white/10 bg-black/20">
+                                            <p className="text-[11px] text-gray-400 leading-relaxed">
+                                                Registration stays on 4M. Link a blank RankedIn tournament for draws and results.
+                                                Sync pushes tournament name, dates, location and regulations, maps divisions to RankedIn classes by name,
+                                                then pushes paid doubles teams. Create matching classes on RankedIn first if they don’t exist yet.
+                                            </p>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className={labelClass}>RankedIn tournament ID or URL</label>
+                                                    <input
+                                                        value={form.rankedin_id}
+                                                        onChange={(e) => handleRankedinIdChange(e.target.value)}
+                                                        placeholder="e.g. 70399 or https://www.rankedin.com/en/tournament/70399/…"
+                                                        className={inputClass}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className={labelClass}>RankedIn URL</label>
+                                                    <div className="flex items-center gap-2">
+                                                        <input
+                                                            value={form.rankedin_url}
+                                                            onChange={(e) => {
+                                                                const id = extractRankedinId(e.target.value);
+                                                                setForm((prev) => ({
+                                                                    ...prev,
+                                                                    rankedin_url: e.target.value,
+                                                                    rankedin_id: id || prev.rankedin_id,
+                                                                }));
+                                                            }}
+                                                            placeholder="Auto-filled from ID"
+                                                            className={inputClass}
+                                                        />
+                                                        {form.rankedin_url && (
+                                                            <a
+                                                                href={form.rankedin_url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="shrink-0 p-2.5 rounded-xl border border-white/10 text-gray-300 hover:text-padel-green hover:border-padel-green/40 transition-colors"
+                                                                title="Open on RankedIn"
+                                                            >
+                                                                <ExternalLink size={16} />
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSyncToRankedin}
+                                                    disabled={syncingRankedin}
+                                                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-padel-green text-black text-xs font-black uppercase tracking-wider hover:brightness-110 disabled:opacity-40 transition-all"
+                                                >
+                                                    {syncingRankedin ? <Loader2 size={14} className="animate-spin" /> : <RefreshCcw size={14} />}
+                                                    Sync to RankedIn
+                                                </button>
+                                                {!activeEvent?.id && (
+                                                    <span className="text-[11px] text-amber-400/90">Save the event once before syncing.</span>
+                                                )}
+                                            </div>
+                                            {divisions.some((d) => d.rankedin_class_id) && (
+                                                <p className="text-[11px] text-padel-green/90">
+                                                    {divisions.filter((d) => d.rankedin_class_id).length} division(s) linked to RankedIn classes.
+                                                </p>
+                                            )}
                                         </div>
                                     )}
                                 </div>
