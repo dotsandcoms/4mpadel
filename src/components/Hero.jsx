@@ -27,12 +27,12 @@ const getEventEndDate = (event) => {
 };
 
 const getEventStatusColors = (sapaStatus) => {
-    if (sapaStatus === 'Major') return { border: 'border-red-500/40', text: 'text-red-500' };
-    if (sapaStatus === 'Super Gold' || sapaStatus === 'S Gold') return { border: 'border-amber-500/40', text: 'text-amber-500' };
-    if (sapaStatus === 'Gold') return { border: 'border-yellow-400/40', text: 'text-yellow-400' };
-    if (sapaStatus === 'Silver') return { border: 'border-gray-400/40', text: 'text-gray-400' };
-    if (sapaStatus === 'Bronze') return { border: 'border-orange-700/40', text: 'text-orange-700' };
-    return { border: 'border-padel-green/40', text: 'text-padel-green' };
+    if (sapaStatus === 'Major') return { border: 'border-red-500/40', text: 'text-red-500', fill: '#EF4444' };
+    if (sapaStatus === 'Super Gold' || sapaStatus === 'S Gold') return { border: 'border-amber-500/40', text: 'text-amber-500', fill: '#F59E0B' };
+    if (sapaStatus === 'Gold') return { border: 'border-yellow-400/40', text: 'text-yellow-400', fill: '#EAB308' };
+    if (sapaStatus === 'Silver') return { border: 'border-gray-400/40', text: 'text-gray-400', fill: '#9CA3AF' };
+    if (sapaStatus === 'Bronze') return { border: 'border-orange-700/40', text: 'text-orange-700', fill: '#C2410C' };
+    return { border: 'border-padel-green/40', text: 'text-padel-green', fill: '#CCFF00' };
 };
 
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -712,15 +712,7 @@ const Hero = () => {
         const weekday = startDate.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase();
         const location = [event.venue, event.city].filter(Boolean).join(', ');
         const statusColors = getEventStatusColors(event.sapa_status);
-        const accent = statusColors.text.includes('yellow')
-            ? '#EAB308'
-            : statusColors.text.includes('amber')
-                ? '#F59E0B'
-                : statusColors.text.includes('red')
-                    ? '#EF4444'
-                    : statusColors.text.includes('orange')
-                        ? '#C2410C'
-                        : '#CCFF00';
+        const accent = statusColors.fill;
 
         return (
             <button
