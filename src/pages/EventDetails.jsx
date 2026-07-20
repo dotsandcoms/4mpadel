@@ -3260,6 +3260,10 @@ const EventDetails = () => {
             promptMembersOnly();
             return;
         }
+        if (registrationClosed) {
+            toast.error('Registration has closed — payment is no longer available for this event.');
+            return;
+        }
         manualRegActionsRef.current?.openPayFlow?.();
     };
 
@@ -3509,7 +3513,7 @@ const EventDetails = () => {
                 {(manualRegStatus.hasPendingPayment || manualRegStatus.canAddDivision) && (
                     <div className={`flex flex-col gap-2.5 mt-4 pt-4 border-t ${manualAllPaid ? 'border-emerald-200/60' : 'border-amber-200/60'
                         }`}>
-                        {manualRegStatus.hasPendingPayment && (
+                        {manualRegStatus.hasPendingPayment && !registrationClosed && (
                             <button
                                 type="button"
                                 onClick={() => manualRegActionsRef.current?.openPayFlow?.()}
@@ -3518,6 +3522,11 @@ const EventDetails = () => {
                             >
                                 Pay Entry <CreditCard className="w-4 h-4" />
                             </button>
+                        )}
+                        {manualRegStatus.hasPendingPayment && registrationClosed && (
+                            <p className="text-xs text-amber-800/80 text-center leading-relaxed">
+                                Registration has closed. Unpaid entries may be removed from the draw.
+                            </p>
                         )}
                         {manualRegStatus.canAddDivision && (
                             <button
@@ -3722,7 +3731,7 @@ const EventDetails = () => {
                                             if (!isEventPassed) {
                                                 if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
                                                     cta = null;
-                                                } else if (manualRegStatus.hasPendingPayment) {
+                                                } else if (manualRegStatus.hasPendingPayment && !registrationClosed) {
                                                     cta = (
                                                         <button
                                                             type="button"
@@ -3862,8 +3871,10 @@ const EventDetails = () => {
                                         if (event.is_manual) {
                                             if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
                                                 countdownCta = { label: 'Manage Entry', onClick: openManageEntry };
-                                            } else if (manualRegStatus.hasPendingPayment) {
+                                            } else if (manualRegStatus.hasPendingPayment && !registrationClosed) {
                                                 countdownCta = { label: 'Pay Now', onClick: openManualPayFlow };
+                                            } else if (manualRegStatus.hasPendingPayment || manualRegStatus.hasRegistrations || manualRegStatus.hasAnyRegistration) {
+                                                countdownCta = { label: 'Manage Entry', onClick: openManageEntry };
                                             } else if (!registrationNotYetOpen && !registrationClosed) {
                                                 countdownCta = { label: 'Register', onClick: openManualRegistration };
                                             }
@@ -3876,6 +3887,7 @@ const EventDetails = () => {
                                             && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0)
                                             && isRegistered
                                             && (!isPaid || !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div))))
+                                            && !registrationClosed
                                         ) {
                                             countdownCta = { label: 'Pay Now', onClick: openRegistrationModal };
                                         }

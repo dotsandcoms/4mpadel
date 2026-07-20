@@ -801,6 +801,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const openPayWizard = useCallback(async () => {
         if (!userEmail) { promptMembersOnly(); return; }
+        if (event?.registration_closes_at && new Date(event.registration_closes_at).getTime() < Date.now()) {
+            toast.error('Registration has closed — payment is no longer available for this event.');
+            return;
+        }
         const restored = await restoreSelectedFromPending();
         if (!restored) { toast.error('No outstanding payment found'); return; }
         setWizardMode('payOnly');
@@ -814,7 +818,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         await loadProfile();
         setWizardStep(4);
         setShowWizard(true);
-    }, [userEmail, restoreSelectedFromPending, loadProfile, promptMembersOnly]);
+    }, [userEmail, restoreSelectedFromPending, loadProfile, promptMembersOnly, event?.registration_closes_at]);
 
     const openAddPartnerWizard = useCallback(async (reg) => {
         if (!userEmail) { promptMembersOnly(); return; }
@@ -4183,10 +4187,15 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 <p className="text-xs text-slate-500 mb-4 -mt-2">You can add a partner to any solo entry at any time.</p>
                             )}
                             <div className="flex flex-col gap-2.5 pt-1">
-                                {hasPendingPayment && (
+                                {hasPendingPayment && !(event?.registration_closes_at && new Date(event.registration_closes_at).getTime() < Date.now()) && (
                                     <PrimaryBtn onClick={openPayWizard}>
                                         Pay Entry <CreditCard className="w-4 h-4" />
                                     </PrimaryBtn>
+                                )}
+                                {hasPendingPayment && event?.registration_closes_at && new Date(event.registration_closes_at).getTime() < Date.now() && (
+                                    <p className="text-xs text-amber-700 text-center leading-relaxed">
+                                        Registration has closed. Unpaid entries may be removed from the draw.
+                                    </p>
                                 )}
                                 {canAddDivision && (
                                     <button
