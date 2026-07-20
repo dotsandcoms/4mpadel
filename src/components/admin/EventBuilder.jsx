@@ -9,7 +9,7 @@ import {
 import { supabase } from '../../supabaseClient';
 import { useClubs } from '../../hooks/useClubs';
 import { getDefaultBackgroundForStatus } from '../../utils/imageUtils';
-import { buildRankedinTournamentUrl, extractRankedinId } from '../../utils/rankedinLink';
+import { buildRankedinTournamentUrl, downloadRankedinSkipReport, extractRankedinId } from '../../utils/rankedinLink';
 
 const DIVISION_GROUPS = [
     {
@@ -1738,6 +1738,17 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             }
             if (data.writePush || data.detailsPush) {
                 console.info('[sync-to-rankedin]', { writePush: data.writePush, detailsPush: data.detailsPush });
+            }
+            if (pushSkipped.length > 0) {
+                const rowCount = downloadRankedinSkipReport(pushSkipped, {
+                    eventName: form.event_name || form.slug || `event-${eventId}`,
+                    rankedinId: data.rankedinId || rankedinId,
+                });
+                if (rowCount > 0) {
+                    toast.message(`Downloaded skip report (${rowCount} player row${rowCount === 1 ? '' : 's'})`, {
+                        duration: 5000,
+                    });
+                }
             }
         } catch (err) {
             console.error(err);

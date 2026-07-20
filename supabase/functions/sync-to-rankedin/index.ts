@@ -667,11 +667,16 @@ async function pushPaidRegistrations(opts: {
       const p1 = playersByEmail.get((reg.email || '').toLowerCase());
       const p2 = playersByEmail.get((partner.email || '').toLowerCase());
       if (!p1?.rankedin_id || !p2?.rankedin_id) {
+        const missingEmails = [
+          !p1?.rankedin_id ? reg.email : null,
+          !p2?.rankedin_id ? partner.email : null,
+        ].filter(Boolean) as string[];
         result.skipped.push({
           reason: 'missing_rankedin_id',
           division: m.divisionName,
           names: [reg.full_name, partner.full_name],
           emails: [reg.email, partner.email],
+          missingEmails,
         });
         continue;
       }
@@ -679,6 +684,10 @@ async function pushPaidRegistrations(opts: {
       const id1 = await resolveNumericPlayerId(auth, p1.rankedin_id, playerIdCache);
       const id2 = await resolveNumericPlayerId(auth, p2.rankedin_id, playerIdCache);
       if (!id1 || !id2) {
+        const unresolvedEmails = [
+          !id1 ? reg.email : null,
+          !id2 ? partner.email : null,
+        ].filter(Boolean) as string[];
         log('warn', 'Could not resolve RankedIn numeric player id', {
           division: m.divisionName,
           names: [reg.full_name, partner.full_name],
@@ -690,6 +699,7 @@ async function pushPaidRegistrations(opts: {
           division: m.divisionName,
           names: [reg.full_name, partner.full_name],
           emails: [reg.email, partner.email],
+          missingEmails: unresolvedEmails,
         });
         continue;
       }

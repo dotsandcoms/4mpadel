@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
-import { extractRankedinId } from '../../utils/rankedinLink';
+import { downloadRankedinSkipReport, extractRankedinId } from '../../utils/rankedinLink';
 import {
     formatRegistrationLicenseLabel,
     resolveRegistrationLicenseCategory,
@@ -347,13 +347,24 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             if (data.writePush || data.detailsPush) {
                 console.info('[sync-to-rankedin]', { writePush: data.writePush, detailsPush: data.detailsPush });
             }
+            if (pushSkipped.length > 0) {
+                const rowCount = downloadRankedinSkipReport(pushSkipped, {
+                    eventName: event.event_name || event.slug || `event-${event.id}`,
+                    rankedinId: data.rankedinId || rankedinId,
+                });
+                if (rowCount > 0) {
+                    toast.message(`Downloaded skip report (${rowCount} player row${rowCount === 1 ? '' : 's'})`, {
+                        duration: 5000,
+                    });
+                }
+            }
         } catch (err) {
             console.error(err);
             toast.error(err.message || 'Failed to sync to RankedIn', { id: toastId });
         } finally {
             setSyncingRankedin(false);
         }
-    }, [event?.id, event?.rankedin_id, event?.rankedin_url, linkedRankedinId, linkedRankedinUrl, load]);
+    }, [event?.id, event?.rankedin_id, event?.rankedin_url, event?.event_name, event?.slug, linkedRankedinId, linkedRankedinUrl, load]);
 
     useEffect(() => {
         if (isActive) {

@@ -484,25 +484,41 @@ async function run() {
     const shardIndex = shardIndexArg >= 0 ? Number(process.argv[shardIndexArg + 1]) : null;
     const shardCount = shardCountArg >= 0 ? Number(process.argv[shardCountArg + 1]) : null;
 
-    let query = supabase
-        .from('players')
-        .select('id, name, rankedin_profile_url, rankedin_id, preferred_ranking, active_ranking_label')
-        .eq('approved', true);
-    if (filterPlayer) {
-        query = query.ilike('name', `%${filterPlayer}%`);
-    } else {
-        // Skip user 'brad elin' to avoid issues
-        query = query.not('name', 'ilike', '%brad elin%');
+    // Paginate — PostgREST defaults to max 1000 rows per request, so a single
+    // .select() silently drops newer approved players (e.g. Stefan Burger #1445
+    // at index ~1217 of 1225) and they never get a rankedin_id linked.
+    const pageSize = 1000;
+    let allPlayers = [];
+    let from = 0;
+    while (true) {
+        let query = supabase
+            .from('players')
+            .select('id, name, rankedin_profile_url, rankedin_id, preferred_ranking, active_ranking_label')
+            .eq('approved', true)
+            .order('id', { ascending: true })
+            .range(from, from + pageSize - 1);
+        if (filterPlayer) {
+            query = query.ilike('name', `%${filterPlayer}%`);
+        } else {
+            // Skip user 'brad elin' to avoid issues
+            query = query.not('name', 'ilike', '%brad elin%');
+        }
+
+        const { data: page, error: pageError } = await query;
+        if (pageError) throw pageError;
+        if (!page?.length) break;
+        allPlayers = allPlayers.concat(page);
+        if (page.length < pageSize) break;
+        from += pageSize;
     }
 
-    const { data: allPlayers } = await query;
-    let players = allPlayers || [];
+    let players = allPlayers;
     if (shardIndex != null && shardCount) {
         players = players.filter((_, i) => i % shardCount === shardIndex);
     }
 
     if (players.length) {
-        console.log(`Starting sync for ${players.length} players...`);
+        console.log(`Starting sync for ${players.length} players (of ${allPlayers.length} approved)...`);
         let current = 0;
         for (const p of players) {
             current++;

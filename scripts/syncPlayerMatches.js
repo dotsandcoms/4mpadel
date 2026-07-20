@@ -46,12 +46,23 @@ async function getAnonToken() {
 async function run() {
     console.log("Starting Player Matches Synchronization...");
     try {
-        const { data: players, error } = await supabase
-            .from('players')
-            .select('id, name, rankedin_id')
-            .not('rankedin_id', 'is', null);
-
-        if (error) throw error;
+        // Paginate past PostgREST's default 1000-row cap.
+        const pageSize = 1000;
+        let players = [];
+        let from = 0;
+        while (true) {
+            const { data: page, error } = await supabase
+                .from('players')
+                .select('id, name, rankedin_id')
+                .not('rankedin_id', 'is', null)
+                .order('id', { ascending: true })
+                .range(from, from + pageSize - 1);
+            if (error) throw error;
+            if (!page?.length) break;
+            players = players.concat(page);
+            if (page.length < pageSize) break;
+            from += pageSize;
+        }
 
         console.log(`Found ${players.length} players with a Rankedin ID.`);
 
