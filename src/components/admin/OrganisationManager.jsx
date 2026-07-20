@@ -112,6 +112,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
     const [selectedEventDetails, setSelectedEventDetails] = useState(null);
     const [selectedOrgDetails, setSelectedOrgDetails] = useState(null);
     const [orgDetailsMode, setOrgDetailsMode] = useState('view'); // 'view' | 'edit'
+    const [deletingOrganisation, setDeletingOrganisation] = useState(false);
     const [createOrgOpen, setCreateOrgOpen] = useState(false);
     const [editingEventId, setEditingEventId] = useState(null);
     const [approvedEvents, setApprovedEvents] = useState([]);
@@ -726,17 +727,18 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
             toast.error('Only super admins can delete organisations.');
             return;
         }
-        if (!org?.id) return;
+        if (!org?.id || deletingOrganisation) return;
 
         if (!window.confirm(`Permanently delete "${org.name}"?\n\nLinked events will be unlinked (not deleted). Members will be removed. This cannot be undone.`)) {
             return;
         }
         const typed = window.prompt(`Type the organisation name to confirm:\n${org.name}`);
-        if (typed !== org.name) {
+        if ((typed || '').trim() !== (org.name || '').trim()) {
             if (typed != null) toast.error('Name did not match. Delete cancelled.');
             return;
         }
 
+        setDeletingOrganisation(true);
         try {
             await supabase.from('albums').update({ organisation_id: null }).eq('organisation_id', org.id);
             await supabase.from('calendar').update({ organisation_id: null }).eq('organisation_id', org.id);
@@ -755,6 +757,8 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
         } catch (err) {
             console.error('Organisation delete failed:', err);
             toast.error(`Delete failed: ${err.message}`);
+        } finally {
+            setDeletingOrganisation(false);
         }
     };
 
@@ -2523,9 +2527,10 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                     <button
                                         type="button"
                                         onClick={() => handleDeleteOrganisation(selectedOrgDetails)}
-                                        className="w-full py-3.5 bg-red-500/10 hover:bg-red-500 hover:text-white border border-red-500/20 text-red-400 font-extrabold text-xs rounded-xl transition-all cursor-pointer text-center flex items-center justify-center gap-2"
+                                        disabled={deletingOrganisation}
+                                        className="w-full py-3.5 bg-red-500/10 hover:bg-red-500 hover:text-white border border-red-500/20 text-red-400 font-extrabold text-xs rounded-xl transition-all cursor-pointer text-center flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none"
                                     >
-                                        <Trash2 size={14} /> Delete Organisation
+                                        <Trash2 size={14} /> {deletingOrganisation ? 'Deleting…' : 'Delete Organisation'}
                                     </button>
                                 )}
                             </div>
