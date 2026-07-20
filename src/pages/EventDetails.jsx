@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, useLocation, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
@@ -632,6 +632,8 @@ const EventDetails = () => {
     };
 
     const { slug } = useParams(); // changed from id to slug
+    const navigate = useNavigate();
+    const location = useLocation();
     const [event, setEvent] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setSubmitting] = useState(false);
@@ -3123,6 +3125,97 @@ const EventDetails = () => {
 
     // handlePayNow removed from here since it's now at the top
 
+    // Featured Events navigate here with state.eventCta — must run before any early
+    // return so hook order stays stable across loading → loaded renders.
+    useEffect(() => {
+        const cta = location.state?.eventCta;
+        if (!cta || !event?.id || loading) return;
+
+        let cancelled = false;
+        let attempts = 0;
+
+        const clearInboundCta = () => {
+            navigate(`${location.pathname}${location.search}`, { replace: true, state: {} });
+        };
+
+        const run = () => {
+            if (cancelled) return;
+            attempts += 1;
+
+            if (cta === 'manage') {
+                if (!manualUserEmail) {
+                    promptMembersOnly();
+                    clearInboundCta();
+                    return;
+                }
+                setActiveTab('overview');
+                if (event.is_manual) {
+                    if (!manualRegActionsRef.current?.openManageEntry && attempts < 12) {
+                        setTimeout(run, 80);
+                        return;
+                    }
+                    if (manualRegActionsRef.current?.openManageEntry) {
+                        manualRegActionsRef.current.openManageEntry();
+                    } else {
+                        document.getElementById('manual-registration')?.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start',
+                        });
+                    }
+                } else {
+                    document.getElementById('event-registration')?.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start',
+                    });
+                }
+            } else if (cta === 'pay') {
+                if (!manualUserEmail) {
+                    promptMembersOnly();
+                    clearInboundCta();
+                    return;
+                }
+                if (event.is_manual) {
+                    if (!manualRegActionsRef.current?.openPayFlow && attempts < 12) {
+                        setTimeout(run, 80);
+                        return;
+                    }
+                    manualRegActionsRef.current?.openPayFlow?.();
+                } else {
+                    setRegStep(1);
+                    setIsModalOpen(true);
+                }
+            } else if (cta === 'register') {
+                if (event.is_manual) {
+                    if (!manualUserEmail) {
+                        promptMembersOnly();
+                        clearInboundCta();
+                        return;
+                    }
+                    if (!manualRegActionsRef.current?.openRegistration && attempts < 12) {
+                        setTimeout(run, 80);
+                        return;
+                    }
+                    manualRegActionsRef.current?.openRegistration?.();
+                } else {
+                    const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+                    if (rId) {
+                        const slugPart = event?.slug ? `/${event.slug}` : '';
+                        window.open(`https://www.rankedin.com/en/tournament/${rId}${slugPart}`, '_blank');
+                    }
+                }
+            }
+
+            clearInboundCta();
+        };
+
+        const timer = setTimeout(run, 120);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [event?.id, event?.is_manual, loading, location.state?.eventCta, manualUserEmail]);
+
     if (loading) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center text-slate-800">
@@ -3770,7 +3863,7 @@ const EventDetails = () => {
                                             if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
                                                 countdownCta = { label: 'Manage Entry', onClick: openManageEntry };
                                             } else if (manualRegStatus.hasPendingPayment) {
-                                                countdownCta = { label: 'Pay', onClick: openManualPayFlow };
+                                                countdownCta = { label: 'Pay Now', onClick: openManualPayFlow };
                                             } else if (!registrationNotYetOpen && !registrationClosed) {
                                                 countdownCta = { label: 'Register', onClick: openManualRegistration };
                                             }
@@ -3784,7 +3877,7 @@ const EventDetails = () => {
                                             && isRegistered
                                             && (!isPaid || !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div))))
                                         ) {
-                                            countdownCta = { label: 'Pay', onClick: openRegistrationModal };
+                                            countdownCta = { label: 'Pay Now', onClick: openRegistrationModal };
                                         }
                                     }
                                     return (

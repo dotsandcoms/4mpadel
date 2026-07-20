@@ -1297,49 +1297,41 @@ const FeaturedTournamentHero = ({ events = [], session = null }) => {
             }
 
             const ids = list.map((e) => e.id);
-            const [{ data: regs }, { data: unpaidParts }] = await Promise.all([
+            // Match EventDetails: only the player's own registration row (email),
+            // not rows where they appear only as partner_email — those often leave
+            // partner_payment_status null/pending even when the player already paid.
+            const [{ data: regs }, { data: parts }] = await Promise.all([
                 supabase
                     .from('event_registrations')
-                    .select('event_id, email, partner_email, payment_status, partner_payment_status, status')
+                    .select('event_id, email, payment_status, status')
                     .in('event_id', ids)
-                    .or(`email.ilike.${email},partner_email.ilike.${email}`)
+                    .ilike('email', email)
                     .neq('status', 'withdrawn'),
                 supabase
                     .from('tournament_participants')
                     .select('event_id, is_paid, email')
                     .in('event_id', ids)
-                    .ilike('email', email)
-                    .neq('is_paid', true),
+                    .ilike('email', email),
             ]);
 
-            const emailLc = email.toLowerCase();
+            const isPaidStatus = (status) => String(status || '').toLowerCase() === 'paid';
+
             list.forEach((ev) => {
                 const notOpen = ev.registration_opens_at && new Date(ev.registration_opens_at) > new Date();
                 const closed = ev.registration_closes_at && new Date(ev.registration_closes_at) <= new Date();
                 const myRegs = (regs || []).filter((r) => r.event_id === ev.id);
-                const needsPayFromReg = myRegs.some((r) => {
-                    const isRegistrant = (r.email || '').toLowerCase() === emailLc;
-                    const isPartner = (r.partner_email || '').toLowerCase() === emailLc;
-                    return (isRegistrant && ['pending', 'failed'].includes(r.payment_status))
-                        || (isPartner && ['pending', 'failed'].includes(r.partner_payment_status));
-                });
-                const needsPayFromPart = (unpaidParts || []).some((p) => p.event_id === ev.id);
-                const isRegistered = myRegs.length > 0;
-                const allPaid = isRegistered && myRegs.every((r) => {
-                    const isRegistrant = (r.email || '').toLowerCase() === emailLc;
-                    const isPartner = (r.partner_email || '').toLowerCase() === emailLc;
-                    if (isRegistrant) return r.payment_status === 'paid';
-                    if (isPartner) return r.partner_payment_status === 'paid';
-                    return true;
-                });
+                const myParts = (parts || []).filter((p) => p.event_id === ev.id);
+                // Mirror EventDetails: outstanding payment → Pay Now; registered+paid → Manage Entry.
+                const needsPayFromReg = myRegs.some((r) => !isPaidStatus(r.payment_status));
+                const needsPayFromPart = !ev.is_manual && myParts.some((p) => !p.is_paid);
+                const isRegistered = myRegs.length > 0 || (!ev.is_manual && myParts.length > 0);
+                const allPaid = isRegistered && !needsPayFromReg && !needsPayFromPart;
 
                 if (needsPayFromReg || needsPayFromPart) {
-                    next[ev.id] = { label: 'Pay', action: 'pay' };
+                    next[ev.id] = { label: 'Pay Now', action: 'pay' };
                 } else if (isRegistered && allPaid) {
-                    next[ev.id] = { label: 'View', action: 'view' };
-                } else if (notOpen) {
-                    next[ev.id] = { label: 'View', action: 'view' };
-                } else if (closed) {
+                    next[ev.id] = { label: 'Manage Entry', action: 'manage' };
+                } else if (notOpen || closed) {
                     next[ev.id] = { label: 'View', action: 'view' };
                 } else {
                     next[ev.id] = { label: 'Register', action: 'register' };
@@ -1386,6 +1378,12 @@ const FeaturedTournamentHero = ({ events = [], session = null }) => {
 
     const handleCta = (cta, event) => {
         const path = `/calendar/${event.slug || event.id}`;
+        const action = cta?.action || 'view';
+        // Hand off to EventDetails so Register / Pay Now / Manage Entry open the same flows.
+        if (action === 'register' || action === 'pay' || action === 'manage') {
+            navigate(path, { state: { eventCta: action } });
+            return;
+        }
         navigate(path);
     };
 
