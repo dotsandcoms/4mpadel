@@ -18,6 +18,10 @@ if (!supabaseUrl || !serviceRoleKey) {
 
 const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
+const HOURS_1D = 24;
+const HOURS_3D = 72;
+const HOURS_7D = 168;
+
 function isEventStillOpen(cal, now) {
   const compareDate = cal?.end_date || cal?.start_date;
   if (!compareDate) return true;
@@ -26,8 +30,24 @@ function isEventStillOpen(cal, now) {
   return now <= eventEnd;
 }
 
+function pickReminderStage(reg, closesAt, now) {
+  const hoursToClose = (closesAt.getTime() - now.getTime()) / (1000 * 60 * 60);
+  if (hoursToClose <= 0) return null;
+
+  if (hoursToClose <= HOURS_1D && !reg.reminder_1d_sent_at) {
+    return 'SEND 1-DAY REMINDER';
+  }
+  if (hoursToClose <= HOURS_3D && hoursToClose > HOURS_1D && !reg.reminder_3d_sent_at) {
+    return 'SEND 3-DAY REMINDER';
+  }
+  if (hoursToClose <= HOURS_7D && hoursToClose > HOURS_3D && !reg.reminder_7d_sent_at) {
+    return 'SEND 7-DAY REMINDER';
+  }
+  return 'DO NOTHING';
+}
+
 async function testReminders() {
-  console.log('=== Dry-run: manual-event payment reminders only ===');
+  console.log('=== Dry-run: manual-event close-date payment reminders (7d / 3d / 1d) ===');
   const now = new Date();
 
   const { data: registrations, error: fetchRegError } = await supabaseAdmin
@@ -40,8 +60,9 @@ async function testReminders() {
       division,
       partner_name,
       pay_token,
-      reminder_sent_at,
-      close_reminder_sent_at,
+      reminder_7d_sent_at,
+      reminder_3d_sent_at,
+      reminder_1d_sent_at,
       division_id,
       calendar!inner (
         id,
@@ -60,7 +81,8 @@ async function testReminders() {
     .eq('calendar.is_manual', true)
     .eq('calendar.allow_payments', true)
     .not('division_id', 'is', null)
-    .not('pay_token', 'is', null);
+    .not('pay_token', 'is', null)
+    .not('calendar.registration_closes_at', 'is', null);
 
   if (fetchRegError) {
     console.error('Failed to run reminders query:', fetchRegError.message);
@@ -81,34 +103,38 @@ async function testReminders() {
     }
   }
 
+  const counts = { '7d': 0, '3d': 0, '1d': 0, skip: 0 };
+
   for (const reg of registrations || []) {
     const cal = reg.calendar;
     const fee = reg.division_id ? (divisionFees[reg.division_id] ?? 0) : Number(cal?.entry_fee || 0);
     const open = isEventStillOpen(cal, now);
-    const createdAt = new Date(reg.created_at);
-    const hoursSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+    const closesAt = cal.registration_closes_at ? new Date(cal.registration_closes_at) : null;
+    const hoursToClose = closesAt ? (closesAt.getTime() - now.getTime()) / (1000 * 60 * 60) : null;
 
     console.log('\n--------------------------------------------------');
     console.log(`Player: ${reg.full_name} (${reg.email})`);
     console.log(`Event: ${cal.event_name} (ID: ${cal.id}) manual=${cal.is_manual}`);
     console.log(`Division: ${reg.division} | Fee: R ${fee} | Open: ${open}`);
+    console.log(`Closes in: ${hoursToClose != null ? `${hoursToClose.toFixed(1)}h` : 'n/a'}`);
+    console.log(`Sent: 7d=${!!reg.reminder_7d_sent_at} 3d=${!!reg.reminder_3d_sent_at} 1d=${!!reg.reminder_1d_sent_at}`);
 
-    if (!open || fee <= 0) {
+    if (!open || fee <= 0 || !closesAt || now >= closesAt) {
       console.log('Decision: SKIP');
+      counts.skip++;
       continue;
     }
 
-    const closesAt = cal.registration_closes_at ? new Date(cal.registration_closes_at) : null;
-    let decision = 'DO NOTHING';
-    if (closesAt && !reg.close_reminder_sent_at) {
-      const hoursToClose = (closesAt.getTime() - now.getTime()) / (1000 * 60 * 60);
-      if (hoursToClose > 0 && hoursToClose <= 24) decision = 'SEND DEADLINE REMINDER';
-    }
-    if (decision === 'DO NOTHING' && hoursSinceCreation >= 24 && !reg.reminder_sent_at) {
-      if (!closesAt || now < closesAt) decision = 'SEND GENERAL REMINDER';
-    }
+    const decision = pickReminderStage(reg, closesAt, now);
     console.log(`Decision: ${decision}`);
+    if (decision === 'SEND 7-DAY REMINDER') counts['7d']++;
+    else if (decision === 'SEND 3-DAY REMINDER') counts['3d']++;
+    else if (decision === 'SEND 1-DAY REMINDER') counts['1d']++;
+    else counts.skip++;
   }
+
+  console.log('\n=== Summary ===');
+  console.log(counts);
 }
 
 testReminders();

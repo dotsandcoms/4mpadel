@@ -263,3 +263,68 @@ export function resolveRegistrationPayer(payment, reg) {
 
     return { isPartnerPaid: true, payerEmail };
 }
+
+const parseRefundMeta = (raw) => {
+    if (!raw) return {};
+    if (typeof raw === 'object') return raw;
+    try {
+        return JSON.parse(raw);
+    } catch {
+        return {};
+    }
+};
+
+/** Latest processed entry-fee refund timestamp for a registration, if any. */
+export function getLatestProcessedEntryRefundAt(regId, refundByRegMap) {
+    if (!regId || !refundByRegMap) return null;
+    const entry = refundByRegMap.get(regId);
+    if (!entry?.rows?.length) return null;
+
+    let latest = null;
+    for (const row of entry.rows) {
+        if (String(row.status || '').toLowerCase() !== 'processed') continue;
+        const meta = parseRefundMeta(row.metadata);
+        if (meta.cover_type && meta.cover_type !== 'entry') continue;
+        const ts = row.processed_at || row.created_at;
+        if (!ts) continue;
+        if (!latest || new Date(ts).getTime() > new Date(latest).getTime()) {
+            latest = ts;
+        }
+    }
+    return latest;
+}
+
+/**
+ * True when a registration has a processed entry refund that is NOT superseded
+ * by a later successful entry payment (e.g. withdraw → re-pay on same row).
+ */
+export function hasBlockingProcessedRefund(reg, refundByRegMap, payments = null) {
+    if (!reg?.id || !refundByRegMap) return false;
+    const latestRefundAt = getLatestProcessedEntryRefundAt(reg.id, refundByRegMap);
+    if (!latestRefundAt) return false;
+
+    const refundMs = new Date(latestRefundAt).getTime();
+    const successPayments = (payments || []).filter((p) => String(p.status || '').toLowerCase() === 'success');
+
+    const laterEntryPayment = successPayments.find((payment) => {
+        if (isLicensePaymentRow(payment)) return false;
+        if (!paymentMatchesRegistration(payment, reg)) return false;
+        const paidAt = new Date(payment.created_at || 0).getTime();
+        return paidAt > refundMs;
+    });
+
+    return !laterEntryPayment;
+}
+
+/**
+ * Active entry counts as paid when payment_status is paid and any prior
+ * withdrawal refund has been superseded by a later successful payment.
+ */
+export function registrationCountsAsPaid(reg, refundByRegMap = null, payments = null) {
+    if (!reg) return false;
+    if (String(reg.status || '').toLowerCase() === 'withdrawn') return false;
+    const paymentStatus = String(reg.payment_status || 'pending').toLowerCase();
+    if (paymentStatus !== 'paid') return false;
+    if (hasBlockingProcessedRefund(reg, refundByRegMap, payments)) return false;
+    return true;
+}

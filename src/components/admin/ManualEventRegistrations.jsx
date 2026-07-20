@@ -15,8 +15,10 @@ import {
     findAdminMarkedPayment,
     findPaymentForRegistration,
     findStrictPaystackEntryPayment,
+    hasBlockingProcessedRefund,
     isExplicitAdminMarkedPayment,
     isLicensePaymentRow,
+    registrationCountsAsPaid,
     registrationHasPaystackEntryPayment,
     resolveRegistrationPaymentMethod,
     resolveRegistrationPayer,
@@ -35,8 +37,21 @@ const hasPaystackEntryPaymentRecord = (reg, payments) =>
     registrationHasPaystackEntryPayment(reg, successPaymentsOnly(payments));
 
 const isPaystackEntryPayment = (reg, payments, refundByRegMap = null) => {
-    if (!registrationCountsAsPaid(reg, refundByRegMap)) return false;
+    if (!registrationCountsAsPaid(reg, refundByRegMap, payments)) return false;
     return hasPaystackEntryPaymentRecord(reg, payments);
+};
+
+const isWithdrawnRegistration = (reg) => String(reg?.status || '').toLowerCase() === 'withdrawn';
+
+/** Income-statement label for a registration payment row — never invents 'paid'. */
+const resolveIncomeStatementPaymentStatus = (reg, refundByRegMap = null, payments = null) => {
+    if (!reg) return 'pending';
+    if (isWithdrawnRegistration(reg)) return 'withdrawn';
+    const paymentStatus = String(reg.payment_status || 'pending').toLowerCase();
+    if (paymentStatus === 'refunded' || hasBlockingProcessedRefund(reg, refundByRegMap, payments)) return 'refunded';
+    if (registrationCountsAsPaid(reg, refundByRegMap, payments)) return 'paid';
+    if (paymentStatus === 'unpaid') return 'pending';
+    return paymentStatus || 'pending';
 };
 
 const PLATFORM_COMMISSION_RATE = 0.05;
@@ -56,53 +71,6 @@ const labelPaymentMethod = (method) => {
     if (!method) return '';
     const key = String(method).toLowerCase();
     return PAYMENT_METHOD_LABELS[key] || method;
-};
-
-const isWithdrawnRegistration = (reg) => String(reg?.status || '').toLowerCase() === 'withdrawn';
-
-const NON_CONFIRMED_PAYMENT_STATUSES = new Set([
-    'pending', 'unpaid', 'processing', 'refunded', 'failed', 'cancelled', 'abandoned',
-]);
-
-const hasProcessedRefund = (regId, refundByRegMap) => {
-    if (!regId || !refundByRegMap) return false;
-    const entry = refundByRegMap.get(regId);
-    if (!entry) return false;
-    const rows = entry.rows || [];
-    // Entry-fee refund processed counts even if a secondary license refund failed.
-    const entryFeeProcessed = rows.some((row) => {
-        if (String(row.status || '').toLowerCase() !== 'processed') return false;
-        const meta = typeof row.metadata === 'object' && row.metadata
-            ? row.metadata
-            : (() => { try { return JSON.parse(row.metadata || '{}'); } catch { return {}; } })();
-        return !meta.cover_type || meta.cover_type === 'entry';
-    });
-    if (entryFeeProcessed) return true;
-    if (entry.statuses.some((s) => s === 'failed' || s === 'needs_attention')) return false;
-    return entry.statuses.length > 0 && entry.statuses.every((s) => s === 'processed');
-};
-
-/** Active entry fee counts as collected / paid-to-club only when confirmed paid on the registration row. */
-const registrationCountsAsPaid = (reg, refundByRegMap = null) => {
-    if (!reg) return false;
-    if (isWithdrawnRegistration(reg)) return false;
-    const paymentStatus = String(reg.payment_status || 'pending').toLowerCase();
-    if (NON_CONFIRMED_PAYMENT_STATUSES.has(paymentStatus)) return false;
-    if (paymentStatus !== 'paid') return false;
-    if (hasProcessedRefund(reg.id, refundByRegMap)) return false;
-    return true;
-};
-
-/** Income-statement label for a registration payment row — never invents 'paid'. */
-const resolveIncomeStatementPaymentStatus = (reg, refundByRegMap = null) => {
-    if (!reg) return 'pending';
-    if (isWithdrawnRegistration(reg)) return 'withdrawn';
-    const paymentStatus = String(reg.payment_status || 'pending').toLowerCase();
-    if (paymentStatus === 'refunded' || hasProcessedRefund(reg.id, refundByRegMap)) return 'refunded';
-    if (registrationCountsAsPaid(reg, refundByRegMap)) return 'paid';
-    if (paymentStatus === 'unpaid') return 'pending';
-    if (NON_CONFIRMED_PAYMENT_STATUSES.has(paymentStatus)) return paymentStatus;
-    return paymentStatus || 'pending';
 };
 
 const buildPlayersByEmail = buildPlayersByEmailMap;
@@ -409,7 +377,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
     const stats = useMemo(() => {
         const active = registrations.filter((r) => !isWithdrawnRegistration(r));
-        const paid = active.filter((r) => registrationCountsAsPaid(r, refundByReg)).length;
+        const paid = active.filter((r) => registrationCountsAsPaid(r, refundByReg, payments)).length;
         const pending = active.length - paid;
         const revenue = payments.filter((p) => p.status === 'success').reduce((s, p) => s + Number(p.amount || 0), 0);
         const now = Date.now();
@@ -1229,7 +1197,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     }, [findPaymentForReg, resolvePaymentPayer]);
 
     const formatPaymentMethodForExport = useCallback((r) => {
-        if (!registrationCountsAsPaid(r)) return '';
+        if (!registrationCountsAsPaid(r, refundByReg, payments)) return '';
 
         if (isPaystackEntryPayment(r, payments, refundByReg)) return 'Paystack';
 
@@ -1241,7 +1209,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     }, [findPaymentForReg, payments, refundByReg]);
 
     const getPaymentDetails = useCallback((reg) => {
-        if (!registrationCountsAsPaid(reg, refundByReg)) return null;
+        if (!registrationCountsAsPaid(reg, refundByReg, payments)) return null;
 
         const payment = findPaymentForReg(reg);
         const { isPartnerPaid, payerName } = resolvePaymentPayer(reg, payment);
@@ -1314,19 +1282,19 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
     const regMatchesPaymentFilter = useCallback((reg) => {
         if (paymentFilter === 'all') return true;
-        if (paymentFilter === 'paid') return registrationCountsAsPaid(reg, refundByReg);
+        if (paymentFilter === 'paid') return registrationCountsAsPaid(reg, refundByReg, payments);
         if (paymentFilter === 'refunded') {
             const ps = String(reg.payment_status || '').toLowerCase();
-            return ps === 'refunded' || hasProcessedRefund(reg.id, refundByReg);
+            return ps === 'refunded' || hasBlockingProcessedRefund(reg, refundByReg, payments);
         }
         if (paymentFilter === 'pending') {
             if (isWithdrawnRegistration(reg)) return false;
             const ps = String(reg.payment_status || 'pending').toLowerCase();
-            return !registrationCountsAsPaid(reg, refundByReg) && ps !== 'refunded';
+            return !registrationCountsAsPaid(reg, refundByReg, payments) && ps !== 'refunded';
         }
         if (paymentFilter === 'manual') return isManualChannelRegistration(reg);
         return true;
-    }, [paymentFilter, refundByReg, isManualChannelRegistration]);
+    }, [paymentFilter, refundByReg, payments, isManualChannelRegistration]);
 
     const regMatchesLicenseFilter = useCallback((reg) => {
         if (licenseFilter === 'all') return true;
@@ -1618,15 +1586,15 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
     const canMarkRegistrationPaid = useCallback((reg) => (
         String(reg?.status || '').toLowerCase() !== 'withdrawn'
-        && !registrationCountsAsPaid(reg, refundByReg)
-    ), [refundByReg]);
+        && !registrationCountsAsPaid(reg, refundByReg, payments)
+    ), [refundByReg, payments]);
 
     const canUnmarkAdminPaid = useCallback((reg) => {
         if (String(reg?.status || '').toLowerCase() === 'withdrawn') return false;
-        if (!registrationCountsAsPaid(reg, refundByReg)) return false;
+        if (!registrationCountsAsPaid(reg, refundByReg, payments)) return false;
         const details = getPaymentDetails(reg);
         return !!details?.isExplicitAdminMark && !details.isPartnerPaid;
-    }, [refundByReg, getPaymentDetails]);
+    }, [refundByReg, payments, getPaymentDetails]);
 
     const renderPaymentCell = useCallback((reg) => {
         const details = getPaymentDetails(reg);
@@ -1776,7 +1744,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         activeRegistrations.forEach((r) => {
             const fee = divFee(r.division);
             expected += fee;
-            if (registrationCountsAsPaid(r, refundByReg)) collected += fee;
+            if (registrationCountsAsPaid(r, refundByReg, payments)) collected += fee;
 
             const email = (r.email || '').toLowerCase().trim();
             if (email) uniqueEmails.add(email);
@@ -1824,7 +1792,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 grossCollected4M += divFee(r.division);
             }
 
-            if (!registrationCountsAsPaid(r, refundByReg)) return;
+            if (!registrationCountsAsPaid(r, refundByReg, payments)) return;
 
             const method = formatPaymentMethodForExport(r);
             if (method === 'Paystack') paid4M++;
@@ -1885,7 +1853,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 type: 'payment',
                 player: [r.full_name, r.partner_name].filter(Boolean).join(' / ') || r.email || '—',
                 amount: fee,
-                status: resolveIncomeStatementPaymentStatus(r, refundByReg),
+                status: resolveIncomeStatementPaymentStatus(r, refundByReg, payments),
                 method: 'Paystack',
             });
         });
@@ -2492,7 +2460,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                                             <TeamPlayerRows players={team.players}>
                                                                                 {(p) => (
                                                                                     <div className="text-sm font-bold text-white">
-                                                                                        {registrationCountsAsPaid(p, refundByReg) ? fmtR(fee) : '—'}
+                                                                                        {registrationCountsAsPaid(p, refundByReg, payments) ? fmtR(fee) : '—'}
                                                                                     </div>
                                                                                 )}
                                                                             </TeamPlayerRows>

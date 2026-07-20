@@ -14,7 +14,9 @@ import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/player
 import { fetchAllRows } from '../../utils/fetchAllRows';
 import {
     findPaymentForRegistration,
+    hasBlockingProcessedRefund,
     isLicensePaymentRow,
+    registrationCountsAsPaid,
     registrationHasPaystackEntryPayment,
     resolveRegistrationPayer,
 } from '../../utils/paymentRegistrationMatch';
@@ -33,7 +35,7 @@ const isPaystackEntryPayment = (participant, allPayments, refundByRegMap = null)
         status: participant?.status,
     };
     if (!participant?.is_paid) return false;
-    if (reg && !registrationCountsAsPaid(reg, refundByRegMap)) return false;
+    if (reg && !registrationCountsAsPaid(reg, refundByRegMap, allPayments)) return false;
 
     const successPayments = (allPayments || []).filter((p) => p.status === 'success');
     if (registrationHasPaystackEntryPayment(reg, successPayments)) return true;
@@ -65,28 +67,6 @@ const getParticipantPaidAmount = (p) => {
 };
 
 const isWithdrawnRegistration = (reg) => String(reg?.status || '').toLowerCase() === 'withdrawn';
-
-const NON_CONFIRMED_PAYMENT_STATUSES = new Set([
-    'pending', 'unpaid', 'processing', 'refunded', 'failed', 'cancelled', 'abandoned',
-]);
-
-const hasProcessedRefund = (regId, refundByRegMap) => {
-    if (!regId || !refundByRegMap) return false;
-    const entry = refundByRegMap.get(regId);
-    if (!entry) return false;
-    if (entry.statuses.some((s) => s === 'failed' || s === 'needs_attention')) return false;
-    return entry.statuses.length > 0 && entry.statuses.every((s) => s === 'processed');
-};
-
-const registrationCountsAsPaid = (reg, refundByRegMap = null) => {
-    if (!reg) return false;
-    if (isWithdrawnRegistration(reg)) return false;
-    const paymentStatus = String(reg.payment_status || 'pending').toLowerCase();
-    if (NON_CONFIRMED_PAYMENT_STATUSES.has(paymentStatus)) return false;
-    if (paymentStatus !== 'paid') return false;
-    if (hasProcessedRefund(reg.id, refundByRegMap)) return false;
-    return true;
-};
 
 const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) => {
     const [events, setEvents] = useState([]);
@@ -275,7 +255,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 grossCollected4M += getParticipantEntryFee(p, selectedEvent);
             }
 
-            if (p._isManualReg && p._reg && !registrationCountsAsPaid(p._reg, refundByReg)) return;
+            if (p._isManualReg && p._reg && !registrationCountsAsPaid(p._reg, refundByReg, eventPayments)) return;
             if (!p.is_paid) return;
             if (isPaystackEntryPayment(p, eventPayments, refundByReg)) {
                 paid4M++;
@@ -565,7 +545,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 // Map registrations → participant shape
                 const mapped = (regRows || []).map(r => {
                     const divFee = Number(r.tournament_divisions?.entry_fee || 0);
-                    const isPaid = registrationCountsAsPaid(r, refundByRegId);
+                    const isPaid = registrationCountsAsPaid(r, refundByRegId, payData);
                     const payment = findManualRegistrationPayment(payData, {
                         id: r.id,
                         email: r.email,
