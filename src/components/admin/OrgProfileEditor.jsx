@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import {
     Building, Upload, Trash2, Plus, Save, Palette, Image as ImageIcon,
     Instagram, Facebook, Youtube, ExternalLink, Eye, ChevronLeft, ChevronRight,
-    ChevronDown,
+    ChevronDown, AlertTriangle,
 } from 'lucide-react';
 
 const inputClass = 'w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:border-padel-green focus:outline-none transition-colors placeholder:text-gray-600';
@@ -79,9 +79,10 @@ const orgTypeOptionsFor = (current) => {
  * Org portal / admin profile editor.
  * Multi-step accordion-style sections so editors only see one block at a time.
  */
-const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
+const OrgProfileEditor = ({ org, onSaved, onDeleted, adminMode = false, canDelete = false }) => {
     const [form, setForm] = useState(null);
     const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
     const [uploading, setUploading] = useState(null);
     const [step, setStep] = useState(0);
     const [openAccordion, setOpenAccordion] = useState(null);
@@ -90,6 +91,7 @@ const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
     const [albumToAdd, setAlbumToAdd] = useState('');
     const [albumsLoading, setAlbumsLoading] = useState(false);
     const [linkingAlbum, setLinkingAlbum] = useState(false);
+    const [deleteConfirmName, setDeleteConfirmName] = useState('');
 
     const steps = useMemo(() => {
         const list = [];
@@ -237,6 +239,40 @@ const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
         }
     };
 
+    const handleDeleteOrganisation = async () => {
+        if (!canDelete || !org?.id) {
+            toast.error('Only super admins can delete organisations.');
+            return;
+        }
+        if (deleteConfirmName.trim() !== (org.name || '').trim()) {
+            toast.error('Type the organisation name exactly to confirm deletion.');
+            return;
+        }
+        if (!window.confirm(`Permanently delete "${org.name}"? This cannot be undone.`)) return;
+
+        setDeleting(true);
+        try {
+            // Detach linked records that would otherwise block deletion
+            await supabase.from('albums').update({ organisation_id: null }).eq('organisation_id', org.id);
+            await supabase.from('calendar').update({ organisation_id: null }).eq('organisation_id', org.id);
+            await supabase.from('organisation_members').delete().eq('organisation_id', org.id);
+
+            const { error } = await supabase
+                .from('organisations')
+                .delete()
+                .eq('id', org.id);
+            if (error) throw error;
+
+            toast.success(`"${org.name}" has been deleted.`);
+            onDeleted?.(org.id);
+        } catch (err) {
+            console.error('Organisation delete failed:', err);
+            toast.error(`Delete failed: ${err.message}`);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
     const toggleAccordion = (id) => {
         setOpenAccordion((prev) => (prev === id ? null : id));
     };
@@ -376,38 +412,74 @@ const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
     const renderStepContent = (stepId) => {
         if (stepId === 'admin' && adminMode) {
             return (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4">
-                    <div>
-                        <label className={labelClass}>Status</label>
-                        <select
-                            value={form.status}
-                            onChange={(e) => setField('status', e.target.value)}
-                            className={inputClass}
-                        >
-                            <option value="pending">Pending</option>
-                            <option value="approved">Approved</option>
-                            <option value="rejected">Rejected</option>
-                            <option value="suspended">Suspended</option>
-                        </select>
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4">
+                        <div>
+                            <label className={labelClass}>Status</label>
+                            <select
+                                value={form.status}
+                                onChange={(e) => setField('status', e.target.value)}
+                                className={inputClass}
+                            >
+                                <option value="pending">Pending</option>
+                                <option value="approved">Approved</option>
+                                <option value="rejected">Rejected</option>
+                                <option value="suspended">Suspended</option>
+                            </select>
+                        </div>
+                        <label className="flex items-center gap-3 cursor-pointer pt-6">
+                            <input
+                                type="checkbox"
+                                checked={form.verified}
+                                onChange={(e) => setField('verified', e.target.checked)}
+                                className="w-4 h-4 accent-padel-green"
+                            />
+                            <span className="text-sm text-white font-bold">Verified badge</span>
+                        </label>
+                        <label className="flex items-center gap-3 cursor-pointer pt-6">
+                            <input
+                                type="checkbox"
+                                checked={form.sapa_sanctioned}
+                                onChange={(e) => setField('sapa_sanctioned', e.target.checked)}
+                                className="w-4 h-4 accent-padel-green"
+                            />
+                            <span className="text-sm text-white font-bold">SAPA sanctioned</span>
+                        </label>
                     </div>
-                    <label className="flex items-center gap-3 cursor-pointer pt-6">
-                        <input
-                            type="checkbox"
-                            checked={form.verified}
-                            onChange={(e) => setField('verified', e.target.checked)}
-                            className="w-4 h-4 accent-padel-green"
-                        />
-                        <span className="text-sm text-white font-bold">Verified badge</span>
-                    </label>
-                    <label className="flex items-center gap-3 cursor-pointer pt-6">
-                        <input
-                            type="checkbox"
-                            checked={form.sapa_sanctioned}
-                            onChange={(e) => setField('sapa_sanctioned', e.target.checked)}
-                            className="w-4 h-4 accent-padel-green"
-                        />
-                        <span className="text-sm text-white font-bold">SAPA sanctioned</span>
-                    </label>
+
+                    {canDelete && (
+                        <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-4 space-y-3">
+                            <div className="flex items-start gap-2">
+                                <AlertTriangle size={16} className="text-red-400 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-bold text-red-300">Danger zone</p>
+                                    <p className="text-xs text-red-200/70 mt-1 leading-relaxed">
+                                        Permanently delete this organisation. Linked events keep their data but are unlinked; members and album links are removed.
+                                    </p>
+                                </div>
+                            </div>
+                            <div>
+                                <label className={labelClass}>Type “{org.name}” to confirm</label>
+                                <input
+                                    type="text"
+                                    value={deleteConfirmName}
+                                    onChange={(e) => setDeleteConfirmName(e.target.value)}
+                                    placeholder={org.name}
+                                    className={`${inputClass} border-red-500/20 focus:border-red-400`}
+                                    autoComplete="off"
+                                />
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleDeleteOrganisation}
+                                disabled={deleting || deleteConfirmName.trim() !== (org.name || '').trim()}
+                                className="inline-flex items-center gap-2 bg-red-500/15 hover:bg-red-500 text-red-300 hover:text-white border border-red-500/30 text-[10px] font-black uppercase tracking-wider px-4 py-3 rounded-xl transition-all disabled:opacity-40 cursor-pointer"
+                            >
+                                <Trash2 size={13} />
+                                {deleting ? 'Deleting…' : 'Delete Organisation'}
+                            </button>
+                        </div>
+                    )}
                 </div>
             );
         }

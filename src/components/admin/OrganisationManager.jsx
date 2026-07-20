@@ -720,6 +720,44 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
         return `${s.getDate()} ${months[s.getMonth()]} - ${e.getDate()} ${months[e.getMonth()]} ${s.getFullYear()}`;
     };
 
+    // Super Admin only — permanently delete an organisation
+    const handleDeleteOrganisation = async (org) => {
+        if (permissions?.role !== 'super_admin') {
+            toast.error('Only super admins can delete organisations.');
+            return;
+        }
+        if (!org?.id) return;
+
+        if (!window.confirm(`Permanently delete "${org.name}"?\n\nLinked events will be unlinked (not deleted). Members will be removed. This cannot be undone.`)) {
+            return;
+        }
+        const typed = window.prompt(`Type the organisation name to confirm:\n${org.name}`);
+        if (typed !== org.name) {
+            if (typed != null) toast.error('Name did not match. Delete cancelled.');
+            return;
+        }
+
+        try {
+            await supabase.from('albums').update({ organisation_id: null }).eq('organisation_id', org.id);
+            await supabase.from('calendar').update({ organisation_id: null }).eq('organisation_id', org.id);
+            await supabase.from('organisation_members').delete().eq('organisation_id', org.id);
+
+            const { error } = await supabase
+                .from('organisations')
+                .delete()
+                .eq('id', org.id);
+            if (error) throw error;
+
+            toast.success(`"${org.name}" has been deleted.`);
+            setSelectedOrgDetails(null);
+            setOrgDetailsMode('view');
+            fetchSuperAdminData();
+        } catch (err) {
+            console.error('Organisation delete failed:', err);
+            toast.error(`Delete failed: ${err.message}`);
+        }
+    };
+
     // Super Admin - Approve Host Organisation
     const handleApproveOrg = async (orgId, applicantEmail, orgName) => {
         try {
@@ -2317,8 +2355,14 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                     <OrgProfileEditor
                                         org={selectedOrgDetails}
                                         adminMode
+                                        canDelete={permissions?.role === 'super_admin'}
                                         onSaved={(updated) => {
                                             setSelectedOrgDetails(updated);
+                                            setOrgDetailsMode('view');
+                                            fetchSuperAdminData();
+                                        }}
+                                        onDeleted={() => {
+                                            setSelectedOrgDetails(null);
                                             setOrgDetailsMode('view');
                                             fetchSuperAdminData();
                                         }}
@@ -2475,6 +2519,15 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                 >
                                     Close Details
                                 </button>
+                                {permissions?.role === 'super_admin' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDeleteOrganisation(selectedOrgDetails)}
+                                        className="w-full py-3.5 bg-red-500/10 hover:bg-red-500 hover:text-white border border-red-500/20 text-red-400 font-extrabold text-xs rounded-xl transition-all cursor-pointer text-center flex items-center justify-center gap-2"
+                                    >
+                                        <Trash2 size={14} /> Delete Organisation
+                                    </button>
+                                )}
                             </div>
                                 </>
                             )}
