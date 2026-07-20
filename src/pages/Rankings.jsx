@@ -711,6 +711,23 @@ const Rankings = () => {
 
   const [selectedOrgId, setSelectedOrgId] = useState(15809); // 15809 = SAPA, 16317 = Broll Pro Tour, 11706 = SA Grand Tour
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { fetchDefaultFederationRankedinConfig } = await import('../utils/federation');
+        const cfg = await fetchDefaultFederationRankedinConfig();
+        const id = Number(cfg.rankingsOrgId);
+        if (!cancelled && Number.isFinite(id) && id > 0) {
+          setSelectedOrgId(id);
+        }
+      } catch {
+        // keep hardcoded SAPA default
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // Search & Pagination State
   const [activeMainTab, setActiveMainTab] = useState('rankings'); // 'overview', 'leaderboards', 'rankings'
   const [activeTab, setActiveTab] = useState('men');

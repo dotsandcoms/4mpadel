@@ -2297,9 +2297,9 @@ const EventDetails = () => {
     useEffect(() => {
         const fetchGlobalRankings = async () => {
             try {
-                // Fetch SAPA Men & Women rankings (OrgId 15809)
-                const men = await getOrganisationRankings(3, 82, 2000, 15809);
-                const women = await getOrganisationRankings(4, 83, 2000, 15809);
+                // Fetch SAPA Men & Women rankings (federation Rankedin ID, SAPA fallback)
+                const men = await getOrganisationRankings(3, 82, 2000);
+                const women = await getOrganisationRankings(4, 83, 2000);
                 const map = new Map();
                 if (men) men.forEach(r => { if (r.Name) map.set(r.Name.toLowerCase(), r.Standing); });
                 if (women) women.forEach(r => { if (r.Name) map.set(r.Name.toLowerCase(), r.Standing); });

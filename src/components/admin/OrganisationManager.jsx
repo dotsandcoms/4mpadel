@@ -446,10 +446,10 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
     const fetchSuperAdminData = async () => {
         setLoading(true);
         try {
-            // 1. Fetch all organisations
+            // 1. Fetch all organisations (with federation for sanctioning ownership)
             const { data: orgs, error: orgsError } = await supabase
                 .from('organisations')
-                .select('*, players!created_by(name, account_type)')
+                .select('*, players!created_by(name, account_type), federations(id, name, short_name, slug)')
                 .order('created_at', { ascending: false });
 
             if (orgsError) throw orgsError;
@@ -458,7 +458,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
             // 2. Fetch all events pending sanctioning
             const { data: events, error: eventsError } = await supabase
                 .from('calendar')
-                .select('*, organisations(name, contact_email)')
+                .select('*, organisations(name, contact_email, federation_id, federations(short_name, name))')
                 .eq('sanction_status', 'pending')
                 .order('id', { ascending: false });
 
@@ -1260,6 +1260,10 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                 No organisation applications pending review.
                             </div>
                         ) : (
+                            <>
+                                <p className="text-[10px] text-gray-500 mb-3 uppercase tracking-wider font-bold">
+                                    Unassigned orgs are platform-only. Federation-linked orgs are primarily sanctioned under Federations (super-admin can still override here).
+                                </p>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {allOrgs.filter(o => o.status === 'pending').map((org) => (
                                     <motion.div
@@ -1271,6 +1275,15 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                             <div>
                                                 <h4 className="font-extrabold text-white text-md">{org.name}</h4>
                                                 <p className="text-xs text-gray-500 mt-1">Applicant: {org.players?.name || 'Unknown User'}</p>
+                                                <span className={`inline-block mt-2 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded border ${
+                                                    org.federation_id
+                                                        ? 'bg-padel-green/10 text-padel-green border-padel-green/20'
+                                                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                }`}>
+                                                    {org.federation_id
+                                                        ? `Federation: ${org.federations?.short_name || org.federations?.name || 'Assigned'}`
+                                                        : 'Unassigned — platform sanction'}
+                                                </span>
 
                                                 <div className="space-y-1.5 mt-4 text-xs text-gray-400">
                                                     <div className="flex items-center gap-2">
@@ -1314,6 +1327,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                     </motion.div>
                                 ))}
                             </div>
+                            </>
                         )}
                     </CollapsibleSection>
 
@@ -1331,6 +1345,10 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                 No tournament sanction requests pending review.
                             </div>
                         ) : (
+                            <>
+                            <p className="text-[10px] text-gray-500 mb-3 uppercase tracking-wider font-bold">
+                                Events from federation-linked hosts are primarily reviewed under Federations. Unassigned hosts stay platform-only; super-admin override always available.
+                            </p>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse text-sm">
                                     <thead>
@@ -1357,6 +1375,15 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                                 <td className="py-4 px-4">
                                                     <span className="font-medium text-white block">{ev.organisations?.name || 'Unknown Club'}</span>
                                                     <span className="text-xs text-gray-500 block mt-0.5">{ev.organisations?.contact_email}</span>
+                                                    <span className={`inline-block mt-1 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded border ${
+                                                        ev.organisations?.federation_id
+                                                            ? 'bg-padel-green/10 text-padel-green border-padel-green/20'
+                                                            : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                    }`}>
+                                                        {ev.organisations?.federation_id
+                                                            ? (ev.organisations?.federations?.short_name || ev.organisations?.federations?.name || 'Federation')
+                                                            : 'Platform'}
+                                                    </span>
                                                 </td>
                                                 <td className="py-4 px-4 align-middle">
                                                     <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase border ${getTierBadgeClass(ev.sapa_status)}`}>
@@ -1393,6 +1420,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                     </tbody>
                                 </table>
                             </div>
+                            </>
                         )}
                     </CollapsibleSection>
 

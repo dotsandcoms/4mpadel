@@ -627,7 +627,7 @@ const Hero = () => {
 
             for (const list of lists) {
                 try {
-                    const rows = await getOrganisationRankings(list.rankingType, list.ageGroup, take, 15809);
+                    const rows = await getOrganisationRankings(list.rankingType, list.ageGroup, take);
                     const hit = (rows || []).find((r) => String(r.RankedinId) === rid)
                         || (rows || []).find((r) => (r.Name || '').trim().toLowerCase() === nameKey);
                     if (hit && hit.StandingDiff !== undefined && hit.StandingDiff !== null) {

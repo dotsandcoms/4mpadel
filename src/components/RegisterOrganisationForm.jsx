@@ -124,6 +124,7 @@ const RegisterOrganisationForm = ({
         linked_status: '',
         linked_club_name: '',
         sapa_intent: '',
+        federation_id: '',
         full_name: playerProfile?.name || '',
         primary_whatsapp: playerProfile?.contact_number || contactPhone || '',
         contact_email: playerProfile?.email || contactEmail || '',
@@ -139,6 +140,8 @@ const RegisterOrganisationForm = ({
         logo_url: '',
         cover_image_url: '',
     });
+
+    const [federationOptions, setFederationOptions] = useState([]);
 
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -167,6 +170,23 @@ const RegisterOrganisationForm = ({
         : 'w-full bg-black/40 border border-white/10 text-white rounded-xl pl-11 pr-11 py-3.5 text-sm focus:outline-none focus:border-padel-green transition-colors';
 
     const setField = (key, value) => setFormData((prev) => ({ ...prev, [key]: value }));
+
+    useEffect(() => {
+        const loadFederations = async () => {
+            const { data } = await supabase
+                .from('federations')
+                .select('id, name, short_name, slug, status')
+                .in('status', ['published', 'draft'])
+                .order('name', { ascending: true });
+            const list = data || [];
+            setFederationOptions(list);
+            const sapa = list.find((f) => f.slug === 'sapa');
+            if (sapa) {
+                setFormData((prev) => (prev.federation_id ? prev : { ...prev, federation_id: sapa.id }));
+            }
+        };
+        loadFederations().catch((err) => console.warn('Federation list unavailable:', err));
+    }, []);
 
     useEffect(() => {
         if (!playerProfile) return;
@@ -609,6 +629,7 @@ const RegisterOrganisationForm = ({
                     ? formData.linked_club_name.trim() || null
                     : null,
                 sapa_intent: formData.sapa_intent,
+                federation_id: formData.federation_id || null,
                 contact_email: contactEmailValue,
                 contact_phone: formData.primary_whatsapp.trim() || null,
                 whatsapp_number: formData.primary_whatsapp.trim() || null,
@@ -847,6 +868,22 @@ const RegisterOrganisationForm = ({
                             compact={compact}
                         />
                     </div>
+
+                    {federationOptions.length > 0 && (
+                        <div>
+                            <label className={labelClass}>Federation (optional — defaults to SAPA)</label>
+                            <SelectField
+                                value={formData.federation_id}
+                                onChange={(v) => setField('federation_id', v)}
+                                options={federationOptions.map((f) => ({
+                                    value: f.id,
+                                    label: f.short_name || f.name,
+                                }))}
+                                placeholder="Select federation"
+                                compact={compact}
+                            />
+                        </div>
+                    )}
                 </div>
             )}
 

@@ -85,6 +85,7 @@ const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
     const [uploading, setUploading] = useState(null);
     const [step, setStep] = useState(0);
     const [openAccordion, setOpenAccordion] = useState(null);
+    const [federationOptions, setFederationOptions] = useState([]);
 
     const steps = useMemo(() => {
         const list = [];
@@ -98,6 +99,16 @@ const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
             { id: 'contacts', title: 'Contact Directory' },
         );
         return list;
+    }, [adminMode]);
+
+    useEffect(() => {
+        if (!adminMode) return;
+        supabase
+            .from('federations')
+            .select('id, name, short_name, slug')
+            .order('name', { ascending: true })
+            .then(({ data }) => setFederationOptions(data || []))
+            .catch(() => setFederationOptions([]));
     }, [adminMode]);
 
     useEffect(() => {
@@ -139,6 +150,7 @@ const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
                 status: org.status || 'pending',
                 verified: Boolean(org.verified),
                 sapa_sanctioned: Boolean(org.sapa_sanctioned),
+                federation_id: org.federation_id || '',
             } : {}),
         });
         setStep(0);
@@ -270,6 +282,7 @@ const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
                 payload.status = form.status;
                 payload.verified = form.verified;
                 payload.sapa_sanctioned = form.sapa_sanctioned;
+                payload.federation_id = form.federation_id || null;
                 if (form.status === 'approved' && org.status !== 'approved') {
                     payload.approved_at = new Date().toISOString();
                 }
@@ -328,6 +341,21 @@ const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
                         />
                         <span className="text-sm text-white font-bold">SAPA sanctioned</span>
                     </label>
+                    <div className="md:col-span-3">
+                        <label className={labelClass}>Federation</label>
+                        <select
+                            value={form.federation_id || ''}
+                            onChange={(e) => setField('federation_id', e.target.value)}
+                            className={inputClass}
+                        >
+                            <option value="">Unassigned (platform sanctioning)</option>
+                            {federationOptions.map((f) => (
+                                <option key={f.id} value={f.id}>
+                                    {f.short_name || f.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
             );
         }
