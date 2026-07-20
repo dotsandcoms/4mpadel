@@ -85,6 +85,11 @@ const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
     const [uploading, setUploading] = useState(null);
     const [step, setStep] = useState(0);
     const [openAccordion, setOpenAccordion] = useState(null);
+    const [linkedAlbums, setLinkedAlbums] = useState([]);
+    const [availableAlbums, setAvailableAlbums] = useState([]);
+    const [albumToAdd, setAlbumToAdd] = useState('');
+    const [albumsLoading, setAlbumsLoading] = useState(false);
+    const [linkingAlbum, setLinkingAlbum] = useState(false);
 
     const steps = useMemo(() => {
         const list = [];
@@ -95,10 +100,46 @@ const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
             { id: 'contact', title: 'Contact & Website' },
             { id: 'socials', title: 'Social Media' },
             { id: 'sponsors', title: 'Sponsors & Partners' },
+            { id: 'media', title: 'Media Albums' },
             { id: 'contacts', title: 'Contact Directory' },
         );
         return list;
     }, [adminMode]);
+
+    const fetchOrgAlbums = async (orgId) => {
+        if (!orgId) return;
+        setAlbumsLoading(true);
+        try {
+            const [{ data: linked, error: linkedErr }, { data: all, error: allErr }] = await Promise.all([
+                supabase
+                    .from('albums')
+                    .select('id, title, slug, cover_image_url, album_date, is_active, is_featured')
+                    .eq('organisation_id', orgId)
+                    .is('parent_album_id', null)
+                    .order('album_date', { ascending: false }),
+                supabase
+                    .from('albums')
+                    .select('id, title, slug, album_date, organisation_id')
+                    .is('parent_album_id', null)
+                    .order('title', { ascending: true }),
+            ]);
+            if (linkedErr) throw linkedErr;
+            if (allErr) throw allErr;
+            setLinkedAlbums(linked || []);
+            const linkedIds = new Set((linked || []).map((a) => a.id));
+            setAvailableAlbums((all || []).filter((a) => !linkedIds.has(a.id)));
+        } catch (err) {
+            console.error('Failed to load organisation albums:', err);
+            toast.error('Could not load albums. Ensure the organisation_id column exists on albums.');
+        } finally {
+            setAlbumsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!org?.id) return;
+        fetchOrgAlbums(org.id);
+    }, [org?.id]);
 
     useEffect(() => {
         if (!org) return;
@@ -156,6 +197,45 @@ const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
         setForm((prev) => ({ ...prev, contacts: prev.contacts.map((c, i) => (i === idx ? { ...c, [key]: value } : c)) }));
     const setSponsor = (idx, key, value) =>
         setForm((prev) => ({ ...prev, sponsors: prev.sponsors.map((s, i) => (i === idx ? { ...s, [key]: value } : s)) }));
+
+    const handleLinkAlbum = async () => {
+        if (!albumToAdd || !org?.id) return;
+        setLinkingAlbum(true);
+        try {
+            const { error } = await supabase
+                .from('albums')
+                .update({ organisation_id: org.id })
+                .eq('id', albumToAdd);
+            if (error) throw error;
+            toast.success('Album linked to organisation');
+            setAlbumToAdd('');
+            await fetchOrgAlbums(org.id);
+        } catch (err) {
+            console.error('Link album failed:', err);
+            toast.error(`Could not link album: ${err.message}`);
+        } finally {
+            setLinkingAlbum(false);
+        }
+    };
+
+    const handleUnlinkAlbum = async (albumId) => {
+        if (!albumId || !org?.id) return;
+        setLinkingAlbum(true);
+        try {
+            const { error } = await supabase
+                .from('albums')
+                .update({ organisation_id: null })
+                .eq('id', albumId);
+            if (error) throw error;
+            toast.success('Album unlinked');
+            await fetchOrgAlbums(org.id);
+        } catch (err) {
+            console.error('Unlink album failed:', err);
+            toast.error(`Could not unlink album: ${err.message}`);
+        } finally {
+            setLinkingAlbum(false);
+        }
+    };
 
     const toggleAccordion = (id) => {
         setOpenAccordion((prev) => (prev === id ? null : id));
@@ -632,6 +712,93 @@ const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
                                             </div>
                                         </div>
                                     </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        if (stepId === 'media') {
+            return (
+                <div className="space-y-4">
+                    <p className="text-xs text-gray-500">
+                        Link gallery albums to this organisation. Their cover images appear in the Media section on the public page.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                        <select
+                            value={albumToAdd}
+                            onChange={(e) => setAlbumToAdd(e.target.value)}
+                            className={`${inputClass} cursor-pointer flex-1`}
+                            disabled={albumsLoading || linkingAlbum}
+                        >
+                            <option value="">Select an album to link…</option>
+                            {availableAlbums.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                    {a.title}{a.album_date ? ` (${String(a.album_date).substring(0, 10)})` : ''}
+                                    {a.organisation_id ? ' — linked elsewhere' : ''}
+                                </option>
+                            ))}
+                        </select>
+                        <button
+                            type="button"
+                            onClick={handleLinkAlbum}
+                            disabled={!albumToAdd || linkingAlbum}
+                            className="inline-flex items-center justify-center gap-1.5 bg-padel-green text-black text-[10px] font-black uppercase tracking-wider px-4 py-3 rounded-xl hover:bg-white transition-all disabled:opacity-40 cursor-pointer shrink-0"
+                        >
+                            <Plus size={12} />
+                            {linkingAlbum ? 'Linking…' : 'Add Album'}
+                        </button>
+                    </div>
+
+                    {albumsLoading ? (
+                        <p className="text-xs text-gray-500">Loading albums…</p>
+                    ) : linkedAlbums.length === 0 ? (
+                        <p className="text-xs text-gray-500">No albums linked yet.</p>
+                    ) : (
+                        <div className="space-y-2">
+                            {linkedAlbums.map((album) => (
+                                <div
+                                    key={album.id}
+                                    className="flex items-center gap-3 bg-black/30 border border-white/5 rounded-2xl p-3"
+                                >
+                                    <div className="w-14 h-14 rounded-xl overflow-hidden bg-black/40 border border-white/10 shrink-0 flex items-center justify-center">
+                                        {album.cover_image_url ? (
+                                            <img src={album.cover_image_url} alt="" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <ImageIcon size={18} className="text-gray-600" />
+                                        )}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-bold text-white truncate">{album.title}</p>
+                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">
+                                            {album.album_date ? String(album.album_date).substring(0, 10) : 'No date'}
+                                            {album.is_featured ? ' · Featured' : ''}
+                                            {!album.is_active ? ' · Hidden' : ''}
+                                            {!album.cover_image_url ? ' · No cover' : ''}
+                                        </p>
+                                    </div>
+                                    {album.slug && (
+                                        <a
+                                            href={`/gallery/${album.slug}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="p-2 text-gray-400 hover:text-white transition-colors"
+                                            title="View album"
+                                        >
+                                            <ExternalLink size={14} />
+                                        </a>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleUnlinkAlbum(album.id)}
+                                        disabled={linkingAlbum}
+                                        className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-40"
+                                        title="Unlink album"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
                                 </div>
                             ))}
                         </div>

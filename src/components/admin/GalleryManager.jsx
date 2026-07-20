@@ -13,6 +13,7 @@ const GalleryManager = ({ permissions }) => {
     const fileInputRef = React.useRef(null);
     const [albums, setAlbums] = useState([]);
     const [events, setEvents] = useState([]); // Fetch calendar events
+    const [organisations, setOrganisations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedAlbum, setSelectedAlbum] = useState(null); // If null, show albums list. If set, show images for this album.
     const [selectedImages, setSelectedImages] = useState([]); // Array of image IDs for bulk actions
@@ -26,6 +27,7 @@ const GalleryManager = ({ permissions }) => {
         is_active: true,
         cover_image_url: '',
         event_id: '',
+        organisation_id: '',
         youtube_playlist_url: '',
         slug: '',
         photographer_name: '',
@@ -44,6 +46,7 @@ const GalleryManager = ({ permissions }) => {
     useEffect(() => {
         fetchAlbums();
         fetchEvents();
+        fetchOrganisations();
     }, []);
 
     const fetchAlbums = async () => {
@@ -51,7 +54,7 @@ const GalleryManager = ({ permissions }) => {
             setLoading(true);
             const { data, error } = await supabase
                 .from('albums')
-                .select('*, calendar(event_name)')
+                .select('*, calendar(event_name), organisations(name, slug)')
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
@@ -76,6 +79,20 @@ const GalleryManager = ({ permissions }) => {
         } catch (error) {
             console.error('Error fetching events:', error);
             // Non-blocking error
+        }
+    };
+
+    const fetchOrganisations = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('organisations')
+                .select('id, name, slug, status')
+                .eq('status', 'approved')
+                .order('name', { ascending: true });
+            if (error) throw error;
+            setOrganisations(data || []);
+        } catch (error) {
+            console.error('Error fetching organisations:', error);
         }
     };
 
@@ -114,6 +131,7 @@ const GalleryManager = ({ permissions }) => {
             is_active: true,
             cover_image_url: '',
             event_id: '',
+            organisation_id: '',
             youtube_playlist_url: '',
             slug: '',
             photographer_name: '',
@@ -134,6 +152,7 @@ const GalleryManager = ({ permissions }) => {
             is_active: album.is_active,
             cover_image_url: album.cover_image_url || '',
             event_id: album.event_id || '',
+            organisation_id: album.organisation_id || '',
             youtube_playlist_url: album.youtube_playlist_url || '',
             slug: album.slug || '',
             photographer_name: album.photographer_name || '',
@@ -148,10 +167,11 @@ const GalleryManager = ({ permissions }) => {
     const handleAlbumSubmit = async (e) => {
         e.preventDefault();
         try {
-            // Clean up empty string to null for event_id foreign key
+            // Clean up empty string to null for foreign keys
             const submissionData = {
                 ...albumFormData,
                 event_id: albumFormData.event_id === '' ? null : albumFormData.event_id,
+                organisation_id: albumFormData.organisation_id === '' ? null : albumFormData.organisation_id,
                 album_date: albumFormData.album_date === '' ? null : albumFormData.album_date,
                 parent_album_id: albumFormData.parent_album_id === '' ? null : albumFormData.parent_album_id
             };
@@ -496,7 +516,10 @@ const GalleryManager = ({ permissions }) => {
                             <h2 className="text-3xl font-bold text-white tracking-tight">{selectedAlbum.title}</h2>
                             <p className="text-gray-400 text-sm flex items-center gap-2">
                                 <FileText size={14} />
-                                {selectedAlbum.calendar?.event_name ? `Linked to ${selectedAlbum.calendar.event_name}` : 'No event linked'}
+                                {[
+                                    selectedAlbum.calendar?.event_name ? `Event: ${selectedAlbum.calendar.event_name}` : null,
+                                    selectedAlbum.organisations?.name ? `Org: ${selectedAlbum.organisations.name}` : null,
+                                ].filter(Boolean).join(' · ') || 'No event or organisation linked'}
                             </p>
                         </div>
                     </div>
@@ -718,6 +741,12 @@ const GalleryManager = ({ permissions }) => {
                                             <span className="line-clamp-1">{album.calendar.event_name}</span>
                                         </div>
                                     )}
+                                    {album.organisations?.name && (
+                                        <div className="flex items-center gap-1.5 text-blue-400/80 text-[11px] font-bold uppercase tracking-wider mb-2">
+                                            <FileText size={12} />
+                                            <span className="line-clamp-1">{album.organisations.name}</span>
+                                        </div>
+                                    )}
                                     <p className="text-sm text-gray-400 line-clamp-2 mb-4">{album.description || 'No description'}</p>
                                     {album.photographer_name && (
                                         <div className="flex items-center gap-1.5 text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">
@@ -897,21 +926,39 @@ const GalleryManager = ({ permissions }) => {
                                             ))}
                                         </select>
                                     </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Link to Event (Optional)</label>
-                                        <select
-                                            name="event_id"
-                                            value={albumFormData.event_id || ''}
-                                            onChange={handleAlbumInputChange}
-                                            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors appearance-none"
-                                        >
-                                            <option value="">-- No Event Linked --</option>
-                                            {events.map(event => (
-                                                <option key={event.id} value={event.id}>
-                                                    {event.event_name} {event.start_date ? `(${event.start_date.substring(0, 10)})` : ''}
-                                                </option>
-                                            ))}
-                                        </select>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Link to Event (Optional)</label>
+                                            <select
+                                                name="event_id"
+                                                value={albumFormData.event_id || ''}
+                                                onChange={handleAlbumInputChange}
+                                                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors appearance-none"
+                                            >
+                                                <option value="">-- No Event Linked --</option>
+                                                {events.map(event => (
+                                                    <option key={event.id} value={event.id}>
+                                                        {event.event_name} {event.start_date ? `(${event.start_date.substring(0, 10)})` : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Link to Organisation (Optional)</label>
+                                            <select
+                                                name="organisation_id"
+                                                value={albumFormData.organisation_id || ''}
+                                                onChange={handleAlbumInputChange}
+                                                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors appearance-none"
+                                            >
+                                                <option value="">-- No Organisation Linked --</option>
+                                                {organisations.map(org => (
+                                                    <option key={org.id} value={org.id}>
+                                                        {org.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>

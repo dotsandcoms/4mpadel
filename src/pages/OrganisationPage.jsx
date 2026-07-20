@@ -8,20 +8,12 @@ import {
     Building, ShieldCheck, BadgeCheck, Globe, Mail, Phone, MessageCircle,
     CalendarDays, Trophy, ChevronLeft, ChevronRight, Clock,
     Instagram, Facebook, Youtube, ExternalLink, Heart, MapPin, Users,
-    Image as ImageIcon, Medal
+    Image as ImageIcon
 } from 'lucide-react';
 
 // Dummy content is only rendered in dev builds so Brad can judge the design;
 // production hides these sections until real data exists.
 const SHOW_DUMMY = import.meta.env.DEV;
-
-const DUMMY_RANKINGS = [
-    { pos: 1, name: 'Wesley Brits', points: 2650 },
-    { pos: 2, name: 'Louwrense Fourie', points: 2140 },
-    { pos: 3, name: 'Dylan Fitt', points: 1890 },
-    { pos: 4, name: 'Tayla de la Harpe', points: 1620 },
-    { pos: 5, name: 'Megan Anderson', points: 1430 },
-];
 
 const DUMMY_CLUBS = [
     { name: 'Atlantic Padel', city: 'Cape Town' },
@@ -48,8 +40,6 @@ const tierBadge = (status) => {
         default: return 'bg-blue-500/10 text-blue-400 border-blue-500/25';
     }
 };
-
-const medalColor = (pos) => pos === 1 ? '#FFD700' : pos === 2 ? '#C0C0C0' : pos === 3 ? '#CD7F32' : null;
 
 const monthShort = (d) => d ? new Date(d).toLocaleDateString('en-ZA', { month: 'short' }).toUpperCase() : '';
 const dayNum = (d) => d ? new Date(d).getDate() : '';
@@ -83,6 +73,7 @@ const OrganisationPage = () => {
     const [org, setOrg] = useState(null);
     const [events, setEvents] = useState([]);
     const [galleryImages, setGalleryImages] = useState([]);
+    const [orgAlbums, setOrgAlbums] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -109,29 +100,43 @@ const OrganisationPage = () => {
                     const eventList = evs || [];
                     setEvents(eventList);
 
-                    // Pull gallery photos from albums linked to this org's events
+                    // Albums linked directly to this organisation (cover images for Media)
+                    const { data: linkedAlbums } = await supabase
+                        .from('albums')
+                        .select('id, slug, title, cover_image_url, album_date, is_featured')
+                        .eq('organisation_id', data.id)
+                        .is('parent_album_id', null)
+                        .eq('is_active', true)
+                        .order('is_featured', { ascending: false })
+                        .order('album_date', { ascending: false });
+                    setOrgAlbums(linkedAlbums || []);
+
+                    // Also pull gallery photos from albums linked to this org's events
                     const eventIds = eventList.map((e) => e.id).filter(Boolean);
+                    const orgAlbumIds = (linkedAlbums || []).map((a) => a.id).filter(Boolean);
+                    let albumIds = [...orgAlbumIds];
+
                     if (eventIds.length > 0) {
-                        const { data: albumsData } = await supabase
+                        const { data: eventAlbums } = await supabase
                             .from('albums')
                             .select('id, event_id, slug')
                             .in('event_id', eventIds)
                             .is('parent_album_id', null)
                             .eq('is_active', true);
 
-                        const albumIds = (albumsData || []).map((a) => a.id).filter(Boolean);
-                        if (albumIds.length > 0) {
-                            const { data: images } = await supabase
-                                .from('gallery_images')
-                                .select('id, image_url, thumbnail_url, album_id, sort_order, created_at')
-                                .in('album_id', albumIds)
-                                .order('sort_order', { ascending: true })
-                                .limit(24);
+                        const eventAlbumIds = (eventAlbums || []).map((a) => a.id).filter(Boolean);
+                        albumIds = [...new Set([...albumIds, ...eventAlbumIds])];
+                    }
 
-                            setGalleryImages(images || []);
-                        } else {
-                            setGalleryImages([]);
-                        }
+                    if (albumIds.length > 0) {
+                        const { data: images } = await supabase
+                            .from('gallery_images')
+                            .select('id, image_url, thumbnail_url, album_id, sort_order, created_at')
+                            .in('album_id', albumIds)
+                            .order('sort_order', { ascending: true })
+                            .limit(24);
+
+                        setGalleryImages(images || []);
                     } else {
                         setGalleryImages([]);
                     }
@@ -163,14 +168,41 @@ const OrganisationPage = () => {
         () => events.reduce((sum, e) => sum + (parseInt(e.registered_players) || 0), 0),
         [events]
     );
-    // Prefer event gallery album photos; fall back to event poster images
-    const mediaImages = useMemo(() => {
+    // Prefer organisation album covers; then gallery photos; then event posters
+    const mediaItems = useMemo(() => {
+        const fromAlbums = (orgAlbums || [])
+            .filter((a) => a.cover_image_url || a.title)
+            .map((a) => ({
+                src: a.cover_image_url || null,
+                href: a.slug ? `/gallery/${a.slug}` : '/gallery',
+                title: a.title || 'Album',
+                date: a.album_date ? String(a.album_date).substring(0, 10) : null,
+                kind: 'album',
+            }));
+        if (fromAlbums.length > 0) return fromAlbums.slice(0, 8);
+
         const fromGallery = galleryImages
-            .map((img) => img.thumbnail_url || img.image_url)
-            .filter(Boolean);
+            .map((img) => ({
+                src: img.thumbnail_url || img.image_url,
+                href: '/gallery',
+                title: 'Gallery',
+                date: null,
+                kind: 'gallery',
+            }))
+            .filter((item) => item.src);
         if (fromGallery.length > 0) return fromGallery.slice(0, 8);
-        return events.map((e) => e.image_url).filter(Boolean).slice(0, 8);
-    }, [galleryImages, events]);
+
+        return events
+            .map((e) => ({
+                src: e.image_url,
+                href: e.slug ? `/events/${e.slug}` : null,
+                title: e.event_name,
+                date: e.start_date ? String(e.start_date).substring(0, 10) : null,
+                kind: 'event',
+            }))
+            .filter((item) => item.src)
+            .slice(0, 8);
+    }, [orgAlbums, galleryImages, events]);
     const lastUpdated = useMemo(() => {
         const dates = events.map(e => e.created_at).filter(Boolean).sort();
         return dates.length ? dates[dates.length - 1] : org?.approved_at || org?.created_at;
@@ -199,11 +231,13 @@ const OrganisationPage = () => {
         ? org.sponsors.filter((s) => (s.name || '').trim() || s.logo_url)
         : [];
     const showClubs = false; // Hidden until clubs are wired up
-    const showMedia = mediaImages.length > 0 || SHOW_DUMMY;
+    const showMedia = mediaItems.length > 0 || SHOW_DUMMY;
     const showSponsors = sponsors.length > 0 || SHOW_DUMMY;
     const clubsList = hostVenues.length > 0 ? hostVenues : (SHOW_DUMMY ? DUMMY_CLUBS : []);
     const sponsorsList = sponsors.length > 0 ? sponsors : (SHOW_DUMMY ? DUMMY_SPONSORS : []);
-    const galleryLink = galleryImages.length > 0 ? '/gallery' : null;
+    const galleryLink = orgAlbums.length > 0
+        ? (orgAlbums[0].slug ? `/gallery/${orgAlbums[0].slug}` : '/gallery')
+        : (galleryImages.length > 0 ? '/gallery' : null);
     const stats = [
         { icon: Trophy, value: events.length, label: 'Events Hosted' },
         { icon: Building, value: clubsList.length, label: 'Host Clubs' },
@@ -332,72 +366,42 @@ const OrganisationPage = () => {
                     </Section>
                 )}
 
-                {/* ===== TWO-COLUMN ON DESKTOP ===== */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                    {/* Upcoming events */}
-                    <Section
-                        id="org-events"
-                        title="Upcoming Events"
-                        accent={accent}
-                        action={<ViewAll to="/calendar" accent={accent} />}
-                    >
-                        {upcoming.length === 0 ? (
-                            <p className="text-xs text-gray-500 py-4">No upcoming events published yet — check back soon.</p>
-                        ) : (
-                            <div className="space-y-2.5">
-                                {upcoming.slice(0, 5).map((ev) => (
-                                    <Link
-                                        key={ev.id}
-                                        to={`/calendar/${ev.slug || ev.id}`}
-                                        className="flex items-center gap-3.5 bg-black/30 hover:bg-black/50 border border-white/5 p-3 rounded-2xl transition-all group"
-                                    >
-                                        <div className="w-12 shrink-0 text-center bg-white/[0.04] border border-white/5 rounded-xl py-1.5">
-                                            <span className="block text-base font-black leading-none" style={{ color: accent }}>{dayNum(ev.start_date)}</span>
-                                            <span className="block text-[8px] font-black uppercase tracking-widest text-gray-500 mt-1">{monthShort(ev.start_date)}</span>
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-bold text-white truncate group-hover:text-padel-green transition-colors">{ev.event_name}</p>
-                                            <p className="text-[11px] text-gray-500 truncate mt-0.5">{[ev.venue, ev.city].filter(Boolean).join(' · ')}</p>
-                                            {ev.sapa_status && ev.sapa_status !== 'None' && (
-                                                <span className={`inline-flex mt-1.5 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border ${tierBadge(ev.sapa_status)}`}>
-                                                    {ev.sapa_status}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <ChevronRight size={15} className="text-gray-600 shrink-0 group-hover:translate-x-0.5 transition-transform" />
-                                    </Link>
-                                ))}
-                            </div>
-                        )}
-                    </Section>
-
-                    {/* Rankings (dummy for now) */}
-                    {(SHOW_DUMMY) && (
-                        <Section
-                            id="org-rankings"
-                            title={`${org.name.split(' ')[0]} Rankings`}
-                            accent={accent}
-                            action={<ViewAll to="/rankings" accent={accent} label="View full rankings" />}
-                        >
-                            <div className="space-y-1">
-                                {DUMMY_RANKINGS.map((r) => (
-                                    <div key={r.pos} className="flex items-center gap-3 py-2 border-b border-white/5 last:border-0">
-                                        <span className="w-6 text-center font-black text-sm" style={{ color: medalColor(r.pos) || '#6B7280' }}>
-                                            {r.pos <= 3 ? <Medal size={15} className="inline" style={{ color: medalColor(r.pos) }} /> : r.pos}
-                                        </span>
-                                        <div className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[10px] font-black text-gray-400 shrink-0">
-                                            {r.name.split(' ').map(w => w[0]).join('')}
-                                        </div>
-                                        <span className="text-sm font-bold text-white truncate flex-1">{r.name}</span>
-                                        <span className="text-sm font-black shrink-0" style={{ color: accent }}>{r.points.toLocaleString('en-ZA')}</span>
-                                        <span className="text-[9px] font-black uppercase text-gray-600 shrink-0">pts</span>
+                {/* ===== UPCOMING EVENTS ===== */}
+                <Section
+                    id="org-events"
+                    title="Upcoming Events"
+                    accent={accent}
+                    action={<ViewAll to="/calendar" accent={accent} />}
+                >
+                    {upcoming.length === 0 ? (
+                        <p className="text-xs text-gray-500 py-4">No upcoming events published yet — check back soon.</p>
+                    ) : (
+                        <div className="space-y-2.5">
+                            {upcoming.slice(0, 5).map((ev) => (
+                                <Link
+                                    key={ev.id}
+                                    to={`/calendar/${ev.slug || ev.id}`}
+                                    className="flex items-center gap-3.5 bg-black/30 hover:bg-black/50 border border-white/5 p-3 rounded-2xl transition-all group"
+                                >
+                                    <div className="w-12 shrink-0 text-center bg-white/[0.04] border border-white/5 rounded-xl py-1.5">
+                                        <span className="block text-base font-black leading-none" style={{ color: accent }}>{dayNum(ev.start_date)}</span>
+                                        <span className="block text-[8px] font-black uppercase tracking-widest text-gray-500 mt-1">{monthShort(ev.start_date)}</span>
                                     </div>
-                                ))}
-                            </div>
-                            <p className="text-[9px] text-gray-600 uppercase tracking-widest font-black mt-3">Preview data — live rankings activate after sanctioned events</p>
-                        </Section>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-bold text-white truncate group-hover:text-padel-green transition-colors">{ev.event_name}</p>
+                                        <p className="text-[11px] text-gray-500 truncate mt-0.5">{[ev.venue, ev.city].filter(Boolean).join(' · ')}</p>
+                                        {ev.sapa_status && ev.sapa_status !== 'None' && (
+                                            <span className={`inline-flex mt-1.5 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider border ${tierBadge(ev.sapa_status)}`}>
+                                                {ev.sapa_status}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <ChevronRight size={15} className="text-gray-600 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                                </Link>
+                            ))}
+                        </div>
                     )}
-                </div>
+                </Section>
 
                 {/* ===== HOST CLUBS ===== */}
                 {showClubs && (
@@ -423,14 +427,48 @@ const OrganisationPage = () => {
 
                 {/* ===== MEDIA ===== */}
                 {showMedia && (
-                    <Section title="Media" accent={accent} action={mediaImages.length > 4 ? <ViewAll to={galleryLink || '/gallery'} accent={accent} /> : null}>
-                        {mediaImages.length > 0 ? (
-                            <div className="grid grid-cols-4 gap-2">
-                                {mediaImages.slice(0, 4).map((src, i) => (
-                                    <div key={i} className="aspect-square rounded-2xl overflow-hidden bg-white/5 border border-white/5">
-                                        <img src={src} alt="" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" loading="lazy" />
-                                    </div>
-                                ))}
+                    <Section title="Media" accent={accent} action={mediaItems.length > 4 ? <ViewAll to={galleryLink || '/gallery'} accent={accent} /> : null}>
+                        {mediaItems.length > 0 ? (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                                {mediaItems.slice(0, 4).map((item, i) => {
+                                    const tile = (
+                                        <div className="group rounded-2xl overflow-hidden bg-white/5 border border-white/5 hover:border-white/15 transition-colors">
+                                            <div className="aspect-square overflow-hidden bg-black/40">
+                                                {item.src ? (
+                                                    <img
+                                                        src={item.src}
+                                                        alt={item.title || ''}
+                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                        loading="lazy"
+                                                    />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center" style={{ color: `${accent}55` }}>
+                                                        <ImageIcon size={28} />
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {item.title && (
+                                                <div className="px-2.5 py-2.5">
+                                                    <p className="text-[11px] font-bold text-white leading-snug line-clamp-2 group-hover:text-padel-green transition-colors">
+                                                        {item.title}
+                                                    </p>
+                                                    {item.date && (
+                                                        <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-1">
+                                                            {item.date}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                    return item.href ? (
+                                        <Link key={i} to={item.href} className="block" title={item.title}>
+                                            {tile}
+                                        </Link>
+                                    ) : (
+                                        <div key={i}>{tile}</div>
+                                    );
+                                })}
                             </div>
                         ) : (
                             <>
@@ -441,7 +479,7 @@ const OrganisationPage = () => {
                                         </div>
                                     ))}
                                 </div>
-                                <p className="text-[9px] text-gray-600 uppercase tracking-widest font-black mt-3">Preview — event photos appear here automatically</p>
+                                <p className="text-[9px] text-gray-600 uppercase tracking-widest font-black mt-3">Preview — link albums to this organisation to show covers here</p>
                             </>
                         )}
                     </Section>
