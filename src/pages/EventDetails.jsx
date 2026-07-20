@@ -462,7 +462,7 @@ const formatPrizeAmount = (amount) => {
 };
 
 const EventHeroBranding = ({ event, theme, variant = 'hero', title = null, centered = false, dateLabel = null, locationLabel = null }) => {
-    const badgeText = event?.organizer_badge_text?.trim()
+    const badgeText = event?.organiser_badge_text?.trim()
         || (event?.sapa_status && event.sapa_status !== 'None'
             ? `SAPA ${event.sapa_status}${event?.points ? ` ${event.points}` : ''}`.trim()
             : '');

@@ -1142,7 +1142,7 @@ const FeaturedEventSlide = ({ event, cta, onCta }) => {
     const accent = statusColors.fill || '#EAB308';
     const dateLabel = formatTournamentDate(event.start_date, event.end_date);
     const city = event.city || '';
-    const badgeText = (event.organizer_badge_text || '').trim()
+    const badgeText = (event.organiser_badge_text || '').trim()
         || (event.sapa_status && event.sapa_status !== 'None'
             ? `SAPA ${event.sapa_status}${event.points ? ` ${event.points}` : ''}`
             : '');

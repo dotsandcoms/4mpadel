@@ -642,7 +642,7 @@ const blankForm = {
     organisation_id: null,
     organizer_name: 'SAPA',
     organizer_logo_url: '',
-    organizer_badge_text: '',
+    organiser_badge_text: '',
     city: '',
     venue: '',
     venues: [],
@@ -1174,7 +1174,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                 }
             }
             // Always pre-populate the public badge text from the selected SAPA tier.
-            next.organizer_badge_text = sapaBadgeText(v);
+            next.organiser_badge_text = sapaBadgeText(v);
             return next;
         });
     };
@@ -1538,7 +1538,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         if (!form.custom_image_url) {
             warnings.push('No custom poster uploaded — SAPA tier default hero will be used on the site');
         }
-        if (!form.organizer_badge_text?.trim() && form.sapa_status && form.sapa_status !== 'None') {
+        if (!form.organiser_badge_text?.trim() && form.sapa_status && form.sapa_status !== 'None') {
             warnings.push('No event subtitle / badge text set');
         }
         if (!(form.sponsor_logos || []).length) warnings.push('No sponsor logos added');
@@ -1987,8 +1987,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                             <div className="md:col-span-2">
                                                 <label className={labelClass}>Event subtitle / badge text</label>
                                                 <input
-                                                    name="organizer_badge_text"
-                                                    value={form.organizer_badge_text}
+                                                    name="organiser_badge_text"
+                                                    value={form.organiser_badge_text}
                                                     onChange={handleInput}
                                                     placeholder="e.g. SAPA GOLD 1000"
                                                     className={inputClass}
@@ -3368,8 +3368,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                     <span className="text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 bg-white/10 text-gray-300 border border-white/10">{form.tournament_tag}</span>
                                                 )}
                                             </div>
-                                            {form.organizer_badge_text && (
-                                                <p className="text-xs text-padel-green font-semibold">{form.organizer_badge_text}</p>
+                                            {form.organiser_badge_text && (
+                                                <p className="text-xs text-padel-green font-semibold">{form.organiser_badge_text}</p>
                                             )}
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-gray-300">
                                                 <p><span className="text-gray-500">Dates:</span> {formatEventDates(form.start_date, form.end_date) || '—'}</p>

@@ -836,7 +836,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
     // Privileged fields (visibility, featuring, sanctioning, org linkage) are
     // excluded so a crafted draft cannot escalate via the admin's session.
     const AMENDMENT_ALLOWED_KEYS = [
-        'event_name', 'slug', 'organizer_name', 'organizer_logo_url', 'organizer_badge_text',
+        'event_name', 'slug', 'organizer_name', 'organizer_logo_url', 'organiser_badge_text',
         'city', 'venue', 'venues', 'address', 'start_date', 'end_date', 'start_time', 'end_time',
         'sapa_status', 'tournament_tag', 'description', 'points', 'points_breakdown',
         'prize_money_total', 'prize_money_breakdown', 'balls', 'courts', 'tournament_director',
