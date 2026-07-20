@@ -35,6 +35,63 @@ const getEventStatusColors = (sapaStatus) => {
     return { border: 'border-padel-green/40', text: 'text-padel-green' };
 };
 
+const pad2 = (n) => String(n).padStart(2, '0');
+
+/** Live countdown to event start_date — My Schedule upcoming events */
+const EventStartsCountdown = ({ startDate, accent = '#EAB308' }) => {
+    const [now, setNow] = useState(() => Date.now());
+
+    useEffect(() => {
+        const id = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(id);
+    }, []);
+
+    if (!startDate) return null;
+    const start = new Date(startDate);
+    if (Number.isNaN(start.getTime())) return null;
+
+    const diff = start.getTime() - now;
+    if (diff <= 0) return null;
+
+    const parts = {
+        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+        mins: Math.floor((diff / (1000 * 60)) % 60),
+        secs: Math.floor((diff / 1000) % 60),
+    };
+
+    return (
+        <div
+            className="relative w-full md:w-fit rounded-lg border px-2.5 pt-2.5 pb-1.5 shrink-0"
+            style={{ borderColor: `${accent}80` }}
+            onClick={(e) => e.stopPropagation()}
+        >
+            <span
+                className="absolute -top-1.5 left-2 px-1 text-[8px] font-bold uppercase tracking-wider bg-[#141414]"
+                style={{ color: accent }}
+            >
+                Event starts in
+            </span>
+            <div className="flex items-end justify-between md:justify-start gap-1.5 sm:gap-2">
+                {[
+                    { value: pad2(parts.days), unit: 'DAYS' },
+                    { value: pad2(parts.hours), unit: 'HRS' },
+                    { value: pad2(parts.mins), unit: 'MINS' },
+                    { value: pad2(parts.secs), unit: 'SECS' },
+                ].map(({ value, unit }, i) => (
+                    <React.Fragment key={unit}>
+                        {i > 0 && <span className="text-white/40 font-bold text-xs sm:text-sm pb-2">:</span>}
+                        <div className="text-center flex-1 md:flex-none min-w-[1.6rem]">
+                            <p className="text-sm sm:text-base font-black text-white leading-none tabular-nums">{value}</p>
+                            <p className="text-[7px] font-bold text-white/50 tracking-wider mt-0.5">{unit}</p>
+                        </div>
+                    </React.Fragment>
+                ))}
+            </div>
+        </div>
+    );
+};
+
 const Hero = () => {
     const { scrollY } = useScroll();
     const opacityText = useTransform(scrollY, [0, 300], [1, 0]);
@@ -648,22 +705,31 @@ const Hero = () => {
         </div>
     );
 
-    const renderSingleEventCard = (event, keySuffix = '') => {
+    const renderSingleEventCard = (event, keySuffix = '', { showStartCountdown = false } = {}) => {
         const startDate = new Date(event.start_date);
         const day = startDate.getDate();
         const month = startDate.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase();
         const weekday = startDate.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase();
         const location = [event.venue, event.city].filter(Boolean).join(', ');
         const statusColors = getEventStatusColors(event.sapa_status);
+        const accent = statusColors.text.includes('yellow')
+            ? '#EAB308'
+            : statusColors.text.includes('amber')
+                ? '#F59E0B'
+                : statusColors.text.includes('red')
+                    ? '#EF4444'
+                    : statusColors.text.includes('orange')
+                        ? '#C2410C'
+                        : '#CCFF00';
 
         return (
             <button
                 key={`${event.id}${keySuffix}`}
                 type="button"
                 onClick={() => handleEventClick(event)}
-                className="flex items-center gap-4 p-4 hover:bg-white/5 transition-colors text-left group w-full"
+                className="flex items-center gap-3 sm:gap-4 p-4 hover:bg-white/5 transition-colors text-left group w-full"
             >
-                <div className="flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-3 shrink-0 self-start pt-0.5">
                     <Calendar size={18} strokeWidth={1.75} className="text-padel-green" />
                     <div className="flex flex-col items-center leading-none">
                         <span className="text-white font-bold text-xl leading-none">{day}</span>
@@ -671,22 +737,35 @@ const Hero = () => {
                         <span className="text-white/40 text-[8px] font-bold uppercase tracking-widest mt-0.5">{weekday}</span>
                     </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm font-bold uppercase truncate">{event.event_name}</p>
-                    <p className="text-[11px] text-white/50 mt-1 flex items-center gap-1.5 flex-wrap min-w-0">
-                        {location && (
-                            <span className="flex items-center gap-1 min-w-0">
-                                <MapPin size={12} className="text-white/40 shrink-0" />
-                                <span className="truncate">{location}</span>
-                            </span>
-                        )}
-                        {location && <span className="text-white/20 font-light">|</span>}
-                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${statusColors.border} ${statusColors.text} bg-transparent`}>
-                            {event.sapa_status || 'SAPA'}
-                        </span>
-                    </p>
+                <div className="flex-1 min-w-0 flex flex-col md:flex-row md:items-center gap-2.5 md:gap-4">
+                    <div className="min-w-0 flex-1">
+                        <div className="flex items-start gap-2">
+                            <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <p className="text-white text-sm font-bold uppercase truncate min-w-0 flex-1">
+                                        {event.event_name}
+                                    </p>
+                                    <span className={`shrink-0 px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${statusColors.border} ${statusColors.text} bg-transparent`}>
+                                        {event.sapa_status || 'SAPA'}
+                                    </span>
+                                </div>
+                                {location && (
+                                    <p className="text-[11px] text-white/50 mt-1 flex items-center gap-1 min-w-0">
+                                        <MapPin size={12} className="text-white/40 shrink-0" />
+                                        <span className="truncate">{location}</span>
+                                    </p>
+                                )}
+                            </div>
+                            <ChevronRight size={18} className="text-padel-green shrink-0 md:hidden mt-0.5 transition-transform group-hover:translate-x-0.5" />
+                        </div>
+                    </div>
+                    {showStartCountdown && (
+                        <div className="w-full md:w-auto md:ml-auto shrink-0">
+                            <EventStartsCountdown startDate={event.start_date} accent={accent} />
+                        </div>
+                    )}
                 </div>
-                <ChevronRight size={18} className="text-padel-green shrink-0 transition-transform group-hover:translate-x-0.5" />
+                <ChevronRight size={18} className="text-padel-green shrink-0 hidden md:block transition-transform group-hover:translate-x-0.5" />
             </button>
         );
     };
@@ -728,7 +807,7 @@ const Hero = () => {
             <div className="flex flex-col">
                 {events.map((event, idx) => (
                     <div key={`${event.id}_${idx}`} className={idx !== events.length - 1 ? 'border-b border-white/10' : ''}>
-                        {renderSingleEventCard(event, `_${idx}`)}
+                        {renderSingleEventCard(event, `_${idx}`, { showStartCountdown: true })}
                     </div>
                 ))}
             </div>
