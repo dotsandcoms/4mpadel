@@ -6,6 +6,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const HOURS_1D = 24;
+const HOURS_3D = 72;
+const HOURS_7D = 168;
+
 type CalendarRow = {
   id: number;
   event_name: string;
@@ -16,6 +20,15 @@ type CalendarRow = {
   end_date: string | null;
   is_manual: boolean | null;
   allow_payments: boolean | null;
+};
+
+type ReminderStage = '7d' | '3d' | '1d';
+
+type ReminderDecision = {
+  stage: ReminderStage;
+  updateField: 'reminder_7d_sent_at' | 'reminder_3d_sent_at' | 'reminder_1d_sent_at';
+  template: 'payment_reminder_general' | 'payment_reminder_deadline';
+  daysLeft: number;
 };
 
 async function sendEmailViaEdge(payload: {
@@ -66,9 +79,70 @@ function isManualEventRegistration(reg: {
   const cal = reg.calendar;
   if (!cal?.is_manual) return false;
   if (cal.allow_payments === false) return false;
-  // Manual checkout flow always creates division_id + pay_token rows.
   if (!reg.division_id || !reg.pay_token) return false;
   return true;
+}
+
+/**
+ * Pick at most one reminder stage per registration per run.
+ * Prefer the most urgent overdue stage that has not been sent yet.
+ * Windows (hours until registration_closes_at):
+ *   1d: 0 < h <= 24
+ *   3d: 24 < h <= 72
+ *   7d: 72 < h <= 168
+ */
+function pickReminderStage(reg: {
+  reminder_7d_sent_at?: string | null;
+  reminder_3d_sent_at?: string | null;
+  reminder_1d_sent_at?: string | null;
+}, closesAt: Date, now: Date): ReminderDecision | null {
+  const hoursToClose = (closesAt.getTime() - now.getTime()) / (1000 * 60 * 60);
+  if (hoursToClose <= 0) return null;
+
+  if (hoursToClose <= HOURS_1D && !reg.reminder_1d_sent_at) {
+    return {
+      stage: '1d',
+      updateField: 'reminder_1d_sent_at',
+      template: 'payment_reminder_deadline',
+      daysLeft: 1,
+    };
+  }
+
+  if (hoursToClose <= HOURS_3D && hoursToClose > HOURS_1D && !reg.reminder_3d_sent_at) {
+    return {
+      stage: '3d',
+      updateField: 'reminder_3d_sent_at',
+      template: 'payment_reminder_general',
+      daysLeft: 3,
+    };
+  }
+
+  if (hoursToClose <= HOURS_7D && hoursToClose > HOURS_3D && !reg.reminder_7d_sent_at) {
+    return {
+      stage: '7d',
+      updateField: 'reminder_7d_sent_at',
+      template: 'payment_reminder_general',
+      daysLeft: 7,
+    };
+  }
+
+  return null;
+}
+
+function formatCloseLabel(closesAt: Date): string {
+  try {
+    return closesAt.toLocaleString('en-ZA', {
+      timeZone: 'Africa/Johannesburg',
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return closesAt.toISOString();
+  }
 }
 
 serve(async (req: Request) => {
@@ -76,16 +150,32 @@ serve(async (req: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  // Optional dry-run: ?dry_run=true or body { dryRun: true } — no emails, no DB writes.
+  let dryRun = false;
+  try {
+    const url = new URL(req.url);
+    if (url.searchParams.get('dry_run') === 'true') dryRun = true;
+    if (req.method !== 'GET') {
+      const body = await req.clone().json().catch(() => null);
+      if (body?.dryRun === true) dryRun = true;
+    }
+  } catch {
+    // ignore parse errors
+  }
+
   // Safety kill switch — must be explicitly enabled in Supabase secrets.
-  if (Deno.env.get('PAYMENT_REMINDERS_ENABLED') !== 'true') {
+  // Dry-run is allowed even when disabled so we can preview recipients safely.
+  const enabled = Deno.env.get('PAYMENT_REMINDERS_ENABLED') === 'true';
+  if (!enabled && !dryRun) {
     console.warn('Payment reminders are disabled (PAYMENT_REMINDERS_ENABLED != true). No emails sent.');
     return new Response(
       JSON.stringify({
         success: true,
         disabled: true,
-        message: 'Payment reminders are disabled. Set PAYMENT_REMINDERS_ENABLED=true after deploying the manual-only fix.',
-        generalSent: 0,
-        deadlineSent: 0,
+        message: 'Payment reminders are disabled. Set PAYMENT_REMINDERS_ENABLED=true after verifying dry-run results.',
+        sent7d: 0,
+        sent3d: 0,
+        sent1d: 0,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
     );
@@ -110,8 +200,9 @@ serve(async (req: Request) => {
         division,
         partner_name,
         pay_token,
-        reminder_sent_at,
-        close_reminder_sent_at,
+        reminder_7d_sent_at,
+        reminder_3d_sent_at,
+        reminder_1d_sent_at,
         division_id,
         calendar!inner (
           id,
@@ -130,7 +221,8 @@ serve(async (req: Request) => {
       .eq('calendar.is_manual', true)
       .eq('calendar.allow_payments', true)
       .not('division_id', 'is', null)
-      .not('pay_token', 'is', null);
+      .not('pay_token', 'is', null)
+      .not('calendar.registration_closes_at', 'is', null);
 
     if (fetchRegError) {
       throw new Error(`Failed to fetch pending registrations: ${fetchRegError.message}`);
@@ -140,9 +232,11 @@ serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           success: true,
+          dryRun,
           message: 'No eligible manual-event pending registrations found.',
-          generalSent: 0,
-          deadlineSent: 0,
+          sent7d: 0,
+          sent3d: 0,
+          sent1d: 0,
           skipped: 0,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
@@ -163,9 +257,11 @@ serve(async (req: Request) => {
       }
     }
 
-    let generalSent = 0;
-    let deadlineSent = 0;
+    let sent7d = 0;
+    let sent3d = 0;
+    let sent1d = 0;
     let skipped = 0;
+    const planned: Array<Record<string, unknown>> = [];
 
     for (const reg of registrations) {
       const cal = reg.calendar as CalendarRow | null;
@@ -194,27 +290,20 @@ serve(async (req: Request) => {
         continue;
       }
 
-      const createdAt = new Date(reg.created_at);
       const closesAt = cal?.registration_closes_at ? new Date(cal.registration_closes_at) : null;
-      const hoursSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
-
-      let shouldSendGeneral = false;
-      let shouldSendDeadline = false;
-
-      if (closesAt && !reg.close_reminder_sent_at) {
-        const hoursToClose = (closesAt.getTime() - now.getTime()) / (1000 * 60 * 60);
-        if (hoursToClose > 0 && hoursToClose <= 24) {
-          shouldSendDeadline = true;
-        }
+      if (!closesAt || Number.isNaN(closesAt.getTime())) {
+        skipped++;
+        continue;
       }
 
-      if (!shouldSendDeadline && hoursSinceCreation >= 24 && !reg.reminder_sent_at) {
-        if (!closesAt || now < closesAt) {
-          shouldSendGeneral = true;
-        }
+      // Registration already closed — no reminders.
+      if (now >= closesAt) {
+        skipped++;
+        continue;
       }
 
-      if (!shouldSendGeneral && !shouldSendDeadline) {
+      const decision = pickReminderStage(reg, closesAt, now);
+      if (!decision) {
         skipped++;
         continue;
       }
@@ -222,15 +311,34 @@ serve(async (req: Request) => {
       const amountString = `R ${Number(fee).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
       const eventUrl = `https://4mpadel.co.za/calendar/${cal?.slug || cal?.id}`;
       const payUrl = `${eventUrl}?pay_token=${reg.pay_token}`;
-      const template = shouldSendDeadline ? 'payment_reminder_deadline' : 'payment_reminder_general';
+      const closesLabel = formatCloseLabel(closesAt);
+
+      const planRow = {
+        stage: decision.stage,
+        to: reg.email,
+        player: reg.full_name,
+        event: cal?.event_name,
+        eventId: cal?.id,
+        amount: amountString,
+        closesAt: closesLabel,
+        daysLeft: decision.daysLeft,
+      };
+      planned.push(planRow);
 
       console.info(
-        `SEND [${template}] to=${reg.email} event="${cal?.event_name}" id=${cal?.id} amount=${amountString}`,
+        `${dryRun ? 'DRY-RUN' : 'SEND'} [${decision.stage}] to=${reg.email} event="${cal?.event_name}" id=${cal?.id} amount=${amountString}`,
       );
+
+      if (dryRun) {
+        if (decision.stage === '7d') sent7d++;
+        else if (decision.stage === '3d') sent3d++;
+        else sent1d++;
+        continue;
+      }
 
       const success = await sendEmailViaEdge({
         to: reg.email,
-        template,
+        template: decision.template,
         variables: {
           eventId: cal?.id,
           eventName: cal?.event_name || 'Tournament',
@@ -240,22 +348,26 @@ serve(async (req: Request) => {
           amountDue: amountString,
           payUrl,
           eventUrl,
+          daysLeft: decision.daysLeft,
+          registrationClosesAt: closesLabel,
+          reminderStage: decision.stage,
         },
       });
 
       if (success) {
-        const updateField = shouldSendDeadline ? 'close_reminder_sent_at' : 'reminder_sent_at';
         const { error: updateError } = await supabaseAdmin
           .from('event_registrations')
-          .update({ [updateField]: now.toISOString() })
+          .update({ [decision.updateField]: now.toISOString() })
           .eq('id', reg.id);
 
         if (updateError) {
           console.error(`Failed to update registration id=${reg.id}:`, updateError.message);
-        } else if (shouldSendDeadline) {
-          deadlineSent++;
+        } else if (decision.stage === '7d') {
+          sent7d++;
+        } else if (decision.stage === '3d') {
+          sent3d++;
         } else {
-          generalSent++;
+          sent1d++;
         }
       }
     }
@@ -263,11 +375,17 @@ serve(async (req: Request) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'Manual-event reminders processed.',
-        generalSent,
-        deadlineSent,
+        dryRun,
+        enabled,
+        message: dryRun
+          ? 'Dry-run complete — no emails sent, no timestamps written.'
+          : 'Manual-event close-date reminders processed.',
+        sent7d,
+        sent3d,
+        sent1d,
         skipped,
         scanned: registrations.length,
+        planned: dryRun ? planned : undefined,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
     );

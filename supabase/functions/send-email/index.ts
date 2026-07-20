@@ -858,11 +858,14 @@ async function generateEmailBody(
     }
 
     case 'payment_reminder_general':
-      subject = `Payment Reminder: ${vars.eventName || 'Tournament'} 🎾`;
+      subject = `Payment Reminder: ${vars.eventName || 'Tournament'} — ${vars.daysLeft || ''} day${vars.daysLeft === 1 ? '' : 's'} left`;
       contentHtml = `
         <h2 style="font-size: 24px; font-weight: 800; color: #FFFFFF; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Complete Your Entry Payment</h2>
         <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
           Hi ${vars.playerName || 'Player'}, this is a friendly reminder that we have not received payment for your registration in <strong style="color: #FFFFFF;">${vars.eventName || 'Tournament'}</strong>.
+        </p>
+        <p style="font-size: 14px; line-height: 1.6; color: #E2E8F0; margin-bottom: 16px;">
+          Registration closes in about <strong style="color: #9AE900;">${vars.daysLeft || 'a few'} day${vars.daysLeft === 1 ? '' : 's'}</strong>${vars.registrationClosesAt ? ` (${vars.registrationClosesAt})` : ''}. Please pay now to keep your spot in the draw.
         </p>
         <p style="font-size: 14px; line-height: 1.6; color: #E2E8F0; margin-bottom: 24px;">
           Please secure your spot in the bracket by clicking the button below to pay your entry fee.
@@ -874,11 +877,11 @@ async function generateEmailBody(
       break;
 
     case 'payment_reminder_deadline':
-      subject = `⚠️ URGENT: Registration Closes Soon for ${vars.eventName || 'Tournament'}!`;
+      subject = `⚠️ URGENT: Registration Closes Tomorrow for ${vars.eventName || 'Tournament'}!`;
       contentHtml = `
         <h2 style="font-size: 24px; font-weight: 800; color: #EF4444; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Action Required: Deadline Closing!</h2>
         <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
-          Hi ${vars.playerName || 'Player'}, registration for <strong style="color: #FFFFFF;">${vars.eventName || 'Tournament'}</strong> is closing soon!
+          Hi ${vars.playerName || 'Player'}, registration for <strong style="color: #FFFFFF;">${vars.eventName || 'Tournament'}</strong> closes in about <strong style="color: #EF4444;">1 day</strong>${vars.registrationClosesAt ? ` (${vars.registrationClosesAt})` : ''}!
         </p>
         <div style="background-color: rgba(239, 68, 68, 0.08); border-left: 4px solid #EF4444; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
           <p style="font-size: 13.5px; line-height: 1.6; color: #FCA5A5; margin: 0; font-weight: 600;">
