@@ -4580,9 +4580,6 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                         Partner Payment Required
                                     </h3>
                                     <p className="text-xs text-slate-600 mt-2 font-normal leading-relaxed">
-                                        You have selected for your partner to pay their own registration fee.
-                                    </p>
-                                    <p className="text-xs text-slate-600 mt-2 font-normal leading-relaxed">
                                         It is your responsibility to ensure that your partner completes payment before registration closes. Your team entry will only be confirmed once both players have paid in full.
                                     </p>
                                     <p className="text-xs text-slate-600 mt-2 font-normal leading-relaxed">
