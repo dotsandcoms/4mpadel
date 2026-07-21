@@ -16,6 +16,7 @@ import {
     findPaymentForRegistration,
     findStrictPaystackEntryPayment,
     hasBlockingProcessedRefund,
+    isEntryFeeRefund,
     isExplicitAdminMarkedPayment,
     isLicensePaymentRow,
     registrationCountsAsPaid,
@@ -1759,8 +1760,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             }
         });
 
+        const paymentById = new Map((payments || []).map((p) => [p.id, p]));
         const totalRefunded = refunds
-            .filter((r) => r.status !== 'failed')
+            .filter((r) => isEntryFeeRefund(r, paymentById.get(r.payment_id)))
             .reduce((sum, r) => sum + Number(r.amount || 0), 0);
 
         return {
@@ -1812,9 +1814,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             }
         });
 
-        // Entry-fee refunds only (exclude failed). These are Paystack refunds against entry payments.
+        // Entry-fee refunds only — temp/full license refunds stay with 4M and must not reduce organiser due.
+        const paymentById = new Map((payments || []).map((p) => [p.id, p]));
         const entryFeesRefunded = refunds
-            .filter((r) => r.status !== 'failed')
+            .filter((r) => isEntryFeeRefund(r, paymentById.get(r.payment_id)))
             .reduce((sum, r) => sum + Number(r.amount || 0), 0);
 
         const entryFeeBalance = Math.max(0, grossCollected4M - entryFeesRefunded);
@@ -1858,8 +1861,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             });
         });
 
+        const paymentById = new Map((payments || []).map((p) => [p.id, p]));
         refunds.forEach((rf) => {
-            if (rf.status === 'failed') return;
+            if (!isEntryFeeRefund(rf, paymentById.get(rf.payment_id))) return;
             const reg = registrations.find((r) => r.id === rf.event_registration_id);
             rows.push({
                 id: `refund-${rf.id}`,
@@ -2294,7 +2298,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Amount due to organiser</p>
                                                 <span className="text-3xl font-black text-padel-green">{fmtR(overviewStats.dueToOrg)}</span>
                                                 <p className="text-[9px] text-gray-500 mt-1">
-                                                    (Collected − Refunded) − {Math.round(PLATFORM_COMMISSION_RATE * 100)}% commission
+                                                    (Entry collected − Entry refunds) − {Math.round(PLATFORM_COMMISSION_RATE * 100)}% commission · licenses stay with 4M
                                                 </p>
                                             </div>
                                             <button
@@ -3158,7 +3162,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                                 {[
                                     { label: 'Total Collected', value: fmtR(overviewStats.collected4M), color: 'text-padel-green' },
-                                    { label: 'Total Refunded', value: `−${fmtR(overviewStats.entryFeesRefunded)}`, color: 'text-red-400' },
+                                    { label: 'Entry Fees Refunded', value: `−${fmtR(overviewStats.entryFeesRefunded)}`, color: 'text-red-400' },
                                     { label: 'Platform Fees', value: `−${fmtR(overviewStats.commission)}`, color: 'text-red-400' },
                                     { label: 'Net Payout to Organiser', value: fmtR(overviewStats.dueToOrg), color: 'text-padel-green' },
                                 ].map((card) => (

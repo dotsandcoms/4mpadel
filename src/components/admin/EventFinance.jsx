@@ -15,6 +15,7 @@ import { fetchAllRows } from '../../utils/fetchAllRows';
 import {
     findPaymentForRegistration,
     hasBlockingProcessedRefund,
+    isEntryFeeRefund,
     isLicensePaymentRow,
     registrationCountsAsPaid,
     registrationHasPaystackEntryPayment,
@@ -176,12 +177,12 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             .reduce((sum, p) => sum + getParticipantEntryFee(p, selectedEvent), 0);
     }, [localParticipants, selectedEvent]);
 
-    const totalRefunded = useMemo(
-        () => refunds
-            .filter(r => r.status !== 'failed')
-            .reduce((sum, r) => sum + Number(r.amount || 0), 0),
-        [refunds],
-    );
+    const totalRefunded = useMemo(() => {
+        const paymentById = new Map((eventPayments || []).map((p) => [p.id, p]));
+        return refunds
+            .filter((r) => isEntryFeeRefund(r, paymentById.get(r.payment_id)))
+            .reduce((sum, r) => sum + Number(r.amount || 0), 0);
+    }, [refunds, eventPayments]);
 
     const refundByReg = useMemo(() => {
         const m = new Map();
@@ -269,6 +270,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             .filter((p) => isLicensePaymentRow(p))
             .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
+        // Entry-fee refunds only — license refunds stay with 4M.
         const entryFeesRefunded = totalRefunded;
         const entryFeeBalance = Math.max(0, grossCollected4M - entryFeesRefunded);
         const commission = grossCollected4M * 0.05;
@@ -1787,7 +1789,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             <div className="rounded-xl border border-padel-green/30 bg-padel-green/5 p-4">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Amount due to organiser</p>
                                 <span className="text-3xl font-black text-padel-green">{fmtR(financialSummary.dueToOrg)}</span>
-                                <p className="text-[9px] text-gray-500 mt-1">(Collected − Refunded) − 5% commission</p>
+                                <p className="text-[9px] text-gray-500 mt-1">(Entry collected − Entry refunds) − 5% commission · licenses stay with 4M</p>
                             </div>
                         </div>
                     </motion.div>

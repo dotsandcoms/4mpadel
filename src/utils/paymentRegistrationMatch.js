@@ -9,6 +9,26 @@ export function isLicensePaymentRow(payment) {
     return Array.isArray(covers) && covers.length > 0 && covers.every((c) => c.type === 'license');
 }
 
+/**
+ * True when a refund is for a SAPA license (temp/full) or membership — not an entry fee.
+ * Licenses stay with 4M; organiser settlement must exclude these amounts.
+ */
+export function isLicenseRefund(refund, payment = null) {
+    if (!refund) return false;
+    const cover = String(refund.metadata?.cover_type || '').toLowerCase();
+    if (cover === 'license') return true;
+    if (cover === 'entry') return false;
+    if (payment && isLicensePaymentRow(payment)) return true;
+    const type = String(payment?.payment_type || '').toLowerCase();
+    return type.includes('license') || type === 'membership';
+}
+
+/** Non-failed refund that reduces the organiser entry-fee pot. */
+export function isEntryFeeRefund(refund, payment = null) {
+    if (!refund || refund.status === 'failed') return false;
+    return !isLicenseRefund(refund, payment);
+}
+
 export function getPaymentMetadataLayers(metadata = {}) {
     const inner = metadata.original_trx?.metadata || {};
     return { top: metadata, inner };
