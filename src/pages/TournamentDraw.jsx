@@ -60,7 +60,9 @@ const TournamentDraw = () => {
 
                     if (!sbError && data) {
                         calendarData = data;
-                        if (data.rankedin_url) {
+                        if (data.rankedin_id) {
+                            rId = String(data.rankedin_id);
+                        } else if (data.rankedin_url) {
                             const match = data.rankedin_url.match(/tournament\/(\d+)/i);
                             if (match) rId = match[1];
                         }

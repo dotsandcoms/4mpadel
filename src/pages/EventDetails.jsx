@@ -1863,6 +1863,13 @@ const EventDetails = () => {
     }, [slug, manualUserEmail]);
 
     useEffect(() => {
+        const classHasPublishedDraw = (c) =>
+            Boolean(
+                (c?.IsPublished || c?.ShowDraws) &&
+                Array.isArray(c?.TournamentDraws) &&
+                c.TournamentDraws.length > 0
+            );
+
         const checkRankedinStatus = async () => {
             if (!event) return;
             const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
@@ -1870,35 +1877,45 @@ const EventDetails = () => {
             if (rId) {
                 setFetchingRankedinData(true);
                 try {
-                    // Check registration status from Rankedin API
-                    if (isEventPassed) {
-                        setIsRankedinRegistrationClosed(true);
-                    } else {
-                        const info = await getTournamentInfo(rId);
-                        console.log("Rankedin Info Fetched:", info);
-                        if (info && info.TournamentSidebarModel && info.TournamentSidebarModel.ClosingDate) {
-                            const closingDate = new Date(info.TournamentSidebarModel.ClosingDate);
-                            const now = new Date();
-                            const isClosed = closingDate < now;
-                            console.log(`Rankedin Closing Date: ${closingDate}, Now: ${now}, IsClosed: ${isClosed}`);
-                            setIsRankedinRegistrationClosed(isClosed);
-                        } else {
-                            console.log("Missing ClosingDate in Rankedin Info.");
-                        }
-                    }
-
-                    // 1. Check DB Cache first
-                    const { data: cacheRow, error: cacheError } = await supabase
+                    // 1. Check DB Cache first — apply draw/results flags immediately so the Draws
+                    // tab does not flash "Coming Soon" while slower Rankedin calls run.
+                    const { data: cacheRow } = await supabase
                         .from('rankedin_results_cache')
                         .select('*')
                         .eq('event_id', event.id)
                         .maybeSingle();
 
+                    if (cacheRow?.has_draw) {
+                        setHasDraw(true);
+                        if (Array.isArray(cacheRow.classes) && cacheRow.classes.length > 0) {
+                            setTournamentClasses(cacheRow.classes);
+                        }
+                    }
+                    if (cacheRow?.has_results) {
+                        setHasResults(true);
+                        if (Array.isArray(cacheRow.winners)) setWinners(cacheRow.winners);
+                    }
+                    if (Array.isArray(cacheRow?.upcoming_matches) && cacheRow.upcoming_matches.length > 0) {
+                        setUpcomingMatches(cacheRow.upcoming_matches);
+                    }
+
+                    // Registration status (non-blocking for draws — failures must not hide draws)
+                    if (isEventPassed) {
+                        setIsRankedinRegistrationClosed(true);
+                    } else {
+                        try {
+                            const info = await getTournamentInfo(rId);
+                            if (info?.TournamentSidebarModel?.ClosingDate) {
+                                const closingDate = new Date(info.TournamentSidebarModel.ClosingDate);
+                                setIsRankedinRegistrationClosed(closingDate < new Date());
+                            }
+                        } catch (infoErr) {
+                            console.warn('Rankedin registration info unavailable:', infoErr);
+                        }
+                    }
+
                     const isPassed = new Date(event.end_date || event.start_date) < new Date();
                     const MIN_SYNC_DATE = new Date('2026-04-02T08:50:00Z');
-
-
-
 
                     let useCache = false;
                     if (cacheRow) {
@@ -1906,12 +1923,9 @@ const EventDetails = () => {
                         const isCacheValid = lastSynced >= MIN_SYNC_DATE;
 
                         if (isPassed) {
-                            // If event is passed, use cache only if it's from after our latest logic fix
                             useCache = isCacheValid;
                         } else {
-                            // If event is live, use cache only if it's less than 2 minutes old AND from after our fix
-                            const now = new Date();
-                            const diffHrs = Math.abs(now - lastSynced) / 36e5;
+                            const diffHrs = Math.abs(Date.now() - lastSynced.getTime()) / 36e5;
                             if (diffHrs < (2 / 60) && isCacheValid) {
                                 useCache = true;
                             }
@@ -1925,13 +1939,11 @@ const EventDetails = () => {
                             return wStr.includes('pending') || wStr.includes('null');
                         });
                         const isEmpty = winnersArray.length === 0;
-                        
-                        const now = new Date();
-                        const diffHrs = Math.abs(now - new Date(cacheRow.last_synced_at)) / 36e5;
+                        const diffHrs = Math.abs(Date.now() - new Date(cacheRow.last_synced_at).getTime()) / 36e5;
 
-                        // Invalidate if there is pending data, OR if winners are empty and the cache is older than 2 hours.
-                        // This prevents permanently caching an empty state right after a tournament finishes.
-                        if (hasPending || (isEmpty && diffHrs > 2)) {
+                        // Only invalidate empty winners for finished events. Upcoming tournaments
+                        // often have published draws with zero winners — do not wipe that state.
+                        if (hasPending || (isPassed && isEmpty && diffHrs > 2 && !cacheRow.has_draw)) {
                             useCache = false;
                             console.log('Cache invalidated because winners are empty/pending and cache is stale');
                         }
@@ -1940,28 +1952,32 @@ const EventDetails = () => {
                     if (useCache && cacheRow) {
                         setTournamentClasses(cacheRow.classes || []);
                         setWinners(cacheRow.winners || []);
-                        setHasDraw(cacheRow.has_draw || false);
-                        setHasResults(cacheRow.has_results || false);
+                        setHasDraw(Boolean(cacheRow.has_draw));
+                        setHasResults(Boolean(cacheRow.has_results));
                         setUpcomingMatches(cacheRow.upcoming_matches || []);
                     } else {
                         // 2. Fetch from Live API
                         const classes = await getTournamentClasses(rId);
-                        let drawAvailable = false;
+                        const classesList = Array.isArray(classes) ? classes : [];
+                        let drawAvailable = classesList.some(classHasPublishedDraw);
                         let apiWinners = [];
                         let apiHasResults = false;
                         let apiUpcomingMatches = [];
 
-                        if (classes) {
-                            setTournamentClasses(classes);
-                            drawAvailable = classes.some(c =>
-                                c.IsPublished &&
-                                Array.isArray(c.TournamentDraws) &&
-                                c.TournamentDraws.length > 0
-                            );
+                        if (classesList.length > 0) {
+                            setTournamentClasses(classesList);
                             setHasDraw(drawAvailable);
+                        } else if (cacheRow?.has_draw) {
+                            // Empty/failed classes fetch must not hide a known published draw
+                            drawAvailable = true;
+                            setHasDraw(true);
+                            if (Array.isArray(cacheRow.classes) && cacheRow.classes.length > 0) {
+                                setTournamentClasses(cacheRow.classes);
+                            }
+                        } else {
+                            setHasDraw(false);
                         }
 
-                        // ALWAYS attempt to fetch winners because some divisions/tournaments might finish early
                         const tournamentWinners = await getTournamentWinners(rId);
                         if (tournamentWinners && tournamentWinners.length > 0) {
                             apiWinners = tournamentWinners;
@@ -1969,16 +1985,17 @@ const EventDetails = () => {
                             apiHasResults = true;
                             setHasResults(true);
                         } else {
-                            // If no winners, check if there are completed matches to show in results
                             const tournamentMatchesCompleted = await getTournamentMatches({ tournamentId: rId, isFinished: true });
                             if (tournamentMatchesCompleted && tournamentMatchesCompleted.length > 0) {
+                                apiHasResults = true;
+                                setHasResults(true);
+                            } else if (cacheRow?.has_results) {
                                 apiHasResults = true;
                                 setHasResults(true);
                             }
                         }
 
                         if (!isPassed) {
-                            // Fetch upcoming matches for live/upcoming events
                             const matchesPreview = await getTournamentMatches({ tournamentId: rId, isFinished: false });
                             if (matchesPreview && matchesPreview.length > 0) {
                                 apiUpcomingMatches = matchesPreview.slice(0, 15);
@@ -1986,18 +2003,27 @@ const EventDetails = () => {
                             }
                         }
 
-                        // 3. Upsert back to Database Cache
+                        // Never poison cache with has_draw:false when the live classes payload was empty
+                        const classesToStore = classesList.length > 0
+                            ? classesList
+                            : (cacheRow?.classes || []);
+                        const hasDrawToStore = classesList.length > 0
+                            ? drawAvailable
+                            : Boolean(cacheRow?.has_draw);
+
                         console.log("Upserting Rankedin Cache to Database...");
                         await supabase
                             .from('rankedin_results_cache')
                             .upsert({
                                 event_id: event.id,
                                 rankedin_id: rId.toString(),
-                                classes: classes || [],
-                                winners: apiWinners,
-                                has_draw: drawAvailable,
-                                has_results: apiHasResults,
-                                upcoming_matches: apiUpcomingMatches,
+                                classes: classesToStore,
+                                winners: apiWinners.length > 0 ? apiWinners : (cacheRow?.winners || []),
+                                has_draw: hasDrawToStore,
+                                has_results: apiHasResults || Boolean(cacheRow?.has_results),
+                                upcoming_matches: apiUpcomingMatches.length > 0
+                                    ? apiUpcomingMatches
+                                    : (cacheRow?.upcoming_matches || []),
                                 last_synced_at: new Date().toISOString()
                             }, { onConflict: 'event_id' })
                             .select();
@@ -2013,7 +2039,7 @@ const EventDetails = () => {
             }
         };
         checkRankedinStatus();
-    }, [event, getTournamentClasses, getTournamentWinners, getTournamentMatches]);
+    }, [event, getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentInfo, isEventPassed]);
 
     useEffect(() => {
         const fetchParticipantsData = async () => {
@@ -3932,7 +3958,11 @@ const EventDetails = () => {
                                     );
                                 })()}
 
-                                <TournamentProgressBar event={event} accentColor={theme.fill} />
+                                <TournamentProgressBar
+                                    event={event}
+                                    accentColor={theme.fill}
+                                    drawPublished={hasDraw}
+                                />
                             </div>
                         </div>
                     </div>
@@ -4842,7 +4872,12 @@ const EventDetails = () => {
                             {/* ══ DRAWS TAB ══ */}
                             {activeTab === 'draws' && (
                                 <div className="space-y-6">
-                                    {hasDraw || hasResults ? (
+                                    {fetchingRankedinData && !(hasDraw || hasResults) ? (
+                                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-16 flex flex-col items-center text-center">
+                                            <div className="w-8 h-8 border-4 border-[#CCFF00] border-t-transparent rounded-full animate-spin mb-4" />
+                                            <p className="text-xs font-bold text-gray-400">Checking for published draws...</p>
+                                        </div>
+                                    ) : hasDraw || hasResults ? (
                                         <Link
                                             to={`/draws/${event.slug || event.rankedin_id || extractRankedinId(event.rankedin_url)}`}
                                             className="flex items-center justify-between p-6 bg-[#0a0a0a] rounded-2xl shadow-lg hover:bg-[#0a0a0a]/90 transition-all group"

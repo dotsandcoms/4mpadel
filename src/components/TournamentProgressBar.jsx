@@ -33,9 +33,16 @@ const formatStepDate = (date, { withTime = false, rangeEnd = null } = {}) => {
  * Build visible tournament progress steps from event dates.
  * Steps without a date are omitted.
  */
-export function buildTournamentProgressSteps(event, now = new Date()) {
+/**
+ * @param {object} event
+ * @param {Date} [now]
+ * @param {{ drawPublished?: boolean }} [options] When Rankedin already has published draws,
+ * mark the Draw Published step complete even if draw_released is still in the future.
+ */
+export function buildTournamentProgressSteps(event, now = new Date(), options = {}) {
     if (!event) return [];
 
+    const { drawPublished = false } = options;
     const opens = parseEventDate(event.registration_opens_at);
     const earlyBird = parseEventDate(event.early_bird_ends_at);
     const closes = parseEventDate(event.registration_closes_at);
@@ -148,6 +155,11 @@ export function buildTournamentProgressSteps(event, now = new Date()) {
         else if (activeIndex > index) status = 'done';
         else if (now.getTime() >= step.at.getTime() && !step.liveUntil) status = 'done';
 
+        // Rankedin may publish earlier than the scheduled draw_released datetime
+        if (step.id === 'draw_published' && drawPublished && status === 'upcoming') {
+            status = 'done';
+        }
+
         const showLive = status === 'live' && (step.id === 'registration_open' || step.id === 'tournament_live');
 
         return {
@@ -166,6 +178,7 @@ export function buildTournamentProgressSteps(event, now = new Date()) {
 export default function TournamentProgressBar({
     event,
     accentColor = '#CCFF00',
+    drawPublished = false,
 }) {
     const [now, setNow] = useState(() => Date.now());
 
@@ -175,8 +188,8 @@ export default function TournamentProgressBar({
     }, []);
 
     const steps = useMemo(
-        () => buildTournamentProgressSteps(event, new Date(now)),
-        [event, now],
+        () => buildTournamentProgressSteps(event, new Date(now), { drawPublished }),
+        [event, now, drawPublished],
     );
 
     if (!steps.length) return null;
