@@ -5,11 +5,46 @@ import { supabase } from '../supabaseClient';
 const API_BASE = 'https://api.rankedin.com/v1';
 const SAPA_ORG_ID = '11331';
 
+/**
+ * Parse Rankedin match dates. Live player-match payloads use DD/MM/YYYY HH:mm,
+ * which `new Date(...)` rejects — that previously dropped all upcoming matches.
+ */
+const parseRankedinDateValue = (value) => {
+    if (!value) return null;
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? null : value;
+    }
+    const raw = String(value).trim();
+    if (!raw) return null;
+
+    if (raw.includes('T') || /^\d{4}-\d{2}-\d{2}/.test(raw)) {
+        const iso = new Date(raw);
+        if (!Number.isNaN(iso.getTime()) && iso.getFullYear() > 1) return iso;
+    }
+
+    const match = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+    if (match) {
+        const [, day, month, year, hours = '0', mins = '0', secs = '0'] = match;
+        const d = new Date(
+            Number(year),
+            Number(month) - 1,
+            Number(day),
+            Number(hours),
+            Number(mins),
+            Number(secs),
+        );
+        if (!Number.isNaN(d.getTime()) && d.getFullYear() > 1) return d;
+    }
+
+    const fallback = new Date(raw);
+    if (!Number.isNaN(fallback.getTime()) && fallback.getFullYear() > 1) return fallback;
+    return null;
+};
+
 const formatRankedinMatchDate = (rawDate, fallbackIso) => {
     const tryFormat = (value) => {
-        if (!value) return null;
-        const d = new Date(value);
-        if (Number.isNaN(d.getTime()) || d.getFullYear() <= 1) return null;
+        const d = parseRankedinDateValue(value);
+        if (!d) return null;
         const day = String(d.getDate()).padStart(2, '0');
         const month = String(d.getMonth() + 1).padStart(2, '0');
         const year = d.getFullYear();
@@ -27,10 +62,8 @@ const getRankedinMatchSortTime = (match) => {
     const info = match.Info || {};
     const formatted = formatRankedinMatchDate(info.Date);
     if (formatted) return formatted.time;
-    if (info.EventStartDate) {
-        const d = new Date(info.EventStartDate);
-        if (!Number.isNaN(d.getTime())) return d.getTime();
-    }
+    const eventStart = parseRankedinDateValue(info.EventStartDate);
+    if (eventStart) return eventStart.getTime();
     return 0;
 };
 
@@ -714,10 +747,10 @@ export const useRankedin = () => {
                         // 5 minutes = 300000 ms
                         if (ageMs < 300000) {
                             const cachedPayload = takeHistory ? cacheRow.past_matches : cacheRow.upcoming_matches;
-                            const isEmptyHistoryCache = takeHistory
-                                && Array.isArray(cachedPayload)
-                                && cachedPayload.length === 0;
-                            if (cachedPayload !== null && cachedPayload !== undefined && !isEmptyHistoryCache) {
+                            // Never trust an empty payload — a prior date-parse bug (and genuine
+                            // transient API blanks) poisoned upcoming_matches to [] and hid live draws.
+                            const isEmptyCache = Array.isArray(cachedPayload) && cachedPayload.length === 0;
+                            if (cachedPayload !== null && cachedPayload !== undefined && !isEmptyCache) {
                                 return finalizeMatchesPayload(cachedPayload, takeHistory);
                             }
                         }
