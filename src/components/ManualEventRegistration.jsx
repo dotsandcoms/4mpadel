@@ -1681,7 +1681,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         return { players, extras };
     }, [
         selectedDivisions, selected, myRegs, divisionRegs, buyLicenseSelf, licenseSelfChoice,
-        partnerLicenseCache, partnerLicensePurchases, profile?.name, displayProfile?.name,
+        partnerLicenseCache, partnerLicensePurchases, profile?.name, displayProfile?.name, event,
     ]);
 
     const reviewPaySummary = useMemo(() => {
@@ -1747,7 +1747,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     }, [
         selectedDivisions, selected, myRegs, divisionRegs, buyLicenseSelf, licenseSelfChoice,
         hasLicense, anySelectedRequiresLicense, partnerLicenseCache, partnerLicensePurchases,
-        profile?.name, displayProfile?.name, profileImageUrl,
+        profile?.name, displayProfile?.name, profileImageUrl, event,
     ]);
 
     const lineItems = useMemo(() => {
