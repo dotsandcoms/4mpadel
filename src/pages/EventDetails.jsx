@@ -878,7 +878,7 @@ const EventDetails = () => {
         });
     }, [event]);
 
-    // Linked organisation logo (not event.organizer_logo_url — that field often holds a SAPA mark)
+    // Linked organisation logo (not event.organiser_logo_url — that field often holds a SAPA mark)
     const [linkedOrgLogoUrl, setLinkedOrgLogoUrl] = useState('');
     const [linkedOrgSlug, setLinkedOrgSlug] = useState('');
     const [linkedOrgName, setLinkedOrgName] = useState('');
@@ -4032,7 +4032,7 @@ const EventDetails = () => {
                                                                 icon: MapPin,
                                                             },
                                                             ...(event.courts ? [{ label: 'Courts', value: event.courts, icon: Layout }] : []),
-                                                            { label: 'Organiser', value: event.organizer_name || 'VAPC', icon: User },
+                                                            { label: 'Organiser', value: event.organiser_name || 'VAPC', icon: User },
                                                             { label: 'Tournament Tier', value: event.sapa_status || 'Gold 1000', icon: Award, valueColor: theme.accentText },
                                                             ...(event.prize_money_total != null && Number(event.prize_money_total) > 0 ? [{
                                                                 label: 'Prize Pool',
@@ -4346,28 +4346,28 @@ const EventDetails = () => {
                                             )}
 
                                             {/* Contact */}
-                                            {(event.contact_details || event.organizer_phone || event.organizer_email) && (
+                                            {(event.contact_details || event.organiser_phone || event.organiser_email) && (
                                                 <InfoSection title="Contact" icon={Phone} accent={theme.fill}>
                                                     <div className="space-y-2 text-sm">
                                                         {event.contact_details && <p className="text-slate-700 whitespace-pre-wrap">{event.contact_details}</p>}
-                                                        {event.organizer_phone && (
+                                                        {event.organiser_phone && (
                                                             <a
-                                                                href={`tel:${event.organizer_phone}`}
+                                                                href={`tel:${event.organiser_phone}`}
                                                                 className="flex items-center gap-2 font-semibold !text-slate-800 hover:!text-black"
                                                                 style={{ color: '#1a1a1a' }}
                                                             >
                                                                 <Phone className="w-4 h-4 shrink-0 text-slate-500" />
-                                                                {event.organizer_phone}
+                                                                {event.organiser_phone}
                                                             </a>
                                                         )}
-                                                        {event.organizer_email && (
+                                                        {event.organiser_email && (
                                                             <a
-                                                                href={`mailto:${event.organizer_email}`}
+                                                                href={`mailto:${event.organiser_email}`}
                                                                 className="flex items-center gap-2 font-semibold !text-slate-800 hover:!text-black"
                                                                 style={{ color: '#1a1a1a' }}
                                                             >
                                                                 <Mail className="w-4 h-4 shrink-0 text-slate-500" />
-                                                                {event.organizer_email}
+                                                                {event.organiser_email}
                                                             </a>
                                                         )}
                                                     </div>

@@ -225,7 +225,7 @@ const renderBrollTitle = (title, tag) => {
 
 // VideoModal is now shared from ./VideoModal.jsx
 
-const TournamentCard = ({ index, title, label, date = null, image, linkPath, drawPath = null, isLive = false, youtubeUrl = null, livePlayers = null, nextMatch = null, onWatchLive = null, buttonLabel = "VIEW DETAILS", status = 'Gold', registeredPlayers = null, rankedinId = null, venue = null, organizerName = null, city = null }) => {
+const TournamentCard = ({ index, title, label, date = null, image, linkPath, drawPath = null, isLive = false, youtubeUrl = null, livePlayers = null, nextMatch = null, onWatchLive = null, buttonLabel = "VIEW DETAILS", status = 'Gold', registeredPlayers = null, rankedinId = null, venue = null, organiserName = null, city = null }) => {
     const navigate = useNavigate();
     const { getTournamentClasses } = useRankedin();
     const [hasDraw, setHasDraw] = useState(false);
@@ -803,7 +803,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                             registeredPlayers={t.registered_players || t.registeredPlayers}
                             rankedinId={t.rankedin_id || t.eventId}
                             venue={t.venue || t.clubName}
-                            organizerName={t.organizer_name || t.organizerName}
+                            organiserName={t.organiser_name || t.organiserName}
                             city={t.city}
                         />
                     </div>
@@ -881,7 +881,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                     {renderBrollTitle(data.cardTitle || data.title, data.tournament_tag || data.cardLabel)}
                 </h3>
 
-                {(data.date || data.city || data.venue || data.organizerName || data.registeredPlayers > 0) && (
+                {(data.date || data.city || data.venue || data.organiserName || data.registeredPlayers > 0) && (
                     <div className="grid grid-cols-2 gap-y-4 gap-x-6 pt-8 border-t border-white/10 pointer-events-auto">
                         {data.date && (
                             <div className="flex items-center gap-2.5 overflow-hidden">
@@ -901,10 +901,10 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                                 <span className="text-[10px] md:text-xs font-medium text-white/60 truncate uppercase tracking-widest">{data.venue}</span>
                             </div>
                         )}
-                        {data.organizerName && (
+                        {data.organiserName && (
                             <div className="flex items-center gap-2.5 overflow-hidden">
                                 <Shield className={`w-3.5 h-3.5 ${statusColors.text} shrink-0`} />
-                                <span className="text-[10px] md:text-xs font-medium text-white/60 truncate uppercase tracking-widest">{data.organizerName}</span>
+                                <span className="text-[10px] md:text-xs font-medium text-white/60 truncate uppercase tracking-widest">{data.organiserName}</span>
                             </div>
                         )}
                         {data.registeredPlayers > 0 && (
@@ -1517,7 +1517,7 @@ const FeaturedSections = ({ session = null }) => {
                         sapaStatus: t.sapa_status,
                         registeredPlayers: t.registered_players,
                         venue: t.venue || t.clubName,
-                        organizerName: t.organizer_name,
+                        organiserName: t.organiser_name,
                         winnerName: findMensOpenWinner(resultsCache?.find(c => c.event_id === t.id)?.winners),
                     }));
                     setLiveTournaments(mappedResults);
@@ -1602,7 +1602,7 @@ const FeaturedSections = ({ session = null }) => {
                                     rankedinId: singleEvent.rankedin_id || extractRankedinId(singleEvent.rankedin_url),
                                     city: singleEvent.city,
                                     venue: singleEvent.venue || singleEvent.clubName,
-                                    organizerName: singleEvent.organizer_name
+                                    organiserName: singleEvent.organiser_name
                                 };
                             }
                             return newData;
@@ -1653,7 +1653,7 @@ const FeaturedSections = ({ session = null }) => {
                                     rankedinId: singleEvent.rankedin_id || extractRankedinId(singleEvent.rankedin_url),
                                     city: singleEvent.city,
                                     venue: singleEvent.venue || singleEvent.clubName,
-                                    organizerName: singleEvent.organizer_name
+                                    organiserName: singleEvent.organiser_name
                                 };
                             }
                             return newData;

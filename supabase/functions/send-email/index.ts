@@ -196,15 +196,15 @@ function generateEventCardHtml(
         `}
 
         <!-- Organizer -->
-        ${eventInfo.organizer_name ? `
+        ${eventInfo.organiser_name ? `
         <tr>
           <td width="30" valign="top" style="padding: 12px 0 0 0; font-size: 18px; border-top: 1px solid rgba(255,255,255,0.05);">📞</td>
           <td valign="top" style="padding: 12px 0 0 0; color: #CBD5E1; border-top: 1px solid rgba(255,255,255,0.05);">
             <strong style="color: #FFFFFF;">Need help? Contact host:</strong><br/>
             <span style="font-size: 12.5px; color: #94A3B8;">
-              ${eventInfo.organizer_name}
-              ${eventInfo.organizer_email ? `<br/>✉️ <a href="mailto:${eventInfo.organizer_email}" style="color: #9AE900; text-decoration: none;">${eventInfo.organizer_email}</a>` : ''}
-              ${eventInfo.organizer_phone ? `<br/>📞 ${eventInfo.organizer_phone}` : ''}
+              ${eventInfo.organiser_name}
+              ${eventInfo.organiser_email ? `<br/>✉️ <a href="mailto:${eventInfo.organiser_email}" style="color: #9AE900; text-decoration: none;">${eventInfo.organiser_email}</a>` : ''}
+              ${eventInfo.organiser_phone ? `<br/>📞 ${eventInfo.organiser_phone}` : ''}
             </span>
           </td>
         </tr>
@@ -242,9 +242,9 @@ async function generateEmailBody(
         vars.venue = vars.venue || eventInfo.venue;
         vars.city = vars.city || eventInfo.city;
         vars.address = vars.address || eventInfo.address;
-        vars.organizerName = vars.organizerName || eventInfo.organizer_name;
-        vars.organizerEmail = vars.organizerEmail || eventInfo.organizer_email;
-        vars.organizerPhone = vars.organizerPhone || eventInfo.organizer_phone;
+        vars.organiserName = vars.organiserName || eventInfo.organiser_name;
+        vars.organiserEmail = vars.organiserEmail || eventInfo.organiser_email;
+        vars.organiserPhone = vars.organiserPhone || eventInfo.organiser_phone;
         vars.rulesRegs = vars.rulesRegs || eventInfo.rules_regs;
         vars.eventUrl = vars.eventUrl || `https://4mpadel.co.za/calendar/${eventInfo.slug || eventInfo.id}`;
       }

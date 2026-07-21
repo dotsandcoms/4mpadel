@@ -1933,8 +1933,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             const result = await sendEmail(PAYOUT_ADMIN_EMAIL, 'organiser_payout_request', {
                 eventName: event?.event_name || 'Tournament',
                 eventId: event?.id,
-                organiserName: event?.organizer_name || 'Organiser',
-                organiserEmail: event?.organizer_email || '',
+                organiserName: event?.organiser_name || 'Organiser',
+                organiserEmail: event?.organiser_email || '',
                 collected: fmtR(overviewStats.collected4M),
                 refunded: fmtR(overviewStats.entryFeesRefunded),
                 balance: fmtR(overviewStats.entryFeeBalance),

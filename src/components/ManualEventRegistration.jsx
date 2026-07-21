@@ -2717,7 +2717,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const EventSummaryCard = ({ compact = false, variant = 'default' }) => {
         const accentClass = theme?.accentBg || 'bg-[#CCFF00]/10 border-[#CCFF00]/20';
         const venueLabel = [event.venue, event.city].filter(Boolean).join(', ') || 'Venue TBC';
-        const organiserLabel = event.organizer_name || '4M Padel';
+        const organiserLabel = event.organiser_name || '4M Padel';
         const courtsLabel = event.courts ? `${event.courts} Indoor Courts` : null;
 
         if (variant === 'profile') {
@@ -2838,7 +2838,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         {event.courts && (
                             <p className="flex items-center gap-2"><Layout size={14} className="text-gray-400 shrink-0" /> {event.courts} courts</p>
                         )}
-                        <p className="flex items-center gap-2"><User size={14} className="text-gray-400 shrink-0" /> Organiser: {event.organizer_name || 'SAPA'}</p>
+                        <p className="flex items-center gap-2"><User size={14} className="text-gray-400 shrink-0" /> Organiser: {event.organiser_name || 'SAPA'}</p>
                     </div>
                 </CardBody>
             </Card>

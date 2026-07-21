@@ -640,8 +640,8 @@ const blankForm = {
     event_name: '',
     slug: '',
     organisation_id: null,
-    organizer_name: 'SAPA',
-    organizer_logo_url: '',
+    organiser_name: 'SAPA',
+    organiser_logo_url: '',
     organiser_badge_text: '',
     city: '',
     venue: '',
@@ -672,9 +672,9 @@ const blankForm = {
     cut_off_times: '',
     draw_released: '',
     contact_details: '',
-    organizer_phone: '',
-    organizer_email: '',
-    organizer_website: '',
+    organiser_phone: '',
+    organiser_email: '',
+    organiser_website: '',
     // media
     custom_image_url: '', // cover / hero
     poster_image_url: '', // event poster (sponsors strip / modal)
@@ -758,14 +758,14 @@ const ageFromDivisionName = (name) => {
     return '';
 };
 
-const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organization = null }) => {
+const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisation = null }) => {
     // Tracks the event currently being edited inside this session (survives first create
     // when the parent still has editingEvent=null, so Save can keep the modal open).
     const [workingEvent, setWorkingEvent] = useState(null);
     const activeEvent = workingEvent;
     // Org editing an already-sanctioned event → changes become a draft
     // amendment that a 4M admin must approve (event stays live meanwhile).
-    const isAmendment = !!(organization && activeEvent && activeEvent.sanction_status === 'approved');
+    const isAmendment = !!(organisation && activeEvent && activeEvent.sanction_status === 'approved');
     const isEditing = !!activeEvent?.id;
     const [step, setStep] = useState(1);
     const [form, setForm] = useState(blankForm);
@@ -846,8 +846,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
 
     // Admin calendar: type-ahead search for organisations to link the event
     useEffect(() => {
-        if (!isOpen || organization) return undefined;
-        const q = (form.organizer_name || '').trim();
+        if (!isOpen || organisation) return undefined;
+        const q = (form.organiser_name || '').trim();
         if (orgSelectedRef.current) {
             orgSelectedRef.current = false;
             return undefined;
@@ -879,7 +879,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             }
         }, 300);
         return () => clearTimeout(timer);
-    }, [form.organizer_name, isOpen, organization]);
+    }, [form.organiser_name, isOpen, organisation]);
 
     useEffect(() => {
         const onDown = (e) => {
@@ -898,11 +898,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         setForm((prev) => ({
             ...prev,
             organisation_id: org.id,
-            organizer_name: org.name || prev.organizer_name,
-            organizer_logo_url: org.logo_url || '',
-            organizer_email: org.contact_email || prev.organizer_email,
-            organizer_phone: org.contact_phone || prev.organizer_phone,
-            organizer_website: org.website_url || prev.organizer_website,
+            organiser_name: org.name || prev.organiser_name,
+            organiser_logo_url: org.logo_url || '',
+            organiser_email: org.contact_email || prev.organiser_email,
+            organiser_phone: org.contact_phone || prev.organiser_phone,
+            organiser_website: org.website_url || prev.organiser_website,
         }));
     };
 
@@ -910,7 +910,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         orgSelectedRef.current = false;
         setForm((prev) => ({
             ...prev,
-            organizer_name: value,
+            organiser_name: value,
             organisation_id: null,
         }));
     };
@@ -1003,7 +1003,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             pointsTouchedRef.current = true;
             // If the org has a pending amendment draft, resume editing THAT
             // draft rather than the live event data.
-            const draft = (organization && editingEvent.sanction_status === 'approved'
+            const draft = (organisation && editingEvent.sanction_status === 'approved'
                 && ['pending', 'rejected'].includes(editingEvent.pending_changes_status)
                 && editingEvent.pending_changes?.payload)
                 ? editingEvent.pending_changes : null;
@@ -1015,14 +1015,14 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             // New events start with the standard SAPA content pre-filled (editable per event).
             const base = { ...blankForm, ...SAPA_DEFAULTS };
             // Org portal mode: prefill organiser identity from the organisation
-            setForm(organization ? {
+            setForm(organisation ? {
                 ...base,
-                organisation_id: organization.id,
-                organizer_name: organization.name || base.organizer_name,
-                organizer_logo_url: organization.logo_url || '',
-                organizer_email: organization.contact_email || '',
-                organizer_phone: organization.contact_phone || '',
-                organizer_website: organization.website_url || '',
+                organisation_id: organisation.id,
+                organiser_name: organisation.name || base.organiser_name,
+                organiser_logo_url: organisation.logo_url || '',
+                organiser_email: organisation.contact_email || '',
+                organiser_phone: organisation.contact_phone || '',
+                organiser_website: organisation.website_url || '',
             } : base);
             setDivisions([emptyDivision(base.license_required_default)]);
             setShowPrizeBreakdown(false);
@@ -1110,7 +1110,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             rankedin_id: ev.rankedin_id ? String(ev.rankedin_id) : '',
             rankedin_url: ev.rankedin_url || '',
         });
-        // Prefer the linked organisation profile logo over a stale event.organizer_logo_url
+        // Prefer the linked organisation profile logo over a stale event.organiser_logo_url
         // (that field often still holds a SAPA mark from older edits).
         if (ev.organisation_id) {
             const { data: linkedOrg } = await supabase
@@ -1119,10 +1119,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                 .eq('id', ev.organisation_id)
                 .maybeSingle();
             if (linkedOrg?.logo_url) {
-                setForm((prev) => ({ ...prev, organizer_logo_url: linkedOrg.logo_url }));
+                setForm((prev) => ({ ...prev, organiser_logo_url: linkedOrg.logo_url }));
             }
-        } else if (organization?.logo_url) {
-            setForm((prev) => ({ ...prev, organizer_logo_url: organization.logo_url }));
+        } else if (organisation?.logo_url) {
+            setForm((prev) => ({ ...prev, organiser_logo_url: organisation.logo_url }));
         }
         if (draftDivisions && draftDivisions.length > 0) {
             setDivisions(draftDivisions.map((d, i) => mapDivisionRow(d, d.id || `draft_${i}`)));
@@ -1397,7 +1397,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         try {
             setUploadingOrgLogo(true);
             const url = await uploadToGallery(file, 'org-logos');
-            setField('organizer_logo_url', url);
+            setField('organiser_logo_url', url);
             toast.success('Organisation logo uploaded');
         } catch (err) {
             toast.error('Failed to upload organisation logo');
@@ -1406,7 +1406,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         }
     };
 
-    const removeOrgLogo = () => setField('organizer_logo_url', '');
+    const removeOrgLogo = () => setField('organiser_logo_url', '');
 
     const handleSponsorUpload = async (e, { asMain = false } = {}) => {
         const files = Array.from(e.target.files || []);
@@ -1487,7 +1487,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         if (!form.registration_closes_at) { toast.error('Registration closes date is required'); return false; }
         if (!form.partner_requirement) { toast.error('Partner requirement is required'); return false; }
         if (typeof form.allow_payments !== 'boolean') { toast.error('Allow payments must be set'); return false; }
-        if (!form.organizer_phone?.trim() && !form.organizer_email?.trim()) {
+        if (!form.organiser_phone?.trim() && !form.organiser_email?.trim()) {
             toast.error('Contact phone or email is required');
             return false;
         }
@@ -1521,7 +1521,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         if (!form.registration_opens_at) errors.push('Registration opens date is required');
         if (!form.registration_closes_at) errors.push('Registration closes date is required');
         if (!form.partner_requirement) errors.push('Partner requirement is required');
-        if (!form.organizer_phone?.trim() && !form.organizer_email?.trim()) {
+        if (!form.organiser_phone?.trim() && !form.organiser_email?.trim()) {
             errors.push('Contact phone or email is required');
         }
         const named = divisions.filter((d) => d.name.trim());
@@ -1542,7 +1542,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             warnings.push('No event subtitle / badge text set');
         }
         if (!(form.sponsor_logos || []).length) warnings.push('No sponsor logos added');
-        if (!organization && !form.is_visible) warnings.push('Event is not visible on the website');
+        if (!organisation && !form.is_visible) warnings.push('Event is not visible on the website');
         if (form.registration_opens_at && form.registration_closes_at && form.registration_opens_at >= form.registration_closes_at) {
             warnings.push('Registration opens at or after the close date');
         }
@@ -1606,10 +1606,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                     : buildRankedinTournamentUrl(linkedRankedinId, form.slug || form.event_name))
                 : null,
         };
-        if (organization) {
+        if (organisation) {
             // Org-created events: tie to the org and stay hidden until a 4M
             // admin sanctions them (DB trigger also forces sanction_status).
-            payload.organisation_id = organization.id;
+            payload.organisation_id = organisation.id;
             if (!isEditing) {
                 payload.is_visible = false;
                 payload.featured_event = false;
@@ -1871,12 +1871,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                 id: eventId,
                 event_name: payload.event_name,
                 slug: payload.slug,
-                sanction_status: prev?.sanction_status || activeEvent?.sanction_status || (organization ? 'pending' : undefined),
+                sanction_status: prev?.sanction_status || activeEvent?.sanction_status || (organisation ? 'pending' : undefined),
             }));
             await reloadDivisionsForEvent(eventId);
 
             toast.success(
-                organization
+                organisation
                     ? (wasNew
                         ? (stayOpen ? 'Event saved — pending 4M Padel sanctioning. You can keep editing.' : 'Event submitted for 4M Padel sanctioning')
                         : (stayOpen ? 'Event saved — you can keep editing.' : 'Event updated — pending 4M Padel sanctioning'))
@@ -1998,24 +1998,24 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                             <div className="relative md:col-span-2" ref={orgSearchRef}>
                                                 <label className={labelClass}>Organiser</label>
                                                 <input
-                                                    name="organizer_name"
-                                                    value={form.organizer_name}
+                                                    name="organiser_name"
+                                                    value={form.organiser_name}
                                                     onChange={(e) => {
-                                                        if (organization) {
-                                                            setForm((prev) => ({ ...prev, organizer_name: e.target.value }));
+                                                        if (organisation) {
+                                                            setForm((prev) => ({ ...prev, organiser_name: e.target.value }));
                                                         } else {
                                                             handleOrganiserNameChange(e.target.value);
                                                         }
                                                     }}
                                                     onFocus={() => {
-                                                        if (!organization && orgSuggestions.length > 0) setOrgSearchOpen(true);
+                                                        if (!organisation && orgSuggestions.length > 0) setOrgSearchOpen(true);
                                                     }}
-                                                    placeholder={organization ? undefined : 'Select an organisation or type a custom name…'}
+                                                    placeholder={organisation ? undefined : 'Select an organisation or type a custom name…'}
                                                     autoComplete="off"
                                                     className={inputClass}
-                                                    readOnly={!!organization}
+                                                    readOnly={!!organisation}
                                                 />
-                                                {!organization && form.organisation_id && (
+                                                {!organisation && form.organisation_id && (
                                                     <div className="mt-1.5 flex items-center justify-between gap-2">
                                                         <p className="text-[11px] text-padel-green font-bold">
                                                             Linked to organisation page
@@ -2029,12 +2029,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                         </button>
                                                     </div>
                                                 )}
-                                                {!organization && !form.organisation_id && (
+                                                {!organisation && !form.organisation_id && (
                                                     <p className="text-[11px] text-gray-500 mt-1">
                                                         Pick from the list to link their page, or type a custom organiser name.
                                                     </p>
                                                 )}
-                                                {!organization && orgSearchOpen && (orgSuggestions.length > 0 || searchingOrgs) && (
+                                                {!organisation && orgSearchOpen && (orgSuggestions.length > 0 || searchingOrgs) && (
                                                     <div className="absolute z-30 left-0 right-0 mt-1 bg-[#0a0a0a] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
                                                         {searchingOrgs && orgSuggestions.length === 0 ? (
                                                             <p className="px-4 py-3 text-xs text-gray-500">Searching…</p>
@@ -2067,14 +2067,14 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                             </div>
                                             <div className="md:col-span-2">
                                                 <label className={labelClass}>Organisation Logo</label>
-                                                {(organization || form.organisation_id) ? (
+                                                {(organisation || form.organisation_id) ? (
                                                     <>
                                                         <p className="text-[11px] text-gray-500 mb-2">
                                                             Linked org logo — shown first in the sponsor strip. SAPA branding appears next to the badge text on the event page.
                                                         </p>
-                                                        {(organization?.logo_url || form.organizer_logo_url) ? (
+                                                        {(organisation?.logo_url || form.organiser_logo_url) ? (
                                                             <img
-                                                                src={organization?.logo_url || form.organizer_logo_url}
+                                                                src={organisation?.logo_url || form.organiser_logo_url}
                                                                 alt="Organisation logo"
                                                                 className="w-14 h-14 rounded-full object-cover border border-white/10 bg-white"
                                                             />
@@ -2088,9 +2088,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                             Shown first in the sponsor strip. SAPA branding appears next to the badge text on the event page.
                                                         </p>
                                                         <div className="flex items-center gap-4">
-                                                            {form.organizer_logo_url && (
+                                                            {form.organiser_logo_url && (
                                                                 <div className="relative group">
-                                                                    <img src={form.organizer_logo_url} alt="Organisation logo" className="w-14 h-14 rounded-full object-cover border border-white/10" />
+                                                                    <img src={form.organiser_logo_url} alt="Organisation logo" className="w-14 h-14 rounded-full object-cover border border-white/10" />
                                                                     <button
                                                                         type="button"
                                                                         onClick={removeOrgLogo}
@@ -2500,7 +2500,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                     <span className="text-sm font-medium text-gray-200">Allow payments</span>
                                                     <input type="checkbox" name="allow_payments" checked={!!form.allow_payments} onChange={handleInput} className="accent-padel-green w-5 h-5" />
                                                 </label>
-                                                {!organization && (
+                                                {!organisation && (
                                                     <label className="flex items-center justify-between bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
                                                         <span className="text-sm font-medium text-gray-200">Payment / finance manager</span>
                                                         <input type="checkbox" name="finance_managed" checked={!!form.finance_managed} onChange={handleInput} className="accent-padel-green w-5 h-5" />
@@ -3158,11 +3158,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                             </div>
                                             <div>
                                                 <label className={labelClass}>WhatsApp / phone</label>
-                                                <input name="organizer_phone" value={form.organizer_phone} onChange={handleInput} className={inputClass} />
+                                                <input name="organiser_phone" value={form.organiser_phone} onChange={handleInput} className={inputClass} />
                                             </div>
                                             <div className="md:col-span-2">
                                                 <label className={labelClass}>Contact email</label>
-                                                <input name="organizer_email" value={form.organizer_email} onChange={handleInput} className={inputClass} />
+                                                <input name="organiser_email" value={form.organiser_email} onChange={handleInput} className={inputClass} />
                                             </div>
                                             <div className="md:col-span-2">
                                                 <label className={labelClass}>Event Co-Admins</label>
@@ -3283,7 +3283,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                     <PanelHeader id="websiteDisplay" title="Website Display" />
                                     {openPanels.websiteDisplay && (
                                         <div className="space-y-3 p-4 rounded-xl border border-white/10 bg-black/20">
-                                            {organization ? (
+                                            {organisation ? (
                                                 <div className="bg-padel-green/5 border border-padel-green/20 rounded-xl px-4 py-3 text-xs text-padel-green font-semibold">
                                                     {isAmendment
                                                         ? 'This event is already sanctioned. Your changes will be submitted as an amendment for 4M Padel approval — the event stays live with its current details until approved.'
@@ -3429,13 +3429,13 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                         <p className="text-gray-300"><span className="text-gray-500">Maximum teams / entries:</span> {form.max_teams_capacity || 'Unlimited'}</p>
                                         <p className="text-gray-300"><span className="text-gray-500">Plate / back draw:</span> {form.back_draw_options || '—'}</p>
                                         <p className="text-gray-300"><span className="text-gray-500">Deciding point:</span> {scoringPointLabel(form.scoring_point)}</p>
-                                        {!organization && (
+                                        {!organisation && (
                                             <p className="text-gray-300"><span className="text-gray-500">Visible on website:</span> {form.is_visible ? 'Yes' : 'No'}</p>
                                         )}
                                     </div>
                                 </div>
 
-                                {organization && (
+                                {organisation && (
                                     <div className="bg-padel-green/5 border border-padel-green/20 rounded-xl px-4 py-3 text-xs text-padel-green font-semibold">
                                         {isAmendment
                                             ? 'Save and Publish both submit an amendment for 4M Padel approval. You stay on this page so you can keep editing.'

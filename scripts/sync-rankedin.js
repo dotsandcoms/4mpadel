@@ -181,7 +181,7 @@ async function syncRankedin() {
                     richDetails.address = sidebar.Address || sidebar.address || '';
                     richDetails.registered_players = sidebar.TotalUniquePersonsInTournament || sidebar.PlayersCount || 0;
                     richDetails.venue = sidebar.LocationName || sidebar.locationName || '';
-                    richDetails.organizer_name = sidebar.ClubName || sidebar.clubName || 'SAPA';
+                    richDetails.organiser_name = sidebar.ClubName || sidebar.clubName || 'SAPA';
 
                     // Extract images
                     const logosModel = infoData.EventLogosModel || infoData.ClubleagueLogosModel || infoData.Logos || infoData;
@@ -303,8 +303,8 @@ async function syncRankedin() {
                     updates.city = (re.city || '').trim();
                     needsUpdate = true;
                 }
-                if (richDetails.organizer_name && existingEvent.organizer_name !== richDetails.organizer_name) {
-                    updates.organizer_name = richDetails.organizer_name;
+                if (richDetails.organiser_name && existingEvent.organiser_name !== richDetails.organiser_name) {
+                    updates.organiser_name = richDetails.organiser_name;
                     needsUpdate = true;
                 }
                 if (richDetails.sponsor_logos && richDetails.sponsor_logos.length > 0) {
@@ -355,7 +355,7 @@ async function syncRankedin() {
                     start_date: sDate ? sDate.substring(0, 10) : null,
                     end_date: eDate ? eDate.substring(0, 10) : null,
                     sapa_status: inferredStatus,
-                    organizer_name: richDetails.organizer_name || 'SAPA',
+                    organiser_name: richDetails.organiser_name || 'SAPA',
                     rankedin_id: rankedinIdStr,
                     rankedin_url: fullUrl,
                     city: (re.city || '').trim(),

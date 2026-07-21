@@ -669,7 +669,7 @@ const Calendar = () => {
                     rankedin_url: localEvent.rankedin_url,
                     city: localEvent.city,
                     registered_players: localEvent.registered_players,
-                    organizer_name: localEvent.organizer_name,
+                    organiser_name: localEvent.organiser_name,
                     event_dates: localEvent.event_dates
                 };
             }
@@ -682,7 +682,7 @@ const Calendar = () => {
             const venueName = event.venue || event.clubName || '';
             const status = event.sapa_status || 'Gold'; // Default for Rankedin if not specified
             const city = event.city || 'Rankedin';
-            const organizer = event.organizer_name || '';
+            const organiser = event.organiser_name || '';
             const eventType = event.is_league ? 'League' : 'Tournament';
 
             const matchesSearch = !searchTerm ||
@@ -690,7 +690,7 @@ const Calendar = () => {
                 venueName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 city.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 status.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                organizer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                organiser.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 eventType.toLowerCase().includes(searchTerm.toLowerCase());
 
             const matchesStatus = (activeTab === 'all' || activeTab === 'All Events') ? true : status === activeTab;

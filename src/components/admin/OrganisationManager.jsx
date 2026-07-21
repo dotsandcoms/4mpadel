@@ -836,13 +836,13 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
     // Privileged fields (visibility, featuring, sanctioning, org linkage) are
     // excluded so a crafted draft cannot escalate via the admin's session.
     const AMENDMENT_ALLOWED_KEYS = [
-        'event_name', 'slug', 'organizer_name', 'organizer_logo_url', 'organiser_badge_text',
+        'event_name', 'slug', 'organiser_name', 'organiser_logo_url', 'organiser_badge_text',
         'city', 'venue', 'venues', 'address', 'start_date', 'end_date', 'start_time', 'end_time',
         'sapa_status', 'tournament_tag', 'description', 'points', 'points_breakdown',
         'prize_money_total', 'prize_money_breakdown', 'balls', 'courts', 'tournament_director',
         'referees', 'sanctioning_details', 'rules_regs', 'withdrawal_substitution',
-        'cut_off_times', 'draw_released', 'contact_details', 'organizer_phone',
-        'organizer_email', 'organizer_website', 'custom_image_url', 'poster_image_url', 'sponsor_logos',
+        'cut_off_times', 'draw_released', 'contact_details', 'organiser_phone',
+        'organiser_email', 'organiser_website', 'custom_image_url', 'poster_image_url', 'sponsor_logos',
         'registration_closes_at', 'registration_opens_at', 'event_dates', 'golden_point', 'scoring_point', 'is_league',
         'max_teams_capacity', 'partner_requirement', 'back_draw_options', 'event_co_admins',
         'allow_payments', 'allow_temporary_license', 'license_required_default', 'collect_tshirt_size', 'entry_fee_notes',
@@ -913,7 +913,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
         ['sapa_status', 'Tier'], ['points', 'Points'], ['prize_money_total', 'Prize Money'],
         ['registration_closes_at', 'Registration Closes'], ['description', 'Description'],
         ['balls', 'Balls'], ['courts', 'Courts'], ['tournament_director', 'Tournament Director'],
-        ['organizer_phone', 'Organiser Phone'], ['organizer_email', 'Organiser Email'],
+        ['organiser_phone', 'Organiser Phone'], ['organiser_email', 'Organiser Email'],
     ];
 
     const getAmendmentChanges = (ev) => {
@@ -1085,7 +1085,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
             ev.venue?.toLowerCase().includes(searchLower) ||
             ev.city?.toLowerCase().includes(searchLower) ||
             ev.organisations?.name?.toLowerCase().includes(searchLower) ||
-            ev.organizer_name?.toLowerCase().includes(searchLower) ||
+            ev.organiser_name?.toLowerCase().includes(searchLower) ||
             ev.sapa_status?.toLowerCase().includes(searchLower)
         );
     }, [approvedEvents, approvedEventsSearch]);
@@ -1534,8 +1534,8 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                                     <span className="text-xs text-gray-500 block mt-0.5">{ev.city}</span>
                                                 </td>
                                                 <td className="py-4 px-4">
-                                                    <span className="font-medium text-white block">{ev.organisations?.name || ev.organizer_name || 'Unknown Club'}</span>
-                                                    <span className="text-xs text-gray-500 block mt-0.5">{ev.organisations?.contact_email || ev.organizer_email}</span>
+                                                    <span className="font-medium text-white block">{ev.organisations?.name || ev.organiser_name || 'Unknown Club'}</span>
+                                                    <span className="text-xs text-gray-500 block mt-0.5">{ev.organisations?.contact_email || ev.organiser_email}</span>
                                                 </td>
                                                 <td className="py-4 px-4 align-middle">
                                                     <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase border ${getTierBadgeClass(ev.sapa_status)}`}>
@@ -1562,7 +1562,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                                         </button>
                                                         <button
                                                             onClick={() => {
-                                                                openRejectionModal('event', ev.id, ev.organisations?.contact_email || ev.organizer_email || '', ev.event_name);
+                                                                openRejectionModal('event', ev.id, ev.organisations?.contact_email || ev.organiser_email || '', ev.event_name);
                                                                 setSelectedEventDetails(null);
                                                             }}
                                                             className="bg-red-500/10 hover:bg-red-500 hover:text-black border border-red-500/20 text-red-400 font-black uppercase tracking-wider text-[10px] px-3.5 py-2 rounded-lg transition-all cursor-pointer flex items-center gap-1"
@@ -1987,10 +1987,10 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                             </button>
                                         ) : (
                                             <span className="text-gray-300 font-bold">
-                                                {selectedEventDetails.organizer_name || 'Unknown Club'}
+                                                {selectedEventDetails.organiser_name || 'Unknown Club'}
                                             </span>
                                         )}{' '}
-                                        ({selectedEventDetails.organisations?.contact_email || selectedEventDetails.organizer_email})
+                                        ({selectedEventDetails.organisations?.contact_email || selectedEventDetails.organiser_email})
                                     </p>
                                 </div>
                             </div>
@@ -2308,7 +2308,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                 </button>
                                 <button
                                     onClick={() => {
-                                        openRejectionModal('event', selectedEventDetails.id, selectedEventDetails.organisations?.contact_email || selectedEventDetails.organizer_email || '', selectedEventDetails.event_name);
+                                        openRejectionModal('event', selectedEventDetails.id, selectedEventDetails.organisations?.contact_email || selectedEventDetails.organiser_email || '', selectedEventDetails.event_name);
                                         setSelectedEventDetails(null);
                                     }}
                                     className="px-6 py-3.5 bg-red-500/10 hover:bg-red-500 hover:text-black border border-red-500/20 text-red-400 font-bold uppercase tracking-wider text-xs rounded-xl transition-all cursor-pointer"
@@ -2632,7 +2632,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                 onClose={() => { setBuilderOpen(false); setBuilderEvent(null); }}
                 onSaved={handleBuilderSaved}
                 editingEvent={builderEvent}
-                organization={isHostView ? currentOrg : null}
+                organisation={isHostView ? currentOrg : null}
             />
 
             {/* ========================================================

@@ -121,10 +121,10 @@ const CalendarManager = () => {
         start_time: '',
         end_time: '',
         organisation_id: null,
-        organizer_name: 'SAPA',
-        organizer_phone: '',
-        organizer_email: '',
-        organizer_website: '',
+        organiser_name: 'SAPA',
+        organiser_phone: '',
+        organiser_email: '',
+        organiser_website: '',
         image_url: '',
         custom_image_url: '',
         featured_event: false,
@@ -207,10 +207,10 @@ const CalendarManager = () => {
         setFormData((prev) => ({
             ...prev,
             organisation_id: org.id,
-            organizer_name: org.name || prev.organizer_name,
-            organizer_email: org.contact_email || prev.organizer_email,
-            organizer_phone: org.contact_phone || prev.organizer_phone,
-            organizer_website: org.website_url || prev.organizer_website,
+            organiser_name: org.name || prev.organiser_name,
+            organiser_email: org.contact_email || prev.organiser_email,
+            organiser_phone: org.contact_phone || prev.organiser_phone,
+            organiser_website: org.website_url || prev.organiser_website,
         }));
     };
 
@@ -504,10 +504,10 @@ const CalendarManager = () => {
             end_date: '',
             start_time: '',
             end_time: '',
-            organizer_name: 'SAPA',
-            organizer_phone: '',
-            organizer_email: '',
-            organizer_website: '',
+            organiser_name: 'SAPA',
+            organiser_phone: '',
+            organiser_email: '',
+            organiser_website: '',
             organisation_id: null,
             image_url: '',
             custom_image_url: '',
@@ -613,10 +613,10 @@ const CalendarManager = () => {
             end_date: event.end_date ? event.end_date.substring(0, 10) : '',
             start_time: event.start_time || '',
             end_time: event.end_time || '',
-            organizer_name: event.organizer_name || 'SAPA',
-            organizer_phone: event.organizer_phone || '',
-            organizer_email: event.organizer_email || '',
-            organizer_website: event.organizer_website || '',
+            organiser_name: event.organiser_name || 'SAPA',
+            organiser_phone: event.organiser_phone || '',
+            organiser_email: event.organiser_email || '',
+            organiser_website: event.organiser_website || '',
             organisation_id: event.organisation_id || null,
             image_url: event.image_url || '',
             custom_image_url: event.custom_image_url || '',
@@ -641,7 +641,7 @@ const CalendarManager = () => {
             allow_payments: event.allow_payments || false,
             points: event.points || '1000'
         });
-        setOrgSearchQuery(event.organisations?.name || event.organizer_name || '');
+        setOrgSearchQuery(event.organisations?.name || event.organiser_name || '');
         setOrgSuggestions([]);
         setOrgSearchOpen(false);
         setIsModalOpen(true);
@@ -918,7 +918,7 @@ const CalendarManager = () => {
                         start_date: sDate ? sDate.substring(0, 10) : null,
                         end_date: eDate ? eDate.substring(0, 10) : null,
                         sapa_status: inferredStatus,
-                        organizer_name: 'SAPA',
+                        organiser_name: 'SAPA',
                         rankedin_id: rankedinIdStr,
                         rankedin_url: fullUrl,
                         city: (re.city || '').trim(),
@@ -1209,7 +1209,7 @@ const CalendarManager = () => {
                                         </td>
                                         <td className="py-3 px-4 align-top">
                                             <div className="font-bold text-white line-clamp-2" title={event.event_name}>{event.event_name}</div>
-                                            {event.organizer_name && <div className="text-xs text-gray-500 mt-1">by {event.organizer_name}</div>}
+                                            {event.organiser_name && <div className="text-xs text-gray-500 mt-1">by {event.organiser_name}</div>}
                                         </td>
                                         <td className="py-3 px-4 align-top">
                                             {event.rankedin_id ? (
@@ -1992,8 +1992,8 @@ const CalendarManager = () => {
                                                 <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Display Name</label>
                                                 <input
                                                     type="text"
-                                                    name="organizer_name"
-                                                    value={formData.organizer_name}
+                                                    name="organiser_name"
+                                                    value={formData.organiser_name}
                                                     onChange={handleInputChange}
                                                     placeholder="Shown on the event page"
                                                     className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none"
@@ -2003,8 +2003,8 @@ const CalendarManager = () => {
                                                 <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Phone</label>
                                                 <input
                                                     type="text"
-                                                    name="organizer_phone"
-                                                    value={formData.organizer_phone}
+                                                    name="organiser_phone"
+                                                    value={formData.organiser_phone}
                                                     onChange={handleInputChange}
                                                     className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none"
                                                 />
@@ -2013,8 +2013,8 @@ const CalendarManager = () => {
                                                 <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Email</label>
                                                 <input
                                                     type="text"
-                                                    name="organizer_email"
-                                                    value={formData.organizer_email}
+                                                    name="organiser_email"
+                                                    value={formData.organiser_email}
                                                     onChange={handleInputChange}
                                                     className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none"
                                                 />
@@ -2023,8 +2023,8 @@ const CalendarManager = () => {
                                                 <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Website</label>
                                                 <input
                                                     type="text"
-                                                    name="organizer_website"
-                                                    value={formData.organizer_website}
+                                                    name="organiser_website"
+                                                    value={formData.organiser_website}
                                                     onChange={handleInputChange}
                                                     className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none"
                                                 />

@@ -603,7 +603,7 @@ const PlayerProfile = () => {
                 if (allFiltered.length > 0) {
                     const { data: dbEvents } = await supabase
                         .from('calendar')
-                        .select('id, slug, rankedin_url, city, venue, registered_players, organizer_name, sapa_status, image_url, entry_fee, category_fees, event_name, is_manual');
+                        .select('id, slug, rankedin_url, city, venue, registered_players, organiser_name, sapa_status, image_url, entry_fee, category_fees, event_name, is_manual');
 
                     // Fetch user's paid registrations
                     let paidRegs = [];
@@ -685,7 +685,7 @@ const PlayerProfile = () => {
                                 e.city = match.city;
                                 e.venue = match.venue;
                                 e.registered_players = match.registered_players;
-                                e.organizer_name = match.organizer_name;
+                                e.organiser_name = match.organiser_name;
                                 e.sapa_status = match.sapa_status;
                                 e.entry_fee = match.entry_fee;
                                 e.category_fees = match.category_fees;
