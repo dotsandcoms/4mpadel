@@ -394,6 +394,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const [agreeComplete, setAgreeComplete] = useState(false);
     const [agreeSapa, setAgreeSapa] = useState(false);
     const [showRulesModal, setShowRulesModal] = useState(false);
+    const [showPartnerPayAck, setShowPartnerPayAck] = useState(false);
+    const [partnerPayAckChecked, setPartnerPayAckChecked] = useState(false);
+    const [partnerPayAckAccepted, setPartnerPayAckAccepted] = useState(false);
     const [tshirtSize, setTshirtSize] = useState('');
     const [tshirtSponsorName, setTshirtSponsorName] = useState('');
     const [tshirtLogoUrl, setTshirtLogoUrl] = useState('');
@@ -963,6 +966,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setAgreeRules(false);
         setAgreeComplete(false);
         setAgreeSapa(false);
+        setShowPartnerPayAck(false);
+        setPartnerPayAckChecked(false);
+        setPartnerPayAckAccepted(false);
         setTshirtSize('');
         setPartnerTshirtSizes({});
         setBuyLicenseSelf(false);
@@ -994,6 +1000,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setAgreeRules(false);
         setAgreeComplete(false);
         setAgreeSapa(false);
+        setShowPartnerPayAck(false);
+        setPartnerPayAckChecked(false);
+        setPartnerPayAckAccepted(false);
         setTshirtSize('');
         setPartnerTshirtSizes({});
         loadProfile();
@@ -1312,6 +1321,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     };
 
     const setDivisionPayMode = (divId, mode) => {
+        if (mode === 'partner') {
+            setPartnerPayAckAccepted(false);
+            setPartnerPayAckChecked(false);
+        }
         setSelected((prev) => ({
             ...prev,
             [divId]: {
@@ -2602,6 +2615,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
     };
 
+    const hasPartnerPaysSelection = useCallback(() => (
+        selectedDivisions.some((d) => {
+            const sel = selected[d.id];
+            return !!(sel?.partnerId && sel?.partnerEmail && sel?.payForPartner === false);
+        })
+    ), [selectedDivisions, selected]);
+
     const goNext = () => {
         if (wizardMode === 'addPartner' && wizardStep === 2) {
             if (selectedDivisions.length === 0) { toast.error('Division not found'); return; }
@@ -2628,6 +2648,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         return;
                     }
                 }
+            }
+            if (hasPartnerPaysSelection() && !partnerPayAckAccepted) {
+                setPartnerPayAckChecked(false);
+                setShowPartnerPayAck(true);
+                return;
             }
             setWizardStep(4);
             return;
@@ -2668,6 +2693,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 return !!(sel?.partnerId && sel?.partnerEmail);
             });
             setHasPartner(anyPartner);
+            if (hasPartnerPaysSelection() && !partnerPayAckAccepted) {
+                setPartnerPayAckChecked(false);
+                setShowPartnerPayAck(true);
+                return;
+            }
             setWizardStep(4);
             return;
         }
@@ -2698,6 +2728,21 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             }
         }
         setWizardStep((s) => Math.min(5, s + 1));
+    };
+
+    const confirmPartnerPayAck = () => {
+        if (!partnerPayAckChecked) {
+            toast.error('Please confirm you understand and accept responsibility');
+            return;
+        }
+        setPartnerPayAckAccepted(true);
+        setShowPartnerPayAck(false);
+        const anyPartner = selectedDivisions.some((d) => {
+            const sel = selected[d.id];
+            return !!(sel?.partnerId && sel?.partnerEmail);
+        });
+        setHasPartner(anyPartner);
+        setWizardStep(4);
     };
 
     const goBack = () => {
@@ -4502,6 +4547,89 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                         {withdrawing ? 'Withdrawing…' : (withdrawAll ? 'Withdraw all' : 'Withdraw')}
                                     </button>
                                 )}
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Partner pays acknowledgement */}
+            <AnimatePresence>
+                {showPartnerPayAck && (
+                    <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                            onClick={() => setShowPartnerPayAck(false)}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 12 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 12 }}
+                            className="relative w-full max-w-md bg-white rounded-2xl border border-gray-100 shadow-xl overflow-hidden"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="px-6 py-5 border-b border-gray-50 flex items-start gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+                                    <AlertCircle className="w-5 h-5 text-amber-600" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <h3 className="text-base font-semibold text-slate-900">
+                                        Partner Payment Required
+                                    </h3>
+                                    <p className="text-xs text-slate-600 mt-2 font-normal leading-relaxed">
+                                        You have selected for your partner to pay their own registration fee.
+                                    </p>
+                                    <p className="text-xs text-slate-600 mt-2 font-normal leading-relaxed">
+                                        It is your responsibility to ensure that your partner completes payment before registration closes. Your team entry will only be confirmed once both players have paid in full.
+                                    </p>
+                                    <p className="text-xs text-slate-600 mt-2 font-normal leading-relaxed">
+                                        If either player has not paid by the registration deadline, neither player will be included in the draw.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPartnerPayAck(false)}
+                                    className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-gray-100 shrink-0"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+
+                            <div className="px-6 py-4">
+                                <label className="flex items-start gap-3 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={partnerPayAckChecked}
+                                        onChange={(e) => setPartnerPayAckChecked(e.target.checked)}
+                                        className="mt-0.5 w-4 h-4 shrink-0 rounded border-gray-300"
+                                        style={{ accentColor: accent }}
+                                    />
+                                    <span className="text-sm text-slate-800 font-medium leading-snug">
+                                        I understand and accept responsibility for ensuring that my partner pays.
+                                    </span>
+                                </label>
+                            </div>
+
+                            <div className="px-6 py-5 flex gap-3 border-t border-gray-50">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPartnerPayAck(false)}
+                                    className="flex-1 py-3 px-4 rounded-xl text-sm font-semibold text-slate-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={confirmPartnerPayAck}
+                                    disabled={!partnerPayAckChecked}
+                                    className="flex-1 py-3 px-4 rounded-xl text-sm font-semibold transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+                                    style={accentGradientStyle}
+                                >
+                                    Continue
+                                </button>
                             </div>
                         </motion.div>
                     </div>
