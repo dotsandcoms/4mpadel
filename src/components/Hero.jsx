@@ -683,8 +683,12 @@ const Hero = () => {
         else if (!event.id?.toString().startsWith('local_')) window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
     };
 
-    const renderScheduleTimeSwitch = () => (
-        <div className="flex w-full mb-4 bg-transparent border border-white/10 rounded-xl p-1">
+    const renderScheduleTimeSwitch = ({ compact = false } = {}) => (
+        <div
+            className={`flex shrink-0 bg-transparent border border-white/15 rounded-lg p-0.5 ${
+                compact ? '' : 'w-full mb-4 rounded-xl p-1'
+            }`}
+        >
             {[
                 { key: 'upcoming', label: 'Upcoming' },
                 { key: 'past', label: 'Past' },
@@ -693,10 +697,14 @@ const Hero = () => {
                     key={key}
                     type="button"
                     onClick={() => setScheduleTimeFilter(key)}
-                    className={`flex-1 py-2 rounded-lg transition-all text-xs font-bold ${
+                    className={`${
+                        compact
+                            ? 'px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px]'
+                            : 'flex-1 py-2 text-xs'
+                    } rounded-md transition-all font-bold whitespace-nowrap ${
                         scheduleTimeFilter === key
-                            ? 'border border-white/40 bg-white/5 text-white shadow-md'
-                            : 'text-white/50 hover:text-white'
+                            ? 'bg-white/10 text-white shadow-sm'
+                            : 'text-white/45 hover:text-white'
                     }`}
                 >
                     {label}
@@ -1359,33 +1367,38 @@ const Hero = () => {
                                         ) : (
                                             // ── Actual Data ──
                                             <div className="lg:col-span-12">
-                                                {/* Tabs */}
-                                                <div className="flex w-full mb-6 bg-transparent border border-white/10 rounded-xl p-1">
+                                                {/* Tabs + time filter on one compact row */}
+                                                <div className="flex w-full mb-4 items-center gap-1.5 sm:gap-2 bg-transparent border border-white/10 rounded-xl p-1">
                                                     <button
+                                                        type="button"
                                                         onClick={() => setActiveHeroTab('matches')}
-                                                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg transition-all text-xs sm:text-sm font-bold ${activeHeroTab === 'matches' ? 'border border-white/40 bg-white/5 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
+                                                        className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-2 rounded-lg transition-all text-[11px] sm:text-sm font-bold ${activeHeroTab === 'matches' ? 'border border-white/40 bg-white/5 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
                                                     >
-                                                        <Trophy size={16} /> Matches
+                                                        <Trophy size={14} className="sm:w-4 sm:h-4 shrink-0" />
+                                                        <span>Matches</span>
                                                         {matchesCount > 0 && (
-                                                            <span className="bg-orange-500 text-black text-[11px] font-black px-1.5 py-0.5 rounded-full flex items-center justify-center min-w-[20px] leading-none">
+                                                            <span className="bg-orange-500 text-black text-[10px] sm:text-[11px] font-black px-1.5 py-0.5 rounded-full flex items-center justify-center min-w-[18px] leading-none">
                                                                 {matchesCount}
                                                             </span>
                                                         )}
                                                     </button>
                                                     <button
+                                                        type="button"
                                                         onClick={() => setActiveHeroTab('events')}
-                                                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg transition-all text-xs sm:text-sm font-bold ${activeHeroTab === 'events' ? 'border border-white/40 bg-white/5 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
+                                                        className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-2 rounded-lg transition-all text-[11px] sm:text-sm font-bold ${activeHeroTab === 'events' ? 'border border-white/40 bg-white/5 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
                                                     >
-                                                        <Calendar size={16} /> Events
+                                                        <Calendar size={14} className="sm:w-4 sm:h-4 shrink-0" />
+                                                        <span>Events</span>
                                                         {upcomingEvents.length > 0 && (
-                                                            <span className="bg-padel-green text-black text-[11px] font-black px-1.5 py-0.5 rounded-full flex items-center justify-center min-w-[20px] leading-none">
+                                                            <span className="bg-padel-green text-black text-[10px] sm:text-[11px] font-black px-1.5 py-0.5 rounded-full flex items-center justify-center min-w-[18px] leading-none">
                                                                 {upcomingEvents.length}
                                                             </span>
                                                         )}
                                                     </button>
+                                                    <div className="ml-auto min-w-0">
+                                                        {renderScheduleTimeSwitch({ compact: true })}
+                                                    </div>
                                                 </div>
-
-                                                {renderScheduleTimeSwitch()}
 
                                                 {/* Events */}
                                                 {activeHeroTab === 'events' && (
