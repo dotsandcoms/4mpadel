@@ -643,7 +643,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 return div && resolveDivisionEntryFee(div, event) === 0;
             })
             .map((r) => r.division_id),
-    ), [myRegs, divisions]);
+    ), [myRegs, divisions, event]);
 
     const confirmedRegs = useMemo(
         () => myRegs.filter((reg) => {
@@ -651,7 +651,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             const div = divisions.find((d) => d.id === reg.division_id);
             return div && resolveDivisionEntryFee(div, event) === 0;
         }),
-        [myRegs, divisions],
+        [myRegs, divisions, event],
     );
 
     const pendingPaymentRegs = useMemo(
@@ -660,7 +660,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             const div = divisions.find((d) => d.id === reg.division_id);
             return div && resolveDivisionEntryFee(div, event) > 0;
         }),
-        [myRegs, divisions]
+        [myRegs, divisions, event]
     );
 
     const hasPendingPayment = pendingPaymentRegs.length > 0;
@@ -1618,7 +1618,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             t += licenseFee(purchase.choice);
         }
         return t;
-    }, [selectedDivisions, selected, myRegs, divisionRegs, buyLicenseSelf, licenseSelfChoice, partnerLicensePurchases, userEmail]);
+    }, [selectedDivisions, selected, myRegs, divisionRegs, buyLicenseSelf, licenseSelfChoice, partnerLicensePurchases, userEmail, event]);
 
     const total = subtotal;
 
