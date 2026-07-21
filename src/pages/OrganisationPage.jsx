@@ -90,12 +90,14 @@ const OrganisationPage = () => {
                 setOrg(data);
 
                 if (data) {
+                    // Org public page shows this organisation's sanctioned events.
+                    // Main-calendar `is_visible` still controls /calendar; hide only
+                    // rejected sanctions here so linked org events actually appear.
                     const { data: evs } = await supabase
                         .from('calendar')
                         .select('id, slug, event_name, venue, city, start_date, end_date, sapa_status, image_url, registered_players, created_at')
                         .eq('organisation_id', data.id)
                         .or('sanction_status.eq.approved,sanction_status.is.null')
-                        .neq('is_visible', false)
                         .order('start_date', { ascending: true });
                     const eventList = evs || [];
                     setEvents(eventList);
