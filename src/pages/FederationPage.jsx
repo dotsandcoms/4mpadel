@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
+import { AnimatePresence } from 'framer-motion';
 import { supabase } from '../supabaseClient';
 import { safeUrl } from '../utils/sanitizeHtml';
 import {
@@ -8,6 +9,7 @@ import {
     getFederationRankingsOrgId,
 } from '../utils/federation';
 import { useRankedin } from '../hooks/useRankedin';
+import RankingDetailsModal from '../components/RankingDetailsModal';
 import {
     Landmark, ShieldCheck, BadgeCheck, Globe, Mail, Phone, MessageCircle,
     ChevronRight, Users, Building, GraduationCap,
@@ -53,22 +55,29 @@ const formatFederationRankings = (data, profileMap) => {
     return data.slice(0, 8).map((item, index) => {
         const name = item.Name || item.PlayerName || '—';
         const key = name.trim().toLowerCase();
+        const profile = profileMap[key] || null;
         return {
             id: item.Participant?.Id || item.RankedinId || `${name}-${index}`,
+            playerId: profile?.id || null,
             name,
             pos: item.Standing || item.Position || index + 1,
             change: Number(item.StandingDiff) || 0,
             points: item.ParticipantPoints?.Points ?? item.Points ?? item.TotalPoints ?? 0,
-            image: profileMap[key] || null,
+            image: profile?.image_url || null,
+            playerRecord: profile || null,
+            rankedinProfile: item.ParticipantUrl
+                ? `https://www.rankedin.com${item.ParticipantUrl}`
+                : null,
         };
     });
 };
 
 /**
- * Load local profile images for ranked player names.
+ * Load local player profiles keyed by lowercased name.
  * @param {string[]} names
+ * @returns {Promise<Record<string, object>>}
  */
-async function fetchProfileImagesByName(names) {
+async function fetchProfilesByName(names) {
     const unique = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
     const map = {};
     if (unique.length === 0) return map;
@@ -80,18 +89,29 @@ async function fetchProfileImagesByName(names) {
 
     const { data, error } = await supabase
         .from('players')
-        .select('name, image_url')
+        .select('*')
         .eq('approved', true)
         .or(orClause);
 
     if (error) {
-        console.warn('Profile image lookup failed:', error.message);
+        console.warn('Profile lookup failed:', error.message);
         return map;
     }
 
     (data || []).forEach((p) => {
         const key = (p.name || '').trim().toLowerCase();
-        if (key && p.image_url) map[key] = p.image_url;
+        if (key && p.id) {
+            let sponsorsList = [];
+            if (p.sponsors) {
+                try {
+                    sponsorsList = JSON.parse(p.sponsors);
+                    if (!Array.isArray(sponsorsList)) sponsorsList = [p.sponsors];
+                } catch {
+                    sponsorsList = String(p.sponsors).split(',').map((s) => s.trim()).filter(Boolean);
+                }
+            }
+            map[key] = { ...p, sponsors: sponsorsList };
+        }
     });
     return map;
 }
@@ -122,6 +142,7 @@ const FederationPage = () => {
     const [coaches, setCoaches] = useState([]);
     const [clubs, setClubs] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [selectedRankingPlayer, setSelectedRankingPlayer] = useState(null);
 
     useEffect(() => {
         let cancelled = false;
@@ -193,7 +214,7 @@ const FederationPage = () => {
                             ...(menRaw || []).slice(0, 8).map((r) => r.Name),
                             ...(womenRaw || []).slice(0, 8).map((r) => r.Name),
                         ].filter(Boolean);
-                        const profileMap = await fetchProfileImagesByName(names);
+                        const profileMap = await fetchProfilesByName(names);
                         if (!cancelled) {
                             setRankingsByTab({
                                 men: formatFederationRankings(menRaw, profileMap),
@@ -220,6 +241,8 @@ const FederationPage = () => {
     const accent = federation?.brand_color || '#9AE900';
     const upcomingCount = events.length;
     const rankingsPreview = rankingsByTab[rankingsTab] || [];
+    const rankingsOrgId = federation ? Number(getFederationRankingsOrgId(federation)) || getFederationRankingsOrgId(federation) : null;
+    const rankingsTabLabel = RANKING_TABS.find((t) => t.id === rankingsTab)?.label || 'Men';
     const stats = useMemo(() => {
         const overrides = federation?.stats && typeof federation.stats === 'object' ? federation.stats : {};
         return [
@@ -394,36 +417,42 @@ const FederationPage = () => {
                     ) : (
                         <ul className="space-y-2">
                             {rankingsPreview.map((r) => (
-                                <li key={r.id} className="flex items-center gap-3 bg-black/30 border border-white/5 rounded-xl px-3 py-2.5">
-                                    <span className="w-7 text-center font-black text-sm shrink-0" style={{ color: medalColor(r.pos) || accent }}>
-                                        {r.pos <= 3 ? <Medal size={14} className="inline" style={{ color: medalColor(r.pos) }} /> : `#${r.pos}`}
-                                    </span>
-                                    <div className="w-9 h-9 rounded-full overflow-hidden bg-white/10 border border-white/10 shrink-0 flex items-center justify-center">
-                                        {r.image && !imageErrors[r.id] ? (
-                                            <img
-                                                src={r.image}
-                                                alt=""
-                                                className="w-full h-full object-cover"
-                                                onError={() => setImageErrors((prev) => ({ ...prev, [r.id]: true }))}
-                                            />
-                                        ) : (
-                                            <span className="text-[10px] font-bold text-gray-400">{getInitials(r.name)}</span>
-                                        )}
-                                    </div>
-                                    <span className="flex-1 text-sm font-bold text-white truncate min-w-0">{r.name}</span>
-                                    <span
-                                        className="text-xs font-black px-2 py-1 rounded-lg bg-white/5 border border-white/10 shrink-0"
-                                        style={{ color: accent }}
+                                <li key={r.id}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSelectedRankingPlayer(r)}
+                                        className="w-full flex items-center gap-3 bg-black/30 border border-white/5 hover:border-white/15 rounded-xl px-3 py-2.5 transition-colors text-left cursor-pointer"
                                     >
-                                        {Number(r.points).toLocaleString()}
-                                    </span>
-                                    <span className={`w-10 text-right text-xs font-black shrink-0 ${
-                                        r.change > 0 ? 'text-padel-green' : r.change < 0 ? 'text-red-500' : 'text-gray-500'
-                                    }`}>
-                                        {r.change > 0 && `▲${r.change}`}
-                                        {r.change < 0 && `▼${Math.abs(r.change)}`}
-                                        {r.change === 0 && '—'}
-                                    </span>
+                                        <span className="w-7 text-center font-black text-sm shrink-0" style={{ color: medalColor(r.pos) || accent }}>
+                                            {r.pos <= 3 ? <Medal size={14} className="inline" style={{ color: medalColor(r.pos) }} /> : `#${r.pos}`}
+                                        </span>
+                                        <div className="w-9 h-9 rounded-full overflow-hidden bg-white/10 border border-white/10 shrink-0 flex items-center justify-center">
+                                            {r.image && !imageErrors[r.id] ? (
+                                                <img
+                                                    src={r.image}
+                                                    alt=""
+                                                    className="w-full h-full object-cover"
+                                                    onError={() => setImageErrors((prev) => ({ ...prev, [r.id]: true }))}
+                                                />
+                                            ) : (
+                                                <span className="text-[10px] font-bold text-gray-400">{getInitials(r.name)}</span>
+                                            )}
+                                        </div>
+                                        <span className="flex-1 text-sm font-bold text-white truncate min-w-0">{r.name}</span>
+                                        <span
+                                            className="text-xs font-black px-2 py-1 rounded-lg bg-white/5 border border-white/10 shrink-0"
+                                            style={{ color: accent }}
+                                        >
+                                            {Number(r.points).toLocaleString()}
+                                        </span>
+                                        <span className={`w-10 text-right text-xs font-black shrink-0 ${
+                                            r.change > 0 ? 'text-padel-green' : r.change < 0 ? 'text-red-500' : 'text-gray-500'
+                                        }`}>
+                                            {r.change > 0 && `▲${r.change}`}
+                                            {r.change < 0 && `▼${Math.abs(r.change)}`}
+                                            {r.change === 0 && '—'}
+                                        </span>
+                                    </button>
                                 </li>
                             ))}
                         </ul>
@@ -515,7 +544,7 @@ const FederationPage = () => {
                             {organisers.map((o) => (
                                 <li key={o.id}>
                                     <Link
-                                        to={`/organisations/${o.slug}`}
+                                        to={o.slug ? `/organisations/${o.slug}` : '/organisations'}
                                         className="flex items-center gap-3 bg-black/30 border border-white/5 hover:border-white/15 rounded-xl px-3 py-2.5 transition-colors"
                                     >
                                         {o.logo_url ? (
@@ -574,24 +603,29 @@ const FederationPage = () => {
                             </p>
                             <ul className="grid sm:grid-cols-2 gap-2">
                                 {coaches.map((c) => (
-                                    <li key={c.id} className="flex items-center gap-3 bg-black/30 border border-white/5 rounded-xl px-3 py-2.5">
-                                        <div className="w-11 h-11 rounded-full overflow-hidden bg-white/10 border border-white/10 shrink-0 flex items-center justify-center">
-                                            {c.profile_pic_url ? (
-                                                <img
-                                                    src={c.profile_pic_url}
-                                                    alt=""
-                                                    className="w-full h-full object-cover"
-                                                />
-                                            ) : (
-                                                <GraduationCap size={16} className="text-gray-500" />
-                                            )}
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-bold text-white truncate">{c.full_name}</p>
-                                            <p className="text-[10px] text-gray-500 truncate">
-                                                {[c.city, c.coaching_location].filter(Boolean).join(' · ') || 'Approved coach'}
-                                            </p>
-                                        </div>
+                                    <li key={c.id}>
+                                        <Link
+                                            to={`/academy/coaches?id=${c.id}`}
+                                            className="flex items-center gap-3 bg-black/30 border border-white/5 hover:border-white/15 rounded-xl px-3 py-2.5 transition-colors"
+                                        >
+                                            <div className="w-11 h-11 rounded-full overflow-hidden bg-white/10 border border-white/10 shrink-0 flex items-center justify-center">
+                                                {c.profile_pic_url ? (
+                                                    <img
+                                                        src={c.profile_pic_url}
+                                                        alt=""
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                ) : (
+                                                    <GraduationCap size={16} className="text-gray-500" />
+                                                )}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm font-bold text-white truncate">{c.full_name}</p>
+                                                <p className="text-[10px] text-gray-500 truncate">
+                                                    {[c.city, c.coaching_location].filter(Boolean).join(' · ') || 'Approved coach'}
+                                                </p>
+                                            </div>
+                                        </Link>
                                     </li>
                                 ))}
                             </ul>
@@ -619,6 +653,21 @@ const FederationPage = () => {
                     </div>
                 </div>
             )}
+
+            <AnimatePresence>
+                {selectedRankingPlayer && (
+                    <RankingDetailsModal
+                        player={selectedRankingPlayer}
+                        playerRecord={
+                            selectedRankingPlayer.playerRecord
+                            || { name: selectedRankingPlayer.name, id: selectedRankingPlayer.playerId || selectedRankingPlayer.id }
+                        }
+                        selectedOrgId={Number(rankingsOrgId) || 15809}
+                        categoryLabel={rankingsTabLabel}
+                        onClose={() => setSelectedRankingPlayer(null)}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
 };
