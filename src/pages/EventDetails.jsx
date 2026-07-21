@@ -25,6 +25,8 @@ import sapaLogo from '../assets/sapa-logo.svg';
 import { getEventImage } from '../utils/imageUtils';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
 import { isRegistrationClosed } from '../utils/registrationClose';
+import { isEarlyBirdActive, resolveDivisionEntryFee } from '../utils/eventEntryFee';
+import TournamentProgressBar from '../components/TournamentProgressBar';
 
 const formatPlayerName = (fullName) => {
     if (!fullName) return '';
@@ -830,8 +832,11 @@ const EventDetails = () => {
     const entryFeeStatLabel = useMemo(() => {
         const fmt = (n) => `R${Number(n).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
         if (event?.is_manual) {
+            if (isEarlyBirdActive(event) && event.early_bird_fee != null && event.early_bird_fee !== '') {
+                return fmt(event.early_bird_fee);
+            }
             const fees = playerDivisions
-                .map((d) => Number(d.EntryFee ?? 0))
+                .map((d) => Number(d.EntryFee ?? d.StandardEntryFee ?? 0))
                 .filter((f) => f > 0);
             if (fees.length === 0) return '-';
             const min = Math.min(...fees);
@@ -839,8 +844,17 @@ const EventDetails = () => {
             if (min === max) return fmt(min);
             return `${fmt(min)}–${fmt(max)}`;
         }
+        if (isEarlyBirdActive(event) && event.early_bird_fee != null && event.early_bird_fee !== '') {
+            return fmt(event.early_bird_fee);
+        }
         return Number(event?.entry_fee || 0) > 0 ? fmt(event.entry_fee) : '-';
-    }, [event?.is_manual, event?.entry_fee, playerDivisions]);
+    }, [event, playerDivisions]);
+
+    const entryFeeStatSublabel = useMemo(() => {
+        if (entryFeeStatLabel === '-') return null;
+        if (isEarlyBirdActive(event)) return 'EARLY BIRD PER PLAYER';
+        return 'PER PLAYER ENTRY FEE';
+    }, [entryFeeStatLabel, event]);
 
     const isEventPassed = useMemo(() => {
         if (!event) return false;
@@ -2021,7 +2035,8 @@ const EventDetails = () => {
                     divisions = (manualDivs || []).map((d) => ({
                         Id: d.id,
                         Name: d.name,
-                        EntryFee: Number(d.entry_fee || 0),
+                        EntryFee: resolveDivisionEntryFee(d, event),
+                        StandardEntryFee: Number(d.entry_fee || 0),
                     }));
 
                     const { data: localRegs } = await supabase
@@ -3842,7 +3857,7 @@ const EventDetails = () => {
                                         { label: 'Entries', value: event.is_manual ? manualEntriesCount : totalPlayersCount, icon: Users },
                                         { label: 'Points', value: event.points || '1000', icon: Trophy },
                                         { label: 'Divisions', value: event.is_manual ? playerDivisions.length : (playerDivisions.length > 0 ? playerDivisions.length : (tournamentClasses.length || event.allowed_divisions?.length || 0)), icon: Grid2x2 },
-                                        { label: 'Entry Fee', value: entryFeeStatLabel, sublabel: entryFeeStatLabel !== '-' ? 'PER PLAYER' : null, icon: Coins },
+                                        { label: 'Entry Fee', value: entryFeeStatLabel, sublabel: entryFeeStatSublabel, icon: Coins },
                                     ].map(({ label, value, sublabel, icon: Icon }, idx) => (
                                         <div key={idx} className="flex-1 py-4 px-1 flex flex-col items-center justify-center text-center min-w-0">
                                             <Icon className="w-4 h-4 mb-1" style={{ color: theme.fill }} />
@@ -3903,6 +3918,8 @@ const EventDetails = () => {
                                         />
                                     );
                                 })()}
+
+                                <TournamentProgressBar event={event} accentColor={theme.fill} />
                             </div>
                         </div>
                     </div>

@@ -682,6 +682,9 @@ const blankForm = {
     // settings
     registration_opens_at: '',
     registration_closes_at: '',
+    early_bird_ends_at: '',
+    early_bird_fee: '',
+    rankings_updated_at: '',
     featured_event: false,
     is_visible: true,
     finance_managed: true,
@@ -1083,6 +1086,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             end_date: ev.end_date ? ev.end_date.substring(0, 10) : '',
             registration_opens_at: toLocalInput(ev.registration_opens_at),
             registration_closes_at: toLocalInput(ev.registration_closes_at),
+            early_bird_ends_at: toLocalInput(ev.early_bird_ends_at),
+            early_bird_fee: ev.early_bird_fee != null && ev.early_bird_fee !== '' ? String(ev.early_bird_fee) : '',
+            rankings_updated_at: toLocalInput(ev.rankings_updated_at),
             draw_released: drawReleased,
             prize_money_total: ev.prize_money_total != null ? String(ev.prize_money_total) : '',
             prize_money_breakdown: prizeBreakdown,
@@ -1546,6 +1552,15 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (form.registration_opens_at && form.registration_closes_at && form.registration_opens_at >= form.registration_closes_at) {
             warnings.push('Registration opens at or after the close date');
         }
+        if (form.early_bird_ends_at && form.registration_closes_at && form.early_bird_ends_at > form.registration_closes_at) {
+            errors.push('Early bird end must be on or before registration closes');
+        }
+        if (form.early_bird_ends_at && (form.early_bird_fee === '' || form.early_bird_fee == null)) {
+            errors.push('Early bird fee is required when an early bird end date is set');
+        }
+        if ((form.early_bird_fee !== '' && form.early_bird_fee != null) && !form.early_bird_ends_at) {
+            errors.push('Early bird end date is required when an early bird fee is set');
+        }
         return { errors, warnings };
     };
 
@@ -1576,6 +1591,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 .map((r) => ({ label: r.label, amount: r.amount })),
             registration_opens_at: safeISOString(form.registration_opens_at),
             registration_closes_at: safeISOString(form.registration_closes_at),
+            early_bird_ends_at: safeISOString(form.early_bird_ends_at),
+            early_bird_fee: form.early_bird_fee === '' || form.early_bird_fee == null
+                ? null
+                : Number(form.early_bird_fee),
+            rankings_updated_at: safeISOString(form.rankings_updated_at),
             start_date: form.start_date || null,
             end_date: form.end_date || null,
             start_time: form.start_time || null,
@@ -2486,6 +2506,78 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                             <p className="md:col-span-2 text-[11px] text-gray-500">
                                                 Division-specific close dates override the global close date. Toggle off to clear, or edit the date/time when on.
                                             </p>
+                                            <div className="md:col-span-2 rounded-xl border border-white/10 bg-[#1a1a1a]/60 p-4 space-y-3">
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <div>
+                                                        <p className="text-sm font-medium text-gray-200">Early bird pricing</p>
+                                                        <p className="text-[11px] text-gray-500 mt-0.5">
+                                                            Toggle off to clear the early bird date and fee (hidden from tournament progress).
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (form.early_bird_ends_at) {
+                                                                setForm((prev) => ({
+                                                                    ...prev,
+                                                                    early_bird_ends_at: '',
+                                                                    early_bird_fee: '',
+                                                                }));
+                                                            } else {
+                                                                const now = new Date();
+                                                                const offsetMs = now.getTimezoneOffset() * 60000;
+                                                                const defaultAt = form.registration_closes_at
+                                                                    || new Date(now.getTime() - offsetMs).toISOString().substring(0, 16);
+                                                                setForm((prev) => ({
+                                                                    ...prev,
+                                                                    early_bird_ends_at: defaultAt,
+                                                                    early_bird_fee: prev.early_bird_fee || (standardPrice || ''),
+                                                                }));
+                                                            }
+                                                        }}
+                                                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none ${
+                                                            form.early_bird_ends_at ? 'bg-padel-green' : 'bg-white/20'
+                                                        }`}
+                                                    >
+                                                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                                                            form.early_bird_ends_at ? 'translate-x-4.5' : 'translate-x-0.5'
+                                                        }`} />
+                                                    </button>
+                                                </div>
+                                                {form.early_bird_ends_at ? (
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label className={labelClass}>Early bird ends at</label>
+                                                            <input
+                                                                type="datetime-local"
+                                                                name="early_bird_ends_at"
+                                                                value={form.early_bird_ends_at}
+                                                                onChange={handleInput}
+                                                                className={inputClass}
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className={labelClass}>Early bird fee (R per player)</label>
+                                                            <input
+                                                                type="number"
+                                                                name="early_bird_fee"
+                                                                value={form.early_bird_fee}
+                                                                onChange={handleInput}
+                                                                placeholder="e.g. 400"
+                                                                min="0"
+                                                                className={inputClass}
+                                                            />
+                                                            <p className="text-[11px] text-gray-500 mt-1">
+                                                                Overrides each division’s entry fee until early bird ends.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-full bg-black/20 border border-white/5 rounded-lg px-4 py-3 text-gray-600 text-sm italic">
+                                                        Early bird off — standard division prices apply
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -3024,8 +3116,69 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                 <input type="number" name="courts_count" value={form.courts_count} onChange={handleInput} min="0" className={inputClass} />
                                             </div>
                                             <div>
-                                                <label className={labelClass}>Draw release date/time</label>
-                                                <input type="datetime-local" name="draw_released" value={form.draw_released} onChange={handleInput} className={inputClass} />
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <label className={labelClass} style={{ marginBottom: 0 }}>Draw release date/time</label>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (form.draw_released) {
+                                                                setField('draw_released', '');
+                                                            } else {
+                                                                const now = new Date();
+                                                                const offsetMs = now.getTimezoneOffset() * 60000;
+                                                                setField('draw_released', new Date(now.getTime() - offsetMs).toISOString().substring(0, 16));
+                                                            }
+                                                        }}
+                                                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                                                            form.draw_released ? 'bg-padel-green' : 'bg-white/20'
+                                                        }`}
+                                                    >
+                                                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                                                            form.draw_released ? 'translate-x-4.5' : 'translate-x-0.5'
+                                                        }`} />
+                                                    </button>
+                                                </div>
+                                                {form.draw_released ? (
+                                                    <input type="datetime-local" name="draw_released" value={form.draw_released} onChange={handleInput} className={inputClass} />
+                                                ) : (
+                                                    <div className="w-full bg-black/20 border border-white/5 rounded-lg px-4 py-3 text-gray-600 text-sm italic">
+                                                        Not set — hidden from tournament progress
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <label className={labelClass} style={{ marginBottom: 0 }}>Rankings updated date/time</label>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (form.rankings_updated_at) {
+                                                                setField('rankings_updated_at', '');
+                                                            } else {
+                                                                const base = form.end_date
+                                                                    ? new Date(`${form.end_date}T12:00:00`)
+                                                                    : new Date();
+                                                                if (form.end_date) base.setDate(base.getDate() + 1);
+                                                                const offsetMs = base.getTimezoneOffset() * 60000;
+                                                                setField('rankings_updated_at', new Date(base.getTime() - offsetMs).toISOString().substring(0, 16));
+                                                            }
+                                                        }}
+                                                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                                                            form.rankings_updated_at ? 'bg-padel-green' : 'bg-white/20'
+                                                        }`}
+                                                    >
+                                                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                                                            form.rankings_updated_at ? 'translate-x-4.5' : 'translate-x-0.5'
+                                                        }`} />
+                                                    </button>
+                                                </div>
+                                                {form.rankings_updated_at ? (
+                                                    <input type="datetime-local" name="rankings_updated_at" value={form.rankings_updated_at} onChange={handleInput} className={inputClass} />
+                                                ) : (
+                                                    <div className="w-full bg-black/20 border border-white/5 rounded-lg px-4 py-3 text-gray-600 text-sm italic">
+                                                        Not set — hidden from tournament progress
+                                                    </div>
+                                                )}
                                             </div>
                                             <div>
                                                 <label className={labelClass}>Tournament director</label>
@@ -3376,6 +3529,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                 <p><span className="text-gray-500">Venue:</span> {venuesDisplayLabel(form.venues, form.city) || '—'}</p>
                                                 <p><span className="text-gray-500">Reg opens:</span> {formatDateTimeLabel(form.registration_opens_at)}</p>
                                                 <p><span className="text-gray-500">Reg closes:</span> {formatDateTimeLabel(form.registration_closes_at)}</p>
+                                                <p><span className="text-gray-500">Early bird:</span> {form.early_bird_ends_at ? `${formatDateTimeLabel(form.early_bird_ends_at)} · R${form.early_bird_fee || '—'}` : '—'}</p>
+                                                <p><span className="text-gray-500">Rankings updated:</span> {formatDateTimeLabel(form.rankings_updated_at) || '—'}</p>
                                             </div>
                                         </div>
                                     </div>

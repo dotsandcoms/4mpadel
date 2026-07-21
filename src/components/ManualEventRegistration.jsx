@@ -21,6 +21,7 @@ import ManualRegistrationEntryCard from './ManualRegistrationEntryCard';
 import { useMembersOnly } from '../context/MembersOnlyContext';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
 import { isRegistrationClosed } from '../utils/registrationClose';
+import { isEarlyBirdActive, resolveDivisionEntryFee } from '../utils/eventEntryFee';
 
 const STEPS = [
     { id: 1, label: 'Profile' },
@@ -115,14 +116,14 @@ const getDivisionDetailsHtml = (division) => {
 const getDivisionSavedDetails = (division) =>
     stripHtml(division?.details ?? division?.Details ?? '').trim();
 
-const DivisionDetails = ({ division, className = 'text-xs text-slate-600 font-normal leading-snug mt-1 rich-text max-w-none' }) => {
+const DivisionDetails = ({ division, event = null, className = 'text-xs text-slate-600 font-normal leading-snug mt-1 rich-text max-w-none' }) => {
     const html = getDivisionDetailsHtml(division);
     if (html) {
         return <div className={className} dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />;
     }
     const fallback = [
         division.format,
-        fmtRWhole(division.entry_fee),
+        fmtRWhole(resolveDivisionEntryFee(division, event)),
         division.license_required ? 'License req.' : null,
     ].filter(Boolean).join(' · ');
     if (!fallback) return null;
@@ -639,7 +640,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             .filter((reg) => {
                 if (reg.payment_status === 'paid') return true;
                 const div = divisions.find((d) => d.id === reg.division_id);
-                return div && Number(div.entry_fee || 0) === 0;
+                return div && resolveDivisionEntryFee(div, event) === 0;
             })
             .map((r) => r.division_id),
     ), [myRegs, divisions]);
@@ -648,7 +649,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         () => myRegs.filter((reg) => {
             if (reg.payment_status === 'paid') return true;
             const div = divisions.find((d) => d.id === reg.division_id);
-            return div && Number(div.entry_fee || 0) === 0;
+            return div && resolveDivisionEntryFee(div, event) === 0;
         }),
         [myRegs, divisions],
     );
@@ -657,7 +658,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         () => myRegs.filter((reg) => {
             if (reg.payment_status === 'paid') return false;
             const div = divisions.find((d) => d.id === reg.division_id);
-            return div && Number(div.entry_fee || 0) > 0;
+            return div && resolveDivisionEntryFee(div, event) > 0;
         }),
         [myRegs, divisions]
     );
@@ -667,7 +668,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const allRegistrationsPaid = hasRegistrations && confirmedRegs.every((reg) => {
         if (reg.payment_status === 'paid') return true;
         const div = divisions.find((d) => d.id === reg.division_id);
-        return !div || Number(div.entry_fee || 0) === 0;
+        return !div || resolveDivisionEntryFee(div, event) === 0;
     });
     const hasAnyRegistration = myRegs.length > 0;
 
@@ -675,7 +676,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         () => myRegs.map((reg) => {
             const div = divisions.find((d) => d.id === reg.division_id)
                 || divisions.find((d) => d.name === reg.division);
-            const fee = Number(div?.entry_fee || 0);
+            const fee = resolveDivisionEntryFee(div, event);
             const isPaid = reg.payment_status === 'paid' || fee === 0;
             const hasPartner = !!(reg.partner_name?.trim() || reg.partner_email?.trim());
             const partnerReg = hasPartner && reg.partner_email
@@ -738,7 +739,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const divisionMetaLine = (d) => {
         const saved = getDivisionSavedDetails(d);
         if (saved) return saved;
-        return [d.format, fmtRWhole(d.entry_fee), d.license_required ? 'License req.' : null].filter(Boolean).join(' · ');
+        return [d.format, fmtRWhole(resolveDivisionEntryFee(d, event)), d.license_required ? 'License req.' : null].filter(Boolean).join(' · ');
     };
 
     const formatDivisionCloseDate = (d) => {
@@ -751,7 +752,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const pendingSelf = myRegs.filter((reg) => {
             if (reg.payment_status === 'paid') return false;
             const div = divisions.find((d) => d.id === reg.division_id);
-            return div && Number(div.entry_fee || 0) > 0;
+            return div && resolveDivisionEntryFee(div, event) > 0;
         });
         if (pendingSelf.length === 0) return false;
 
@@ -766,7 +767,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const pendingPartner = (partnerRows || []).filter((reg) => {
             if (reg.payment_status === 'paid') return false;
             const div = divisions.find((d) => d.id === reg.division_id);
-            return div && Number(div.entry_fee || 0) > 0;
+            return div && resolveDivisionEntryFee(div, event) > 0;
         });
 
         const hasPartnerEntry = pendingSelf.some((r) => r.partner_name || r.partner_email) || pendingPartner.length > 0;
@@ -1239,7 +1240,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const getDivisionMeta = (division) => {
         const parts = [];
-        const fee = Number(division.entry_fee || 0);
+        const fee = resolveDivisionEntryFee(division, event);
         if (fee > 0) parts.push(`Entry fee: ${fmtRWhole(fee)} per player`);
         if (division.format) parts.push(`Format: ${division.format}`);
         if (division.license_required) parts.push('SAPA license required');
@@ -1608,7 +1609,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         let t = 0;
         for (const d of selectedDivisions) {
             const sel = selected[d.id];
-            const fee = Number(d.entry_fee || 0);
+            const fee = resolveDivisionEntryFee(d, event);
             if (isSelfPayingDivision(d.id, sel)) t += fee;
             if (sel?.partnerName && sel?.payForPartner && !isPartnerDivisionPaid(d.id)) t += fee;
         }
@@ -1627,7 +1628,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
         for (const d of selectedDivisions) {
             const sel = selected[d.id];
-            const fee = Number(d.entry_fee || 0);
+            const fee = resolveDivisionEntryFee(d, event);
             if (isSelfPayingDivision(d.id, sel)) selfDivisions.push({ name: d.name, fee });
         }
 
@@ -1643,7 +1644,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const partnerGroups = {};
         for (const d of selectedDivisions) {
             const sel = selected[d.id];
-            const fee = Number(d.entry_fee || 0);
+            const fee = resolveDivisionEntryFee(d, event);
             if (sel?.partnerName && sel?.payForPartner && !isPartnerDivisionPaid(d.id)) {
                 const key = sel.partnerEmail || sel.partnerName;
                 if (!partnerGroups[key]) {
@@ -1687,7 +1688,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const selfName = displayProfile?.name || profile?.name || 'You';
         const entries = selectedDivisions.map((d) => {
             const sel = selected[d.id];
-            const fee = Number(d.entry_fee || 0);
+            const fee = resolveDivisionEntryFee(d, event);
             const selfPays = isSelfPayingDivision(d.id, sel);
             const partnerAlreadyPaid = isPartnerDivisionPaid(d.id);
             const userPaysPartner = !!(sel?.partnerName && sel?.payForPartner) && !partnerAlreadyPaid;
@@ -1883,7 +1884,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const selfName = profile?.name || (userEmail ? userEmail.split('@')[0] : 'Player');
         for (const d of selectedDivisions) {
             const sel = selected[d.id];
-            const fee = Number(d.entry_fee || 0);
+            const fee = resolveDivisionEntryFee(d, event);
             const partnerPays = !!(sel?.partnerName && sel?.payForPartner);
             const selfPays = isSelfPayingDivision(d.id, sel);
             const selfAlreadyPaid = isSelfDivisionPaid(d.id);
@@ -1988,7 +1989,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const { rows, covers, soloLinks } = buildRegistrationRows();
         const reference = `REGEV-${event.id}-${Date.now()}`;
         const divisionEntryFees = Object.fromEntries(
-            selectedDivisions.map((d) => [d.name, Number(d.entry_fee || 0)]),
+            selectedDivisions.map((d) => [d.name, resolveDivisionEntryFee(d, event)]),
         );
         const paymentMetadata = {
             source: 'manual_event',
@@ -2119,7 +2120,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     eventName: event.event_name,
                     division: d.name,
                     eventDates: event.event_dates || '',
-                    amountDue: fmtRWhole(d.entry_fee || 0),
+                    amountDue: fmtRWhole(resolveDivisionEntryFee(d, event)),
                     payUrl,
                 });
             }
@@ -2532,8 +2533,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (!reg || !targetDiv || switching) return;
 
         const currentDiv = divisions.find((d) => d.id === reg.division_id || d.name === reg.division);
-        const oldFee = Number(currentDiv?.entry_fee || 0);
-        const newFee = Number(targetDiv.entry_fee || 0);
+        const oldFee = resolveDivisionEntryFee(currentDiv, event);
+        const newFee = resolveDivisionEntryFee(targetDiv, event);
         const delta = Math.round((newFee - oldFee) * 100) / 100;
 
         setSwitching(true);
@@ -2717,7 +2718,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             }
             const hasPayableSelection = selectedDivisions.some((d) => {
                 const sel = selected[d.id];
-                const fee = Number(d.entry_fee || 0);
+                const fee = resolveDivisionEntryFee(d, event);
                 if (fee === 0) return true;
                 if (isSelfPayingDivision(d.id, sel)) return true;
                 if (sel?.partnerName && sel?.payForPartner) return true;
@@ -3046,6 +3047,18 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 : 'Select one or more divisions. Adding a partner is optional — leave it blank to enter on your own.'}
                         />
 
+                        {isEarlyBirdActive(event) && (
+                            <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[12px] text-emerald-900">
+                                <span className="font-bold">Early bird:</span>{' '}
+                                {fmtRWhole(event.early_bird_fee)} per player until{' '}
+                                {new Date(event.early_bird_ends_at).toLocaleString('en-ZA', {
+                                    day: 'numeric', month: 'short', year: 'numeric',
+                                    hour: '2-digit', minute: '2-digit',
+                                })}
+                                . Standard division prices apply after that.
+                            </div>
+                        )}
+
                         <div className="space-y-2">
                             {(wizardMode === 'addPartner'
                                 ? divisions.filter((d) => d.id === addPartnerTarget?.division_id)
@@ -3117,7 +3130,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                     <p className="font-semibold text-slate-900 text-sm leading-snug">
                                                         {d.name}
                                                     </p>
-                                                    <DivisionDetails division={d} className="text-[11px] text-slate-600 font-normal leading-snug mt-1 rich-text max-w-none" />
+                                                    <DivisionDetails division={d} event={event} className="text-[11px] text-slate-600 font-normal leading-snug mt-1 rich-text max-w-none" />
                                                     {reged && (
                                                         <p className="text-[10px] text-emerald-600 font-normal mt-0.5">
                                                             {enteredByName ? `Entered by ${enteredByName}` : 'Already entered'}
@@ -3907,7 +3920,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 const confirmSelfName = displayProfile?.name || profile?.name || 'You';
                 const confirmEntries = selectedDivisions.map((d) => {
                     const sel = selected[d.id];
-                    const fee = Number(d.entry_fee || 0);
+                    const fee = resolveDivisionEntryFee(d, event);
                     const userPaysPartner = !!(sel?.partnerName && sel?.payForPartner);
                     const partnerPaysSelf = !!(sel?.partnerName && !sel?.payForPartner);
                     const partnerUnpaid = partnerPaysSelf && fee > 0 && !isPartnerDivisionPaid(d.id);
@@ -4206,7 +4219,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 {panelEntries.map((entry) => {
                                     const reg = myRegs.find((r) => r.id === entry.id);
                                     const div = divisions.find((d) => d.id === entry.divisionId);
-                                    const needsPay = reg && reg.payment_status !== 'paid' && Number(div?.entry_fee || 0) > 0;
+                                    const needsPay = reg && reg.payment_status !== 'paid' && resolveDivisionEntryFee(div, event) > 0;
                                     return (
                                         <ManualRegistrationEntryCard
                                             key={entry.id}
@@ -4286,7 +4299,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                             {closed ? 'Closed' : closeDate || 'Open'}
                                                         </span>
                                                     </div>
-                                                    <DivisionDetails division={d} />
+                                                    <DivisionDetails division={d} event={event} />
                                                 </div>
                                             </div>
                                         </div>
@@ -4440,7 +4453,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
                             {(() => {
                                 const wdDiv = divisions.find((d) => d.id === withdrawTarget.division_id || d.name === withdrawTarget.division);
-                                const wdFee = Number(wdDiv?.entry_fee || 0);
+                                const wdFee = resolveDivisionEntryFee(wdDiv, event);
                                 const wdPaid = withdrawTarget.payment_status === 'paid';
                                 if (wdPaid && wdFee > 0) {
                                     return (
@@ -4483,9 +4496,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     </button>
                                     {switchMode && (() => {
                                         const cur = divisions.find((d) => d.id === withdrawTarget.division_id || d.name === withdrawTarget.division);
-                                        const oldFee = Number(cur?.entry_fee || 0);
+                                        const oldFee = resolveDivisionEntryFee(cur, event);
                                         const tgt = divisions.find((d) => d.id === switchTargetDivId);
-                                        const newFee = Number(tgt?.entry_fee || 0);
+                                        const newFee = resolveDivisionEntryFee(tgt, event);
                                         const delta = tgt ? Math.round((newFee - oldFee) * 100) / 100 : 0;
                                         return (
                                             <div className="mt-2 space-y-2">
@@ -4498,7 +4511,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                     <option value="">Choose a division…</option>
                                                     {switchEligibleDivisions.map((d) => (
                                                         <option key={d.id} value={d.id}>
-                                                            {d.name} — {fmtRWhole(Number(d.entry_fee || 0))}
+                                                            {d.name} — {fmtRWhole(resolveDivisionEntryFee(d, event))}
                                                         </option>
                                                     ))}
                                                 </select>
