@@ -25,6 +25,7 @@ import sapaLogo from '../assets/sapa-logo.svg';
 import { getEventImage } from '../utils/imageUtils';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
 import { isRegistrationClosed } from '../utils/registrationClose';
+import { resolvePartnerPaid } from '../utils/partnerPaymentStatus';
 import { isEarlyBirdActive, resolveDivisionEntryFee } from '../utils/eventEntryFee';
 import TournamentProgressBar from '../components/TournamentProgressBar';
 
@@ -1367,7 +1368,7 @@ const EventDetails = () => {
                 )
                 : null;
             const partnerPaid = hasPartner && (
-                reg.partner_payment_status === 'paid' || partnerReg?.payment_status === 'paid'
+                resolvePartnerPaid(reg, partnerReg)
             );
             const registeredBy = (reg.registered_by || '').toLowerCase();
             const wasAddedByPartner = !!(registeredBy && registeredBy !== manualUserEmail);
@@ -3464,8 +3465,11 @@ const EventDetails = () => {
     const partnerAddedNeedsPayment = partnerAddedEntries.some((e) => !e.isPaid);
     const partnerAddedByName = partnerAddedEntries[0]?.addedByName || 'Your partner';
     const hasManualRegistrations = event.is_manual && manualUserEmail && manualEntries.length > 0;
-    const manualAllPaid = manualEntries.length > 0 && manualEntries.every((e) => e.isPaid);
-    const manualHasPending = manualEntries.some((e) => !e.isPaid);
+    /** Green only when every entry is fully paid — including partners. */
+    const entryTeamFullyPaid = (e) => e.isPaid && (!e.hasPartner || e.partnerPaid);
+    const manualAllPaid = manualEntries.length > 0 && manualEntries.every(entryTeamFullyPaid);
+    const manualHasPending = manualEntries.some((e) => !entryTeamFullyPaid(e));
+    const partnerPaymentPending = manualEntries.some((e) => e.isPaid && e.hasPartner && !e.partnerPaid);
 
     const manualAllRegistrationsBlock = hasManualRegistrations && (
         <div className={`rounded-2xl shadow-sm overflow-hidden ${manualHasPending
@@ -3499,6 +3503,15 @@ const EventDetails = () => {
                         )}
                     </div>
                 </div>
+
+                {partnerPaymentPending && (
+                    <div className="flex items-start gap-2.5 mb-4 p-3 rounded-xl bg-amber-50/80 border border-amber-100">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                        <p className="text-xs text-amber-900 leading-relaxed">
+                            Your partner still needs to complete payment to confirm the team entry.
+                        </p>
+                    </div>
+                )}
 
                 <div className="space-y-3">
                     {manualEntries.map((entry) => (
@@ -3573,7 +3586,7 @@ const EventDetails = () => {
         || (event.is_manual && (manualRegStatus.hasRegistrations || manualRegStatus.hasPendingPayment))
     );
     const registrationHighlightClass = shouldHighlightRegistration
-        ? (manualRegStatus?.hasPendingPayment || needsPayment)
+        ? (manualRegStatus?.hasPendingPayment || needsPayment || partnerPaymentPending)
             ? '!shadow-[0_0_15px_rgba(245,158,11,0.4)] !border-amber-400'
             : '!shadow-[0_0_15px_rgba(34,197,94,0.3)] !border-green-400'
         : '';

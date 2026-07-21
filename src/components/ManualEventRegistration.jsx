@@ -21,6 +21,7 @@ import ManualRegistrationEntryCard from './ManualRegistrationEntryCard';
 import { useMembersOnly } from '../context/MembersOnlyContext';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
 import { isRegistrationClosed } from '../utils/registrationClose';
+import { resolvePartnerPaid } from '../utils/partnerPaymentStatus';
 import { isEarlyBirdActive, resolveDivisionEntryFee } from '../utils/eventEntryFee';
 
 const STEPS = [
@@ -687,7 +688,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 )
                 : null;
             const partnerPaid = hasPartner && (
-                reg.partner_payment_status === 'paid' || partnerReg?.payment_status === 'paid'
+                resolvePartnerPaid(reg, partnerReg)
             );
             const canAddPartner = isPaid
                 && !hasPartner
@@ -1078,9 +1079,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     };
 
     const isPartnerDivisionPaid = (divisionId) => {
-        if (myRegs.some((r) => r.division_id === divisionId && r.partner_payment_status === 'paid')) return true;
         const sel = selected[divisionId];
-        return partnerHasOwnPaidEntry(divisionId, sel?.partnerEmail);
+        const partnerEmail = sel?.partnerEmail
+            || myRegs.find((r) => r.division_id === divisionId)?.partner_email;
+        // Only trust the partner's own payment_status — never the denormalized
+        // partner_payment_status on the viewer's row (can be stale/wrong).
+        return partnerHasOwnPaidEntry(divisionId, partnerEmail);
     };
 
     const isSelfPayingDivision = (divId, sel) => {
@@ -1905,7 +1909,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 partner_email: sel?.partnerEmail || existingSelfReg?.partner_email || null,
                 payment_status: selfAlreadyPaid ? 'paid' : fee === 0 ? 'paid' : 'pending',
                 partner_payment_status: (sel?.partnerName || existingSelfReg?.partner_name)
-                    ? (isPartnerDivisionPaid(d.id) ? 'paid' : (existingSelfReg?.partner_payment_status || 'pending'))
+                    ? (isPartnerDivisionPaid(d.id) ? 'paid' : 'pending')
                     : null,
                 status: 'registered',
                 registered_by: existingSelfReg?.registered_by || userEmail,
@@ -4208,6 +4212,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                         {hasRegistrations
                                             ? 'You have an outstanding payment to complete your registration.'
                                             : 'Complete your payment to secure your spot.'}
+                                    </p>
+                                </div>
+                            )}
+                            {!hasPendingPayment && registrationEntries.some((e) => e.isPaid && e.hasPartner && !e.partnerPaid) && (
+                                <div className="flex items-start gap-2.5 mb-4 p-3 rounded-xl bg-amber-50/80 border border-amber-100">
+                                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                    <p className="text-xs text-amber-900 leading-relaxed">
+                                        Your partner still needs to complete payment to confirm the team entry.
                                     </p>
                                 </div>
                             )}
