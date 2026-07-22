@@ -2006,7 +2006,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                                         </span>
                                                     </div>
                                                     <div className="min-w-0 rounded-lg bg-[#140f1f] border border-fuchsia-400/40 px-2.5 py-2.5">
-                                                        <span className="text-fuchsia-300 font-black block text-[9px] uppercase tracking-wider">Closes</span>
+                                                        <span className="text-fuchsia-300 font-black block text-[9px] uppercase tracking-wider">Entries Close</span>
                                                         <span className="block font-bold text-white mt-1 truncate" title={formatRegistrationClosesLabel(ev.registration_closes_at)}>
                                                             {formatRegistrationClosesLabel(ev.registration_closes_at)}
                                                         </span>
