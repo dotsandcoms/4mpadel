@@ -1,9 +1,31 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
+import { SAPA_FALLBACK_RANKEDIN, fetchDefaultFederationRankedinConfig } from '../utils/federation';
 
 // Rankedin API Base URL
 const API_BASE = 'https://api.rankedin.com/v1';
-const SAPA_ORG_ID = '11331';
+
+/** Cached SAPA/default federation Rankedin IDs (DB first, hardcoded fallback). */
+let rankedinConfigPromise = null;
+
+/**
+ * Resolve Rankedin events/rankings org IDs from the federations table.
+ * @returns {Promise<{ eventsOrgId: string, rankingsOrgId: string }>}
+ */
+async function resolveRankedinOrgIds() {
+    if (!rankedinConfigPromise) {
+        rankedinConfigPromise = fetchDefaultFederationRankedinConfig()
+            .then((c) => ({
+                eventsOrgId: c.eventsOrgId || SAPA_FALLBACK_RANKEDIN.eventsOrgId,
+                rankingsOrgId: c.rankingsOrgId || SAPA_FALLBACK_RANKEDIN.rankingsOrgId,
+            }))
+            .catch(() => ({
+                eventsOrgId: SAPA_FALLBACK_RANKEDIN.eventsOrgId,
+                rankingsOrgId: SAPA_FALLBACK_RANKEDIN.rankingsOrgId,
+            }));
+    }
+    return rankedinConfigPromise;
+}
 
 /**
  * Parse Rankedin match dates. Live player-match payloads use DD/MM/YYYY HH:mm,
@@ -196,9 +218,9 @@ export const useRankedin = () => {
         setLoading(true);
         setError(null);
         try {
-            // Organization/GetOrganisationEventsAsync endpoint
+            const { eventsOrgId } = await resolveRankedinOrgIds();
             const data = await fetchWithCache(
-                `${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${SAPA_ORG_ID}&IsFinished=true&Language=en&skip=0&take=${take}`
+                `${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${eventsOrgId}&IsFinished=true&Language=en&skip=0&take=${take}`
             );
             return data.payload || [];
         } catch (err) {
@@ -280,8 +302,9 @@ export const useRankedin = () => {
         setLoading(true);
         setError(null);
         try {
+            const { eventsOrgId } = await resolveRankedinOrgIds();
             const data = await fetchWithCache(
-                `${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${SAPA_ORG_ID}&IsFinished=false&Language=en&skip=0&take=100`
+                `${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${eventsOrgId}&IsFinished=false&Language=en&skip=0&take=100`
             );
             return data.payload || [];
         } catch (err) {
@@ -351,14 +374,15 @@ export const useRankedin = () => {
      */
     const getTournamentDetails = useCallback(async (tournamentId) => {
         try {
+            const { eventsOrgId } = await resolveRankedinOrgIds();
             // Check finished events
-            const finishedData = await fetchWithCache(`${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${SAPA_ORG_ID}&IsFinished=true&Language=en&skip=0&take=100`);
+            const finishedData = await fetchWithCache(`${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${eventsOrgId}&IsFinished=true&Language=en&skip=0&take=100`);
             let tour = finishedData.payload?.find(t => t.eventId.toString() === tournamentId.toString());
 
             if (tour) return tour;
 
             // Check upcoming/ongoing events
-            const upcomingData = await fetchWithCache(`${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${SAPA_ORG_ID}&IsFinished=false&Language=en&skip=0&take=100`);
+            const upcomingData = await fetchWithCache(`${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${eventsOrgId}&IsFinished=false&Language=en&skip=0&take=100`);
             tour = upcomingData.payload?.find(t => t.eventId.toString() === tournamentId.toString());
 
             return tour || null;
@@ -385,12 +409,15 @@ export const useRankedin = () => {
      * @param {number} take Number of players to fetch
      * @returns {Promise<Array>} Array of ranked players
      */
-    const getOrganisationRankings = useCallback(async (rankingType, ageGroup, take = 10, rankingId = 15809) => {
+    const getOrganisationRankings = useCallback(async (rankingType, ageGroup, take = 10, rankingId = null) => {
         setLoading(true);
         setError(null);
         try {
+            const resolvedId = rankingId
+                ?? (await resolveRankedinOrgIds()).rankingsOrgId
+                ?? SAPA_FALLBACK_RANKEDIN.rankingsOrgId;
             const data = await fetchWithCache(
-                `${API_BASE}/Ranking/GetRankingsAsync?rankingId=${rankingId}&rankingType=${rankingType}&ageGroup=${ageGroup}&weekFromNow=0&language=en&skip=0&take=${take}`
+                `${API_BASE}/Ranking/GetRankingsAsync?rankingId=${resolvedId}&rankingType=${rankingType}&ageGroup=${ageGroup}&weekFromNow=0&language=en&skip=0&take=${take}`
             );
             return data.Payload || [];
         } catch (err) {

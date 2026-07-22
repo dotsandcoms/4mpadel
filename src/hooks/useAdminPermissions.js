@@ -62,6 +62,28 @@ async function resolveOrgMembership(userEmail) {
     return null;
 }
 
+/**
+ * Resolve federation membership for a user email.
+ * @returns {{ federation: object, federations: object[], federationRole: string }|null}
+ */
+async function resolveFederationMembership(userEmail) {
+    const { data: memberships } = await supabase
+        .from('federation_members')
+        .select('role, federation_id, federations(*)')
+        .ilike('user_email', userEmail);
+
+    const active = (memberships || [])
+        .filter((m) => m.federations)
+        .map((m) => ({ ...m.federations, member_role: m.role }));
+
+    if (active.length === 0) return null;
+    return {
+        federation: active[0],
+        federations: active,
+        federationRole: active[0].member_role,
+    };
+}
+
 export const useAdminPermissions = (userEmail) => {
     const [permissions, setPermissions] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -80,6 +102,7 @@ export const useAdminPermissions = (userEmail) => {
                 // so they can manage events for organisations they belong to.
                 if (SUPER_ADMINS.includes(userEmail.toLowerCase())) {
                     const orgMembership = await resolveOrgMembership(userEmail);
+                    const fedMembership = await resolveFederationMembership(userEmail);
                     setPermissions({
                         role: 'super_admin',
                         allowed_tabs: [],
@@ -88,6 +111,11 @@ export const useAdminPermissions = (userEmail) => {
                             org: orgMembership.org,
                             orgs: orgMembership.orgs,
                             orgRole: orgMembership.orgRole,
+                        } : {}),
+                        ...(fedMembership ? {
+                            federation: fedMembership.federation,
+                            federations: fedMembership.federations,
+                            federationRole: fedMembership.federationRole,
                         } : {}),
                     });
                     setLoading(false);
@@ -102,36 +130,60 @@ export const useAdminPermissions = (userEmail) => {
 
                 if (error) {
                     if (error.code === 'PGRST116') {
-                        // Not a 4M admin — check organisation membership
-                        const orgMembership = await resolveOrgMembership(userEmail);
-                        if (orgMembership) {
+                        // Not a 4M admin — check federation then organisation membership
+                        const fedMembership = await resolveFederationMembership(userEmail);
+                        if (fedMembership) {
+                            const tabs = ['federations'];
+                            if (['owner', 'admin'].includes(fedMembership.federationRole)) {
+                                tabs.push('organisations');
+                            }
                             setPermissions({
-                                role: 'org_owner',
-                                org: orgMembership.org,
-                                orgs: orgMembership.orgs,
-                                orgRole: orgMembership.orgRole,
-                                allowed_tabs: ['organisations'],
-                                module_permissions: {}
+                                role: 'federation_admin',
+                                federation: fedMembership.federation,
+                                federations: fedMembership.federations,
+                                federationRole: fedMembership.federationRole,
+                                allowed_tabs: tabs,
+                                module_permissions: {},
                             });
                         } else {
-                            // Not found - default to no permissions
-                            setPermissions({ role: 'custom', allowed_tabs: [], module_permissions: {} });
+                            const orgMembership = await resolveOrgMembership(userEmail);
+                            if (orgMembership) {
+                                setPermissions({
+                                    role: 'org_owner',
+                                    org: orgMembership.org,
+                                    orgs: orgMembership.orgs,
+                                    orgRole: orgMembership.orgRole,
+                                    allowed_tabs: ['organisations'],
+                                    module_permissions: {}
+                                });
+                            } else {
+                                setPermissions({ role: 'custom', allowed_tabs: [], module_permissions: {} });
+                            }
                         }
                     } else {
                         console.error('Error fetching admin permissions:', error);
-                        // Fallback to minimal permissions on error
                         setPermissions({ role: 'custom', allowed_tabs: [], module_permissions: {} });
                     }
                 } else {
-                    // Custom/admin roles can also be org members — attach linked org when present
                     const orgMembership = await resolveOrgMembership(userEmail);
+                    const fedMembership = await resolveFederationMembership(userEmail);
+                    const allowed = Array.isArray(data.allowed_tabs) ? [...data.allowed_tabs] : [];
+                    if (fedMembership && !allowed.includes('federations')) {
+                        allowed.push('federations');
+                    }
                     setPermissions({
                         ...data,
+                        allowed_tabs: allowed,
                         module_permissions: data.module_permissions || {},
                         ...(orgMembership ? {
                             org: orgMembership.org,
                             orgs: orgMembership.orgs,
                             orgRole: orgMembership.orgRole,
+                        } : {}),
+                        ...(fedMembership ? {
+                            federation: fedMembership.federation,
+                            federations: fedMembership.federations,
+                            federationRole: fedMembership.federationRole,
                         } : {}),
                     });
                 }

@@ -678,7 +678,9 @@ const CalendarManager = () => {
 
         try {
             const API_BASE = 'https://api.rankedin.com/v1';
-            const SAPA_ORG_ID = '11331';
+            const { fetchDefaultFederationRankedinConfig, SAPA_FALLBACK_RANKEDIN } = await import('../../utils/federation');
+            const rankedinCfg = await fetchDefaultFederationRankedinConfig().catch(() => null);
+            const SAPA_ORG_ID = rankedinCfg?.eventsOrgId || SAPA_FALLBACK_RANKEDIN.eventsOrgId;
 
             // 1. Fetch from Rankedin (Both finished and upcoming)
             const [finishedRes, upcomingRes] = await Promise.all([

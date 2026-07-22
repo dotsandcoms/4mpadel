@@ -169,6 +169,14 @@ const Navbar = ({ isDark = false, accentColor }) => {
       ]
     },
     {
+      name: 'Ecosystem',
+      href: '#',
+      dropdown: [
+        { name: 'Federations', href: '/federations' },
+        { name: 'Organisations', href: '/organisations' },
+      ]
+    },
+    {
       name: 'Academy',
       href: '#',
       dropdown: [
