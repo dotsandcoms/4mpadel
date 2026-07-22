@@ -703,8 +703,8 @@ const Hero = () => {
                             : 'flex-1 py-2 text-xs'
                     } rounded-md transition-all font-bold whitespace-nowrap ${
                         scheduleTimeFilter === key
-                            ? 'bg-white/10 text-white shadow-sm'
-                            : 'text-white/45 hover:text-white'
+                            ? 'border border-white/40 bg-white/5 text-white shadow-md'
+                            : 'text-white/50 hover:text-white'
                     }`}
                 >
                     {label}
