@@ -157,8 +157,22 @@ const OrganisationPage = () => {
     const accentSoft = `${accent}1a`;   // ~10% alpha
     const accentBorder = `${accent}40`; // ~25% alpha
 
-    const today = new Date().toISOString().substring(0, 10);
-    const upcoming = useMemo(() => events.filter(e => (e.end_date || e.start_date || '') >= today), [events, today]);
+    const upcoming = useMemo(() => {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        return [...events]
+            .filter((e) => {
+                const end = new Date(e.end_date || e.start_date || 0);
+                if (Number.isNaN(end.getTime())) return false;
+                end.setHours(23, 59, 59, 999);
+                return end.getTime() >= startOfToday.getTime();
+            })
+            .sort((a, b) => {
+                const aT = new Date(a.start_date || 0).getTime();
+                const bT = new Date(b.start_date || 0).getTime();
+                return aT - bT;
+            });
+    }, [events]);
     const hostVenues = useMemo(() => {
         const seen = new Map();
         events.forEach(e => {

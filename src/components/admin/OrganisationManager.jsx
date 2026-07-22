@@ -19,6 +19,83 @@ import OrgAuditLog from './OrgAuditLog';
 import ManualEventRegistrations from './ManualEventRegistrations';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
 
+/**
+ * Collect positive fee amounts from calendar + tournament_divisions.
+ * @param {object} event
+ * @param {{ entry_fee?: number|string }[]} [divisions]
+ * @returns {number[]}
+ */
+const collectEventFeeAmounts = (event, divisions = []) => {
+    const fees = [];
+    const push = (value) => {
+        const n = Number(value);
+        if (!Number.isNaN(n) && n > 0) fees.push(n);
+    };
+    push(event?.entry_fee);
+    push(event?.early_bird_fee);
+    Object.values(event?.category_fees || {}).forEach(push);
+    (divisions || event?._divisions || []).forEach((d) => push(d?.entry_fee));
+    return fees;
+};
+
+/**
+ * Human-readable entry price for org admin cards (handles division-only pricing).
+ * @param {object} event
+ * @param {{ entry_fee?: number|string }[]} [divisions]
+ * @returns {string}
+ */
+const formatEventEntryPriceLabel = (event, divisions = []) => {
+    const fees = collectEventFeeAmounts(event, divisions);
+    if (fees.length === 0) return 'TBC';
+    const min = Math.min(...fees);
+    const max = Math.max(...fees);
+    if (min === max) return `R ${min.toLocaleString('en-ZA')}`;
+    return `R ${min.toLocaleString('en-ZA')} – ${max.toLocaleString('en-ZA')}`;
+};
+
+/**
+ * @param {string|null|undefined} value
+ * @returns {string}
+ */
+const formatRegistrationClosesLabel = (value) => {
+    if (!value) return 'Not set';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return 'Not set';
+    return d.toLocaleString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+};
+
+/**
+ * Upcoming soonest-first, then past (most recent first).
+ * @param {Array<{ start_date?: string, end_date?: string }>} list
+ * @returns {typeof list}
+ */
+const sortEventsUpcomingFirst = (list) => {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const startMs = (e) => {
+        const d = new Date(e?.start_date || e?.end_date || 0);
+        return Number.isNaN(d.getTime()) ? Number.POSITIVE_INFINITY : d.getTime();
+    };
+    const isUpcoming = (e) => {
+        const d = new Date(e?.end_date || e?.start_date || 0);
+        if (Number.isNaN(d.getTime())) return false;
+        d.setHours(23, 59, 59, 999);
+        return d.getTime() >= startOfToday.getTime();
+    };
+    return [...(list || [])].sort((a, b) => {
+        const aUp = isUpcoming(a);
+        const bUp = isUpcoming(b);
+        if (aUp !== bUp) return aUp ? -1 : 1;
+        return aUp ? startMs(a) - startMs(b) : startMs(b) - startMs(a);
+    });
+};
+
 const CollapsibleSection = ({
     open,
     onToggle,
@@ -420,22 +497,61 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                 .from('calendar')
                 .select('*')
                 .eq('organisation_id', currentOrg.id)
-                .order('start_date', { ascending: false });
+                .order('start_date', { ascending: true });
 
             if (error) throw error;
             const evList = events || [];
-            setOrgEvents(evList);
+            const eventIds = evList.map((e) => e.id);
 
-            // Fetch live participant counts (paginated — not limited to first 1000 rows)
-            if (evList.length > 0) {
-                const allCounts = await fetchAllParticipantCounts();
-                const eventIds = new Set(evList.map(e => e.id));
-                const counts = {};
-                eventIds.forEach(id => {
-                    if (allCounts[id]) counts[id] = allCounts[id];
+            const divisionsByEvent = {};
+            const entryCounts = {};
+            const paidCounts = {};
+
+            if (eventIds.length > 0) {
+                const { data: divisions, error: divErr } = await supabase
+                    .from('tournament_divisions')
+                    .select('event_id, name, entry_fee')
+                    .in('event_id', eventIds);
+
+                if (divErr) throw divErr;
+
+                (divisions || []).forEach((d) => {
+                    if (!divisionsByEvent[d.event_id]) divisionsByEvent[d.event_id] = [];
+                    divisionsByEvent[d.event_id].push(d);
                 });
-                setParticipantCounts(prev => ({ ...prev, ...counts }));
+
+                // Same definition as EventDetails / Manage Event: active registration rows
+                // (player entries, not unique teams), excluding withdrawn.
+                const pageSize = 1000;
+                let from = 0;
+                while (true) {
+                    const { data: regs, error: regErr } = await supabase
+                        .from('event_registrations')
+                        .select('event_id, payment_status, status')
+                        .in('event_id', eventIds)
+                        .neq('status', 'withdrawn')
+                        .range(from, from + pageSize - 1);
+                    if (regErr) throw regErr;
+                    (regs || []).forEach((r) => {
+                        const id = r.event_id;
+                        entryCounts[id] = (entryCounts[id] || 0) + 1;
+                        if (r.payment_status === 'paid') {
+                            paidCounts[id] = (paidCounts[id] || 0) + 1;
+                        }
+                    });
+                    if (!regs || regs.length < pageSize) break;
+                    from += pageSize;
+                }
+
+                setParticipantCounts((prev) => ({ ...prev, ...entryCounts }));
             }
+
+            setOrgEvents(sortEventsUpcomingFirst(evList.map((e) => ({
+                ...e,
+                _divisions: divisionsByEvent[e.id] || [],
+                _entryCount: entryCounts[e.id] || 0,
+                _paidCount: paidCounts[e.id] || 0,
+            }))));
         } catch (err) {
             console.error('Failed to fetch host events:', err);
             toast.error('Error loading tournament lists.');
@@ -1058,13 +1174,13 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
         const pendingCount = orgEvents.filter(e => e.sanction_status === 'pending').length;
 
         const totalRegistrations = approved.reduce((sum, e) => {
-            // Prefer live count from tournament_participants, fall back to calendar column
-            return sum + (participantCounts[e.id] ?? parseInt(e.registered_players) ?? 0);
+            return sum + (e._entryCount ?? participantCounts[e.id] ?? parseInt(e.registered_players) ?? 0);
         }, 0);
 
         const totalEarned = approved.reduce((sum, e) => {
-            const fee = parseFloat(e.entry_fee) || 0;
-            const players = participantCounts[e.id] ?? parseInt(e.registered_players) ?? 0;
+            const fees = collectEventFeeAmounts(e, e._divisions);
+            const fee = fees.length ? Math.min(...fees) : (parseFloat(e.entry_fee) || 0);
+            const players = e._paidCount ?? participantCounts[e.id] ?? parseInt(e.registered_players) ?? 0;
             return sum + (fee * players);
         }, 0);
 
@@ -1869,14 +1985,31 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
 
                                                 <h4 className="font-extrabold text-white text-md leading-snug">{ev.event_name}</h4>
 
-                                                <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-gray-400 bg-black/35 p-3 rounded-xl border border-white/5">
-                                                    <div>
-                                                        <span className="text-gray-500 font-bold block text-[9px] uppercase tracking-wider">Venue</span>
-                                                        <span className="truncate block font-semibold text-gray-300">{ev.venue || 'TBD'}</span>
+                                                <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-2 text-xs bg-white/[0.04] p-3 rounded-xl border border-white/10">
+                                                    <div className="min-w-0 rounded-lg bg-[#0f172a] border border-sky-400/40 px-2.5 py-2.5">
+                                                        <span className="text-sky-300 font-black block text-[9px] uppercase tracking-wider">Venue</span>
+                                                        <span className="truncate block font-bold text-white mt-1">{ev.venue || 'TBD'}</span>
                                                     </div>
-                                                    <div>
-                                                        <span className="text-gray-500 font-bold block text-[9px] uppercase tracking-wider">Entry Price</span>
-                                                        <span className="block font-black text-padel-green">R {ev.entry_fee || 0}</span>
+                                                    <div className="min-w-0 rounded-lg bg-[#0a1a08] border border-padel-green/50 px-2.5 py-2.5">
+                                                        <span className="text-padel-green font-black block text-[9px] uppercase tracking-wider">Entry Price</span>
+                                                        <span className="block font-black text-white mt-1">
+                                                            {formatEventEntryPriceLabel(ev, ev._divisions)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="min-w-0 rounded-lg bg-[#1a1408] border border-amber-400/45 px-2.5 py-2.5">
+                                                        <span className="text-amber-300 font-black block text-[9px] uppercase tracking-wider">Entries</span>
+                                                        <span className="block font-black text-white mt-1">
+                                                            {ev._entryCount ?? 0}
+                                                            <span className="text-amber-200/80 font-semibold text-[10px] ml-1">
+                                                                ({ev._paidCount ?? 0} paid)
+                                                            </span>
+                                                        </span>
+                                                    </div>
+                                                    <div className="min-w-0 rounded-lg bg-[#140f1f] border border-fuchsia-400/40 px-2.5 py-2.5">
+                                                        <span className="text-fuchsia-300 font-black block text-[9px] uppercase tracking-wider">Closes</span>
+                                                        <span className="block font-bold text-white mt-1 truncate" title={formatRegistrationClosesLabel(ev.registration_closes_at)}>
+                                                            {formatRegistrationClosesLabel(ev.registration_closes_at)}
+                                                        </span>
                                                     </div>
                                                 </div>
 
