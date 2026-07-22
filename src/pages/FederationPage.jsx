@@ -391,19 +391,28 @@ const FederationPage = () => {
             <div className="relative">
                 <div
                     className={`relative overflow-hidden bg-gradient-to-br from-[#0B0F19] via-black to-[#0B0F19] ${
-                        federation.cover_image_url ? 'h-24 sm:h-40 md:h-72' : 'h-3 sm:h-8 md:h-40'
+                        federation.cover_image_url ? 'h-44 sm:h-60 md:h-80 lg:h-[26rem]' : 'h-3 sm:h-8 md:h-40'
                     }`}
                 >
                     {federation.cover_image_url ? (
-                        <img src={federation.cover_image_url} alt="" className="w-full h-full object-cover opacity-70" />
+                        <img
+                            src={federation.cover_image_url}
+                            alt=""
+                            className="absolute inset-0 w-full h-full object-cover object-center"
+                        />
                     ) : (
                         <div className="absolute inset-0" style={{ background: `radial-gradient(ellipse at 70% 30%, ${accent}22, transparent 55%)` }} />
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent" />
+                    {/* Soft bottom fade only — keep hero photo readable */}
+                    {federation.cover_image_url ? (
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-black/25" />
+                    ) : (
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
+                    )}
                 </div>
 
                 <div className={`container mx-auto px-4 md:px-6 relative z-10 ${
-                    federation.cover_image_url ? '-mt-10 sm:-mt-14 md:-mt-24' : 'mt-0 md:-mt-16'
+                    federation.cover_image_url ? '-mt-14 sm:-mt-20 md:-mt-28' : 'mt-0 md:-mt-16'
                 }`}>
                     <div className="flex flex-col gap-2.5 sm:gap-3 md:gap-5">
                         <div className="flex items-end gap-3.5 sm:gap-5 md:gap-8">
