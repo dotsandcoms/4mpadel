@@ -172,7 +172,8 @@ const Navbar = ({ isDark = false, accentColor }) => {
       name: 'Ecosystem',
       href: '#',
       dropdown: [
-        { name: 'Federations', href: '/federations' },
+        { name: 'Federation', heading: true },
+        { name: 'Sapa', href: '/federations/sapa' },
         { name: 'Organisations', href: '/organisations' },
       ]
     },
@@ -286,13 +287,24 @@ const Navbar = ({ isDark = false, accentColor }) => {
                   {link.dropdown && (
                     <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 w-52 bg-black/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 py-1.5 z-[60]">
                       {link.dropdown.map((subItem) => (
-                        <a
-                          key={subItem.name}
-                          href={subItem.href}
-                          className="block px-5 py-2 text-[10px] font-bold text-gray-300 hover:text-padel-green hover:bg-white/5 transition-all uppercase tracking-wider border-l-2 border-transparent hover:border-padel-green"
-                        >
-                          {subItem.name}
-                        </a>
+                        subItem.heading ? (
+                          <div
+                            key={subItem.name}
+                            className="px-5 pt-2.5 pb-1 text-[9px] font-black text-gray-500 uppercase tracking-[0.18em] select-none pointer-events-none"
+                          >
+                            {subItem.name}
+                          </div>
+                        ) : (
+                          <a
+                            key={subItem.name}
+                            href={subItem.href}
+                            className={`block py-2 text-[10px] font-bold text-gray-300 hover:text-padel-green hover:bg-white/5 transition-all uppercase tracking-wider border-l-2 border-transparent hover:border-padel-green ${
+                              link.name === 'Ecosystem' && subItem.name === 'Sapa' ? 'pl-7 pr-5' : 'px-5'
+                            }`}
+                          >
+                            {subItem.name}
+                          </a>
+                        )
                       ))}
                     </div>
                   )}
@@ -622,15 +634,25 @@ const Navbar = ({ isDark = false, accentColor }) => {
                             className="overflow-hidden flex flex-col pl-9 pr-4 py-1.5 gap-2 border-l border-white/5 ml-6 mt-1 mb-2 bg-white/[0.01] rounded-r-xl"
                           >
                             {link.dropdown.map((subItem) => (
-                              <a
-                                key={subItem.name}
-                                href={subItem.href}
-                                onClick={() => setIsMobileMenuOpen(false)}
-                                className={`block py-2 text-[10px] font-black uppercase tracking-wider transition-colors ${location.pathname === subItem.href ? 'text-padel-green' : 'text-gray-400 hover:text-white'
-                                  }`}
-                              >
-                                {subItem.name}
-                              </a>
+                              subItem.heading ? (
+                                <div
+                                  key={subItem.name}
+                                  className="pt-2 pb-0.5 text-[9px] font-black text-gray-500 uppercase tracking-[0.18em] select-none pointer-events-none"
+                                >
+                                  {subItem.name}
+                                </div>
+                              ) : (
+                                <a
+                                  key={subItem.name}
+                                  href={subItem.href}
+                                  onClick={() => setIsMobileMenuOpen(false)}
+                                  className={`block py-2 text-[10px] font-black uppercase tracking-wider transition-colors ${
+                                    link.name === 'Ecosystem' && subItem.name === 'Sapa' ? 'pl-2' : ''
+                                  } ${location.pathname === subItem.href ? 'text-padel-green' : 'text-gray-400 hover:text-white'}`}
+                                >
+                                  {subItem.name}
+                                </a>
+                              )
                             ))}
                           </motion.div>
                         )}
