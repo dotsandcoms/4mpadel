@@ -221,9 +221,24 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
         approvedHosts: false,
         auditLog: false,
     });
+    /** Collapsed by default so the tournament list stays scannable. */
+    const [expandedOrgEventIds, setExpandedOrgEventIds] = useState(() => new Set());
 
     const toggleSection = (key) => {
         setSectionOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+    };
+
+    /**
+     * Expand / collapse a hosted tournament card in My Events.
+     * @param {number|string} eventId
+     */
+    const toggleOrgEventExpanded = (eventId) => {
+        setExpandedOrgEventIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(eventId)) next.delete(eventId);
+            else next.add(eventId);
+            return next;
+        });
     };
 
     const getTierBadgeClass = (status) => {
@@ -1962,131 +1977,168 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                     No tournaments hosted yet. Click "Create Event" at the top to build your first event.
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 gap-4">
-                                    {orgEvents.map((ev) => (
-                                        <div key={ev.id} className="bg-white/[0.015] border border-white/10 p-5 rounded-2xl flex flex-col justify-between relative overflow-hidden shadow-lg hover:border-white/20 transition-colors">
-                                            <div className="absolute top-0 right-0 w-24 h-24 bg-white/2 blur-[40px] rounded-full pointer-events-none" />
+                                <div className="grid grid-cols-1 gap-3">
+                                    {orgEvents.map((ev) => {
+                                        const isExpanded = expandedOrgEventIds.has(ev.id);
+                                        const statusBadge = (
+                                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border shrink-0
+                                                ${ev.sanction_status === 'approved'
+                                                    ? 'bg-padel-green/10 text-padel-green border-padel-green/20'
+                                                    : ev.sanction_status === 'pending'
+                                                        ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                                                        : 'bg-red-500/10 text-red-400 border-red-500/20'
+                                                }`}
+                                            >
+                                                {ev.sanction_status === 'approved' ? 'Approved' : ev.sanction_status}
+                                            </span>
+                                        );
 
-                                            <div>
-                                                <div className="flex justify-between items-start gap-4 mb-3">
-                                                    <span className="text-xs text-padel-green font-bold">{ev.event_dates}</span>
+                                        return (
+                                            <div
+                                                key={ev.id}
+                                                className="bg-white/[0.015] border border-white/10 rounded-2xl relative overflow-hidden shadow-lg hover:border-white/20 transition-colors"
+                                            >
+                                                <div className="absolute top-0 right-0 w-24 h-24 bg-white/2 blur-[40px] rounded-full pointer-events-none" />
 
-                                                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border
-                                                        ${ev.sanction_status === 'approved'
-                                                            ? 'bg-padel-green/10 text-padel-green border-padel-green/20'
-                                                            : ev.sanction_status === 'pending'
-                                                                ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
-                                                                : 'bg-red-500/10 text-red-400 border-red-500/20'
-                                                        }`}
-                                                    >
-                                                        {ev.sanction_status === 'approved' ? 'Approved' : ev.sanction_status}
-                                                    </span>
-                                                </div>
-
-                                                <h4 className="font-extrabold text-white text-md leading-snug">{ev.event_name}</h4>
-
-                                                <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-2 text-xs bg-white/[0.04] p-3 rounded-xl border border-white/10">
-                                                    <div className="min-w-0 rounded-lg bg-[#0f172a] border border-sky-400/40 px-2.5 py-2.5">
-                                                        <span className="text-sky-300 font-black block text-[9px] uppercase tracking-wider">Venue</span>
-                                                        <span className="truncate block font-bold text-white mt-1">{ev.venue || 'TBD'}</span>
-                                                    </div>
-                                                    <div className="min-w-0 rounded-lg bg-[#0a1a08] border border-padel-green/50 px-2.5 py-2.5">
-                                                        <span className="text-padel-green font-black block text-[9px] uppercase tracking-wider">Entry Price</span>
-                                                        <span className="block font-black text-white mt-1">
-                                                            {formatEventEntryPriceLabel(ev, ev._divisions)}
-                                                        </span>
-                                                    </div>
-                                                    <div className="min-w-0 rounded-lg bg-[#1a1408] border border-amber-400/45 px-2.5 py-2.5">
-                                                        <span className="text-amber-300 font-black block text-[9px] uppercase tracking-wider">Entries</span>
-                                                        <span className="block font-black text-white mt-1">
-                                                            {ev._entryCount ?? 0}
-                                                            <span className="text-amber-200/80 font-semibold text-[10px] ml-1">
-                                                                ({ev._paidCount ?? 0} paid)
-                                                            </span>
-                                                        </span>
-                                                    </div>
-                                                    <div className="min-w-0 rounded-lg bg-[#140f1f] border border-fuchsia-400/40 px-2.5 py-2.5">
-                                                        <span className="text-fuchsia-300 font-black block text-[9px] uppercase tracking-wider">Entries Close</span>
-                                                        <span className="block font-bold text-white mt-1 truncate" title={formatRegistrationClosesLabel(ev.registration_closes_at)}>
-                                                            {formatRegistrationClosesLabel(ev.registration_closes_at)}
-                                                        </span>
-                                                    </div>
-                                                </div>
-
-                                                {/* Rejection notice banner if rejected */}
-                                                {ev.sanction_status === 'rejected' && ev.rejection_notes && (
-                                                    <div className="mt-3.5 bg-red-500/5 border border-red-500/15 p-3 rounded-xl flex items-start gap-2">
-                                                        <AlertCircle size={14} className="text-red-400 shrink-0 mt-0.5" />
-                                                        <div>
-                                                            <span className="text-[10px] font-black text-red-400 uppercase tracking-widest block">Rejection Feedback</span>
-                                                            <p className="text-[11px] text-gray-400 leading-relaxed mt-1 font-semibold">{ev.rejection_notes}</p>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleOrgEventExpanded(ev.id)}
+                                                    aria-expanded={isExpanded}
+                                                    className="w-full p-4 text-left cursor-pointer hover:bg-white/[0.02] transition-colors"
+                                                >
+                                                    <div className="flex justify-between items-start gap-4">
+                                                        <div className="min-w-0">
+                                                            <h4 className={`font-extrabold text-white text-md leading-snug ${isExpanded ? '' : 'truncate'}`}>
+                                                                {ev.event_name}
+                                                            </h4>
+                                                            <span className="text-xs text-padel-green font-bold block mt-1.5">{ev.event_dates}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 shrink-0">
+                                                            {statusBadge}
+                                                            <ChevronDown
+                                                                size={16}
+                                                                className={`text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                                            />
                                                         </div>
                                                     </div>
-                                                )}
-                                            </div>
+                                                </button>
 
-                                            <div className="flex gap-2 mt-5 pt-3.5 border-t border-white/5 justify-between items-center">
-                                                {ev.sanction_status === 'approved' ? (
-                                                    <button 
-                                                        type="button"
-                                                        onClick={() => openEventManager(ev)}
-                                                        className="text-[10px] text-padel-green font-black hover:text-white flex items-center gap-1.5 bg-padel-green/10 hover:bg-padel-green/20 border border-padel-green/20 px-2.5 py-1 rounded-md transition-all cursor-pointer"
-                                                    >
-                                                        <LayoutDashboard size={12} /> Manage Event
-                                                    </button>
-                                                ) : (
-                                                    <span className="text-[10px] text-gray-500 font-bold">
-                                                        ID: {ev.id}
-                                                    </span>
-                                                )}
+                                                <AnimatePresence initial={false}>
+                                                    {isExpanded && (
+                                                        <motion.div
+                                                            key="event-body"
+                                                            initial={{ height: 0, opacity: 0 }}
+                                                            animate={{ height: 'auto', opacity: 1 }}
+                                                            exit={{ height: 0, opacity: 0 }}
+                                                            transition={{ duration: 0.2 }}
+                                                            className="overflow-hidden"
+                                                        >
+                                                            <div className="px-4 pb-5">
+                                                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 text-xs bg-white/[0.04] p-3 rounded-xl border border-white/10">
+                                                                    <div className="min-w-0 rounded-lg bg-[#0f172a] border border-sky-400/40 px-2.5 py-2.5">
+                                                                        <span className="text-sky-300 font-black block text-[9px] uppercase tracking-wider">Venue</span>
+                                                                        <span className="truncate block font-bold text-white mt-1">{ev.venue || 'TBD'}</span>
+                                                                    </div>
+                                                                    <div className="min-w-0 rounded-lg bg-[#0a1a08] border border-padel-green/50 px-2.5 py-2.5">
+                                                                        <span className="text-padel-green font-black block text-[9px] uppercase tracking-wider">Entry Price</span>
+                                                                        <span className="block font-black text-white mt-1">
+                                                                            {formatEventEntryPriceLabel(ev, ev._divisions)}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="min-w-0 rounded-lg bg-[#1a1408] border border-amber-400/45 px-2.5 py-2.5">
+                                                                        <span className="text-amber-300 font-black block text-[9px] uppercase tracking-wider">Entries</span>
+                                                                        <span className="block font-black text-white mt-1">
+                                                                            {ev._entryCount ?? 0}
+                                                                            <span className="text-amber-200/80 font-semibold text-[10px] ml-1">
+                                                                                ({ev._paidCount ?? 0} paid)
+                                                                            </span>
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="min-w-0 rounded-lg bg-[#140f1f] border border-fuchsia-400/40 px-2.5 py-2.5">
+                                                                        <span className="text-fuchsia-300 font-black block text-[9px] uppercase tracking-wider">Entries Close</span>
+                                                                        <span className="block font-bold text-white mt-1 truncate" title={formatRegistrationClosesLabel(ev.registration_closes_at)}>
+                                                                            {formatRegistrationClosesLabel(ev.registration_closes_at)}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
 
-                                                <div className="flex items-center gap-4">
-                                                    {ev.sanction_status === 'approved' && (
-                                                        <a
-                                                            href={`/calendar/${ev.slug}`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="text-[10px] font-black text-gray-400 hover:text-white uppercase tracking-widest flex items-center gap-1"
-                                                        >
-                                                            View Event &rarr;
-                                                        </a>
+                                                                {ev.sanction_status === 'rejected' && ev.rejection_notes && (
+                                                                    <div className="mt-3.5 bg-red-500/5 border border-red-500/15 p-3 rounded-xl flex items-start gap-2">
+                                                                        <AlertCircle size={14} className="text-red-400 shrink-0 mt-0.5" />
+                                                                        <div>
+                                                                            <span className="text-[10px] font-black text-red-400 uppercase tracking-widest block">Rejection Feedback</span>
+                                                                            <p className="text-[11px] text-gray-400 leading-relaxed mt-1 font-semibold">{ev.rejection_notes}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                <div className="flex gap-2 mt-5 pt-3.5 border-t border-white/5 justify-between items-center">
+                                                                    {ev.sanction_status === 'approved' ? (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => openEventManager(ev)}
+                                                                            className="text-[10px] text-padel-green font-black hover:text-white flex items-center gap-1.5 bg-padel-green/10 hover:bg-padel-green/20 border border-padel-green/20 px-2.5 py-1 rounded-md transition-all cursor-pointer"
+                                                                        >
+                                                                            <LayoutDashboard size={12} /> Manage Event
+                                                                        </button>
+                                                                    ) : (
+                                                                        <span className="text-[10px] text-gray-500 font-bold">
+                                                                            ID: {ev.id}
+                                                                        </span>
+                                                                    )}
+
+                                                                    <div className="flex items-center gap-4">
+                                                                        {ev.sanction_status === 'approved' && (
+                                                                            <a
+                                                                                href={`/calendar/${ev.slug}`}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="text-[10px] font-black text-gray-400 hover:text-white uppercase tracking-widest flex items-center gap-1"
+                                                                            >
+                                                                                View Event &rarr;
+                                                                            </a>
+                                                                        )}
+                                                                        {ev.sanction_status !== 'approved' ? (
+                                                                            <button
+                                                                                onClick={() => handleStartEditEvent(ev)}
+                                                                                className="text-[10px] font-black text-padel-green hover:text-white uppercase tracking-widest flex items-center gap-1.5 cursor-pointer bg-transparent border-0"
+                                                                            >
+                                                                                <Edit size={12} /> Edit Details
+                                                                            </button>
+                                                                        ) : ev.pending_changes_status === 'pending' ? (
+                                                                            <button
+                                                                                onClick={() => handleStartEditEvent(ev)}
+                                                                                title="Your amendment is awaiting 4M Padel approval. Click to revise your draft."
+                                                                                className="text-[10px] font-black text-amber-400 hover:text-amber-300 uppercase tracking-widest flex items-center gap-1.5 cursor-pointer bg-transparent border-0 animate-pulse"
+                                                                            >
+                                                                                <Edit3 size={12} /> Amendment Pending
+                                                                            </button>
+                                                                        ) : ev.pending_changes_status === 'rejected' ? (
+                                                                            <button
+                                                                                onClick={() => handleStartEditEvent(ev)}
+                                                                                title={`Amendment declined: ${ev.pending_changes_notes || 'see email for feedback'}. Click to revise and resubmit.`}
+                                                                                className="text-[10px] font-black text-red-400 hover:text-red-300 uppercase tracking-widest flex items-center gap-1.5 cursor-pointer bg-transparent border-0"
+                                                                            >
+                                                                                <AlertCircle size={12} /> Amendment Declined — Revise
+                                                                            </button>
+                                                                        ) : (
+                                                                            <button
+                                                                                onClick={() => handleStartEditEvent(ev)}
+                                                                                title="Propose changes to this sanctioned event. Changes only go live once 4M Padel approves them."
+                                                                                className="text-[10px] font-black text-gray-400 hover:text-padel-green uppercase tracking-widest flex items-center gap-1.5 cursor-pointer bg-transparent border-0"
+                                                                            >
+                                                                                <Edit size={12} /> Request Changes
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </motion.div>
                                                     )}
-                                                    {ev.sanction_status !== 'approved' ? (
-                                                        <button
-                                                            onClick={() => handleStartEditEvent(ev)}
-                                                            className="text-[10px] font-black text-padel-green hover:text-white uppercase tracking-widest flex items-center gap-1.5 cursor-pointer bg-transparent border-0"
-                                                        >
-                                                            <Edit size={12} /> Edit Details
-                                                        </button>
-                                                    ) : ev.pending_changes_status === 'pending' ? (
-                                                        <button
-                                                            onClick={() => handleStartEditEvent(ev)}
-                                                            title="Your amendment is awaiting 4M Padel approval. Click to revise your draft."
-                                                            className="text-[10px] font-black text-amber-400 hover:text-amber-300 uppercase tracking-widest flex items-center gap-1.5 cursor-pointer bg-transparent border-0 animate-pulse"
-                                                        >
-                                                            <Edit3 size={12} /> Amendment Pending
-                                                        </button>
-                                                    ) : ev.pending_changes_status === 'rejected' ? (
-                                                        <button
-                                                            onClick={() => handleStartEditEvent(ev)}
-                                                            title={`Amendment declined: ${ev.pending_changes_notes || 'see email for feedback'}. Click to revise and resubmit.`}
-                                                            className="text-[10px] font-black text-red-400 hover:text-red-300 uppercase tracking-widest flex items-center gap-1.5 cursor-pointer bg-transparent border-0"
-                                                        >
-                                                            <AlertCircle size={12} /> Amendment Declined — Revise
-                                                        </button>
-                                                    ) : (
-                                                        <button
-                                                            onClick={() => handleStartEditEvent(ev)}
-                                                            title="Propose changes to this sanctioned event. Changes only go live once 4M Padel approves them."
-                                                            className="text-[10px] font-black text-gray-400 hover:text-padel-green uppercase tracking-widest flex items-center gap-1.5 cursor-pointer bg-transparent border-0"
-                                                        >
-                                                            <Edit size={12} /> Request Changes
-                                                        </button>
-                                                    )}
-                                                </div>
+                                                </AnimatePresence>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
