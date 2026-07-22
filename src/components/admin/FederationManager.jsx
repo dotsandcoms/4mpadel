@@ -6,9 +6,30 @@ import { toast } from 'sonner';
 import {
     Landmark, Plus, RefreshCw, Users, Building, Trophy, Check, X,
     Edit3, Link2, Save, Loader2, ExternalLink, AlertCircle, Upload, Trash2,
-    Image as ImageIcon, ChevronDown,
+    Image as ImageIcon, ChevronDown, Instagram, Facebook, Youtube,
 } from 'lucide-react';
 import FederationMembersManager from './FederationMembersManager';
+
+const emptySocials = () => ({
+    instagram: '',
+    facebook: '',
+    tiktok: '',
+    youtube: '',
+});
+
+/**
+ * Normalise stored socials jsonb for the form.
+ * @param {unknown} value
+ */
+const normaliseSocials = (value) => {
+    const src = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    return {
+        instagram: src.instagram || '',
+        facebook: src.facebook || '',
+        tiktok: src.tiktok || '',
+        youtube: src.youtube || '',
+    };
+};
 
 /**
  * Collapsible admin section — matches OrganisationManager pattern.
@@ -83,6 +104,7 @@ const emptyForm = () => ({
     rankedin_rankings_org_id: '',
     personnel: [],
     committees: [],
+    socials: emptySocials(),
 });
 
 const slugify = (value) => String(value || '')
@@ -190,6 +212,7 @@ const FederationManager = ({ permissions }) => {
     const [pendingAmendments, setPendingAmendments] = useState([]);
     const [sectionOpen, setSectionOpen] = useState({
         profile: true,
+        socials: false,
         personnel: false,
         committees: false,
         linkedOrgs: false,
@@ -310,6 +333,7 @@ const FederationManager = ({ permissions }) => {
                 ...selected,
                 personnel: normalisePersonnel(selected.personnel),
                 committees: normaliseCommittees(selected.committees),
+                socials: normaliseSocials(selected.socials),
                 rankedin_events_org_id: selected.rankedin_events_org_id || '',
                 rankedin_rankings_org_id: selected.rankedin_rankings_org_id || '',
             });
@@ -320,6 +344,18 @@ const FederationManager = ({ permissions }) => {
     }, [selected, loadFederationScoped]);
 
     const updateField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+
+    /**
+     * Update one social media URL field.
+     * @param {string} key
+     * @param {string} value
+     */
+    const updateSocial = (key, value) => {
+        setForm((prev) => ({
+            ...prev,
+            socials: { ...normaliseSocials(prev.socials), [key]: value },
+        }));
+    };
 
     const updatePerson = (idx, key, value) => {
         setForm((prev) => ({
@@ -409,6 +445,9 @@ const FederationManager = ({ permissions }) => {
                 rankedin_rankings_org_id: form.rankedin_rankings_org_id || null,
                 personnel,
                 committees,
+                socials: Object.fromEntries(
+                    Object.entries(normaliseSocials(form.socials)).map(([k, v]) => [k, String(v || '').trim()])
+                ),
                 updated_at: new Date().toISOString(),
             };
 
@@ -843,6 +882,40 @@ const FederationManager = ({ permissions }) => {
                                         className="mt-1 w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white font-medium normal-case tracking-normal"
                                     />
                                 </label>
+                            </CollapsibleSection>
+
+                            <CollapsibleSection
+                                open={sectionOpen.socials}
+                                onToggle={() => toggleSection('socials')}
+                                title="Social Media"
+                                icon={Instagram}
+                                count={Object.values(normaliseSocials(form.socials)).filter((v) => String(v || '').trim()).length}
+                            >
+                                <p className="text-[11px] text-gray-500 -mt-1">
+                                    These links show as clickable icons on the public federation page.
+                                </p>
+                                <div className="grid md:grid-cols-2 gap-3">
+                                    {[
+                                        ['instagram', 'Instagram URL', Instagram],
+                                        ['facebook', 'Facebook URL', Facebook],
+                                        ['tiktok', 'TikTok URL', ExternalLink],
+                                        ['youtube', 'YouTube URL', Youtube],
+                                    ].map(([key, label, Icon]) => (
+                                        <label key={key} className="block text-[10px] font-black uppercase tracking-wider text-gray-500">
+                                            {label}
+                                            <div className="relative mt-1">
+                                                <Icon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                                                <input
+                                                    type="url"
+                                                    value={form.socials?.[key] || ''}
+                                                    onChange={(e) => updateSocial(key, e.target.value)}
+                                                    placeholder="https://..."
+                                                    className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-sm text-white font-medium normal-case tracking-normal"
+                                                />
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
                             </CollapsibleSection>
 
                             <CollapsibleSection

@@ -10,6 +10,7 @@ import {
 } from '../utils/federation';
 import { useRankedin } from '../hooks/useRankedin';
 import RankingDetailsModal from '../components/RankingDetailsModal';
+import { getEventImage } from '../utils/imageUtils';
 import {
     Landmark, ShieldCheck, BadgeCheck, Globe, Mail, Phone, MessageCircle,
     ChevronRight, Users, Building, GraduationCap, Trophy, Calendar,
@@ -82,8 +83,8 @@ const accentOnDark = (hex, fallback = '#C8F500') => {
 /**
  * Horizontal snap scroller for mobile-friendly section cards.
  */
-const ScrollRow = ({ children }) => (
-    <div className="-mx-4 sm:mx-0 px-4 sm:px-0 flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide no-scrollbar touch-pan-x overscroll-x-contain pb-1">
+const ScrollRow = ({ children, className = '' }) => (
+    <div className={`-mx-4 sm:mx-0 px-4 sm:px-0 flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide no-scrollbar touch-pan-x overscroll-x-contain scroll-smooth pb-1 ${className}`}>
         {children}
     </div>
 );
@@ -102,10 +103,13 @@ const Section = ({ title, accent, action, children, id }) => (
  * Map RankedIn ranking rows + local player images (same fields as Rankings.jsx).
  * @param {object[]} data
  * @param {Record<string, object>} profileMap
+ * @param {{ limit?: number, gender?: string }} [options]
  */
-const formatFederationRankings = (data, profileMap) => {
+const formatFederationRankings = (data, profileMap, options = {}) => {
     if (!Array.isArray(data)) return [];
-    return data.slice(0, 8).map((item, index) => {
+    const limit = options.limit ?? 24;
+    const gender = options.gender || null;
+    return data.slice(0, limit).map((item, index) => {
         const name = item.Name || item.PlayerName || '—';
         const key = name.trim().toLowerCase();
         const profile = profileMap[key] || null;
@@ -118,6 +122,7 @@ const formatFederationRankings = (data, profileMap) => {
             points: item.ParticipantPoints?.Points ?? item.Points ?? item.TotalPoints ?? 0,
             image: profile?.image_url || null,
             playerRecord: profile || null,
+            gender,
             rankedinProfile: item.ParticipantUrl
                 ? `https://www.rankedin.com${item.ParticipantUrl}`
                 : null,
@@ -136,7 +141,7 @@ async function fetchProfilesByName(names) {
     if (unique.length === 0) return map;
 
     const orClause = unique
-        .slice(0, 40)
+        .slice(0, 80)
         .map((n) => `name.ilike."${String(n).replace(/"/g, '')}"`)
         .join(',');
 
@@ -242,7 +247,7 @@ const FederationPage = () => {
                     const today = new Date().toISOString().substring(0, 10);
                     const { data: evs } = await supabase
                         .from('calendar')
-                        .select('id, slug, event_name, venue, city, start_date, end_date, sapa_status, image_url, organisation_id')
+                        .select('id, slug, event_name, venue, city, start_date, end_date, sapa_status, image_url, custom_image_url, poster_image_url, organisation_id')
                         .in('organisation_id', orgIds)
                         .or('sanction_status.eq.approved,sanction_status.is.null')
                         .neq('is_visible', false)
@@ -278,18 +283,18 @@ const FederationPage = () => {
                     try {
                         const rid = Number(rankingsOrgId) || rankingsOrgId;
                         const [menRaw, womenRaw] = await Promise.all([
-                            getOrganisationRankings(3, 82, 8, rid),
-                            getOrganisationRankings(4, 83, 8, rid),
+                            getOrganisationRankings(3, 82, 40, rid),
+                            getOrganisationRankings(4, 83, 40, rid),
                         ]);
                         const names = [
-                            ...(menRaw || []).slice(0, 8).map((r) => r.Name),
-                            ...(womenRaw || []).slice(0, 8).map((r) => r.Name),
+                            ...(menRaw || []).slice(0, 40).map((r) => r.Name),
+                            ...(womenRaw || []).slice(0, 40).map((r) => r.Name),
                         ].filter(Boolean);
                         const profileMap = await fetchProfilesByName(names);
                         if (!cancelled) {
                             setRankingsByTab({
-                                men: formatFederationRankings(menRaw, profileMap),
-                                women: formatFederationRankings(womenRaw, profileMap),
+                                men: formatFederationRankings(menRaw, profileMap, { limit: 40, gender: 'men' }),
+                                women: formatFederationRankings(womenRaw, profileMap, { limit: 40, gender: 'women' }),
                             });
                         }
                     } catch (rankErr) {
@@ -314,6 +319,17 @@ const FederationPage = () => {
     const rankingsPreview = rankingsByTab[rankingsTab] || [];
     const rankingsOrgId = federation ? Number(getFederationRankingsOrgId(federation)) || getFederationRankingsOrgId(federation) : null;
     const rankingsTabLabel = RANKING_TABS.find((t) => t.id === rankingsTab)?.label || 'Men';
+    const playersAlphabetical = useMemo(() => {
+        const seen = new Set();
+        return [...(rankingsByTab.men || []), ...(rankingsByTab.women || [])]
+            .filter((p) => {
+                const key = (p.name || '').trim().toLowerCase();
+                if (!key || seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            })
+            .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+    }, [rankingsByTab]);
     const stats = useMemo(() => {
         const overrides = federation?.stats && typeof federation.stats === 'object' ? federation.stats : {};
         return [
@@ -342,6 +358,12 @@ const FederationPage = () => {
     }
 
     const socials = federation.socials || {};
+    const socialLinks = [
+        { key: 'instagram', href: safeUrl(socials.instagram), Icon: Instagram, label: 'Instagram' },
+        { key: 'facebook', href: safeUrl(socials.facebook), Icon: Facebook, label: 'Facebook' },
+        { key: 'tiktok', href: safeUrl(socials.tiktok), Icon: ExternalLink, label: 'TikTok' },
+        { key: 'youtube', href: safeUrl(socials.youtube), Icon: Youtube, label: 'YouTube' },
+    ].filter((s) => s.href);
     const personnel = Array.isArray(federation.personnel) ? federation.personnel : [];
     const committees = Array.isArray(federation.committees) ? federation.committees : [];
     const website = safeUrl(federation.website_url);
@@ -499,7 +521,7 @@ const FederationPage = () => {
             </div>
 
             {/* Actions */}
-            {(website || federation.contact_email || waLink(federation.whatsapp_number) || socials.instagram || socials.facebook || socials.youtube) && (
+            {(website || federation.contact_email || waLink(federation.whatsapp_number) || socialLinks.length > 0) && (
             <div className="container mx-auto px-4 md:px-6 mt-4">
                 <div className="flex flex-wrap gap-2">
                     {website && (
@@ -517,21 +539,19 @@ const FederationPage = () => {
                             <MessageCircle size={14} /> WhatsApp
                         </a>
                     )}
-                    {socials.instagram && (
-                        <a href={safeUrl(socials.instagram) || '#'} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10">
-                            <Instagram size={14} />
+                    {socialLinks.map(({ key, href, Icon, label }) => (
+                        <a
+                            key={key}
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={label}
+                            title={label}
+                            className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10 hover:text-padel-green transition-colors"
+                        >
+                            <Icon size={16} />
                         </a>
-                    )}
-                    {socials.facebook && (
-                        <a href={safeUrl(socials.facebook) || '#'} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10">
-                            <Facebook size={14} />
-                        </a>
-                    )}
-                    {socials.youtube && (
-                        <a href={safeUrl(socials.youtube) || '#'} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10">
-                            <Youtube size={14} />
-                        </a>
-                    )}
+                    ))}
                 </div>
             </div>
             )}
@@ -566,13 +586,13 @@ const FederationPage = () => {
                     ) : rankingsPreview.length === 0 ? (
                         <p className="text-sm text-gray-500">Rankings unavailable right now.</p>
                     ) : (
-                        <ScrollRow>
+                        <ScrollRow className="md:pr-2">
                             {rankingsPreview.map((r) => (
                                 <button
                                     key={r.id}
                                     type="button"
                                     onClick={() => setSelectedRankingPlayer(r)}
-                                    className="snap-start shrink-0 w-[132px] sm:w-[148px] rounded-2xl bg-white/[0.04] border border-white/10 p-3 text-left cursor-pointer active:scale-[0.98] transition-transform"
+                                    className="snap-start shrink-0 w-[120px] sm:w-[140px] md:w-[148px] rounded-2xl bg-white/[0.04] border border-white/10 p-3 text-left cursor-pointer active:scale-[0.98] transition-transform"
                                 >
                                     <div className="flex items-center justify-between mb-2.5">
                                         <span className="text-[11px] font-black" style={{ color: medalColor(r.pos) || accent }}>
@@ -624,10 +644,12 @@ const FederationPage = () => {
                                     className="snap-start shrink-0 w-[220px] sm:w-[240px] rounded-2xl overflow-hidden bg-white/[0.04] border border-white/10 active:scale-[0.98] transition-transform"
                                 >
                                     <div className="h-24 relative bg-gradient-to-br from-white/10 to-black">
-                                        {ev.image_url ? (
-                                            <img src={ev.image_url} alt="" className="absolute inset-0 w-full h-full object-cover opacity-80" />
-                                        ) : null}
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
+                                        <img
+                                            src={getEventImage(ev)}
+                                            alt=""
+                                            className="absolute inset-0 w-full h-full object-cover"
+                                        />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/10" />
                                         <div className="absolute bottom-2.5 left-2.5 flex items-end gap-2">
                                             <div className="w-11 h-11 rounded-xl bg-black/70 border border-white/15 flex flex-col items-center justify-center backdrop-blur-sm">
                                                 <span className="text-[8px] font-black text-gray-400 leading-none">{monthShort(ev.start_date)}</span>
@@ -662,60 +684,46 @@ const FederationPage = () => {
                 >
                     {rankingsLoading ? (
                         <p className="text-sm text-gray-500">Loading players…</p>
-                    ) : (rankingsByTab.men.length === 0 && rankingsByTab.women.length === 0) ? (
+                    ) : playersAlphabetical.length === 0 ? (
                         <p className="text-sm text-gray-500">No ranked players available right now.</p>
                     ) : (
-                        <div className="space-y-4">
-                            {[
-                                { key: 'men', label: 'Men' },
-                                { key: 'women', label: 'Women' },
-                            ].map((group) => {
-                                const list = (rankingsByTab[group.key] || []).slice(0, 8);
-                                if (list.length === 0) return null;
-                                return (
-                                    <div key={group.key}>
-                                        <p className="text-[9px] font-black uppercase tracking-wider text-gray-500 mb-2 px-0.5">{group.label}</p>
-                                        <ScrollRow>
-                                            {list.map((r) => (
-                                                <button
-                                                    key={`${group.key}-${r.id}`}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setRankingsTab(group.key);
-                                                        setSelectedRankingPlayer(r);
-                                                    }}
-                                                    className="snap-start shrink-0 w-[88px] flex flex-col items-center gap-1.5 cursor-pointer bg-transparent border-0 p-0"
-                                                >
-                                                    <div className="relative">
-                                                        <div className="w-16 h-16 rounded-full overflow-hidden bg-white/10 border-2 border-white/10 flex items-center justify-center">
-                                                            {r.image && !imageErrors[`p-${r.id}`] ? (
-                                                                <img
-                                                                    src={r.image}
-                                                                    alt=""
-                                                                    className="w-full h-full object-cover"
-                                                                    onError={() => setImageErrors((prev) => ({ ...prev, [`p-${r.id}`]: true }))}
-                                                                />
-                                                            ) : (
-                                                                <span className="text-[11px] font-bold text-gray-400">{getInitials(r.name)}</span>
-                                                            )}
-                                                        </div>
-                                                        <span
-                                                            className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[9px] font-black px-1.5 py-0.5 rounded-full text-black"
-                                                            style={{ background: accent }}
-                                                        >
-                                                            #{r.pos}
-                                                        </span>
-                                                    </div>
-                                                    <span className="text-[10px] font-bold text-white text-center leading-tight line-clamp-2 w-full mt-1">
-                                                        {r.name}
-                                                    </span>
-                                                </button>
-                                            ))}
-                                        </ScrollRow>
+                        <ScrollRow>
+                            {playersAlphabetical.map((r) => (
+                                <button
+                                    key={r.id}
+                                    type="button"
+                                    onClick={() => {
+                                        if (r.gender) setRankingsTab(r.gender);
+                                        setSelectedRankingPlayer(r);
+                                    }}
+                                    className="snap-start shrink-0 w-[88px] sm:w-[96px] flex flex-col items-center gap-1.5 cursor-pointer bg-transparent border-0 p-0"
+                                >
+                                    <div className="relative">
+                                        <div className="w-16 h-16 sm:w-[4.5rem] sm:h-[4.5rem] rounded-full overflow-hidden bg-white/10 border-2 border-white/10 flex items-center justify-center">
+                                            {r.image && !imageErrors[`p-${r.id}`] ? (
+                                                <img
+                                                    src={r.image}
+                                                    alt=""
+                                                    className="w-full h-full object-cover"
+                                                    onError={() => setImageErrors((prev) => ({ ...prev, [`p-${r.id}`]: true }))}
+                                                />
+                                            ) : (
+                                                <span className="text-[11px] font-bold text-gray-400">{getInitials(r.name)}</span>
+                                            )}
+                                        </div>
+                                        <span
+                                            className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[9px] font-black px-1.5 py-0.5 rounded-full text-black"
+                                            style={{ background: accent }}
+                                        >
+                                            #{r.pos}
+                                        </span>
                                     </div>
-                                );
-                            })}
-                        </div>
+                                    <span className="text-[10px] sm:text-[11px] font-bold text-white text-center leading-tight line-clamp-2 w-full mt-1">
+                                        {r.name}
+                                    </span>
+                                </button>
+                            ))}
+                        </ScrollRow>
                     )}
                 </Section>
 

@@ -55,5 +55,9 @@ export const getDefaultEventBackground = (event) => {
 
 export const getEventImage = (event) => {
     if (!event) return tournamentHero;
-    return event.image || event.custom_image_url || getDefaultEventBackground(event);
+    return event.image
+        || event.custom_image_url
+        || event.poster_image_url
+        || event.image_url
+        || getDefaultEventBackground(event);
 };
