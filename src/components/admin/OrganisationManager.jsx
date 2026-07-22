@@ -329,6 +329,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
         setActiveSection('overview');
         setSelectedOrgDetails(null);
         setOrgDetailsMode('view');
+        setExpandedOrgEventIds(new Set());
         onViewChange?.('host');
         try {
             const params = new URLSearchParams(window.location.search);
@@ -362,6 +363,11 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
             setLocalOrgState(currentOrg);
         }
     }, [currentOrg]);
+
+    // Drop expand state whenever the host org changes (impersonation / membership switch).
+    useEffect(() => {
+        setExpandedOrgEventIds(new Set());
+    }, [currentOrg?.id]);
 
     useEffect(() => {
         if (localOrgState) {
