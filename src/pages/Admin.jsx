@@ -14,6 +14,7 @@ import EventManagement from '../components/admin/EventManagement';
 import EmailBroadcastManager from '../components/admin/EmailBroadcastManager';
 import OrganisationManager from '../components/admin/OrganisationManager';
 import FederationManager from '../components/admin/FederationManager';
+import ClubManager from '../components/admin/ClubManager';
 import { useAdminPermissions } from '../hooks/useAdminPermissions';
 import { useAdminFeedNotifications } from '../hooks/useAdminFeedNotifications';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -143,7 +144,7 @@ const Admin = () => {
 
     useEffect(() => {
         if (!permissionsLoading && permissions && !hasPermission(activeTab)) {
-            const allTabs = ['dashboard', 'federations', 'organisations', 'players', 'coaches', 'calendar', 'event-mgmt', 'gallery', 'email-broadcast', 'finance', 'blog', 'settings', 'admin-mgmt'];
+            const allTabs = ['dashboard', 'federations', 'organisations', 'clubs', 'players', 'coaches', 'calendar', 'event-mgmt', 'gallery', 'email-broadcast', 'finance', 'blog', 'settings', 'admin-mgmt'];
             const firstAllowed = allTabs.find(tab => hasPermission(tab));
             if (firstAllowed) {
                 setActiveTab(firstAllowed);
@@ -426,6 +427,9 @@ const Admin = () => {
                                     {activeTab === 'dashboard' && <DashboardHome onTabChange={setActiveTab} />}
                                     {activeTab === 'federations' && (
                                         <FederationManager permissions={permissions} />
+                                    )}
+                                    {activeTab === 'clubs' && (
+                                        <ClubManager permissions={permissions} />
                                     )}
                                     {activeTab === 'organisations' && (
                                         <OrganisationManager

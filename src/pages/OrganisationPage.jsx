@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import { supabase } from '../supabaseClient';
 import { safeUrl } from '../utils/sanitizeHtml';
+import { fetchOrganisationClubs } from '../utils/club';
 import {
     Building, ShieldCheck, BadgeCheck, Globe, Mail, Phone, MessageCircle,
     CalendarDays, Trophy, ChevronLeft, ChevronRight, Clock,
@@ -74,6 +75,7 @@ const OrganisationPage = () => {
     const [events, setEvents] = useState([]);
     const [galleryImages, setGalleryImages] = useState([]);
     const [orgAlbums, setOrgAlbums] = useState([]);
+    const [linkedClubs, setLinkedClubs] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -93,14 +95,18 @@ const OrganisationPage = () => {
                     // Org public page shows this organisation's sanctioned events.
                     // Main-calendar `is_visible` still controls /calendar; hide only
                     // rejected sanctions here so linked org events actually appear.
-                    const { data: evs } = await supabase
-                        .from('calendar')
-                        .select('id, slug, event_name, venue, city, start_date, end_date, sapa_status, image_url, registered_players, created_at')
-                        .eq('organisation_id', data.id)
-                        .or('sanction_status.eq.approved,sanction_status.is.null')
-                        .order('start_date', { ascending: true });
+                    const [{ data: evs }, orgClubs] = await Promise.all([
+                        supabase
+                            .from('calendar')
+                            .select('id, slug, event_name, venue, city, start_date, end_date, sapa_status, image_url, registered_players, created_at')
+                            .eq('organisation_id', data.id)
+                            .or('sanction_status.eq.approved,sanction_status.is.null')
+                            .order('start_date', { ascending: true }),
+                        fetchOrganisationClubs(data.id).catch(() => []),
+                    ]);
                     const eventList = evs || [];
                     setEvents(eventList);
+                    setLinkedClubs(orgClubs || []);
 
                     // Albums linked directly to this organisation (cover images for Media)
                     const { data: linkedAlbums } = await supabase
@@ -142,6 +148,11 @@ const OrganisationPage = () => {
                     } else {
                         setGalleryImages([]);
                     }
+                } else {
+                    setEvents([]);
+                    setLinkedClubs([]);
+                    setOrgAlbums([]);
+                    setGalleryImages([]);
                 }
             } catch (err) {
                 console.error('Failed to load organisation:', err);
@@ -246,17 +257,19 @@ const OrganisationPage = () => {
     const sponsors = Array.isArray(org.sponsors)
         ? org.sponsors.filter((s) => (s.name || '').trim() || s.logo_url)
         : [];
-    const showClubs = false; // Hidden until clubs are wired up
+    const clubsList = linkedClubs.length > 0
+        ? linkedClubs
+        : (hostVenues.length > 0 ? hostVenues : (SHOW_DUMMY ? DUMMY_CLUBS : []));
+    const showClubs = clubsList.length > 0;
     const showMedia = mediaItems.length > 0 || SHOW_DUMMY;
     const showSponsors = sponsors.length > 0 || SHOW_DUMMY;
-    const clubsList = hostVenues.length > 0 ? hostVenues : (SHOW_DUMMY ? DUMMY_CLUBS : []);
     const sponsorsList = sponsors.length > 0 ? sponsors : (SHOW_DUMMY ? DUMMY_SPONSORS : []);
     const galleryLink = orgAlbums.length > 0
         ? (orgAlbums[0].slug ? `/gallery/${orgAlbums[0].slug}` : '/gallery')
         : (galleryImages.length > 0 ? '/gallery' : null);
     const stats = [
         { icon: Trophy, value: events.length, label: 'Events Hosted' },
-        { icon: Building, value: clubsList.length, label: 'Host Clubs' },
+        { icon: Building, value: linkedClubs.length || clubsList.length, label: 'Host Clubs' },
         { icon: Users, value: registeredPlayers > 999 ? `${(registeredPlayers / 1000).toFixed(1)}k` : registeredPlayers, label: 'Registered Players' },
         {
             icon: Clock,
@@ -423,19 +436,33 @@ const OrganisationPage = () => {
                 {showClubs && (
                     <Section title="Host Clubs" accent={accent}>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-                            {clubsList.slice(0, 8).map((c, i) => (
-                                <div key={i} className="flex items-center gap-2.5 bg-black/30 border border-white/5 p-3 rounded-2xl">
-                                    <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: accentSoft, color: accent }}>
-                                        <Building size={15} />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-xs font-bold text-white truncate">{c.name}</p>
-                                        {c.city && <p className="text-[10px] text-gray-500 truncate">{c.city}</p>}
-                                    </div>
-                                </div>
-                            ))}
+                            {clubsList.slice(0, 8).map((c, i) => {
+                                const body = (
+                                    <>
+                                        {c.logo_url ? (
+                                            <img src={c.logo_url} alt="" className="w-9 h-9 rounded-xl object-cover shrink-0 border border-white/10" />
+                                        ) : (
+                                            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: accentSoft, color: accent }}>
+                                                <Building size={15} />
+                                            </div>
+                                        )}
+                                        <div className="min-w-0">
+                                            <p className="text-xs font-bold text-white truncate">{c.name}</p>
+                                            {c.city && <p className="text-[10px] text-gray-500 truncate">{c.city}</p>}
+                                        </div>
+                                    </>
+                                );
+                                const className = 'flex items-center gap-2.5 bg-black/30 border border-white/5 p-3 rounded-2xl';
+                                return c.slug ? (
+                                    <Link key={c.id || c.slug || i} to={`/clubs/${c.slug}`} className={`${className} hover:border-white/15 transition-colors`}>
+                                        {body}
+                                    </Link>
+                                ) : (
+                                    <div key={c.id || i} className={className}>{body}</div>
+                                );
+                            })}
                         </div>
-                        {hostVenues.length === 0 && SHOW_DUMMY && (
+                        {linkedClubs.length === 0 && hostVenues.length === 0 && SHOW_DUMMY && (
                             <p className="text-[9px] text-gray-600 uppercase tracking-widest font-black mt-3">Preview data — populated from this organiser's event venues</p>
                         )}
                     </Section>

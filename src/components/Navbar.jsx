@@ -175,6 +175,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
         { name: 'Federation', heading: true },
         { name: 'Sapa', href: '/federations/sapa' },
         { name: 'Organisations', href: '/organisations' },
+        { name: 'Clubs', href: '/clubs' },
       ]
     },
     {

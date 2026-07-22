@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign, Image as ImageIcon, UserPlus, X, Shield, ExternalLink, Home, User, ChevronLeft, ChevronRight, Mail, Building, Landmark } from 'lucide-react';
+import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign, Image as ImageIcon, UserPlus, X, Shield, ExternalLink, Home, User, ChevronLeft, ChevronRight, Mail, Building, Landmark, MapPin } from 'lucide-react';
 import logo from '../../assets/logo_4m_lowercase.png';
 
 const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDesktopCollapsed, setIsDesktopCollapsed, permissions, player, session, badgeCounts = {} }) => {
@@ -8,6 +8,7 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDe
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'federations', label: 'Federations', icon: Landmark },
         { id: 'organisations', label: 'Organisations', icon: Building },
+        { id: 'clubs', label: 'Clubs', icon: MapPin },
         { id: 'players', label: 'Players', icon: Users },
         { id: 'coaches', label: 'Coaches', icon: UserPlus },
         { id: 'calendar', label: 'Calendar', icon: Calendar },
