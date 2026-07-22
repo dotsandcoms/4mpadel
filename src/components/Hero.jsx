@@ -703,8 +703,8 @@ const Hero = () => {
                             : 'flex-1 py-2 text-xs'
                     } rounded-md transition-all font-bold whitespace-nowrap ${
                         scheduleTimeFilter === key
-                            ? 'border border-white/40 bg-white/5 text-white shadow-md'
-                            : 'text-white/50 hover:text-white'
+                            ? 'bg-white/10 text-white shadow-sm'
+                            : 'text-white/45 hover:text-white'
                     }`}
                 >
                     {label}
@@ -1069,7 +1069,7 @@ const Hero = () => {
                         <span>The Home of 4M Padel</span>
                     </motion.div>
 
-                    <div className="overflow-hidden mb-6">
+                    <div className="overflow-hidden mb-3">
                         <motion.h1
                             initial={{ y: 100 }}
                             animate={{ y: 0 }}
@@ -1095,7 +1095,7 @@ const Hero = () => {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.9, duration: 0.8 }}
-                            className="mb-6 w-full"
+                            className="mb-2 w-full"
                         >
                             <p className="text-white text-base md:text-lg font-bold mb-3">
                                 {getGreeting()}{firstName && <>, <span className="text-padel-green">{firstName}</span></>} <span aria-hidden="true">👋</span>
@@ -1297,7 +1297,7 @@ const Hero = () => {
                                 </div>
                                 )}
                                 {hasScheduleContent && (
-                                <div className="border-t border-white/5 py-3">
+                                <div className="border-t border-white/5 pt-1.5 pb-3">
                                 <button
                                     type="button"
                                     onClick={() => setScheduleOpen((open) => !open)}
