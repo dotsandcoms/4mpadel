@@ -19,6 +19,7 @@ const FinanceManager = () => {
     const [stats, setStats] = useState({ totalRevenue: 'R 0.00', successfulPayouts: 'R 0.00' });
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
+    const [statusFilter, setStatusFilter] = useState('success'); // success | pending | all
     const [searchQuery, setSearchQuery] = useState('');
     const [players, setPlayers] = useState([]);
     const [syncingId, setSyncingId] = useState(null);
@@ -863,6 +864,12 @@ const FinanceManager = () => {
     };
 
     const filteredTransactions = transactions.filter(trx => {
+        const status = String(trx.status || '');
+        const isSuccess = status === 'Success';
+        if (statusFilter === 'success' && !isSuccess) return false;
+        // Pending bucket = anything not settled success (pending / failed / abandoned / etc.)
+        if (statusFilter === 'pending' && isSuccess) return false;
+
         const matchesLicense = filter === 'all' || 
             (filter === 'full' && parseFloat(trx.amount.replace('R ', '').replace(',', '')) >= 450) ||
             (filter === 'temp' && parseFloat(trx.amount.replace('R ', '').replace(',', '')) === 120);
@@ -973,11 +980,18 @@ const FinanceManager = () => {
                             <div className="bg-[#1a1a1a]/50 backdrop-blur-md rounded-3xl border border-white/10 overflow-hidden">
                                 <div className="p-6 border-b border-white/10 flex flex-col md:flex-row justify-between items-center gap-4">
                                     <div className="flex flex-col gap-2">
-                                        <div className="flex bg-black/20 p-1 rounded-xl w-fit">
-                                            <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded-lg text-xs font-bold ${filter === 'all' ? 'bg-white/10 text-white' : 'text-gray-500'}`}>All</button>
-                                            <button onClick={() => setFilter('full')} className={`px-4 py-2 rounded-lg text-xs font-bold ${filter === 'full' ? 'bg-white/10 text-white' : 'text-gray-500'}`}>Full</button>
-                                            <button onClick={() => setFilter('temp')} className={`px-4 py-2 rounded-lg text-xs font-bold ${filter === 'temp' ? 'bg-white/10 text-white' : 'text-gray-500'}`}>Temp</button>
-                                            <button onClick={() => setFilter('reconcile')} className={`px-4 py-2 rounded-lg text-xs font-bold ${filter === 'reconcile' ? 'bg-orange-500/20 text-orange-400' : 'text-gray-500'}`}>Sync Needed</button>
+                                        <div className="flex flex-wrap gap-2">
+                                            <div className="flex bg-black/20 p-1 rounded-xl w-fit">
+                                                <button onClick={() => { setStatusFilter('success'); setCurrentPage(1); }} className={`px-4 py-2 rounded-lg text-xs font-bold ${statusFilter === 'success' ? 'bg-padel-green text-black' : 'text-gray-500'}`}>Success</button>
+                                                <button onClick={() => { setStatusFilter('pending'); setCurrentPage(1); }} className={`px-4 py-2 rounded-lg text-xs font-bold ${statusFilter === 'pending' ? 'bg-red-500/20 text-red-400' : 'text-gray-500'}`}>Pending / Failed</button>
+                                                <button onClick={() => { setStatusFilter('all'); setCurrentPage(1); }} className={`px-4 py-2 rounded-lg text-xs font-bold ${statusFilter === 'all' ? 'bg-white/10 text-white' : 'text-gray-500'}`}>All statuses</button>
+                                            </div>
+                                            <div className="flex bg-black/20 p-1 rounded-xl w-fit">
+                                                <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded-lg text-xs font-bold ${filter === 'all' ? 'bg-white/10 text-white' : 'text-gray-500'}`}>All types</button>
+                                                <button onClick={() => setFilter('full')} className={`px-4 py-2 rounded-lg text-xs font-bold ${filter === 'full' ? 'bg-white/10 text-white' : 'text-gray-500'}`}>Full</button>
+                                                <button onClick={() => setFilter('temp')} className={`px-4 py-2 rounded-lg text-xs font-bold ${filter === 'temp' ? 'bg-white/10 text-white' : 'text-gray-500'}`}>Temp</button>
+                                                <button onClick={() => setFilter('reconcile')} className={`px-4 py-2 rounded-lg text-xs font-bold ${filter === 'reconcile' ? 'bg-orange-500/20 text-orange-400' : 'text-gray-500'}`}>Sync Needed</button>
+                                            </div>
                                         </div>
                                         {filteredTransactions.length > 0 && (
                                             <p className="text-[10px] font-black uppercase text-gray-600 tracking-widest pl-2">
