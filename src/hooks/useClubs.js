@@ -16,6 +16,7 @@ export function useClubs() {
                 const { data, error } = await supabase
                     .from('clubs')
                     .select('id, name')
+                    .not('status', 'in', '(pending,rejected)')
                     .order('name');
                 if (error) {
                     console.error("Error fetching clubs:", error);

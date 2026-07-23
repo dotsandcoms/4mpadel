@@ -8,6 +8,9 @@ import {
 import { supabase } from '../../supabaseClient';
 import { toast } from 'sonner';
 
+/** Only settled Paystack charges count toward ledger totals. */
+const isSuccessfulPayment = (pay) => String(pay?.status || '').toLowerCase() === 'success';
+
 const UserPayments = ({ allowedEvents = [] }) => {
     const isRestricted = allowedEvents.length > 0;
     const [players, setPlayers] = useState([]);
@@ -54,23 +57,32 @@ const UserPayments = ({ allowedEvents = [] }) => {
 
                     if (playerPayments.length === 0 && isRestricted) return null;
 
-                    const totalPaid = playerPayments.reduce((acc, curr) => acc + Number(curr.amount), 0);
-                    
-                    // Sort payments by the actual payment date
-                    const sortedPayments = playerPayments.sort((a, b) => {
+                    const successfulPayments = playerPayments.filter(isSuccessfulPayment);
+                    const totalPaid = successfulPayments.reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
+
+                    // Sort payments by the actual payment date (show all statuses; totals use success only)
+                    const sortedPayments = [...playerPayments].sort((a, b) => {
                         const dateA = new Date(a.metadata?.original_trx?.rawDate || a.created_at);
                         const dateB = new Date(b.metadata?.original_trx?.rawDate || b.created_at);
                         return dateB - dateA;
                     });
 
-                    const lastPayment = sortedPayments[0];
+                    const lastSuccessful = successfulPayments
+                        .slice()
+                        .sort((a, b) => {
+                            const dateA = new Date(a.metadata?.original_trx?.rawDate || a.created_at);
+                            const dateB = new Date(b.metadata?.original_trx?.rawDate || b.created_at);
+                            return dateB - dateA;
+                        })[0];
+                    const lastPayment = lastSuccessful || sortedPayments[0];
                     const effectiveDate = lastPayment ? (lastPayment.metadata?.original_trx?.date || new Date(lastPayment.created_at).toLocaleDateString()) : 'N/A';
 
                     return {
                         ...p,
                         totalPaid,
                         lastPaymentDate: effectiveDate,
-                        payments: sortedPayments
+                        payments: sortedPayments,
+                        successfulPaymentCount: successfulPayments.length,
                     };
                 }).filter(Boolean);
                 setPlayers(processed);
@@ -370,19 +382,42 @@ const UserPayments = ({ allowedEvents = [] }) => {
                             {selectedPlayer.payments?.length > 0 ? (
                                 selectedPlayer.payments.map(pay => {
                                     const effectiveDate = pay.metadata?.original_trx?.date || new Date(pay.created_at).toLocaleDateString();
+                                    const status = String(pay.status || 'unknown').toLowerCase();
+                                    const isSuccess = status === 'success';
+                                    const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
                                     return (
-                                        <div key={pay.id} className="bg-white/5 p-5 rounded-2xl border border-white/5 flex justify-between items-center group hover:border-padel-green/30 transition-all">
+                                        <div
+                                            key={pay.id}
+                                            className={`bg-white/5 p-5 rounded-2xl border flex justify-between items-center group transition-all ${
+                                                isSuccess
+                                                    ? 'border-white/5 hover:border-padel-green/30'
+                                                    : 'border-red-500/20 opacity-80'
+                                            }`}
+                                        >
                                             <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 rounded-xl bg-black/40 flex items-center justify-center text-gray-500 group-hover:text-padel-green shadow-inner">
+                                                <div className={`w-10 h-10 rounded-xl bg-black/40 flex items-center justify-center shadow-inner ${
+                                                    isSuccess ? 'text-gray-500 group-hover:text-padel-green' : 'text-red-400'
+                                                }`}>
                                                     <CreditCard size={18} />
                                                 </div>
                                                 <div>
                                                     <div className="flex flex-col">
-                                                        <p className="text-white font-bold text-sm tracking-tight capitalize leading-none mb-1">
-                                                            {pay.payment_type?.replace(/_/g, ' ')}
-                                                        </p>
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <p className="text-white font-bold text-sm tracking-tight capitalize leading-none">
+                                                                {pay.payment_type?.replace(/_/g, ' ')}
+                                                            </p>
+                                                            <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                                                                isSuccess
+                                                                    ? 'bg-padel-green/15 text-padel-green'
+                                                                    : 'bg-red-500/15 text-red-400'
+                                                            }`}>
+                                                                {statusLabel}
+                                                            </span>
+                                                        </div>
                                                         {(pay.calendar?.event_name || pay.metadata?.event_name) && (
-                                                            <p className="text-padel-green text-[10px] font-black uppercase tracking-wider leading-none">
+                                                            <p className={`text-[10px] font-black uppercase tracking-wider leading-none ${
+                                                                isSuccess ? 'text-padel-green' : 'text-gray-500'
+                                                            }`}>
                                                                 {pay.calendar?.event_name || pay.metadata?.event_name}
                                                             </p>
                                                         )}
@@ -392,11 +427,13 @@ const UserPayments = ({ allowedEvents = [] }) => {
                                             </div>
                                             <div className="flex items-center gap-6">
                                                 <div className="text-right">
-                                                    <p className="text-white font-black text-sm">
+                                                    <p className={`font-black text-sm ${isSuccess ? 'text-white' : 'text-gray-500 line-through'}`}>
                                                         {Number(pay.amount) === 0 ? 'R0' : `R${pay.amount}`}
                                                     </p>
-                                                    <p className="text-[9px] text-padel-green font-black uppercase tracking-widest leading-none mt-1">
-                                                        {pay.metadata?.paid_by_name ? `By ${pay.metadata.paid_by_name}` : pay.payment_method}
+                                                    <p className={`text-[9px] font-black uppercase tracking-widest leading-none mt-1 ${
+                                                        isSuccess ? 'text-padel-green' : 'text-red-400'
+                                                    }`}>
+                                                        {pay.metadata?.paid_by_name ? `By ${pay.metadata.paid_by_name}` : (pay.payment_method || 'paystack')}
                                                     </p>
                                                 </div>
                                                 <button 

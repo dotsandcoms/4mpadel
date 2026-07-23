@@ -5,10 +5,11 @@ import { toast } from 'sonner';
 import {
     MapPin, Plus, RefreshCw, Users, Building, Save, Loader2, ExternalLink,
     Upload, Trash2, Image as ImageIcon, ChevronDown, Instagram, Facebook, Youtube,
-    Search,
+    Search, Check, X, Clock,
 } from 'lucide-react';
 import ClubMembersManager from './ClubMembersManager';
 import { slugifyClub } from '../../utils/club';
+import { sendEmail } from '../../utils/emails';
 
 const MotionDiv = motion.div;
 
@@ -178,8 +179,9 @@ const ClubManager = ({ permissions }) => {
 
     const filteredClubs = useMemo(() => {
         const q = listSearch.trim().toLowerCase();
-        if (!q) return clubs;
-        return clubs.filter((c) => {
+        const base = clubs.filter((c) => c.status !== 'pending');
+        if (!q) return base;
+        return base.filter((c) => {
             const hay = [
                 c.name,
                 c.short_name,
@@ -191,6 +193,85 @@ const ClubManager = ({ permissions }) => {
             return hay.includes(q);
         });
     }, [clubs, listSearch]);
+
+    const pendingClubs = useMemo(
+        () => clubs.filter((c) => c.status === 'pending'),
+        [clubs],
+    );
+
+    const applicantEmail = (club) => {
+        if (club?.contact_email) return club.contact_email;
+        const primary = (Array.isArray(club?.contacts) ? club.contacts : []).find((c) => c.is_primary)
+            || (Array.isArray(club?.contacts) ? club.contacts[0] : null);
+        return primary?.email || '';
+    };
+
+    const handleApproveClub = async (club) => {
+        try {
+            const { error } = await supabase
+                .from('clubs')
+                .update({
+                    status: 'published',
+                    verified: true,
+                    approved_at: new Date().toISOString(),
+                    rejection_notes: null,
+                })
+                .eq('id', club.id);
+            if (error) throw error;
+
+            const email = applicantEmail(club);
+            if (email) {
+                const { error: memberError } = await supabase
+                    .from('club_members')
+                    .upsert({
+                        club_id: club.id,
+                        player_id: club.created_by || null,
+                        user_email: email.toLowerCase(),
+                        role: 'owner',
+                    }, { onConflict: 'club_id,user_email' });
+                if (memberError) console.warn('Owner membership assignment warning:', memberError);
+                sendEmail(email, 'club_approved', { clubName: club.name });
+            }
+
+            toast.success(`Approved club: ${club.name}`);
+            loadClubs();
+        } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Failed to approve club');
+        }
+    };
+
+    const handleRejectClub = async (club) => {
+        const notes = window.prompt(`Rejection notes for ${club.name}:`);
+        if (notes == null) return;
+        if (!String(notes).trim()) {
+            toast.error('Please provide rejection feedback.');
+            return;
+        }
+        try {
+            const { error } = await supabase
+                .from('clubs')
+                .update({
+                    status: 'rejected',
+                    rejection_notes: String(notes).trim(),
+                })
+                .eq('id', club.id);
+            if (error) throw error;
+
+            const email = applicantEmail(club);
+            if (email) {
+                sendEmail(email, 'club_rejected', {
+                    clubName: club.name,
+                    notes: String(notes).trim(),
+                });
+            }
+            toast.success(`Rejected club application: ${club.name}`);
+            loadClubs();
+        } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Failed to reject club');
+        }
+    };
 
     const toggleSection = (key) => {
         setSectionOpen((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -475,6 +556,55 @@ const ClubManager = ({ permissions }) => {
                 </div>
             </div>
 
+            {isSuper && pendingClubs.length > 0 && (
+                <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                        <Clock size={16} className="text-amber-400" />
+                        <h3 className="text-sm font-black uppercase tracking-wider text-amber-300">
+                            Pending club applications ({pendingClubs.length})
+                        </h3>
+                    </div>
+                    <ul className="space-y-2">
+                        {pendingClubs.map((club) => (
+                            <li
+                                key={club.id}
+                                className="flex flex-wrap items-center gap-3 bg-black/40 border border-white/10 rounded-xl px-3 py-3"
+                            >
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-bold text-white truncate">{club.name}</p>
+                                    <p className="text-[11px] text-gray-400 truncate">
+                                        {[club.city, applicantEmail(club)].filter(Boolean).join(' · ') || 'No contact email'}
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setSelectedId(club.id); setIsCreating(false); }}
+                                        className="px-2.5 py-1.5 rounded-lg border border-white/10 text-[10px] font-black uppercase tracking-wider text-gray-300 hover:bg-white/5"
+                                    >
+                                        Review
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleApproveClub(club)}
+                                        className="px-2.5 py-1.5 rounded-lg bg-padel-green text-black text-[10px] font-black uppercase tracking-wider flex items-center gap-1"
+                                    >
+                                        <Check size={12} /> Approve
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRejectClub(club)}
+                                        className="px-2.5 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 text-[10px] font-black uppercase tracking-wider flex items-center gap-1"
+                                    >
+                                        <X size={12} /> Reject
+                                    </button>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
             <div className="grid lg:grid-cols-[260px_1fr] gap-4">
                 <aside className="bg-white/[0.02] border border-white/10 rounded-2xl p-3 space-y-2 max-h-[70vh] overflow-y-auto flex flex-col">
                     <div className="sticky top-0 z-10 bg-black/90 backdrop-blur-md pb-1 space-y-2">
@@ -490,8 +620,8 @@ const ClubManager = ({ permissions }) => {
                         </div>
                         <p className="px-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">
                             {listSearch.trim()
-                                ? `${filteredClubs.length} of ${clubs.length}`
-                                : `${clubs.length} clubs`}
+                                ? `${filteredClubs.length} of ${clubs.filter((c) => c.status !== 'pending').length}`
+                                : `${clubs.filter((c) => c.status !== 'pending').length} clubs`}
                         </p>
                     </div>
                     {clubs.length === 0 && !isCreating && (
@@ -604,8 +734,10 @@ const ClubManager = ({ permissions }) => {
                                             className={inputClass}
                                         >
                                             <option value="draft">draft</option>
+                                            <option value="pending">pending</option>
                                             <option value="published">published</option>
                                             <option value="archived">archived</option>
+                                            <option value="rejected">rejected</option>
                                         </select>
                                     </label>
                                     <div className="flex items-center gap-4 pt-6">

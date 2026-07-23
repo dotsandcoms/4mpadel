@@ -417,12 +417,16 @@ const PlayerProfile = () => {
 
                 const paymentsById = new Map((paymentsData || []).map((p) => [p.id, p]));
 
-                const paymentTxns = (paymentsData || []).map((t) => {
+                const paymentTxns = (paymentsData || [])
+                    // Ledger should not treat abandoned/failed/pending as paid contributions.
+                    // Still include them so the player can see failed attempts — marked by status.
+                    .map((t) => {
                     const refunds = refundsByPaymentId.get(t.id) || [];
                     const refundedTotal = refunds
                         .filter(isCountableRefund)
                         .reduce((sum, rf) => sum + Number(rf.amount || 0), 0);
                     const isFullyRefunded = refundedTotal > 0 && refundedTotal >= Number(t.amount || 0);
+                    const rawStatus = String(t.status || 'unknown');
 
                     return {
                         kind: 'payment',
@@ -431,11 +435,14 @@ const PlayerProfile = () => {
                         date: t.metadata?.original_trx?.date || new Date(t.created_at).toLocaleDateString(),
                         sortDate: new Date(t.created_at).getTime(),
                         amount: formatTransactionAmount(t.amount),
-                        status: isFullyRefunded ? 'Refunded' : t.status.charAt(0).toUpperCase() + t.status.slice(1),
+                        status: isFullyRefunded
+                            ? 'Refunded'
+                            : rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1),
                         payment_type: t.payment_type,
                         event_name: t.calendar?.event_name || t.metadata?.event_name,
                         refunds,
                         refundedTotal,
+                        countsTowardTotal: rawStatus.toLowerCase() === 'success' && !isFullyRefunded,
                     };
                 });
 
@@ -1942,7 +1949,13 @@ const PlayerProfile = () => {
                                                         )}
                                                     </div>
                                                     <div className="text-right shrink-0">
-                                                        <span className={`text-xs font-black ${t.kind === 'refund' ? 'text-orange-400' : 'text-blue-400'}`}>{t.amount}</span>
+                                                        <span className={`text-xs font-black ${
+                                                            t.kind === 'refund'
+                                                                ? 'text-orange-400'
+                                                                : t.status?.toLowerCase() === 'success'
+                                                                    ? 'text-blue-400'
+                                                                    : 'text-gray-500 line-through'
+                                                        }`}>{t.amount}</span>
                                                         <span className="text-[7.5px] text-gray-500 font-semibold block uppercase tracking-widest mt-1">
                                                             {t.kind === 'refund' ? 'refund' : t.payment_type?.replace(/_/g, ' ')}
                                                         </span>
@@ -3921,7 +3934,13 @@ const PlayerProfile = () => {
                                                                     </div>
                                                                     <div className="flex flex-col text-sm">
                                                                         <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Amount</span>
-                                                                        <span className={`font-black ${trx.kind === 'refund' ? 'text-orange-400' : 'text-white'}`}>{trx.amount}</span>
+                                                                        <span className={`font-black ${
+                                                                            trx.kind === 'refund'
+                                                                                ? 'text-orange-400'
+                                                                                : trx.status?.toLowerCase() === 'success'
+                                                                                    ? 'text-white'
+                                                                                    : 'text-gray-500 line-through'
+                                                                        }`}>{trx.amount}</span>
                                                                         {trx.kind === 'payment' && trx.refundedTotal > 0 && trx.status?.toLowerCase() !== 'refunded' && (
                                                                             <span className="text-[9px] text-orange-400 font-bold mt-1">
                                                                                 -{formatTransactionAmount(trx.refundedTotal)} refunded

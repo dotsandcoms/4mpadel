@@ -54,6 +54,7 @@ const Admin = () => {
 
     // Pending organisation applications + event sanction requests (badge on Organisations tab)
     const [orgBadgeCount, setOrgBadgeCount] = useState(0);
+    const [clubBadgeCount, setClubBadgeCount] = useState(0);
 
     useEffect(() => {
         const canSeeOrgOversight = permissions?.role === 'super_admin'
@@ -75,6 +76,28 @@ const Admin = () => {
 
         fetchOrgBadgeCount();
         const interval = setInterval(fetchOrgBadgeCount, 30000);
+        return () => clearInterval(interval);
+    }, [permissions]);
+
+    useEffect(() => {
+        const canSeeClubOversight = permissions?.role === 'super_admin'
+            || (permissions?.role === 'custom' && (permissions?.allowed_tabs || []).includes('clubs'));
+        if (!canSeeClubOversight) return;
+
+        const fetchClubBadgeCount = async () => {
+            try {
+                const { count } = await supabase
+                    .from('clubs')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('status', 'pending');
+                setClubBadgeCount(count || 0);
+            } catch (err) {
+                console.error('Failed to fetch club badge counts:', err);
+            }
+        };
+
+        fetchClubBadgeCount();
+        const interval = setInterval(fetchClubBadgeCount, 30000);
         return () => clearInterval(interval);
     }, [permissions]);
 
@@ -325,7 +348,7 @@ const Admin = () => {
                 permissions={permissions}
                 player={player}
                 session={session}
-                badgeCounts={{ organisations: orgBadgeCount }}
+                badgeCounts={{ organisations: orgBadgeCount, clubs: clubBadgeCount }}
             />
 
             <main className={`flex-1 transition-all duration-300 ${isDesktopCollapsed ? 'lg:ml-20' : 'lg:ml-64'} p-4 md:p-8 lg:p-12 overflow-y-auto min-h-screen lg:h-screen bg-gradient-to-br from-black to-[#0a0a0a]`}>

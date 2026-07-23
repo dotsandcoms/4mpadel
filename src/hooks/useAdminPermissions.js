@@ -97,7 +97,7 @@ async function resolveClubAccess(userEmail, orgMembership) {
         .ilike('user_email', userEmail);
 
     (memberships || []).forEach((m) => {
-        if (m.clubs) {
+        if (m.clubs && ['published', 'draft'].includes(m.clubs.status)) {
             clubMap.set(m.clubs.id, { ...m.clubs, member_role: m.role });
         }
     });
