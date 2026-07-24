@@ -262,7 +262,7 @@ const ClubPage = () => {
                 <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
                     {[
                         { label: 'Courts', value: club.stats?.courts ?? totalCourts },
-                        { label: 'Events', value: club.stats?.events ?? '—' },
+                        { label: 'SAPA Events', value: club.stats?.events ?? '—' },
                         { label: 'Players', value: club.stats?.members ?? memberCount },
                     ].map((s) => (
                         <div key={s.label} className="bg-white/[0.03] border border-white/5 rounded-xl sm:rounded-2xl px-1 py-2.5 sm:p-4 text-center min-w-0">
