@@ -854,7 +854,7 @@ const EventDetails = () => {
     const entryFeeStatSublabel = useMemo(() => {
         if (entryFeeStatLabel === '-') return null;
         if (isEarlyBirdActive(event)) return 'EARLY BIRD PER PLAYER';
-        return 'PER PLAYER ENTRY FEE';
+        return '';
     }, [entryFeeStatLabel, event]);
 
     const isEventPassed = useMemo(() => {
