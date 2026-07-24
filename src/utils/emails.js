@@ -93,6 +93,14 @@ const getSubjectForTemplate = (template, vars) => {
             return `Congratulations! Your Organisation is Approved! 🎉`;
         case 'org_rejected': 
             return `Update on your Organisation Application`;
+        case 'club_applied':
+            return `Club Application Received - 4M Padel 🏟️`;
+        case 'admin_club_applied':
+            return `⚠️ Action Required: New Club Pending Review!`;
+        case 'club_approved':
+            return `Congratulations! Your Club is Approved! 🎉`;
+        case 'club_rejected':
+            return `Update on your Club Application`;
         case 'event_pending_sanction': 
             return `🏆 Sanction Requested: ${vars.eventName || 'New Event'}`;
         case 'event_sanctioned': 

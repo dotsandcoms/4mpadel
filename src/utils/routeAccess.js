@@ -5,6 +5,8 @@ export function isPublicRoute(pathname) {
     if (pathname === '/') return true;
     if (pathname === '/calendar' || pathname.startsWith('/calendar/')) return true;
     if (pathname === '/organisations' || pathname.startsWith('/organisations/')) return true;
+    if (pathname === '/federations' || pathname.startsWith('/federations/')) return true;
+    if (pathname === '/clubs' || pathname.startsWith('/clubs/')) return true;
     if (pathname === '/academy' || pathname.startsWith('/academy/')) return true;
     return PUBLIC_EXACT.includes(pathname);
 }

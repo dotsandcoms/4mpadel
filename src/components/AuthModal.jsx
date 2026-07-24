@@ -14,6 +14,7 @@ import { fetchUpcomingCalendarEvents } from '../utils/calendarEvents';
 import { PAYSTACK_PUBLIC_KEY, isPaystackConfigured } from '../utils/paystackConfig';
 import RegisterOrganisationForm from './RegisterOrganisationForm';
 import RegisterCoachForm from './RegisterCoachForm';
+import RegisterClubForm from './RegisterClubForm';
 
 const REGISTRATION_OPTIONS = [
     {
@@ -39,7 +40,6 @@ const REGISTRATION_OPTIONS = [
         label: 'Club',
         description: 'Register your padel club on the platform.',
         icon: Landmark,
-        comingSoon: true,
     },
 ];
 
@@ -150,8 +150,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }) => {
     };
 
     const handleSelectRegisterType = (type) => {
-        if (type === 'club') return;
-        // Organisation (and coach) applications do not require a player profile.
+        // Organisation, coach, and club applications do not require a player profile.
         setRegisterType(type);
         setStep(1);
     };
@@ -557,6 +556,12 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }) => {
                             </div>
                         ) : activeTab === 'register' && registerType === 'organisation' ? (
                             <RegisterOrganisationForm
+                                onBack={() => setRegisterType(null)}
+                                onClose={onClose}
+                                contactEmail={email}
+                            />
+                        ) : activeTab === 'register' && registerType === 'club' ? (
+                            <RegisterClubForm
                                 onBack={() => setRegisterType(null)}
                                 onClose={onClose}
                                 contactEmail={email}

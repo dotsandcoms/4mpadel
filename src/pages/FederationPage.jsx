@@ -262,9 +262,11 @@ const FederationPage = () => {
                 const [{ data: clubRows }, { data: coachRows }] = await Promise.all([
                     supabase
                         .from('clubs')
-                        .select('id, name')
+                        .select('id, name, slug, logo_url, city, status')
+                        .eq('federation_id', fed.id)
+                        .eq('status', 'published')
                         .order('name', { ascending: true })
-                        .limit(8),
+                        .limit(12),
                     supabase
                         .from('coach_applications')
                         .select('id, full_name, city, coaching_location, profile_pic_url')
@@ -814,21 +816,32 @@ const FederationPage = () => {
                 </Section>
 
                 {/* Clubs */}
-                <Section id="clubs" title="Approved Clubs" accent={accent}>
+                <Section
+                    id="clubs"
+                    title="Approved Clubs"
+                    accent={accent}
+                    action={<Link to="/clubs" className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1 hover:opacity-80" style={{ color: accent }}>All clubs <ChevronRight size={12} /></Link>}
+                >
                     {clubs.length === 0 ? (
-                        <p className="text-sm text-gray-500">No approved clubs listed yet.</p>
+                        <p className="text-sm text-gray-500">No clubs linked to this federation yet.</p>
                     ) : (
                         <ScrollRow>
                             {clubs.map((c) => (
-                                <div
+                                <Link
                                     key={c.id}
-                                    className="snap-start shrink-0 w-[140px] rounded-2xl bg-white/[0.04] border border-white/10 p-3 text-center"
+                                    to={c.slug ? `/clubs/${c.slug}` : '/clubs'}
+                                    className="snap-start shrink-0 w-[140px] rounded-2xl bg-white/[0.04] border border-white/10 p-3 text-center active:scale-[0.98] transition-transform"
                                 >
-                                    <div className="w-12 h-12 mx-auto rounded-xl bg-white/5 flex items-center justify-center mb-2">
-                                        <LayoutGrid size={18} style={{ color: accent }} />
-                                    </div>
+                                    {c.logo_url ? (
+                                        <img src={c.logo_url} alt="" className="w-12 h-12 mx-auto rounded-xl object-cover border border-white/10 mb-2" />
+                                    ) : (
+                                        <div className="w-12 h-12 mx-auto rounded-xl bg-white/5 flex items-center justify-center mb-2">
+                                            <LayoutGrid size={18} style={{ color: accent }} />
+                                        </div>
+                                    )}
                                     <p className="text-[12px] font-bold text-white line-clamp-2 leading-snug">{c.name}</p>
-                                </div>
+                                    {c.city && <p className="text-[9px] text-gray-500 mt-1 truncate">{c.city}</p>}
+                                </Link>
                             ))}
                         </ScrollRow>
                     )}

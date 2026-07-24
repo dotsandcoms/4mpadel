@@ -33,6 +33,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
   const isLoggedIn = !!targetEmail;
   const isSuperAdmin = targetEmail ? SUPER_ADMINS.includes(targetEmail.toLowerCase()) : false;
   const [isOrgMember, setIsOrgMember] = useState(false);
+  const [isClubAdmin, setIsClubAdmin] = useState(false);
 
   // Approved organisation member? → show Organisation Dashboard shortcut
   useEffect(() => {
@@ -68,6 +69,29 @@ const Navbar = ({ isDark = false, accentColor }) => {
       }
     };
     checkOrgMembership();
+    return () => { cancelled = true; };
+  }, [targetEmail]);
+
+  // Club admin/owner of a published club? → show Club Dashboard shortcut
+  useEffect(() => {
+    let cancelled = false;
+    const checkClubMembership = async () => {
+      if (!targetEmail) { setIsClubAdmin(false); return; }
+      try {
+        const { data: memberships } = await supabase
+          .from('club_members')
+          .select('role, clubs(status)')
+          .ilike('user_email', targetEmail)
+          .in('role', ['owner', 'admin', 'staff'])
+          .limit(10);
+        const member = (memberships || []).some((m) => m.clubs?.status === 'published');
+        if (!cancelled) setIsClubAdmin(member);
+      } catch (err) {
+        console.warn('Club membership check failed:', err);
+        if (!cancelled) setIsClubAdmin(false);
+      }
+    };
+    checkClubMembership();
     return () => { cancelled = true; };
   }, [targetEmail]);
 
@@ -175,6 +199,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
         { name: 'Federation', heading: true },
         { name: 'Sapa', href: '/federations/sapa' },
         { name: 'Organisations', href: '/organisations' },
+        { name: 'Clubs', href: '/clubs' },
       ]
     },
     {
@@ -426,6 +451,11 @@ const Navbar = ({ isDark = false, accentColor }) => {
                     {isOrgMember && (
                       <a href="/admin?tab=organisations&view=host" target="_blank" className="flex items-center gap-2 px-4 py-2 text-[10px] font-black text-gray-300 hover:text-padel-green hover:bg-white/5 transition-colors uppercase tracking-widest">
                         <Building className="w-3.5 h-3.5" />Org Dashboard
+                      </a>
+                    )}
+                    {isClubAdmin && (
+                      <a href="/admin?tab=clubs" target="_blank" className="flex items-center gap-2 px-4 py-2 text-[10px] font-black text-gray-300 hover:text-padel-green hover:bg-white/5 transition-colors uppercase tracking-widest">
+                        <MapPin className="w-3.5 h-3.5" />Club Dashboard
                       </a>
                     )}
                     <a href="/profile" className="flex items-center gap-2 px-4 py-2 text-[10px] font-black text-gray-300 hover:text-padel-green hover:bg-white/5 transition-colors uppercase tracking-widest">
@@ -688,6 +718,11 @@ const Navbar = ({ isDark = false, accentColor }) => {
                     {isOrgMember && (
                       <a href="/admin?tab=organisations&view=host" onClick={() => setIsMobileMenuOpen(false)} className="w-full py-2.5 bg-white/5 border border-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white/10 active:scale-95 transition-all">
                         <Building className="w-4 h-4 text-padel-green" />Org Dashboard
+                      </a>
+                    )}
+                    {isClubAdmin && (
+                      <a href="/admin?tab=clubs" onClick={() => setIsMobileMenuOpen(false)} className="w-full py-2.5 bg-white/5 border border-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white/10 active:scale-95 transition-all">
+                        <MapPin className="w-4 h-4 text-padel-green" />Club Dashboard
                       </a>
                     )}
                     <a href="/profile" onClick={() => setIsMobileMenuOpen(false)} className="w-full py-2.5 bg-white/5 border border-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white/10 active:scale-95 transition-all">

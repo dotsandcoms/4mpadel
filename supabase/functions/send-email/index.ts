@@ -431,6 +431,94 @@ async function generateEmailBody(
       actionLabel = 'Re-apply Now';
       break;
 
+    case 'club_applied':
+      subject = 'Club Application Received - 4M Padel 🏟️';
+      contentHtml = `
+        <h2 style="font-size: 24px; font-weight: 800; color: #FFFFFF; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Application Under Review</h2>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
+          Thank you for applying to register <strong style="color: #FFFFFF;">${vars.clubName}</strong> as a club on 4M Padel.
+        </p>
+        <div style="background: linear-gradient(135deg, #1F2937, #111827); border: 1px solid rgba(154, 233, 0, 0.15); border-radius: 16px; padding: 24px; margin-bottom: 24px; text-align: left;">
+          <div style="font-size: 10px; font-weight: 900; text-transform: uppercase; color: #F59E0B; letter-spacing: 1.5px; margin-bottom: 8px;">Status: Pending Review</div>
+          <p style="font-size: 13.5px; line-height: 1.6; color: #E2E8F0; margin: 0;">
+            Our administration panel is reviewing your application. This typically takes 24–48 hours.
+          </p>
+        </div>
+        <p style="font-size: 13.5px; line-height: 1.6; color: #64748B; margin-bottom: 0;">
+          You will receive another email as soon as your club has been approved. After approval you'll get a Club Dashboard in your account menu.
+        </p>
+      `;
+      break;
+
+    case 'admin_club_applied':
+      subject = `⚠️ Action Required: New Club Pending Review!`;
+      contentHtml = `
+        <h2 style="font-size: 24px; font-weight: 800; color: #F59E0B; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">New Club Application</h2>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
+          A new club has applied to join the platform. Review the application to approve or reject the listing.
+        </p>
+        <div style="background: linear-gradient(135deg, #1F2937, #111827); border: 1px solid rgba(255,255,255,0.05); padding: 24px; border-radius: 16px; margin-bottom: 24px;">
+          <h3 style="font-size: 12px; font-weight: 900; text-transform: uppercase; color: #9AE900; margin-top: 0; margin-bottom: 16px; letter-spacing: 1.5px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px;">Application Summary</h3>
+          <table width="100%" style="font-size: 13.5px; color: #E2E8F0; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 8px 0; color: #64748B;">Club Name:</td>
+              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.clubName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #64748B;">Applicant Name:</td>
+              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.creatorName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #64748B;">Contact Email:</td>
+              <td align="right" style="font-weight: bold; color: #9AE900;">${vars.contactEmail}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #64748B;">Contact Phone:</td>
+              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.contactPhone || 'N/A'}</td>
+            </tr>
+          </table>
+        </div>
+      `;
+      actionUrl = 'https://4mpadel.co.za/admin?tab=clubs';
+      actionLabel = 'Open Admin Panel';
+      break;
+
+    case 'club_approved':
+      subject = 'Congratulations! Your Club is Approved! 🎉';
+      contentHtml = `
+        <h2 style="font-size: 24px; font-weight: 800; color: #9AE900; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Welcome to the Club Network!</h2>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
+          We are thrilled to inform you that <strong style="color: #FFFFFF;">${vars.clubName}</strong> has been <strong style="color: #9AE900;">APPROVED</strong> and is now live on 4M Padel!
+        </p>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #E2E8F0; margin-bottom: 24px;">
+          Your <strong style="color: #FFFFFF;">Club Dashboard</strong> is now unlocked. Sign in with your club contact email to complete your public club page — courts, opening hours, gallery, sponsors and contacts.
+        </p>
+      `;
+      actionUrl = 'https://4mpadel.co.za/admin?tab=clubs';
+      actionLabel = 'Open Club Dashboard';
+      break;
+
+    case 'club_rejected':
+      subject = 'Update on your Club Application';
+      contentHtml = `
+        <h2 style="font-size: 24px; font-weight: 800; color: #EF4444; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Application Feedback</h2>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
+          Thank you for applying to register <strong style="color: #FFFFFF;">${vars.clubName}</strong>. Unfortunately, our administration team has declined your application at this time.
+        </p>
+        <div style="background-color: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); padding: 24px; border-radius: 16px; margin-bottom: 24px;">
+          <h3 style="font-size: 12px; font-weight: 900; text-transform: uppercase; color: #EF4444; margin-top: 0; margin-bottom: 10px; letter-spacing: 1px;">Reviewer Notes</h3>
+          <p style="font-size: 13.5px; line-height: 1.6; color: #FCA5A5; margin: 0;">
+            ${vars.notes || 'Please verify your contact details and club venue credentials before resubmitting.'}
+          </p>
+        </div>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 0;">
+          If you have resolved the items listed above, you can re-apply from the clubs page.
+        </p>
+      `;
+      actionUrl = 'https://4mpadel.co.za/clubs';
+      actionLabel = 'Re-apply Now';
+      break;
+
     case 'event_pending_sanction':
       subject = `🏆 Sanction Requested: ${vars.eventName || 'New Event'}`;
       contentHtml = `
@@ -922,6 +1010,8 @@ const ADMIN_ONLY_TEMPLATES = new Set([
   'broadcast',
   'org_approved',
   'org_rejected',
+  'club_approved',
+  'club_rejected',
   'event_sanctioned',
   'event_rejected',
   'event_pending_sanction',
@@ -933,6 +1023,8 @@ const ADMIN_ONLY_TEMPLATES = new Set([
 const PUBLIC_APPLICATION_TEMPLATES = new Set([
   'org_applied',
   'admin_org_applied',
+  'club_applied',
+  'admin_club_applied',
 ]);
 
 function isTrustedServiceCaller(authHeader: string | null): boolean {
