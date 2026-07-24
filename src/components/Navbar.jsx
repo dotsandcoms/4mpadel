@@ -196,7 +196,6 @@ const Navbar = ({ isDark = false, accentColor }) => {
       name: 'Ecosystem',
       href: '#',
       dropdown: [
-        { name: 'Federation', heading: true },
         { name: 'Sapa', href: '/federations/sapa' },
         { name: 'Organisations', href: '/organisations' },
         { name: 'Clubs', href: '/clubs' },
@@ -323,11 +322,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
                           <a
                             key={subItem.name}
                             href={subItem.href}
-                            className={`block py-2 text-[10px] font-bold hover:bg-white/5 transition-all uppercase tracking-wider border-l-2 border-transparent hover:border-padel-green ${
-                              link.name === 'Ecosystem' && subItem.name === 'Sapa'
-                                ? 'pl-7 pr-5 text-white hover:text-white'
-                                : 'px-5 text-gray-300 hover:text-padel-green'
-                            }`}
+                            className="block px-5 py-2 text-[10px] font-bold text-gray-300 hover:text-padel-green hover:bg-white/5 transition-all uppercase tracking-wider border-l-2 border-transparent hover:border-padel-green"
                           >
                             {subItem.name}
                           </a>
@@ -679,11 +674,9 @@ const Navbar = ({ isDark = false, accentColor }) => {
                                   href={subItem.href}
                                   onClick={() => setIsMobileMenuOpen(false)}
                                   className={`block py-2 text-[10px] font-black uppercase tracking-wider transition-colors ${
-                                    link.name === 'Ecosystem' && subItem.name === 'Sapa'
-                                      ? 'pl-2 text-white'
-                                      : location.pathname === subItem.href
-                                        ? 'text-padel-green'
-                                        : 'text-gray-400 hover:text-white'
+                                    location.pathname === subItem.href
+                                      ? 'text-padel-green'
+                                      : 'text-gray-400 hover:text-white'
                                   }`}
                                 >
                                   {subItem.name}

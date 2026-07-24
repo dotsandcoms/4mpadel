@@ -17,7 +17,7 @@ import {
 const CLUB_NAV = [
     { id: 'overview', label: 'Overview', icon: Info },
     { id: 'courts', label: 'Courts', icon: LayoutGrid },
-    { id: 'events', label: 'Events', icon: Calendar },
+    { id: 'events', label: 'SAPA Events', icon: Calendar },
     { id: 'gallery', label: 'Gallery', icon: ImageIcon },
     { id: 'facilities', label: 'Facilities', icon: Coffee },
     { id: 'info', label: 'Info', icon: Clock },
@@ -263,7 +263,7 @@ const ClubPage = () => {
                     {[
                         { label: 'Courts', value: club.stats?.courts ?? totalCourts },
                         { label: 'Events', value: club.stats?.events ?? '—' },
-                        { label: 'Members', value: club.stats?.members ?? memberCount },
+                        { label: 'Players', value: club.stats?.members ?? memberCount },
                     ].map((s) => (
                         <div key={s.label} className="bg-white/[0.03] border border-white/5 rounded-xl sm:rounded-2xl px-1 py-2.5 sm:p-4 text-center min-w-0">
                             <div className="text-lg sm:text-2xl font-black leading-none" style={{ color: accent }}>{s.value}</div>
@@ -277,8 +277,14 @@ const ClubPage = () => {
             <div className="container mx-auto px-4 md:px-6 mt-4">
                 <div className="flex flex-wrap gap-2">
                     {website && (
-                        <a href={website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest text-black" style={{ background: accent }}>
-                            <Globe size={14} /> Website
+                        <a
+                            href={website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest !text-black hover:!text-black [&_svg]:!text-black"
+                            style={{ background: accent, color: '#000' }}
+                        >
+                            <Globe size={14} color="#000" /> Website
                         </a>
                     )}
                     {mapUrl && (
@@ -417,7 +423,7 @@ const ClubPage = () => {
                     )}
                 </Section>
 
-                <Section id="events" title="Upcoming Events" accent={accent}>
+                <Section id="events" title="SAPA Events" accent={accent}>
                     <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-8 text-center">
                         <Calendar size={28} className="mx-auto text-gray-600 mb-2" />
                         <p className="text-sm text-gray-500">Events at this club coming soon.</p>
