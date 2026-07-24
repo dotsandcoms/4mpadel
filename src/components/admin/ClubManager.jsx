@@ -134,6 +134,15 @@ const ghostBtnClass = 'px-3 py-1.5 rounded-lg border border-white/10 text-xs fon
  */
 const ClubManager = ({ permissions }) => {
     const isSuper = permissions?.role === 'super_admin';
+    // Platform / My Clubs switcher — mirrors the Organisations portal toggle.
+    // Only super admins see the toggle (scoped roles already only load their clubs).
+    const [viewMode, setViewMode] = useState(() => {
+        try {
+            return new URLSearchParams(window.location.search).get('view') === 'mine' ? 'mine' : 'platform';
+        } catch {
+            return 'platform';
+        }
+    });
     const [clubs, setClubs] = useState([]);
     const [federations, setFederations] = useState([]);
     const [approvedOrgs, setApprovedOrgs] = useState([]);
@@ -170,11 +179,34 @@ const ClubManager = ({ permissions }) => {
         [clubs, selectedId],
     );
 
+    const myClubIds = useMemo(
+        () => new Set((permissions?.clubs || []).map((c) => c.id)),
+        [permissions?.clubs],
+    );
+    const showViewToggle = isSuper && myClubIds.size > 0;
+    const effectiveView = showViewToggle ? viewMode : 'platform';
+
+    const handleViewModeChange = (mode) => {
+        setViewMode(mode);
+        try {
+            const params = new URLSearchParams(window.location.search);
+            params.set('tab', 'clubs');
+            if (mode === 'mine') params.set('view', 'mine');
+            else params.delete('view');
+            window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+        } catch { /* ignore */ }
+    };
+
+    const visibleClubs = useMemo(() => {
+        const base = clubs.filter((c) => c.status !== 'pending');
+        if (effectiveView !== 'mine') return base;
+        return base.filter((c) => myClubIds.has(c.id));
+    }, [clubs, effectiveView, myClubIds]);
+
     const filteredClubs = useMemo(() => {
         const q = listSearch.trim().toLowerCase();
-        const base = clubs.filter((c) => c.status !== 'pending');
-        if (!q) return base;
-        return base.filter((c) => {
+        if (!q) return visibleClubs;
+        return visibleClubs.filter((c) => {
             const hay = [
                 c.name,
                 c.short_name,
@@ -185,12 +217,21 @@ const ClubManager = ({ permissions }) => {
             ].filter(Boolean).join(' ').toLowerCase();
             return hay.includes(q);
         });
-    }, [clubs, listSearch]);
+    }, [visibleClubs, listSearch]);
 
-    const pendingClubs = useMemo(
-        () => clubs.filter((c) => c.status === 'pending'),
-        [clubs],
-    );
+    const pendingClubs = useMemo(() => {
+        const base = clubs.filter((c) => c.status === 'pending');
+        if (effectiveView !== 'mine') return base;
+        return base.filter((c) => myClubIds.has(c.id));
+    }, [clubs, effectiveView, myClubIds]);
+
+    // Keep the selection inside the active view when switching to My Clubs.
+    useEffect(() => {
+        if (effectiveView !== 'mine' || isCreating) return;
+        if (selectedId && myClubIds.has(selectedId)) return;
+        const first = clubs.find((c) => myClubIds.has(c.id) && c.status !== 'pending');
+        setSelectedId(first ? first.id : null);
+    }, [effectiveView, selectedId, myClubIds, clubs, isCreating]);
 
     const applicantEmail = (club) => {
         if (club?.contact_email) return club.contact_email;
@@ -592,10 +633,38 @@ const ClubManager = ({ permissions }) => {
                         <MapPin className="text-padel-green" size={22} /> Clubs
                     </h2>
                     <p className="text-sm text-gray-400 mt-1">
-                        Club cards linked to federations, organisations and players.
+                        {effectiveView === 'mine'
+                            ? 'Manage the clubs linked to your account.'
+                            : 'Club cards linked to federations, organisations and players.'}
                     </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                    {showViewToggle && (
+                        <div className="flex items-center gap-1 p-1 rounded-xl bg-white/5 border border-white/10">
+                            <button
+                                type="button"
+                                onClick={() => handleViewModeChange('platform')}
+                                className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                                    effectiveView === 'platform'
+                                        ? 'bg-amber-500 text-black'
+                                        : 'text-gray-400 hover:text-white'
+                                }`}
+                            >
+                                Platform Overview
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleViewModeChange('mine')}
+                                className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                                    effectiveView === 'mine'
+                                        ? 'bg-padel-green text-black'
+                                        : 'text-gray-400 hover:text-white'
+                                }`}
+                            >
+                                My Clubs
+                            </button>
+                        </div>
+                    )}
                     <button
                         type="button"
                         onClick={() => loadClubs()}
@@ -679,14 +748,18 @@ const ClubManager = ({ permissions }) => {
                         </div>
                         <p className="px-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">
                             {listSearch.trim()
-                                ? `${filteredClubs.length} of ${clubs.filter((c) => c.status !== 'pending').length}`
-                                : `${clubs.filter((c) => c.status !== 'pending').length} clubs`}
+                                ? `${filteredClubs.length} of ${visibleClubs.length}`
+                                : `${visibleClubs.length} clubs`}
                         </p>
                     </div>
-                    {clubs.length === 0 && !isCreating && (
-                        <p className="text-xs text-gray-500 p-3">No clubs yet. Create one or apply the clubs migration.</p>
+                    {visibleClubs.length === 0 && !isCreating && (
+                        <p className="text-xs text-gray-500 p-3">
+                            {effectiveView === 'mine'
+                                ? 'No clubs linked to your account yet.'
+                                : 'No clubs yet. Create one or apply the clubs migration.'}
+                        </p>
                     )}
-                    {clubs.length > 0 && filteredClubs.length === 0 && (
+                    {visibleClubs.length > 0 && filteredClubs.length === 0 && (
                         <p className="text-xs text-gray-500 p-3">No clubs match “{listSearch.trim()}”.</p>
                     )}
                     {filteredClubs.map((c) => (

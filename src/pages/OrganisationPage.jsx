@@ -16,13 +16,6 @@ import {
 // production hides these sections until real data exists.
 const SHOW_DUMMY = import.meta.env.DEV;
 
-const DUMMY_CLUBS = [
-    { name: 'Atlantic Padel', city: 'Cape Town' },
-    { name: 'NetSet Padel', city: 'Johannesburg' },
-    { name: 'KCC', city: 'Roodepoort' },
-    { name: 'Africa Padel', city: 'Sandton' },
-];
-
 const DUMMY_SPONSORS = [
     { tier: 'Title Sponsor', name: 'Wilson' },
     { tier: 'Gold Partner', name: 'HEAD' },
@@ -257,9 +250,8 @@ const OrganisationPage = () => {
     const sponsors = Array.isArray(org.sponsors)
         ? org.sponsors.filter((s) => (s.name || '').trim() || s.logo_url)
         : [];
-    const clubsList = linkedClubs.length > 0
-        ? linkedClubs
-        : (hostVenues.length > 0 ? hostVenues : (SHOW_DUMMY ? DUMMY_CLUBS : []));
+    // Real linked clubs first; otherwise fall back to venues from this org's events.
+    const clubsList = linkedClubs.length > 0 ? linkedClubs : hostVenues;
     const showClubs = clubsList.length > 0;
     const showMedia = mediaItems.length > 0 || SHOW_DUMMY;
     const showSponsors = sponsors.length > 0 || SHOW_DUMMY;
@@ -462,8 +454,8 @@ const OrganisationPage = () => {
                                 );
                             })}
                         </div>
-                        {linkedClubs.length === 0 && hostVenues.length === 0 && SHOW_DUMMY && (
-                            <p className="text-[9px] text-gray-600 uppercase tracking-widest font-black mt-3">Preview data — populated from this organiser's event venues</p>
+                        {linkedClubs.length === 0 && hostVenues.length > 0 && (
+                            <p className="text-[9px] text-gray-600 uppercase tracking-widest font-black mt-3">Populated from this organiser's event venues</p>
                         )}
                     </Section>
                 )}
