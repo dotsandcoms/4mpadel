@@ -3,8 +3,8 @@ import { supabase } from '../../supabaseClient';
 import { toast } from 'sonner';
 import {
     MapPin, Plus, RefreshCw, Users, Building, Save, Loader2, ExternalLink,
-    Upload, Trash2, Image as ImageIcon, ChevronDown, Instagram, Facebook, Youtube,
-    Search, Check, X, Clock, Palette,
+    Upload, Trash2, Image as ImageIcon, ChevronDown, Instagram, Facebook,
+    Search, Check, X, Clock, Palette, Phone,
 } from 'lucide-react';
 import ClubMembersManager from './ClubMembersManager';
 import { slugifyClub } from '../../utils/club';
@@ -46,7 +46,7 @@ const CollapsibleSection = ({
     </div>
 );
 
-const emptySocials = () => ({ instagram: '', facebook: '', tiktok: '', youtube: '' });
+const emptySocials = () => ({ instagram: '', facebook: '', tiktok: '', playtomic: '' });
 const emptyCourts = () => ({
     indoor: { count: 0, features: [], image_url: '' },
     outdoor: { count: 0, features: [], image_url: '' },
@@ -104,7 +104,7 @@ const normaliseSocials = (value) => {
         instagram: src.instagram || '',
         facebook: src.facebook || '',
         tiktok: src.tiktok || '',
-        youtube: src.youtube || '',
+        playtomic: src.playtomic || '',
     };
 };
 
@@ -1082,18 +1082,22 @@ const ClubManager = ({ permissions }) => {
                                 onToggle={() => toggleSection('socials')}
                                 title="Social Media"
                                 icon={Instagram}
-                                count={Object.values(normaliseSocials(form.socials)).filter((v) => String(v || '').trim()).length}
+                                count={
+                                    Object.values(normaliseSocials(form.socials)).filter((v) => String(v || '').trim()).length
+                                    + (String(form.whatsapp_number || '').trim() ? 1 : 0)
+                                }
                             >
                                 <div className="grid md:grid-cols-2 gap-3">
                                     {[
-                                        ['instagram', 'Instagram', Instagram],
-                                        ['facebook', 'Facebook', Facebook],
-                                        ['tiktok', 'TikTok', ExternalLink],
-                                        ['youtube', 'YouTube', Youtube],
+                                        ['instagram', 'Instagram', Instagram, 'https://instagram.com/...'],
+                                        ['facebook', 'Facebook', Facebook, 'https://facebook.com/...'],
+                                        ['tiktok', 'TikTok', ExternalLink, 'https://tiktok.com/@...'],
+                                        ['playtomic', 'Playtomic', ExternalLink, 'https://playtomic.com/...'],
                                     ].map((entry) => {
                                         const key = entry[0];
                                         const label = entry[1];
                                         const SocialIcon = entry[2];
+                                        const placeholder = entry[3];
                                         return (
                                         <label key={key} className={labelClass}>
                                             {label}
@@ -1103,12 +1107,24 @@ const ClubManager = ({ permissions }) => {
                                                     value={form.socials?.[key] || ''}
                                                     onChange={(e) => updateField('socials', { ...normaliseSocials(form.socials), [key]: e.target.value })}
                                                     className={`${inputClass} !mt-0 pl-9`}
-                                                    placeholder="https://..."
+                                                    placeholder={placeholder}
                                                 />
                                             </div>
                                         </label>
                                         );
                                     })}
+                                    <label className={labelClass}>
+                                        WhatsApp
+                                        <div className="relative mt-1">
+                                            <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                                            <input
+                                                value={form.whatsapp_number ?? ''}
+                                                onChange={(e) => updateField('whatsapp_number', e.target.value)}
+                                                className={`${inputClass} !mt-0 pl-9`}
+                                                placeholder="0XX XXX XXXX"
+                                            />
+                                        </div>
+                                    </label>
                                 </div>
                             </CollapsibleSection>
 

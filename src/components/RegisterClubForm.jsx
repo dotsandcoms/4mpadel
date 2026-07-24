@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
     MapPin, Mail, Phone, Globe, Send, Loader2, ChevronLeft, Lock, Eye, EyeOff,
-    User, CheckCircle2, Instagram, Facebook,
+    User, CheckCircle2, Instagram, Facebook, ExternalLink, MessageCircle,
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { sendEmail } from '../utils/emails';
@@ -58,6 +58,9 @@ const RegisterClubForm = ({ onBack, onClose, contactEmail = '' }) => {
         website_url: '',
         instagram: '',
         facebook: '',
+        tiktok: '',
+        playtomic: '',
+        whatsapp_number: '',
         full_name: '',
         contact_email: contactEmail || '',
         contact_phone: '',
@@ -265,10 +268,12 @@ const RegisterClubForm = ({ onBack, onClose, contactEmail = '' }) => {
                 website_url: formData.website_url.trim() || null,
                 contact_email: contactEmailValue,
                 contact_phone: formData.contact_phone.trim() || null,
-                whatsapp_number: formData.contact_phone.trim() || null,
+                whatsapp_number: formData.whatsapp_number.trim() || formData.contact_phone.trim() || null,
                 socials: {
                     instagram: formData.instagram.trim() || '',
                     facebook: formData.facebook.trim() || '',
+                    tiktok: formData.tiktok.trim() || '',
+                    playtomic: formData.playtomic.trim() || '',
                 },
                 contacts,
                 created_by: createdBy,
@@ -398,6 +403,27 @@ const RegisterClubForm = ({ onBack, onClose, contactEmail = '' }) => {
                             <div className="relative mt-1.5">
                                 <Facebook size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
                                 <input value={formData.facebook} onChange={(e) => setField('facebook', e.target.value)} className={fieldClass} placeholder="https://facebook.com/…" />
+                            </div>
+                        </label>
+                        <label className={labelClass}>
+                            TikTok
+                            <div className="relative mt-1.5">
+                                <ExternalLink size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+                                <input value={formData.tiktok} onChange={(e) => setField('tiktok', e.target.value)} className={fieldClass} placeholder="https://tiktok.com/@…" />
+                            </div>
+                        </label>
+                        <label className={labelClass}>
+                            Playtomic
+                            <div className="relative mt-1.5">
+                                <ExternalLink size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+                                <input value={formData.playtomic} onChange={(e) => setField('playtomic', e.target.value)} className={fieldClass} placeholder="https://playtomic.com/…" />
+                            </div>
+                        </label>
+                        <label className={`${labelClass} sm:col-span-2`}>
+                            WhatsApp
+                            <div className="relative mt-1.5">
+                                <MessageCircle size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+                                <input value={formData.whatsapp_number} onChange={(e) => setField('whatsapp_number', e.target.value)} className={fieldClass} placeholder="0XX XXX XXXX" />
                             </div>
                         </label>
                     </div>

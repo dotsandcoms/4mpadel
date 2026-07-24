@@ -11,7 +11,7 @@ import {
 import {
     MapPin, BadgeCheck, ShieldCheck, Globe, Mail, Phone, MessageCircle,
     ChevronRight, Building, Calendar, Image as ImageIcon, Info, LayoutGrid,
-    Instagram, Facebook, Youtube, ExternalLink, Clock, Coffee, Landmark,
+    Instagram, Facebook, ExternalLink, Clock, Coffee, Landmark,
 } from 'lucide-react';
 
 const CLUB_NAV = [
@@ -123,7 +123,7 @@ const ClubPage = () => {
         { key: 'instagram', href: safeUrl(socials.instagram), icon: Instagram, label: 'Instagram' },
         { key: 'facebook', href: safeUrl(socials.facebook), icon: Facebook, label: 'Facebook' },
         { key: 'tiktok', href: safeUrl(socials.tiktok), icon: ExternalLink, label: 'TikTok' },
-        { key: 'youtube', href: safeUrl(socials.youtube), icon: Youtube, label: 'YouTube' },
+        { key: 'playtomic', href: safeUrl(socials.playtomic), icon: ExternalLink, label: 'Playtomic' },
     ].filter((s) => s.href);
     const website = safeUrl(club?.website_url);
     const mapUrl = useMemo(() => {
@@ -298,9 +298,21 @@ const ClubPage = () => {
                     )}
                     {socialLinks.map((item) => {
                         const SocialIcon = item.icon;
+                        const isNamed = item.key === 'tiktok' || item.key === 'playtomic';
                         return (
-                            <a key={item.key} href={item.href} target="_blank" rel="noopener noreferrer" aria-label={item.label} title={item.label} className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10">
-                                <SocialIcon size={16} />
+                            <a
+                                key={item.key}
+                                href={item.href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label={item.label}
+                                title={item.label}
+                                className={isNamed
+                                    ? 'inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-white/5 border border-white/10 text-white hover:bg-white/10'
+                                    : 'inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10'}
+                            >
+                                <SocialIcon size={isNamed ? 14 : 16} />
+                                {isNamed ? item.label : null}
                             </a>
                         );
                     })}
