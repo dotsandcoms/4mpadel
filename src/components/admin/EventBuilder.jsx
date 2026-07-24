@@ -10,6 +10,7 @@ import { supabase } from '../../supabaseClient';
 import { useClubs } from '../../hooks/useClubs';
 import { getDefaultBackgroundForStatus } from '../../utils/imageUtils';
 import { buildRankedinTournamentUrl, downloadRankedinSkipReport, extractRankedinId } from '../../utils/rankedinLink';
+import { loadGoogleMaps } from '../../utils/googleMaps';
 
 const DIVISION_GROUPS = [
     {
@@ -118,34 +119,6 @@ const sapaBadgeClass = (status) => {
 const GENDERS = ['', 'Men', 'Ladies', 'Mixed', 'Junior'];
 const AGE_CATEGORIES = ['', 'Open', '35+', '40+', '45+', '50+', '55+', 'Masters', 'Junior'];
 const TOURNAMENT_TAGS = ['None', 'Broll', 'SAPA', 'Club', 'Social', 'Internal', '360 Padel', 'SA Grand'];
-
-const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
-let googleMapsPromise = null;
-const loadGoogleMaps = () => {
-    if (typeof window === 'undefined') return Promise.reject(new Error('no window'));
-    if (!GOOGLE_MAPS_KEY) {
-        return Promise.reject(new Error('VITE_GOOGLE_MAPS_API_KEY is not set. Add it to your host env (e.g. Vercel) and redeploy.'));
-    }
-    if (window.google?.maps?.places) return Promise.resolve(window.google);
-    if (googleMapsPromise) return googleMapsPromise;
-    googleMapsPromise = new Promise((resolve, reject) => {
-        const existing = document.querySelector('script[data-google-maps]');
-        if (existing) {
-            existing.addEventListener('load', () => resolve(window.google));
-            existing.addEventListener('error', reject);
-            return;
-        }
-        const s = document.createElement('script');
-        s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&libraries=places`;
-        s.async = true;
-        s.defer = true;
-        s.setAttribute('data-google-maps', 'true');
-        s.onload = () => resolve(window.google);
-        s.onerror = reject;
-        document.head.appendChild(s);
-    });
-    return googleMapsPromise;
-};
 
 const STEPS = [
     { id: 1, label: 'Basics', icon: Info },

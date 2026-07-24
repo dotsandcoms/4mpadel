@@ -1,17 +1,17 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../../supabaseClient';
 import { toast } from 'sonner';
 import {
     MapPin, Plus, RefreshCw, Users, Building, Save, Loader2, ExternalLink,
     Upload, Trash2, Image as ImageIcon, ChevronDown, Instagram, Facebook, Youtube,
-    Search, Check, X, Clock,
+    Search, Check, X, Clock, Palette,
 } from 'lucide-react';
 import ClubMembersManager from './ClubMembersManager';
 import { slugifyClub } from '../../utils/club';
 import { sendEmail } from '../../utils/emails';
+import { attachPlacesAutocomplete } from '../../utils/googleMaps';
 
-const MotionDiv = motion.div;
+const COLOR_PRESETS = ['#CC1414', '#9AE900', '#F97316', '#3B82F6', '#EF4444', '#A855F7', '#14B8A6', '#EAB308', '#EC4899'];
 
 const CollapsibleSection = ({
     open,
@@ -23,7 +23,7 @@ const CollapsibleSection = ({
     actions,
     children,
 }) => (
-    <div className="bg-white/[0.02] border border-white/10 backdrop-blur-md rounded-2xl shadow-xl overflow-hidden">
+    <div className="bg-white/[0.02] border border-white/10 rounded-2xl shadow-xl">
         <div className="flex items-center gap-2 p-4 md:p-5">
             <button
                 type="button"
@@ -38,21 +38,11 @@ const CollapsibleSection = ({
             </button>
             {actions}
         </div>
-        <AnimatePresence initial={false}>
-            {open && (
-                <MotionDiv
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="overflow-hidden"
-                >
-                    <div className="px-4 md:px-5 pb-5 border-t border-white/5 pt-4 space-y-4">
-                        {children}
-                    </div>
-                </MotionDiv>
-            )}
-        </AnimatePresence>
+        {open && (
+            <div className="px-4 md:px-5 pb-5 border-t border-white/5 pt-4 space-y-4">
+                {children}
+            </div>
+        )}
     </div>
 );
 
@@ -154,9 +144,12 @@ const ClubManager = ({ permissions }) => {
     const [selectedId, setSelectedId] = useState(null);
     const [isCreating, setIsCreating] = useState(false);
     const [form, setForm] = useState(emptyForm());
+    const [slugManual, setSlugManual] = useState(false);
     const [membersOpen, setMembersOpen] = useState(false);
     const [assignOrgId, setAssignOrgId] = useState('');
     const [listSearch, setListSearch] = useState('');
+    const addressInputRef = useRef(null);
+    const autocompleteRef = useRef(null);
     const [sectionOpen, setSectionOpen] = useState({
         profile: true,
         sponsor: false,
@@ -335,36 +328,96 @@ const ClubManager = ({ permissions }) => {
     }, [loadClubs, loadLookups]);
 
     useEffect(() => {
-        if (selected) {
-            setForm({
-                ...emptyForm(),
-                ...selected,
-                lat: selected.lat ?? '',
-                lng: selected.lng ?? '',
-                federation_id: selected.federation_id || '',
-                socials: normaliseSocials(selected.socials),
-                contacts: Array.isArray(selected.contacts) ? selected.contacts : [],
-                opening_hours: { ...emptyHours(), ...(selected.opening_hours || {}) },
-                courts: normaliseCourts(selected.courts),
-                services: Array.isArray(selected.services) ? selected.services : [],
-                cafe: selected.cafe || null,
-                sponsors: Array.isArray(selected.sponsors) ? selected.sponsors : [],
-                principal_sponsor: selected.principal_sponsor || null,
-                gallery: Array.isArray(selected.gallery) ? selected.gallery : [],
-                stats: selected.stats && typeof selected.stats === 'object' ? selected.stats : {},
-            });
-            setIsCreating(false);
-            loadLinkedOrgs(selected.id);
-            setSectionOpen((prev) => ({ ...prev, profile: true }));
-        }
-    }, [selected, loadLinkedOrgs]);
+        if (!selectedId) return;
+        const club = clubs.find((c) => c.id === selectedId);
+        if (!club) return;
+        setForm({
+            ...emptyForm(),
+            ...club,
+            lat: club.lat ?? '',
+            lng: club.lng ?? '',
+            federation_id: club.federation_id || '',
+            socials: normaliseSocials(club.socials),
+            contacts: Array.isArray(club.contacts) ? club.contacts : [],
+            opening_hours: { ...emptyHours(), ...(club.opening_hours || {}) },
+            courts: normaliseCourts(club.courts),
+            services: Array.isArray(club.services) ? club.services : [],
+            cafe: club.cafe || null,
+            sponsors: Array.isArray(club.sponsors) ? club.sponsors : [],
+            principal_sponsor: club.principal_sponsor || null,
+            gallery: Array.isArray(club.gallery) ? club.gallery : [],
+            stats: club.stats && typeof club.stats === 'object' ? club.stats : {},
+        });
+        setSlugManual(true);
+        setIsCreating(false);
+        loadLinkedOrgs(selectedId);
+        setSectionOpen((prev) => ({ ...prev, profile: true }));
+        // Only re-hydrate when the selected club id changes — not on every clubs[] refresh.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedId, loadLinkedOrgs]);
 
     const startCreate = () => {
         setIsCreating(true);
         setSelectedId(null);
         setForm(emptyForm());
+        setSlugManual(false);
         setLinkedOrgIds([]);
     };
+
+    // Google Places autocomplete — shared helper with EventBuilder.
+    // Depend on selectedId (not selected object) so club list refreshes don't tear this down.
+    useEffect(() => {
+        if ((!selectedId && !isCreating) || !sectionOpen.profile) return undefined;
+        let cancelled = false;
+        let attached = null;
+
+        const timer = setTimeout(() => {
+            const input = addressInputRef.current;
+            if (!input) return;
+
+            attachPlacesAutocomplete(input, {
+                country: 'za',
+                onPlace: (place) => {
+                    const comps = place.address_components || [];
+                    const get = (type) => comps.find((c) => c.types.includes(type))?.long_name || '';
+                    const city = get('locality')
+                        || get('sublocality')
+                        || get('administrative_area_level_2')
+                        || get('administrative_area_level_1');
+                    const loc = place.geometry?.location;
+                    const formatted = place.formatted_address || '';
+                    if (formatted && addressInputRef.current) {
+                        addressInputRef.current.value = formatted;
+                    }
+                    setForm((prev) => ({
+                        ...prev,
+                        address: formatted || prev.address,
+                        city: city || prev.city,
+                        lat: loc ? String(loc.lat()) : prev.lat,
+                        lng: loc ? String(loc.lng()) : prev.lng,
+                    }));
+                },
+            })
+                .then((api) => {
+                    if (cancelled) {
+                        api.destroy();
+                        return;
+                    }
+                    attached = api;
+                    autocompleteRef.current = api;
+                })
+                .catch((err) => {
+                    console.warn('Google Maps failed to load:', err);
+                });
+        }, 0);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+            attached?.destroy();
+            autocompleteRef.current = null;
+        };
+    }, [selectedId, isCreating, sectionOpen.profile]);
 
     const handleUpload = async (e, kind) => {
         const file = e.target.files?.[0];
@@ -697,35 +750,148 @@ const ClubManager = ({ permissions }) => {
                                 icon={MapPin}
                             >
                                 <div className="grid md:grid-cols-2 gap-3">
-                                    {[
-                                        ['name', 'Name'],
-                                        ['short_name', 'Short name'],
-                                        ['slug', 'Slug'],
-                                        ['city', 'City'],
-                                        ['address', 'Address'],
-                                        ['website_url', 'Website'],
-                                        ['contact_email', 'Contact email'],
-                                        ['contact_phone', 'Contact phone'],
-                                        ['whatsapp_number', 'WhatsApp'],
-                                        ['brand_color', 'Brand colour'],
-                                        ['lat', 'Latitude'],
-                                        ['lng', 'Longitude'],
-                                    ].map(([key, label]) => (
-                                        <label key={key} className={labelClass}>
-                                            {label}
+                                    <label className={labelClass}>
+                                        Name
+                                        <input
+                                            value={form.name ?? ''}
+                                            onChange={(e) => {
+                                                const v = e.target.value;
+                                                setForm((prev) => ({
+                                                    ...prev,
+                                                    name: v,
+                                                    ...(isCreating && !slugManual
+                                                        ? { slug: slugifyClub(v) }
+                                                        : {}),
+                                                }));
+                                            }}
+                                            className={inputClass}
+                                        />
+                                    </label>
+                                    <label className={labelClass}>
+                                        Short name
+                                        <input
+                                            value={form.short_name ?? ''}
+                                            onChange={(e) => updateField('short_name', e.target.value)}
+                                            className={inputClass}
+                                        />
+                                    </label>
+                                    <label className={labelClass}>
+                                        Slug
+                                        <input
+                                            value={form.slug ?? ''}
+                                            onChange={(e) => {
+                                                setSlugManual(true);
+                                                updateField('slug', e.target.value);
+                                            }}
+                                            className={inputClass}
+                                            placeholder="auto from name"
+                                        />
+                                    </label>
+                                    <label className={labelClass}>
+                                        City
+                                        <input
+                                            value={form.city ?? ''}
+                                            onChange={(e) => updateField('city', e.target.value)}
+                                            className={inputClass}
+                                            placeholder="Auto from address"
+                                        />
+                                    </label>
+                                    <div className="md:col-span-2">
+                                        <label className={labelClass}>Address</label>
+                                        <input
+                                            key={selectedId || (isCreating ? 'new-club' : 'no-club')}
+                                            ref={addressInputRef}
+                                            value={form.address || ''}
+                                            onChange={(e) => updateField('address', e.target.value)}
+                                            placeholder="Start typing to search Google..."
+                                            autoComplete="off"
+                                            className={inputClass}
+                                        />
+                                        <p className="text-[10px] text-gray-500 mt-1 normal-case tracking-normal font-medium">
+                                            Powered by Google — selecting a result auto-fills city, latitude and longitude.
+                                        </p>
+                                    </div>
+                                    <label className={labelClass}>
+                                        Website
+                                        <input
+                                            value={form.website_url ?? ''}
+                                            onChange={(e) => updateField('website_url', e.target.value)}
+                                            className={inputClass}
+                                        />
+                                    </label>
+                                    <label className={labelClass}>
+                                        Contact email
+                                        <input
+                                            value={form.contact_email ?? ''}
+                                            onChange={(e) => updateField('contact_email', e.target.value)}
+                                            className={inputClass}
+                                        />
+                                    </label>
+                                    <label className={labelClass}>
+                                        Contact phone
+                                        <input
+                                            value={form.contact_phone ?? ''}
+                                            onChange={(e) => updateField('contact_phone', e.target.value)}
+                                            className={inputClass}
+                                        />
+                                    </label>
+                                    <label className={labelClass}>
+                                        WhatsApp
+                                        <input
+                                            value={form.whatsapp_number ?? ''}
+                                            onChange={(e) => updateField('whatsapp_number', e.target.value)}
+                                            className={inputClass}
+                                        />
+                                    </label>
+                                    <div className="md:col-span-2 bg-black/30 border border-white/5 rounded-2xl p-4">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <Palette size={14} style={{ color: form.brand_color || '#CC1414' }} />
+                                            <p className="text-xs font-bold text-white">Brand colour</p>
+                                            <span className="text-[10px] text-gray-500">— accents on the public club page</span>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            {COLOR_PRESETS.map((c) => (
+                                                <button
+                                                    key={c}
+                                                    type="button"
+                                                    onClick={() => updateField('brand_color', c)}
+                                                    className={`w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 ${
+                                                        form.brand_color === c ? 'border-white scale-110' : 'border-transparent'
+                                                    }`}
+                                                    style={{ background: c }}
+                                                    title={c}
+                                                />
+                                            ))}
                                             <input
-                                                value={form[key] ?? ''}
-                                                onChange={(e) => {
-                                                    const v = e.target.value;
-                                                    updateField(key, v);
-                                                    if (key === 'name' && isCreating && !form.slug) {
-                                                        updateField('slug', slugifyClub(v));
-                                                    }
-                                                }}
-                                                className={inputClass}
+                                                type="color"
+                                                value={/^#[0-9A-Fa-f]{6}$/.test(form.brand_color || '') ? form.brand_color : '#CC1414'}
+                                                onChange={(e) => updateField('brand_color', e.target.value)}
+                                                className="w-8 h-8 rounded-full border border-white/20 bg-transparent cursor-pointer"
+                                                title="Custom colour"
                                             />
-                                        </label>
-                                    ))}
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 ml-1">
+                                                {form.brand_color || '#CC1414'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <label className={labelClass}>
+                                        Latitude
+                                        <input
+                                            value={form.lat ?? ''}
+                                            onChange={(e) => updateField('lat', e.target.value)}
+                                            className={inputClass}
+                                            placeholder="Auto from address"
+                                        />
+                                    </label>
+                                    <label className={labelClass}>
+                                        Longitude
+                                        <input
+                                            value={form.lng ?? ''}
+                                            onChange={(e) => updateField('lng', e.target.value)}
+                                            className={inputClass}
+                                            placeholder="Auto from address"
+                                        />
+                                    </label>
                                     <label className={labelClass}>
                                         Status
                                         <select
