@@ -93,6 +93,9 @@ export async function attachPlacesAutocomplete(inputEl, options = {}) {
         throw new Error('Google Places Autocomplete is not available');
     }
 
+    // The widget lazily appends a .pac-container to <body> with no teardown API —
+    // snapshot existing ones so destroy() can remove whatever this instance added.
+    const containersBefore = new Set(document.querySelectorAll('.pac-container'));
     const ac = new google.maps.places.Autocomplete(inputEl, {
         fields: ['formatted_address', 'address_components', 'geometry', 'name'],
         types: ['establishment', 'geocode'],
@@ -111,6 +114,9 @@ export async function attachPlacesAutocomplete(inputEl, options = {}) {
             if (google.maps?.event) {
                 google.maps.event.clearInstanceListeners(ac);
             }
+            document.querySelectorAll('.pac-container').forEach((el) => {
+                if (!containersBefore.has(el)) el.remove();
+            });
         },
     };
 }

@@ -322,10 +322,14 @@ const ClubManager = ({ permissions }) => {
         setLinkedOrgIds((data || []).map((r) => r.organisation_id));
     }, []);
 
+    // Load on mount / permission-scope change only. loadClubs' identity changes with
+    // selectedId, and re-running it on every selection unmounts the editor (loading
+    // spinner), which detaches the Google Places widget from the address input.
     useEffect(() => {
         loadClubs();
         loadLookups();
-    }, [loadClubs, loadLookups]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isSuper, permissions?.clubs, loadLookups]);
 
     useEffect(() => {
         if (!selectedId) return;
@@ -561,7 +565,9 @@ const ClubManager = ({ permissions }) => {
         }
     };
 
-    if (loading) {
+    // Full-screen spinner only before the first load — swapping the editor out for
+    // the spinner on refreshes detaches the Places autocomplete from the address input.
+    if (loading && clubs.length === 0) {
         return (
             <div className="flex items-center justify-center py-20 text-gray-400 gap-2">
                 <Loader2 className="animate-spin" size={18} /> Loading clubs…
