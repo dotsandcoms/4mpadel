@@ -962,6 +962,11 @@ async function generateEmailBody(
               <td style="padding: 8px 0; color: #64748B;">Platform commission (5%):</td>
               <td align="right" style="font-weight: bold; color: #F87171;">−${vars.commission || 'R 0'}</td>
             </tr>
+            ${vars.interimPaid && vars.interimPaid !== 'R 0' ? `
+            <tr>
+              <td style="padding: 8px 0; color: #64748B;">Interim payments to organiser:</td>
+              <td align="right" style="font-weight: bold; color: #F87171;">−${vars.interimPaid}</td>
+            </tr>` : ''}
             <tr>
               <td style="padding: 12px 0 8px; color: #9AE900; font-weight: 800; border-top: 1px solid rgba(255,255,255,0.08);">Amount due to organiser:</td>
               <td align="right" style="padding: 12px 0 8px; font-weight: 900; color: #9AE900; font-size: 18px; border-top: 1px solid rgba(255,255,255,0.08);">${vars.dueToOrganiser || 'R 0'}</td>

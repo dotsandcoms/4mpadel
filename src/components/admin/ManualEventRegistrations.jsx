@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
-    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy, Link2, Info, MessageCircle, XCircle, Pencil, FileText, ArrowRight, ArrowDownLeft, ArrowUpRight, Phone, RefreshCcw, ExternalLink
+    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy, Link2, Info, MessageCircle, XCircle, Pencil, FileText, ArrowRight, ArrowDownLeft, ArrowUpRight, Phone, RefreshCcw, ExternalLink, Plus
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
@@ -174,6 +174,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const [requestingPayout, setRequestingPayout] = useState(false);
     const [statementSearch, setStatementSearch] = useState('');
     const [syncingRankedin, setSyncingRankedin] = useState(false);
+    const [interimPayments, setInterimPayments] = useState([]);
+    const [interimAmount, setInterimAmount] = useState('');
+    const [interimDate, setInterimDate] = useState(() => new Date().toISOString().slice(0, 10));
+    const [interimNote, setInterimNote] = useState('');
+    const [savingInterim, setSavingInterim] = useState(false);
     const [linkedRankedinId, setLinkedRankedinId] = useState(
         () => extractRankedinId(event?.rankedin_id) || extractRankedinId(event?.rankedin_url) || '',
     );
@@ -183,6 +188,93 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         setLinkedRankedinId(extractRankedinId(event?.rankedin_id) || extractRankedinId(event?.rankedin_url) || '');
         setLinkedRankedinUrl(event?.rankedin_url || '');
     }, [event?.id, event?.rankedin_id, event?.rankedin_url]);
+
+    useEffect(() => {
+        const rows = Array.isArray(event?.organiser_interim_payments)
+            ? event.organiser_interim_payments
+            : [];
+        setInterimPayments(rows);
+    }, [event?.id, event?.organiser_interim_payments]);
+
+    const persistInterimPayments = useCallback(async (nextRows) => {
+        if (!event?.id) throw new Error('Missing event');
+        const { error } = await supabase
+            .from('calendar')
+            .update({ organiser_interim_payments: nextRows })
+            .eq('id', event.id);
+        if (error) throw error;
+        setInterimPayments(nextRows);
+    }, [event?.id]);
+
+    const handleAddInterimPayment = async () => {
+        const amount = Number(String(interimAmount).replace(/[^0-9.]/g, ''));
+        if (!Number.isFinite(amount) || amount <= 0) {
+            toast.error('Enter a valid interim payment amount');
+            return;
+        }
+        if (!interimDate) {
+            toast.error('Select the payment date');
+            return;
+        }
+        setSavingInterim(true);
+        try {
+            const row = {
+                id: (typeof crypto !== 'undefined' && crypto.randomUUID)
+                    ? crypto.randomUUID()
+                    : `interim-${Date.now()}`,
+                amount,
+                paid_at: interimDate,
+                note: interimNote.trim() || null,
+                created_at: new Date().toISOString(),
+            };
+            const next = [...interimPayments, row].sort((a, b) => String(a.paid_at || '').localeCompare(String(b.paid_at || '')));
+            await persistInterimPayments(next);
+            setInterimAmount('');
+            setInterimNote('');
+            setInterimDate(new Date().toISOString().slice(0, 10));
+            toast.success(`Interim payment of ${fmtR(amount)} recorded`);
+            try {
+                await logEventActivity({
+                    eventId: event.id,
+                    action: 'interim_payment_added',
+                    category: 'FINANCE',
+                    summary: `Interim payment to organiser: ${fmtR(amount)} on ${interimDate}`,
+                    details: row,
+                });
+            } catch (_) { /* non-blocking */ }
+        } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Failed to save interim payment');
+        } finally {
+            setSavingInterim(false);
+        }
+    };
+
+    const handleRemoveInterimPayment = async (paymentId) => {
+        const target = interimPayments.find((p) => p.id === paymentId);
+        if (!target) return;
+        if (!window.confirm(`Remove interim payment of ${fmtR(target.amount)}?`)) return;
+        setSavingInterim(true);
+        try {
+            const next = interimPayments.filter((p) => p.id !== paymentId);
+            await persistInterimPayments(next);
+            toast.success('Interim payment removed');
+            try {
+                await logEventActivity({
+                    eventId: event.id,
+                    action: 'interim_payment_removed',
+                    category: 'FINANCE',
+                    summary: `Removed interim payment: ${fmtR(target.amount)}`,
+                    details: target,
+                });
+            } catch (_) { /* non-blocking */ }
+        } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Failed to remove interim payment');
+        } finally {
+            setSavingInterim(false);
+        }
+    };
 
     const load = useCallback(async () => {
         if (!event?.id) return;
@@ -196,11 +288,15 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             .eq('status', 'processing')
             .lt('created_at', abandonCutoff);
 
-        const [regRes, payRes, divRes] = await Promise.all([
+        const [regRes, payRes, divRes, eventRes] = await Promise.all([
             supabase.from('event_registrations').select('*').eq('event_id', event.id).order('created_at', { ascending: false }),
             supabase.from('payments').select('*').eq('event_id', event.id),
             supabase.from('tournament_divisions').select('*').eq('event_id', event.id),
+            supabase.from('calendar').select('organiser_interim_payments').eq('id', event.id).maybeSingle(),
         ]);
+        if (eventRes?.data && Array.isArray(eventRes.data.organiser_interim_payments)) {
+            setInterimPayments(eventRes.data.organiser_interim_payments);
+        }
         let regs = regRes.data || [];
         const payRows = payRes.data || [];
         const successPayments = payRows.filter((p) => p.status === 'success');
@@ -1823,7 +1919,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         const entryFeeBalance = Math.max(0, grossCollected4M - entryFeesRefunded);
         // Platform fee is 5% of gross entry fees collected via 4M (before refunds), per settlement model.
         const commission = grossCollected4M * PLATFORM_COMMISSION_RATE;
-        const dueToOrg = Math.max(0, entryFeeBalance - commission);
+        const interimPaid = (interimPayments || []).reduce((sum, p) => sum + Math.max(0, Number(p.amount || 0)), 0);
+        const dueBeforeInterim = Math.max(0, entryFeeBalance - commission);
+        const dueToOrg = Math.max(0, dueBeforeInterim - interimPaid);
 
         return {
             unique,
@@ -1834,12 +1932,14 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             entryFeeBalance,
             licenseRevenue4M,
             commission,
+            interimPaid,
+            dueBeforeInterim,
             dueToOrg,
             fullLicenses,
             tempLicenses,
             noLicenses,
         };
-    }, [activeRegistrations, payments, divFee, formatPaymentMethodForExport, formatLicenseForExport, refundByReg, refunds]);
+    }, [activeRegistrations, payments, divFee, formatPaymentMethodForExport, formatLicenseForExport, refundByReg, refunds, interimPayments]);
 
     const incomeStatementRows = useMemo(() => {
         const rows = [];
@@ -1894,6 +1994,23 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             });
         }
 
+        (interimPayments || []).forEach((p) => {
+            const amount = Math.max(0, Number(p.amount || 0));
+            if (amount <= 0) return;
+            rows.push({
+                id: `interim-${p.id}`,
+                date: p.paid_at || p.created_at || null,
+                description: p.note
+                    ? `Interim payment to organiser — ${p.note}`
+                    : 'Interim payment to organiser',
+                type: 'interim',
+                player: event?.organiser_name || 'Organiser',
+                amount: -amount,
+                status: 'processed',
+                method: 'Manual',
+            });
+        });
+
         rows.sort((a, b) => {
             if (!a.date && !b.date) return 0;
             if (!a.date) return 1;
@@ -1902,7 +2019,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         });
 
         return rows;
-    }, [activeRegistrations, payments, divFee, findPaymentForReg, refundByReg, refunds, registrations, overviewStats.commission]);
+    }, [activeRegistrations, payments, divFee, findPaymentForReg, refundByReg, refunds, registrations, overviewStats.commission, interimPayments, event?.organiser_name]);
 
     const filteredIncomeStatementRows = useMemo(() => {
         const q = statementSearch.trim().toLowerCase();
@@ -1943,6 +2060,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 refunded: fmtR(overviewStats.entryFeesRefunded),
                 balance: fmtR(overviewStats.entryFeeBalance),
                 commission: fmtR(overviewStats.commission),
+                interimPaid: fmtR(overviewStats.interimPaid),
                 dueToOrganiser: fmtR(overviewStats.dueToOrg),
                 licenseRevenue: fmtR(overviewStats.licenseRevenue4M),
                 paidEntries: overviewStats.paid4M,
@@ -1957,12 +2075,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                     eventId: event.id,
                     action: 'payout_requested',
                     category: 'FINANCE',
-                    summary: `Payout requested: ${fmtR(overviewStats.dueToOrg)} due to organiser`,
+                    summary: `Payout requested: ${fmtR(overviewStats.dueToOrg)} remaining due to organiser`,
                     details: {
                         dueToOrganiser: overviewStats.dueToOrg,
                         collected: overviewStats.collected4M,
                         refunded: overviewStats.entryFeesRefunded,
                         commission: overviewStats.commission,
+                        interimPaid: overviewStats.interimPaid,
                     },
                 });
             } catch (_) { /* non-blocking */ }
@@ -2288,6 +2407,80 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             <span className="text-red-400">Platform fees @ {Math.round(PLATFORM_COMMISSION_RATE * 100)}%</span>
                                             <span className="font-bold text-red-400">−{fmtR(overviewStats.commission)}</span>
                                         </div>
+                                        {interimPayments.length > 0 && (
+                                            <div className="space-y-2 border-t border-white/10 pt-3">
+                                                {interimPayments.map((p) => {
+                                                    const paidLabel = p.paid_at
+                                                        ? new Date(`${p.paid_at}T12:00:00`).toLocaleDateString('en-GB', {
+                                                            day: 'numeric', month: 'short', year: 'numeric',
+                                                        })
+                                                        : '—';
+                                                    return (
+                                                        <div key={p.id} className="flex items-start justify-between gap-3 text-sm">
+                                                            <div className="min-w-0">
+                                                                <p className="text-red-400">
+                                                                    Interim payment to organiser
+                                                                    <span className="text-gray-500 font-normal"> · {paidLabel}</span>
+                                                                </p>
+                                                                {p.note && (
+                                                                    <p className="text-[10px] text-gray-500 mt-0.5 truncate">{p.note}</p>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-center gap-2 shrink-0">
+                                                                <span className="font-bold text-red-400">−{fmtR(p.amount)}</span>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleRemoveInterimPayment(p.id)}
+                                                                    disabled={savingInterim}
+                                                                    className="p-1 rounded-md text-gray-500 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-40"
+                                                                    title="Remove interim payment"
+                                                                >
+                                                                    <Trash2 size={13} />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                        <div className="rounded-xl border border-white/10 bg-black/20 p-3 space-y-2">
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                                                Record interim payment to organiser
+                                            </p>
+                                            <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1.4fr_auto] gap-2">
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="1"
+                                                    value={interimAmount}
+                                                    onChange={(e) => setInterimAmount(e.target.value)}
+                                                    placeholder="Amount (R)"
+                                                    className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-padel-green"
+                                                />
+                                                <input
+                                                    type="date"
+                                                    value={interimDate}
+                                                    onChange={(e) => setInterimDate(e.target.value)}
+                                                    className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-padel-green"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={interimNote}
+                                                    onChange={(e) => setInterimNote(e.target.value)}
+                                                    placeholder="Note (optional)"
+                                                    className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-padel-green"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={handleAddInterimPayment}
+                                                    disabled={savingInterim}
+                                                    className="inline-flex items-center justify-center gap-1.5 bg-white/10 hover:bg-padel-green hover:text-black text-white px-3 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-colors disabled:opacity-40"
+                                                >
+                                                    {savingInterim ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                                                    Add
+                                                </button>
+                                            </div>
+                                        </div>
                                         {overviewStats.licenseRevenue4M > 0 && (
                                             <p className="text-[10px] text-gray-500">
                                                 SAPA license revenue via 4M (not paid to organiser): {fmtR(overviewStats.licenseRevenue4M)}
@@ -2298,7 +2491,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Amount due to organiser</p>
                                                 <span className="text-3xl font-black text-padel-green">{fmtR(overviewStats.dueToOrg)}</span>
                                                 <p className="text-[9px] text-gray-500 mt-1">
-                                                    (Entry collected − Entry refunds) − {Math.round(PLATFORM_COMMISSION_RATE * 100)}% commission · licenses stay with 4M
+                                                    (Entry collected − Entry refunds) − {Math.round(PLATFORM_COMMISSION_RATE * 100)}% commission
+                                                    {overviewStats.interimPaid > 0 ? ` − interim paid (${fmtR(overviewStats.interimPaid)})` : ''}
+                                                    {' · '}licenses stay with 4M
                                                 </p>
                                             </div>
                                             <button
@@ -2313,7 +2508,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             </button>
                                         </div>
                                         <p className="text-[10px] text-gray-500">
-                                            Summary based on entry-fee transactions only. Requesting payout emails 4M admin to arrange settlement.
+                                            Summary based on entry-fee transactions only. Record interim payments when partial settlements are made, then request final payout for the remainder.
                                         </p>
                                     </div>
                                 </motion.div>
@@ -3159,11 +3354,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                 </button>
                             </div>
 
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                                 {[
                                     { label: 'Total Collected', value: fmtR(overviewStats.collected4M), color: 'text-padel-green' },
                                     { label: 'Entry Fees Refunded', value: `−${fmtR(overviewStats.entryFeesRefunded)}`, color: 'text-red-400' },
                                     { label: 'Platform Fees', value: `−${fmtR(overviewStats.commission)}`, color: 'text-red-400' },
+                                    { label: 'Interim Paid', value: `−${fmtR(overviewStats.interimPaid)}`, color: 'text-red-400' },
                                     { label: 'Net Payout to Organiser', value: fmtR(overviewStats.dueToOrg), color: 'text-padel-green' },
                                 ].map((card) => (
                                     <div key={card.label} className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">

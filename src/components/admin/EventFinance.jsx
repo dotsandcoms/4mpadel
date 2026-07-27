@@ -231,7 +231,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         if (!selectedEvent) {
             return {
                 paid4M: 0, paidClub: 0, collected4M: 0, entryFeesRefunded: 0,
-                entryFeeBalance: 0, licenseRevenue4M: 0, commission: 0, dueToOrg: 0,
+                entryFeeBalance: 0, licenseRevenue4M: 0, commission: 0, interimPaid: 0, dueToOrg: 0,
             };
         }
 
@@ -274,7 +274,11 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         const entryFeesRefunded = totalRefunded;
         const entryFeeBalance = Math.max(0, grossCollected4M - entryFeesRefunded);
         const commission = grossCollected4M * 0.05;
-        const dueToOrg = Math.max(0, entryFeeBalance - commission);
+        const interimPaid = (Array.isArray(selectedEvent?.organiser_interim_payments)
+            ? selectedEvent.organiser_interim_payments
+            : []
+        ).reduce((sum, p) => sum + Math.max(0, Number(p.amount || 0)), 0);
+        const dueToOrg = Math.max(0, entryFeeBalance - commission - interimPaid);
 
         return {
             paid4M,
@@ -284,6 +288,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             entryFeeBalance,
             licenseRevenue4M,
             commission,
+            interimPaid,
             dueToOrg,
         };
     }, [localParticipants, selectedEvent, eventPayments, refundByReg, totalRefunded]);
@@ -294,7 +299,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             try {
                 const { data: eData } = await supabase
                     .from('calendar')
-                    .select('id, event_name, start_date, rankedin_id, rankedin_url, entry_fee, category_fees, finance_managed, is_manual, allow_payments, slug')
+                    .select('id, event_name, start_date, rankedin_id, rankedin_url, entry_fee, category_fees, finance_managed, is_manual, allow_payments, slug, organiser_interim_payments, organiser_name')
                     .order('start_date', { ascending: false });
 
                 const pData = await fetchAllRows(() => supabase
@@ -1781,6 +1786,12 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                 <span className="text-red-400">Platform fees @ 5%</span>
                                 <span className="font-bold text-red-400">−{fmtR(financialSummary.commission)}</span>
                             </div>
+                            {financialSummary.interimPaid > 0 && (
+                                <div className="flex items-center justify-between gap-4 text-sm">
+                                    <span className="text-red-400">Interim payments to organiser</span>
+                                    <span className="font-bold text-red-400">−{fmtR(financialSummary.interimPaid)}</span>
+                                </div>
+                            )}
                             {financialSummary.licenseRevenue4M > 0 && (
                                 <p className="text-[10px] text-gray-500">
                                     SAPA license revenue via 4M (not paid to organiser): {fmtR(financialSummary.licenseRevenue4M)}
@@ -1789,7 +1800,11 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             <div className="rounded-xl border border-padel-green/30 bg-padel-green/5 p-4">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Amount due to organiser</p>
                                 <span className="text-3xl font-black text-padel-green">{fmtR(financialSummary.dueToOrg)}</span>
-                                <p className="text-[9px] text-gray-500 mt-1">(Entry collected − Entry refunds) − 5% commission · licenses stay with 4M</p>
+                                <p className="text-[9px] text-gray-500 mt-1">
+                                    (Entry collected − Entry refunds) − 5% commission
+                                    {financialSummary.interimPaid > 0 ? ` − interim paid (${fmtR(financialSummary.interimPaid)})` : ''}
+                                    {' · '}licenses stay with 4M
+                                </p>
                             </div>
                         </div>
                     </motion.div>
