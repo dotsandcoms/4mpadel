@@ -138,7 +138,7 @@ const getSubjectForTemplate = (template, vars) => {
         case 'entry_refunded':
             return `Refund Initiated: ${vars.eventName || 'Tournament'} ✅`;
         case 'organiser_payout_request':
-            return `Payout requested: ${vars.eventName || 'Tournament'} — ${vars.dueToOrganiser || ''}`;
+            return `Payout requested: ${vars.eventName || 'Tournament'} — ${vars.amountRequested || vars.dueToOrganiser || ''}`;
         case 'partner_invite':
             return `${vars.inviterName || 'Your partner'} registered you for ${vars.eventName || 'a tournament'}! 🎾`;
         case 'partner_assigned':

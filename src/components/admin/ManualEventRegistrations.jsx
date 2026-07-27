@@ -56,6 +56,7 @@ const resolveIncomeStatementPaymentStatus = (reg, refundByRegMap = null, payment
 };
 
 const PLATFORM_COMMISSION_RATE = 0.05;
+const PAYOUT_REQUEST_MAX_RATE = 0.5;
 const PAYOUT_ADMIN_EMAIL = 'markstillerman@gmail.com';
 
 const ABANDONED_CHECKOUT_AFTER_MS = 24 * 60 * 60 * 1000;
@@ -172,6 +173,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const [openPaymentNoteId, setOpenPaymentNoteId] = useState(null);
     const [updatingWhatsApp, setUpdatingWhatsApp] = useState(null);
     const [requestingPayout, setRequestingPayout] = useState(false);
+    const [payoutModalOpen, setPayoutModalOpen] = useState(false);
+    const [payoutRequestAmount, setPayoutRequestAmount] = useState('');
     const [statementSearch, setStatementSearch] = useState('');
     const [syncingRankedin, setSyncingRankedin] = useState(false);
     const [interimPayments, setInterimPayments] = useState([]);
@@ -2043,10 +2046,114 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         });
     }, [incomeStatementRows, statementSearch]);
 
+    const payoutRequestRules = useMemo(() => {
+        const remainingDue = Math.max(0, Number(overviewStats.dueToOrg || 0));
+        const totalDue = Math.max(0, Number(overviewStats.dueBeforeInterim || 0));
+        const interimPaid = Math.max(0, Number(overviewStats.interimPaid || 0));
+        const firstRequestCap = Math.floor(totalDue * PAYOUT_REQUEST_MAX_RATE);
+        const endRaw = event?.end_date || event?.start_date || null;
+        let eventEnded = false;
+        if (endRaw) {
+            const end = new Date(endRaw);
+            if (!Number.isNaN(end.getTime())) {
+                // Treat the event as finished after the end calendar day.
+                end.setHours(23, 59, 59, 999);
+                eventEnded = Date.now() > end.getTime();
+            }
+        }
+
+        const hasFirstPartial = interimPaid > 0;
+        let maxRequestable = 0;
+        let phase = 'first';
+        let helperText = '';
+        let blockedReason = '';
+
+        if (remainingDue <= 0) {
+            blockedReason = 'Nothing due to organiser yet';
+        } else if (!eventEnded) {
+            phase = 'first';
+            if (hasFirstPartial) {
+                blockedReason = 'First partial payment already recorded. The remaining balance can be requested after the event ends.';
+            } else {
+                maxRequestable = Math.min(remainingDue, firstRequestCap);
+                helperText = `First payout request is limited to 50% of the amount due (${fmtR(maxRequestable)}). The remaining balance can be requested after the event.`;
+            }
+        } else {
+            phase = 'final';
+            maxRequestable = remainingDue;
+            helperText = hasFirstPartial
+                ? `Event has ended. You can request the remaining balance of ${fmtR(remainingDue)}.`
+                : `Event has ended. You can request the full amount due of ${fmtR(remainingDue)}.`;
+        }
+
+        return {
+            remainingDue,
+            totalDue,
+            interimPaid,
+            firstRequestCap,
+            eventEnded,
+            hasFirstPartial,
+            maxRequestable,
+            phase,
+            helperText,
+            blockedReason,
+            canRequest: maxRequestable > 0 && !blockedReason,
+        };
+    }, [
+        overviewStats.dueToOrg,
+        overviewStats.dueBeforeInterim,
+        overviewStats.interimPaid,
+        event?.end_date,
+        event?.start_date,
+    ]);
+
+    const maxPayoutRequest = payoutRequestRules.maxRequestable;
+
+    const openPayoutRequestModal = () => {
+        if (requestingPayout) return;
+        if (overviewStats.dueToOrg <= 0) {
+            toast.error('Nothing due to organiser yet');
+            return;
+        }
+        if (!payoutRequestRules.canRequest) {
+            toast.error(payoutRequestRules.blockedReason || 'Payout cannot be requested yet');
+            return;
+        }
+        setPayoutRequestAmount(String(maxPayoutRequest));
+        setPayoutModalOpen(true);
+    };
+
+    const closePayoutRequestModal = () => {
+        if (requestingPayout) return;
+        setPayoutModalOpen(false);
+        setPayoutRequestAmount('');
+    };
+
     const handleRequestPayout = async () => {
         if (requestingPayout) return;
         if (overviewStats.dueToOrg <= 0) {
             toast.error('Nothing due to organiser yet');
+            return;
+        }
+        if (!payoutRequestRules.canRequest) {
+            toast.error(payoutRequestRules.blockedReason || 'Payout cannot be requested yet');
+            return;
+        }
+        const amount = Number(String(payoutRequestAmount).replace(/[^0-9.]/g, ''));
+        if (!Number.isFinite(amount) || amount <= 0) {
+            toast.error('Enter how much you want to request');
+            return;
+        }
+        if (amount > maxPayoutRequest) {
+            toast.error(
+                payoutRequestRules.phase === 'first'
+                    ? `First payout request is limited to 50% (${fmtR(maxPayoutRequest)})`
+                    : `You can request up to the remaining balance (${fmtR(maxPayoutRequest)})`,
+            );
+            return;
+        }
+        if (amount > overviewStats.dueToOrg) {
+            toast.error(`Cannot request more than the amount due (${fmtR(overviewStats.dueToOrg)})`);
             return;
         }
         setRequestingPayout(true);
@@ -2061,7 +2168,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 balance: fmtR(overviewStats.entryFeeBalance),
                 commission: fmtR(overviewStats.commission),
                 interimPaid: fmtR(overviewStats.interimPaid),
+                interimPaidAmount: overviewStats.interimPaid,
                 dueToOrganiser: fmtR(overviewStats.dueToOrg),
+                amountRequested: fmtR(amount),
+                amountRequestedValue: amount,
+                maxRequestable: fmtR(maxPayoutRequest),
+                requestPhase: payoutRequestRules.phase === 'first' ? 'First request (max 50%)' : 'Final balance (after event)',
                 licenseRevenue: fmtR(overviewStats.licenseRevenue4M),
                 paidEntries: overviewStats.paid4M,
                 requestedAt: new Date().toLocaleString('en-ZA', {
@@ -2069,14 +2181,19 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 }),
             });
             if (!result.success) throw new Error(result.error || 'Email failed');
-            toast.success('Payout request sent to 4M admin');
+            toast.success(`Payout request of ${fmtR(amount)} sent to 4M admin`);
+            setPayoutModalOpen(false);
+            setPayoutRequestAmount('');
             try {
                 await logEventActivity({
                     eventId: event.id,
                     action: 'payout_requested',
                     category: 'FINANCE',
-                    summary: `Payout requested: ${fmtR(overviewStats.dueToOrg)} remaining due to organiser`,
+                    summary: `Payout requested: ${fmtR(amount)} (${payoutRequestRules.phase === 'first' ? 'first request ≤50%' : 'final balance'}; ${fmtR(overviewStats.dueToOrg)} currently due)`,
                     details: {
+                        amountRequested: amount,
+                        maxRequestable: maxPayoutRequest,
+                        requestPhase: payoutRequestRules.phase,
                         dueToOrganiser: overviewStats.dueToOrg,
                         collected: overviewStats.collected4M,
                         refunded: overviewStats.entryFeesRefunded,
@@ -2495,11 +2612,20 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                     {overviewStats.interimPaid > 0 ? ` − interim paid (${fmtR(overviewStats.interimPaid)})` : ''}
                                                     {' · '}licenses stay with 4M
                                                 </p>
+                                                {!payoutRequestRules.canRequest && payoutRequestRules.blockedReason && overviewStats.dueToOrg > 0 && (
+                                                    <p className="text-[10px] text-amber-400 mt-2">{payoutRequestRules.blockedReason}</p>
+                                                )}
+                                                {payoutRequestRules.canRequest && payoutRequestRules.phase === 'first' && (
+                                                    <p className="text-[10px] text-gray-500 mt-2">First request capped at 50% · remaining balance after the event</p>
+                                                )}
+                                                {payoutRequestRules.canRequest && payoutRequestRules.phase === 'final' && (
+                                                    <p className="text-[10px] text-gray-500 mt-2">Event ended · full remaining balance can be requested</p>
+                                                )}
                                             </div>
                                             <button
                                                 type="button"
-                                                onClick={handleRequestPayout}
-                                                disabled={requestingPayout || overviewStats.dueToOrg <= 0}
+                                                onClick={openPayoutRequestModal}
+                                                disabled={requestingPayout || !payoutRequestRules.canRequest}
                                                 className="inline-flex items-center justify-center gap-2 bg-padel-green text-black px-5 py-3 rounded-xl text-sm font-black hover:bg-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                                             >
                                                 {requestingPayout ? <Loader2 size={16} className="animate-spin" /> : null}
@@ -2508,7 +2634,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             </button>
                                         </div>
                                         <p className="text-[10px] text-gray-500">
-                                            Summary based on entry-fee transactions only. Record interim payments when partial settlements are made, then request final payout for the remainder.
+                                            First payout request is limited to 50% of the amount due. The remaining balance can be requested after the event ends. Record interim payments when partial settlements are made.
                                         </p>
                                     </div>
                                 </motion.div>
@@ -3124,6 +3250,80 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                         </div>
                     )}
 
+                    {payoutModalOpen && (
+                        <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/60" onClick={closePayoutRequestModal}>
+                            <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-start gap-3 mb-4">
+                                    <div className="w-9 h-9 rounded-xl bg-padel-green/10 flex items-center justify-center shrink-0">
+                                        <DollarSign size={16} className="text-padel-green" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <h3 className="text-white font-bold">
+                                            {payoutRequestRules.phase === 'first' ? 'Request first payout (50%)' : 'Request final payout'}
+                                        </h3>
+                                        <p className="text-xs text-gray-400 mt-0.5">
+                                            Amount due: {fmtR(overviewStats.dueToOrg)}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <p className="text-sm text-gray-400 mb-4">
+                                    {payoutRequestRules.helperText}
+                                </p>
+
+                                <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">
+                                    Amount requesting
+                                </label>
+                                <div className="relative mb-2">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-bold">R</span>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={maxPayoutRequest}
+                                        step={1}
+                                        value={payoutRequestAmount}
+                                        onChange={(e) => setPayoutRequestAmount(e.target.value)}
+                                        className="w-full bg-black/30 border border-white/10 rounded-lg pl-8 pr-3 py-2.5 text-sm text-white outline-none focus:border-padel-green/50"
+                                        placeholder={String(maxPayoutRequest)}
+                                        autoFocus
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between mb-4">
+                                    <p className="text-[11px] text-gray-500">
+                                        {payoutRequestRules.phase === 'first' ? 'Max 50% now' : 'Remaining balance'} · {fmtR(maxPayoutRequest)}
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPayoutRequestAmount(String(maxPayoutRequest))}
+                                        className="text-[11px] font-bold uppercase tracking-wider text-padel-green hover:text-white"
+                                    >
+                                        Use max
+                                    </button>
+                                </div>
+
+                                <div className="flex flex-col gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleRequestPayout}
+                                        disabled={requestingPayout}
+                                        className="w-full py-2.5 rounded-lg text-sm font-bold bg-padel-green text-black hover:bg-white disabled:opacity-40 inline-flex items-center justify-center gap-2"
+                                    >
+                                        {requestingPayout ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
+                                        Send payout request
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={closePayoutRequestModal}
+                                        disabled={requestingPayout}
+                                        className="w-full py-2 rounded-lg text-xs font-semibold text-gray-400 hover:text-white disabled:opacity-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {markPaidTarget && (
                         <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/60" onClick={() => !markPaidBusy && closeMarkPaidModal()}>
                             <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
@@ -3344,8 +3544,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                 </div>
                                 <button
                                     type="button"
-                                    onClick={handleRequestPayout}
-                                    disabled={requestingPayout || overviewStats.dueToOrg <= 0}
+                                    onClick={openPayoutRequestModal}
+                                    disabled={requestingPayout || !payoutRequestRules.canRequest}
                                     className="inline-flex items-center justify-center gap-2 bg-padel-green text-black px-5 py-2.5 rounded-xl text-sm font-black hover:bg-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                                 >
                                     {requestingPayout ? <Loader2 size={16} className="animate-spin" /> : null}

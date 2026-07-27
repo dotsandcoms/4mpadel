@@ -929,7 +929,7 @@ async function generateEmailBody(
       break;
 
     case 'organiser_payout_request':
-      subject = `Payout requested: ${vars.eventName || 'Tournament'} — ${vars.dueToOrganiser || ''}`;
+      subject = `Payout requested: ${vars.eventName || 'Tournament'} — ${vars.amountRequested || vars.dueToOrganiser || ''}`;
       contentHtml = `
         <h2 style="font-size: 24px; font-weight: 800; color: #F59E0B; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Organiser Payout Request</h2>
         <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
@@ -962,14 +962,37 @@ async function generateEmailBody(
               <td style="padding: 8px 0; color: #64748B;">Platform commission (5%):</td>
               <td align="right" style="font-weight: bold; color: #F87171;">−${vars.commission || 'R 0'}</td>
             </tr>
-            ${vars.interimPaid && vars.interimPaid !== 'R 0' ? `
+            ${(() => {
+              const interimNumeric = Number(vars.interimPaidAmount);
+              const interimFromLabel = Number(String(vars.interimPaid || '').replace(/[^\d.-]/g, ''));
+              const interimAmount = Number.isFinite(interimNumeric) && interimNumeric > 0
+                ? interimNumeric
+                : (Number.isFinite(interimFromLabel) ? interimFromLabel : 0);
+              if (interimAmount <= 0) return '';
+              const interimLabel = vars.interimPaid || fmtR(interimAmount);
+              return `
             <tr>
-              <td style="padding: 8px 0; color: #64748B;">Interim payments to organiser:</td>
-              <td align="right" style="font-weight: bold; color: #F87171;">−${vars.interimPaid}</td>
+              <td style="padding: 8px 0; color: #64748B;">Partial / interim payment:</td>
+              <td align="right" style="font-weight: bold; color: #F87171;">−${interimLabel}</td>
+            </tr>`;
+            })()}
+            <tr>
+              <td style="padding: 8px 0; color: #64748B;">Amount due to organiser:</td>
+              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.dueToOrganiser || 'R 0'}</td>
+            </tr>
+            ${vars.maxRequestable ? `
+            <tr>
+              <td style="padding: 8px 0; color: #64748B;">Max requestable:</td>
+              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.maxRequestable}</td>
+            </tr>` : ''}
+            ${vars.requestPhase ? `
+            <tr>
+              <td style="padding: 8px 0; color: #64748B;">Request type:</td>
+              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.requestPhase}</td>
             </tr>` : ''}
             <tr>
-              <td style="padding: 12px 0 8px; color: #9AE900; font-weight: 800; border-top: 1px solid rgba(255,255,255,0.08);">Amount due to organiser:</td>
-              <td align="right" style="padding: 12px 0 8px; font-weight: 900; color: #9AE900; font-size: 18px; border-top: 1px solid rgba(255,255,255,0.08);">${vars.dueToOrganiser || 'R 0'}</td>
+              <td style="padding: 12px 0 8px; color: #9AE900; font-weight: 800; border-top: 1px solid rgba(255,255,255,0.08);">Amount requested:</td>
+              <td align="right" style="padding: 12px 0 8px; font-weight: 900; color: #9AE900; font-size: 18px; border-top: 1px solid rgba(255,255,255,0.08);">${vars.amountRequested || vars.dueToOrganiser || 'R 0'}</td>
             </tr>
             ${vars.licenseRevenue && vars.licenseRevenue !== 'R 0' ? `
             <tr>
