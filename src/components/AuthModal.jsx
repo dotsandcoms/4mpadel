@@ -43,6 +43,29 @@ const REGISTRATION_OPTIONS = [
     },
 ];
 
+const REGISTER_HEADINGS = {
+    null: {
+        title: 'Create Account',
+        subtitle: 'What are you registering for?',
+    },
+    profile: {
+        title: 'Create Player Profile',
+        subtitle: 'Register to manage your player profile and stats',
+    },
+    organisation: {
+        title: 'Organisation Registration',
+        subtitle: 'Apply to host sanctioned tournaments on 4M Padel',
+    },
+    coach: {
+        title: 'Coach Registration',
+        subtitle: 'Apply to join the approved 4M Padel coach network',
+    },
+    club: {
+        title: 'Club Registration',
+        subtitle: 'Register or claim your padel club on 4M Padel',
+    },
+};
+
 console.log('Paystack Config Check:', {
     keyPrefix: PAYSTACK_PUBLIC_KEY ? PAYSTACK_PUBLIC_KEY.substring(0, 12) + '...' : 'MISSING',
     keyLength: PAYSTACK_PUBLIC_KEY.length,
@@ -50,14 +73,8 @@ console.log('Paystack Config Check:', {
     isTestMode: PAYSTACK_PUBLIC_KEY.startsWith('pk_test_'),
 });
 
-const AuthModal = ({ isOpen, onClose, initialTab = 'login' }) => {
+const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType = null }) => {
     const [activeTab, setActiveTab] = useState(initialTab); // 'login', 'register', 'forgot_password'
-
-    useEffect(() => {
-        if (isOpen) {
-            setActiveTab(initialTab);
-        }
-    }, [isOpen, initialTab]);
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState(null);
     const navigate = useNavigate();
@@ -98,6 +115,13 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }) => {
     const [eventsLoading, setEventsLoading] = useState(false);
     const [registerType, setRegisterType] = useState(null);
     const { clubs } = useClubs();
+
+    useEffect(() => {
+        if (isOpen) {
+            setActiveTab(initialTab);
+            setRegisterType(initialRegisterType || null);
+        }
+    }, [isOpen, initialTab, initialRegisterType]);
 
     const filteredEvents = upcomingEvents.filter((event) =>
         event.event_name?.toLowerCase().includes(eventSearchQuery.toLowerCase()),
@@ -473,24 +497,14 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }) => {
                             {activeTab === 'login'
                                 ? 'Welcome Back'
                                 : activeTab === 'register'
-                                    ? (registerType === 'organisation'
-                                        ? 'Organisation Registration'
-                                        : registerType === 'coach'
-                                            ? 'Coach Registration'
-                                            : 'Create Profile')
+                                    ? (REGISTER_HEADINGS[registerType ?? 'null']?.title || 'Create Account')
                                     : 'Reset Password'}
                         </h2>
                         <p className="text-gray-400 text-sm">
                             {activeTab === 'login'
                                 ? 'Enter your credentials to access your profile'
                                 : activeTab === 'register'
-                                    ? (registerType === null
-                                        ? 'What are you registering for?'
-                                        : registerType === 'organisation'
-                                            ? 'Apply to host sanctioned tournaments on 4M Padel'
-                                            : registerType === 'coach'
-                                                ? 'Apply to join the approved 4M Padel coach network'
-                                                : 'Register to manage your player profile and stats')
+                                    ? (REGISTER_HEADINGS[registerType ?? 'null']?.subtitle || 'What are you registering for?')
                                     : 'Retrieve your account access'}
                         </p>
                     </div>

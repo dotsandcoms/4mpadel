@@ -103,6 +103,14 @@ const getSubjectForTemplate = (template, vars) => {
             return `Update on your Club Application`;
         case 'club_member_added':
             return `You've been added to ${vars.clubName || 'a club'} on 4M Padel`;
+        case 'club_claim_applied':
+            return `Club claim received: ${vars.clubName || 'Club'} — pending review`;
+        case 'admin_club_claim_applied':
+            return `⚠️ Action Required: Club claim pending — ${vars.clubName || 'Club'}`;
+        case 'club_claim_approved':
+            return `Club claim approved: ${vars.clubName || 'Club'} 🎉`;
+        case 'club_claim_rejected':
+            return `Update on your club claim: ${vars.clubName || 'Club'}`;
         case 'event_pending_sanction': 
             return `🏆 Sanction Requested: ${vars.eventName || 'New Event'}`;
         case 'event_sanctioned': 

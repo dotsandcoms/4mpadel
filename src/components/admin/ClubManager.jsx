@@ -157,6 +157,7 @@ const ClubManager = ({ permissions }) => {
     const [membersOpen, setMembersOpen] = useState(false);
     const [assignOrgId, setAssignOrgId] = useState('');
     const [listSearch, setListSearch] = useState('');
+    const [pendingClaims, setPendingClaims] = useState([]);
     const addressInputRef = useRef(null);
     const autocompleteRef = useRef(null);
     const [sectionOpen, setSectionOpen] = useState({
@@ -307,6 +308,94 @@ const ClubManager = ({ permissions }) => {
         }
     };
 
+    const loadPendingClaims = useCallback(async () => {
+        if (!isSuper) {
+            setPendingClaims([]);
+            return;
+        }
+        try {
+            const { data, error } = await supabase
+                .from('club_claim_requests')
+                .select('*, clubs(id, name, short_name, city, logo_url, status)')
+                .eq('status', 'pending')
+                .order('created_at', { ascending: true });
+            if (error) throw error;
+            setPendingClaims(data || []);
+        } catch (err) {
+            console.warn('Failed to load club claims:', err.message);
+            setPendingClaims([]);
+        }
+    }, [isSuper]);
+
+    const handleApproveClaim = async (claim) => {
+        try {
+            const clubName = claim.clubs?.name || 'Club';
+            const email = (claim.requester_email || '').toLowerCase();
+            if (!email) throw new Error('Claim is missing requester email');
+
+            const { error: memberError } = await supabase
+                .from('club_members')
+                .upsert({
+                    club_id: claim.club_id,
+                    player_id: claim.requester_player_id || null,
+                    user_email: email,
+                    role: 'owner',
+                }, { onConflict: 'club_id,user_email' });
+            if (memberError) throw memberError;
+
+            const { error } = await supabase
+                .from('club_claim_requests')
+                .update({
+                    status: 'approved',
+                    reviewed_at: new Date().toISOString(),
+                    rejection_notes: null,
+                })
+                .eq('id', claim.id);
+            if (error) throw error;
+
+            sendEmail(email, 'club_claim_approved', { clubName });
+            toast.success(`Approved claim for ${clubName}`);
+            loadPendingClaims();
+            loadClubs();
+        } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Failed to approve claim');
+        }
+    };
+
+    const handleRejectClaim = async (claim) => {
+        const clubName = claim.clubs?.name || 'Club';
+        const notes = window.prompt(`Rejection notes for claim on ${clubName}:`);
+        if (notes == null) return;
+        if (!String(notes).trim()) {
+            toast.error('Please provide rejection feedback.');
+            return;
+        }
+        try {
+            const { error } = await supabase
+                .from('club_claim_requests')
+                .update({
+                    status: 'rejected',
+                    rejection_notes: String(notes).trim(),
+                    reviewed_at: new Date().toISOString(),
+                })
+                .eq('id', claim.id);
+            if (error) throw error;
+
+            if (claim.requester_email) {
+                sendEmail(claim.requester_email, 'club_claim_rejected', {
+                    clubName,
+                    notes: String(notes).trim(),
+                });
+            }
+            toast.success(`Rejected claim for ${clubName}`);
+            loadPendingClaims();
+        } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Failed to reject claim');
+        }
+    };
+
     const toggleSection = (key) => {
         setSectionOpen((prev) => ({ ...prev, [key]: !prev[key] }));
     };
@@ -369,8 +458,9 @@ const ClubManager = ({ permissions }) => {
     useEffect(() => {
         loadClubs();
         loadLookups();
+        loadPendingClaims();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isSuper, permissions?.clubs, loadLookups]);
+    }, [isSuper, permissions?.clubs, loadLookups, loadPendingClaims]);
 
     useEffect(() => {
         if (!selectedId) return;
@@ -722,6 +812,67 @@ const ClubManager = ({ permissions }) => {
                                     <button
                                         type="button"
                                         onClick={() => handleRejectClub(club)}
+                                        className="px-2.5 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 text-[10px] font-black uppercase tracking-wider flex items-center gap-1"
+                                    >
+                                        <X size={12} /> Reject
+                                    </button>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
+            {isSuper && pendingClaims.length > 0 && (
+                <div className="bg-sky-500/10 border border-sky-500/25 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                        <Building size={16} className="text-sky-400" />
+                        <h3 className="text-sm font-black uppercase tracking-wider text-sky-300">
+                            Pending club claims ({pendingClaims.length})
+                        </h3>
+                    </div>
+                    <ul className="space-y-2">
+                        {pendingClaims.map((claim) => (
+                            <li
+                                key={claim.id}
+                                className="flex flex-wrap items-center gap-3 bg-black/40 border border-white/10 rounded-xl px-3 py-3"
+                            >
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-bold text-white truncate">
+                                        {claim.clubs?.name || 'Club'}
+                                    </p>
+                                    <p className="text-[11px] text-gray-400 truncate">
+                                        {[
+                                            claim.full_name,
+                                            claim.requester_email,
+                                            claim.primary_role,
+                                            claim.clubs?.city,
+                                        ].filter(Boolean).join(' · ')}
+                                    </p>
+                                    {claim.notes && (
+                                        <p className="text-[11px] text-gray-500 mt-1 line-clamp-2">{claim.notes}</p>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {claim.club_id && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setSelectedId(claim.club_id); setIsCreating(false); }}
+                                            className="px-2.5 py-1.5 rounded-lg border border-white/10 text-[10px] font-black uppercase tracking-wider text-gray-300 hover:bg-white/5"
+                                        >
+                                            View club
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleApproveClaim(claim)}
+                                        className="px-2.5 py-1.5 rounded-lg bg-padel-green text-black text-[10px] font-black uppercase tracking-wider flex items-center gap-1"
+                                    >
+                                        <Check size={12} /> Approve
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRejectClaim(claim)}
                                         className="px-2.5 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 text-[10px] font-black uppercase tracking-wider flex items-center gap-1"
                                     >
                                         <X size={12} /> Reject

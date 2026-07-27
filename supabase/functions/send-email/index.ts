@@ -534,6 +534,69 @@ async function generateEmailBody(
       actionLabel = 'Open Club Dashboard';
       break;
 
+    case 'club_claim_applied':
+      subject = `Club claim received: ${vars.clubName || 'Club'} — pending review`;
+      contentHtml = `
+        <h2 style="font-size: 24px; font-weight: 800; color: #FFFFFF; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Claim Submitted</h2>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
+          Thanks <strong style="color: #FFFFFF;">${vars.creatorName || ''}</strong> — we received your claim for <strong style="color: #FFFFFF;">${vars.clubName}</strong>.
+        </p>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #E2E8F0; margin-bottom: 0;">
+          A 4M admin will review your request. Once approved, you&apos;ll get Club Dashboard access for this club.
+        </p>
+      `;
+      actionUrl = 'https://4mpadel.co.za/clubs';
+      actionLabel = 'Browse Clubs';
+      break;
+
+    case 'admin_club_claim_applied':
+      subject = `⚠️ Action Required: Club claim pending — ${vars.clubName || 'Club'}`;
+      contentHtml = `
+        <h2 style="font-size: 24px; font-weight: 800; color: #F59E0B; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Club Claim Pending</h2>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
+          <strong style="color: #FFFFFF;">${vars.creatorName || 'Someone'}</strong> (${vars.contactEmail || ''}) requested ownership of <strong style="color: #FFFFFF;">${vars.clubName}</strong>.
+        </p>
+        <div style="background-color: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); padding: 20px; border-radius: 16px; margin-bottom: 8px;">
+          <p style="font-size: 13px; color: #FCD34D; margin: 0;">Role: ${vars.role || '—'} · Phone: ${vars.contactPhone || '—'}</p>
+        </div>
+      `;
+      actionUrl = 'https://4mpadel.co.za/admin?tab=clubs';
+      actionLabel = 'Review Claims';
+      break;
+
+    case 'club_claim_approved':
+      subject = `Club claim approved: ${vars.clubName || 'Club'} 🎉`;
+      contentHtml = `
+        <h2 style="font-size: 24px; font-weight: 800; color: #9AE900; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Claim Approved</h2>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
+          Great news — your claim for <strong style="color: #FFFFFF;">${vars.clubName}</strong> has been <strong style="color: #9AE900;">APPROVED</strong>.
+        </p>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #E2E8F0; margin-bottom: 0;">
+          Your <strong style="color: #FFFFFF;">Club Dashboard</strong> is now unlocked. Sign in with this email to manage the club page.
+        </p>
+      `;
+      actionUrl = 'https://4mpadel.co.za/admin?tab=clubs';
+      actionLabel = 'Open Club Dashboard';
+      break;
+
+    case 'club_claim_rejected':
+      subject = `Update on your club claim: ${vars.clubName || 'Club'}`;
+      contentHtml = `
+        <h2 style="font-size: 24px; font-weight: 800; color: #EF4444; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Claim Not Approved</h2>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
+          Thanks for requesting access to <strong style="color: #FFFFFF;">${vars.clubName}</strong>. Unfortunately this claim was not approved at this time.
+        </p>
+        <div style="background-color: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); padding: 24px; border-radius: 16px; margin-bottom: 0;">
+          <h3 style="font-size: 12px; font-weight: 900; text-transform: uppercase; color: #EF4444; margin-top: 0; margin-bottom: 10px; letter-spacing: 1px;">Reviewer Notes</h3>
+          <p style="font-size: 13.5px; line-height: 1.6; color: #FCA5A5; margin: 0;">
+            ${vars.notes || 'Please contact 4M Padel if you believe this was in error.'}
+          </p>
+        </div>
+      `;
+      actionUrl = 'https://4mpadel.co.za/clubs';
+      actionLabel = 'Browse Clubs';
+      break;
+
     case 'event_pending_sanction':
       subject = `🏆 Sanction Requested: ${vars.eventName || 'New Event'}`;
       contentHtml = `
@@ -1028,6 +1091,8 @@ const ADMIN_ONLY_TEMPLATES = new Set([
   'club_approved',
   'club_rejected',
   'club_member_added',
+  'club_claim_approved',
+  'club_claim_rejected',
   'event_sanctioned',
   'event_rejected',
   'event_pending_sanction',
@@ -1041,6 +1106,8 @@ const PUBLIC_APPLICATION_TEMPLATES = new Set([
   'admin_org_applied',
   'club_applied',
   'admin_club_applied',
+  'club_claim_applied',
+  'admin_club_claim_applied',
 ]);
 
 function isTrustedServiceCaller(authHeader: string | null): boolean {
