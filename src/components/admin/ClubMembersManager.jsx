@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import { toast } from 'sonner';
 import { X, Users, Trash2, Search, UserPlus } from 'lucide-react';
+import { sendEmail } from '../../utils/emails';
 
 const ROLES = ['owner', 'admin', 'staff'];
 
@@ -76,16 +77,33 @@ const ClubMembersManager = ({ club, onClose }) => {
     }, [searchQuery, members]);
 
     const handleAddMember = async (player) => {
+        if (!player?.email) {
+            toast.error('Player has no email address');
+            return;
+        }
         setIsAdding(true);
         try {
+            const email = player.email.trim().toLowerCase();
             const { error } = await supabase.from('club_members').insert({
                 club_id: club.id,
                 player_id: player.id,
-                user_email: player.email,
+                user_email: email,
                 role: newRole,
             });
             if (error) throw error;
-            toast.success('Member added');
+
+            const emailResult = await sendEmail(email, 'club_member_added', {
+                clubName: club.short_name || club.name,
+                role: newRole,
+                playerName: player.name || '',
+            });
+            if (emailResult?.success) {
+                toast.success(`${player.name || email} added — email sent`);
+            } else {
+                toast.success(`${player.name || email} added`);
+                toast.warning('Member added, but the notification email failed to send');
+            }
+
             setSearchQuery('');
             setSearchResults([]);
             fetchMembers();

@@ -519,6 +519,21 @@ async function generateEmailBody(
       actionLabel = 'Re-apply Now';
       break;
 
+    case 'club_member_added':
+      subject = `You've been added to ${vars.clubName || 'a club'} on 4M Padel`;
+      contentHtml = `
+        <h2 style="font-size: 24px; font-weight: 800; color: #9AE900; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Club Dashboard Access</h2>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
+          You have been added as <strong style="color: #FFFFFF;">${vars.role || 'admin'}</strong> for <strong style="color: #FFFFFF;">${vars.clubName || 'a club'}</strong> on 4M Padel.
+        </p>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #E2E8F0; margin-bottom: 24px;">
+          Sign in with this email to open your <strong style="color: #FFFFFF;">Club Dashboard</strong> — update the public club page, courts, hours, gallery, sponsors and contacts.
+        </p>
+      `;
+      actionUrl = 'https://4mpadel.co.za/admin?tab=clubs';
+      actionLabel = 'Open Club Dashboard';
+      break;
+
     case 'event_pending_sanction':
       subject = `🏆 Sanction Requested: ${vars.eventName || 'New Event'}`;
       contentHtml = `
@@ -1012,6 +1027,7 @@ const ADMIN_ONLY_TEMPLATES = new Set([
   'org_rejected',
   'club_approved',
   'club_rejected',
+  'club_member_added',
   'event_sanctioned',
   'event_rejected',
   'event_pending_sanction',

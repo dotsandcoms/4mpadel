@@ -72,7 +72,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
     return () => { cancelled = true; };
   }, [targetEmail]);
 
-  // Club admin/owner of a published club? → show Club Dashboard shortcut
+  // Club admin/owner/staff of a draft or published club? → show Club Dashboard shortcut
   useEffect(() => {
     let cancelled = false;
     const checkClubMembership = async () => {
@@ -84,7 +84,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
           .ilike('user_email', targetEmail)
           .in('role', ['owner', 'admin', 'staff'])
           .limit(10);
-        const member = (memberships || []).some((m) => m.clubs?.status === 'published');
+        const member = (memberships || []).some((m) => ['published', 'draft'].includes(m.clubs?.status));
         if (!cancelled) setIsClubAdmin(member);
       } catch (err) {
         console.warn('Club membership check failed:', err);
@@ -440,6 +440,9 @@ const Navbar = ({ isDark = false, accentColor }) => {
                         <p className="text-[7.5px] font-black text-white/40 uppercase tracking-widest mt-1">ID: {player.rankedin_id}</p>
                       )}
                     </div>
+                    <a href="/profile" className="flex items-center gap-2 px-4 py-2 text-[10px] font-black text-gray-300 hover:text-padel-green hover:bg-white/5 transition-colors uppercase tracking-widest">
+                      <User className="w-3.5 h-3.5" />My Profile
+                    </a>
                     {isSuperAdmin && (
                       <a href="/admin" target="_blank" className="flex items-center gap-2 px-4 py-2 text-[10px] font-black text-amber-500 hover:text-white hover:bg-amber-500/10 transition-colors uppercase tracking-widest">
                         <ShieldAlert className="w-3.5 h-3.5" />Admin Panel
@@ -455,9 +458,6 @@ const Navbar = ({ isDark = false, accentColor }) => {
                         <MapPin className="w-3.5 h-3.5" />Club Dashboard
                       </a>
                     )}
-                    <a href="/profile" className="flex items-center gap-2 px-4 py-2 text-[10px] font-black text-gray-300 hover:text-padel-green hover:bg-white/5 transition-colors uppercase tracking-widest">
-                      <User className="w-3.5 h-3.5" />My Profile
-                    </a>
                     <div className="h-px bg-white/5 my-1 mx-3" />
                     <button onClick={handleLogout} className="w-full flex items-center gap-2 px-4 py-2 text-[10px] font-black text-red-400 hover:text-white hover:bg-red-500/10 transition-colors uppercase tracking-widest text-left cursor-pointer">
                       <LogOut className="w-3.5 h-3.5" />Logout
@@ -709,6 +709,9 @@ const Navbar = ({ isDark = false, accentColor }) => {
               <div className="p-5 border-t border-white/5 bg-black flex flex-col gap-2">
                 {isLoggedIn && (
                   <>
+                    <a href="/profile" onClick={() => setIsMobileMenuOpen(false)} className="w-full py-2.5 bg-white/5 border border-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white/10 active:scale-95 transition-all">
+                      <User className="w-4 h-4 text-padel-green" />My Profile
+                    </a>
                     {isSuperAdmin && (
                       <a href="/admin" onClick={() => setIsMobileMenuOpen(false)} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-black rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10 active:scale-95 transition-all">
                         <ShieldAlert className="w-4 h-4" />Admin Panel
@@ -724,9 +727,6 @@ const Navbar = ({ isDark = false, accentColor }) => {
                         <MapPin className="w-4 h-4 text-padel-green" />Club Dashboard
                       </a>
                     )}
-                    <a href="/profile" onClick={() => setIsMobileMenuOpen(false)} className="w-full py-2.5 bg-white/5 border border-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white/10 active:scale-95 transition-all">
-                      <User className="w-4 h-4 text-padel-green" />My Profile
-                    </a>
                     <button onClick={() => { setIsMobileMenuOpen(false); handleLogout(); }} className="w-full py-2.5 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:border-transparent active:scale-95 transition-all cursor-pointer">
                       <LogOut className="w-4 h-4" />Logout
                     </button>
