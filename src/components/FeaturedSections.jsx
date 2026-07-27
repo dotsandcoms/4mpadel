@@ -1379,8 +1379,9 @@ const FeaturedTournamentHero = ({ events = [], session = null }) => {
     const handleCta = (cta, event) => {
         const path = `/calendar/${event.slug || event.id}`;
         const action = cta?.action || 'view';
-        // Hand off to EventDetails so Register / Pay Now / Manage Entry open the same flows.
-        if (action === 'register' || action === 'pay' || action === 'manage') {
+        // Pay Now / Manage Entry still hand off into EventDetails flows.
+        // Register only opens the details page — user starts registration from there.
+        if (action === 'pay' || action === 'manage') {
             navigate(path, { state: { eventCta: action } });
             return;
         }
