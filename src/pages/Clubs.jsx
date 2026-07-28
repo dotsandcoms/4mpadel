@@ -46,7 +46,7 @@ const Clubs = () => {
                 <div className="absolute -top-24 -right-24 w-96 h-96 bg-padel-green/5 blur-[100px] rounded-full pointer-events-none" />
                 <div className="container mx-auto px-4 md:px-6 pt-28 md:pt-36 pb-10 md:pb-14 relative z-10">
                     <span className="text-[10px] md:text-xs font-black uppercase tracking-[0.25em] text-padel-green">4M Padel Ecosystem</span>
-                    <h1 className="text-3xl md:text-5xl font-black mt-2 leading-tight">
+                    <h1 className="text-3xl md:text-5xl font-bold font-display tracking-tighter mt-2 leading-[1.05]">
                         Padel <span className="text-padel-green">Clubs</span>
                     </h1>
                     <p className="text-gray-400 text-sm md:text-base mt-3 max-w-xl">
@@ -120,7 +120,7 @@ const Clubs = () => {
                                                 </span>
                                             )}
                                         </div>
-                                        <h2 className="text-lg font-black text-white group-hover:text-padel-green transition-colors truncate">
+                                        <h2 className="text-lg font-bold font-display tracking-tighter text-white group-hover:text-padel-green transition-colors truncate">
                                             {c.short_name || c.name}
                                         </h2>
                                         {c.city && (

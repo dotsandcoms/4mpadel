@@ -228,7 +228,7 @@ const ClubPage = () => {
                                     </span>
                                 )}
                             </div>
-                            <h1 className="text-3xl sm:text-4xl md:text-5xl font-black leading-none tracking-tight truncate">{brandTitle}</h1>
+                            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold font-display leading-[1.05] tracking-tighter truncate">{brandTitle}</h1>
                             {club.city && (
                                 <p className="text-gray-400 text-sm mt-1.5 flex items-center gap-1">
                                     <MapPin size={13} /> {club.city}

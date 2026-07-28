@@ -60,8 +60,8 @@ const Services = () => {
                     viewport={{ once: true }}
                     className="max-w-xl mb-12 md:mb-16"
                 >
-                    <h4 className="text-padel-green font-bold text-[11px] sm:text-[13px] tracking-widest uppercase mb-4 sm:mb-6">The Platform</h4>
-                    <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black font-display text-white mb-2 leading-tight tracking-tight">
+                    <h4 className="text-padel-green font-bold font-display text-[11px] sm:text-[13px] tracking-widest uppercase mb-4 sm:mb-6">The Platform</h4>
+                    <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold font-display text-white mb-2 leading-[1.05] tracking-tighter">
                         Your Home<br/>
                         <span className="text-padel-green">of Padel.</span>
                     </h2>

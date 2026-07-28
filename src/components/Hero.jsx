@@ -1057,7 +1057,7 @@ const Hero = () => {
                 {/* Hero Content */}
                 <motion.div
                     style={{ opacity: opacityText }}
-                    className={`relative z-20 flex flex-col flex-none justify-start pt-20 px-4 lg:pt-24 lg:px-8 container mx-auto ${session ? 'pb-2 lg:pb-4' : 'pb-0'}`}
+                    className={`relative z-20 flex flex-col flex-none justify-start pt-20 px-4 lg:pt-24 lg:px-8 w-full max-w-[1500px] mx-auto ${session ? 'pb-2 lg:pb-4' : 'pb-0'}`}
                 >
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
@@ -1234,7 +1234,7 @@ const Hero = () => {
                     )}
                 </motion.div>
 
-                <div className={`relative z-30 px-4 w-full lg:px-8 flex flex-col container mx-auto ${session ? 'pb-0' : 'pb-0'}`}>
+                <div className={`relative z-30 px-4 w-full max-w-[1500px] lg:px-8 flex flex-col mx-auto ${session ? 'pb-0' : 'pb-0'}`}>
 
                     <AnimatePresence>
                         {session && (hasScheduleContent || hasPendingActions) && (
