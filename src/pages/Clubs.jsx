@@ -367,9 +367,6 @@ const Clubs = () => {
                                                 <MapPin size={11} /> {[c._city, c._region].filter(Boolean).join(' · ')}
                                             </p>
                                         )}
-                                        {c.about && (
-                                            <p className="text-[12px] text-gray-500 mt-2 line-clamp-2">{c.about}</p>
-                                        )}
                                     </div>
                                     <ChevronRight size={16} className="text-gray-600 group-hover:text-padel-green shrink-0 mt-1" />
                                 </div>

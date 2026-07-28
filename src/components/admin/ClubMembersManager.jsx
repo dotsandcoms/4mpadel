@@ -23,7 +23,7 @@ const ClubMembersManager = ({ club, onClose }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
-    const [newRole, setNewRole] = useState('admin');
+    const [newRole, setNewRole] = useState('owner');
     const [isAdding, setIsAdding] = useState(false);
 
     const fetchMembers = async () => {
