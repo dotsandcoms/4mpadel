@@ -11,6 +11,10 @@ import { useClubs } from '../../hooks/useClubs';
 import { getDefaultBackgroundForStatus } from '../../utils/imageUtils';
 import { buildRankedinTournamentUrl, downloadRankedinSkipReport, extractRankedinId } from '../../utils/rankedinLink';
 import { loadGoogleMaps } from '../../utils/googleMaps';
+import {
+    isCalendarEventFinished,
+    isRecentResultsAutoTier,
+} from '../../utils/recentResults';
 
 const DIVISION_GROUPS = [
     {
@@ -1069,6 +1073,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             is_visible: ev.is_visible !== false,
             allow_payments: ev.allow_payments ?? true,
             finance_managed: ev.finance_managed ?? true,
+            show_in_recent_results: !!(ev.show_in_recent_results || ev.featured_result),
             golden_point: resolveScoringPoint(ev) === 'golden',
             scoring_point: resolveScoringPoint(ev),
             is_league: !!ev.is_league,
@@ -1139,6 +1144,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             if (name === 'start_date' && val && !isEditing) {
                 if (!regCloseTouchedRef.current) next.registration_closes_at = mondayCloseFor(val);
                 if (!regOpenTouchedRef.current) next.registration_opens_at = opensOneMonthBefore(val);
+            }
+            // Keep homepage Recent Results flag in sync with Event Builder toggle.
+            if (name === 'show_in_recent_results') {
+                next.featured_result = !!val;
             }
             return next;
         });
@@ -1618,6 +1627,14 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 payload.is_visible = true;
             }
         }
+
+        // Finished Gold / Super Gold / Major events auto-enter Recent Results.
+        if (isRecentResultsAutoTier(payload.sapa_status) && isCalendarEventFinished(payload)) {
+            payload.show_in_recent_results = true;
+        }
+        // Keep Calendar Manager + homepage flag aligned with the Event Builder toggle.
+        payload.featured_result = !!payload.show_in_recent_results;
+
         return payload;
     };
 

@@ -7,6 +7,12 @@ import { Calendar, ChevronLeft, ChevronRight, ChevronDown, Play, PlayCircle, Tro
 import VideoModal, { getYoutubeEmbedUrl } from './VideoModal';
 import { getEventImage, getDefaultEventBackground } from '../utils/imageUtils';
 import CommunityCtaBanner from './CommunityCtaBanner';
+import {
+    promoteFinishedTiersToRecentResults,
+    isCalendarEventFinished,
+    isRecentResultsAutoTier,
+    RECENT_RESULTS_AUTO_TIERS,
+} from '../utils/recentResults';
 
 const getStatusColors = (status) => {
     const s = status?.toLowerCase() || '';
@@ -1490,25 +1496,50 @@ const FeaturedSections = ({ session = null }) => {
     useEffect(() => {
         const fetchTours = async () => {
             try {
+                // Flip Show in Recent Results for finished Gold / Super Gold / Major events.
+                await promoteFinishedTiersToRecentResults(supabase);
+
                 // First try to fetch results marked as featured_result in our calendar table
                 const { data: featuredResults, error } = await supabase
                     .from('calendar')
                     .select('*, registered_players, start_date, end_date')
-                    .eq('featured_result', true)
+                    .or('featured_result.eq.true,show_in_recent_results.eq.true')
                     .or('sanction_status.eq.approved,sanction_status.is.null')
                     .neq('is_visible', false)
                     .order('start_date', { ascending: false })
                     .limit(10);
 
-                if (featuredResults && featuredResults.length > 0 && !error) {
+                // Fallback / supplement: finished auto-tier events even if flags were not writable.
+                const { data: autoTierResults } = await supabase
+                    .from('calendar')
+                    .select('*, registered_players, start_date, end_date')
+                    .in('sapa_status', RECENT_RESULTS_AUTO_TIERS)
+                    .or('sanction_status.eq.approved,sanction_status.is.null')
+                    .neq('is_visible', false)
+                    .order('start_date', { ascending: false })
+                    .limit(30);
+
+                const byId = new Map();
+                (featuredResults || []).forEach((t) => byId.set(t.id, t));
+                (autoTierResults || [])
+                    .filter((t) => isRecentResultsAutoTier(t.sapa_status) && isCalendarEventFinished(t))
+                    .forEach((t) => {
+                        if (!byId.has(t.id)) byId.set(t.id, t);
+                    });
+
+                const mergedResults = [...byId.values()]
+                    .sort((a, b) => new Date(b.start_date) - new Date(a.start_date))
+                    .slice(0, 10);
+
+                if (mergedResults.length > 0 && !error) {
                     // Pull cached RankedIn winners so we can surface the Men's Open champions on each result card
                     const { data: resultsCache } = await supabase
                         .from('rankedin_results_cache')
                         .select('event_id, winners')
-                        .in('event_id', featuredResults.map(t => t.id));
+                        .in('event_id', mergedResults.map(t => t.id));
 
                     // Map calendar events to the format expected by TournamentCard for results
-                    const mappedResults = featuredResults.map(t => ({
+                    const mappedResults = mergedResults.map(t => ({
                         eventId: t.id,
                         eventName: t.event_name,
                         city: t.city,

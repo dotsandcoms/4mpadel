@@ -1298,7 +1298,7 @@ const Hero = () => {
                                 )}
                                 <HappeningNowWidget />
                                 {hasScheduleContent && (
-                                <div className="border-t border-white/5 pt-1.5 pb-3">
+                                <div className="border-t border-white/5 mt-4 pt-4 pb-3">
                                 <button
                                     type="button"
                                     onClick={() => setScheduleOpen((open) => !open)}

@@ -6,6 +6,7 @@ import { supabase } from '../../supabaseClient';
 import { useRankedin } from '../../hooks/useRankedin';
 import EventBuilder from './EventBuilder';
 import { getDefaultBackgroundForStatus } from '../../utils/imageUtils';
+import { promoteFinishedTiersToRecentResults } from '../../utils/recentResults';
 import {
     PieChart,
     Pie,
@@ -219,6 +220,7 @@ const CalendarManager = () => {
     const fetchEvents = async () => {
         try {
             setLoading(true);
+            await promoteFinishedTiersToRecentResults(supabase);
             const { data, error } = await supabase
                 .from('calendar')
                 .select('*, organisations:organisation_id(id, name, logo_url)')
@@ -419,6 +421,9 @@ const CalendarManager = () => {
             
             // Ensure category_fees is a valid object
             if (!payload.category_fees) payload.category_fees = {};
+
+            // Keep Event Builder + homepage recent-results flags in sync
+            payload.show_in_recent_results = !!payload.featured_result;
 
             if (editingEvent) {
                 // Update

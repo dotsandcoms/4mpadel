@@ -46,7 +46,7 @@ export async function fetchClubBySlug(slug) {
 export async function fetchPublishedClubs() {
     const { data, error } = await supabase
         .from('clubs')
-        .select('id, name, short_name, slug, logo_url, city, about, brand_color, verified, sapa_registered')
+        .select('id, name, short_name, slug, logo_url, city, address, about, brand_color, verified, sapa_registered')
         .eq('status', 'published')
         .order('name', { ascending: true });
     if (error) throw error;
