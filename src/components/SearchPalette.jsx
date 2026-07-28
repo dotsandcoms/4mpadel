@@ -14,7 +14,9 @@ import {
   Award,
   Trophy,
   Camera,
-  GraduationCap
+  GraduationCap,
+  MapPin,
+  Building
 } from 'lucide-react';
 import { useSearch } from '../context/SearchContext';
 import { supabase } from '../supabaseClient';
@@ -25,6 +27,8 @@ const SearchPalette = () => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState({
     players: [],
+    clubs: [],
+    organisations: [],
     events: [],
     blogs: [],
     coaches: [],
@@ -53,7 +57,7 @@ const SearchPalette = () => {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 100);
       setQuery('');
-      setResults({ players: [], events: [], blogs: [], coaches: [], navigation: [] });
+      setResults({ players: [], clubs: [], organisations: [], events: [], blogs: [], coaches: [], navigation: [] });
       setSelectedIndex(0);
     }
   }, [isOpen]);
@@ -61,7 +65,7 @@ const SearchPalette = () => {
   useEffect(() => {
     const searchData = async () => {
       if (query.trim() === '') {
-        setResults({ players: [], events: [], blogs: [], coaches: [], navigation: [] });
+        setResults({ players: [], clubs: [], organisations: [], events: [], blogs: [], coaches: [], navigation: [] });
         return;
       }
 
@@ -72,6 +76,8 @@ const SearchPalette = () => {
         const isPlayerSearch = ['players', 'pro', 'coach'].some(k => lowerQuery.includes(k));
 
         let playersQuery = supabase.from('players').select('name, rankedin_id, id, image_url').limit(5);
+        let clubsQuery = supabase.from('clubs').select('name, short_name, slug, city, logo_url').in('status', ['published', 'draft']).limit(5);
+        let organisationsQuery = supabase.from('organisations').select('name, slug, city, logo_url, org_type').eq('status', 'approved').limit(5);
         let eventsQuery = supabase.from('calendar').select('event_name, venue, slug, image_url, start_date').or('sanction_status.eq.approved,sanction_status.is.null').limit(5);
         let blogsQuery = supabase.from('blogs').select('title, slug, category, image_url').ilike('title', `%${query}%`).limit(5);
         let coachesQuery = supabase.from('coach_applications').select('full_name, city, id, profile_pic_url').eq('status', 'approved').ilike('full_name', `%${query}%`).limit(5);
@@ -89,8 +95,13 @@ const SearchPalette = () => {
           playersQuery = playersQuery.ilike('name', `%${query}%`);
         }
 
-        const [playersRes, eventsRes, blogsRes, coachesRes] = await Promise.all([
+        clubsQuery = clubsQuery.or(`name.ilike.%${query}%,short_name.ilike.%${query}%,city.ilike.%${query}%`);
+        organisationsQuery = organisationsQuery.or(`name.ilike.%${query}%,city.ilike.%${query}%,org_type.ilike.%${query}%`);
+
+        const [playersRes, clubsRes, organisationsRes, eventsRes, blogsRes, coachesRes] = await Promise.all([
           playersQuery,
+          clubsQuery,
+          organisationsQuery,
           eventsQuery,
           blogsQuery,
           coachesQuery
@@ -98,6 +109,8 @@ const SearchPalette = () => {
 
         setResults({
           players: playersRes.data || [],
+          clubs: (clubsRes.data || []).map(c => ({ ...c, subtitle: c.city || c.short_name || 'Club' })),
+          organisations: (organisationsRes.data || []).map(o => ({ ...o, subtitle: o.city || o.org_type || 'Organisation' })),
           events: (eventsRes.data || []).map(e => ({ ...e, name: e.event_name, subtitle: e.venue })),
           blogs: (blogsRes.data || []).map(b => ({ ...b, name: b.title, subtitle: b.category })),
           coaches: (coachesRes.data || []).map(c => ({ ...c, name: c.full_name, subtitle: c.city, image_url: c.profile_pic_url })),
@@ -119,6 +132,8 @@ const SearchPalette = () => {
   const allResults = [
     ...(results.navigation || []).map(item => ({ ...item, type: 'nav' })),
     ...(results.players || []).map(item => ({ ...item, type: 'player' })),
+    ...(results.clubs || []).map(item => ({ ...item, type: 'club' })),
+    ...(results.organisations || []).map(item => ({ ...item, type: 'organisation' })),
     ...(results.coaches || []).map(item => ({ ...item, type: 'coach' })),
     ...(results.events || []).map(item => ({ ...item, type: 'event' })),
     ...(results.blogs || []).map(item => ({ ...item, type: 'blog' }))
@@ -138,6 +153,8 @@ const SearchPalette = () => {
     closeSearch();
     if (item.type === 'nav') navigate(item.href);
     if (item.type === 'player') navigate(`/players?id=${item.id}`);
+    if (item.type === 'club') navigate(`/clubs/${item.slug}`);
+    if (item.type === 'organisation') navigate(`/organisations/${item.slug}`);
     if (item.type === 'coach') navigate(`/academy/coaches?id=${item.id}`);
     if (item.type === 'event') navigate(`/calendar/${item.slug}`);
     if (item.type === 'blog') navigate(`/blog/${item.slug}`);
@@ -225,6 +242,34 @@ const SearchPalette = () => {
                   </div>
                 )}
 
+                {results.clubs.length > 0 && (
+                  <div>
+                    <div className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-4">Clubs</div>
+                    {(results.clubs || []).map((item, idx) => (
+                      <ResultItem 
+                        key={item.slug} 
+                        item={{ ...item, name: item.name, icon: MapPin, type: 'club' }} 
+                        active={selectedIndex === results.navigation.length + results.players.length + idx}
+                        onClick={() => handleSelect({ ...item, type: 'club' })}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {results.organisations.length > 0 && (
+                  <div>
+                    <div className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-4">Organisations</div>
+                    {(results.organisations || []).map((item, idx) => (
+                      <ResultItem 
+                        key={item.slug} 
+                        item={{ ...item, name: item.name, icon: Building, type: 'organisation' }} 
+                        active={selectedIndex === results.navigation.length + results.players.length + results.clubs.length + idx}
+                        onClick={() => handleSelect({ ...item, type: 'organisation' })}
+                      />
+                    ))}
+                  </div>
+                )}
+
                 {/* Coach Results */}
                 {results.coaches.length > 0 && (
                   <div>
@@ -233,7 +278,7 @@ const SearchPalette = () => {
                       <ResultItem 
                         key={item.id} 
                         item={{ ...item, name: item.name, icon: Award, type: 'coach' }} 
-                        active={selectedIndex === results.navigation.length + results.players.length + idx}
+                        active={selectedIndex === results.navigation.length + results.players.length + results.clubs.length + results.organisations.length + idx}
                         onClick={() => handleSelect({ ...item, type: 'coach' })}
                       />
                     ))}
@@ -248,7 +293,7 @@ const SearchPalette = () => {
                       <ResultItem 
                         key={item.slug} 
                         item={{ ...item, name: item.name, subtitle: item.location, icon: Calendar, type: 'event' }} 
-                        active={selectedIndex === results.navigation.length + results.players.length + results.coaches.length + idx}
+                        active={selectedIndex === results.navigation.length + results.players.length + results.clubs.length + results.organisations.length + results.coaches.length + idx}
                         onClick={() => handleSelect({ ...item, type: 'event' })}
                       />
                     ))}
@@ -263,7 +308,7 @@ const SearchPalette = () => {
                       <ResultItem 
                         key={item.slug} 
                         item={{ ...item, icon: BookOpen, type: 'blog' }} 
-                        active={selectedIndex === results.navigation.length + results.players.length + results.coaches.length + results.events.length + idx}
+                        active={selectedIndex === results.navigation.length + results.players.length + results.clubs.length + results.organisations.length + results.coaches.length + results.events.length + idx}
                         onClick={() => handleSelect({ ...item, type: 'blog' })}
                       />
                     ))}
@@ -274,7 +319,7 @@ const SearchPalette = () => {
               <div className="py-12 text-center text-gray-500">
                 <Search className="w-8 h-8 mx-auto mb-3 opacity-20 text-[#CCFF00]" />
                 <p className="text-sm font-medium text-white/80">No results found for "{query}"</p>
-                <p className="text-xs mt-1 text-gray-500">Try searching for players, tournaments or rankings</p>
+                <p className="text-xs mt-1 text-gray-500">Try searching for players, clubs, organisations, tournaments or rankings</p>
               </div>
             ) : (
               <div className="py-10 px-6">

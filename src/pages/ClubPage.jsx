@@ -355,33 +355,54 @@ const ClubPage = () => {
                 </div>
             </div>
 
-            {/* Quick actions */}
+            {/* Quick actions — icon-only, evenly spanning full width */}
             <div className="container mx-auto px-4 md:px-6 mt-4">
-                <div className="flex flex-wrap gap-2">
+                <div className="flex w-full gap-2">
                     {website && (
                         <a
                             href={website}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest !text-black hover:!text-black [&_svg]:!text-black"
+                            aria-label="Website"
+                            title="Website"
+                            className="inline-flex flex-1 items-center justify-center h-10 rounded-xl !text-black hover:!text-black [&_svg]:!text-black"
                             style={{ background: accent, color: '#000' }}
                         >
-                            <Globe size={14} color="#000" /> Website
+                            <Globe size={16} color="#000" />
                         </a>
                     )}
                     {mapUrl && (
-                        <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-white/5 border border-white/10 text-white hover:bg-white/10">
-                            <MapPin size={14} /> Map
+                        <a
+                            href={mapUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Map"
+                            title="Map"
+                            className="inline-flex flex-1 items-center justify-center h-10 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10"
+                        >
+                            <MapPin size={16} />
                         </a>
                     )}
                     {club.contact_email && (
-                        <a href={`mailto:${club.contact_email}`} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-white/5 border border-white/10 text-white hover:bg-white/10">
-                            <Mail size={14} /> Contact
+                        <a
+                            href={`mailto:${club.contact_email}`}
+                            aria-label="Contact"
+                            title="Contact"
+                            className="inline-flex flex-1 items-center justify-center h-10 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10"
+                        >
+                            <Mail size={16} />
                         </a>
                     )}
                     {waLink(club.whatsapp_number) && (
-                        <a href={waLink(club.whatsapp_number)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-white/5 border border-white/10 text-white hover:bg-white/10">
-                            <MessageCircle size={14} /> WhatsApp
+                        <a
+                            href={waLink(club.whatsapp_number)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="WhatsApp"
+                            title="WhatsApp"
+                            className="inline-flex flex-1 items-center justify-center h-10 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10"
+                        >
+                            <MessageCircle size={16} />
                         </a>
                     )}
                     {socialLinks.map((item) => {
@@ -396,8 +417,8 @@ const ClubPage = () => {
                                 aria-label={item.label}
                                 title={item.label}
                                 className={isNamed
-                                    ? 'inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest bg-white/5 border border-white/10 text-white hover:bg-white/10'
-                                    : 'inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10'}
+                                    ? 'inline-flex flex-1 items-center justify-center gap-2 h-10 px-3 rounded-xl text-xs font-black uppercase tracking-widest bg-white/5 border border-white/10 text-white hover:bg-white/10'
+                                    : 'inline-flex flex-1 items-center justify-center h-10 rounded-xl bg-white/5 border border-white/10 text-white hover:bg-white/10'}
                             >
                                 <SocialIcon size={isNamed ? 14 : 16} />
                                 {isNamed ? item.label : null}
@@ -577,9 +598,9 @@ const ClubPage = () => {
                                     </button>
                                 ))}
                             </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                            <div className="grid grid-cols-5 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-1 sm:gap-2">
                                 {filteredGallery.map((img, idx) => (
-                                    <div key={idx} className="aspect-square rounded-xl overflow-hidden border border-white/10 bg-white/5">
+                                    <div key={idx} className="aspect-square rounded-lg sm:rounded-xl overflow-hidden border border-white/10 bg-white/5">
                                         <img src={img.url} alt={img.caption || ''} className="w-full h-full object-cover" />
                                     </div>
                                 ))}
