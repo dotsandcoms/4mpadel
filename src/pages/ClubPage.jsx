@@ -31,6 +31,26 @@ const DAY_LABELS = {
 
 const waLink = (num) => (num ? `https://wa.me/${String(num).replace(/[^0-9]/g, '').replace(/^0/, '27')}` : null);
 
+const normalizeVenueName = (value) => String(value || '').trim().toLowerCase();
+
+const eventMatchesClub = (event, club) => {
+    const clubNames = [club?.name, club?.short_name]
+        .filter(Boolean)
+        .map(normalizeVenueName)
+        .filter(Boolean);
+    if (!clubNames.length) return false;
+
+    const venues = Array.isArray(event?.venues)
+        ? event.venues.map(normalizeVenueName)
+        : [];
+    const fallbackVenue = normalizeVenueName(event?.venue);
+
+    return clubNames.some((clubName) =>
+        venues.includes(clubName)
+        || fallbackVenue.includes(clubName),
+    );
+};
+
 const Section = ({ title, accent, action, children, id }) => (
     <section id={id} className="scroll-mt-44 sm:scroll-mt-40 md:scroll-mt-36">
         <div className="flex items-center justify-between gap-3 mb-3 px-0.5">
@@ -49,6 +69,9 @@ const ClubPage = () => {
     const [club, setClub] = useState(null);
     const [orgs, setOrgs] = useState([]);
     const [memberCount, setMemberCount] = useState(0);
+    const [hasClubOwner, setHasClubOwner] = useState(false);
+    const [clubEvents, setClubEvents] = useState([]);
+    const [eventsLoading, setEventsLoading] = useState(false);
     const [loading, setLoading] = useState(true);
     const [galleryFilter, setGalleryFilter] = useState('all');
     const [activeNavId, setActiveNavId] = useState('overview');
@@ -82,6 +105,13 @@ const ClubPage = () => {
                     .select('id', { count: 'exact', head: true })
                     .eq('club_id', data.id);
                 if (!cancelled) setMemberCount(count || 0);
+
+                const { count: ownerCount } = await supabase
+                    .from('club_members')
+                    .select('club_id', { count: 'exact', head: true })
+                    .eq('club_id', data.id)
+                    .eq('role', 'owner');
+                if (!cancelled) setHasClubOwner((ownerCount || 0) > 0);
             } catch (err) {
                 console.error(err);
                 if (!cancelled) setClub(null);
@@ -109,6 +139,44 @@ const ClubPage = () => {
         nodes.forEach((n) => observer.observe(n));
         return () => observer.disconnect();
     }, [club?.id, loading]);
+
+    useEffect(() => {
+        if (!club?.id) {
+            setClubEvents([]);
+            return;
+        }
+
+        let cancelled = false;
+        const loadClubEvents = async () => {
+            setEventsLoading(true);
+            try {
+                const { data, error } = await supabase
+                    .from('calendar')
+                    .select('id, slug, event_name, start_date, end_date, venue, venues, city, sapa_status, registered_players')
+                    .or('sanction_status.eq.approved,sanction_status.is.null')
+                    .neq('is_visible', false)
+                    .order('start_date', { ascending: false })
+                    .limit(200);
+
+                if (error) throw error;
+                if (cancelled) return;
+
+                const matched = (data || [])
+                    .filter((event) => eventMatchesClub(event, club))
+                    .sort((a, b) => new Date(b.start_date) - new Date(a.start_date));
+
+                setClubEvents(matched);
+            } catch (err) {
+                console.error('Failed to load club events:', err);
+                if (!cancelled) setClubEvents([]);
+            } finally {
+                if (!cancelled) setEventsLoading(false);
+            }
+        };
+
+        loadClubEvents();
+        return () => { cancelled = true; };
+    }, [club]);
 
     const accent = accentOnDark(club?.brand_color);
     const courts = club?.courts || {};
@@ -232,14 +300,16 @@ const ClubPage = () => {
                             </div>
                             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                 <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold font-display leading-[1.05] tracking-tighter truncate">{brandTitle}</h1>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsAuthModalOpen(true)}
-                                    className="inline-flex items-center justify-center gap-2 self-start shrink-0 px-4 py-2.5 rounded-2xl bg-padel-green text-black text-[10px] sm:text-[11px] font-black uppercase tracking-widest hover:bg-white transition-colors"
-                                >
-                                    <Landmark size={14} />
-                                    Claim Club
-                                </button>
+                                {!hasClubOwner && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsAuthModalOpen(true)}
+                                        className="inline-flex items-center justify-center gap-2 self-start shrink-0 px-4 py-2.5 rounded-2xl bg-padel-green text-black text-[10px] sm:text-[11px] font-black uppercase tracking-widest hover:bg-white transition-colors"
+                                    >
+                                        <Landmark size={14} />
+                                        Claim Club
+                                    </button>
+                                )}
                             </div>
                             {club.city && (
                                 <p className="text-gray-400 text-sm mt-1.5 flex items-center gap-1">
@@ -436,13 +506,55 @@ const ClubPage = () => {
                 </Section>
 
                 <Section id="events" title="SAPA Events" accent={accent}>
-                    <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-8 text-center">
-                        <Calendar size={28} className="mx-auto text-gray-600 mb-2" />
-                        <p className="text-sm text-gray-500">Events at this club coming soon.</p>
-                        <Link to="/calendar" className="inline-flex items-center gap-1 mt-3 text-[10px] font-black uppercase tracking-widest" style={{ color: accent }}>
-                            Browse calendar <ChevronRight size={12} />
-                        </Link>
-                    </div>
+                    {eventsLoading ? (
+                        <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-8 text-center">
+                            <Calendar size={28} className="mx-auto text-gray-600 mb-2" />
+                            <p className="text-sm text-gray-500">Loading events…</p>
+                        </div>
+                    ) : clubEvents.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-8 text-center">
+                            <Calendar size={28} className="mx-auto text-gray-600 mb-2" />
+                            <p className="text-sm text-gray-500">No linked SAPA events found for this club yet.</p>
+                            <Link to="/calendar" className="inline-flex items-center gap-1 mt-3 text-[10px] font-black uppercase tracking-widest" style={{ color: accent }}>
+                                Browse calendar <ChevronRight size={12} />
+                            </Link>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {clubEvents.slice(0, 6).map((event) => (
+                                <Link
+                                    key={event.id}
+                                    to={`/calendar/${event.slug || event.id}`}
+                                    className="flex items-center gap-3 rounded-2xl bg-white/[0.04] border border-white/10 px-4 py-3 hover:border-white/20 transition-colors"
+                                >
+                                    <div className="shrink-0 w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex flex-col items-center justify-center">
+                                        <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: accent }}>
+                                            {new Date(event.start_date).toLocaleDateString('en-GB', { month: 'short' }).toUpperCase()}
+                                        </span>
+                                        <span className="text-white font-black text-lg leading-none">
+                                            {new Date(event.start_date).getDate()}
+                                        </span>
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-bold text-white truncate">{event.event_name}</p>
+                                        <p className="text-[11px] text-gray-500 truncate mt-0.5">
+                                            {[event.venue || (Array.isArray(event.venues) ? event.venues.join(' / ') : ''), event.city].filter(Boolean).join(', ')}
+                                        </p>
+                                    </div>
+                                    <div className="shrink-0 text-right">
+                                        {event.sapa_status && (
+                                            <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: accent }}>
+                                                {event.sapa_status}
+                                            </p>
+                                        )}
+                                        {event.registered_players ? (
+                                            <p className="text-[10px] text-gray-500 mt-0.5">{event.registered_players} entries</p>
+                                        ) : null}
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    )}
                 </Section>
 
                 <Section id="gallery" title="Gallery" accent={accent}>
