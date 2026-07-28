@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
+import AuthModal from '../components/AuthModal';
 import { supabase } from '../supabaseClient';
 import { safeUrl } from '../utils/sanitizeHtml';
 import {
@@ -51,6 +52,7 @@ const ClubPage = () => {
     const [loading, setLoading] = useState(true);
     const [galleryFilter, setGalleryFilter] = useState('all');
     const [activeNavId, setActiveNavId] = useState('overview');
+    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
     const scrollToSection = useCallback((id) => {
         const el = document.getElementById(id);
@@ -228,7 +230,17 @@ const ClubPage = () => {
                                     </span>
                                 )}
                             </div>
-                            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold font-display leading-[1.05] tracking-tighter truncate">{brandTitle}</h1>
+                            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold font-display leading-[1.05] tracking-tighter truncate">{brandTitle}</h1>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsAuthModalOpen(true)}
+                                    className="inline-flex items-center justify-center gap-2 self-start shrink-0 px-4 py-2.5 rounded-2xl bg-padel-green text-black text-[10px] sm:text-[11px] font-black uppercase tracking-widest hover:bg-white transition-colors"
+                                >
+                                    <Landmark size={14} />
+                                    Claim Club
+                                </button>
+                            </div>
                             {club.city && (
                                 <p className="text-gray-400 text-sm mt-1.5 flex items-center gap-1">
                                     <MapPin size={13} /> {club.city}
@@ -592,6 +604,22 @@ const ClubPage = () => {
                     </div>
                 </Section>
             </div>
+
+            <AuthModal
+                isOpen={isAuthModalOpen}
+                onClose={() => setIsAuthModalOpen(false)}
+                initialTab="register"
+                initialRegisterType="club"
+                initialClubClaim={club ? {
+                    id: club.id,
+                    name: club.name,
+                    short_name: club.short_name,
+                    city: club.city,
+                    logo_url: club.logo_url,
+                    status: club.status,
+                    verified: club.verified,
+                } : null}
+            />
         </div>
     );
 };

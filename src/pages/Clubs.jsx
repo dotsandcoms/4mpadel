@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { MapPin, BadgeCheck, ShieldCheck, ChevronRight, Search, Landmark } from 'lucide-react';
+import { MapPin, BadgeCheck, ShieldCheck, ChevronRight, Search } from 'lucide-react';
 import { fetchPublishedClubs } from '../utils/club';
-import AuthModal from '../components/AuthModal';
 import heroCourt from '../assets/home.jpeg';
 
 /**
@@ -13,7 +12,6 @@ const Clubs = () => {
     const [clubs, setClubs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
     useEffect(() => {
         const load = async () => {
@@ -76,14 +74,6 @@ const Clubs = () => {
                                 className="w-full bg-white/5 border border-white/10 rounded-2xl pl-11 pr-4 py-3 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-padel-green"
                             />
                         </div>
-                        <button
-                            type="button"
-                            onClick={() => setIsAuthModalOpen(true)}
-                            className="inline-flex items-center justify-center gap-2 shrink-0 px-5 py-3 rounded-2xl bg-padel-green text-black text-[11px] font-black uppercase tracking-widest hover:bg-white transition-colors"
-                        >
-                            <Landmark size={14} />
-                            Register / Claim Club
-                        </button>
                     </div>
                 </div>
             </div>
@@ -95,13 +85,6 @@ const Clubs = () => {
                     <div className="text-center py-16 text-gray-500">
                         <MapPin size={40} className="mx-auto mb-4 opacity-40" />
                         <p className="text-sm">No published clubs yet.</p>
-                        <button
-                            type="button"
-                            onClick={() => setIsAuthModalOpen(true)}
-                            className="mt-4 inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-padel-green text-black text-[11px] font-black uppercase tracking-widest"
-                        >
-                            Register your club
-                        </button>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -152,12 +135,6 @@ const Clubs = () => {
                 )}
             </div>
 
-            <AuthModal
-                isOpen={isAuthModalOpen}
-                onClose={() => setIsAuthModalOpen(false)}
-                initialTab="register"
-                initialRegisterType="club"
-            />
         </div>
     );
 };

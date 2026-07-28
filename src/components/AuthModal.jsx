@@ -73,7 +73,7 @@ console.log('Paystack Config Check:', {
     isTestMode: PAYSTACK_PUBLIC_KEY.startsWith('pk_test_'),
 });
 
-const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType = null }) => {
+const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType = null, initialClubClaim = null }) => {
     const [activeTab, setActiveTab] = useState(initialTab); // 'login', 'register', 'forgot_password'
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState(null);
@@ -579,6 +579,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
                                 onBack={() => setRegisterType(null)}
                                 onClose={onClose}
                                 contactEmail={email}
+                                initialClubClaim={initialClubClaim}
                             />
                         ) : activeTab === 'register' && registerType === 'coach' ? (
                             <RegisterCoachForm

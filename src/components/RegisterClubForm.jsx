@@ -42,7 +42,7 @@ const ProgressBar = ({ step }) => (
 /**
  * Public club registration — search/claim existing clubs, or create new (pending approval).
  */
-const RegisterClubForm = ({ onBack, onClose, contactEmail = '' }) => {
+const RegisterClubForm = ({ onBack, onClose, contactEmail = '', initialClubClaim = null }) => {
     const [step, setStep] = useState(1);
     const [submitted, setSubmitted] = useState(false);
     const [submitMode, setSubmitMode] = useState('create'); // create | claim
@@ -244,6 +244,11 @@ const RegisterClubForm = ({ onBack, onClose, contactEmail = '' }) => {
             city: club.city || prev.city,
         }));
     };
+
+    useEffect(() => {
+        if (!initialClubClaim?.id) return;
+        selectExistingClub(initialClubClaim);
+    }, [initialClubClaim?.id]);
 
     const clearClaimSelection = () => {
         setClaimClub(null);
@@ -499,7 +504,7 @@ const RegisterClubForm = ({ onBack, onClose, contactEmail = '' }) => {
                 <div className="w-16 h-16 mx-auto rounded-full bg-padel-green/15 flex items-center justify-center">
                     <CheckCircle2 className="text-padel-green" size={32} />
                 </div>
-                <h3 className="text-xl font-black text-white">
+                <h3 className="text-2xl font-bold text-white">
                     {submitMode === 'claim' ? 'Claim received' : 'Application received'}
                 </h3>
                 <p className="text-sm text-gray-400 max-w-sm mx-auto">
@@ -532,7 +537,7 @@ const RegisterClubForm = ({ onBack, onClose, contactEmail = '' }) => {
                 <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">
                     Step {step} of {TOTAL_STEPS}
                 </p>
-                <h3 className="text-lg font-black text-white mt-1">
+                <h3 className="text-lg font-bold text-white mt-1">
                     {isClaiming && step === 1 ? 'Claim existing club' : STEP_TITLES[step - 1]}
                 </h3>
             </div>
