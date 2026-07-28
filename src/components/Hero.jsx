@@ -125,8 +125,8 @@ const Hero = () => {
     const [scheduleTimeFilter, setScheduleTimeFilter] = useState('upcoming'); // 'upcoming' | 'past'
     const [pastEventSlide, setPastEventSlide] = useState(0);
     const [pastMatchSlide, setPastMatchSlide] = useState(0);
-    const [scheduleOpen, setScheduleOpen] = useState(true);
-    const [pendingActionsOpen, setPendingActionsOpen] = useState(true);
+    const [scheduleOpen, setScheduleOpen] = useState(false);
+    const [pendingActionsOpen, setPendingActionsOpen] = useState(false);
     const [player, setPlayer] = useState(null);
     const { getPlayerEventsAsync, getPlayerMatches, getPlayerProfile, getOrganisationRankings } = useRankedin();
 
@@ -1296,6 +1296,7 @@ const Hero = () => {
                                 </AnimatePresence>
                                 </div>
                                 )}
+                                <HappeningNowWidget />
                                 {hasScheduleContent && (
                                 <div className="border-t border-white/5 pt-1.5 pb-3">
                                 <button
@@ -1477,8 +1478,6 @@ const Hero = () => {
                         )}
                     </AnimatePresence>
 
-                    {/* Happening Now Widget — Global live events */}
-                    <HappeningNowWidget />
                 </div>
             </div>
             <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />

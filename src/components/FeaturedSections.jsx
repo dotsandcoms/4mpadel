@@ -543,7 +543,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(true);
     const [recentResultsPage, setRecentResultsPage] = useState(0);
-    const [recentResultsOpen, setRecentResultsOpen] = useState(true);
+    const [recentResultsOpen, setRecentResultsOpen] = useState(false);
 
     // Image/Card content for the right/bottom side of the hero section
     const items = data.id === 'recent-results' ? liveTournaments : (data.id === 'featured-live' ? liveFeaturedTournaments : featuredTournaments);
@@ -1015,7 +1015,7 @@ const HOME_QUICK_LINKS = [
 
 const HomeQuickLinks = () => {
     const navigate = useNavigate();
-    const [open, setOpen] = useState(true);
+    const [open, setOpen] = useState(false);
 
     return (
         <section className="relative border-t border-white/5 bg-[#000000] py-3">
@@ -1257,7 +1257,7 @@ const FeaturedEventSlide = ({ event, cta, onCta }) => {
 // registration countdown, and profile-aware Register / Pay CTAs.
 const FeaturedTournamentHero = ({ events = [], session = null }) => {
     const navigate = useNavigate();
-    const [featuredOpen, setFeaturedOpen] = useState(true);
+    const [featuredOpen, setFeaturedOpen] = useState(false);
     const [activeIndex, setActiveIndex] = useState(0);
     const [ctaByEventId, setCtaByEventId] = useState({});
     const sliderRef = useRef(null);
