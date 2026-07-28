@@ -1329,26 +1329,29 @@ const ClubManager = ({ permissions }) => {
                                         />
                                     </label>
                                     <label className={labelClass}>
-                                        Slug
-                                        <input
-                                            value={form.slug ?? ''}
-                                            onChange={(e) => {
-                                                setSlugManual(true);
-                                                updateField('slug', e.target.value);
-                                            }}
+                                        Status
+                                        <select
+                                            value={form.status}
+                                            onChange={(e) => updateField('status', e.target.value)}
                                             className={inputClass}
-                                            placeholder="auto from name"
-                                        />
+                                        >
+                                            <option value="draft">draft</option>
+                                            <option value="pending">pending</option>
+                                            <option value="published">published</option>
+                                            <option value="archived">archived</option>
+                                            <option value="rejected">rejected</option>
+                                        </select>
                                     </label>
-                                    <label className={labelClass}>
-                                        City
-                                        <input
-                                            value={form.city ?? ''}
-                                            onChange={(e) => updateField('city', e.target.value)}
-                                            className={inputClass}
-                                            placeholder="Auto from address"
-                                        />
-                                    </label>
+                                    <div className="flex items-center gap-4 pt-6">
+                                        <label className="flex items-center gap-2 text-xs text-gray-300 font-bold">
+                                            <input type="checkbox" checked={!!form.verified} onChange={(e) => updateField('verified', e.target.checked)} />
+                                            Verified
+                                        </label>
+                                        <label className="flex items-center gap-2 text-xs text-gray-300 font-bold">
+                                            <input type="checkbox" checked={!!form.sapa_registered} onChange={(e) => updateField('sapa_registered', e.target.checked)} />
+                                            SAPA registered
+                                        </label>
+                                    </div>
                                     <div className="md:col-span-2">
                                         <label className={labelClass}>Address</label>
                                         <input
@@ -1364,6 +1367,24 @@ const ClubManager = ({ permissions }) => {
                                             Powered by Google — selecting a result auto-fills city, latitude and longitude.
                                         </p>
                                     </div>
+                                    <label className={labelClass}>
+                                        City
+                                        <input
+                                            value={form.city ?? ''}
+                                            onChange={(e) => updateField('city', e.target.value)}
+                                            className={inputClass}
+                                            placeholder="Auto from address"
+                                        />
+                                    </label>
+                                    <label className={labelClass}>
+                                        About
+                                        <textarea
+                                            value={form.about || ''}
+                                            onChange={(e) => updateField('about', e.target.value)}
+                                            rows={3}
+                                            className={inputClass}
+                                        />
+                                    </label>
                                     <label className={labelClass}>
                                         Website
                                         <input
@@ -1396,37 +1417,6 @@ const ClubManager = ({ permissions }) => {
                                             className={inputClass}
                                         />
                                     </label>
-                                    <div className="md:col-span-2 bg-black/30 border border-white/5 rounded-2xl p-4">
-                                        <div className="flex items-center gap-2 mb-3">
-                                            <Palette size={14} style={{ color: form.brand_color || '#CC1414' }} />
-                                            <p className="text-xs font-bold text-white">Brand colour</p>
-                                            <span className="text-[10px] text-gray-500">— accents on the public club page</span>
-                                        </div>
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            {COLOR_PRESETS.map((c) => (
-                                                <button
-                                                    key={c}
-                                                    type="button"
-                                                    onClick={() => updateField('brand_color', c)}
-                                                    className={`w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 ${
-                                                        form.brand_color === c ? 'border-white scale-110' : 'border-transparent'
-                                                    }`}
-                                                    style={{ background: c }}
-                                                    title={c}
-                                                />
-                                            ))}
-                                            <input
-                                                type="color"
-                                                value={/^#[0-9A-Fa-f]{6}$/.test(form.brand_color || '') ? form.brand_color : '#CC1414'}
-                                                onChange={(e) => updateField('brand_color', e.target.value)}
-                                                className="w-8 h-8 rounded-full border border-white/20 bg-transparent cursor-pointer"
-                                                title="Custom colour"
-                                            />
-                                            <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 ml-1">
-                                                {form.brand_color || '#CC1414'}
-                                            </span>
-                                        </div>
-                                    </div>
                                     <label className={labelClass}>
                                         Latitude
                                         <input
@@ -1445,30 +1435,6 @@ const ClubManager = ({ permissions }) => {
                                             placeholder="Auto from address"
                                         />
                                     </label>
-                                    <label className={labelClass}>
-                                        Status
-                                        <select
-                                            value={form.status}
-                                            onChange={(e) => updateField('status', e.target.value)}
-                                            className={inputClass}
-                                        >
-                                            <option value="draft">draft</option>
-                                            <option value="pending">pending</option>
-                                            <option value="published">published</option>
-                                            <option value="archived">archived</option>
-                                            <option value="rejected">rejected</option>
-                                        </select>
-                                    </label>
-                                    <div className="flex items-center gap-4 pt-6">
-                                        <label className="flex items-center gap-2 text-xs text-gray-300 font-bold">
-                                            <input type="checkbox" checked={!!form.verified} onChange={(e) => updateField('verified', e.target.checked)} />
-                                            Verified
-                                        </label>
-                                        <label className="flex items-center gap-2 text-xs text-gray-300 font-bold">
-                                            <input type="checkbox" checked={!!form.sapa_registered} onChange={(e) => updateField('sapa_registered', e.target.checked)} />
-                                            SAPA registered
-                                        </label>
-                                    </div>
                                 </div>
 
                                 <div className="grid md:grid-cols-2 gap-3">
@@ -1506,15 +1472,37 @@ const ClubManager = ({ permissions }) => {
                                     </div>
                                 </div>
 
-                                <label className={labelClass}>
-                                    About
-                                    <textarea
-                                        value={form.about || ''}
-                                        onChange={(e) => updateField('about', e.target.value)}
-                                        rows={3}
-                                        className={inputClass}
-                                    />
-                                </label>
+                                <div className="bg-black/30 border border-white/5 rounded-2xl p-4">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <Palette size={14} style={{ color: form.brand_color || '#CC1414' }} />
+                                        <p className="text-xs font-bold text-white">Brand colour</p>
+                                        <span className="text-[10px] text-gray-500">— accents on the public club page</span>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {COLOR_PRESETS.map((c) => (
+                                            <button
+                                                key={c}
+                                                type="button"
+                                                onClick={() => updateField('brand_color', c)}
+                                                className={`w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 ${
+                                                    form.brand_color === c ? 'border-white scale-110' : 'border-transparent'
+                                                }`}
+                                                style={{ background: c }}
+                                                title={c}
+                                            />
+                                        ))}
+                                        <input
+                                            type="color"
+                                            value={/^#[0-9A-Fa-f]{6}$/.test(form.brand_color || '') ? form.brand_color : '#CC1414'}
+                                            onChange={(e) => updateField('brand_color', e.target.value)}
+                                            className="w-8 h-8 rounded-full border border-white/20 bg-transparent cursor-pointer"
+                                            title="Custom colour"
+                                        />
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 ml-1">
+                                            {form.brand_color || '#CC1414'}
+                                        </span>
+                                    </div>
+                                </div>
                             </CollapsibleSection>
 
                             <CollapsibleSection open={sectionOpen.sponsor} onToggle={() => toggleSection('sponsor')} title="Principal Sponsor Banner" icon={Building}>
