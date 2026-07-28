@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import {
     MapPin, Plus, RefreshCw, Users, Building, Save, Loader2, ExternalLink,
     Upload, Trash2, Image as ImageIcon, ChevronDown, Instagram, Facebook,
-    Search, Check, X, Clock, Palette, Phone,
+    Search, Check, X, Clock, Palette, Phone, ArrowLeft, Eye, ShieldCheck,
 } from 'lucide-react';
 import ClubMembersManager from './ClubMembersManager';
 import { slugifyClub } from '../../utils/club';
@@ -65,6 +65,21 @@ const DAY_LABELS = {
     mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday',
     fri: 'Friday', sat: 'Saturday', sun: 'Sunday',
 };
+
+const createClosedSections = () => ({
+    profile: false,
+    sponsor: false,
+    socials: false,
+    courts: false,
+    cafe: false,
+    services: false,
+    hours: false,
+    gallery: false,
+    sponsors: false,
+    contacts: false,
+    orgs: false,
+    federation: false,
+});
 
 const emptyForm = () => ({
     name: '',
@@ -152,28 +167,19 @@ const ClubManager = ({ permissions }) => {
     const [uploading, setUploading] = useState(null);
     const [selectedId, setSelectedId] = useState(null);
     const [isCreating, setIsCreating] = useState(false);
+    const [managerView, setManagerView] = useState('list');
     const [form, setForm] = useState(emptyForm());
     const [slugManual, setSlugManual] = useState(false);
     const [membersOpen, setMembersOpen] = useState(false);
     const [assignOrgId, setAssignOrgId] = useState('');
     const [listSearch, setListSearch] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
     const [pendingClaims, setPendingClaims] = useState([]);
+    const [memberCounts, setMemberCounts] = useState({});
+    const [linkedOrgCounts, setLinkedOrgCounts] = useState({});
     const addressInputRef = useRef(null);
     const autocompleteRef = useRef(null);
-    const [sectionOpen, setSectionOpen] = useState({
-        profile: true,
-        sponsor: false,
-        socials: false,
-        courts: false,
-        cafe: false,
-        services: false,
-        hours: false,
-        gallery: false,
-        sponsors: false,
-        contacts: false,
-        orgs: false,
-        federation: false,
-    });
+    const [sectionOpen, setSectionOpen] = useState(createClosedSections);
 
     const selected = useMemo(
         () => clubs.find((c) => c.id === selectedId) || null,
@@ -220,11 +226,86 @@ const ClubManager = ({ permissions }) => {
         });
     }, [visibleClubs, listSearch]);
 
+    const clubRows = useMemo(() => {
+        return filteredClubs.map((club) => {
+            const indoor = Number(club.courts?.indoor?.count) || 0;
+            const outdoor = Number(club.courts?.outdoor?.count) || 0;
+            const totalCourts = indoor + outdoor;
+            return {
+                ...club,
+                totalCourts,
+                members: memberCounts[club.id] || Number(club.stats?.members) || 0,
+                linkedOrgs: linkedOrgCounts[club.id] || 0,
+            };
+        });
+    }, [filteredClubs, memberCounts, linkedOrgCounts]);
+
+    const ITEMS_PER_PAGE = 50;
+
+    const totalPages = Math.max(1, Math.ceil(clubRows.length / ITEMS_PER_PAGE));
+
+    const paginatedClubRows = useMemo(() => {
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        return clubRows.slice(start, start + ITEMS_PER_PAGE);
+    }, [clubRows, currentPage]);
+
+    const managerStats = useMemo(() => {
+        const rows = visibleClubs.map((club) => ({
+            ...club,
+            members: memberCounts[club.id] || Number(club.stats?.members) || 0,
+            linkedOrgs: linkedOrgCounts[club.id] || 0,
+            totalCourts: (Number(club.courts?.indoor?.count) || 0) + (Number(club.courts?.outdoor?.count) || 0),
+        }));
+        return {
+            total: rows.length,
+            published: rows.filter((club) => club.status === 'published').length,
+            draft: rows.filter((club) => club.status === 'draft').length,
+            verified: rows.filter((club) => club.verified).length,
+            sapaRegistered: rows.filter((club) => club.sapa_registered).length,
+            totalMembers: rows.reduce((sum, club) => sum + club.members, 0),
+            totalCourts: rows.reduce((sum, club) => sum + club.totalCourts, 0),
+            totalLinkedOrgs: rows.reduce((sum, club) => sum + club.linkedOrgs, 0),
+        };
+    }, [visibleClubs, memberCounts, linkedOrgCounts]);
+
+    const selectedSummary = useMemo(() => {
+        if (!selected && !isCreating) return null;
+        const source = selected || form;
+        const indoor = Number(source?.courts?.indoor?.count) || 0;
+        const outdoor = Number(source?.courts?.outdoor?.count) || 0;
+        const logo = source?.logo_url || '';
+        return {
+            logo,
+            name: source?.short_name || source?.name || 'New club',
+            fullName: source?.name || 'New club',
+            city: source?.city || 'City not set',
+            status: source?.status || 'draft',
+            verified: !!source?.verified,
+            sapaRegistered: !!source?.sapa_registered,
+            totalCourts: indoor + outdoor,
+            indoor,
+            outdoor,
+            members: selected ? (memberCounts[selected.id] || Number(selected.stats?.members) || 0) : 0,
+            linkedOrgs: selected ? (linkedOrgCounts[selected.id] || linkedOrgIds.length) : linkedOrgIds.length,
+            hasPublicPage: !!(selected?.slug && selected?.status === 'published'),
+        };
+    }, [selected, isCreating, form, memberCounts, linkedOrgCounts, linkedOrgIds.length]);
+
     const pendingClubs = useMemo(() => {
         const base = clubs.filter((c) => c.status === 'pending');
         if (effectiveView !== 'mine') return base;
         return base.filter((c) => myClubIds.has(c.id));
     }, [clubs, effectiveView, myClubIds]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [listSearch, effectiveView]);
+
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(totalPages);
+        }
+    }, [currentPage, totalPages]);
 
     // Keep the selection inside the active view when switching to My Clubs.
     useEffect(() => {
@@ -396,11 +477,62 @@ const ClubManager = ({ permissions }) => {
         }
     };
 
+    const openClubDetail = useCallback((clubId) => {
+        setSelectedId(clubId);
+        setIsCreating(false);
+        setManagerView('detail');
+    }, []);
+
+    const backToClubList = useCallback(() => {
+        setManagerView('list');
+        setMembersOpen(false);
+        if (!isCreating) return;
+        setIsCreating(false);
+        setSelectedId(null);
+        setForm(emptyForm());
+        setSlugManual(false);
+        setLinkedOrgIds([]);
+        setSectionOpen(createClosedSections());
+    }, [isCreating]);
+
     const toggleSection = (key) => {
         setSectionOpen((prev) => ({ ...prev, [key]: !prev[key] }));
     };
 
     const updateField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+
+    const loadClubMetrics = useCallback(async (clubIds) => {
+        if (!clubIds.length) {
+            setMemberCounts({});
+            setLinkedOrgCounts({});
+            return;
+        }
+        try {
+            const [{ data: members }, { data: orgLinks }] = await Promise.all([
+                supabase.from('players').select('club_id').in('club_id', clubIds),
+                supabase.from('club_organisations').select('club_id').in('club_id', clubIds),
+            ]);
+
+            const nextMemberCounts = {};
+            (members || []).forEach((row) => {
+                if (!row.club_id) return;
+                nextMemberCounts[row.club_id] = (nextMemberCounts[row.club_id] || 0) + 1;
+            });
+
+            const nextLinkedCounts = {};
+            (orgLinks || []).forEach((row) => {
+                if (!row.club_id) return;
+                nextLinkedCounts[row.club_id] = (nextLinkedCounts[row.club_id] || 0) + 1;
+            });
+
+            setMemberCounts(nextMemberCounts);
+            setLinkedOrgCounts(nextLinkedCounts);
+        } catch (err) {
+            console.warn('Failed to load club metrics:', err.message);
+            setMemberCounts({});
+            setLinkedOrgCounts({});
+        }
+    }, []);
 
     const loadClubs = useCallback(async () => {
         setLoading(true);
@@ -416,6 +548,7 @@ const ClubManager = ({ permissions }) => {
             const { data, error } = await query;
             if (error) throw error;
             setClubs(data || []);
+            loadClubMetrics((data || []).map((club) => club.id));
             if (!selectedId && (data || []).length > 0 && !isCreating) {
                 setSelectedId(data[0].id);
             }
@@ -425,7 +558,7 @@ const ClubManager = ({ permissions }) => {
         } finally {
             setLoading(false);
         }
-    }, [isSuper, permissions?.clubs, selectedId, isCreating]);
+    }, [isSuper, permissions?.clubs, selectedId, isCreating, loadClubMetrics]);
 
     const loadLookups = useCallback(async () => {
         const [{ data: feds }, { data: orgs }] = await Promise.all([
@@ -486,7 +619,7 @@ const ClubManager = ({ permissions }) => {
         setSlugManual(true);
         setIsCreating(false);
         loadLinkedOrgs(selectedId);
-        setSectionOpen((prev) => ({ ...prev, profile: true }));
+        setSectionOpen(createClosedSections());
         // Only re-hydrate when the selected club id changes — not on every clubs[] refresh.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedId, loadLinkedOrgs]);
@@ -494,9 +627,11 @@ const ClubManager = ({ permissions }) => {
     const startCreate = () => {
         setIsCreating(true);
         setSelectedId(null);
+        setManagerView('detail');
         setForm(emptyForm());
         setSlugManual(false);
         setLinkedOrgIds([]);
+        setSectionOpen(createClosedSections());
     };
 
     // Google Places autocomplete — shared helper with EventBuilder.
@@ -797,7 +932,7 @@ const ClubManager = ({ permissions }) => {
                                 <div className="flex items-center gap-2">
                                     <button
                                         type="button"
-                                        onClick={() => { setSelectedId(club.id); setIsCreating(false); }}
+                                        onClick={() => openClubDetail(club.id)}
                                         className="px-2.5 py-1.5 rounded-lg border border-white/10 text-[10px] font-black uppercase tracking-wider text-gray-300 hover:bg-white/5"
                                     >
                                         Review
@@ -857,7 +992,7 @@ const ClubManager = ({ permissions }) => {
                                     {claim.club_id && (
                                         <button
                                             type="button"
-                                            onClick={() => { setSelectedId(claim.club_id); setIsCreating(false); }}
+                                            onClick={() => openClubDetail(claim.club_id)}
                                             className="px-2.5 py-1.5 rounded-lg border border-white/10 text-[10px] font-black uppercase tracking-wider text-gray-300 hover:bg-white/5"
                                         >
                                             View club
@@ -884,94 +1019,282 @@ const ClubManager = ({ permissions }) => {
                 </div>
             )}
 
-            <div className="grid lg:grid-cols-[260px_1fr] gap-4">
-                <aside className="bg-white/[0.02] border border-white/10 rounded-2xl p-3 space-y-2 max-h-[70vh] overflow-y-auto flex flex-col">
-                    <div className="sticky top-0 z-10 bg-black/90 backdrop-blur-md pb-1 space-y-2">
-                        <div className="relative">
-                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
-                            <input
-                                type="search"
-                                value={listSearch}
-                                onChange={(e) => setListSearch(e.target.value)}
-                                placeholder="Search clubs…"
-                                className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-padel-green"
-                            />
-                        </div>
-                        <p className="px-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                            {listSearch.trim()
-                                ? `${filteredClubs.length} of ${visibleClubs.length}`
-                                : `${visibleClubs.length} clubs`}
-                        </p>
+            {managerView === 'list' ? (
+                <div className="space-y-4">
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        {[
+                            { label: 'Visible Clubs', value: managerStats.total, tone: 'text-white', helper: `${managerStats.published} published` },
+                            { label: 'Verification', value: managerStats.verified, tone: 'text-padel-green', helper: `${managerStats.sapaRegistered} SAPA registered` },
+                            { label: 'Members', value: managerStats.totalMembers, tone: 'text-amber-400', helper: `${managerStats.totalLinkedOrgs} linked orgs` },
+                            { label: 'Courts', value: managerStats.totalCourts, tone: 'text-sky-400', helper: `${managerStats.draft} drafts` },
+                        ].map((stat) => (
+                            <div key={stat.label} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 shadow-xl">
+                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">{stat.label}</p>
+                                <p className={`mt-3 text-3xl font-display font-bold tracking-tighter ${stat.tone}`}>{stat.value}</p>
+                                <p className="mt-1 text-xs text-gray-500">{stat.helper}</p>
+                            </div>
+                        ))}
                     </div>
-                    {visibleClubs.length === 0 && !isCreating && (
-                        <p className="text-xs text-gray-500 p-3">
-                            {effectiveView === 'mine'
-                                ? 'No clubs linked to your account yet.'
-                                : 'No clubs yet. Create one or apply the clubs migration.'}
-                        </p>
-                    )}
-                    {visibleClubs.length > 0 && filteredClubs.length === 0 && (
-                        <p className="text-xs text-gray-500 p-3">No clubs match “{listSearch.trim()}”.</p>
-                    )}
-                    {filteredClubs.map((c) => (
-                        <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => { setSelectedId(c.id); setIsCreating(false); }}
-                            className={`w-full text-left px-3 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-2.5 ${
-                                selectedId === c.id && !isCreating
-                                    ? 'bg-padel-green/15 text-padel-green border border-padel-green/30'
-                                    : 'text-gray-300 hover:bg-white/5 border border-transparent'
-                            }`}
-                        >
-                            {c.logo_url ? (
-                                <img src={c.logo_url} alt="" className="w-7 h-7 rounded-lg object-cover border border-white/10" />
-                            ) : (
-                                <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-gray-500">
-                                    <MapPin size={12} />
-                                </div>
-                            )}
-                            <span className="truncate flex-1">{c.short_name || c.name}</span>
-                            <span className={`text-[8px] uppercase font-black ${c.status === 'published' ? 'text-padel-green' : 'text-gray-500'}`}>
-                                {c.status}
-                            </span>
-                        </button>
-                    ))}
-                </aside>
 
+                    <div className="rounded-3xl border border-white/10 bg-white/[0.02] overflow-hidden shadow-2xl">
+                        <div className="flex flex-col gap-3 border-b border-white/10 p-4 md:flex-row md:items-center md:justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-11 h-11 rounded-2xl bg-padel-green/10 border border-padel-green/20 flex items-center justify-center">
+                                    <Building className="text-padel-green" size={18} />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-black text-white uppercase tracking-tight">Club Manager</h3>
+                                    <p className="text-sm text-gray-500">
+                                        {listSearch.trim()
+                                            ? `Showing ${Math.min(clubRows.length, ITEMS_PER_PAGE)} of ${clubRows.length} matching clubs`
+                                            : `${visibleClubs.length} clubs available`}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="relative w-full md:w-[320px]">
+                                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                                <input
+                                    type="search"
+                                    value={listSearch}
+                                    onChange={(e) => setListSearch(e.target.value)}
+                                    placeholder="Search clubs..."
+                                    className="w-full bg-black/40 border border-white/10 rounded-2xl pl-10 pr-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-padel-green"
+                                />
+                            </div>
+                        </div>
+
+                        {visibleClubs.length === 0 && !isCreating ? (
+                            <div className="p-10 text-center text-sm text-gray-500">
+                                {effectiveView === 'mine'
+                                    ? 'No clubs linked to your account yet.'
+                                    : 'No clubs yet. Create one or apply the clubs migration.'}
+                            </div>
+                        ) : clubRows.length === 0 ? (
+                            <div className="p-10 text-center text-sm text-gray-500">
+                                No clubs match “{listSearch.trim()}”.
+                            </div>
+                        ) : (
+                            <>
+                                <div className="hidden md:grid md:grid-cols-[minmax(0,2.2fr)_1.1fr_0.9fr_1.1fr_1fr_1fr] gap-3 px-4 py-3 border-b border-white/5 text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">
+                                    <div>Club</div>
+                                    <div>Status</div>
+                                    <div>Courts</div>
+                                    <div>Members</div>
+                                    <div>Linked Orgs</div>
+                                    <div>Health</div>
+                                </div>
+                                <div className="divide-y divide-white/5">
+                                    {paginatedClubRows.map((club) => {
+                                        const statusTone = club.status === 'published'
+                                            ? 'text-padel-green'
+                                            : club.status === 'draft'
+                                                ? 'text-amber-400'
+                                                : 'text-gray-400';
+                                        return (
+                                            <button
+                                                key={club.id}
+                                                type="button"
+                                                onClick={() => openClubDetail(club.id)}
+                                                className="w-full text-left px-4 py-4 hover:bg-white/[0.03] transition-colors"
+                                            >
+                                                <div className="md:hidden flex items-start gap-3">
+                                                    {club.logo_url ? (
+                                                        <img src={club.logo_url} alt="" className="w-12 h-12 rounded-2xl object-cover border border-white/10 shrink-0" />
+                                                    ) : (
+                                                        <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-500 shrink-0">
+                                                            <MapPin size={16} />
+                                                        </div>
+                                                    )}
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="text-sm font-bold text-white truncate">{club.short_name || club.name}</p>
+                                                            <span className={`text-[9px] font-black uppercase tracking-widest ${statusTone}`}>{club.status}</span>
+                                                        </div>
+                                                        <p className="text-xs text-gray-500 mt-1">{club.city || 'No city set'}</p>
+                                                        <div className="flex flex-wrap gap-2 mt-2 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                                                            <span>{club.totalCourts} courts</span>
+                                                            <span>{club.members} members</span>
+                                                            <span>{club.linkedOrgs} orgs</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="hidden md:grid md:grid-cols-[minmax(0,2.2fr)_1.1fr_0.9fr_1.1fr_1fr_1fr] gap-3 items-center">
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        {club.logo_url ? (
+                                                            <img src={club.logo_url} alt="" className="w-12 h-12 rounded-2xl object-cover border border-white/10 shrink-0" />
+                                                        ) : (
+                                                            <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-500 shrink-0">
+                                                                <MapPin size={16} />
+                                                            </div>
+                                                        )}
+                                                        <div className="min-w-0">
+                                                            <p className="text-sm font-bold text-white truncate">{club.short_name || club.name}</p>
+                                                            <p className="text-xs text-gray-500 truncate">{club.city || 'No city set'}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <p className={`text-sm font-black uppercase tracking-wider ${statusTone}`}>{club.status}</p>
+                                                        <p className="text-[11px] text-gray-500 mt-1">{club.verified ? 'Verified' : 'Unverified'}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-lg font-display font-bold tracking-tight text-white">{club.totalCourts}</p>
+                                                        <p className="text-[11px] text-gray-500 uppercase tracking-wider">Indoor {Number(club.courts?.indoor?.count) || 0} / Outdoor {Number(club.courts?.outdoor?.count) || 0}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-lg font-display font-bold tracking-tight text-white">{club.members}</p>
+                                                        <p className="text-[11px] text-gray-500 uppercase tracking-wider">Players linked</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-lg font-display font-bold tracking-tight text-white">{club.linkedOrgs}</p>
+                                                        <p className="text-[11px] text-gray-500 uppercase tracking-wider">Approved orgs</p>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-1.5 justify-start">
+                                                        <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${club.sapa_registered ? 'bg-padel-green/10 text-padel-green border-padel-green/20' : 'bg-white/5 text-gray-500 border-white/10'}`}>
+                                                            SAPA
+                                                        </span>
+                                                        <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${club.verified ? 'bg-sky-500/10 text-sky-300 border-sky-500/20' : 'bg-white/5 text-gray-500 border-white/10'}`}>
+                                                            {club.verified ? 'Verified' : 'Review'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                {clubRows.length > ITEMS_PER_PAGE && (
+                                    <div className="flex flex-col gap-3 border-t border-white/10 px-4 py-4 md:flex-row md:items-center md:justify-between">
+                                        <p className="text-xs text-gray-500">
+                                            Showing <span className="text-white">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> to{' '}
+                                            <span className="text-white">{Math.min(currentPage * ITEMS_PER_PAGE, clubRows.length)}</span> of{' '}
+                                            <span className="text-white">{clubRows.length}</span> clubs
+                                        </p>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                                                disabled={currentPage === 1}
+                                                className="px-3 py-2 rounded-xl border border-white/10 text-xs font-black uppercase tracking-wider text-gray-300 hover:bg-white/5 disabled:opacity-40"
+                                            >
+                                                Previous
+                                            </button>
+                                            <span className="text-xs font-black uppercase tracking-wider text-gray-500">
+                                                Page {currentPage} of {totalPages}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                                                disabled={currentPage === totalPages}
+                                                className="px-3 py-2 rounded-xl border border-white/10 text-xs font-black uppercase tracking-wider text-gray-300 hover:bg-white/5 disabled:opacity-40"
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+                </div>
+            ) : (
                 <div className="space-y-4 min-w-0">
                     {(selected || isCreating) ? (
                         <>
-                            <div className="flex flex-wrap gap-2 justify-end">
-                                {selected?.slug && selected.status === 'published' && (
-                                    <a
-                                        href={`/clubs/${selected.slug}`}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className={ghostBtnClass}
-                                    >
-                                        <ExternalLink size={12} /> Public
-                                    </a>
-                                )}
-                                {selected && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setMembersOpen(true)}
-                                        className={ghostBtnClass}
-                                    >
-                                        <Users size={12} /> Members
-                                    </button>
-                                )}
-                                <button
-                                    type="button"
-                                    disabled={saving || !!uploading}
-                                    onClick={handleSave}
-                                    className="px-3 py-1.5 rounded-lg bg-padel-green text-black text-xs font-black flex items-center gap-1 disabled:opacity-50"
-                                >
-                                    {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-                                    Save
-                                </button>
+                            <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-4 md:p-5 shadow-2xl">
+                                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                    <div className="flex items-start gap-4 min-w-0">
+                                        {selectedSummary?.logo ? (
+                                            <img src={selectedSummary.logo} alt="" className="w-16 h-16 rounded-3xl object-cover border border-white/10 shrink-0" />
+                                        ) : (
+                                            <div className="w-16 h-16 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-500 shrink-0">
+                                                <MapPin size={22} />
+                                            </div>
+                                        )}
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={backToClubList}
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-widest text-padel-green hover:bg-padel-green/10 hover:border-padel-green/30"
+                                                >
+                                                    <ArrowLeft size={12} /> Back to clubs
+                                                </button>
+                                                <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
+                                                    selectedSummary?.status === 'published'
+                                                        ? 'bg-padel-green/10 text-padel-green'
+                                                        : 'bg-amber-500/10 text-amber-300'
+                                                }`}>
+                                                    {selectedSummary?.status || 'draft'}
+                                                </span>
+                                            </div>
+                                            <h3 className="mt-2 text-2xl md:text-3xl font-display font-bold tracking-tighter text-white truncate">
+                                                {selectedSummary?.name}
+                                            </h3>
+                                            <p className="text-sm text-gray-400 mt-1">
+                                                {isCreating ? 'Set up the new club profile and publish when ready.' : selectedSummary?.city}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {selectedSummary?.hasPublicPage && (
+                                            <a
+                                                href={`/clubs/${selected.slug}`}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className={ghostBtnClass}
+                                            >
+                                                <ExternalLink size={12} /> Public
+                                            </a>
+                                        )}
+                                        {selected && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setMembersOpen(true)}
+                                                className={ghostBtnClass}
+                                            >
+                                                <Users size={12} /> Members
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
+                                            disabled={saving || !!uploading}
+                                            onClick={handleSave}
+                                            className="px-3 py-1.5 rounded-lg bg-padel-green text-black text-xs font-black flex items-center gap-1 disabled:opacity-50"
+                                        >
+                                            {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                                            Save
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                                    {[
+                                        { label: 'Members', value: selectedSummary?.members ?? 0, icon: Users, tone: 'text-padel-green' },
+                                        { label: 'Courts', value: selectedSummary?.totalCourts ?? 0, icon: MapPin, tone: 'text-white' },
+                                        { label: 'Linked Orgs', value: selectedSummary?.linkedOrgs ?? 0, icon: Building, tone: 'text-amber-300' },
+                                        { label: 'Verified', value: selectedSummary?.verified ? 'Yes' : 'No', icon: ShieldCheck, tone: selectedSummary?.verified ? 'text-sky-300' : 'text-gray-400' },
+                                        { label: 'SAPA Registered', value: selectedSummary?.sapaRegistered ? 'Yes' : 'No', icon: Eye, tone: selectedSummary?.sapaRegistered ? 'text-padel-green' : 'text-gray-400' },
+                                    ].map((card) => {
+                                        const Icon = card.icon;
+                                        return (
+                                            <div key={card.label} className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                                                <div className="flex items-center gap-2">
+                                                    <Icon size={14} className={card.tone} />
+                                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">{card.label}</p>
+                                                </div>
+                                                <p className={`mt-3 text-2xl font-display font-bold tracking-tighter ${card.tone}`}>{card.value}</p>
+                                                {card.label === 'Courts' && (
+                                                    <p className="text-[11px] text-gray-500 mt-1">
+                                                        Indoor {selectedSummary?.indoor ?? 0} / Outdoor {selectedSummary?.outdoor ?? 0}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
+
+                            <div className="space-y-4">
 
                             <CollapsibleSection
                                 open={sectionOpen.profile}
@@ -1644,6 +1967,7 @@ const ClubManager = ({ permissions }) => {
                                     </select>
                                 </label>
                             </CollapsibleSection>
+                            </div>
                         </>
                     ) : (
                         <div className="text-center py-20 text-gray-500 text-sm border border-white/5 rounded-2xl">
@@ -1651,7 +1975,7 @@ const ClubManager = ({ permissions }) => {
                         </div>
                     )}
                 </div>
-            </div>
+            )}
 
             {membersOpen && selected && (
                 <ClubMembersManager club={selected} onClose={() => setMembersOpen(false)} />
