@@ -4,6 +4,7 @@ import { Helmet } from 'react-helmet-async';
 import { MapPin, BadgeCheck, ShieldCheck, ChevronRight, Search, Landmark } from 'lucide-react';
 import { fetchPublishedClubs } from '../utils/club';
 import AuthModal from '../components/AuthModal';
+import heroCourt from '../assets/home.jpeg';
 
 /**
  * Public directory of published clubs — /clubs
@@ -43,6 +44,17 @@ const Clubs = () => {
             </Helmet>
 
             <div className="relative overflow-hidden border-b border-white/5 bg-gradient-to-br from-black via-[#0B0F19] to-black">
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 z-0 w-screen h-[62vw] max-h-[420px] md:h-[38vw] md:max-h-[520px] lg:max-h-[560px] min-h-[260px] overflow-hidden">
+                    <div className="absolute inset-0">
+                        <img
+                            src={heroCourt}
+                            alt=""
+                            className="w-full h-full object-cover object-[78%_center] md:object-[82%_center] grayscale contrast-[1.35] brightness-[0.95]"
+                        />
+                    </div>
+                    <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-black via-black/75 to-transparent" />
+                    <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-black/25 via-black/45 to-black" />
+                </div>
                 <div className="absolute -top-24 -right-24 w-96 h-96 bg-padel-green/5 blur-[100px] rounded-full pointer-events-none" />
                 <div className="container mx-auto px-4 md:px-6 pt-28 md:pt-36 pb-10 md:pb-14 relative z-10">
                     <span className="text-[10px] md:text-xs font-black uppercase tracking-[0.25em] text-padel-green">4M Padel Ecosystem</span>
