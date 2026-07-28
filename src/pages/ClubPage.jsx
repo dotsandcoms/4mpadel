@@ -263,7 +263,7 @@ const ClubPage = () => {
                     {[
                         { label: 'Courts', value: club.stats?.courts ?? totalCourts },
                         { label: 'SAPA Events', value: club.stats?.events ?? '—' },
-                        { label: 'Players', value: club.stats?.members ?? memberCount },
+                         { label: 'Players', value: club.stats?.members ?? memberCount },
                     ].map((s) => (
                         <div key={s.label} className="bg-white/[0.03] border border-white/5 rounded-xl sm:rounded-2xl px-1 py-2.5 sm:p-4 text-center min-w-0">
                             <div className="text-lg sm:text-2xl font-black leading-none" style={{ color: accent }}>{s.value}</div>

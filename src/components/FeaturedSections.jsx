@@ -1151,7 +1151,7 @@ const FeaturedEventSlide = ({ event, cta, onCta }) => {
 
     return (
         <div
-            className="relative w-full rounded-2xl overflow-hidden border snap-center shrink-0 min-h-[190px] md:min-h-[220px] lg:min-h-[240px]"
+            className="relative w-full rounded-2xl overflow-hidden border snap-center shrink-0 min-h-[170px] md:min-h-[195px] lg:min-h-[210px]"
             style={{ borderColor: `${accent}66` }}
         >
             <img
@@ -1162,9 +1162,9 @@ const FeaturedEventSlide = ({ event, cta, onCta }) => {
             <div className="absolute inset-0 bg-gradient-to-r from-black via-black/85 to-black/40 md:from-black md:via-black/75 md:to-black/15" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/15" />
 
-            <div className="relative z-10 flex flex-col justify-between min-h-[190px] md:min-h-[220px] lg:min-h-[240px] p-3.5 sm:p-4 md:p-5 lg:p-6 md:pr-28 lg:pr-32">
-                <div className="md:max-w-[55%] lg:max-w-[48%]">
-                    <div className="flex items-start justify-between gap-2 mb-1.5 md:mb-2 md:justify-start">
+            <div className="relative z-10 flex flex-col justify-start gap-2 min-h-[170px] md:min-h-[195px] lg:min-h-[210px] px-3.5 pt-3.5 pb-2 sm:px-4 sm:pt-4 sm:pb-2.5 md:px-5 md:pt-5 md:pb-3 lg:px-6 lg:pt-6 lg:pb-3 md:pr-28 lg:pr-32">
+                <div className="md:max-w-[55%] lg:max-w-[48%] flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-2 md:justify-start">
                         {(event.sapa_status || event.tournament_tag) && (
                             <span
                                 className="inline-flex w-fit px-2 py-0.5 rounded-full border text-[8px] sm:text-[9px] font-black uppercase tracking-widest bg-black/40"
@@ -1188,7 +1188,7 @@ const FeaturedEventSlide = ({ event, cta, onCta }) => {
                     </div>
 
                     {badgeText && (
-                        <p className="hidden md:block text-[10px] font-black uppercase tracking-wide mb-1.5">
+                        <p className="hidden md:block text-[10px] font-black uppercase tracking-wide">
                             {badgeText.split(/\s+/).map((word, i) => {
                                 const isTier = /^(gold|silver|bronze|major|super)$/i.test(word);
                                 return (
@@ -1205,12 +1205,12 @@ const FeaturedEventSlide = ({ event, cta, onCta }) => {
                         onClick={() => navigate(linkPath)}
                         className="text-left"
                     >
-                        <h3 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-white uppercase tracking-tight leading-snug line-clamp-2 mb-1.5 md:mb-2">
+                        <h3 className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-white uppercase tracking-tight leading-snug line-clamp-2">
                             {event.event_name}
                         </h3>
                     </button>
 
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2.5 md:mb-3">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                         {dateLabel && (
                             <div className="flex items-center gap-1 text-[11px] sm:text-xs font-bold uppercase" style={{ color: accent }}>
                                 <Calendar className="w-3 h-3 shrink-0" /> {dateLabel}
@@ -1224,7 +1224,7 @@ const FeaturedEventSlide = ({ event, cta, onCta }) => {
                     </div>
                 </div>
 
-                <div className="flex flex-wrap items-end justify-between gap-2.5 mt-1 md:mt-0 md:max-w-[55%] lg:max-w-[48%]">
+                <div className="flex flex-wrap items-end justify-between gap-2 md:max-w-[55%] lg:max-w-[48%] pt-2">
                     <FeaturedRegCountdown
                         opensAt={event.registration_opens_at}
                         closesAt={event.registration_closes_at}
