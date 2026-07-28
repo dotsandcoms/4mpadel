@@ -12,7 +12,7 @@ import {
 import {
     MapPin, BadgeCheck, ShieldCheck, Globe, Mail, Phone, MessageCircle,
     ChevronRight, Building, Calendar, Image as ImageIcon, Info, LayoutGrid,
-    Instagram, Facebook, ExternalLink, Clock, Coffee, Landmark,
+    Instagram, Facebook, ExternalLink, Clock, Coffee, Landmark, ChevronDown,
 } from 'lucide-react';
 
 const CLUB_NAV = [
@@ -74,6 +74,7 @@ const ClubPage = () => {
     const [eventsLoading, setEventsLoading] = useState(false);
     const [loading, setLoading] = useState(true);
     const [galleryFilter, setGalleryFilter] = useState('all');
+    const [aboutExpanded, setAboutExpanded] = useState(false);
     const [activeNavId, setActiveNavId] = useState('overview');
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
@@ -334,7 +335,23 @@ const ClubPage = () => {
                     </div>
 
                     {club.about && (
-                        <p className="text-gray-400 text-sm mt-3 max-w-2xl leading-relaxed line-clamp-3">{club.about}</p>
+                        <div className="mt-3 max-w-2xl">
+                            <p className={`text-gray-400 text-sm leading-relaxed ${aboutExpanded ? '' : 'line-clamp-3'}`}>
+                                {club.about}
+                            </p>
+                            {club.about.length > 140 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setAboutExpanded((open) => !open)}
+                                    className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider border-0 bg-transparent cursor-pointer p-0"
+                                    style={{ color: accent }}
+                                    aria-expanded={aboutExpanded}
+                                >
+                                    {aboutExpanded ? 'Show less' : 'Read more'}
+                                    <ChevronDown size={12} className={`transition-transform ${aboutExpanded ? 'rotate-180' : ''}`} />
+                                </button>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>
@@ -344,8 +361,8 @@ const ClubPage = () => {
                 <div className="grid grid-cols-3 gap-1.5 sm:gap-3">
                     {[
                         { label: 'Courts', value: club.stats?.courts ?? totalCourts },
-                        { label: 'SAPA Events', value: club.stats?.events ?? '—' },
-                         { label: 'Players', value: club.stats?.members ?? memberCount },
+                        { label: 'SAPA Events', value: eventsLoading ? '…' : clubEvents.length },
+                        { label: 'Players', value: club.stats?.members ?? memberCount },
                     ].map((s) => (
                         <div key={s.label} className="bg-white/[0.03] border border-white/5 rounded-xl sm:rounded-2xl px-1 py-2.5 sm:p-4 text-center min-w-0">
                             <div className="text-lg sm:text-2xl font-black leading-none" style={{ color: accent }}>{s.value}</div>
