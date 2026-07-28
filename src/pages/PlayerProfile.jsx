@@ -106,7 +106,6 @@ const PlayerProfile = () => {
     const [isImpersonating, setIsImpersonating] = useState(false);
     const [loadingReset, setLoadingReset] = useState(false);
     const [coachApplication, setCoachApplication] = useState(null);
-    const [showCoachModal, setShowCoachModal] = useState(false);
     const navigate = useNavigate();
     const [transactions, setTransactions] = useState([]);
     const [transactionsLoading, setTransactionsLoading] = useState(false);
@@ -1451,6 +1450,7 @@ const PlayerProfile = () => {
                                     { id: 'matches', label: 'My Matches' },
                                     { id: 'rankings', label: 'My Rankings' },
                                     { id: 'payments', label: 'Payments' },
+                                    ...(coachApplication ? [{ id: 'coach', label: 'Coach Profile' }] : []),
                                     { id: 'profile', label: 'My Profile' },
                                 ].map((tab) => {
                                     const isSelected = activeTab === tab.id;
@@ -1469,6 +1469,9 @@ const PlayerProfile = () => {
                                     } else if (tab.id === 'payments') {
                                         activeStyles = 'bg-blue-500 border border-blue-500 text-white shadow-lg shadow-blue-500/20';
                                         inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-blue-500/10';
+                                    } else if (tab.id === 'coach') {
+                                        activeStyles = 'bg-emerald-500 border border-emerald-500 text-black shadow-lg shadow-emerald-500/20';
+                                        inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-emerald-500/10';
                                     } else {
                                         activeStyles = 'bg-padel-green border border-padel-green text-black shadow-lg shadow-padel-green/20';
                                         inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-padel-green/10';
@@ -1498,6 +1501,7 @@ const PlayerProfile = () => {
                             activeTab === 'matches' ? 'border-orange-500/35 shadow-[0_0_20px_rgba(249,115,22,0.12)]' :
                             activeTab === 'rankings' ? 'border-yellow-500/35 shadow-[0_0_20px_rgba(234,179,8,0.12)]' :
                             activeTab === 'payments' ? 'border-blue-500/35 shadow-[0_0_20px_rgba(59,130,246,0.12)]' :
+                            activeTab === 'coach' ? 'border-emerald-500/35 shadow-[0_0_20px_rgba(16,185,129,0.12)]' :
                             'border-padel-green/35 shadow-[0_0_20px_rgba(204,255,0,0.12)]'
                         }`}>
                             {/* Events Tab Content */}
@@ -1991,6 +1995,19 @@ const PlayerProfile = () => {
                                             No transactions found
                                         </div>
                                     )}
+                                </div>
+                            )}
+
+                            {/* Coach Profile Tab Content (mobile) */}
+                            {activeTab === 'coach' && coachApplication && (
+                                <div className="space-y-3">
+                                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-300">Coach Profile</h4>
+                                    <CoachProfileModal
+                                        app={coachApplication}
+                                        embedded
+                                        canEdit
+                                        onUpdate={(updatedApp) => setCoachApplication(updatedApp)}
+                                    />
                                 </div>
                             )}
 
@@ -3145,8 +3162,8 @@ const PlayerProfile = () => {
                                 </button>
                                 {coachApplication && (
                                     <button
-                                        onClick={() => setShowCoachModal(true)}
-                                        className="whitespace-nowrap px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] sm:text-[11px] transition-all flex items-center gap-3 bg-padel-green text-black shadow-xl shadow-padel-green/20 hover:bg-white hover:scale-105"
+                                        onClick={() => setActiveTab('coach')}
+                                        className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'coach' ? 'bg-emerald-500 border border-emerald-500 text-black shadow-xl shadow-emerald-500/20' : 'bg-[#0a0a0a]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-emerald-500/15 hover:text-emerald-300 hover:border-emerald-500/40'}`}
                                     >
                                         <Briefcase size={16} /> Coach Profile
                                     </button>
@@ -3160,6 +3177,23 @@ const PlayerProfile = () => {
                             </motion.div>
 
                             <AnimatePresence mode="wait">
+                                {activeTab === 'coach' && coachApplication && (
+                                    <motion.div
+                                        key="coach"
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="bg-neutral-950/35 backdrop-blur-2xl border-t border-emerald-500/25 border-x border-emerald-500/15 border-b border-emerald-500/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85),0_0_40px_rgba(16,185,129,0.08)] rounded-[2.5rem] p-6 sm:p-8 lg:p-10 relative overflow-hidden"
+                                    >
+                                        <CoachProfileModal
+                                            app={coachApplication}
+                                            embedded
+                                            canEdit
+                                            onUpdate={(updatedApp) => setCoachApplication(updatedApp)}
+                                        />
+                                    </motion.div>
+                                )}
                                 {activeTab === 'personal' && (
                                     <motion.div
                                         key="personal"
@@ -4537,15 +4571,6 @@ const PlayerProfile = () => {
                     userName={player?.name}
                     onPaymentSuccess={refetchPlayer}
                 />
-
-                {showCoachModal && coachApplication && (
-                    <CoachProfileModal
-                        app={coachApplication}
-                        isAdmin={false}
-                        onClose={() => setShowCoachModal(false)}
-                        onUpdate={(updatedApp) => setCoachApplication(updatedApp)}
-                    />
-                )}
 
                 {/* Edit Profile Modal */}
                 <AnimatePresence>
