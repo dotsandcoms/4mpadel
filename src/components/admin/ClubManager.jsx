@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import {
     MapPin, Plus, RefreshCw, Users, Building, Save, Loader2, ExternalLink,
     Upload, Trash2, Image as ImageIcon, ChevronDown, Instagram, Facebook,
-    Search, Check, X, Clock, Palette, Phone, ArrowLeft, Eye, ShieldCheck,
+    Search, Check, X, Clock, Palette, Phone, ArrowLeft, Eye, ShieldCheck, UserPlus,
 } from 'lucide-react';
 import ClubMembersManager from './ClubMembersManager';
 import { slugifyClub } from '../../utils/club';
@@ -170,7 +170,7 @@ const ClubManager = ({ permissions }) => {
     const [managerView, setManagerView] = useState('list');
     const [form, setForm] = useState(emptyForm());
     const [slugManual, setSlugManual] = useState(false);
-    const [membersOpen, setMembersOpen] = useState(false);
+    const [membersClub, setMembersClub] = useState(null);
     const [assignOrgId, setAssignOrgId] = useState('');
     const [listSearch, setListSearch] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
@@ -485,7 +485,7 @@ const ClubManager = ({ permissions }) => {
 
     const backToClubList = useCallback(() => {
         setManagerView('list');
-        setMembersOpen(false);
+        setMembersClub(null);
         if (!isCreating) return;
         setIsCreating(false);
         setSelectedId(null);
@@ -494,6 +494,49 @@ const ClubManager = ({ permissions }) => {
         setLinkedOrgIds([]);
         setSectionOpen(createClosedSections());
     }, [isCreating]);
+
+    const quickEditCity = async (club) => {
+        const next = window.prompt(`City for ${club.short_name || club.name}:`, club.city || '');
+        if (next == null) return;
+        const city = next.trim();
+        try {
+            const { error } = await supabase
+                .from('clubs')
+                .update({ city: city || null })
+                .eq('id', club.id);
+            if (error) throw error;
+            setClubs((prev) => prev.map((c) => (c.id === club.id ? { ...c, city: city || null } : c)));
+            if (selectedId === club.id) {
+                setForm((prev) => ({ ...prev, city: city || '' }));
+            }
+            toast.success(city ? `City set to ${city}` : 'City cleared');
+        } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Failed to update city');
+        }
+    };
+
+    const handleDeleteClub = async (club) => {
+        const label = club.short_name || club.name;
+        if (!window.confirm(`Delete club "${label}"? This cannot be undone.`)) return;
+        try {
+            const { error } = await supabase.from('clubs').delete().eq('id', club.id);
+            if (error) throw error;
+            toast.success(`Deleted ${label}`);
+            setMembersClub((current) => (current?.id === club.id ? null : current));
+            if (selectedId === club.id) {
+                setSelectedId(null);
+                setIsCreating(false);
+                setForm(emptyForm());
+                setManagerView('list');
+                setSectionOpen(createClosedSections());
+            }
+            loadClubs();
+        } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Failed to delete club');
+        }
+    };
 
     const toggleSection = (key) => {
         setSectionOpen((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -1075,52 +1118,76 @@ const ClubManager = ({ permissions }) => {
                             </div>
                         ) : (
                             <>
-                                <div className="hidden md:grid md:grid-cols-[minmax(0,2.2fr)_1.1fr_0.9fr_1.1fr_1fr_1fr] gap-3 px-4 py-3 border-b border-white/5 text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">
+                                <div className="hidden md:grid md:grid-cols-[minmax(0,2fr)_0.9fr_0.8fr_0.9fr_0.9fr_0.9fr_1.3fr] gap-3 px-4 py-3 border-b border-white/5 text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">
                                     <div>Club</div>
                                     <div>Status</div>
                                     <div>Courts</div>
                                     <div>Members</div>
                                     <div>Linked Orgs</div>
                                     <div>Health</div>
+                                    <div>Actions</div>
                                 </div>
                                 <div className="divide-y divide-white/5">
                                     {paginatedClubRows.map((club) => {
-                                        const statusTone = club.status === 'published'
-                                            ? 'text-padel-green'
+                                        const statusBadgeClass = club.status === 'published'
+                                            ? 'bg-padel-green/10 text-padel-green border-padel-green/20'
                                             : club.status === 'draft'
-                                                ? 'text-amber-400'
-                                                : 'text-gray-400';
+                                                ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                : club.status === 'pending'
+                                                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                    : 'bg-white/5 text-gray-400 border-white/10';
                                         return (
-                                            <button
+                                            <div
                                                 key={club.id}
-                                                type="button"
-                                                onClick={() => openClubDetail(club.id)}
-                                                className="group w-full cursor-pointer text-left px-4 py-4 hover:bg-white/[0.04] transition-all duration-200 hover:shadow-[inset_0_0_0_1px_rgba(204,255,0,0.18)]"
+                                                className="group w-full px-4 py-4 hover:bg-white/[0.04] transition-all duration-200 hover:shadow-[inset_0_0_0_1px_rgba(204,255,0,0.18)]"
                                             >
-                                                <div className="md:hidden flex items-start gap-3">
-                                                    {club.logo_url ? (
-                                                        <img src={club.logo_url} alt="" className="w-12 h-12 rounded-2xl object-cover border border-white/10 shrink-0 transition-transform duration-200 group-hover:scale-[1.03]" />
-                                                    ) : (
-                                                        <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-500 shrink-0 transition-colors duration-200 group-hover:border-padel-green/20 group-hover:text-padel-green">
-                                                            <MapPin size={16} />
+                                                <div className="md:hidden space-y-3">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openClubDetail(club.id)}
+                                                        className="w-full flex items-start gap-3 text-left bg-transparent border-0 p-0 cursor-pointer"
+                                                    >
+                                                        {club.logo_url ? (
+                                                            <img src={club.logo_url} alt="" className="w-12 h-12 rounded-2xl object-cover border border-white/10 shrink-0 transition-transform duration-200 group-hover:scale-[1.03]" />
+                                                        ) : (
+                                                            <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-500 shrink-0 transition-colors duration-200 group-hover:border-padel-green/20 group-hover:text-padel-green">
+                                                                <MapPin size={16} />
+                                                            </div>
+                                                        )}
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <p className="text-sm font-bold text-white truncate transition-colors duration-200 group-hover:text-padel-green">{club.short_name || club.name}</p>
+                                                                <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${statusBadgeClass}`}>
+                                                                    {club.status}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs text-gray-500 mt-1">{club.city || 'No city set'}</p>
+                                                            <div className="flex flex-wrap gap-2 mt-2 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                                                                <span>{club.totalCourts} courts</span>
+                                                                <span>{club.members} members</span>
+                                                                <span>{club.linkedOrgs} orgs</span>
+                                                            </div>
                                                         </div>
-                                                    )}
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="flex items-center gap-2">
-                                                            <p className="text-sm font-bold text-white truncate transition-colors duration-200 group-hover:text-padel-green">{club.short_name || club.name}</p>
-                                                            <span className={`text-[9px] font-black uppercase tracking-widest ${statusTone}`}>{club.status}</span>
-                                                        </div>
-                                                        <p className="text-xs text-gray-500 mt-1">{club.city || 'No city set'}</p>
-                                                        <div className="flex flex-wrap gap-2 mt-2 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-                                                            <span>{club.totalCourts} courts</span>
-                                                            <span>{club.members} members</span>
-                                                            <span>{club.linkedOrgs} orgs</span>
-                                                        </div>
+                                                    </button>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        <button type="button" onClick={() => quickEditCity(club)} className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10">
+                                                            City
+                                                        </button>
+                                                        <button type="button" onClick={() => setMembersClub(club)} className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 inline-flex items-center gap-1">
+                                                            <UserPlus size={10} /> Owner
+                                                        </button>
+                                                        <button type="button" onClick={() => handleDeleteClub(club)} className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 inline-flex items-center gap-1">
+                                                            <Trash2 size={10} /> Delete
+                                                        </button>
                                                     </div>
                                                 </div>
 
-                                                <div className="hidden md:grid md:grid-cols-[minmax(0,2.2fr)_1.1fr_0.9fr_1.1fr_1fr_1fr] gap-3 items-center">
-                                                    <div className="flex items-center gap-3 min-w-0">
+                                                <div className="hidden md:grid md:grid-cols-[minmax(0,2fr)_0.9fr_0.8fr_0.9fr_0.9fr_0.9fr_1.3fr] gap-3 items-center">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openClubDetail(club.id)}
+                                                        className="flex items-center gap-3 min-w-0 text-left bg-transparent border-0 p-0 cursor-pointer"
+                                                    >
                                                         {club.logo_url ? (
                                                             <img src={club.logo_url} alt="" className="w-12 h-12 rounded-2xl object-cover border border-white/10 shrink-0 transition-transform duration-200 group-hover:scale-[1.03]" />
                                                         ) : (
@@ -1132,22 +1199,24 @@ const ClubManager = ({ permissions }) => {
                                                             <p className="text-sm font-bold text-white truncate transition-colors duration-200 group-hover:text-padel-green">{club.short_name || club.name}</p>
                                                             <p className="text-xs text-gray-500 truncate">{club.city || 'No city set'}</p>
                                                         </div>
+                                                    </button>
+                                                    <div>
+                                                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${statusBadgeClass}`}>
+                                                            {club.status}
+                                                        </span>
+                                                        <p className="text-[10px] text-gray-500 mt-1.5 uppercase tracking-wider">{club.verified ? 'Verified' : 'Unverified'}</p>
                                                     </div>
                                                     <div>
-                                                        <p className={`text-sm font-black uppercase tracking-wider ${statusTone}`}>{club.status}</p>
-                                                        <p className="text-[11px] text-gray-500 mt-1">{club.verified ? 'Verified' : 'Unverified'}</p>
+                                                        <p className="text-sm font-bold text-white">{club.totalCourts}</p>
+                                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">In {Number(club.courts?.indoor?.count) || 0} / Out {Number(club.courts?.outdoor?.count) || 0}</p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-lg font-display font-bold tracking-tight text-white">{club.totalCourts}</p>
-                                                        <p className="text-[11px] text-gray-500 uppercase tracking-wider">Indoor {Number(club.courts?.indoor?.count) || 0} / Outdoor {Number(club.courts?.outdoor?.count) || 0}</p>
+                                                        <p className="text-sm font-bold text-white">{club.members}</p>
+                                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">Players linked</p>
                                                     </div>
                                                     <div>
-                                                        <p className="text-lg font-display font-bold tracking-tight text-white">{club.members}</p>
-                                                        <p className="text-[11px] text-gray-500 uppercase tracking-wider">Players linked</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-lg font-display font-bold tracking-tight text-white">{club.linkedOrgs}</p>
-                                                        <p className="text-[11px] text-gray-500 uppercase tracking-wider">Approved orgs</p>
+                                                        <p className="text-sm font-bold text-white">{club.linkedOrgs}</p>
+                                                        <p className="text-[10px] text-gray-500 uppercase tracking-wider">Approved orgs</p>
                                                     </div>
                                                     <div className="flex flex-wrap gap-1.5 justify-start">
                                                         <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${club.sapa_registered ? 'bg-padel-green/10 text-padel-green border-padel-green/20' : 'bg-white/5 text-gray-500 border-white/10'}`}>
@@ -1157,8 +1226,34 @@ const ClubManager = ({ permissions }) => {
                                                             {club.verified ? 'Verified' : 'Review'}
                                                         </span>
                                                     </div>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => quickEditCity(club)}
+                                                            className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white"
+                                                            title="Set city"
+                                                        >
+                                                            City
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setMembersClub(club)}
+                                                            className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white inline-flex items-center gap-1"
+                                                            title="Add owner or admin"
+                                                        >
+                                                            <UserPlus size={10} /> Owner
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDeleteClub(club)}
+                                                            className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 inline-flex items-center gap-1"
+                                                            title="Delete club"
+                                                        >
+                                                            <Trash2 size={10} />
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                            </button>
+                                            </div>
                                         );
                                     })}
                                 </div>
@@ -1219,10 +1314,12 @@ const ClubManager = ({ permissions }) => {
                                                 >
                                                     <ArrowLeft size={12} /> Back to clubs
                                                 </button>
-                                                <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${
                                                     selectedSummary?.status === 'published'
-                                                        ? 'bg-padel-green/10 text-padel-green'
-                                                        : 'bg-amber-500/10 text-amber-300'
+                                                        ? 'bg-padel-green/10 text-padel-green border-padel-green/20'
+                                                        : selectedSummary?.status === 'draft'
+                                                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                            : 'bg-white/5 text-gray-400 border-white/10'
                                                 }`}>
                                                     {selectedSummary?.status || 'draft'}
                                                 </span>
@@ -1231,7 +1328,7 @@ const ClubManager = ({ permissions }) => {
                                                 {selectedSummary?.name}
                                             </h3>
                                             <p className="text-sm text-gray-400 mt-1">
-                                                {isCreating ? 'Set up the new club profile and publish when ready.' : selectedSummary?.city}
+                                                {isCreating ? 'Set up the new club profile and publish when ready.' : (selectedSummary?.city || 'No city set')}
                                             </p>
                                         </div>
                                     </div>
@@ -1247,13 +1344,29 @@ const ClubManager = ({ permissions }) => {
                                             </a>
                                         )}
                                         {selected && (
-                                            <button
-                                                type="button"
-                                                onClick={() => setMembersOpen(true)}
-                                                className={ghostBtnClass}
-                                            >
-                                                <Users size={12} /> Members
-                                            </button>
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => quickEditCity(selected)}
+                                                    className={ghostBtnClass}
+                                                >
+                                                    <MapPin size={12} /> City
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setMembersClub(selected)}
+                                                    className={ghostBtnClass}
+                                                >
+                                                    <UserPlus size={12} /> Owner / Admin
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDeleteClub(selected)}
+                                                    className="px-3 py-1.5 rounded-lg border border-red-500/20 bg-red-500/10 text-xs font-bold text-red-400 hover:bg-red-500/20 flex items-center gap-1"
+                                                >
+                                                    <Trash2 size={12} /> Delete
+                                                </button>
+                                            </>
                                         )}
                                         <button
                                             type="button"
@@ -1965,8 +2078,8 @@ const ClubManager = ({ permissions }) => {
                 </div>
             )}
 
-            {membersOpen && selected && (
-                <ClubMembersManager club={selected} onClose={() => setMembersOpen(false)} />
+            {membersClub && (
+                <ClubMembersManager club={membersClub} onClose={() => setMembersClub(null)} />
             )}
         </div>
     );
