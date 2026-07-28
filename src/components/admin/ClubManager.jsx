@@ -1095,19 +1095,19 @@ const ClubManager = ({ permissions }) => {
                                                 key={club.id}
                                                 type="button"
                                                 onClick={() => openClubDetail(club.id)}
-                                                className="w-full text-left px-4 py-4 hover:bg-white/[0.03] transition-colors"
+                                                className="group w-full cursor-pointer text-left px-4 py-4 hover:bg-white/[0.04] transition-all duration-200 hover:shadow-[inset_0_0_0_1px_rgba(204,255,0,0.18)]"
                                             >
                                                 <div className="md:hidden flex items-start gap-3">
                                                     {club.logo_url ? (
-                                                        <img src={club.logo_url} alt="" className="w-12 h-12 rounded-2xl object-cover border border-white/10 shrink-0" />
+                                                        <img src={club.logo_url} alt="" className="w-12 h-12 rounded-2xl object-cover border border-white/10 shrink-0 transition-transform duration-200 group-hover:scale-[1.03]" />
                                                     ) : (
-                                                        <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-500 shrink-0">
+                                                        <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-500 shrink-0 transition-colors duration-200 group-hover:border-padel-green/20 group-hover:text-padel-green">
                                                             <MapPin size={16} />
                                                         </div>
                                                     )}
                                                     <div className="min-w-0 flex-1">
                                                         <div className="flex items-center gap-2">
-                                                            <p className="text-sm font-bold text-white truncate">{club.short_name || club.name}</p>
+                                                            <p className="text-sm font-bold text-white truncate transition-colors duration-200 group-hover:text-padel-green">{club.short_name || club.name}</p>
                                                             <span className={`text-[9px] font-black uppercase tracking-widest ${statusTone}`}>{club.status}</span>
                                                         </div>
                                                         <p className="text-xs text-gray-500 mt-1">{club.city || 'No city set'}</p>
@@ -1122,14 +1122,14 @@ const ClubManager = ({ permissions }) => {
                                                 <div className="hidden md:grid md:grid-cols-[minmax(0,2.2fr)_1.1fr_0.9fr_1.1fr_1fr_1fr] gap-3 items-center">
                                                     <div className="flex items-center gap-3 min-w-0">
                                                         {club.logo_url ? (
-                                                            <img src={club.logo_url} alt="" className="w-12 h-12 rounded-2xl object-cover border border-white/10 shrink-0" />
+                                                            <img src={club.logo_url} alt="" className="w-12 h-12 rounded-2xl object-cover border border-white/10 shrink-0 transition-transform duration-200 group-hover:scale-[1.03]" />
                                                         ) : (
-                                                            <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-500 shrink-0">
+                                                            <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-500 shrink-0 transition-colors duration-200 group-hover:border-padel-green/20 group-hover:text-padel-green">
                                                                 <MapPin size={16} />
                                                             </div>
                                                         )}
                                                         <div className="min-w-0">
-                                                            <p className="text-sm font-bold text-white truncate">{club.short_name || club.name}</p>
+                                                            <p className="text-sm font-bold text-white truncate transition-colors duration-200 group-hover:text-padel-green">{club.short_name || club.name}</p>
                                                             <p className="text-xs text-gray-500 truncate">{club.city || 'No city set'}</p>
                                                         </div>
                                                     </div>
