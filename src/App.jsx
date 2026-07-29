@@ -34,6 +34,7 @@ import Gallery from './pages/Gallery';
 import AlbumDetails from './pages/AlbumDetails';
 import Contact from './pages/Contact';
 import ResetPassword from './pages/ResetPassword';
+import ClaimClubInvite from './pages/ClaimClubInvite';
 import SiteFooter from './components/SiteFooter';
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
@@ -155,6 +156,7 @@ function AppContent() {
           <Route path="/draws/:id" element={<TournamentDraw />} />
           <Route path="/profile" element={<PlayerProfile />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/claim-club" element={<ClaimClubInvite />} />
           <Route path="/academy/coaches" element={<ApprovedCoaches />} />
           <Route path="/academy/videos" element={<CoachingVideos />} />
           <Route path="/academy/register" element={<CoachRegistration />} />

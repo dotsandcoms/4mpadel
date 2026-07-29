@@ -549,6 +549,22 @@ async function generateEmailBody(
       actionLabel = 'Browse Clubs';
       break;
 
+    case 'club_claim_invite':
+      subject = `You're invited to claim: ${vars.clubName || 'a club'} 🎾`;
+      contentHtml = `
+        <h2 style="font-size: 24px; font-weight: 800; color: #9AE900; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">You're Invited</h2>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
+          <strong style="color: #FFFFFF;">${vars.inviterName || 'A 4M Padel admin'}</strong> has invited you to claim
+          <strong style="color: #FFFFFF;"> ${vars.clubName || 'a club'}</strong>.
+        </p>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #E2E8F0; margin-bottom: 0;">
+          Accept this invite to become the club owner and unlock access to the <strong style="color: #FFFFFF;">Club Dashboard</strong>.
+        </p>
+      `;
+      actionUrl = vars.accept_url || 'https://4mpadel.co.za/claim-club';
+      actionLabel = 'Accept Claim Invite';
+      break;
+
     case 'admin_club_claim_applied':
       subject = `⚠️ Action Required: Club claim pending — ${vars.clubName || 'Club'}`;
       contentHtml = `
@@ -1119,6 +1135,7 @@ const ADMIN_ONLY_TEMPLATES = new Set([
   'club_approved',
   'club_rejected',
   'club_member_added',
+  'club_claim_invite',
   'club_claim_approved',
   'club_claim_rejected',
   'event_sanctioned',

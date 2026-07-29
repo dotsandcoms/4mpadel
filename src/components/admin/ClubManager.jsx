@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import {
     MapPin, Plus, RefreshCw, Users, Building, Save, Loader2, ExternalLink,
     Upload, Trash2, Image as ImageIcon, ChevronDown, Instagram, Facebook,
-    Search, Check, X, Clock, Palette, Phone, ArrowLeft, ShieldCheck, UserPlus, User,
+    Search, Check, X, Clock, Palette, Phone, ArrowLeft, ShieldCheck, UserPlus, User, Mail, Send,
 } from 'lucide-react';
 import ClubMembersManager from './ClubMembersManager';
 import {
@@ -183,9 +183,18 @@ const roleLabel = (role) => {
 /**
  * @param {Array<{ id: string, name: string, role: string, image_url?: string|null }>} admins
  */
-const OwnersAdminsCell = ({ admins }) => {
+const OwnersAdminsCell = ({ admins, onInvite }) => {
     if (!admins?.length) {
-        return <p className="text-xs text-gray-500">No owners</p>;
+        return (
+            <div className="space-y-1">
+                <p className="text-xs text-gray-500">No owners</p>
+                {onInvite && (
+                    <button type="button" onClick={onInvite} className="inline-flex items-center gap-1 text-[10px] font-bold text-padel-green hover:underline">
+                        <Mail size={10} /> Invite to claim
+                    </button>
+                )}
+            </div>
+        );
     }
     const visible = admins.slice(0, 2);
     const extra = admins.length - visible.length;
@@ -249,6 +258,13 @@ const ClubManager = ({ permissions }) => {
     const [assignOrgId, setAssignOrgId] = useState('');
     const [listSearch, setListSearch] = useState('');
     const [claimFilter, setClaimFilter] = useState('all');
+    const [inviteClub, setInviteClub] = useState(null);
+    const [inviteEmail, setInviteEmail] = useState('');
+    const [inviteSearchQuery, setInviteSearchQuery] = useState('');
+    const [invitePlayerResults, setInvitePlayerResults] = useState([]);
+    const [inviteIsSearching, setInviteIsSearching] = useState(false);
+    const [inviteSelectedPlayer, setInviteSelectedPlayer] = useState(null);
+    const [inviteSending, setInviteSending] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [pendingClaims, setPendingClaims] = useState([]);
     const [memberCounts, setMemberCounts] = useState({});
@@ -257,6 +273,44 @@ const ClubManager = ({ permissions }) => {
     const addressInputRef = useRef(null);
     const autocompleteRef = useRef(null);
     const [sectionOpen, setSectionOpen] = useState(createClosedSections);
+
+    useEffect(() => {
+        if (!inviteClub) return;
+
+        const q = inviteSearchQuery.trim();
+        if (q.length < 2) {
+            setInvitePlayerResults([]);
+            return;
+        }
+
+        let cancelled = false;
+        const t = setTimeout(async () => {
+            setInviteIsSearching(true);
+            try {
+                const { data, error } = await supabase
+                    .from('players')
+                    .select('id, name, email, image_url')
+                    .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
+                    .not('email', 'is', null)
+                    .limit(8);
+                if (error) throw error;
+                if (cancelled) return;
+                setInvitePlayerResults(data || []);
+            } catch (err) {
+                console.error(err);
+                if (cancelled) return;
+                setInvitePlayerResults([]);
+            } finally {
+                if (!cancelled) setInviteIsSearching(false);
+            }
+        }, 350);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(t);
+            setInviteIsSearching(false);
+        };
+    }, [inviteSearchQuery, inviteClub?.id]);
 
     const selected = useMemo(
         () => clubs.find((c) => c.id === selectedId) || null,
@@ -591,6 +645,67 @@ const ClubManager = ({ permissions }) => {
         }
     };
 
+    const handleSendClaimInvite = async () => {
+        if (!inviteClub) return;
+        const email = inviteEmail.trim().toLowerCase();
+        if (!email) return;
+        setInviteSending(true);
+        try {
+            const { data: session } = await supabase.auth.getSession();
+            const userId = session?.session?.user?.id || null;
+
+            let existingPlayer = inviteSelectedPlayer || null;
+            if (!existingPlayer) {
+                const { data: player } = await supabase
+                    .from('players')
+                    .select('id')
+                    .ilike('email', email)
+                    .maybeSingle();
+                existingPlayer = player || null;
+            }
+
+            const { data: invite, error } = await supabase
+                .from('club_claim_invites')
+                .insert({
+                    club_id: inviteClub.id,
+                    email,
+                    invited_by: userId,
+                })
+                .select('token')
+                .single();
+            if (error) throw error;
+
+            const acceptUrl = `${window.location.origin}/claim-club?token=${invite.token}`;
+            await sendEmail(email, 'club_claim_invite', {
+                clubName: inviteClub.name,
+                inviterName: session?.session?.user?.user_metadata?.full_name || '4M Padel Admin',
+                accept_url: acceptUrl,
+            });
+
+            // If they don't have a player profile yet, invite them to create it first.
+            if (!existingPlayer?.id) {
+                const redirectTo = `${window.location.origin}/profile?new_invite=true&claim_token=${invite.token}`;
+                const { error: otpError } = await supabase.auth.signInWithOtp({
+                    email,
+                    options: { emailRedirectTo: redirectTo },
+                });
+                if (otpError) throw otpError;
+            }
+
+            toast.success(`Invite sent to ${email}${existingPlayer?.id ? '' : ' (profile invite also sent)'}`);
+            setInviteClub(null);
+            setInviteEmail('');
+            setInviteSearchQuery('');
+            setInviteSelectedPlayer(null);
+            setInvitePlayerResults([]);
+        } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Failed to send invite');
+        } finally {
+            setInviteSending(false);
+        }
+    };
+
     const openClubDetail = useCallback((clubId) => {
         setSelectedId(clubId);
         setIsCreating(false);
@@ -665,15 +780,32 @@ const ClubManager = ({ permissions }) => {
             setClubAdminsById({});
             return;
         }
+
+        const fetchAll = async (query) => {
+            const PAGE = 1000;
+            let all = [];
+            let from = 0;
+            while (true) {
+                const { data, error } = await query.range(from, from + PAGE - 1);
+                if (error) throw error;
+                all = all.concat(data || []);
+                if (!data || data.length < PAGE) break;
+                from += PAGE;
+            }
+            return all;
+        };
+
         try {
-            const [{ data: members }, { data: orgLinks }, { data: clubMembers }] = await Promise.all([
-                supabase.from('players').select('club_id').in('club_id', clubIds),
-                supabase.from('club_organisations').select('club_id').in('club_id', clubIds),
-                supabase
-                    .from('club_members')
-                    .select('club_id, role, user_email, players!player_id(id, name, image_url, email)')
-                    .in('club_id', clubIds)
-                    .in('role', ['owner', 'admin']),
+            const [members, orgLinks, clubMembers] = await Promise.all([
+                fetchAll(supabase.from('players').select('club_id').in('club_id', clubIds)),
+                fetchAll(supabase.from('club_organisations').select('club_id').in('club_id', clubIds)),
+                fetchAll(
+                    supabase
+                        .from('club_members')
+                        .select('club_id, role, user_email, players!player_id(id, name, image_url, email)')
+                        .in('club_id', clubIds)
+                        .in('role', ['owner', 'admin']),
+                ),
             ]);
 
             const nextMemberCounts = {};
@@ -1349,7 +1481,16 @@ const ClubManager = ({ permissions }) => {
                                                                 {[club.cityLabel, club.regionLabel].filter(Boolean).join(' · ') || 'No city set'}
                                                             </p>
                                                             <div className="mt-3">
-                                                                <OwnersAdminsCell admins={club.admins} />
+                                                                <OwnersAdminsCell
+                                                                    admins={club.admins}
+                                                                    onInvite={!club.admins?.length ? () => {
+                                                                        setInviteClub(club);
+                                                                        setInviteEmail('');
+                                                                        setInviteSearchQuery('');
+                                                                        setInviteSelectedPlayer(null);
+                                                                        setInvitePlayerResults([]);
+                                                                    } : undefined}
+                                                                />
                                                             </div>
                                                             <div className="flex flex-wrap gap-2 mt-2 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
                                                                 <span>{club.totalCourts} courts</span>
@@ -1395,7 +1536,16 @@ const ClubManager = ({ permissions }) => {
                                                         <p className="text-sm font-bold text-white truncate">{club.cityLabel || '—'}</p>
                                                         <p className="text-xs text-gray-500 truncate mt-0.5">{club.regionLabel || 'Region unset'}</p>
                                                     </div>
-                                                    <OwnersAdminsCell admins={club.admins} />
+                                                    <OwnersAdminsCell
+                                                        admins={club.admins}
+                                                        onInvite={!club.admins?.length ? () => {
+                                                            setInviteClub(club);
+                                                            setInviteEmail('');
+                                                            setInviteSearchQuery('');
+                                                            setInviteSelectedPlayer(null);
+                                                            setInvitePlayerResults([]);
+                                                        } : undefined}
+                                                    />
                                                     <div>
                                                         <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${claimedBadgeClass}`}>
                                                             {isClaimed ? 'Claimed' : 'Unclaimed'}
@@ -2272,6 +2422,95 @@ const ClubManager = ({ permissions }) => {
                         if (clubId) loadLinkedOrgs(clubId);
                     }}
                 />
+            )}
+
+            {inviteClub && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+                    onClick={() => {
+                        setInviteClub(null);
+                        setInviteEmail('');
+                        setInviteSearchQuery('');
+                        setInviteSelectedPlayer(null);
+                        setInvitePlayerResults([]);
+                    }}
+                >
+                    <div className="bg-[#141414] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-black text-white uppercase tracking-wide">Invite to Claim</h3>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setInviteClub(null);
+                                    setInviteEmail('');
+                                    setInviteSearchQuery('');
+                                    setInviteSelectedPlayer(null);
+                                    setInvitePlayerResults([]);
+                                }}
+                                className="text-gray-500 hover:text-white"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+                        <p className="text-sm text-gray-400 mb-4">
+                            Send an email invite for <span className="text-white font-bold">{inviteClub.name}</span>. The recipient will be able to accept and become the club owner.
+                        </p>
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Search user (name or email)</label>
+                        <input
+                            type="text"
+                            value={inviteSearchQuery || inviteEmail}
+                            onChange={(e) => {
+                                const next = e.target.value;
+                                setInviteSearchQuery(next);
+                                setInviteEmail(next);
+                                setInviteSelectedPlayer(null);
+                            }}
+                            placeholder="Start typing…"
+                            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-padel-green/50 mb-3"
+                            onKeyDown={(e) => e.key === 'Enter' && handleSendClaimInvite()}
+                        />
+
+                        {(inviteIsSearching || invitePlayerResults.length > 0) && inviteSearchQuery.trim().length >= 2 && (
+                            <div className="bg-black/40 border border-white/10 rounded-xl divide-y divide-white/5 mb-4">
+                                {invitePlayerResults.map((p) => (
+                                    <button
+                                        key={p.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setInviteSelectedPlayer(p);
+                                            setInviteEmail(p.email || '');
+                                            setInviteSearchQuery(p.email || '');
+                                            setInvitePlayerResults([]);
+                                        }}
+                                        className="w-full text-left px-3 py-2 hover:bg-white/5 flex items-center justify-between gap-2"
+                                    >
+                                        <span className="text-sm text-white truncate">
+                                            {p.name || p.email}
+                                        </span>
+                                        <span className="text-[10px] text-gray-500 flex items-center gap-1 truncate">
+                                            <Mail size={12} /> {p.email}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {!inviteSelectedPlayer?.id && inviteSearchQuery.trim() && inviteSearchQuery.trim().length >= 2 && invitePlayerResults.length === 0 && !inviteIsSearching && (
+                            <p className="text-[11px] text-gray-500 mb-4">
+                                No matching player found. We&apos;ll invite them to create their profile first, then they can accept the claim invite.
+                            </p>
+                        )}
+                        <button
+                            type="button"
+                            onClick={handleSendClaimInvite}
+                            disabled={inviteSending || !inviteEmail.trim()}
+                            className="w-full py-3 rounded-xl bg-padel-green text-black font-black uppercase tracking-wider text-sm flex items-center justify-center gap-2 disabled:opacity-40"
+                        >
+                            {inviteSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                            {inviteSending ? 'Sending...' : 'Send Invite'}
+                        </button>
+                    </div>
+                </div>
             )}
         </div>
     );

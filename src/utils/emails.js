@@ -111,6 +111,8 @@ const getSubjectForTemplate = (template, vars) => {
             return `Club claim approved: ${vars.clubName || 'Club'} 🎉`;
         case 'club_claim_rejected':
             return `Update on your club claim: ${vars.clubName || 'Club'}`;
+        case 'club_claim_invite':
+            return `You've been invited to claim ${vars.clubName || 'a club'} on 4M Padel`;
         case 'event_pending_sanction': 
             return `🏆 Sanction Requested: ${vars.eventName || 'New Event'}`;
         case 'event_sanctioned': 

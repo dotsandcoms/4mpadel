@@ -175,8 +175,13 @@ const PlayerProfile = () => {
             showMessage('Password set successfully! Your account is now active.', 'success');
             setNewPassword('');
             setIsActivationRequired(false);
-            // Clear the URL param
-            navigate('/profile', { replace: true });
+            const claimToken = new URLSearchParams(window.location.search).get('claim_token');
+            if (claimToken) {
+                navigate(`/claim-club?token=${encodeURIComponent(claimToken)}`, { replace: true });
+            } else {
+                // Clear the URL param
+                navigate('/profile', { replace: true });
+            }
         }
         setIsUpdatingPassword(false);
     };
