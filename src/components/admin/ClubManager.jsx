@@ -4,14 +4,29 @@ import { toast } from 'sonner';
 import {
     MapPin, Plus, RefreshCw, Users, Building, Save, Loader2, ExternalLink,
     Upload, Trash2, Image as ImageIcon, ChevronDown, Instagram, Facebook,
-    Search, Check, X, Clock, Palette, Phone, ArrowLeft, Eye, ShieldCheck, UserPlus,
+    Search, Check, X, Clock, Palette, Phone, ArrowLeft, ShieldCheck, UserPlus, User,
 } from 'lucide-react';
 import ClubMembersManager from './ClubMembersManager';
-import { slugifyClub } from '../../utils/club';
+import {
+    slugifyClub,
+    CLUB_STATUSES,
+    clubStatusLabel,
+    clubStatusBadgeClass,
+    isPublicClubStatus,
+    isInReviewClubStatus,
+    normalizeClubStatus,
+    clubCityLabel,
+    clubRegionLabel,
+} from '../../utils/club';
 import { sendEmail } from '../../utils/emails';
 import { attachPlacesAutocomplete } from '../../utils/googleMaps';
 
 const COLOR_PRESETS = ['#CC1414', '#9AE900', '#F97316', '#3B82F6', '#EF4444', '#A855F7', '#14B8A6', '#EAB308', '#EC4899'];
+const CLAIM_FILTER_OPTIONS = [
+    { value: 'all', label: 'All' },
+    { value: 'claimed', label: 'Claimed' },
+    { value: 'unclaimed', label: 'Unclaimed' },
+];
 
 const CollapsibleSection = ({
     open,
@@ -88,7 +103,7 @@ const emptyForm = () => ({
     about: '',
     website_url: '',
     brand_color: '#CC1414',
-    status: 'draft',
+    status: 'unclaimed',
     contact_email: '',
     contact_phone: '',
     whatsapp_number: '',
@@ -144,6 +159,66 @@ const inputClass = 'mt-1 w-full bg-black/40 border border-white/10 rounded-xl px
 const labelClass = 'block text-[10px] font-black uppercase tracking-wider text-gray-400';
 const ghostBtnClass = 'px-3 py-1.5 rounded-lg border border-white/10 text-xs font-bold text-gray-300 hover:bg-white/5 flex items-center gap-1';
 
+const CLUB_LIST_GRID = 'md:grid-cols-[minmax(160px,1.5fr)_minmax(90px,0.85fr)_minmax(150px,1.15fr)_0.85fr_0.65fr_0.7fr_0.7fr_0.8fr_1fr]';
+
+/**
+ * @param {string|null|undefined} name
+ */
+const personInitials = (name) => {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    return parts.slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+};
+
+/**
+ * @param {string|null|undefined} role
+ */
+const roleLabel = (role) => {
+    const raw = String(role || '').trim().toLowerCase();
+    if (raw === 'owner') return 'Owner';
+    if (raw === 'admin') return 'Admin';
+    return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : 'Member';
+};
+
+/**
+ * @param {Array<{ id: string, name: string, role: string, image_url?: string|null }>} admins
+ */
+const OwnersAdminsCell = ({ admins }) => {
+    if (!admins?.length) {
+        return <p className="text-xs text-gray-500">No owners</p>;
+    }
+    const visible = admins.slice(0, 2);
+    const extra = admins.length - visible.length;
+    return (
+        <div className="space-y-2 min-w-0">
+            {visible.map((person) => (
+                <div key={person.id} className="flex items-center gap-2.5 min-w-0">
+                    {person.image_url ? (
+                        <img
+                            src={person.image_url}
+                            alt=""
+                            className="w-8 h-8 rounded-full object-cover border border-white/10 shrink-0"
+                        />
+                    ) : (
+                        <div className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[10px] font-black text-gray-400 shrink-0">
+                            {personInitials(person.name) === '?'
+                                ? <User size={12} />
+                                : personInitials(person.name)}
+                        </div>
+                    )}
+                    <div className="min-w-0">
+                        <p className="text-sm font-bold text-white truncate leading-tight">{person.name}</p>
+                        <p className="text-xs text-gray-500 truncate leading-tight mt-0.5">{roleLabel(person.role)}</p>
+                    </div>
+                </div>
+            ))}
+            {extra > 0 && (
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">+{extra} more</p>
+            )}
+        </div>
+    );
+};
+
 /**
  * Platform Clubs admin — full club card content editor.
  */
@@ -173,10 +248,12 @@ const ClubManager = ({ permissions }) => {
     const [membersClub, setMembersClub] = useState(null);
     const [assignOrgId, setAssignOrgId] = useState('');
     const [listSearch, setListSearch] = useState('');
+    const [claimFilter, setClaimFilter] = useState('all');
     const [currentPage, setCurrentPage] = useState(1);
     const [pendingClaims, setPendingClaims] = useState([]);
     const [memberCounts, setMemberCounts] = useState({});
     const [linkedOrgCounts, setLinkedOrgCounts] = useState({});
+    const [clubAdminsById, setClubAdminsById] = useState({});
     const addressInputRef = useRef(null);
     const autocompleteRef = useRef(null);
     const [sectionOpen, setSectionOpen] = useState(createClosedSections);
@@ -205,15 +282,29 @@ const ClubManager = ({ permissions }) => {
     };
 
     const visibleClubs = useMemo(() => {
-        const base = clubs.filter((c) => c.status !== 'pending');
+        const base = clubs.filter((c) => {
+            const rawStatus = String(c.status || '').toLowerCase();
+            if (rawStatus === 'rejected') return false;
+            // Keep the main table focused on "Published" and "In review".
+            return isInReviewClubStatus(c.status) || isPublicClubStatus(c.status);
+        });
         if (effectiveView !== 'mine') return base;
         return base.filter((c) => myClubIds.has(c.id));
     }, [clubs, effectiveView, myClubIds]);
 
     const filteredClubs = useMemo(() => {
         const q = listSearch.trim().toLowerCase();
-        if (!q) return visibleClubs;
-        return visibleClubs.filter((c) => {
+        const claimFiltered = claimFilter === 'all'
+            ? visibleClubs
+            : visibleClubs.filter((c) => {
+                const admins = clubAdminsById[c.id] || [];
+                const isClaimed = admins.length > 0;
+                return claimFilter === 'claimed' ? isClaimed : !isClaimed;
+            });
+
+        if (!q) return claimFiltered;
+
+        return claimFiltered.filter((c) => {
             const hay = [
                 c.name,
                 c.short_name,
@@ -224,7 +315,7 @@ const ClubManager = ({ permissions }) => {
             ].filter(Boolean).join(' ').toLowerCase();
             return hay.includes(q);
         });
-    }, [visibleClubs, listSearch]);
+    }, [visibleClubs, listSearch, claimFilter, clubAdminsById]);
 
     const clubRows = useMemo(() => {
         return filteredClubs.map((club) => {
@@ -236,9 +327,12 @@ const ClubManager = ({ permissions }) => {
                 totalCourts,
                 members: memberCounts[club.id] || Number(club.stats?.members) || 0,
                 linkedOrgs: linkedOrgCounts[club.id] || 0,
+                cityLabel: clubCityLabel(club),
+                regionLabel: clubRegionLabel(club),
+                admins: clubAdminsById[club.id] || [],
             };
         });
-    }, [filteredClubs, memberCounts, linkedOrgCounts]);
+    }, [filteredClubs, memberCounts, linkedOrgCounts, clubAdminsById]);
 
     const ITEMS_PER_PAGE = 50;
 
@@ -250,6 +344,13 @@ const ClubManager = ({ permissions }) => {
     }, [clubRows, currentPage]);
 
     const managerStats = useMemo(() => {
+        // Use the full clubs list (excluding only rejected) so counts like
+        // "In review" and "Claimed" reflect reality, not just the visible table.
+        const scopedClubs = effectiveView === 'mine'
+            ? clubs.filter((c) => myClubIds.has(c.id))
+            : clubs;
+        const all = scopedClubs.filter((c) => String(c.status || '').toLowerCase() !== 'rejected');
+
         const rows = visibleClubs.map((club) => ({
             ...club,
             members: memberCounts[club.id] || Number(club.stats?.members) || 0,
@@ -257,16 +358,15 @@ const ClubManager = ({ permissions }) => {
             totalCourts: (Number(club.courts?.indoor?.count) || 0) + (Number(club.courts?.outdoor?.count) || 0),
         }));
         return {
-            total: rows.length,
-            published: rows.filter((club) => club.status === 'published').length,
-            draft: rows.filter((club) => club.status === 'draft').length,
-            verified: rows.filter((club) => club.verified).length,
-            sapaRegistered: rows.filter((club) => club.sapa_registered).length,
+            total: visibleClubs.length,
+            published: all.filter((club) => isPublicClubStatus(club.status)).length,
+            inReview: pendingClaims.length,
+            claimed: all.filter((club) => (clubAdminsById[club.id] || []).length > 0).length,
             totalMembers: rows.reduce((sum, club) => sum + club.members, 0),
             totalCourts: rows.reduce((sum, club) => sum + club.totalCourts, 0),
             totalLinkedOrgs: rows.reduce((sum, club) => sum + club.linkedOrgs, 0),
         };
-    }, [visibleClubs, memberCounts, linkedOrgCounts]);
+    }, [clubs, visibleClubs, effectiveView, myClubIds, memberCounts, linkedOrgCounts, clubAdminsById, pendingClaims]);
 
     const selectedSummary = useMemo(() => {
         if (!selected && !isCreating) return null;
@@ -279,7 +379,7 @@ const ClubManager = ({ permissions }) => {
             name: source?.short_name || source?.name || 'New club',
             fullName: source?.name || 'New club',
             city: source?.city || 'City not set',
-            status: source?.status || 'draft',
+            status: source?.status || 'unclaimed',
             verified: !!source?.verified,
             sapaRegistered: !!source?.sapa_registered,
             totalCourts: indoor + outdoor,
@@ -287,19 +387,19 @@ const ClubManager = ({ permissions }) => {
             outdoor,
             members: selected ? (memberCounts[selected.id] || Number(selected.stats?.members) || 0) : 0,
             linkedOrgs: selected ? (linkedOrgCounts[selected.id] || linkedOrgIds.length) : linkedOrgIds.length,
-            hasPublicPage: !!(selected?.slug && selected?.status === 'published'),
+            hasPublicPage: !!(selected?.slug && isPublicClubStatus(selected?.status)),
         };
     }, [selected, isCreating, form, memberCounts, linkedOrgCounts, linkedOrgIds.length]);
 
     const pendingClubs = useMemo(() => {
-        const base = clubs.filter((c) => c.status === 'pending');
+        const base = clubs.filter((c) => isInReviewClubStatus(c.status));
         if (effectiveView !== 'mine') return base;
         return base.filter((c) => myClubIds.has(c.id));
     }, [clubs, effectiveView, myClubIds]);
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [listSearch, effectiveView]);
+    }, [listSearch, effectiveView, claimFilter]);
 
     useEffect(() => {
         if (currentPage > totalPages) {
@@ -311,7 +411,7 @@ const ClubManager = ({ permissions }) => {
     useEffect(() => {
         if (effectiveView !== 'mine' || isCreating) return;
         if (selectedId && myClubIds.has(selectedId)) return;
-        const first = clubs.find((c) => myClubIds.has(c.id) && c.status !== 'pending');
+        const first = clubs.find((c) => myClubIds.has(c.id) && !isInReviewClubStatus(c.status));
         setSelectedId(first ? first.id : null);
     }, [effectiveView, selectedId, myClubIds, clubs, isCreating]);
 
@@ -423,6 +523,20 @@ const ClubManager = ({ permissions }) => {
                     role: 'owner',
                 }, { onConflict: 'club_id,user_email' });
             if (memberError) throw memberError;
+
+            // Claiming an unclaimed club promotes it to published.
+            const claimClubStatus = String(claim.clubs?.status || '').toLowerCase();
+            if (['unclaimed', 'draft', 'archived'].includes(claimClubStatus)) {
+                const { error: clubStatusError } = await supabase
+                    .from('clubs')
+                    .update({
+                        status: 'published',
+                        verified: true,
+                        approved_at: new Date().toISOString(),
+                    })
+                    .eq('id', claim.club_id);
+                if (clubStatusError) throw clubStatusError;
+            }
 
             const { error } = await supabase
                 .from('club_claim_requests')
@@ -548,12 +662,18 @@ const ClubManager = ({ permissions }) => {
         if (!clubIds.length) {
             setMemberCounts({});
             setLinkedOrgCounts({});
+            setClubAdminsById({});
             return;
         }
         try {
-            const [{ data: members }, { data: orgLinks }] = await Promise.all([
+            const [{ data: members }, { data: orgLinks }, { data: clubMembers }] = await Promise.all([
                 supabase.from('players').select('club_id').in('club_id', clubIds),
                 supabase.from('club_organisations').select('club_id').in('club_id', clubIds),
+                supabase
+                    .from('club_members')
+                    .select('club_id, role, user_email, players!player_id(id, name, image_url, email)')
+                    .in('club_id', clubIds)
+                    .in('role', ['owner', 'admin']),
             ]);
 
             const nextMemberCounts = {};
@@ -568,12 +688,58 @@ const ClubManager = ({ permissions }) => {
                 nextLinkedCounts[row.club_id] = (nextLinkedCounts[row.club_id] || 0) + 1;
             });
 
+            const missingEmails = [...new Set(
+                (clubMembers || [])
+                    .filter((row) => !row.players?.name && row.user_email)
+                    .map((row) => String(row.user_email).toLowerCase()),
+            )];
+
+            let playersByEmail = {};
+            if (missingEmails.length) {
+                const { data: emailPlayers } = await supabase
+                    .from('players')
+                    .select('id, name, image_url, email')
+                    .in('email', missingEmails);
+                playersByEmail = Object.fromEntries(
+                    (emailPlayers || [])
+                        .filter((p) => p.email)
+                        .map((p) => [String(p.email).toLowerCase(), p]),
+                );
+            }
+
+            const nextAdmins = {};
+            (clubMembers || []).forEach((row) => {
+                if (!row.club_id) return;
+                const email = String(row.user_email || row.players?.email || '').toLowerCase();
+                const player = row.players || playersByEmail[email] || null;
+                const entry = {
+                    id: row.players?.id || email || `${row.club_id}-${row.role}`,
+                    name: player?.name || email || 'Unknown',
+                    role: row.role,
+                    image_url: player?.image_url || null,
+                    email,
+                };
+                if (!nextAdmins[row.club_id]) nextAdmins[row.club_id] = [];
+                nextAdmins[row.club_id].push(entry);
+            });
+
+            Object.keys(nextAdmins).forEach((clubId) => {
+                nextAdmins[clubId].sort((a, b) => {
+                    if (a.role === b.role) return String(a.name).localeCompare(String(b.name));
+                    if (a.role === 'owner') return -1;
+                    if (b.role === 'owner') return 1;
+                    return 0;
+                });
+            });
+
             setMemberCounts(nextMemberCounts);
             setLinkedOrgCounts(nextLinkedCounts);
+            setClubAdminsById(nextAdmins);
         } catch (err) {
             console.warn('Failed to load club metrics:', err.message);
             setMemberCounts({});
             setLinkedOrgCounts({});
+            setClubAdminsById({});
         }
     }, []);
 
@@ -645,6 +811,7 @@ const ClubManager = ({ permissions }) => {
         setForm({
             ...emptyForm(),
             ...club,
+            status: normalizeClubStatus(club.status),
             lat: club.lat ?? '',
             lng: club.lng ?? '',
             federation_id: club.federation_id || '',
@@ -791,7 +958,7 @@ const ClubManager = ({ permissions }) => {
                 about: form.about || null,
                 website_url: form.website_url || null,
                 brand_color: form.brand_color || null,
-                status: form.status || 'draft',
+                status: normalizeClubStatus(form.status) || 'unclaimed',
                 contact_email: form.contact_email || null,
                 contact_phone: form.contact_phone || null,
                 whatsapp_number: form.whatsapp_number || null,
@@ -957,7 +1124,7 @@ const ClubManager = ({ permissions }) => {
                     <div className="flex items-center gap-2">
                         <Clock size={16} className="text-amber-400" />
                         <h3 className="text-sm font-black uppercase tracking-wider text-amber-300">
-                            Pending club applications ({pendingClubs.length})
+                            Clubs in review ({pendingClubs.length})
                         </h3>
                     </div>
                     <ul className="space-y-2">
@@ -1066,10 +1233,10 @@ const ClubManager = ({ permissions }) => {
                 <div className="space-y-4">
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                         {[
-                            { label: 'Visible Clubs', value: managerStats.total, tone: 'text-white', helper: `${managerStats.published} published` },
-                            { label: 'Verification', value: managerStats.verified, tone: 'text-padel-green', helper: `${managerStats.sapaRegistered} SAPA registered` },
-                            { label: 'Members', value: managerStats.totalMembers, tone: 'text-amber-400', helper: `${managerStats.totalLinkedOrgs} linked orgs` },
-                            { label: 'Courts', value: managerStats.totalCourts, tone: 'text-sky-400', helper: `${managerStats.draft} drafts` },
+                            { label: 'Visible Clubs', value: managerStats.total, tone: 'text-white', helper: 'Shown in this list' },
+                            { label: 'Claimed', value: managerStats.claimed, tone: 'text-padel-green', helper: 'Has owner/admin' },
+                            { label: 'Published', value: managerStats.published, tone: 'text-sky-400', helper: 'Public directory' },
+                            { label: 'In review', value: managerStats.inReview, tone: 'text-violet-400', helper: 'Pending claim requests' },
                         ].map((stat) => (
                             <div key={stat.label} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 shadow-xl">
                                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">{stat.label}</p>
@@ -1088,21 +1255,34 @@ const ClubManager = ({ permissions }) => {
                                 <div>
                                     <h3 className="text-xl font-black text-white uppercase tracking-tight">Club Manager</h3>
                                     <p className="text-sm text-gray-500">
-                                        {listSearch.trim()
+                                        {listSearch.trim() || claimFilter !== 'all'
                                             ? `Showing ${Math.min(clubRows.length, ITEMS_PER_PAGE)} of ${clubRows.length} matching clubs`
                                             : `${visibleClubs.length} clubs available`}
                                     </p>
                                 </div>
                             </div>
-                            <div className="relative w-full md:w-[320px]">
-                                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
-                                <input
-                                    type="search"
-                                    value={listSearch}
-                                    onChange={(e) => setListSearch(e.target.value)}
-                                    placeholder="Search clubs..."
-                                    className="w-full bg-black/40 border border-white/10 rounded-2xl pl-10 pr-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-padel-green"
-                                />
+                            <div className="flex items-center gap-3 w-full md:w-[520px] justify-end">
+                                <div className="relative w-full md:w-[320px]">
+                                    <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                                    <input
+                                        type="search"
+                                        value={listSearch}
+                                        onChange={(e) => setListSearch(e.target.value)}
+                                        placeholder="Search clubs..."
+                                        className="w-full bg-black/40 border border-white/10 rounded-2xl pl-10 pr-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-padel-green"
+                                    />
+                                </div>
+                                <select
+                                    value={claimFilter}
+                                    onChange={(e) => setClaimFilter(e.target.value)}
+                                    className="w-full md:w-[200px] bg-black/40 border border-white/10 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:border-padel-green"
+                                >
+                                    {CLAIM_FILTER_OPTIONS.map((s) => (
+                                        <option key={s.value} value={s.value}>
+                                            {s.label}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
 
@@ -1114,28 +1294,32 @@ const ClubManager = ({ permissions }) => {
                             </div>
                         ) : clubRows.length === 0 ? (
                             <div className="p-10 text-center text-sm text-gray-500">
-                                No clubs match “{listSearch.trim()}”.
+                                No clubs match your current filters.
                             </div>
                         ) : (
-                            <>
-                                <div className="hidden md:grid md:grid-cols-[minmax(0,2fr)_0.9fr_0.8fr_0.9fr_0.9fr_0.9fr_1.3fr] gap-3 px-4 py-3 border-b border-white/5 text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">
+                            <div className="overflow-x-auto">
+                                <div className={`hidden md:grid ${CLUB_LIST_GRID} gap-3 px-4 py-3 border-b border-white/5 text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 min-w-[1100px]`}>
                                     <div>Club</div>
-                                    <div>Status</div>
+                                    <div>City</div>
+                                    <div>Owner / Admin</div>
+                                    <div>Club Status</div>
                                     <div>Courts</div>
                                     <div>Members</div>
                                     <div>Linked Orgs</div>
-                                    <div>Health</div>
+                                    <div>Status</div>
                                     <div>Actions</div>
                                 </div>
-                                <div className="divide-y divide-white/5">
+                                <div className="divide-y divide-white/5 md:min-w-[1100px]">
                                     {paginatedClubRows.map((club) => {
-                                        const statusBadgeClass = club.status === 'published'
+                                        const isClaimed = (club.admins || []).length > 0;
+                                        const claimedBadgeClass = isClaimed
                                             ? 'bg-padel-green/10 text-padel-green border-padel-green/20'
-                                            : club.status === 'draft'
-                                                ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                                                : club.status === 'pending'
-                                                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                                                    : 'bg-white/5 text-gray-400 border-white/10';
+                                            : 'bg-white/5 text-gray-400 border-white/10';
+                                        const inReview = isInReviewClubStatus(club.status);
+                                        const approvalBadgeClass = inReview
+                                            ? 'bg-violet-500/10 text-violet-300 border-violet-500/20'
+                                            : 'bg-padel-green/10 text-padel-green border-padel-green/20';
+                                        const approvalLabel = inReview ? 'In review' : 'Published';
                                         return (
                                             <div
                                                 key={club.id}
@@ -1157,11 +1341,16 @@ const ClubManager = ({ permissions }) => {
                                                         <div className="min-w-0 flex-1">
                                                             <div className="flex items-center gap-2 flex-wrap">
                                                                 <p className="text-sm font-bold text-white truncate transition-colors duration-200 group-hover:text-padel-green">{club.short_name || club.name}</p>
-                                                                <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${statusBadgeClass}`}>
-                                                                    {club.status}
+                                                                <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${claimedBadgeClass}`}>
+                                                                    {isClaimed ? 'Claimed' : 'Unclaimed'}
                                                                 </span>
                                                             </div>
-                                                            <p className="text-xs text-gray-500 mt-1">{club.city || 'No city set'}</p>
+                                                            <p className="text-xs text-gray-500 mt-1">
+                                                                {[club.cityLabel, club.regionLabel].filter(Boolean).join(' · ') || 'No city set'}
+                                                            </p>
+                                                            <div className="mt-3">
+                                                                <OwnersAdminsCell admins={club.admins} />
+                                                            </div>
                                                             <div className="flex flex-wrap gap-2 mt-2 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
                                                                 <span>{club.totalCourts} courts</span>
                                                                 <span>{club.members} members</span>
@@ -1182,7 +1371,7 @@ const ClubManager = ({ permissions }) => {
                                                     </div>
                                                 </div>
 
-                                                <div className="hidden md:grid md:grid-cols-[minmax(0,2fr)_0.9fr_0.8fr_0.9fr_0.9fr_0.9fr_1.3fr] gap-3 items-center">
+                                                <div className={`hidden md:grid ${CLUB_LIST_GRID} gap-3 items-center`}>
                                                     <button
                                                         type="button"
                                                         onClick={() => openClubDetail(club.id)}
@@ -1197,14 +1386,20 @@ const ClubManager = ({ permissions }) => {
                                                         )}
                                                         <div className="min-w-0">
                                                             <p className="text-sm font-bold text-white truncate transition-colors duration-200 group-hover:text-padel-green">{club.short_name || club.name}</p>
-                                                            <p className="text-xs text-gray-500 truncate">{club.city || 'No city set'}</p>
+                                                            {club.short_name && club.short_name !== club.name && (
+                                                                <p className="text-xs text-gray-500 truncate">{club.name}</p>
+                                                            )}
                                                         </div>
                                                     </button>
+                                                    <div className="min-w-0">
+                                                        <p className="text-sm font-bold text-white truncate">{club.cityLabel || '—'}</p>
+                                                        <p className="text-xs text-gray-500 truncate mt-0.5">{club.regionLabel || 'Region unset'}</p>
+                                                    </div>
+                                                    <OwnersAdminsCell admins={club.admins} />
                                                     <div>
-                                                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${statusBadgeClass}`}>
-                                                            {club.status}
+                                                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${claimedBadgeClass}`}>
+                                                            {isClaimed ? 'Claimed' : 'Unclaimed'}
                                                         </span>
-                                                        <p className="text-[10px] text-gray-500 mt-1.5 uppercase tracking-wider">{club.verified ? 'Verified' : 'Unverified'}</p>
                                                     </div>
                                                     <div>
                                                         <p className="text-sm font-bold text-white">{club.totalCourts}</p>
@@ -1219,11 +1414,8 @@ const ClubManager = ({ permissions }) => {
                                                         <p className="text-[10px] text-gray-500 uppercase tracking-wider">Approved orgs</p>
                                                     </div>
                                                     <div className="flex flex-wrap gap-1.5 justify-start">
-                                                        <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${club.sapa_registered ? 'bg-padel-green/10 text-padel-green border-padel-green/20' : 'bg-white/5 text-gray-500 border-white/10'}`}>
-                                                            SAPA
-                                                        </span>
-                                                        <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${club.verified ? 'bg-sky-500/10 text-sky-300 border-sky-500/20' : 'bg-white/5 text-gray-500 border-white/10'}`}>
-                                                            {club.verified ? 'Verified' : 'Review'}
+                                                        <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${approvalBadgeClass}`}>
+                                                            {approvalLabel}
                                                         </span>
                                                     </div>
                                                     <div className="flex flex-wrap gap-1.5">
@@ -1287,7 +1479,7 @@ const ClubManager = ({ permissions }) => {
                                         </div>
                                     </div>
                                 )}
-                            </>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -1314,14 +1506,8 @@ const ClubManager = ({ permissions }) => {
                                                 >
                                                     <ArrowLeft size={12} /> Back to clubs
                                                 </button>
-                                                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${
-                                                    selectedSummary?.status === 'published'
-                                                        ? 'bg-padel-green/10 text-padel-green border-padel-green/20'
-                                                        : selectedSummary?.status === 'draft'
-                                                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                                                            : 'bg-white/5 text-gray-400 border-white/10'
-                                                }`}>
-                                                    {selectedSummary?.status || 'draft'}
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${clubStatusBadgeClass(selectedSummary?.status)}`}>
+                                                    {clubStatusLabel(selectedSummary?.status)}
                                                 </span>
                                             </div>
                                             <h3 className="mt-2 text-2xl md:text-3xl font-display font-bold tracking-tighter text-white truncate">
@@ -1386,7 +1572,6 @@ const ClubManager = ({ permissions }) => {
                                         { label: 'Courts', value: selectedSummary?.totalCourts ?? 0, icon: MapPin, tone: 'text-white' },
                                         { label: 'Linked Orgs', value: selectedSummary?.linkedOrgs ?? 0, icon: Building, tone: 'text-amber-300' },
                                         { label: 'Verified', value: selectedSummary?.verified ? 'Yes' : 'No', icon: ShieldCheck, tone: selectedSummary?.verified ? 'text-sky-300' : 'text-gray-400' },
-                                        { label: 'SAPA Registered', value: selectedSummary?.sapaRegistered ? 'Yes' : 'No', icon: Eye, tone: selectedSummary?.sapaRegistered ? 'text-padel-green' : 'text-gray-400' },
                                     ].map((card) => {
                                         const Icon = card.icon;
                                         return (
@@ -1444,25 +1629,24 @@ const ClubManager = ({ permissions }) => {
                                     <label className={labelClass}>
                                         Status
                                         <select
-                                            value={form.status}
+                                            value={normalizeClubStatus(form.status)}
                                             onChange={(e) => updateField('status', e.target.value)}
                                             className={inputClass}
                                         >
-                                            <option value="draft">draft</option>
-                                            <option value="pending">pending</option>
-                                            <option value="published">published</option>
-                                            <option value="archived">archived</option>
-                                            <option value="rejected">rejected</option>
+                                            {normalizeClubStatus(form.status) === 'rejected' && (
+                                                <option value="rejected">Rejected</option>
+                                            )}
+                                            {CLUB_STATUSES.map((status) => (
+                                                <option key={status.value} value={status.value}>
+                                                    {status.label}
+                                                </option>
+                                            ))}
                                         </select>
                                     </label>
                                     <div className="flex items-center gap-4 pt-6">
                                         <label className="flex items-center gap-2 text-xs text-gray-300 font-bold">
                                             <input type="checkbox" checked={!!form.verified} onChange={(e) => updateField('verified', e.target.checked)} />
                                             Verified
-                                        </label>
-                                        <label className="flex items-center gap-2 text-xs text-gray-300 font-bold">
-                                            <input type="checkbox" checked={!!form.sapa_registered} onChange={(e) => updateField('sapa_registered', e.target.checked)} />
-                                            SAPA registered
                                         </label>
                                     </div>
                                     <div className="md:col-span-2">
@@ -2079,7 +2263,15 @@ const ClubManager = ({ permissions }) => {
             )}
 
             {membersClub && (
-                <ClubMembersManager club={membersClub} onClose={() => setMembersClub(null)} />
+                <ClubMembersManager
+                    club={membersClub}
+                    onClose={() => {
+                        const clubId = membersClub.id;
+                        setMembersClub(null);
+                        loadClubMetrics(clubs.map((c) => c.id).filter(Boolean));
+                        if (clubId) loadLinkedOrgs(clubId);
+                    }}
+                />
             )}
         </div>
     );

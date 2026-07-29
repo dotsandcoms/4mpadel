@@ -84,7 +84,10 @@ const Navbar = ({ isDark = false, accentColor }) => {
           .ilike('user_email', targetEmail)
           .in('role', ['owner', 'admin', 'staff'])
           .limit(10);
-        const member = (memberships || []).some((m) => ['published', 'draft'].includes(m.clubs?.status));
+        const member = (memberships || []).some((m) => {
+          const status = String(m.clubs?.status || '').toLowerCase();
+          return status && !['pending', 'in_review', 'rejected'].includes(status);
+        });
         if (!cancelled) setIsClubAdmin(member);
       } catch (err) {
         console.warn('Club membership check failed:', err);

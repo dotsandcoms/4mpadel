@@ -76,7 +76,7 @@ const SearchPalette = () => {
         const isPlayerSearch = ['players', 'pro', 'coach'].some(k => lowerQuery.includes(k));
 
         let playersQuery = supabase.from('players').select('name, rankedin_id, id, image_url').limit(5);
-        let clubsQuery = supabase.from('clubs').select('name, short_name, slug, city, logo_url').in('status', ['published', 'draft']).limit(5);
+        let clubsQuery = supabase.from('clubs').select('name, short_name, slug, city, logo_url').in('status', ['published', '4m_approved', '4m_premium']).limit(5);
         let organisationsQuery = supabase.from('organisations').select('name, slug, city, logo_url, org_type').eq('status', 'approved').limit(5);
         let eventsQuery = supabase.from('calendar').select('event_name, venue, slug, image_url, start_date').or('sanction_status.eq.approved,sanction_status.is.null').limit(5);
         let blogsQuery = supabase.from('blogs').select('title, slug, category, image_url').ilike('title', `%${query}%`).limit(5);

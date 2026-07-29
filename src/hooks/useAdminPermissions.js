@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { isManageableClubStatus } from '../utils/club';
 
 export const SUPER_ADMIN_EMAILS = ['bradein@dotsandcoms.co.za', 'brad@dotsandcoms.co.za', 'admin@4mpadel.co.za', 'markstillerman@gmail.com'];
 
@@ -97,7 +98,7 @@ async function resolveClubAccess(userEmail, orgMembership) {
         .ilike('user_email', userEmail);
 
     (memberships || []).forEach((m) => {
-        if (m.clubs && ['published', 'draft'].includes(m.clubs.status)) {
+        if (m.clubs && isManageableClubStatus(m.clubs.status)) {
             clubMap.set(m.clubs.id, { ...m.clubs, member_role: m.role });
         }
     });

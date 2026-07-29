@@ -7,7 +7,7 @@ import {
 import { supabase } from '../supabaseClient';
 import { sendEmail } from '../utils/emails';
 import { toast } from 'sonner';
-import { slugifyClub } from '../utils/club';
+import { slugifyClub, CLAIMABLE_CLUB_STATUSES } from '../utils/club';
 
 const TOTAL_STEPS = 3;
 
@@ -40,7 +40,7 @@ const ProgressBar = ({ step }) => (
 );
 
 /**
- * Public club registration — search/claim existing clubs, or create new (pending approval).
+ * Public club registration — search/claim existing clubs, or create new (in review).
  */
 const RegisterClubForm = ({ onBack, onClose, contactEmail = '', initialClubClaim = null }) => {
     const [step, setStep] = useState(1);
@@ -202,7 +202,7 @@ const RegisterClubForm = ({ onBack, onClose, contactEmail = '', initialClubClaim
                     .from('clubs')
                     .select('id, name, short_name, slug, city, logo_url, status, verified')
                     .or(`name.ilike.%${safe}%,short_name.ilike.%${safe}%`)
-                    .in('status', ['published', 'draft', 'archived'])
+                    .in('status', CLAIMABLE_CLUB_STATUSES)
                     .order('name')
                     .limit(8);
                 if (error) throw error;
@@ -443,7 +443,7 @@ const RegisterClubForm = ({ onBack, onClose, contactEmail = '', initialClubClaim
             },
             contacts,
             created_by: createdBy,
-            status: 'pending',
+            status: 'in_review',
         };
 
         const { error } = await supabase.from('clubs').insert(insertPayload);

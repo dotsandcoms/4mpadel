@@ -87,7 +87,7 @@ const Admin = () => {
         const fetchClubBadgeCount = async () => {
             try {
                 const [{ count: pendingClubs }, { count: pendingClaims }] = await Promise.all([
-                    supabase.from('clubs').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+                    supabase.from('clubs').select('*', { count: 'exact', head: true }).in('status', ['in_review', 'pending']),
                     supabase.from('club_claim_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
                 ]);
                 setClubBadgeCount((pendingClubs || 0) + (pendingClaims || 0));

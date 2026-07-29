@@ -264,7 +264,7 @@ const FederationPage = () => {
                         .from('clubs')
                         .select('id, name, slug, logo_url, city, status')
                         .eq('federation_id', fed.id)
-                        .eq('status', 'published')
+                        .in('status', ['published', '4m_approved', '4m_premium'])
                         .order('name', { ascending: true })
                         .limit(12),
                     supabase

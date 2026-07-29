@@ -8,6 +8,7 @@ import {
     fetchClubBySlug,
     fetchClubOrganisations,
     accentOnDark,
+    isPublicClubStatus,
 } from '../utils/club';
 import {
     MapPin, BadgeCheck, ShieldCheck, Globe, Mail, Phone, MessageCircle,
@@ -92,7 +93,7 @@ const ClubPage = () => {
             try {
                 const data = await fetchClubBySlug(slug);
                 if (cancelled) return;
-                if (!data || data.status !== 'published') {
+                if (!data || !isPublicClubStatus(data.status)) {
                     setClub(null);
                     return;
                 }
