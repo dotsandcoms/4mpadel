@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import {
     Zap, Users, UserX, LayoutList, CircleDot, Trophy, BarChart3, Info,
 } from 'lucide-react';
-import { parseEventDate } from '../utils/eventEntryFee';
+import { isEarlyBirdActive, parseEventDate } from '../utils/eventEntryFee';
 
 const startOfLocalDay = (d) => {
     const x = new Date(d);
@@ -64,12 +64,19 @@ export function buildTournamentProgressSteps(event, now = new Date(), options = 
         });
     }
 
-    if (earlyBird) {
+    const earlyBirdFee = event.early_bird_fee;
+    const hasEarlyBirdFee = earlyBirdFee !== null && earlyBirdFee !== undefined && earlyBirdFee !== '';
+    if (earlyBird && hasEarlyBirdFee) {
+        // Live from registration open (or immediately if no open date) until early bird ends.
+        const earlyBirdStart = opens && opens.getTime() < earlyBird.getTime()
+            ? opens
+            : new Date(0);
         steps.push({
             id: 'early_bird',
-            label: 'Early Bird Entries End',
-            icon: Users,
-            at: earlyBird,
+            label: 'Early Bird Entries',
+            icon: Zap,
+            at: earlyBirdStart,
+            liveUntil: earlyBird,
             dateLabel: formatStepDate(earlyBird, { withTime: true }),
         });
     }
@@ -149,6 +156,16 @@ export function buildTournamentProgressSteps(event, now = new Date(), options = 
         }
     }
 
+    // Prefer early bird as the illuminated active step while pricing is in effect
+    // (otherwise Registration Open keeps the spotlight for the whole window).
+    const earlyBirdIndex = steps.findIndex((s) => s.id === 'early_bird');
+    if (earlyBirdIndex >= 0 && isEarlyBirdActive(event, now)) {
+        const earlyStep = steps[earlyBirdIndex];
+        if (now.getTime() >= earlyStep.at.getTime()) {
+            activeIndex = earlyBirdIndex;
+        }
+    }
+
     return steps.map((step, index) => {
         let status = 'upcoming';
         if (activeIndex === index) status = 'live';
@@ -160,12 +177,31 @@ export function buildTournamentProgressSteps(event, now = new Date(), options = 
             status = 'done';
         }
 
-        const showLive = status === 'live' && (step.id === 'registration_open' || step.id === 'tournament_live');
+        const showLive = status === 'live' && (
+            step.id === 'registration_open'
+            || step.id === 'tournament_live'
+            || step.id === 'early_bird'
+        );
+
+        let label = step.label;
+        let sublabel = showLive ? 'LIVE' : step.dateLabel;
+        if (step.id === 'early_bird') {
+            if (status === 'live') {
+                label = 'Early Bird Entries';
+                sublabel = 'LIVE';
+            } else if (status === 'done') {
+                label = 'Early Bird Entries';
+                sublabel = 'Ended';
+            } else {
+                label = 'Early Bird Entries';
+            }
+        }
 
         return {
             ...step,
+            label,
             status,
-            sublabel: showLive ? 'LIVE' : step.dateLabel,
+            sublabel,
             showLiveDot: showLive,
         };
     });
