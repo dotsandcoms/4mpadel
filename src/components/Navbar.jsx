@@ -1,19 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, ChevronDown, Trophy, Search, Bell, MapPin, User, LogOut, ShieldAlert, Home, Users, TrendingUp, Image, GraduationCap, Zap, Mail, ChevronUp, Calendar, Building } from 'lucide-react';
+import { Menu, X, ChevronDown, Trophy, Search, Bell, MapPin, User, LogOut, ShieldAlert, Home, Users, TrendingUp, Image, GraduationCap, Zap, Mail, ChevronUp, Calendar, Building, ChevronRight, Plus } from 'lucide-react';
 import logo from '../assets/logo_4m_lowercase.png';
 import saFlag from '../assets/Flag_of_South_Africa.svg.png';
 import { supabase } from '../supabaseClient';
 import { useSearch } from '../context/SearchContext';
 import { usePendingPayments } from '../hooks/usePendingPayments';
 import AuthModal from './AuthModal';
+import { isManageableClubStatus, clubStatusLabel, normalizeClubStatus } from '../utils/club';
+
+const managedClubSubtitle = (club) => {
+  const status = normalizeClubStatus(club?.status);
+  if (club?.verified || status === '4m_approved' || status === '4m_premium') {
+    return { label: 'Verified Club', className: 'text-sky-300' };
+  }
+  return { label: `${clubStatusLabel(club?.status)} Club`, className: 'text-gray-400' };
+};
+
+const managedOrgSubtitle = (org) => {
+  if (org?.verified) {
+    return { label: 'Verified Organisation', className: 'text-sky-300' };
+  }
+  if (String(org?.status || '').toLowerCase() === 'approved') {
+    return { label: 'Approved Organisation', className: 'text-sky-300' };
+  }
+  return { label: 'Organisation', className: 'text-gray-400' };
+};
 
 const Navbar = ({ isDark = false, accentColor }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [expandedMobileMenus, setExpandedMobileMenus] = useState([]);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalConfig, setAuthModalConfig] = useState({ initialTab: 'login', initialRegisterType: null });
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [session, setSession] = useState(null);
   const [player, setPlayer] = useState(null);
@@ -32,71 +52,122 @@ const Navbar = ({ isDark = false, accentColor }) => {
   const targetEmail = sessionStorage.getItem('admin_test_login_email') || session?.user?.email;
   const isLoggedIn = !!targetEmail;
   const isSuperAdmin = targetEmail ? SUPER_ADMINS.includes(targetEmail.toLowerCase()) : false;
-  const [isOrgMember, setIsOrgMember] = useState(false);
-  const [isClubAdmin, setIsClubAdmin] = useState(false);
+  const [managedClubs, setManagedClubs] = useState([]);
+  const [managedOrgs, setManagedOrgs] = useState([]);
+  const [managePagesTab, setManagePagesTab] = useState('clubs');
 
-  // Approved organisation member? → show Organisation Dashboard shortcut
+  const hasManagedClubs = managedClubs.length > 0;
+  const hasManagedOrgs = managedOrgs.length > 0;
+  const hasManageMyPages = hasManagedClubs || hasManagedOrgs;
+  const showManagePagesTabs = hasManagedClubs && hasManagedOrgs;
+  const activeManagePagesTab = useMemo(() => {
+    if (showManagePagesTabs) return managePagesTab;
+    if (hasManagedClubs) return 'clubs';
+    if (hasManagedOrgs) return 'organisations';
+    return 'clubs';
+  }, [showManagePagesTabs, managePagesTab, hasManagedClubs, hasManagedOrgs]);
+
+  // Approved organisations the user can manage → Manage My Pages
   useEffect(() => {
     let cancelled = false;
-    const checkOrgMembership = async () => {
-      if (!targetEmail) { setIsOrgMember(false); return; }
+    const loadManagedOrgs = async () => {
+      if (!targetEmail) {
+        setManagedOrgs([]);
+        return;
+      }
       try {
+        const orgMap = new Map();
         const { data: memberships } = await supabase
           .from('organisation_members')
-          .select('organisation_id, organisations(status)')
+          .select('organisation_id, organisations(id, name, slug, logo_url, status, verified)')
           .ilike('user_email', targetEmail)
-          .limit(5);
-        let member = (memberships || []).some(m => m.organisations?.status === 'approved');
+          .limit(25);
 
-        if (!member) {
-          // Legacy fallback: org created by this user's player record
+        (memberships || []).forEach((m) => {
+          const org = m.organisations;
+          if (org?.status === 'approved' && org.id) orgMap.set(org.id, org);
+        });
+
+        if (orgMap.size === 0) {
           const { data: playerRow } = await supabase
             .from('players').select('id').ilike('email', targetEmail).maybeSingle();
           if (playerRow) {
-            const { data: orgRow } = await supabase
+            const { data: orgRows } = await supabase
               .from('organisations')
-              .select('id')
+              .select('id, name, slug, logo_url, status, verified')
               .eq('created_by', playerRow.id)
               .eq('status', 'approved')
-              .maybeSingle();
-            member = !!orgRow;
+              .limit(25);
+            (orgRows || []).forEach((org) => {
+              if (org?.id) orgMap.set(org.id, org);
+            });
           }
         }
-        if (!cancelled) setIsOrgMember(member);
+
+        if (!cancelled) {
+          const orgs = [...orgMap.values()].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+          setManagedOrgs(orgs);
+        }
       } catch (err) {
         console.warn('Org membership check failed:', err);
-        if (!cancelled) setIsOrgMember(false);
+        if (!cancelled) setManagedOrgs([]);
       }
     };
-    checkOrgMembership();
+    loadManagedOrgs();
     return () => { cancelled = true; };
   }, [targetEmail]);
 
-  // Club admin/owner/staff of a draft or published club? → show Club Dashboard shortcut
+  // Claimed / manageable clubs → Manage My Pages
   useEffect(() => {
     let cancelled = false;
-    const checkClubMembership = async () => {
-      if (!targetEmail) { setIsClubAdmin(false); return; }
+    const loadManagedClubs = async () => {
+      if (!targetEmail) {
+        setManagedClubs([]);
+        return;
+      }
       try {
         const { data: memberships } = await supabase
           .from('club_members')
-          .select('role, clubs(status)')
+          .select('role, clubs(id, name, slug, logo_url, status, verified)')
           .ilike('user_email', targetEmail)
           .in('role', ['owner', 'admin', 'staff'])
-          .limit(10);
-        const member = (memberships || []).some((m) => {
-          const status = String(m.clubs?.status || '').toLowerCase();
-          return status && !['pending', 'in_review', 'rejected'].includes(status);
-        });
-        if (!cancelled) setIsClubAdmin(member);
+          .limit(25);
+
+        const clubs = (memberships || [])
+          .map((m) => m.clubs)
+          .filter((club) => club?.id && isManageableClubStatus(club.status))
+          .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+
+        // De-dupe by id
+        const unique = [...new Map(clubs.map((c) => [c.id, c])).values()];
+        if (!cancelled) setManagedClubs(unique);
       } catch (err) {
         console.warn('Club membership check failed:', err);
-        if (!cancelled) setIsClubAdmin(false);
+        if (!cancelled) setManagedClubs([]);
       }
     };
-    checkClubMembership();
+    loadManagedClubs();
     return () => { cancelled = true; };
   }, [targetEmail]);
+
+  useEffect(() => {
+    if (showManagePagesTabs) return;
+    if (hasManagedClubs) setManagePagesTab('clubs');
+    else if (hasManagedOrgs) setManagePagesTab('organisations');
+  }, [showManagePagesTabs, hasManagedClubs, hasManagedOrgs]);
+
+  const openAuthModal = (config = {}) => {
+    setAuthModalConfig({
+      initialTab: config.initialTab || 'login',
+      initialRegisterType: config.initialRegisterType || null,
+    });
+    setIsAuthModalOpen(true);
+  };
+
+  const closeAuthModal = () => {
+    setIsAuthModalOpen(false);
+    setAuthModalConfig({ initialTab: 'login', initialRegisterType: null });
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -451,13 +522,13 @@ const Navbar = ({ isDark = false, accentColor }) => {
                         <ShieldAlert className="w-3.5 h-3.5" />Admin Panel
                       </a>
                     )}
-                    {isOrgMember && (
+                    {hasManagedOrgs && (
                       <a href="/admin?tab=organisations&view=host" target="_blank" className="flex items-center gap-2 px-4 py-2 text-[10px] font-black text-gray-300 hover:text-padel-green hover:bg-white/5 transition-colors uppercase tracking-widest">
                         <Building className="w-3.5 h-3.5" />Org Dashboard
                       </a>
                     )}
-                    {isClubAdmin && (
-                      <a href="/admin?tab=clubs" target="_blank" className="flex items-center gap-2 px-4 py-2 text-[10px] font-black text-gray-300 hover:text-padel-green hover:bg-white/5 transition-colors uppercase tracking-widest">
+                    {hasManagedClubs && (
+                      <a href="/admin?tab=clubs&view=mine" target="_blank" className="flex items-center gap-2 px-4 py-2 text-[10px] font-black text-gray-300 hover:text-padel-green hover:bg-white/5 transition-colors uppercase tracking-widest">
                         <MapPin className="w-3.5 h-3.5" />Club Dashboard
                       </a>
                     )}
@@ -468,13 +539,13 @@ const Navbar = ({ isDark = false, accentColor }) => {
                   </div>
                 </div>
               ) : (
-                <button
-                  onClick={() => setIsAuthModalOpen(true)}
-                  className={`px-3.5 xl:px-4 py-1.5 xl:py-2 rounded-full text-xs font-bold hover:scale-105 transition-all duration-300 text-black cursor-pointer`}
-                  style={{ backgroundColor: accentColor || (isDark ? '#F40020' : '#ccff00') }}
-                >
-                  Login ↗
-                </button>
+                    <button
+                      onClick={() => openAuthModal({ initialTab: 'login' })}
+                      className={`px-3.5 xl:px-4 py-1.5 xl:py-2 rounded-full text-xs font-bold hover:scale-105 transition-all duration-300 text-black cursor-pointer`}
+                      style={{ backgroundColor: accentColor || (isDark ? '#F40020' : '#ccff00') }}
+                    >
+                      Login ↗
+                    </button>
               )}
             </div>
 
@@ -613,7 +684,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
                   <div className="p-4 bg-gradient-to-br from-[#ccff00]/10 to-[#ccff00]/5 border border-[#ccff00]/20 rounded-2xl text-center">
                     <p className="text-xs text-gray-300 font-bold mb-2.5">Sign in to track your stats, tournaments and calendar!</p>
                     <button
-                      onClick={() => { setIsMobileMenuOpen(false); setIsAuthModalOpen(true); }}
+                      onClick={() => { setIsMobileMenuOpen(false); openAuthModal({ initialTab: 'login' }); }}
                       className="w-full py-2 bg-padel-green text-black font-black text-xs uppercase tracking-widest rounded-xl hover:scale-105 active:scale-95 transition-all"
                     >
                       Login / Register ↗
@@ -692,6 +763,93 @@ const Navbar = ({ isDark = false, accentColor }) => {
                     </div>
                   );
                 })}
+
+                {hasManageMyPages && (
+                  <div className="mt-3 pt-4 border-t border-white/5">
+                    <p className="px-1 mb-3 text-[9px] font-black uppercase tracking-[0.18em] text-white/80">
+                      Manage My Pages
+                    </p>
+
+                    {showManagePagesTabs && (
+                      <div className="grid grid-cols-2 gap-2 mb-3">
+                        <button
+                          type="button"
+                          onClick={() => setManagePagesTab('clubs')}
+                          className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                            activeManagePagesTab === 'clubs'
+                              ? 'border border-padel-green text-padel-green bg-padel-green/5'
+                              : 'border border-transparent bg-white/5 text-gray-400'
+                          }`}
+                        >
+                          Clubs
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setManagePagesTab('organisations')}
+                          className={`py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                            activeManagePagesTab === 'organisations'
+                              ? 'border border-padel-green text-padel-green bg-padel-green/5'
+                              : 'border border-transparent bg-white/5 text-gray-400'
+                          }`}
+                        >
+                          Organisations
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex flex-col gap-2">
+                      {(activeManagePagesTab === 'clubs' ? managedClubs : managedOrgs).map((item) => {
+                        const isClub = activeManagePagesTab === 'clubs';
+                        const subtitle = isClub ? managedClubSubtitle(item) : managedOrgSubtitle(item);
+                        const href = isClub
+                          ? `/admin?tab=clubs&view=mine&club=${item.id}`
+                          : `/admin?tab=organisations&view=host&org=${item.id}`;
+                        return (
+                          <a
+                            key={item.id}
+                            href={href}
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:border-padel-green/30 hover:bg-white/[0.07] transition-all"
+                          >
+                            {item.logo_url ? (
+                              <img
+                                src={item.logo_url}
+                                alt=""
+                                className="w-9 h-9 rounded-lg object-cover bg-white shrink-0"
+                              />
+                            ) : (
+                              <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center text-black text-sm font-black uppercase shrink-0">
+                                {(item.name || '?').charAt(0)}
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[12px] font-bold text-white truncate leading-tight">{item.name}</p>
+                              <p className={`text-[10px] font-semibold truncate mt-0.5 ${subtitle.className}`}>
+                                {subtitle.label}
+                              </p>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-white/50 shrink-0" />
+                          </a>
+                        );
+                      })}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        openAuthModal({
+                          initialTab: 'register',
+                          initialRegisterType: activeManagePagesTab === 'clubs' ? 'club' : 'organisation',
+                        });
+                      }}
+                      className="mt-3 w-full flex items-center justify-start gap-1.5 px-1 py-1 text-[11px] font-bold text-padel-green hover:text-white transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      {activeManagePagesTab === 'clubs' ? 'Manage another club' : 'Manage another organisation'}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {isLoggedIn && player && (
@@ -720,16 +878,6 @@ const Navbar = ({ isDark = false, accentColor }) => {
                         <ShieldAlert className="w-4 h-4" />Admin Panel
                       </a>
                     )}
-                    {isOrgMember && (
-                      <a href="/admin?tab=organisations&view=host" onClick={() => setIsMobileMenuOpen(false)} className="w-full py-2.5 bg-white/5 border border-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white/10 active:scale-95 transition-all">
-                        <Building className="w-4 h-4 text-padel-green" />Org Dashboard
-                      </a>
-                    )}
-                    {isClubAdmin && (
-                      <a href="/admin?tab=clubs" onClick={() => setIsMobileMenuOpen(false)} className="w-full py-2.5 bg-white/5 border border-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white/10 active:scale-95 transition-all">
-                        <MapPin className="w-4 h-4 text-padel-green" />Club Dashboard
-                      </a>
-                    )}
                     <button onClick={() => { setIsMobileMenuOpen(false); handleLogout(); }} className="w-full py-2.5 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:border-transparent active:scale-95 transition-all cursor-pointer">
                       <LogOut className="w-4 h-4" />Logout
                     </button>
@@ -740,7 +888,12 @@ const Navbar = ({ isDark = false, accentColor }) => {
           </>
         )}
       </AnimatePresence>
-      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={closeAuthModal}
+        initialTab={authModalConfig.initialTab}
+        initialRegisterType={authModalConfig.initialRegisterType}
+      />
     </>
   );
 };

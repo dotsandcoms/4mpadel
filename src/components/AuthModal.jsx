@@ -14,7 +14,7 @@ import { fetchUpcomingCalendarEvents } from '../utils/calendarEvents';
 import { PAYSTACK_PUBLIC_KEY, isPaystackConfigured } from '../utils/paystackConfig';
 import RegisterOrganisationForm from './RegisterOrganisationForm';
 import RegisterCoachForm from './RegisterCoachForm';
-import RegisterClubForm from './RegisterClubForm';
+import ClubCreateWizard from './clubs/ClubCreateWizard';
 
 const REGISTRATION_OPTIONS = [
     {
@@ -575,9 +575,11 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
                                 contactEmail={email}
                             />
                         ) : activeTab === 'register' && registerType === 'club' ? (
-                            <RegisterClubForm
-                                onBack={() => setRegisterType(null)}
-                                onClose={onClose}
+                            <ClubCreateWizard
+                                mode="public"
+                                embedded
+                                onCancel={() => setRegisterType(null)}
+                                onComplete={onClose}
                                 contactEmail={email}
                                 initialClubClaim={initialClubClaim}
                             />

@@ -142,7 +142,7 @@ const ClaimClubInvite = () => {
                         <XCircle size={48} className="mx-auto text-gray-400 mb-4" />
                         <h2 className="text-xl font-black uppercase mb-2">Profile Required</h2>
                         <p className="text-gray-400 mb-6">
-                            To manage this club, please create your 4M Padel player profile first. Then you can accept the claim invite.
+                            To manage this club, please create your 4M Padel player profile first. Then you can accept the club claim invite.
                         </p>
                         <button
                             type="button"
@@ -166,7 +166,7 @@ const ClaimClubInvite = () => {
                 <div className="flex items-center justify-center pt-32 px-4">
                     <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-[#141414] border border-white/10 rounded-2xl p-8 max-w-md w-full text-center">
                         {accepted ? <CheckCircle size={48} className="mx-auto text-padel-green mb-4" /> : <XCircle size={48} className="mx-auto text-gray-400 mb-4" />}
-                        <h2 className="text-xl font-black uppercase mb-2">{accepted ? 'Club Claimed!' : 'Invite Declined'}</h2>
+                        <h2 className="text-xl font-black uppercase mb-2">{accepted ? 'Club Claimed!' : 'Club Invite Declined'}</h2>
                         <p className="text-gray-400">{accepted ? `You are now the owner of ${club.name}. Redirecting to your dashboard...` : 'You have declined this invite.'}</p>
                     </motion.div>
                 </div>
@@ -206,7 +206,7 @@ const ClaimClubInvite = () => {
                             className="flex-1 py-3 rounded-xl bg-padel-green text-black font-black uppercase tracking-wider text-sm flex items-center justify-center gap-2 disabled:opacity-40"
                         >
                             {processing ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                            {processing ? 'Processing...' : 'Accept & Claim'}
+                            {processing ? 'Processing...' : 'Accept & Claim Club'}
                         </button>
                     </div>
                 </motion.div>

@@ -537,9 +537,9 @@ async function generateEmailBody(
     case 'club_claim_applied':
       subject = `Club claim received: ${vars.clubName || 'Club'} — pending review`;
       contentHtml = `
-        <h2 style="font-size: 24px; font-weight: 800; color: #FFFFFF; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Claim Submitted</h2>
+        <h2 style="font-size: 24px; font-weight: 800; color: #FFFFFF; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Club Claim Submitted</h2>
         <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
-          Thanks <strong style="color: #FFFFFF;">${vars.creatorName || ''}</strong> — we received your claim for <strong style="color: #FFFFFF;">${vars.clubName}</strong>.
+          Thanks <strong style="color: #FFFFFF;">${vars.creatorName || ''}</strong> — we received your club claim for <strong style="color: #FFFFFF;">${vars.clubName}</strong>.
         </p>
         <p style="font-size: 14.5px; line-height: 1.7; color: #E2E8F0; margin-bottom: 0;">
           A 4M admin will review your request. Once approved, you&apos;ll get Club Dashboard access for this club.
@@ -550,7 +550,7 @@ async function generateEmailBody(
       break;
 
     case 'club_claim_invite':
-      subject = `You're invited to claim: ${vars.clubName || 'a club'} 🎾`;
+      subject = `You're invited to claim a club: ${vars.clubName || 'a club'} 🎾`;
       contentHtml = `
         <h2 style="font-size: 24px; font-weight: 800; color: #9AE900; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">You're Invited</h2>
         <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
@@ -558,11 +558,11 @@ async function generateEmailBody(
           <strong style="color: #FFFFFF;"> ${vars.clubName || 'a club'}</strong>.
         </p>
         <p style="font-size: 14.5px; line-height: 1.7; color: #E2E8F0; margin-bottom: 0;">
-          Accept this invite to become the club owner and unlock access to the <strong style="color: #FFFFFF;">Club Dashboard</strong>.
+          Accept this club claim invite to become the club owner and unlock access to the <strong style="color: #FFFFFF;">Club Dashboard</strong>.
         </p>
       `;
       actionUrl = vars.accept_url || 'https://4mpadel.co.za/claim-club';
-      actionLabel = 'Accept Claim Invite';
+      actionLabel = 'Accept Club Claim Invite';
       break;
 
     case 'admin_club_claim_applied':
@@ -577,15 +577,15 @@ async function generateEmailBody(
         </div>
       `;
       actionUrl = 'https://4mpadel.co.za/admin?tab=clubs';
-      actionLabel = 'Review Claims';
+      actionLabel = 'Review Club Claims';
       break;
 
     case 'club_claim_approved':
       subject = `Club claim approved: ${vars.clubName || 'Club'} 🎉`;
       contentHtml = `
-        <h2 style="font-size: 24px; font-weight: 800; color: #9AE900; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Claim Approved</h2>
+        <h2 style="font-size: 24px; font-weight: 800; color: #9AE900; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Club Claim Approved</h2>
         <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
-          Great news — your claim for <strong style="color: #FFFFFF;">${vars.clubName}</strong> has been <strong style="color: #9AE900;">APPROVED</strong>.
+          Great news — your club claim for <strong style="color: #FFFFFF;">${vars.clubName}</strong> has been <strong style="color: #9AE900;">APPROVED</strong>.
         </p>
         <p style="font-size: 14.5px; line-height: 1.7; color: #E2E8F0; margin-bottom: 0;">
           Your <strong style="color: #FFFFFF;">Club Dashboard</strong> is now unlocked. Sign in with this email to manage the club page.
@@ -598,9 +598,9 @@ async function generateEmailBody(
     case 'club_claim_rejected':
       subject = `Update on your club claim: ${vars.clubName || 'Club'}`;
       contentHtml = `
-        <h2 style="font-size: 24px; font-weight: 800; color: #EF4444; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Claim Not Approved</h2>
+        <h2 style="font-size: 24px; font-weight: 800; color: #EF4444; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Club Claim Not Approved</h2>
         <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
-          Thanks for requesting access to <strong style="color: #FFFFFF;">${vars.clubName}</strong>. Unfortunately this claim was not approved at this time.
+          Thanks for requesting access to <strong style="color: #FFFFFF;">${vars.clubName}</strong>. Unfortunately this club claim was not approved at this time.
         </p>
         <div style="background-color: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); padding: 24px; border-radius: 16px; margin-bottom: 0;">
           <h3 style="font-size: 12px; font-weight: 900; text-transform: uppercase; color: #EF4444; margin-top: 0; margin-bottom: 10px; letter-spacing: 1px;">Reviewer Notes</h3>

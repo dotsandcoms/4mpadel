@@ -380,7 +380,7 @@ const RegisterClubForm = ({ onBack, onClose, contactEmail = '', initialClubClaim
         });
         if (error) {
             if (error.code === '23505') {
-                throw new Error('You already have a pending claim for this club.');
+                throw new Error('You already have a pending club claim for this club.');
             }
             throw error;
         }
@@ -499,23 +499,72 @@ const RegisterClubForm = ({ onBack, onClose, contactEmail = '', initialClubClaim
     };
 
     if (submitted) {
+        const clubName = submitMode === 'claim'
+            ? (claimClub?.name || formData.name)
+            : formData.name;
+        const clubCity = submitMode === 'claim'
+            ? (claimClub?.city || '')
+            : formData.city;
+        const clubLogo = submitMode === 'claim' ? claimClub?.logo_url : null;
+
         return (
-            <div className="text-center py-8 space-y-4">
-                <div className="w-16 h-16 mx-auto rounded-full bg-padel-green/15 flex items-center justify-center">
-                    <CheckCircle2 className="text-padel-green" size={32} />
+            <div className="text-center py-6 space-y-4">
+                <div className="w-16 h-16 mx-auto rounded-full border-2 border-padel-green flex items-center justify-center">
+                    <CheckCircle2 className="text-padel-green" size={30} />
                 </div>
-                <h3 className="text-2xl font-bold text-white">
-                    {submitMode === 'claim' ? 'Claim received' : 'Application received'}
+                <h3 className="text-2xl font-black text-white tracking-tight">
+                    {submitMode === 'claim' ? 'Club claim received!' : 'Application submitted!'}
                 </h3>
                 <p className="text-sm text-gray-400 max-w-sm mx-auto">
                     {submitMode === 'claim'
-                        ? 'Thanks — your club claim is pending review. We\'ll email you once an admin approves it. After approval you\'ll get Club Dashboard access.'
-                        : 'Thanks — your club registration is pending review. We\'ll email you once it\'s approved. After approval you\'ll get a Club Dashboard in your account menu.'}
+                        ? `Your club claim for ${clubName} is pending review. We'll email you once an admin approves it — you'll then get Club Dashboard access.`
+                        : `${clubName} has been submitted for review. We'll email you once it's approved.`}
                 </p>
+
+                <div className="rounded-2xl border border-white/10 bg-black/40 p-4 flex items-center gap-3 text-left">
+                    {clubLogo ? (
+                        <img src={clubLogo} alt="" className="w-12 h-12 rounded-xl object-cover border border-white/10 shrink-0" />
+                    ) : (
+                        <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-500 shrink-0">
+                            <Building2 size={18} />
+                        </div>
+                    )}
+                    <div className="min-w-0">
+                        <p className="text-sm font-bold text-white truncate">{clubName}</p>
+                        {clubCity && (
+                            <p className="text-xs text-gray-500 truncate">{clubCity}</p>
+                        )}
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-black/30 p-4 text-left">
+                    <p className="text-sm font-bold text-white mb-3">What happens next?</p>
+                    <ul className="space-y-2.5 text-sm text-gray-300">
+                        <li className="flex items-start gap-2.5">
+                            <span className="mt-0.5 w-5 h-5 rounded-full bg-padel-green/15 border border-padel-green/30 flex items-center justify-center shrink-0">
+                                <CheckCircle2 size={11} className="text-padel-green" />
+                            </span>
+                            <span>4M Padel will review your request</span>
+                        </li>
+                        <li className="flex items-start gap-2.5">
+                            <span className="mt-0.5 w-5 h-5 rounded-full bg-padel-green/15 border border-padel-green/30 flex items-center justify-center shrink-0">
+                                <CheckCircle2 size={11} className="text-padel-green" />
+                            </span>
+                            <span>We may contact you for verification</span>
+                        </li>
+                        <li className="flex items-start gap-2.5">
+                            <span className="mt-0.5 w-5 h-5 rounded-full bg-padel-green/15 border border-padel-green/30 flex items-center justify-center shrink-0">
+                                <CheckCircle2 size={11} className="text-padel-green" />
+                            </span>
+                            <span>You will be notified once a decision has been made</span>
+                        </li>
+                    </ul>
+                </div>
+
                 <button
                     type="button"
                     onClick={onClose}
-                    className="mt-2 px-6 py-3 rounded-xl bg-padel-green text-black text-xs font-black uppercase tracking-widest"
+                    className="w-full py-3 rounded-xl bg-padel-green text-black text-sm font-black"
                 >
                     Done
                 </button>
@@ -538,7 +587,7 @@ const RegisterClubForm = ({ onBack, onClose, contactEmail = '', initialClubClaim
                     Step {step} of {TOTAL_STEPS}
                 </p>
                 <h3 className="text-lg font-bold text-white mt-1">
-                    {isClaiming && step === 1 ? 'Claim existing club' : STEP_TITLES[step - 1]}
+                    {isClaiming && step === 1 ? 'Claim this club' : STEP_TITLES[step - 1]}
                 </h3>
             </div>
             <ProgressBar step={step} />
@@ -586,7 +635,7 @@ const RegisterClubForm = ({ onBack, onClose, contactEmail = '', initialClubClaim
                                                 </p>
                                             </div>
                                             <span className="text-[9px] font-black uppercase tracking-wider text-padel-green shrink-0">
-                                                Claim
+                                                Claim club
                                             </span>
                                         </button>
                                     ))}
@@ -604,7 +653,7 @@ const RegisterClubForm = ({ onBack, onClose, contactEmail = '', initialClubClaim
                             )}
                         </div>
                         <p className="text-[10px] text-gray-500 mt-1.5">
-                            Search for your club first. If it already exists, claim it for admin approval. If not, continue registering a new club.
+                            Search for your club first. If it already exists, claim this club for admin approval. If not, continue registering a new club.
                         </p>
                     </label>
 
@@ -619,7 +668,7 @@ const RegisterClubForm = ({ onBack, onClose, contactEmail = '', initialClubClaim
                                     </div>
                                 )}
                                 <div className="min-w-0 flex-1">
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Claiming existing club</p>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Claiming this club</p>
                                     <p className="text-white font-bold truncate">{claimClub.name}</p>
                                     <p className="text-xs text-gray-400 truncate">
                                         {[claimClub.city, claimClub.verified ? 'Verified' : null].filter(Boolean).join(' · ')}
@@ -713,7 +762,7 @@ const RegisterClubForm = ({ onBack, onClose, contactEmail = '', initialClubClaim
                 <div className="space-y-3">
                     {isClaiming && (
                         <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-gray-400">
-                            Claiming <span className="text-white font-bold">{claimClub.name}</span>
+                            Claiming club <span className="text-white font-bold">{claimClub.name}</span>
                         </div>
                     )}
                     <label className={labelClass}>
@@ -842,7 +891,7 @@ const RegisterClubForm = ({ onBack, onClose, contactEmail = '', initialClubClaim
                 <div className="space-y-4">
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-2 text-sm">
                         <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">
-                            {isClaiming ? 'Claim request' : 'New club application'}
+                            {isClaiming ? 'Club claim request' : 'New club application'}
                         </p>
                         <p className="text-white font-bold">{formData.name}</p>
                         {!isClaiming && (
@@ -861,7 +910,7 @@ const RegisterClubForm = ({ onBack, onClose, contactEmail = '', initialClubClaim
                     </div>
                     <p className="text-xs text-gray-500">
                         {isClaiming
-                            ? 'A 4M admin will review your claim. Once approved, you\'ll get Club Dashboard access for this club.'
+                            ? 'A 4M admin will review your club claim. Once approved, you\'ll get Club Dashboard access for this club.'
                             : 'Your club will stay private until a 4M admin approves it. After approval you can manage the club card from Club Dashboard.'}
                     </p>
                     <label className="flex items-start gap-3 text-xs text-gray-300 cursor-pointer">
@@ -897,7 +946,7 @@ const RegisterClubForm = ({ onBack, onClose, contactEmail = '', initialClubClaim
                         className="w-full py-3.5 rounded-xl bg-padel-green text-black text-xs font-black uppercase tracking-widest hover:bg-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                         {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                        {isClaiming ? 'Submit claim' : 'Submit application'}
+                        {isClaiming ? 'Submit club claim' : 'Submit application'}
                     </button>
                 )}
             </div>

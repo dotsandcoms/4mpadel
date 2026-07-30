@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../supabaseClient';
 import { toast } from 'sonner';
 import {
@@ -7,6 +8,7 @@ import {
     Search, Check, X, Clock, Palette, Phone, ArrowLeft, ShieldCheck, UserPlus, User, Mail, Send,
 } from 'lucide-react';
 import ClubMembersManager from './ClubMembersManager';
+import ClubCreateWizard from '../clubs/ClubCreateWizard';
 import {
     slugifyClub,
     CLUB_STATUSES,
@@ -190,7 +192,7 @@ const OwnersAdminsCell = ({ admins, onInvite }) => {
                 <p className="text-xs text-gray-500">No owners</p>
                 {onInvite && (
                     <button type="button" onClick={onInvite} className="inline-flex items-center gap-1 text-[10px] font-bold text-padel-green hover:underline">
-                        <Mail size={10} /> Invite to claim
+                        <Mail size={10} /> Invite to claim club
                     </button>
                 )}
             </div>
@@ -255,6 +257,7 @@ const ClubManager = ({ permissions }) => {
     const [form, setForm] = useState(emptyForm());
     const [slugManual, setSlugManual] = useState(false);
     const [membersClub, setMembersClub] = useState(null);
+    const [showWizard, setShowWizard] = useState(false);
     const [assignOrgId, setAssignOrgId] = useState('');
     const [listSearch, setListSearch] = useState('');
     const [claimFilter, setClaimFilter] = useState('all');
@@ -267,6 +270,9 @@ const ClubManager = ({ permissions }) => {
     const [inviteSending, setInviteSending] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [pendingClaims, setPendingClaims] = useState([]);
+    const [rejectClaimTarget, setRejectClaimTarget] = useState(null);
+    const [rejectClaimNotes, setRejectClaimNotes] = useState('');
+    const [rejectClaimSaving, setRejectClaimSaving] = useState(false);
     const [memberCounts, setMemberCounts] = useState({});
     const [linkedOrgCounts, setLinkedOrgCounts] = useState({});
     const [clubAdminsById, setClubAdminsById] = useState({});
@@ -603,29 +609,36 @@ const ClubManager = ({ permissions }) => {
             if (error) throw error;
 
             sendEmail(email, 'club_claim_approved', { clubName });
-            toast.success(`Approved claim for ${clubName}`);
+            toast.success(`Approved club claim for ${clubName}`);
             loadPendingClaims();
             loadClubs();
         } catch (err) {
             console.error(err);
-            toast.error(err.message || 'Failed to approve claim');
+            toast.error(err.message || 'Failed to approve club claim');
         }
     };
 
-    const handleRejectClaim = async (claim) => {
+    const openRejectClaim = (claim) => {
+        setRejectClaimTarget(claim);
+        setRejectClaimNotes('');
+    };
+
+    const handleRejectClaim = async () => {
+        if (!rejectClaimTarget) return;
+        const claim = rejectClaimTarget;
         const clubName = claim.clubs?.name || 'Club';
-        const notes = window.prompt(`Rejection notes for claim on ${clubName}:`);
-        if (notes == null) return;
-        if (!String(notes).trim()) {
+        const notes = String(rejectClaimNotes || '').trim();
+        if (!notes) {
             toast.error('Please provide rejection feedback.');
             return;
         }
+        setRejectClaimSaving(true);
         try {
             const { error } = await supabase
                 .from('club_claim_requests')
                 .update({
                     status: 'rejected',
-                    rejection_notes: String(notes).trim(),
+                    rejection_notes: notes,
                     reviewed_at: new Date().toISOString(),
                 })
                 .eq('id', claim.id);
@@ -634,14 +647,18 @@ const ClubManager = ({ permissions }) => {
             if (claim.requester_email) {
                 sendEmail(claim.requester_email, 'club_claim_rejected', {
                     clubName,
-                    notes: String(notes).trim(),
+                    notes,
                 });
             }
-            toast.success(`Rejected claim for ${clubName}`);
+            toast.success(`Rejected club claim for ${clubName}`);
+            setRejectClaimTarget(null);
+            setRejectClaimNotes('');
             loadPendingClaims();
         } catch (err) {
             console.error(err);
-            toast.error(err.message || 'Failed to reject claim');
+            toast.error(err.message || 'Failed to reject club claim');
+        } finally {
+            setRejectClaimSaving(false);
         }
     };
 
@@ -891,7 +908,10 @@ const ClubManager = ({ permissions }) => {
             setClubs(data || []);
             loadClubMetrics((data || []).map((club) => club.id));
             if (!selectedId && (data || []).length > 0 && !isCreating) {
-                setSelectedId(data[0].id);
+                const params = new URLSearchParams(window.location.search);
+                const fromUrl = params.get('club');
+                const match = fromUrl && (data || []).find((c) => c.id === fromUrl);
+                setSelectedId(match ? match.id : data[0].id);
             }
         } catch (err) {
             console.error(err);
@@ -966,14 +986,18 @@ const ClubManager = ({ permissions }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedId, loadLinkedOrgs]);
 
+    // "New Club" opens the step-by-step wizard in a modal (same pattern as
+    // EventBuilder); the collapsible editor remains the tool for editing.
     const startCreate = () => {
-        setIsCreating(true);
-        setSelectedId(null);
-        setManagerView('detail');
-        setForm(emptyForm());
-        setSlugManual(false);
-        setLinkedOrgIds([]);
-        setSectionOpen(createClosedSections());
+        setIsCreating(false);
+        setShowWizard(true);
+    };
+
+    const handleWizardComplete = (club) => {
+        setShowWizard(false);
+        setClubs((prev) => [...prev.filter((c) => c.id !== club.id), club].sort((a, b) => a.name.localeCompare(b.name)));
+        openClubDetail(club.id);
+        loadClubs();
     };
 
     // Google Places autocomplete — shared helper with EventBuilder.
@@ -1345,21 +1369,53 @@ const ClubManager = ({ permissions }) => {
                                         onClick={() => handleApproveClaim(claim)}
                                         className="px-2.5 py-1.5 rounded-lg bg-padel-green text-black text-[10px] font-black uppercase tracking-wider flex items-center gap-1"
                                     >
-                                        <Check size={12} /> Approve
+                                        <Check size={12} /> Approve club claim
                                     </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleRejectClaim(claim)}
-                                        className="px-2.5 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 text-[10px] font-black uppercase tracking-wider flex items-center gap-1"
-                                    >
-                                        <X size={12} /> Reject
-                                    </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => openRejectClaim(claim)}
+                                            className="px-2.5 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 text-[10px] font-black uppercase tracking-wider flex items-center gap-1"
+                                        >
+                                            <X size={12} /> Reject club claim
+                                        </button>
                                 </div>
                             </li>
                         ))}
                     </ul>
                 </div>
             )}
+
+            <AnimatePresence>
+                {showWizard && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[1100] overflow-y-auto"
+                        onClick={() => setShowWizard(false)}
+                    >
+                        <div className="flex min-h-full items-center justify-center p-4">
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.97, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.97, y: 20 }}
+                                className="w-full max-w-xl"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <ClubCreateWizard
+                                    mode="admin"
+                                    onCancel={() => setShowWizard(false)}
+                                    onOpenExisting={(clubId) => {
+                                        setShowWizard(false);
+                                        openClubDetail(clubId);
+                                    }}
+                                    onComplete={handleWizardComplete}
+                                />
+                            </motion.div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {managerView === 'list' ? (
                 <div className="space-y-4">
@@ -1368,7 +1424,7 @@ const ClubManager = ({ permissions }) => {
                             { label: 'Visible Clubs', value: managerStats.total, tone: 'text-white', helper: 'Shown in this list' },
                             { label: 'Claimed', value: managerStats.claimed, tone: 'text-padel-green', helper: 'Has owner/admin' },
                             { label: 'Published', value: managerStats.published, tone: 'text-sky-400', helper: 'Public directory' },
-                            { label: 'In review', value: managerStats.inReview, tone: 'text-violet-400', helper: 'Pending claim requests' },
+                            { label: 'In review', value: managerStats.inReview, tone: 'text-violet-400', helper: 'Pending club claim requests' },
                         ].map((stat) => (
                             <div key={stat.label} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 shadow-xl">
                                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">{stat.label}</p>
@@ -2437,7 +2493,7 @@ const ClubManager = ({ permissions }) => {
                 >
                     <div className="bg-[#141414] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-black text-white uppercase tracking-wide">Invite to Claim</h3>
+                            <h3 className="text-lg font-black text-white uppercase tracking-wide">Invite to Claim Club</h3>
                             <button
                                 type="button"
                                 onClick={() => {
@@ -2509,6 +2565,77 @@ const ClubManager = ({ permissions }) => {
                             {inviteSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                             {inviteSending ? 'Sending...' : 'Send Invite'}
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {rejectClaimTarget && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+                    onClick={() => {
+                        if (rejectClaimSaving) return;
+                        setRejectClaimTarget(null);
+                        setRejectClaimNotes('');
+                    }}
+                >
+                    <div
+                        className="bg-[#141414] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-black text-white uppercase tracking-wide">Reject Club Claim</h3>
+                            <button
+                                type="button"
+                                disabled={rejectClaimSaving}
+                                onClick={() => {
+                                    setRejectClaimTarget(null);
+                                    setRejectClaimNotes('');
+                                }}
+                                className="text-gray-500 hover:text-white disabled:opacity-40"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+                        <p className="text-sm text-gray-400 mb-4">
+                            Reject the club claim for{' '}
+                            <span className="text-white font-bold">{rejectClaimTarget.clubs?.name || 'this club'}</span>
+                            {rejectClaimTarget.full_name ? (
+                                <> from <span className="text-white font-bold">{rejectClaimTarget.full_name}</span></>
+                            ) : null}
+                            . Please add a short reason — this is emailed to the requester.
+                        </p>
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
+                            Rejection notes
+                        </label>
+                        <textarea
+                            value={rejectClaimNotes}
+                            onChange={(e) => setRejectClaimNotes(e.target.value)}
+                            rows={4}
+                            placeholder="Why is this club claim being rejected?"
+                            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white text-sm placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500/40 mb-4 resize-none"
+                        />
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                disabled={rejectClaimSaving}
+                                onClick={() => {
+                                    setRejectClaimTarget(null);
+                                    setRejectClaimNotes('');
+                                }}
+                                className="flex-1 py-3 rounded-xl border border-white/10 text-gray-300 font-black uppercase tracking-wider text-sm hover:bg-white/5 disabled:opacity-40"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleRejectClaim}
+                                disabled={rejectClaimSaving || !rejectClaimNotes.trim()}
+                                className="flex-1 py-3 rounded-xl bg-red-500 text-white font-black uppercase tracking-wider text-sm flex items-center justify-center gap-2 disabled:opacity-40"
+                            >
+                                {rejectClaimSaving ? <Loader2 size={16} className="animate-spin" /> : <X size={16} />}
+                                {rejectClaimSaving ? 'Rejecting...' : 'Reject Club Claim'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

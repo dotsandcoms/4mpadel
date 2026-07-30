@@ -12,7 +12,8 @@ import { useRankedin } from '../hooks/useRankedin';
 import { usePendingPayments } from '../hooks/usePendingPayments';
 import { useClubs } from '../hooks/useClubs';
 import SearchableSelect from '../components/SearchableSelect';
-import { User, Phone, Save, AlertCircle, CheckCircle, CheckCircle2, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Shield, Mail, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users, Instagram, TrendingUp, Edit3, X, RotateCcw } from 'lucide-react';
+import { User, Phone, Save, AlertCircle, CheckCircle, CheckCircle2, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Shield, Mail, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users, Instagram, TrendingUp, Edit3, X, RotateCcw, Building2, Building, Clock, LayoutDashboard } from 'lucide-react';
+import { clubStatusLabel, isManageableClubStatus, isInReviewClubStatus } from '../utils/club';
 
 const REFUND_REASON_LABELS = {
     owner_withdraw: 'Withdrawal',
@@ -106,7 +107,13 @@ const PlayerProfile = () => {
     const [isImpersonating, setIsImpersonating] = useState(false);
     const [loadingReset, setLoadingReset] = useState(false);
     const [coachApplication, setCoachApplication] = useState(null);
+    const [myClubPending, setMyClubPending] = useState([]);
+    const [myClubManaged, setMyClubManaged] = useState([]);
+    const [myOrgPending, setMyOrgPending] = useState([]);
+    const [myOrgManaged, setMyOrgManaged] = useState([]);
     const navigate = useNavigate();
+    const hasMyClub = myClubPending.length > 0 || myClubManaged.length > 0;
+    const hasMyOrganisation = myOrgPending.length > 0 || myOrgManaged.length > 0;
     const [transactions, setTransactions] = useState([]);
     const [transactionsLoading, setTransactionsLoading] = useState(false);
     const [currentTransactionPage, setCurrentTransactionPage] = useState(1);
@@ -329,10 +336,220 @@ const PlayerProfile = () => {
                     setCoachApplication(coachData);
                 }
 
+                // Club applications / claim requests / dashboard memberships
+                await fetchMyClubs(emailToFetch, playerData.id);
+
+                // Organisation applications / memberships
+                await fetchMyOrganisations(emailToFetch, playerData.id);
+
                 // Fetch transactions for this user
                 fetchTransactions(emailToFetch);
             }
             setLoading(false);
+        };
+
+        const fetchMyClubs = async (email, playerId) => {
+            try {
+                const emailFilter = String(email || '').trim();
+                if (!emailFilter) {
+                    setMyClubPending([]);
+                    setMyClubManaged([]);
+                    return;
+                }
+
+                const createsByEmail = supabase
+                    .from('clubs')
+                    .select('id, name, slug, logo_url, city, status, contact_email, created_by, created_at')
+                    .ilike('contact_email', emailFilter)
+                    .in('status', ['in_review', 'pending'])
+                    .order('created_at', { ascending: false });
+
+                const createsByPlayer = playerId
+                    ? supabase
+                        .from('clubs')
+                        .select('id, name, slug, logo_url, city, status, contact_email, created_by, created_at')
+                        .eq('created_by', playerId)
+                        .in('status', ['in_review', 'pending'])
+                        .order('created_at', { ascending: false })
+                    : Promise.resolve({ data: [] });
+
+                const [
+                    { data: memberships },
+                    { data: pendingByEmail },
+                    { data: pendingByPlayer },
+                    { data: pendingClaims },
+                ] = await Promise.all([
+                    supabase
+                        .from('club_members')
+                        .select('role, club_id, clubs(id, name, slug, logo_url, city, status, brand_color, short_name)')
+                        .ilike('user_email', emailFilter)
+                        .in('role', ['owner', 'admin', 'staff']),
+                    createsByEmail,
+                    createsByPlayer,
+                    supabase
+                        .from('club_claim_requests')
+                        .select('id, status, created_at, full_name, clubs(id, name, slug, logo_url, city, status)')
+                        .ilike('requester_email', emailFilter)
+                        .eq('status', 'pending')
+                        .order('created_at', { ascending: false }),
+                ]);
+
+                const pendingCreatesMap = new Map();
+                [...(pendingByEmail || []), ...(pendingByPlayer || [])].forEach((c) => {
+                    if (c?.id) pendingCreatesMap.set(c.id, c);
+                });
+                const pendingCreates = Array.from(pendingCreatesMap.values());
+
+                const managed = (memberships || [])
+                    .filter((m) => m.clubs && isManageableClubStatus(m.clubs.status))
+                    .map((m) => ({
+                        id: m.clubs.id,
+                        role: m.role,
+                        club: m.clubs,
+                    }));
+
+                const managedIds = new Set(managed.map((m) => m.id));
+
+                const pending = [
+                    ...(pendingCreates || [])
+                        .filter((c) => !managedIds.has(c.id) && isInReviewClubStatus(c.status))
+                        .map((c) => ({
+                            id: `create-${c.id}`,
+                            type: 'create',
+                            status: 'pending',
+                            club: c,
+                            created_at: c.created_at,
+                        })),
+                    ...(pendingClaims || []).map((c) => ({
+                        id: `claim-${c.id}`,
+                        type: 'claim',
+                        status: 'pending',
+                        club: c.clubs,
+                        created_at: c.created_at,
+                    })),
+                ];
+
+                setMyClubManaged(managed);
+                setMyClubPending(pending);
+            } catch (err) {
+                console.error('Failed to load my clubs:', err);
+                setMyClubManaged([]);
+                setMyClubPending([]);
+            }
+        };
+
+        const fetchMyOrganisations = async (email, playerId) => {
+            try {
+                const emailFilter = String(email || '').trim();
+                if (!emailFilter) {
+                    setMyOrgPending([]);
+                    setMyOrgManaged([]);
+                    return;
+                }
+
+                const orgSelect = 'id, name, slug, logo_url, status, verified, org_type, created_at, created_by, contact_email';
+
+                const [
+                    membershipsRes,
+                    pendingByCreatorRes,
+                    pendingByEmailRes,
+                ] = await Promise.all([
+                    supabase
+                        .from('organisation_members')
+                        .select(`role, organisation_id, organisations(${orgSelect})`)
+                        .ilike('user_email', emailFilter)
+                        .limit(25),
+                    playerId
+                        ? supabase
+                            .from('organisations')
+                            .select(orgSelect)
+                            .eq('created_by', playerId)
+                            .eq('status', 'pending')
+                            .order('created_at', { ascending: false })
+                        : Promise.resolve({ data: [], error: null }),
+                    supabase
+                        .from('organisations')
+                        .select(orgSelect)
+                        .ilike('contact_email', emailFilter)
+                        .eq('status', 'pending')
+                        .order('created_at', { ascending: false }),
+                ]);
+
+                if (membershipsRes.error) console.warn('Org memberships load failed:', membershipsRes.error.message);
+                if (pendingByCreatorRes.error) console.warn('Pending orgs (creator) load failed:', pendingByCreatorRes.error.message);
+                if (pendingByEmailRes.error) console.warn('Pending orgs (email) load failed:', pendingByEmailRes.error.message);
+
+                const memberships = membershipsRes.data || [];
+                const pendingByCreator = pendingByCreatorRes.data || [];
+                const pendingByEmail = pendingByEmailRes.data || [];
+
+                const managedMap = new Map();
+                memberships.forEach((m) => {
+                    const org = m.organisations;
+                    if (org?.id && org.status === 'approved') {
+                        managedMap.set(org.id, {
+                            id: org.id,
+                            role: m.role,
+                            org,
+                        });
+                    }
+                });
+
+                // Legacy: approved orgs created by this player (merge any not already via membership)
+                if (playerId) {
+                    const { data: legacyOrgs, error: legacyError } = await supabase
+                        .from('organisations')
+                        .select(orgSelect)
+                        .eq('created_by', playerId)
+                        .eq('status', 'approved')
+                        .limit(25);
+                    if (legacyError) console.warn('Legacy orgs load failed:', legacyError.message);
+                    (legacyOrgs || []).forEach((org) => {
+                        if (org?.id && !managedMap.has(org.id)) {
+                            managedMap.set(org.id, {
+                                id: org.id,
+                                role: 'owner',
+                                org,
+                            });
+                        }
+                    });
+                }
+
+                const managedIds = new Set(managedMap.keys());
+                const pendingMap = new Map();
+                [...pendingByCreator, ...pendingByEmail].forEach((org) => {
+                    if (org?.id && !managedIds.has(org.id)) {
+                        pendingMap.set(org.id, {
+                            id: `org-pending-${org.id}`,
+                            status: 'pending',
+                            org,
+                            created_at: org.created_at,
+                        });
+                    }
+                });
+
+                // Pending memberships (org still under review)
+                memberships.forEach((m) => {
+                    const org = m.organisations;
+                    if (org?.id && org.status === 'pending' && !managedIds.has(org.id)) {
+                        pendingMap.set(org.id, {
+                            id: `org-member-pending-${org.id}`,
+                            status: 'pending',
+                            org,
+                            created_at: null,
+                        });
+                    }
+                });
+
+                setMyOrgManaged([...managedMap.values()].sort((a, b) =>
+                    String(a.org?.name || '').localeCompare(String(b.org?.name || ''))
+                ));
+                setMyOrgPending([...pendingMap.values()]);
+            } catch (err) {
+                console.error('Failed to load my organisations:', err);
+                setMyOrgManaged([]);
+                setMyOrgPending([]);
+            }
         };
 
         const fetchTransactions = async (email) => {
@@ -517,7 +734,7 @@ const PlayerProfile = () => {
             setIsEditing(true);
         }
         const tab = params.get('tab');
-        if (tab && ['events', 'matches', 'rankings', 'payments'].includes(tab)) {
+        if (tab && ['events', 'matches', 'rankings', 'payments', 'club', 'coach'].includes(tab)) {
             setActiveTab(tab);
         }
     }, []);
@@ -1079,6 +1296,221 @@ const PlayerProfile = () => {
         }
     };
 
+    const roleLabel = (role) => {
+        if (role === 'owner') return 'Owner';
+        if (role === 'admin') return 'Admin';
+        if (role === 'staff') return 'Staff';
+        return role || 'Member';
+    };
+
+    const renderMyClubContent = () => (
+        <div className="space-y-4">
+            <div className="flex items-center gap-4">
+                <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 shadow-[0_0_15px_rgba(14,165,233,0.15)] flex items-center justify-center shrink-0">
+                    <Building2 size={24} />
+                </div>
+                <h4 className="font-black text-white uppercase tracking-wider text-sm sm:text-base lg:text-lg">
+                    My Club
+                </h4>
+            </div>
+
+            {myClubPending.length > 0 && (
+                <div className="space-y-3">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-400/80">Pending approval</p>
+                    {myClubPending.map((item) => {
+                        const club = item.club || {};
+                        return (
+                            <div
+                                key={item.id}
+                                className="bg-[#0a0a0a]/70 border border-amber-500/20 rounded-2xl p-4 flex items-center gap-3"
+                            >
+                                {club.logo_url ? (
+                                    <img src={club.logo_url} alt="" className="w-12 h-12 rounded-xl object-cover border border-white/10 shrink-0" />
+                                ) : (
+                                    <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                                        <Building2 size={18} className="text-gray-500" />
+                                    </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-black text-white truncate">{club.name || 'Club application'}</p>
+                                    <p className="text-[10px] text-gray-500 truncate mt-0.5">
+                                        {item.type === 'claim' ? 'Club claim request' : 'New club application'}
+                                        {club.city ? ` · ${club.city}` : ''}
+                                    </p>
+                                </div>
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
+                                    <Clock size={10} /> Pending
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {myClubManaged.length > 0 && (
+                <div className="space-y-3">
+                    {myClubPending.length > 0 && (
+                        <p className="text-[9px] font-black uppercase tracking-widest text-sky-400/80 pt-1">Your clubs</p>
+                    )}
+                    {myClubManaged.map((item) => {
+                        const club = item.club || {};
+                        return (
+                            <div
+                                key={item.id}
+                                className="bg-[#0a0a0a]/70 border border-sky-500/20 rounded-2xl p-4 space-y-3"
+                            >
+                                <div className="flex items-center gap-3">
+                                    {club.logo_url ? (
+                                        <img src={club.logo_url} alt="" className="w-12 h-12 rounded-xl object-cover border border-white/10 shrink-0" />
+                                    ) : (
+                                        <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                                            <Building2 size={18} className="text-sky-400" />
+                                        </div>
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-black text-white truncate">{club.short_name || club.name}</p>
+                                        <p className="text-[10px] text-gray-500 truncate mt-0.5">
+                                            {[club.city, clubStatusLabel(club.status)].filter(Boolean).join(' · ')}
+                                        </p>
+                                    </div>
+                                    <span className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-sky-500/10 text-sky-300 border border-sky-500/20 shrink-0">
+                                        {roleLabel(item.role)}
+                                    </span>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate('/admin?tab=clubs')}
+                                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-sky-500 text-black text-[9px] font-black uppercase tracking-wider hover:bg-sky-400 transition-colors"
+                                    >
+                                        <LayoutDashboard size={12} /> Club Dashboard
+                                    </button>
+                                    {club.slug && (
+                                        <button
+                                            type="button"
+                                            onClick={() => navigate(`/clubs/${club.slug}`)}
+                                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-white text-[9px] font-black uppercase tracking-wider hover:bg-white/10 transition-colors"
+                                        >
+                                            <ExternalLink size={12} /> View page
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+
+    const orgStatusLabel = (status) => {
+        const raw = String(status || '').toLowerCase();
+        if (raw === 'approved') return 'Approved';
+        if (raw === 'pending') return 'Pending';
+        if (raw === 'rejected') return 'Rejected';
+        return status || 'Organisation';
+    };
+
+    const renderMyOrganisationContent = () => (
+        <div className="space-y-4">
+            <div className="flex items-center gap-4">
+                <div className="p-2.5 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400 shadow-[0_0_15px_rgba(139,92,246,0.15)] flex items-center justify-center shrink-0">
+                    <Building size={24} />
+                </div>
+                <h4 className="font-black text-white uppercase tracking-wider text-sm sm:text-base lg:text-lg">
+                    My Organisation
+                </h4>
+            </div>
+
+            {myOrgPending.length > 0 && (
+                <div className="space-y-3">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-400/80">Pending approval</p>
+                    {myOrgPending.map((item) => {
+                        const org = item.org || {};
+                        return (
+                            <div
+                                key={item.id}
+                                className="bg-[#0a0a0a]/70 border border-amber-500/20 rounded-2xl p-4 flex items-center gap-3"
+                            >
+                                {org.logo_url ? (
+                                    <img src={org.logo_url} alt="" className="w-12 h-12 rounded-xl object-cover border border-white/10 shrink-0" />
+                                ) : (
+                                    <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                                        <Building size={18} className="text-gray-500" />
+                                    </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-black text-white truncate">{org.name || 'Organisation application'}</p>
+                                    <p className="text-[10px] text-gray-500 truncate mt-0.5">
+                                        Organisation application
+                                        {org.org_type ? ` · ${org.org_type}` : ''}
+                                    </p>
+                                </div>
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
+                                    <Clock size={10} /> Pending
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {myOrgManaged.length > 0 && (
+                <div className="space-y-3">
+                    {myOrgPending.length > 0 && (
+                        <p className="text-[9px] font-black uppercase tracking-widest text-violet-400/80 pt-1">Your organisations</p>
+                    )}
+                    {myOrgManaged.map((item) => {
+                        const org = item.org || {};
+                        return (
+                            <div
+                                key={item.id}
+                                className="bg-[#0a0a0a]/70 border border-violet-500/20 rounded-2xl p-4 space-y-3"
+                            >
+                                <div className="flex items-center gap-3">
+                                    {org.logo_url ? (
+                                        <img src={org.logo_url} alt="" className="w-12 h-12 rounded-xl object-cover border border-white/10 shrink-0" />
+                                    ) : (
+                                        <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                                            <Building size={18} className="text-violet-400" />
+                                        </div>
+                                    )}
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-black text-white truncate">{org.name}</p>
+                                        <p className="text-[10px] text-gray-500 truncate mt-0.5">
+                                            {[org.org_type, orgStatusLabel(org.status)].filter(Boolean).join(' · ')}
+                                        </p>
+                                    </div>
+                                    <span className="px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider bg-violet-500/10 text-violet-300 border border-violet-500/20 shrink-0">
+                                        {roleLabel(item.role)}
+                                    </span>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate(`/admin?tab=organisations&view=host&org=${org.id}`)}
+                                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-violet-500 text-black text-[9px] font-black uppercase tracking-wider hover:bg-violet-400 transition-colors"
+                                    >
+                                        <LayoutDashboard size={12} /> Organisation Dashboard
+                                    </button>
+                                    {org.slug && (
+                                        <button
+                                            type="button"
+                                            onClick={() => navigate(`/organisations/${org.slug}`)}
+                                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-white text-[9px] font-black uppercase tracking-wider hover:bg-white/10 transition-colors"
+                                        >
+                                            <ExternalLink size={12} /> View page
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+
     if (loading) {
         return (
             <div className="min-h-screen bg-black flex items-center justify-center pt-24">
@@ -1455,6 +1887,8 @@ const PlayerProfile = () => {
                                     { id: 'matches', label: 'My Matches' },
                                     { id: 'rankings', label: 'My Rankings' },
                                     { id: 'payments', label: 'Payments' },
+                                    ...(hasMyClub ? [{ id: 'club', label: 'My Club' }] : []),
+                                    ...(hasMyOrganisation ? [{ id: 'organisation', label: 'My Organisation' }] : []),
                                     ...(coachApplication ? [{ id: 'coach', label: 'Coach Profile' }] : []),
                                     { id: 'profile', label: 'My Profile' },
                                 ].map((tab) => {
@@ -1474,6 +1908,12 @@ const PlayerProfile = () => {
                                     } else if (tab.id === 'payments') {
                                         activeStyles = 'bg-blue-500 border border-blue-500 text-white shadow-lg shadow-blue-500/20';
                                         inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-blue-500/10';
+                                    } else if (tab.id === 'club') {
+                                        activeStyles = 'bg-sky-500 border border-sky-500 text-black shadow-lg shadow-sky-500/20';
+                                        inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-sky-500/10';
+                                    } else if (tab.id === 'organisation') {
+                                        activeStyles = 'bg-violet-500 border border-violet-500 text-white shadow-lg shadow-violet-500/20';
+                                        inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-violet-500/10';
                                     } else if (tab.id === 'coach') {
                                         activeStyles = 'bg-emerald-500 border border-emerald-500 text-black shadow-lg shadow-emerald-500/20';
                                         inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-emerald-500/10';
@@ -1506,6 +1946,8 @@ const PlayerProfile = () => {
                             activeTab === 'matches' ? 'border-orange-500/35 shadow-[0_0_20px_rgba(249,115,22,0.12)]' :
                             activeTab === 'rankings' ? 'border-yellow-500/35 shadow-[0_0_20px_rgba(234,179,8,0.12)]' :
                             activeTab === 'payments' ? 'border-blue-500/35 shadow-[0_0_20px_rgba(59,130,246,0.12)]' :
+                            activeTab === 'club' ? 'border-sky-500/35 shadow-[0_0_20px_rgba(14,165,233,0.12)]' :
+                            activeTab === 'organisation' ? 'border-violet-500/35 shadow-[0_0_20px_rgba(139,92,246,0.12)]' :
                             activeTab === 'coach' ? 'border-emerald-500/35 shadow-[0_0_20px_rgba(16,185,129,0.12)]' :
                             'border-padel-green/35 shadow-[0_0_20px_rgba(204,255,0,0.12)]'
                         }`}>
@@ -2002,6 +2444,12 @@ const PlayerProfile = () => {
                                     )}
                                 </div>
                             )}
+
+                            {/* My Club Tab Content (mobile) */}
+                            {activeTab === 'club' && hasMyClub && renderMyClubContent()}
+
+                            {/* My Organisation Tab Content (mobile) */}
+                            {activeTab === 'organisation' && hasMyOrganisation && renderMyOrganisationContent()}
 
                             {/* Coach Profile Tab Content (mobile) */}
                             {activeTab === 'coach' && coachApplication && (
@@ -3165,6 +3613,22 @@ const PlayerProfile = () => {
                                 >
                                     <CreditCard size={16} /> Payments
                                 </button>
+                                {hasMyClub && (
+                                    <button
+                                        onClick={() => setActiveTab('club')}
+                                        className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'club' ? 'bg-sky-500 border border-sky-500 text-black shadow-xl shadow-sky-500/20' : 'bg-[#0a0a0a]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-sky-500/15 hover:text-sky-300 hover:border-sky-500/40'}`}
+                                    >
+                                        <Building2 size={16} /> My Club
+                                    </button>
+                                )}
+                                {hasMyOrganisation && (
+                                    <button
+                                        onClick={() => setActiveTab('organisation')}
+                                        className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'organisation' ? 'bg-violet-500 border border-violet-500 text-white shadow-xl shadow-violet-500/20' : 'bg-[#0a0a0a]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-violet-500/15 hover:text-violet-300 hover:border-violet-500/40'}`}
+                                    >
+                                        <Building size={16} /> My Organisation
+                                    </button>
+                                )}
                                 {coachApplication && (
                                     <button
                                         onClick={() => setActiveTab('coach')}
@@ -3182,6 +3646,30 @@ const PlayerProfile = () => {
                             </motion.div>
 
                             <AnimatePresence mode="wait">
+                                {activeTab === 'club' && hasMyClub && (
+                                    <motion.div
+                                        key="club"
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="bg-neutral-950/35 backdrop-blur-2xl border-t border-sky-500/25 border-x border-sky-500/15 border-b border-sky-500/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85),0_0_40px_rgba(14,165,233,0.08)] rounded-[2.5rem] p-6 sm:p-8 lg:p-10 relative overflow-hidden"
+                                    >
+                                        {renderMyClubContent()}
+                                    </motion.div>
+                                )}
+                                {activeTab === 'organisation' && hasMyOrganisation && (
+                                    <motion.div
+                                        key="organisation"
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="bg-neutral-950/35 backdrop-blur-2xl border-t border-violet-500/25 border-x border-violet-500/15 border-b border-violet-500/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85),0_0_40px_rgba(139,92,246,0.08)] rounded-[2.5rem] p-6 sm:p-8 lg:p-10 relative overflow-hidden"
+                                    >
+                                        {renderMyOrganisationContent()}
+                                    </motion.div>
+                                )}
                                 {activeTab === 'coach' && coachApplication && (
                                     <motion.div
                                         key="coach"
