@@ -185,14 +185,51 @@ const roleLabel = (role) => {
 
 /**
  * @param {Array<{ id: string, name: string, role: string, image_url?: string|null }>} admins
+ * @param {{ email: string, created_at?: string }|null|undefined} pendingInvite
+ * @param {(() => void)|undefined} onInvite
  */
-const OwnersAdminsCell = ({ admins, onInvite }) => {
+const OwnersAdminsCell = ({ admins, pendingInvite = null, onInvite }) => {
     if (!admins?.length) {
+        if (pendingInvite?.email) {
+            return (
+                <div className="space-y-2 min-w-0">
+                    <div className="flex items-start gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-xl bg-padel-green/10 border border-padel-green/25 flex items-center justify-center shrink-0">
+                            <Mail size={14} className="text-padel-green" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-sm font-bold text-white truncate leading-tight border-b border-dotted border-white/25 w-fit max-w-full">
+                                {pendingInvite.email}
+                            </p>
+                            <div className="flex items-center gap-2 flex-wrap mt-1.5">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-padel-green/15 text-padel-green border border-padel-green/25">
+                                    Invite sent
+                                </span>
+                                <span className="text-[10px] text-gray-500 font-medium">Pending claim</span>
+                            </div>
+                        </div>
+                    </div>
+                    {onInvite && (
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onInvite(); }}
+                            className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-padel-green hover:underline"
+                        >
+                            <Mail size={10} /> Send another invite
+                        </button>
+                    )}
+                </div>
+            );
+        }
         return (
             <div className="space-y-1">
                 <p className="text-xs text-gray-500">No owners</p>
                 {onInvite && (
-                    <button type="button" onClick={onInvite} className="inline-flex items-center gap-1 text-[10px] font-bold text-padel-green hover:underline">
+                    <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onInvite(); }}
+                        className="inline-flex items-center gap-1 text-[10px] font-bold text-padel-green hover:underline"
+                    >
                         <Mail size={10} /> Invite to claim club
                     </button>
                 )}
@@ -277,6 +314,7 @@ const ClubManager = ({ permissions }) => {
     const [memberCounts, setMemberCounts] = useState({});
     const [linkedOrgCounts, setLinkedOrgCounts] = useState({});
     const [clubAdminsById, setClubAdminsById] = useState({});
+    const [claimInvitesByClubId, setClaimInvitesByClubId] = useState({});
     const addressInputRef = useRef(null);
     const autocompleteRef = useRef(null);
     const [sectionOpen, setSectionOpen] = useState(createClosedSections);
@@ -391,9 +429,10 @@ const ClubManager = ({ permissions }) => {
                 cityLabel: clubCityLabel(club),
                 regionLabel: clubRegionLabel(club),
                 admins: clubAdminsById[club.id] || [],
+                pendingInvite: claimInvitesByClubId[club.id] || null,
             };
         });
-    }, [filteredClubs, memberCounts, linkedOrgCounts, clubAdminsById]);
+    }, [filteredClubs, memberCounts, linkedOrgCounts, clubAdminsById, claimInvitesByClubId]);
 
     const ITEMS_PER_PAGE = 50;
 
@@ -716,6 +755,7 @@ const ClubManager = ({ permissions }) => {
             setInviteSearchQuery('');
             setInviteSelectedPlayer(null);
             setInvitePlayerResults([]);
+            loadClubMetrics(clubs.map((c) => c.id).filter(Boolean));
         } catch (err) {
             console.error(err);
             toast.error(err.message || 'Failed to send invite');
@@ -796,6 +836,7 @@ const ClubManager = ({ permissions }) => {
             setMemberCounts({});
             setLinkedOrgCounts({});
             setClubAdminsById({});
+            setClaimInvitesByClubId({});
             return;
         }
 
@@ -814,7 +855,7 @@ const ClubManager = ({ permissions }) => {
         };
 
         try {
-            const [members, orgLinks, clubMembers] = await Promise.all([
+            const [members, orgLinks, clubMembers, claimInvites] = await Promise.all([
                 fetchAll(supabase.from('players').select('club_id').in('club_id', clubIds)),
                 fetchAll(supabase.from('club_organisations').select('club_id').in('club_id', clubIds)),
                 fetchAll(
@@ -823,6 +864,14 @@ const ClubManager = ({ permissions }) => {
                         .select('club_id, role, user_email, players!player_id(id, name, image_url, email)')
                         .in('club_id', clubIds)
                         .in('role', ['owner', 'admin']),
+                ),
+                fetchAll(
+                    supabase
+                        .from('club_claim_invites')
+                        .select('id, club_id, email, status, created_at')
+                        .in('club_id', clubIds)
+                        .eq('status', 'pending')
+                        .order('created_at', { ascending: false }),
                 ),
             ]);
 
@@ -882,14 +931,27 @@ const ClubManager = ({ permissions }) => {
                 });
             });
 
+            // Latest pending invite per club (query ordered newest-first).
+            const nextInvites = {};
+            (claimInvites || []).forEach((invite) => {
+                if (!invite?.club_id || nextInvites[invite.club_id]) return;
+                nextInvites[invite.club_id] = {
+                    id: invite.id,
+                    email: String(invite.email || '').toLowerCase(),
+                    created_at: invite.created_at,
+                };
+            });
+
             setMemberCounts(nextMemberCounts);
             setLinkedOrgCounts(nextLinkedCounts);
             setClubAdminsById(nextAdmins);
+            setClaimInvitesByClubId(nextInvites);
         } catch (err) {
             console.warn('Failed to load club metrics:', err.message);
             setMemberCounts({});
             setLinkedOrgCounts({});
             setClubAdminsById({});
+            setClaimInvitesByClubId({});
         }
     }, []);
 
@@ -1541,6 +1603,7 @@ const ClubManager = ({ permissions }) => {
                                                             <div className="mt-3">
                                                                 <OwnersAdminsCell
                                                                     admins={club.admins}
+                                                                    pendingInvite={club.pendingInvite}
                                                                     onInvite={!club.admins?.length ? () => {
                                                                         setInviteClub(club);
                                                                         setInviteEmail('');
@@ -1596,6 +1659,7 @@ const ClubManager = ({ permissions }) => {
                                                     </div>
                                                     <OwnersAdminsCell
                                                         admins={club.admins}
+                                                        pendingInvite={club.pendingInvite}
                                                         onInvite={!club.admins?.length ? () => {
                                                             setInviteClub(club);
                                                             setInviteEmail('');
