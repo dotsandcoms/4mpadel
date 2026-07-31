@@ -18,8 +18,8 @@ import VerifiedBadge from '../components/VerifiedBadge';
 import {
     MapPin, ShieldCheck, Globe, Mail, Phone, MessageCircle,
     ChevronRight, Building, Calendar, LayoutGrid, Instagram, Facebook,
-    ExternalLink, Coffee, Landmark, ChevronDown, Users, Trophy, ShoppingBag,
-    Droplets, Dumbbell, Wifi, Car, ParkingCircle, Utensils, User,
+    ExternalLink, Coffee, Landmark, ChevronDown, ChevronLeft, Users, Trophy,
+    ShoppingBag, Droplets, Dumbbell, Wifi, Car, ParkingCircle, Utensils, User, X,
 } from 'lucide-react';
 
 const DAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -112,6 +112,7 @@ const ClubPage = () => {
     const [eventsLoading, setEventsLoading] = useState(false);
     const [loading, setLoading] = useState(true);
     const [galleryFilter, setGalleryFilter] = useState('all');
+    const [lightboxIndex, setLightboxIndex] = useState(null);
     const [aboutExpanded, setAboutExpanded] = useState(false);
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
     const [openAccordions, setOpenAccordions] = useState({
@@ -246,6 +247,57 @@ const ClubPage = () => {
     const filteredGallery = galleryFilter === 'all'
         ? gallery
         : gallery.filter((g) => (g.category || 'other') === galleryFilter);
+
+    const openLightbox = useCallback((idx) => {
+        setLightboxIndex(idx);
+    }, []);
+
+    const closeLightbox = useCallback(() => {
+        setLightboxIndex(null);
+    }, []);
+
+    const showLightboxPrev = useCallback(() => {
+        setLightboxIndex((prev) => {
+            if (prev == null || filteredGallery.length === 0) return prev;
+            return prev === 0 ? filteredGallery.length - 1 : prev - 1;
+        });
+    }, [filteredGallery.length]);
+
+    const showLightboxNext = useCallback(() => {
+        setLightboxIndex((prev) => {
+            if (prev == null || filteredGallery.length === 0) return prev;
+            return prev === filteredGallery.length - 1 ? 0 : prev + 1;
+        });
+    }, [filteredGallery.length]);
+
+    useEffect(() => {
+        if (lightboxIndex == null) return undefined;
+        const onKey = (e) => {
+            if (e.key === 'Escape') closeLightbox();
+            if (e.key === 'ArrowLeft') showLightboxPrev();
+            if (e.key === 'ArrowRight') showLightboxNext();
+        };
+        window.addEventListener('keydown', onKey);
+        const prevOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            window.removeEventListener('keydown', onKey);
+            document.body.style.overflow = prevOverflow;
+        };
+    }, [lightboxIndex, closeLightbox, showLightboxPrev, showLightboxNext]);
+
+    // If filter changes while lightbox is open, clamp / close invalid index
+    useEffect(() => {
+        if (lightboxIndex == null) return;
+        if (filteredGallery.length === 0) {
+            setLightboxIndex(null);
+            return;
+        }
+        if (lightboxIndex >= filteredGallery.length) {
+            setLightboxIndex(filteredGallery.length - 1);
+        }
+    }, [filteredGallery.length, lightboxIndex]);
+
     const socials = club?.socials || {};
     const socialLinks = [
         { key: 'instagram', href: safeUrl(socials.instagram), icon: Instagram, label: 'Instagram' },
@@ -688,9 +740,14 @@ const ClubPage = () => {
                                 </div>
                                 <div className="flex gap-2 overflow-x-auto scrollbar-hide no-scrollbar pb-1 sm:grid sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 sm:overflow-visible">
                                     {filteredGallery.map((img, idx) => (
-                                        <div key={idx} className="shrink-0 w-28 sm:w-auto aspect-[4/3] sm:aspect-square rounded-xl overflow-hidden border border-white/10 bg-white/5">
+                                        <button
+                                            key={idx}
+                                            type="button"
+                                            onClick={() => openLightbox(idx)}
+                                            className="shrink-0 w-28 sm:w-auto aspect-[4/3] sm:aspect-square rounded-xl overflow-hidden border border-white/10 bg-white/5 p-0 cursor-pointer hover:border-white/25 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-padel-green/60"
+                                        >
                                             <img src={img.url} alt={img.caption || ''} className="w-full h-full object-cover" />
-                                        </div>
+                                        </button>
                                     ))}
                                 </div>
                             </>
@@ -936,6 +993,63 @@ const ClubPage = () => {
                     )}
                 </div>
             </div>
+
+            {lightboxIndex != null && filteredGallery[lightboxIndex] && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+                    onClick={closeLightbox}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Club photo"
+                >
+                    <button
+                        type="button"
+                        onClick={closeLightbox}
+                        className="absolute top-4 right-4 z-10 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+                        aria-label="Close"
+                    >
+                        <X size={22} />
+                    </button>
+
+                    {filteredGallery.length > 1 && (
+                        <>
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); showLightboxPrev(); }}
+                                className="absolute left-3 sm:left-6 z-10 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+                                aria-label="Previous photo"
+                            >
+                                <ChevronLeft size={28} />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); showLightboxNext(); }}
+                                className="absolute right-3 sm:right-6 z-10 p-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors"
+                                aria-label="Next photo"
+                            >
+                                <ChevronRight size={28} />
+                            </button>
+                        </>
+                    )}
+
+                    <div
+                        className="relative max-w-5xl w-full max-h-[90vh] flex flex-col items-center"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <img
+                            src={filteredGallery[lightboxIndex].url}
+                            alt={filteredGallery[lightboxIndex].caption || ''}
+                            className="max-h-[80vh] w-auto max-w-full object-contain rounded-lg"
+                        />
+                        <p className="mt-3 text-xs text-white/50 font-bold uppercase tracking-widest">
+                            {lightboxIndex + 1} / {filteredGallery.length}
+                            {filteredGallery[lightboxIndex].category
+                                ? ` · ${filteredGallery[lightboxIndex].category}`
+                                : ''}
+                        </p>
+                    </div>
+                </div>
+            )}
 
             <AuthModal
                 isOpen={isAuthModalOpen}
