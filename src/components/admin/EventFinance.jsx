@@ -16,9 +16,11 @@ import {
     findPaymentForRegistration,
     hasBlockingProcessedRefund,
     isEntryFeeRefund,
+    isCompedEntryPayment,
     isLicensePaymentRow,
     registrationCountsAsPaid,
     registrationHasPaystackEntryPayment,
+    registrationIsCompedEntry,
     resolveRegistrationPayer,
 } from '../../utils/paymentRegistrationMatch';
 import { resolveRegistrationLicenseCategory } from '../../utils/registrationLicense';
@@ -173,9 +175,13 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         if (!selectedEvent) return 0;
 
         return localParticipants
-            .filter(p => p.is_paid)
-            .reduce((sum, p) => sum + getParticipantEntryFee(p, selectedEvent), 0);
-    }, [localParticipants, selectedEvent]);
+            .filter((p) => p.is_paid)
+            .reduce((sum, p) => {
+                if (p._reg && registrationIsCompedEntry(p._reg, eventPayments)) return sum;
+                if (p.actual_payment && isCompedEntryPayment(p.actual_payment)) return sum;
+                return sum + getParticipantEntryFee(p, selectedEvent);
+            }, 0);
+    }, [localParticipants, selectedEvent, eventPayments]);
 
     const totalRefunded = useMemo(() => {
         const paymentById = new Map((eventPayments || []).map((p) => [p.id, p]));
@@ -205,7 +211,11 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         const licenseCounts = { full: 0, temp: 0, none: 0 };
 
         localParticipants.forEach(p => {
-            expected += getParticipantEntryFee(p, selectedEvent);
+            const isComped = (p._reg && registrationIsCompedEntry(p._reg, eventPayments))
+                || isCompedEntryPayment(p.actual_payment);
+            if (!isComped) {
+                expected += getParticipantEntryFee(p, selectedEvent);
+            }
             
             const profileKey = p.profile_id || p.full_name?.toLowerCase().trim();
             if (profileKey && !uniqueProfiles.has(profileKey)) {
@@ -225,18 +235,19 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             licenses: licenseCounts,
             uniquePlayers: uniqueProfiles.size
         };
-    }, [localParticipants, selectedEvent, totalCollected, getResolvedLicenseType]);
+    }, [localParticipants, selectedEvent, totalCollected, getResolvedLicenseType, eventPayments]);
 
     const financialSummary = useMemo(() => {
         if (!selectedEvent) {
             return {
-                paid4M: 0, paidClub: 0, collected4M: 0, entryFeesRefunded: 0,
+                paid4M: 0, paidClub: 0, compedEntries: 0, collected4M: 0, entryFeesRefunded: 0,
                 entryFeeBalance: 0, licenseRevenue4M: 0, commission: 0, interimPaid: 0, dueToOrg: 0,
             };
         }
 
         let paid4M = 0;
         let paidClub = 0;
+        let compedEntries = 0;
         let grossCollected4M = 0;
 
         localParticipants.forEach((p) => {
@@ -258,6 +269,12 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
 
             if (p._isManualReg && p._reg && !registrationCountsAsPaid(p._reg, refundByReg, eventPayments)) return;
             if (!p.is_paid) return;
+
+            if (registrationIsCompedEntry(reg, eventPayments) || isCompedEntryPayment(p.actual_payment)) {
+                compedEntries++;
+                return;
+            }
+
             if (isPaystackEntryPayment(p, eventPayments, refundByReg)) {
                 paid4M++;
             } else {
@@ -283,6 +300,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         return {
             paid4M,
             paidClub,
+            compedEntries,
             collected4M: grossCollected4M,
             entryFeesRefunded,
             entryFeeBalance,
@@ -1754,7 +1772,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             <div className="w-1 h-4 bg-emerald-500 rounded-full" />
                             Financial Summary
                         </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
                                 <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Entries Paid to 4m</p>
                                 <span className="text-xl font-black text-white">{financialSummary.paid4M}</span>
@@ -1763,7 +1781,12 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                 <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Entry Payments (Manual)</p>
                                 <span className="text-xl font-black text-white">{financialSummary.paidClub}</span>
                             </div>
-                            <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4 col-span-1 md:col-span-2">
+                            <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
+                                <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Comped Entries</p>
+                                <span className="text-xl font-black text-white">{financialSummary.compedEntries}</span>
+                                <p className="text-[9px] text-gray-500 mt-1">Free / complimentary · R 0</p>
+                            </div>
+                            <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Collected by 4M (gross)</p>
                                 <span className="text-xl font-black text-padel-green">{fmtR(financialSummary.collected4M)}</span>
                                 <p className="text-[9px] text-gray-500 mt-1">Entry fees via Paystack before refunds</p>
@@ -1774,6 +1797,15 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                 <span className="text-gray-400">Funds collected for entry fees</span>
                                 <span className="font-bold text-white">{fmtR(financialSummary.collected4M)}</span>
                             </div>
+                            {financialSummary.compedEntries > 0 && (
+                                <div className="flex items-center justify-between gap-4 text-sm">
+                                    <span className="text-gray-400">
+                                        Comped entries
+                                        <span className="text-gray-600 font-normal"> · {financialSummary.compedEntries} free</span>
+                                    </span>
+                                    <span className="font-bold text-gray-500">{fmtR(0)}</span>
+                                </div>
+                            )}
                             <div className="flex items-center justify-between gap-4 text-sm">
                                 <span className="text-gray-400">Funds refunded for entry fees</span>
                                 <span className="font-bold text-red-400">−{fmtR(financialSummary.entryFeesRefunded)}</span>

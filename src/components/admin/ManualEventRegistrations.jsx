@@ -18,9 +18,11 @@ import {
     hasBlockingProcessedRefund,
     isEntryFeeRefund,
     isExplicitAdminMarkedPayment,
+    isCompedEntryPayment,
     isLicensePaymentRow,
     registrationCountsAsPaid,
     registrationHasPaystackEntryPayment,
+    registrationIsCompedEntry,
     resolveRegistrationPaymentMethod,
     resolveRegistrationPayer,
 } from '../../utils/paymentRegistrationMatch';
@@ -147,6 +149,14 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const [markPaidBusy, setMarkPaidBusy] = useState(false);
     const [unmarkTarget, setUnmarkTarget] = useState(null);
     const [unmarkBusy, setUnmarkBusy] = useState(false);
+    const [addPlayerOpen, setAddPlayerOpen] = useState(false);
+    const [addPlayerSearch, setAddPlayerSearch] = useState('');
+    const [addPlayerResults, setAddPlayerResults] = useState([]);
+    const [addPlayerSearching, setAddPlayerSearching] = useState(false);
+    const [addPlayerSelected, setAddPlayerSelected] = useState(null);
+    const [addPlayerDivision, setAddPlayerDivision] = useState('');
+    const [addPlayerNote, setAddPlayerNote] = useState('');
+    const [addPlayerBusy, setAddPlayerBusy] = useState(false);
     const [removeTarget, setRemoveTarget] = useState(null);
     const [removePair, setRemovePair] = useState(false);
     const [removeBusy, setRemoveBusy] = useState(false);
@@ -590,6 +600,187 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         setMarkPaidNote('');
         setMarkPaidMethod('manual');
         setMarkPaidBusy(false);
+    };
+
+    const openAddPlayerModal = () => {
+        setAddPlayerOpen(true);
+        setAddPlayerSearch('');
+        setAddPlayerResults([]);
+        setAddPlayerSelected(null);
+        setAddPlayerDivision(divisions[0]?.name || '');
+        setAddPlayerNote('');
+        setAddPlayerBusy(false);
+    };
+
+    const closeAddPlayerModal = () => {
+        if (addPlayerBusy) return;
+        setAddPlayerOpen(false);
+        setAddPlayerSearch('');
+        setAddPlayerResults([]);
+        setAddPlayerSelected(null);
+        setAddPlayerDivision('');
+        setAddPlayerNote('');
+        setAddPlayerBusy(false);
+    };
+
+    // Search 4M players for admin complimentary entry
+    useEffect(() => {
+        if (!addPlayerOpen || addPlayerSearch.trim().length < 2) {
+            setAddPlayerResults([]);
+            return undefined;
+        }
+        let cancelled = false;
+        const handle = setTimeout(async () => {
+            setAddPlayerSearching(true);
+            const q = addPlayerSearch.trim().replace(/[,()%]/g, ' ');
+            const { data, error } = await supabase
+                .from('players')
+                .select('id, name, email, image_url')
+                .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
+                .limit(12);
+            if (cancelled) return;
+            if (error) {
+                console.error('Add player search failed:', error);
+                setAddPlayerResults([]);
+            } else {
+                setAddPlayerResults((data || []).filter((p) => p.email));
+            }
+            setAddPlayerSearching(false);
+        }, 300);
+        return () => {
+            cancelled = true;
+            clearTimeout(handle);
+        };
+    }, [addPlayerOpen, addPlayerSearch]);
+
+    const confirmAddPlayer = async () => {
+        if (!addPlayerSelected?.email) {
+            toast.error('Select a 4M player');
+            return;
+        }
+        if (!addPlayerDivision) {
+            toast.error('Select a division');
+            return;
+        }
+        const note = addPlayerNote.trim();
+        if (!note) {
+            toast.error('A note is required for complimentary entries');
+            return;
+        }
+
+        const email = addPlayerSelected.email.trim();
+        const alreadyEntered = registrations.some((r) =>
+            r.status !== 'withdrawn'
+            && r.division === addPlayerDivision
+            && (r.email || '').toLowerCase() === email.toLowerCase());
+        if (alreadyEntered) {
+            toast.error(`${addPlayerSelected.name} is already entered in ${addPlayerDivision}`);
+            return;
+        }
+
+        setAddPlayerBusy(true);
+        try {
+            const div = divisions.find((d) => d.name === addPlayerDivision);
+            const { data: { user } } = await supabase.auth.getUser();
+            const adminEmail = user?.email || null;
+
+            const { data: inserted, error: insErr } = await supabase
+                .from('event_registrations')
+                .insert({
+                    event_id: event.id,
+                    email,
+                    full_name: addPlayerSelected.name,
+                    division: addPlayerDivision,
+                    division_id: div?.id || null,
+                    payment_status: 'paid',
+                    payment_method: 'manual',
+                    status: 'registered',
+                    registered_by: adminEmail || email,
+                })
+                .select('id')
+                .maybeSingle();
+            if (insErr) throw insErr;
+            if (!inserted?.id) throw new Error('Registration was not created');
+
+            const reference = `MANUAL-ADMIN-COMP-${inserted.id}`;
+            const paymentMetadata = {
+                source: 'admin_add_player',
+                division: addPlayerDivision,
+                email,
+                registration_id: inserted.id,
+                marked_by_admin: true,
+                free_entry: true,
+                comp_entry: true,
+                note,
+                payment_note: note,
+                added_by: adminEmail,
+            };
+            const { error: payErr } = await supabase.from('payments').insert([{
+                event_id: event.id,
+                amount: 0,
+                currency: 'ZAR',
+                status: 'success',
+                payment_type: 'event_entry_fee',
+                payment_method: 'manual',
+                reference,
+                metadata: paymentMetadata,
+            }]);
+            if (payErr) throw payErr;
+
+            const eventUrl = `https://4mpadel.co.za/calendar/${event.slug || event.id}`;
+            const eventDates = event.event_dates
+                || (event.start_date
+                    ? new Date(event.start_date).toLocaleDateString(undefined, {
+                        weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+                    })
+                    : '');
+            try {
+                await sendEmail(email, 'event_registration', {
+                    eventId: event.id,
+                    playerName: addPlayerSelected.name,
+                    eventName: event.event_name,
+                    division: addPlayerDivision,
+                    partnerName: 'TBD',
+                    eventDates,
+                    venue: [event.venue, event.city].filter(Boolean).join(', '),
+                    paid: true,
+                    amountDue: 'R 0.00',
+                    eventUrl,
+                });
+            } catch (mailErr) {
+                console.error('Entry confirmation email failed:', mailErr);
+                toast.message('Player added, but confirmation email could not be sent');
+            }
+
+            await logEventActivity({
+                eventId: event.id,
+                action: 'admin.added_player',
+                category: 'ADMIN',
+                summary: `Added ${addPlayerSelected.name} with free entry (${addPlayerDivision})`,
+                details: {
+                    registration_id: inserted.id,
+                    player_name: addPlayerSelected.name,
+                    player_email: email,
+                    division: addPlayerDivision,
+                    note,
+                    free_entry: true,
+                    added_by: adminEmail,
+                },
+            });
+
+            toast.success(`Added ${addPlayerSelected.name} — free entry confirmed`);
+            setAddPlayerOpen(false);
+            setAddPlayerSearch('');
+            setAddPlayerResults([]);
+            setAddPlayerSelected(null);
+            setAddPlayerDivision('');
+            setAddPlayerNote('');
+            load();
+        } catch (err) {
+            toast.error(err.message || 'Failed to add player');
+        } finally {
+            setAddPlayerBusy(false);
+        }
     };
 
     const handleToggleWhatsApp = async (reg) => {
@@ -1299,6 +1490,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const formatPaymentMethodForExport = useCallback((r) => {
         if (!registrationCountsAsPaid(r, refundByReg, payments)) return '';
 
+        if (registrationIsCompedEntry(r, payments)) return 'Comped';
         if (isPaystackEntryPayment(r, payments, refundByReg)) return 'Paystack';
 
         const payment = findPaymentForReg(r);
@@ -1316,8 +1508,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         const method = resolveRegistrationPaymentMethod(reg, payment) || (isPartnerPaid ? 'partner' : 'paystack');
         const note = payment?.metadata?.note || payment?.metadata?.payment_note || null;
         const isExplicitAdminMark = isExplicitAdminMarkedPayment(payment);
-        const isPaystackChannel = isPaystackEntryPayment(reg, payments, refundByReg);
-        const isManualChannel = !isPartnerPaid && !isPaystackChannel;
+        const isCompedChannel = isCompedEntryPayment(payment) || registrationIsCompedEntry(reg, payments);
+        const isPaystackChannel = !isCompedChannel && isPaystackEntryPayment(reg, payments, refundByReg);
+        const isManualChannel = !isPartnerPaid && !isPaystackChannel && !isCompedChannel;
 
         return {
             isPartnerPaid,
@@ -1325,6 +1518,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             method,
             note,
             isExplicitAdminMark,
+            isCompedChannel,
             isManualChannel,
             payment,
         };
@@ -1342,6 +1536,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         const channelLabel = details.isPartnerPaid ? (
             <span className="text-[9px] font-bold text-sky-300">
                 Paid by {details.payerName || 'partner'}
+            </span>
+        ) : details.isCompedChannel ? (
+            <span className="text-[9px] font-bold text-violet-300">
+                Comped
             </span>
         ) : details.isManualChannel ? (
             details.method && details.method !== 'paystack' ? (
@@ -1664,6 +1862,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const paymentBadge = useCallback((reg) => {
         const details = getPaymentDetails(reg);
         if (details) {
+            if (details.isCompedChannel) {
+                return (
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-violet-500/10 text-violet-300 border border-violet-500/20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-violet-400" /> Comped
+                    </span>
+                );
+            }
             if (details.isManualChannel) {
                 return (
                     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-500/10 text-amber-300 border border-amber-500/20">
@@ -1842,9 +2047,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         const licenseCounted = new Set();
 
         activeRegistrations.forEach((r) => {
-            const fee = divFee(r.division);
+            const isComped = registrationIsCompedEntry(r, payments);
+            const fee = isComped ? 0 : divFee(r.division);
             expected += fee;
-            if (registrationCountsAsPaid(r, refundByReg, payments)) collected += fee;
+            if (registrationCountsAsPaid(r, refundByReg, payments) && !isComped) collected += fee;
 
             const email = (r.email || '').toLowerCase().trim();
             if (email) uniqueEmails.add(email);
@@ -1879,6 +2085,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const overviewStats = useMemo(() => {
         let paid4M = 0;
         let paidClub = 0;
+        let compedEntries = 0;
         let grossCollected4M = 0;
         let licenseRevenue4M = 0;
         const unique = new Set(activeRegistrations.map((r) => r.email)).size;
@@ -1895,14 +2102,19 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
             if (!registrationCountsAsPaid(r, refundByReg, payments)) return;
 
-            const method = formatPaymentMethodForExport(r);
-            if (method === 'Paystack') paid4M++;
-            else paidClub++;
-
             const license = formatLicenseForExport(r);
             if (license.includes('Full')) fullLicenses++;
             else if (license.includes('Temporary')) tempLicenses++;
             else noLicenses++;
+
+            if (registrationIsCompedEntry(r, payments)) {
+                compedEntries++;
+                return;
+            }
+
+            const method = formatPaymentMethodForExport(r);
+            if (method === 'Paystack') paid4M++;
+            else paidClub++;
         });
 
         payments.forEach((p) => {
@@ -1930,6 +2142,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             unique,
             paid4M,
             paidClub,
+            compedEntries,
             collected4M: grossCollected4M,
             entryFeesRefunded,
             entryFeeBalance,
@@ -1948,6 +2161,21 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         const rows = [];
 
         activeRegistrations.forEach((r) => {
+            if (registrationIsCompedEntry(r, payments)) {
+                const payment = findPaymentForReg(r);
+                rows.push({
+                    id: `comp-${r.id}`,
+                    date: payment?.created_at || r.paid_at || r.created_at,
+                    description: `${r.division || 'Entry'} — Comped Entry`,
+                    type: 'comped',
+                    player: [r.full_name, r.partner_name].filter(Boolean).join(' / ') || r.email || '—',
+                    amount: 0,
+                    status: 'comped',
+                    method: 'Comped',
+                    note: payment?.metadata?.note || payment?.metadata?.payment_note || null,
+                });
+                return;
+            }
             if (!hasPaystackEntryPaymentRecord(r, payments)) return;
             const payment = findPaymentForReg(r);
             const fee = divFee(r.division);
@@ -2224,6 +2452,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             let channel = '';
             if (details) {
                 if (details.isPartnerPaid) channel = `Partner (${details.payerName || 'partner'})`;
+                else if (details.isCompedChannel) channel = 'Comped';
                 else if (details.isManualChannel) channel = `Manual (${labelPaymentMethod(details.method) || 'Admin'})`;
                 else channel = labelPaymentMethod(details.method) || 'Paystack';
             }
@@ -2276,13 +2505,20 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={openAddPlayerModal}
+                                            className="bg-padel-green text-black px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:brightness-110 shrink-0"
+                                        >
+                                            <UserPlus size={16} /> Add Player
+                                        </button>
                                         {linkedRankedinId && (
                                             <>
                                                 <button
                                                     type="button"
                                                     onClick={handleSyncToRankedin}
                                                     disabled={syncingRankedin}
-                                                    className="bg-padel-green text-black px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:brightness-110 disabled:opacity-40 shrink-0"
+                                                    className="bg-white/5 text-white border border-white/10 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-white/10 disabled:opacity-40 shrink-0"
                                                 >
                                                     {syncingRankedin ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}
                                                     Sync to RankedIn
@@ -2321,6 +2557,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                     <p className="text-xs text-gray-400 truncate max-w-[60vw]">{event.event_name}</p>
                                 </div>
                                 <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={openAddPlayerModal}
+                                        className="bg-padel-green text-black px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:brightness-110"
+                                    >
+                                        <UserPlus size={16} /> Add
+                                    </button>
                                     {linkedRankedinId && (
                                         <button
                                             type="button"
@@ -2500,7 +2743,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Entry Payments (Manual)</p>
                                             <span className="text-xl font-black text-white">{overviewStats.paidClub}</span>
                                         </div>
-                                        <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4 col-span-2">
+                                        <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
+                                            <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Comped Entries</p>
+                                            <span className="text-xl font-black text-white">{overviewStats.compedEntries}</span>
+                                            <p className="text-[9px] text-gray-500 mt-1">Free / complimentary · R 0</p>
+                                        </div>
+                                        <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
                                             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Collected by 4M (gross)</p>
                                             <span className="text-xl font-black text-padel-green">{fmtR(overviewStats.collected4M)}</span>
                                             <p className="text-[9px] text-gray-500 mt-1">Entry fees via Paystack before refunds</p>
@@ -2512,6 +2760,15 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             <span className="text-gray-400">Funds collected for entry fees</span>
                                             <span className="font-bold text-white">{fmtR(overviewStats.collected4M)}</span>
                                         </div>
+                                        {overviewStats.compedEntries > 0 && (
+                                            <div className="flex items-center justify-between gap-4 text-sm">
+                                                <span className="text-gray-400">
+                                                    Comped entries
+                                                    <span className="text-gray-600 font-normal"> · {overviewStats.compedEntries} free</span>
+                                                </span>
+                                                <span className="font-bold text-gray-500">{fmtR(0)}</span>
+                                            </div>
+                                        )}
                                         <div className="flex items-center justify-between gap-4 text-sm">
                                             <span className="text-gray-400">Funds refunded for entry fees</span>
                                             <span className="font-bold text-red-400">−{fmtR(overviewStats.entryFeesRefunded)}</span>
@@ -3384,6 +3641,182 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                         </div>
                     )}
 
+                    {addPlayerOpen && (
+                        <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/60" onClick={closeAddPlayerModal}>
+                            <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-lg p-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-start gap-3 mb-4">
+                                    <div className="w-9 h-9 rounded-xl bg-padel-green/15 flex items-center justify-center shrink-0">
+                                        <UserPlus size={16} className="text-padel-green" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <h3 className="text-white font-bold">Add Player — Free Entry</h3>
+                                        <p className="text-xs text-gray-400 mt-0.5">
+                                            Search a 4M player, assign a division, and confirm complimentary entry.
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={closeAddPlayerModal}
+                                        disabled={addPlayerBusy}
+                                        className="p-1.5 text-gray-500 hover:text-white rounded-lg hover:bg-white/5 disabled:opacity-40"
+                                    >
+                                        <X size={18} />
+                                    </button>
+                                </div>
+
+                                {addPlayerSelected ? (
+                                    <div className="mb-4 flex items-center gap-3 rounded-xl border border-padel-green/30 bg-padel-green/5 px-3 py-2.5">
+                                        <div className="w-10 h-10 rounded-full overflow-hidden bg-white/5 border border-white/10 shrink-0 flex items-center justify-center">
+                                            {addPlayerSelected.image_url ? (
+                                                <img src={addPlayerSelected.image_url} alt="" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <User size={16} className="text-gray-500" />
+                                            )}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-sm font-bold text-white truncate">{addPlayerSelected.name}</p>
+                                            <p className="text-[11px] text-gray-400 truncate">{addPlayerSelected.email}</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setAddPlayerSelected(null)}
+                                            disabled={addPlayerBusy}
+                                            className="text-[11px] font-bold uppercase tracking-wider text-gray-400 hover:text-white disabled:opacity-40"
+                                        >
+                                            Change
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="mb-4">
+                                        <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">
+                                            Search 4M players
+                                        </label>
+                                        <div className="relative">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" size={14} />
+                                            <input
+                                                type="text"
+                                                value={addPlayerSearch}
+                                                onChange={(e) => setAddPlayerSearch(e.target.value)}
+                                                placeholder="Name or email…"
+                                                autoFocus
+                                                className="w-full bg-black/30 border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white outline-none focus:border-padel-green/50"
+                                            />
+                                        </div>
+                                        <div className="mt-2 max-h-48 overflow-y-auto rounded-xl border border-white/10 divide-y divide-white/5">
+                                            {addPlayerSearch.trim().length < 2 ? (
+                                                <p className="px-3 py-4 text-xs text-gray-500 text-center">Type at least 2 characters to search</p>
+                                            ) : addPlayerSearching ? (
+                                                <div className="px-3 py-4 flex items-center justify-center gap-2 text-xs text-gray-400">
+                                                    <Loader2 size={14} className="animate-spin" /> Searching…
+                                                </div>
+                                            ) : addPlayerResults.length === 0 ? (
+                                                <p className="px-3 py-4 text-xs text-gray-500 text-center">No players found</p>
+                                            ) : (
+                                                addPlayerResults.map((p) => {
+                                                    const alreadyInSelectedDiv = addPlayerDivision && registrations.some((r) =>
+                                                        r.status !== 'withdrawn'
+                                                        && r.division === addPlayerDivision
+                                                        && (r.email || '').toLowerCase() === (p.email || '').toLowerCase());
+                                                    return (
+                                                        <button
+                                                            key={p.id}
+                                                            type="button"
+                                                            disabled={alreadyInSelectedDiv || addPlayerBusy}
+                                                            onClick={() => setAddPlayerSelected(p)}
+                                                            className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.04] disabled:opacity-40 disabled:cursor-not-allowed"
+                                                        >
+                                                            <div className="w-8 h-8 rounded-full overflow-hidden bg-white/5 border border-white/10 shrink-0 flex items-center justify-center">
+                                                                {p.image_url ? (
+                                                                    <img src={p.image_url} alt="" className="w-full h-full object-cover" />
+                                                                ) : (
+                                                                    <User size={14} className="text-gray-500" />
+                                                                )}
+                                                            </div>
+                                                            <div className="min-w-0 flex-1">
+                                                                <p className="text-sm font-bold text-white truncate">{p.name}</p>
+                                                                <p className="text-[11px] text-gray-500 truncate">{p.email}</p>
+                                                            </div>
+                                                            {alreadyInSelectedDiv ? (
+                                                                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 shrink-0">Entered</span>
+                                                            ) : (
+                                                                <UserPlus size={14} className="text-padel-green shrink-0" />
+                                                            )}
+                                                        </button>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">Division</label>
+                                {divisions.length === 0 ? (
+                                    <p className="text-xs text-amber-400 mb-3">No divisions found for this event.</p>
+                                ) : (
+                                    <select
+                                        value={addPlayerDivision}
+                                        onChange={(e) => setAddPlayerDivision(e.target.value)}
+                                        disabled={addPlayerBusy}
+                                        className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-padel-green/50 mb-3"
+                                    >
+                                        {divisions.map((d) => (
+                                            <option key={d.id || d.name} value={d.name}>
+                                                {d.name}{d.entry_fee != null ? ` · ${fmtR(d.entry_fee)}` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
+
+                                <div className="mb-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5">
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">Entry status</p>
+                                    <p className="text-sm text-white font-semibold mt-0.5">Marked as paid · Free / complimentary entry (R 0)</p>
+                                </div>
+
+                                <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">
+                                    Note <span className="text-red-400">*</span>
+                                </label>
+                                <textarea
+                                    value={addPlayerNote}
+                                    onChange={(e) => setAddPlayerNote(e.target.value)}
+                                    placeholder='e.g. "Comp entry — sponsor guest", "Organiser guest place"'
+                                    rows={3}
+                                    required
+                                    disabled={addPlayerBusy}
+                                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-padel-green/50 mb-1 resize-none"
+                                />
+                                <p className={`text-[11px] mb-4 min-h-[1rem] ${addPlayerNote.trim() ? 'invisible' : 'text-amber-400/90'}`}>
+                                    Required — explain why this entry is complimentary.
+                                </p>
+
+                                <div className="flex flex-col gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={confirmAddPlayer}
+                                        disabled={
+                                            addPlayerBusy
+                                            || !addPlayerSelected
+                                            || !addPlayerDivision
+                                            || !addPlayerNote.trim()
+                                            || divisions.length === 0
+                                        }
+                                        className="w-full py-2.5 rounded-lg text-sm font-bold bg-padel-green text-black hover:brightness-110 disabled:opacity-40 inline-flex items-center justify-center gap-2"
+                                    >
+                                        {addPlayerBusy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                                        Add player & send confirmation
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={closeAddPlayerModal}
+                                        disabled={addPlayerBusy}
+                                        className="w-full py-2 rounded-lg text-xs font-semibold text-gray-400 hover:text-white disabled:opacity-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {matchingProfileReg && (
                         <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/60" onClick={() => !profileLinkBusy && setMatchingProfileReg(null)}>
                             <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -3615,7 +4048,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                 const isCredit = row.amount >= 0;
                                                 const typeIcon = row.type === 'payment'
                                                     ? <ArrowDownLeft size={12} className="text-padel-green" />
-                                                    : <ArrowUpRight size={12} className="text-red-400" />;
+                                                    : row.type === 'comped'
+                                                        ? <Check size={12} className="text-violet-300" />
+                                                        : <ArrowUpRight size={12} className="text-red-400" />;
                                                 const statusClass = {
                                                     paid: 'bg-emerald-500/15 text-emerald-400',
                                                     pending: 'bg-amber-500/15 text-amber-400',
@@ -3627,6 +4062,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                     refunded: 'bg-sky-500/15 text-sky-400',
                                                     processed: 'bg-sky-500/15 text-sky-400',
                                                     withdrawn: 'bg-gray-500/15 text-gray-400',
+                                                    comped: 'bg-violet-500/15 text-violet-300',
                                                 }[row.status] || 'bg-gray-500/15 text-gray-400';
                                                 return (
                                                     <tr key={row.id} className="hover:bg-white/[0.02]">

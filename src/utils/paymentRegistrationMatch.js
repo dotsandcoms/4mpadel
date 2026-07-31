@@ -74,7 +74,7 @@ export function paymentMatchesRegistration(payment, reg) {
     if (meta.registration_id === reg.id) return true;
 
     if (
-        meta.source === 'manual_event_admin'
+        (meta.source === 'manual_event_admin' || meta.source === 'admin_add_player')
         && norm(meta.email) === email
         && (!meta.division || !division || meta.division === division)
     ) {
@@ -219,8 +219,26 @@ export function isExplicitAdminMarkedPayment(payment) {
     return !!(
         meta.marked_by_admin
         || meta.source === 'manual_event_admin'
+        || meta.source === 'admin_add_player'
         || String(payment.reference || '').startsWith('MANUAL-ADMIN-')
     );
+}
+
+/** Complimentary / free admin entry — R0 and excluded from settlement balances. */
+export function isCompedEntryPayment(payment) {
+    if (!payment) return false;
+    const meta = payment.metadata || {};
+    if (meta.free_entry || meta.comp_entry || meta.source === 'admin_add_player') return true;
+    return String(payment.reference || '').startsWith('MANUAL-ADMIN-COMP-');
+}
+
+export function registrationIsCompedEntry(reg, payments) {
+    if (!reg) return false;
+    const payment = findPaymentForRegistration(
+        (payments || []).filter((p) => p.status === 'success'),
+        reg,
+    );
+    return isCompedEntryPayment(payment);
 }
 
 /**
