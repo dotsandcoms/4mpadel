@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import {
     MapPin, Plus, RefreshCw, Users, Building, Save, Loader2, ExternalLink,
     Upload, Trash2, Image as ImageIcon, ChevronDown, Instagram, Facebook,
-    Search, Check, X, Clock, Palette, Phone, ArrowLeft, ShieldCheck, UserPlus, User, Mail, Send,
+    Search, Check, X, Clock, Palette, Phone, ArrowLeft, ShieldCheck, UserPlus, User, Mail, Send, Info,
 } from 'lucide-react';
 import ClubMembersManager from './ClubMembersManager';
 import ClubCreateWizard from '../clubs/ClubCreateWizard';
@@ -185,30 +185,76 @@ const roleLabel = (role) => {
 
 /**
  * @param {Array<{ id: string, name: string, role: string, image_url?: string|null }>} admins
- * @param {{ email: string, created_at?: string }|null|undefined} pendingInvite
+ * @param {{ email: string, status?: string, created_at?: string }|null|undefined} pendingInvite
  * @param {(() => void)|undefined} onInvite
  */
 const OwnersAdminsCell = ({ admins, pendingInvite = null, onInvite }) => {
+    const [inviteInfoOpen, setInviteInfoOpen] = useState(false);
+
     if (!admins?.length) {
         if (pendingInvite?.email) {
+            const sentAt = pendingInvite.created_at
+                ? new Date(pendingInvite.created_at).toLocaleString('en-GB', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                })
+                : null;
             return (
-                <div className="space-y-2 min-w-0">
-                    <div className="flex items-start gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-xl bg-padel-green/10 border border-padel-green/25 flex items-center justify-center shrink-0">
-                            <Mail size={14} className="text-padel-green" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <p className="text-sm font-bold text-white truncate leading-tight border-b border-dotted border-white/25 w-fit max-w-full">
-                                {pendingInvite.email}
-                            </p>
-                            <div className="flex items-center gap-2 flex-wrap mt-1.5">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-padel-green/15 text-padel-green border border-padel-green/25">
-                                    Invite sent
-                                </span>
-                                <span className="text-[10px] text-gray-500 font-medium">Pending claim</span>
-                            </div>
-                        </div>
+                <div className="space-y-1.5 min-w-0">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                        <p className="text-xs text-gray-500">No owners</p>
+                        <span className="relative inline-flex shrink-0 align-middle">
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setInviteInfoOpen((open) => !open);
+                                }}
+                                className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-padel-green/50 text-padel-green hover:bg-padel-green/10 transition-colors"
+                                aria-label="View claim invite details"
+                                title="View claim invite details"
+                            >
+                                <Info size={9} strokeWidth={2.5} />
+                            </button>
+                            {inviteInfoOpen && (
+                                <>
+                                    <button
+                                        type="button"
+                                        className="fixed inset-0 z-[100] cursor-default"
+                                        aria-label="Close invite details"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setInviteInfoOpen(false);
+                                        }}
+                                    />
+                                    <div
+                                        className="absolute left-0 bottom-full mb-1.5 z-[101] min-w-[200px] max-w-[280px] rounded-lg border border-white/10 bg-[#0a0a0a] px-2.5 py-2 text-[10px] text-gray-200 shadow-2xl"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <p className="text-[9px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">Claim invite</p>
+                                        <div className="space-y-1.5">
+                                            <div>
+                                                <p className="text-[9px] font-bold uppercase tracking-wider text-gray-500">Sent to</p>
+                                                <p className="text-xs text-white font-semibold break-all">{pendingInvite.email}</p>
+                                            </div>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-padel-green/15 text-padel-green border border-padel-green/25">
+                                                    {pendingInvite.status || 'pending'}
+                                                </span>
+                                                {sentAt && (
+                                                    <span className="text-[10px] text-gray-500">{sentAt}</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </span>
                     </div>
+                    <p className="text-[10px] font-bold text-padel-green truncate">Invite sent · {pendingInvite.email}</p>
                     {onInvite && (
                         <button
                             type="button"
@@ -938,6 +984,7 @@ const ClubManager = ({ permissions }) => {
                 nextInvites[invite.club_id] = {
                     id: invite.id,
                     email: String(invite.email || '').toLowerCase(),
+                    status: invite.status || 'pending',
                     created_at: invite.created_at,
                 };
             });
