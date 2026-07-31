@@ -13,7 +13,7 @@ import { isManageableClubStatus, clubStatusLabel, normalizeClubStatus } from '..
 const managedClubSubtitle = (club) => {
   const status = normalizeClubStatus(club?.status);
   if (club?.verified || status === '4m_approved' || status === '4m_premium') {
-    return { label: 'Verified Club', className: 'text-sky-300' };
+    return { label: '4M approved', className: 'text-padel-green' };
   }
   return { label: `${clubStatusLabel(club?.status)} Club`, className: 'text-gray-400' };
 };

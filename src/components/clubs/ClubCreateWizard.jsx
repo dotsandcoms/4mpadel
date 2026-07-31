@@ -9,6 +9,7 @@ import {
 import { slugifyClub, SA_REGIONS, CLAIMABLE_CLUB_STATUSES } from '../../utils/club';
 import { attachPlacesAutocomplete } from '../../utils/googleMaps';
 import { sendEmail } from '../../utils/emails';
+import VerifiedBadge from '../VerifiedBadge';
 
 const ADMIN_NOTIFY_EMAIL = 'markstillerman@gmail.com';
 
@@ -868,8 +869,8 @@ const ClubCreateWizard = ({
                             <MapPin size={10} /> {locationLabel}
                         </p>
                         {isAdmin && (
-                            <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded bg-padel-green/10 border border-padel-green/25 text-padel-green text-[9px] font-black uppercase tracking-wider">
-                                <BadgeCheck size={10} /> Verified club
+                            <span className="inline-flex items-center gap-1.5 mt-1 px-2 py-0.5 rounded bg-padel-green/10 border border-padel-green/25 text-padel-green text-[9px] font-black uppercase tracking-wider">
+                                <VerifiedBadge tone="green" size={12} title="4M approved" /> 4M approved
                             </span>
                         )}
                     </div>

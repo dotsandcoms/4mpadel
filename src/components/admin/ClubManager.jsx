@@ -22,6 +22,7 @@ import {
 } from '../../utils/club';
 import { sendEmail } from '../../utils/emails';
 import { attachPlacesAutocomplete } from '../../utils/googleMaps';
+import clubsManagerLogo from '../../assets/logo_4m_clubs.png';
 
 const COLOR_PRESETS = ['#CC1414', '#9AE900', '#F97316', '#3B82F6', '#EF4444', '#A855F7', '#14B8A6', '#EAB308', '#EC4899'];
 const CLAIM_FILTER_OPTIONS = [
@@ -1436,12 +1437,13 @@ const ClubManager = ({ permissions }) => {
 
                     <div className="rounded-3xl border border-white/10 bg-white/[0.02] overflow-hidden shadow-2xl">
                         <div className="flex flex-col gap-3 border-b border-white/10 p-4 md:flex-row md:items-center md:justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="w-11 h-11 rounded-2xl bg-padel-green/10 border border-padel-green/20 flex items-center justify-center">
-                                    <Building className="text-padel-green" size={18} />
-                                </div>
-                                <div>
-                                    <h3 className="text-xl font-black text-white uppercase tracking-tight">Club Manager</h3>
+                            <div className="flex items-center gap-3 min-w-0">
+                                <img
+                                    src={clubsManagerLogo}
+                                    alt="4M Padel Clubs"
+                                    className="h-11 md:h-12 w-auto object-contain shrink-0"
+                                />
+                                <div className="min-w-0">
                                     <p className="text-sm text-gray-500">
                                         {listSearch.trim() || claimFilter !== 'all'
                                             ? `Showing ${Math.min(clubRows.length, ITEMS_PER_PAGE)} of ${clubRows.length} matching clubs`

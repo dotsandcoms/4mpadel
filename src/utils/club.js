@@ -64,6 +64,23 @@ export const isManageableClubStatus = (status) => {
 };
 
 /**
+ * @param {string|null|undefined} status
+ */
+export const isFourMApprovedClubStatus = (status) => {
+    const normalized = normalizeClubStatus(status);
+    return normalized === '4m_approved' || normalized === '4m_premium';
+};
+
+/**
+ * Club should show the 4M approved badge.
+ * @param {{ status?: string|null, verified?: boolean|null }|null|undefined} club
+ */
+export const showFourMApprovedBadge = (club) => {
+    if (!club) return false;
+    return isFourMApprovedClubStatus(club.status) || !!club.verified;
+};
+
+/**
  * Badge classes for club status pills.
  * @param {string|null|undefined} status
  */
@@ -73,7 +90,7 @@ export const clubStatusBadgeClass = (status) => {
         case 'published':
             return 'bg-padel-green/10 text-padel-green border-padel-green/20';
         case '4m_approved':
-            return 'bg-sky-500/10 text-sky-300 border-sky-500/20';
+            return 'bg-padel-green/10 text-padel-green border-padel-green/25';
         case '4m_premium':
             return 'bg-amber-500/10 text-amber-300 border-amber-500/20';
         case 'in_review':

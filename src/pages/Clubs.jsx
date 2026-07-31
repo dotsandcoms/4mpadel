@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, BadgeCheck, ShieldCheck, ChevronRight, Search, Filter, X, ChevronDown, Globe } from 'lucide-react';
-import { fetchPublishedClubs, SA_REGIONS, clubCityLabel, clubRegionLabel } from '../utils/club';
+import { MapPin, ShieldCheck, ChevronRight, Search, Filter, X, ChevronDown, Globe } from 'lucide-react';
+import { fetchPublishedClubs, SA_REGIONS, clubCityLabel, clubRegionLabel, showFourMApprovedBadge } from '../utils/club';
+import VerifiedBadge from '../components/VerifiedBadge';
 import heroCourt from '../assets/home.jpeg';
 
 /**
@@ -264,9 +265,9 @@ const Clubs = () => {
                                     )}
                                     <div className="min-w-0 flex-1">
                                         <div className="flex flex-wrap gap-1.5 mb-1.5">
-                                            {c.verified && (
-                                                <span className="inline-flex items-center gap-0.5 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border bg-blue-500/10 text-blue-400 border-blue-500/25">
-                                                    <BadgeCheck size={9} /> Verified
+                                            {showFourMApprovedBadge(c) && (
+                                                <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border bg-padel-green/10 text-padel-green border-padel-green/25">
+                                                    <VerifiedBadge tone="green" size={11} title="4M approved" /> 4M approved
                                                 </span>
                                             )}
                                             {c.sapa_registered && (
@@ -275,8 +276,11 @@ const Clubs = () => {
                                                 </span>
                                             )}
                                         </div>
-                                        <h2 className="text-lg font-bold font-display tracking-tighter text-white group-hover:text-padel-green transition-colors truncate">
-                                            {c.short_name || c.name}
+                                        <h2 className="text-lg font-bold font-display tracking-tighter text-white group-hover:text-padel-green transition-colors flex items-center gap-1.5 min-w-0">
+                                            <span className="truncate min-w-0">{c.short_name || c.name}</span>
+                                            {showFourMApprovedBadge(c) && (
+                                                <VerifiedBadge tone="green" size={16} className="shrink-0" title="4M approved" />
+                                            )}
                                         </h2>
                                         {(c._city || c._region) && (
                                             <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
