@@ -28,6 +28,7 @@ const COLOR_PRESETS = ['#CC1414', '#9AE900', '#F97316', '#3B82F6', '#EF4444', '#
 const CLAIM_FILTER_OPTIONS = [
     { value: 'all', label: 'All' },
     { value: 'claimed', label: 'Claimed' },
+    { value: 'pending', label: 'Pending' },
     { value: 'unclaimed', label: 'Unclaimed' },
 ];
 
@@ -444,7 +445,11 @@ const ClubManager = ({ permissions }) => {
             : visibleClubs.filter((c) => {
                 const admins = clubAdminsById[c.id] || [];
                 const isClaimed = admins.length > 0;
-                return claimFilter === 'claimed' ? isClaimed : !isClaimed;
+                const hasPendingInvite = !!claimInvitesByClubId[c.id]?.email;
+                if (claimFilter === 'claimed') return isClaimed;
+                if (claimFilter === 'pending') return !isClaimed && hasPendingInvite;
+                if (claimFilter === 'unclaimed') return !isClaimed && !hasPendingInvite;
+                return true;
             });
 
         if (!q) return claimFiltered;
@@ -460,7 +465,7 @@ const ClubManager = ({ permissions }) => {
             ].filter(Boolean).join(' ').toLowerCase();
             return hay.includes(q);
         });
-    }, [visibleClubs, listSearch, claimFilter, clubAdminsById]);
+    }, [visibleClubs, listSearch, claimFilter, clubAdminsById, claimInvitesByClubId]);
 
     const clubRows = useMemo(() => {
         return filteredClubs.map((club) => {
@@ -508,11 +513,15 @@ const ClubManager = ({ permissions }) => {
             published: all.filter((club) => isPublicClubStatus(club.status)).length,
             inReview: pendingClaims.length,
             claimed: all.filter((club) => (clubAdminsById[club.id] || []).length > 0).length,
+            pendingInvites: all.filter((club) => (
+                (clubAdminsById[club.id] || []).length === 0
+                && !!claimInvitesByClubId[club.id]?.email
+            )).length,
             totalMembers: rows.reduce((sum, club) => sum + club.members, 0),
             totalCourts: rows.reduce((sum, club) => sum + club.totalCourts, 0),
             totalLinkedOrgs: rows.reduce((sum, club) => sum + club.linkedOrgs, 0),
         };
-    }, [clubs, visibleClubs, effectiveView, myClubIds, memberCounts, linkedOrgCounts, clubAdminsById, pendingClaims]);
+    }, [clubs, visibleClubs, effectiveView, myClubIds, memberCounts, linkedOrgCounts, clubAdminsById, claimInvitesByClubId, pendingClaims]);
 
     const selectedSummary = useMemo(() => {
         if (!selected && !isCreating) return null;
@@ -1529,10 +1538,11 @@ const ClubManager = ({ permissions }) => {
 
             {managerView === 'list' ? (
                 <div className="space-y-4">
-                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                         {[
                             { label: 'Visible Clubs', value: managerStats.total, tone: 'text-white', helper: 'Shown in this list' },
                             { label: 'Claimed', value: managerStats.claimed, tone: 'text-padel-green', helper: 'Has owner/admin' },
+                            { label: 'Pending invites', value: managerStats.pendingInvites, tone: 'text-amber-300', helper: 'Claim invite sent' },
                             { label: 'Published', value: managerStats.published, tone: 'text-sky-400', helper: 'Public directory' },
                             { label: 'In review', value: managerStats.inReview, tone: 'text-violet-400', helper: 'Pending club claim requests' },
                         ].map((stat) => (
@@ -1611,9 +1621,13 @@ const ClubManager = ({ permissions }) => {
                                 <div className="divide-y divide-white/5 md:min-w-[1100px]">
                                     {paginatedClubRows.map((club) => {
                                         const isClaimed = (club.admins || []).length > 0;
+                                        const isPendingInvite = !isClaimed && !!club.pendingInvite?.email;
+                                        const claimStatusLabel = isClaimed ? 'Claimed' : (isPendingInvite ? 'Pending' : 'Unclaimed');
                                         const claimedBadgeClass = isClaimed
                                             ? 'bg-padel-green/10 text-padel-green border-padel-green/20'
-                                            : 'bg-white/5 text-gray-400 border-white/10';
+                                            : isPendingInvite
+                                                ? 'bg-amber-500/10 text-amber-300 border-amber-500/25'
+                                                : 'bg-white/5 text-gray-400 border-white/10';
                                         const inReview = isInReviewClubStatus(club.status);
                                         const approvalBadgeClass = inReview
                                             ? 'bg-violet-500/10 text-violet-300 border-violet-500/20'
@@ -1641,7 +1655,7 @@ const ClubManager = ({ permissions }) => {
                                                             <div className="flex items-center gap-2 flex-wrap">
                                                                 <p className="text-sm font-bold text-white truncate transition-colors duration-200 group-hover:text-padel-green">{club.short_name || club.name}</p>
                                                                 <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${claimedBadgeClass}`}>
-                                                                    {isClaimed ? 'Claimed' : 'Unclaimed'}
+                                                                    {claimStatusLabel}
                                                                 </span>
                                                             </div>
                                                             <p className="text-xs text-gray-500 mt-1">
@@ -1717,7 +1731,7 @@ const ClubManager = ({ permissions }) => {
                                                     />
                                                     <div>
                                                         <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${claimedBadgeClass}`}>
-                                                            {isClaimed ? 'Claimed' : 'Unclaimed'}
+                                                            {claimStatusLabel}
                                                         </span>
                                                     </div>
                                                     <div>
