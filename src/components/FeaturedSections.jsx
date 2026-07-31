@@ -630,15 +630,22 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             type="button"
             onClick={() => setRecentResultsOpen((open) => !open)}
             aria-expanded={recentResultsOpen}
-            className={`relative z-10 flex w-full items-center justify-between px-1 text-left group ${recentResultsOpen ? 'mb-3' : 'mb-0'}`}
+            className={`relative z-10 flex w-full items-center justify-between gap-3 px-1 text-left group ${recentResultsOpen ? 'mb-3' : 'mb-0'}`}
         >
             <h2 className="text-xs font-bold uppercase tracking-[0.2em] truncate text-white/80">
                 {data.title}
             </h2>
-            <ChevronDown
-                size={16}
-                className={`text-white/50 shrink-0 transition-transform duration-300 group-hover:text-white/70 ${recentResultsOpen ? '' : '-rotate-90'}`}
-            />
+            <span className="flex items-center gap-1.5 shrink-0">
+                {!recentResultsOpen && (liveTournaments?.length || 0) > 0 && (
+                    <span className="px-2 py-0.5 rounded-full border border-white/20 text-[9px] font-bold uppercase tracking-wider text-white/80 tabular-nums">
+                        {liveTournaments.length}
+                    </span>
+                )}
+                <ChevronDown
+                    size={16}
+                    className={`text-white/50 transition-transform duration-300 group-hover:text-white/70 ${recentResultsOpen ? '' : '-rotate-90'}`}
+                />
+            </span>
         </button>
     ) : isGridSection ? (
         <div className="relative z-10 flex items-center justify-between mb-3 md:mb-4">
@@ -1401,15 +1408,22 @@ const FeaturedTournamentHero = ({ events = [], session = null }) => {
                     type="button"
                     onClick={() => setFeaturedOpen((open) => !open)}
                     aria-expanded={featuredOpen}
-                    className={`flex w-full items-center justify-between px-1 text-left group ${featuredOpen ? 'mb-3' : 'mb-0'}`}
+                    className={`flex w-full items-center justify-between gap-3 px-1 text-left group ${featuredOpen ? 'mb-3' : 'mb-0'}`}
                 >
                     <h2 className="text-xs font-bold uppercase tracking-[0.2em] truncate text-white/80">
                         Featured Events
                     </h2>
-                    <ChevronDown
-                        size={16}
-                        className={`text-white/50 shrink-0 transition-transform duration-300 group-hover:text-white/70 ${featuredOpen ? '' : '-rotate-90'}`}
-                    />
+                    <span className="flex items-center gap-1.5 shrink-0">
+                        {!featuredOpen && list.length > 0 && (
+                            <span className="px-2 py-0.5 rounded-full border border-white/20 text-[9px] font-bold uppercase tracking-wider text-white/80 tabular-nums">
+                                {list.length}
+                            </span>
+                        )}
+                        <ChevronDown
+                            size={16}
+                            className={`text-white/50 transition-transform duration-300 group-hover:text-white/70 ${featuredOpen ? '' : '-rotate-90'}`}
+                        />
+                    </span>
                 </button>
 
                 <AnimatePresence initial={false}>

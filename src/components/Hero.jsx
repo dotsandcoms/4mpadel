@@ -1303,13 +1303,29 @@ const Hero = () => {
                                     type="button"
                                     onClick={() => setScheduleOpen((open) => !open)}
                                     aria-expanded={scheduleOpen}
-                                    className={`flex w-full items-center justify-between px-1 text-left group ${scheduleOpen ? 'mb-3' : 'mb-0'}`}
+                                    className={`flex w-full items-center justify-between gap-3 px-1 text-left group ${scheduleOpen ? 'mb-3' : 'mb-0'}`}
                                 >
                                     <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-white/80">My Schedule</h2>
-                                    <ChevronDown
-                                        size={16}
-                                        className={`text-white/50 shrink-0 transition-transform duration-300 group-hover:text-white/70 ${scheduleOpen ? '' : '-rotate-90'}`}
-                                    />
+                                    <span className="flex items-center gap-1.5 shrink-0">
+                                        {!scheduleOpen && (
+                                            <>
+                                                {upcomingEvents.length > 0 && (
+                                                    <span className="px-2 py-0.5 rounded-full border border-white/20 text-[9px] font-bold uppercase tracking-wider text-white/80">
+                                                        {upcomingEvents.length} Events
+                                                    </span>
+                                                )}
+                                                {matchesCount > 0 && (
+                                                    <span className="px-2 py-0.5 rounded-full border border-white/20 text-[9px] font-bold uppercase tracking-wider text-white/80">
+                                                        {matchesCount} Matches
+                                                    </span>
+                                                )}
+                                            </>
+                                        )}
+                                        <ChevronDown
+                                            size={16}
+                                            className={`text-white/50 transition-transform duration-300 group-hover:text-white/70 ${scheduleOpen ? '' : '-rotate-90'}`}
+                                        />
+                                    </span>
                                 </button>
                                 <AnimatePresence initial={false}>
                                 {scheduleOpen && (
