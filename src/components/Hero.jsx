@@ -40,9 +40,10 @@ const getEventStatusColors = (sapaStatus) => {
 };
 
 /** Mirror EventDetails / FeaturedSections: outstanding fee → Pay Now; otherwise Manage Entry.
- *  Curated schedule-only events (not registered) get no entry CTA. */
+ *  Curated schedule-only events the user hasn't registered for get a Register CTA
+ *  (same as FeaturedSections) — it just opens the event page to start registration. */
 const resolveScheduleEntryCta = (event) => {
-    if (event?.fromSchedule && !event?.isRegistered) return null;
+    if (event?.fromSchedule && !event?.isRegistered) return { label: 'Register', action: 'register' };
     const hasFee = Number(event?.entry_fee) > 0
         || (event?.category_fees && Object.keys(event.category_fees).length > 0);
     const paymentsAllowed = event?.allow_payments === true;
@@ -78,17 +79,17 @@ const EventStartsCountdown = ({ startDate, accent = '#EAB308' }) => {
 
     return (
         <div
-            className="relative w-full md:w-fit rounded-lg border px-2.5 pt-2.5 pb-1.5 shrink-0"
+            className="relative w-fit max-w-full rounded-lg border px-2.5 pt-2.5 pb-1.5 shrink-0"
             style={{ borderColor: `${accent}80` }}
             onClick={(e) => e.stopPropagation()}
         >
             <span
-                className="absolute -top-1.5 left-2 px-1 text-[8px] font-bold uppercase tracking-wider bg-[#141414]"
+                className="absolute -top-1.5 left-2 px-1 text-[8px] font-bold uppercase tracking-wider bg-[#141414] whitespace-nowrap"
                 style={{ color: accent }}
             >
                 Event starts in
             </span>
-            <div className="flex items-end justify-between md:justify-start gap-1.5 sm:gap-2">
+            <div className="flex items-end justify-start gap-1.5 sm:gap-2">
                 {[
                     { value: pad2(parts.days), unit: 'DAYS' },
                     { value: pad2(parts.hours), unit: 'HRS' },
@@ -97,7 +98,7 @@ const EventStartsCountdown = ({ startDate, accent = '#EAB308' }) => {
                 ].map(({ value, unit }, i) => (
                     <React.Fragment key={unit}>
                         {i > 0 && <span className="text-white/40 font-bold text-xs sm:text-sm pb-2">:</span>}
-                        <div className="text-center flex-1 md:flex-none min-w-[1.6rem]">
+                        <div className="text-center min-w-[1.6rem]">
                             <p className="text-sm sm:text-base font-black text-white leading-none tabular-nums">{value}</p>
                             <p className="text-[7px] font-bold text-white/50 tracking-wider mt-0.5">{unit}</p>
                         </div>
@@ -854,17 +855,17 @@ const Hero = () => {
                         handleEventClick(event);
                     }
                 }}
-                className="flex items-center gap-3 sm:gap-4 p-4 hover:bg-white/5 transition-colors text-left group w-full cursor-pointer"
+                className="flex flex-col gap-2.5 p-4 hover:bg-white/5 transition-colors text-left group w-full cursor-pointer"
             >
-                <div className="flex items-center gap-3 shrink-0 self-start pt-0.5">
-                    <Calendar size={18} strokeWidth={1.75} className="text-padel-green" />
-                    <div className="flex flex-col items-center leading-none">
-                        <span className="text-white font-bold text-xl leading-none">{day}</span>
-                        <span className="text-padel-green text-[9px] font-black uppercase tracking-widest mt-1.5">{month}</span>
-                        <span className="text-white/40 text-[8px] font-bold uppercase tracking-widest mt-0.5">{weekday}</span>
+                <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="flex items-center gap-3 shrink-0 self-start pt-0.5">
+                        <Calendar size={18} strokeWidth={1.75} className="text-padel-green" />
+                        <div className="flex flex-col items-center leading-none">
+                            <span className="text-white font-bold text-xl leading-none">{day}</span>
+                            <span className="text-padel-green text-[9px] font-black uppercase tracking-widest mt-1.5">{month}</span>
+                            <span className="text-white/40 text-[8px] font-bold uppercase tracking-widest mt-0.5">{weekday}</span>
+                        </div>
                     </div>
-                </div>
-                <div className="flex-1 min-w-0 flex flex-col md:flex-row md:items-center gap-2.5 md:gap-4">
                     <div className="min-w-0 flex-1">
                         <div className="flex items-start gap-2">
                             <div className="min-w-0 flex-1">
@@ -886,34 +887,34 @@ const Hero = () => {
                             <ChevronRight size={18} className="text-padel-green shrink-0 md:hidden mt-0.5 transition-transform group-hover:translate-x-0.5" />
                         </div>
                     </div>
-                    {(showStartCountdown || entryCta) && (
-                        <div className="w-full md:w-auto md:ml-auto shrink-0 flex flex-col sm:flex-row sm:items-center gap-2">
-                            {showStartCountdown && (
-                                <EventStartsCountdown startDate={event.start_date} accent={accent} />
-                            )}
-                            {entryCta && (
-                                <button
-                                    type="button"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleEntryCta(event, entryCta);
-                                    }}
-                                    className="relative overflow-hidden self-stretch sm:self-center shrink-0 whitespace-nowrap px-3 py-2 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-wide border text-center transition-all hover:brightness-110"
-                                    style={{
-                                        background: `linear-gradient(145deg, color-mix(in srgb, ${accent} 68%, white 32%) 0%, ${accent} 50%, color-mix(in srgb, ${accent} 82%, black 18%) 100%)`,
-                                        borderColor: accent,
-                                        color: (accent === '#CCFF00' || accent === '#EAB308' || accent === '#F59E0B') ? '#0a0a0a' : '#ffffff',
-                                        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.28), 0 1px 6px color-mix(in srgb, ${accent} 35%, transparent)`,
-                                    }}
-                                >
-                                    <span className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/22 via-white/6 to-transparent rounded-full" />
-                                    <span className="relative z-10">{entryCta.label}</span>
-                                </button>
-                            )}
-                        </div>
-                    )}
+                    <ChevronRight size={18} className="text-padel-green shrink-0 hidden md:block transition-transform group-hover:translate-x-0.5" />
                 </div>
-                <ChevronRight size={18} className="text-padel-green shrink-0 hidden md:block transition-transform group-hover:translate-x-0.5" />
+                {(showStartCountdown || entryCta) && (
+                    <div className="w-full flex flex-row items-center justify-between gap-2">
+                        {showStartCountdown && (
+                            <EventStartsCountdown startDate={event.start_date} accent={accent} />
+                        )}
+                        {entryCta && (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEntryCta(event, entryCta);
+                                }}
+                                className="relative overflow-hidden self-center shrink-0 whitespace-nowrap px-3 py-2 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-wide border text-center transition-all hover:brightness-110"
+                                style={{
+                                    background: `linear-gradient(145deg, color-mix(in srgb, ${accent} 68%, white 32%) 0%, ${accent} 50%, color-mix(in srgb, ${accent} 82%, black 18%) 100%)`,
+                                    borderColor: accent,
+                                    color: (accent === '#CCFF00' || accent === '#EAB308' || accent === '#F59E0B') ? '#0a0a0a' : '#ffffff',
+                                    boxShadow: `inset 0 1px 0 rgba(255,255,255,0.28), 0 1px 6px color-mix(in srgb, ${accent} 35%, transparent)`,
+                                }}
+                            >
+                                <span className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/22 via-white/6 to-transparent rounded-full" />
+                                <span className="relative z-10">{entryCta.label}</span>
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
         );
     };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar as CalendarIcon, MapPin, Filter, Search, ChevronRight, X, ChevronDown, Award, ArrowRight, Users, ChevronLeft, LayoutGrid, List, Loader, AlertCircle, Trophy, Layers, User, PlayCircle, Video, Shield, Check, Star, Globe, Plus } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Filter, Search, ChevronRight, X, ChevronDown, Award, ArrowRight, Users, ChevronLeft, LayoutGrid, List, Loader, AlertCircle, Trophy, Layers, User, PlayCircle, Video, Shield, Check, Star, Globe, Plus, Bookmark } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { getEventImage } from '../utils/imageUtils';
@@ -522,6 +522,7 @@ const Calendar = () => {
     const [activeTab, setActiveTab] = useState(initialTab); // 'upcoming', 'past', 'all', 'my-calendar'
     const [leagueFilter, setLeagueFilter] = useState('Tournaments'); // 'All' | 'League' | 'Tournaments'
     const [showFilters, setShowFilters] = useState(false);
+    const [scheduleOnly, setScheduleOnly] = useState(false);
 
     useEffect(() => {
         const tab = searchParams.get('tab');
@@ -791,6 +792,7 @@ const Calendar = () => {
             const matchesDrawerStatus = statusFilters.length === 0 || statusFilters.includes(status);
 
             const matchesCity = cityFilter === 'All' || city === cityFilter;
+            const matchesSchedule = !scheduleOnly || scheduledEventIds.has(Number(event.id));
 
 
             let matchesTiming = true;
@@ -808,13 +810,26 @@ const Calendar = () => {
                 (leagueFilter === 'League' && event.is_league === true) ||
                 (leagueFilter === 'Tournaments' && !event.is_league);
 
-            return matchesSearch && matchesStatus && matchesDrawerStatus && matchesCity && matchesTiming && matchesLeague;
+            return matchesSearch && matchesStatus && matchesDrawerStatus && matchesCity && matchesTiming && matchesLeague && matchesSchedule;
         });
-    }, [events, personalEvents, activeTab, searchTerm, statusFilters, cityFilter, leagueFilter, viewMode]);
+    }, [events, personalEvents, activeTab, searchTerm, statusFilters, cityFilter, leagueFilter, viewMode, scheduleOnly, scheduledEventIds]);
 
     const spotlightEvents = useMemo(() => {
         return events.filter(event => event.is_spotlight === true);
     }, [events]);
+
+    // Upcoming count of events the player has added to their schedule —
+    // shown as a "My Schedule (N)" chip next to the Upcoming Events heading.
+    const scheduleCount = useMemo(() => {
+        if (!sessionEmail || scheduledEventIds.size === 0) return 0;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return events.filter((event) => {
+            if (!scheduledEventIds.has(Number(event.id))) return false;
+            const endDate = new Date(event.end_date || event.start_date);
+            return !isNaN(endDate.getTime()) && endDate >= today;
+        }).length;
+    }, [events, scheduledEventIds, sessionEmail]);
 
     // Pagination Logic
     const totalPages = Math.ceil(filteredEvents.length / itemsPerPage);
@@ -826,7 +841,7 @@ const Calendar = () => {
     // Reset page on filter change
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, statusFilters, cityFilter, activeTab, leagueFilter, viewMode]);
+    }, [searchTerm, statusFilters, cityFilter, activeTab, leagueFilter, viewMode, scheduleOnly]);
 
     // Scroll to top on filter change, but NOT on search typing
     useEffect(() => {
@@ -1171,7 +1186,7 @@ const Calendar = () => {
                 <div className="flex justify-center mb-8 md:mb-10 relative z-50">
                     <div className="flex overflow-x-auto hide-scrollbar space-x-2 sm:space-x-3 px-4 mx-auto max-w-full flex-nowrap shrink-0 snap-x snap-mandatory">
                         {[
-                            { id: 'all', label: 'All Events', icon: CalendarIcon },
+                            { id: 'all', label: 'All', icon: CalendarIcon },
                             { id: 'Major', label: 'Major', icon: Trophy },
                             { id: 'Super Gold', label: 'Super Gold', icon: Trophy },
                             { id: 'Gold', label: 'Gold', icon: Trophy },
@@ -1231,11 +1246,39 @@ const Calendar = () => {
                         {viewMode === 'list' ? (
                             /* Premium List View */
                             <div className="space-y-3">
-                                <div className="flex items-center gap-2 mb-3 px-1">
-                                    <h2 className="text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest text-white/80">Upcoming Events</h2>
-                                    <div className="bg-padel-green/10 border border-padel-green/20 text-padel-green px-2 py-0.5 rounded-full text-[10px] font-black">
-                                        {filteredEvents.length}
-                                    </div>
+                                <div className="flex items-center gap-2 mb-3 px-1 flex-wrap">
+                                    <button
+                                        type="button"
+                                        onClick={() => setScheduleOnly(false)}
+                                        disabled={!scheduleOnly}
+                                        className={`flex items-center gap-2 transition-opacity ${scheduleOnly ? 'opacity-50 hover:opacity-100 cursor-pointer' : 'cursor-default'}`}
+                                    >
+                                        <h2 className="text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest text-white/80">Upcoming Events</h2>
+                                        <div className="bg-padel-green/10 border border-padel-green/20 text-padel-green px-2 py-0.5 rounded-full text-[10px] font-black">
+                                            {filteredEvents.length}
+                                        </div>
+                                    </button>
+                                    {sessionEmail && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setScheduleOnly((v) => !v)}
+                                            title={scheduleOnly ? 'Show all events' : 'Show only events in My Schedule'}
+                                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border transition-colors ${
+                                                scheduleOnly
+                                                    ? 'bg-padel-green text-black border-padel-green'
+                                                    : 'bg-white/5 text-gray-300 border-white/10 hover:border-white/20 hover:text-white'
+                                            }`}
+                                        >
+                                            <Bookmark className="w-3 h-3" /> My Schedule
+                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                                                scheduleOnly
+                                                    ? 'bg-black/10 border-black/20 text-black'
+                                                    : 'bg-padel-green/10 border-padel-green/20 text-padel-green'
+                                            }`}>
+                                                {scheduleCount}
+                                            </span>
+                                        </button>
+                                    )}
                                 </div>
                                 <AnimatePresence mode="popLayout">
                                     {paginatedEvents.map((event, index) => (
