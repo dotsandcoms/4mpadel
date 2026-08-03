@@ -170,6 +170,9 @@ export function buildTournamentProgressSteps(event, now = new Date(), options = 
         let status = 'upcoming';
         if (activeIndex === index) status = 'live';
         else if (activeIndex > index) status = 'done';
+        // Timed windows (early bird, registration open, tournament live): once past liveUntil, stay highlighted as done
+        // even when a later-overlapping step (e.g. Registration Open) is still LIVE.
+        else if (step.liveUntil && now.getTime() > step.liveUntil.getTime()) status = 'done';
         else if (now.getTime() >= step.at.getTime() && !step.liveUntil) status = 'done';
 
         // Rankedin may publish earlier than the scheduled draw_released datetime

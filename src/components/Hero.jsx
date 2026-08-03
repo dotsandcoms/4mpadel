@@ -35,6 +35,17 @@ const getEventStatusColors = (sapaStatus) => {
     return { border: 'border-padel-green/40', text: 'text-padel-green', fill: '#CCFF00' };
 };
 
+/** Mirror EventDetails countdown CTA for a schedule event the user is already on. */
+/** Mirror EventDetails / FeaturedSections: outstanding fee → Pay Now; otherwise Manage Entry. */
+const resolveScheduleEntryCta = (event) => {
+    const hasFee = Number(event?.entry_fee) > 0
+        || (event?.category_fees && Object.keys(event.category_fees).length > 0);
+    const paymentsAllowed = event?.allow_payments === true;
+    const needsPay = event?.isPaid !== true && hasFee && paymentsAllowed;
+    if (needsPay) return { label: 'Pay Now', action: 'pay' };
+    return { label: 'Manage Entry', action: 'manage' };
+};
+
 const pad2 = (n) => String(n).padStart(2, '0');
 
 /** Live countdown to event start_date — My Schedule upcoming events */
@@ -353,7 +364,7 @@ const Hero = () => {
 
                 if (uniqueEvents.length > 0) {
                     const [dbEventsRes, paidParticipantsRes] = await Promise.all([
-                        supabase.from('calendar').select('id, slug, rankedin_url, sapa_status, entry_fee, category_fees, venue, city'),
+                        supabase.from('calendar').select('id, slug, rankedin_url, sapa_status, entry_fee, category_fees, venue, city, is_manual, allow_payments'),
                         supabase.from('tournament_participants').select('event_id')
                             .or(`email.ilike.${playerData.email},profile_id.eq.${playerData.id}`)
                             .eq('is_paid', true),
@@ -379,6 +390,8 @@ const Hero = () => {
                                 e.category_fees = match.category_fees;
                                 e.venue = match.venue;
                                 e.city = match.city;
+                                e.is_manual = match.is_manual;
+                                e.allow_payments = match.allow_payments;
                                 e.isPaid = e.id?.toString().startsWith('local_')
                                     ? paidManualEventIds.has(match.id)
                                     : paidEventIds.has(match.id);
@@ -389,7 +402,8 @@ const Hero = () => {
 
                 let upcomingFiltered = uniqueEvents
                     .filter(isUpcomingEvent)
-                    .sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+                    .sort((a, b) => new Date(a.start_date) - new Date(b.start_date))
+                    .map((e) => ({ ...e, entryCta: resolveScheduleEntryCta(e) }));
 
                 const pastFiltered = uniqueEvents
                     .filter(isPastEvent)
@@ -683,6 +697,23 @@ const Hero = () => {
         else if (!event.id?.toString().startsWith('local_')) window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
     };
 
+    /** Same hand-off as Featured Events → EventDetails (state.eventCta). */
+    const handleEntryCta = (event, cta) => {
+        const path = event.slug || event.db_id
+            ? `/calendar/${event.slug || event.db_id}`
+            : null;
+        if (!path) {
+            handleEventClick(event);
+            return;
+        }
+        const action = cta?.action || event.entryCta?.action;
+        if (action === 'pay' || action === 'manage') {
+            navigate(path, { state: { eventCta: action } });
+            return;
+        }
+        navigate(path);
+    };
+
     const renderScheduleTimeSwitch = ({ compact = false } = {}) => (
         <div
             className={`flex shrink-0 bg-transparent border border-white/15 rounded-lg p-0.5 ${
@@ -721,13 +752,23 @@ const Hero = () => {
         const location = [event.venue, event.city].filter(Boolean).join(', ');
         const statusColors = getEventStatusColors(event.sapa_status);
         const accent = statusColors.fill;
+        const entryCta = showStartCountdown
+            ? (event.entryCta || resolveScheduleEntryCta(event))
+            : null;
 
         return (
-            <button
+            <div
                 key={`${event.id}${keySuffix}`}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => handleEventClick(event)}
-                className="flex items-center gap-3 sm:gap-4 p-4 hover:bg-white/5 transition-colors text-left group w-full"
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleEventClick(event);
+                    }
+                }}
+                className="flex items-center gap-3 sm:gap-4 p-4 hover:bg-white/5 transition-colors text-left group w-full cursor-pointer"
             >
                 <div className="flex items-center gap-3 shrink-0 self-start pt-0.5">
                     <Calendar size={18} strokeWidth={1.75} className="text-padel-green" />
@@ -759,14 +800,35 @@ const Hero = () => {
                             <ChevronRight size={18} className="text-padel-green shrink-0 md:hidden mt-0.5 transition-transform group-hover:translate-x-0.5" />
                         </div>
                     </div>
-                    {showStartCountdown && (
-                        <div className="w-full md:w-auto md:ml-auto shrink-0">
-                            <EventStartsCountdown startDate={event.start_date} accent={accent} />
+                    {(showStartCountdown || entryCta) && (
+                        <div className="w-full md:w-auto md:ml-auto shrink-0 flex flex-col sm:flex-row sm:items-center gap-2">
+                            {showStartCountdown && (
+                                <EventStartsCountdown startDate={event.start_date} accent={accent} />
+                            )}
+                            {entryCta && (
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEntryCta(event, entryCta);
+                                    }}
+                                    className="relative overflow-hidden self-stretch sm:self-center shrink-0 whitespace-nowrap px-3 py-2 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-wide border text-center transition-all hover:brightness-110"
+                                    style={{
+                                        background: `linear-gradient(145deg, color-mix(in srgb, ${accent} 68%, white 32%) 0%, ${accent} 50%, color-mix(in srgb, ${accent} 82%, black 18%) 100%)`,
+                                        borderColor: accent,
+                                        color: (accent === '#CCFF00' || accent === '#EAB308' || accent === '#F59E0B') ? '#0a0a0a' : '#ffffff',
+                                        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.28), 0 1px 6px color-mix(in srgb, ${accent} 35%, transparent)`,
+                                    }}
+                                >
+                                    <span className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/22 via-white/6 to-transparent rounded-full" />
+                                    <span className="relative z-10">{entryCta.label}</span>
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
                 <ChevronRight size={18} className="text-padel-green shrink-0 hidden md:block transition-transform group-hover:translate-x-0.5" />
-            </button>
+            </div>
         );
     };
 
