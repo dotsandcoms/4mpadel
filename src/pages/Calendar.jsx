@@ -410,13 +410,13 @@ const CalendarEventItem = ({ event, index, onSchedule, isOnSchedule, scheduleBus
                     disabled={scheduleBusy}
                     title={isOnSchedule ? 'Remove from My Schedule' : 'Add to My Schedule'}
                     aria-label={isOnSchedule ? 'Remove from My Schedule' : 'Add to My Schedule'}
-                    className={`absolute top-2 right-2 z-20 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center border transition-all ${
+                    className={`absolute top-2 right-2 z-20 w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center border transition-all ${
                         isOnSchedule
                             ? 'bg-padel-green border-padel-green text-black'
                             : 'bg-black/50 border-white/10 text-padel-green hover:border-padel-green/60 hover:bg-padel-green/10'
                     } ${scheduleBusy ? 'opacity-50 cursor-wait' : ''}`}
                 >
-                    {isOnSchedule ? <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5" strokeWidth={3} /> : <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" strokeWidth={2.5} />}
+                    {isOnSchedule ? <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" strokeWidth={3} /> : <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" strokeWidth={2.5} />}
                 </button>
 
                 <div className="flex flex-row items-center gap-3 sm:gap-5 relative z-10 w-full min-w-0">
