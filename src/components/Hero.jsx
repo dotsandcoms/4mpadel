@@ -1311,12 +1311,12 @@ const Hero = () => {
                                             <>
                                                 {upcomingEvents.length > 0 && (
                                                     <span className="px-2 py-0.5 rounded-full border border-white/20 text-[9px] font-bold uppercase tracking-wider text-white/80">
-                                                        {upcomingEvents.length} Events
+                                                        {upcomingEvents.length} {upcomingEvents.length === 1 ? 'Event' : 'Events'}
                                                     </span>
                                                 )}
                                                 {matchesCount > 0 && (
                                                     <span className="px-2 py-0.5 rounded-full border border-white/20 text-[9px] font-bold uppercase tracking-wider text-white/80">
-                                                        {matchesCount} Matches
+                                                        {matchesCount} {matchesCount === 1 ? 'Match' : 'Matches'}
                                                     </span>
                                                 )}
                                             </>
