@@ -1,11 +1,18 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar as CalendarIcon, MapPin, Filter, Search, ChevronRight, X, ChevronDown, Award, ArrowRight, Users, ChevronLeft, LayoutGrid, List, Loader, AlertCircle, Trophy, Layers, User, PlayCircle, Video, Shield, Check, Star, Globe } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Filter, Search, ChevronRight, X, ChevronDown, Award, ArrowRight, Users, ChevronLeft, LayoutGrid, List, Loader, AlertCircle, Trophy, Layers, User, PlayCircle, Video, Shield, Check, Star, Globe, Plus } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { getEventImage } from '../utils/imageUtils';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
+import { useMembersOnly } from '../context/MembersOnlyContext';
+import { toast } from 'sonner';
+import {
+    fetchScheduledEventIds,
+    toggleEventOnSchedule,
+    SCHEDULE_CHANGED_EVENT,
+} from '../utils/playerSchedule';
 
 import { GitBranch, Map } from 'lucide-react';
 import featuredBg from '../assets/featuredbg.jpeg';
@@ -346,7 +353,7 @@ const FeaturedCarousel = ({ events }) => {
     );
 };
 
-const CalendarEventItem = ({ event, index }) => {
+const CalendarEventItem = ({ event, index, onSchedule, isOnSchedule, scheduleBusy }) => {
     let tierColor = 'border-white/10';
     let bgGradient = 'bg-white/5';
 
@@ -375,6 +382,13 @@ const CalendarEventItem = ({ event, index }) => {
         }
     }
 
+    const handleScheduleClick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (scheduleBusy || !onSchedule) return;
+        onSchedule(event);
+    };
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -388,6 +402,22 @@ const CalendarEventItem = ({ event, index }) => {
                 className={`group block bg-[#141414] hover:bg-[#1a1a1a] border ${tierColor} rounded-2xl py-3 px-4 transition-all duration-300 shadow-xl overflow-hidden relative cursor-pointer`}
             >
                 <div className={`absolute inset-0 ${bgGradient} opacity-10 group-hover:opacity-30 transition-opacity`}></div>
+
+                {/* Add / remove from My Schedule */}
+                <button
+                    type="button"
+                    onClick={handleScheduleClick}
+                    disabled={scheduleBusy}
+                    title={isOnSchedule ? 'Remove from My Schedule' : 'Add to My Schedule'}
+                    aria-label={isOnSchedule ? 'Remove from My Schedule' : 'Add to My Schedule'}
+                    className={`absolute top-2 right-2 z-20 w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center border transition-all ${
+                        isOnSchedule
+                            ? 'bg-padel-green border-padel-green text-black'
+                            : 'bg-black/50 border-white/10 text-padel-green hover:border-padel-green/60 hover:bg-padel-green/10'
+                    } ${scheduleBusy ? 'opacity-50 cursor-wait' : ''}`}
+                >
+                    {isOnSchedule ? <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5" strokeWidth={3} /> : <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" strokeWidth={2.5} />}
+                </button>
 
                 <div className="flex flex-row items-center gap-3 sm:gap-5 relative z-10 w-full min-w-0">
 
@@ -414,7 +444,7 @@ const CalendarEventItem = ({ event, index }) => {
                     </div>
 
                     {/* Info block (Middle) */}
-                    <div className="flex-1 min-w-0 flex flex-col justify-center gap-1 sm:gap-1.5 py-1">
+                    <div className="flex-1 min-w-0 flex flex-col justify-center gap-1 sm:gap-1.5 py-1 pr-6">
                         {/* Status Row */}
                         <div className="flex items-center gap-2 mb-0.5">
                             <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${statusColors.border} ${statusColors.text} bg-transparent`}>
@@ -512,15 +542,76 @@ const Calendar = () => {
 
     // Personalized State
     const [userProfile, setUserProfile] = useState(null);
+    const [sessionEmail, setSessionEmail] = useState(null);
     const [personalEvents, setPersonalEvents] = useState([]);
     const [personalLoading, setPersonalLoading] = useState(false);
+    const [scheduledEventIds, setScheduledEventIds] = useState(() => new Set());
+    const [scheduleBusyId, setScheduleBusyId] = useState(null);
 
     const { getPlayerEventsAsync } = useRankedin();
+    const { promptMembersOnly } = useMembersOnly();
 
     useEffect(() => {
         fetchEvents();
         checkUserStatus();
     }, []);
+
+    const loadScheduledIds = async (email) => {
+        if (!email) {
+            setScheduledEventIds(new Set());
+            return;
+        }
+        try {
+            const ids = await fetchScheduledEventIds(email);
+            setScheduledEventIds(new Set(ids.map(Number)));
+        } catch (err) {
+            console.warn('Failed to load My Schedule ids:', err);
+        }
+    };
+
+    useEffect(() => {
+        if (!sessionEmail) return undefined;
+        loadScheduledIds(sessionEmail);
+        const onScheduleChanged = () => loadScheduledIds(sessionEmail);
+        window.addEventListener(SCHEDULE_CHANGED_EVENT, onScheduleChanged);
+        return () => window.removeEventListener(SCHEDULE_CHANGED_EVENT, onScheduleChanged);
+    }, [sessionEmail]);
+
+    const handleToggleSchedule = async (event) => {
+        if (!sessionEmail) {
+            promptMembersOnly();
+            return;
+        }
+        if (!event?.id) return;
+
+        const eventId = Number(event.id);
+        const currentlyOn = scheduledEventIds.has(eventId);
+        setScheduleBusyId(eventId);
+        // Optimistic UI
+        setScheduledEventIds((prev) => {
+            const next = new Set(prev);
+            if (currentlyOn) next.delete(eventId);
+            else next.add(eventId);
+            return next;
+        });
+
+        try {
+            const nowOn = await toggleEventOnSchedule(sessionEmail, eventId, currentlyOn);
+            toast.success(nowOn ? 'Added to My Schedule' : 'Removed from My Schedule');
+        } catch (err) {
+            console.error('Schedule toggle failed:', err);
+            // Revert
+            setScheduledEventIds((prev) => {
+                const next = new Set(prev);
+                if (currentlyOn) next.add(eventId);
+                else next.delete(eventId);
+                return next;
+            });
+            toast.error(err?.message || 'Could not update My Schedule');
+        } finally {
+            setScheduleBusyId(null);
+        }
+    };
 
     const checkUserStatus = async () => {
         const { data: { session } } = await supabase.auth.getSession();
@@ -533,6 +624,8 @@ const Calendar = () => {
         if (impersonationEmail && isAdmin) {
             targetEmail = impersonationEmail;
         }
+
+        setSessionEmail(targetEmail || null);
 
         if (targetEmail) {
             const { data: profile } = await supabase
@@ -1146,7 +1239,14 @@ const Calendar = () => {
                                 </div>
                                 <AnimatePresence mode="popLayout">
                                     {paginatedEvents.map((event, index) => (
-                                        <CalendarEventItem key={event.id} event={event} index={index} />
+                                        <CalendarEventItem
+                                            key={event.id}
+                                            event={event}
+                                            index={index}
+                                            onSchedule={handleToggleSchedule}
+                                            isOnSchedule={scheduledEventIds.has(Number(event.id))}
+                                            scheduleBusy={scheduleBusyId === Number(event.id)}
+                                        />
                                     ))}
                                 </AnimatePresence>
 

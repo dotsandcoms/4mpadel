@@ -9,6 +9,10 @@ import VideoModal from './VideoModal';
 import { useRankedin } from '../hooks/useRankedin';
 import { usePendingPayments } from '../hooks/usePendingPayments';
 import HappeningNowWidget from './HappeningNowWidget';
+import {
+    fetchScheduledEventsWithCalendar,
+    SCHEDULE_CHANGED_EVENT,
+} from '../utils/playerSchedule';
 
 const parseMatchDate = (dateStr) => {
     if (!dateStr) return new Date(0);
@@ -35,9 +39,10 @@ const getEventStatusColors = (sapaStatus) => {
     return { border: 'border-padel-green/40', text: 'text-padel-green', fill: '#CCFF00' };
 };
 
-/** Mirror EventDetails countdown CTA for a schedule event the user is already on. */
-/** Mirror EventDetails / FeaturedSections: outstanding fee → Pay Now; otherwise Manage Entry. */
+/** Mirror EventDetails / FeaturedSections: outstanding fee → Pay Now; otherwise Manage Entry.
+ *  Curated schedule-only events (not registered) get no entry CTA. */
 const resolveScheduleEntryCta = (event) => {
+    if (event?.fromSchedule && !event?.isRegistered) return null;
     const hasFee = Number(event?.entry_fee) > 0
         || (event?.category_fees && Object.keys(event.category_fees).length > 0);
     const paymentsAllowed = event?.allow_payments === true;
@@ -135,6 +140,7 @@ const Hero = () => {
     const [activeHeroTab, setActiveHeroTab] = useState('matches'); // 'events' | 'matches'
     const [scheduleTimeFilter, setScheduleTimeFilter] = useState('upcoming'); // 'upcoming' | 'past'
     const [pastEventSlide, setPastEventSlide] = useState(0);
+    const [upcomingEventSlide, setUpcomingEventSlide] = useState(0);
     const [pastMatchSlide, setPastMatchSlide] = useState(0);
     const [scheduleOpen, setScheduleOpen] = useState(false);
     const [pendingActionsOpen, setPendingActionsOpen] = useState(false);
@@ -267,19 +273,23 @@ const Hero = () => {
                     }
                 }
 
+                // Allow My Schedule for logged-in emails even without a players row / RankedIn id
                 if (!playerData?.email) {
-                    setEventsLoading(false);
-                    return;
+                    playerData = { email: targetEmail, rankedin_id: null, id: null, name: null };
                 }
 
                 if (signal.aborted) return;
 
                 // Fetch events and matches in parallel using the signal
-                const [rawEvents, rawMatches, rawPastMatches, profileData] = await Promise.all([
+                const [rawEvents, rawMatches, rawPastMatches, profileData, scheduleRows] = await Promise.all([
                     playerData.rankedin_id ? getPlayerEventsAsync(playerData.rankedin_id, signal) : Promise.resolve([]),
                     playerData.rankedin_id ? getPlayerMatches(playerData.rankedin_id, false, 20, signal) : Promise.resolve([]),
                     playerData.rankedin_id ? getPlayerMatches(playerData.rankedin_id, true, 200, signal) : Promise.resolve([]),
-                    playerData.rankedin_id ? getPlayerProfile(playerData.rankedin_id, signal) : Promise.resolve(null)
+                    playerData.rankedin_id ? getPlayerProfile(playerData.rankedin_id, signal) : Promise.resolve(null),
+                    fetchScheduledEventsWithCalendar(playerData.email).catch((err) => {
+                        console.warn('Hero schedule fetch failed:', err);
+                        return [];
+                    }),
                 ]);
 
                 if (signal.aborted) return;
@@ -311,6 +321,9 @@ const Hero = () => {
                         .map((r) => r.event_id || r.calendar?.id)
                         .filter(Boolean),
                 );
+                const scheduledEventIds = new Set(
+                    (scheduleRows || []).map((row) => row.event_id || row.calendar?.id).filter(Boolean),
+                );
 
                 const allEvents = rawEvents || [];
                 localRegs.forEach(reg => {
@@ -332,8 +345,42 @@ const Hero = () => {
                             state: 1,
                             payment_status: userPaymentStatus,
                             isPaid: userPaymentStatus === 'paid',
+                            isRegistered: true,
                         });
                     }
+                });
+
+                // Curated "My Schedule" events from Calendar +
+                (scheduleRows || []).forEach((row) => {
+                    const cal = row.calendar;
+                    if (!cal) return;
+                    const rankedinMatch = cal.rankedin_url ? cal.rankedin_url.match(/\/tournament\/(\d+)/) : null;
+                    const rId = rankedinMatch ? rankedinMatch[1] : null;
+                    const alreadyListed = allEvents.some((e) => (
+                        e.id?.toString() === rId
+                        || e.db_id === cal.id
+                        || e.id === `local_${cal.id}`
+                        || e.id === `schedule_${cal.id}`
+                    ));
+                    if (alreadyListed) {
+                        allEvents.forEach((e) => {
+                            if (e.db_id === cal.id || e.id === `local_${cal.id}` || e.id?.toString() === rId) {
+                                e.fromSchedule = true;
+                            }
+                        });
+                        return;
+                    }
+                    allEvents.push({
+                        id: `schedule_${cal.id}`,
+                        db_id: cal.id,
+                        start_date: cal.start_date,
+                        end_date: cal.end_date,
+                        event_name: cal.event_name,
+                        state: 1,
+                        fromSchedule: true,
+                        isRegistered: false,
+                        isPaid: false,
+                    });
                 });
 
                 const startOfToday = new Date();
@@ -343,12 +390,26 @@ const Hero = () => {
 
                 const uniqueEventsMap = new Map();
                 allEvents.forEach(e => {
-                    if (e.id?.toString().startsWith('local_') && !activeManualEventIds.has(e.db_id)) {
-                        return;
+                    const isLocalOrSchedule = e.id?.toString().startsWith('local_') || e.id?.toString().startsWith('schedule_');
+                    if (isLocalOrSchedule) {
+                        const calId = e.db_id;
+                        const keep = activeManualEventIds.has(calId) || scheduledEventIds.has(calId) || e.fromSchedule;
+                        if (!keep) return;
                     }
-                    const key = e.id?.toString().startsWith('local_') ? `local_${e.db_id}` : `rankedin_${e.id}`;
+                    const key = e.id?.toString().startsWith('local_') || e.id?.toString().startsWith('schedule_')
+                        ? `local_${e.db_id}`
+                        : `rankedin_${e.id}`;
                     if (!uniqueEventsMap.has(key)) {
                         uniqueEventsMap.set(key, e);
+                    } else {
+                        const existing = uniqueEventsMap.get(key);
+                        uniqueEventsMap.set(key, {
+                            ...existing,
+                            ...e,
+                            isRegistered: existing.isRegistered || e.isRegistered,
+                            fromSchedule: existing.fromSchedule || e.fromSchedule,
+                            isPaid: existing.isPaid || e.isPaid,
+                        });
                     }
                 });
                 const uniqueEvents = Array.from(uniqueEventsMap.values());
@@ -365,9 +426,14 @@ const Hero = () => {
                 if (uniqueEvents.length > 0) {
                     const [dbEventsRes, paidParticipantsRes] = await Promise.all([
                         supabase.from('calendar').select('id, slug, rankedin_url, sapa_status, entry_fee, category_fees, venue, city, is_manual, allow_payments'),
-                        supabase.from('tournament_participants').select('event_id')
-                            .or(`email.ilike.${playerData.email},profile_id.eq.${playerData.id}`)
-                            .eq('is_paid', true),
+                        playerData.id || playerData.email
+                            ? supabase.from('tournament_participants').select('event_id')
+                                .or([
+                                    `email.ilike.${playerData.email}`,
+                                    playerData.id ? `profile_id.eq.${playerData.id}` : null,
+                                ].filter(Boolean).join(','))
+                                .eq('is_paid', true)
+                            : Promise.resolve({ data: [] }),
                     ]);
 
                     if (signal.aborted) return;
@@ -379,7 +445,7 @@ const Hero = () => {
 
                     if (dbEventsRes.data) {
                         uniqueEvents.forEach((e) => {
-                            const match = e.id?.toString().startsWith('local_')
+                            const match = e.id?.toString().startsWith('local_') || e.id?.toString().startsWith('schedule_')
                                 ? dbEventsRes.data.find(dbE => dbE.id === e.db_id)
                                 : dbEventsRes.data.find(dbE => dbE.rankedin_url?.includes(`/tournament/${e.id}/`));
                             if (match) {
@@ -392,9 +458,13 @@ const Hero = () => {
                                 e.city = match.city;
                                 e.is_manual = match.is_manual;
                                 e.allow_payments = match.allow_payments;
-                                e.isPaid = e.id?.toString().startsWith('local_')
+                                const paid = e.id?.toString().startsWith('local_') || e.id?.toString().startsWith('schedule_')
                                     ? paidManualEventIds.has(match.id)
                                     : paidEventIds.has(match.id);
+                                e.isPaid = Boolean(e.isPaid || paid);
+                                if (paid || activeManualEventIds.has(match.id)) {
+                                    e.isRegistered = true;
+                                }
                             }
                         });
                     }
@@ -410,12 +480,16 @@ const Hero = () => {
                     .sort((a, b) => new Date(b.start_date) - new Date(a.start_date))
                     .slice(0, 15);
 
+                const hasCuratedSchedule = upcomingFiltered.some((e) => e.fromSchedule);
                 const currentMonthEvents = upcomingFiltered.filter((e) => {
                     const eventEnd = getEventEndDate(e);
                     return eventEnd.getMonth() === currentMonth && eventEnd.getFullYear() === currentYear;
                 });
 
-                if (currentMonthEvents.length > 0) {
+                // Built schedules: show a fuller upcoming list. Otherwise keep the tighter home glance.
+                if (hasCuratedSchedule) {
+                    upcomingFiltered = upcomingFiltered.slice(0, 10);
+                } else if (currentMonthEvents.length > 0) {
                     upcomingFiltered = currentMonthEvents;
                 } else {
                     upcomingFiltered = upcomingFiltered.slice(0, 3);
@@ -587,6 +661,7 @@ const Hero = () => {
             if (document.visibilityState === 'visible') fetchPlayerEventsAndMatches();
         };
         window.addEventListener('4m:registrations-changed', handleRegistrationsChanged);
+        window.addEventListener(SCHEDULE_CHANGED_EVENT, handleRegistrationsChanged);
         window.addEventListener('visibilitychange', handleVisibility);
 
         // Periodic refresh so a long-lived open tab doesn't get stuck showing a stale
@@ -604,6 +679,7 @@ const Hero = () => {
             controller.abort();
             clearInterval(refreshIntervalId);
             window.removeEventListener('4m:registrations-changed', handleRegistrationsChanged);
+            window.removeEventListener(SCHEDULE_CHANGED_EVENT, handleRegistrationsChanged);
             window.removeEventListener('visibilitychange', handleVisibility);
         };
     }, [session, getPlayerEventsAsync, getPlayerMatches]);
@@ -672,12 +748,17 @@ const Hero = () => {
 
     useEffect(() => {
         setPastEventSlide(0);
+        setUpcomingEventSlide(0);
         setPastMatchSlide(0);
     }, [activeHeroTab, scheduleTimeFilter]);
 
     useEffect(() => {
         setPastEventSlide(0);
     }, [pastEvents.length]);
+
+    useEffect(() => {
+        setUpcomingEventSlide(0);
+    }, [upcomingEvents.length]);
 
     useEffect(() => {
         setPastMatchSlide(0);
@@ -694,7 +775,12 @@ const Hero = () => {
 
     const handleEventClick = (event) => {
         if (event.slug || event.db_id) navigate(`/calendar/${event.slug || event.db_id}`);
-        else if (!event.id?.toString().startsWith('local_')) window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
+        else if (
+            !event.id?.toString().startsWith('local_')
+            && !event.id?.toString().startsWith('schedule_')
+        ) {
+            window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
+        }
     };
 
     /** Same hand-off as Featured Events → EventDetails (state.eventCta). */
@@ -863,18 +949,6 @@ const Hero = () => {
             </div>
         );
     };
-
-    const renderEventRows = (events) => (
-        <div className="w-full bg-white/5 border border-white/10 rounded-2xl overflow-hidden animate-fade-in">
-            <div className="flex flex-col">
-                {events.map((event, idx) => (
-                    <div key={`${event.id}_${idx}`} className={idx !== events.length - 1 ? 'border-b border-white/10' : ''}>
-                        {renderSingleEventCard(event, `_${idx}`, { showStartCountdown: true })}
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
 
     const renderFeaturedMatchCard = (match) => {
         const info = match.Info || {};
@@ -1483,7 +1557,12 @@ const Hero = () => {
                                                 {activeHeroTab === 'events' && (
                                                     scheduleTimeFilter === 'upcoming' ? (
                                                         upcomingEvents.length > 0 ? (
-                                                            renderEventRows(upcomingEvents)
+                                                            renderPastPager(
+                                                                upcomingEvents,
+                                                                upcomingEventSlide,
+                                                                setUpcomingEventSlide,
+                                                                (event, keySuffix) => renderSingleEventCard(event, keySuffix, { showStartCountdown: true }),
+                                                            )
                                                         ) : (
                                                             <div className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-5 flex flex-col items-center justify-center text-center animate-fade-in">
                                                                 <Calendar size={28} strokeWidth={1.5} className="text-white/20 mb-2" />

@@ -14,6 +14,10 @@ import { useClubs } from '../hooks/useClubs';
 import SearchableSelect from '../components/SearchableSelect';
 import { User, Phone, Save, AlertCircle, CheckCircle, CheckCircle2, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Shield, Mail, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users, Instagram, TrendingUp, Edit3, X, RotateCcw, Building2, Building, Clock, LayoutDashboard } from 'lucide-react';
 import { clubStatusLabel, isManageableClubStatus, isInReviewClubStatus } from '../utils/club';
+import {
+    fetchScheduledEventsWithCalendar,
+    SCHEDULE_CHANGED_EVENT,
+} from '../utils/playerSchedule';
 
 const REFUND_REASON_LABELS = {
     owner_withdraw: 'Withdrawal',
@@ -769,6 +773,16 @@ const PlayerProfile = () => {
                     (localRegs || []).map((r) => r.event_id || r.calendar?.id).filter(Boolean),
                 );
 
+                let scheduleRows = [];
+                try {
+                    scheduleRows = await fetchScheduledEventsWithCalendar(player.email);
+                } catch (err) {
+                    console.warn('Profile schedule fetch failed:', err);
+                }
+                const scheduledEventIds = new Set(
+                    (scheduleRows || []).map((row) => row.event_id || row.calendar?.id).filter(Boolean),
+                );
+
                 if (localRegs) {
                     localRegs.forEach(reg => {
                         const cal = reg.calendar;
@@ -788,23 +802,68 @@ const PlayerProfile = () => {
                                 end_date: cal.end_date,
                                 name: cal.event_name,
                                 state: 1, // Default to upcoming
-                                payment_status: userPaymentStatus
+                                payment_status: userPaymentStatus,
+                                isRegistered: true,
                             });
                         }
                     });
                 }
+
+                // Curated My Schedule events (Calendar +)
+                (scheduleRows || []).forEach((row) => {
+                    const cal = row.calendar;
+                    if (!cal) return;
+                    const rankedinMatch = cal.rankedin_url ? cal.rankedin_url.match(/\/tournament\/(\d+)/) : null;
+                    const rId = rankedinMatch ? rankedinMatch[1] : null;
+                    const alreadyListed = events.some((e) => (
+                        e.id?.toString() === rId
+                        || e.db_id === cal.id
+                        || e.id === `local_${cal.id}`
+                        || e.id === `schedule_${cal.id}`
+                    ));
+                    if (alreadyListed) {
+                        events.forEach((e) => {
+                            if (e.db_id === cal.id || e.id === `local_${cal.id}` || e.id?.toString() === rId) {
+                                e.fromSchedule = true;
+                            }
+                        });
+                        return;
+                    }
+                    events.push({
+                        id: `schedule_${cal.id}`,
+                        db_id: cal.id,
+                        start_date: cal.start_date,
+                        end_date: cal.end_date,
+                        name: cal.event_name,
+                        state: 1,
+                        fromSchedule: true,
+                        isRegistered: false,
+                    });
+                });
 
                 const startOfToday = new Date();
                 startOfToday.setHours(0, 0, 0, 0);
 
                 const uniqueEventsMap = new Map();
                 events.forEach(e => {
-                    if (e.id?.toString().startsWith('local_') && !activeManualEventIds.has(e.db_id)) {
-                        return;
+                    const isLocalOrSchedule = e.id?.toString().startsWith('local_') || e.id?.toString().startsWith('schedule_');
+                    if (isLocalOrSchedule) {
+                        const calId = e.db_id;
+                        const keep = activeManualEventIds.has(calId) || scheduledEventIds.has(calId) || e.fromSchedule;
+                        if (!keep) return;
                     }
-                    const key = e.id?.toString().startsWith('local_') ? `local_${e.db_id}` : `rankedin_${e.id}`;
+                    const key = isLocalOrSchedule ? `local_${e.db_id}` : `rankedin_${e.id}`;
                     if (!uniqueEventsMap.has(key)) {
                         uniqueEventsMap.set(key, e);
+                    } else {
+                        const existing = uniqueEventsMap.get(key);
+                        uniqueEventsMap.set(key, {
+                            ...existing,
+                            ...e,
+                            isRegistered: existing.isRegistered || e.isRegistered,
+                            fromSchedule: existing.fromSchedule || e.fromSchedule,
+                            isPaid: existing.isPaid || e.isPaid,
+                        });
                     }
                 });
                 const uniqueEvents = Array.from(uniqueEventsMap.values());
@@ -903,7 +962,7 @@ const PlayerProfile = () => {
 
                     if (dbEvents) {
                         allFiltered.forEach(e => {
-                            const match = e.id?.toString().startsWith('local_')
+                            const match = e.id?.toString().startsWith('local_') || e.id?.toString().startsWith('schedule_')
                                 ? dbEvents.find(dbE => dbE.id === e.db_id)
                                 : dbEvents.find(dbE => dbE.rankedin_url && dbE.rankedin_url.includes(`/tournament/${e.id}/`));
                                 
@@ -918,10 +977,14 @@ const PlayerProfile = () => {
                                 e.entry_fee = match.entry_fee;
                                 e.category_fees = match.category_fees;
                                 e.event_name = match.event_name || e.event_name;
+                                e.name = match.event_name || e.name;
                                 e.is_manual = match.is_manual;
                                 e.isPaid = paidEventIds.has(match.id);
                                 if (e.isPaid && e.payment_status === 'pending') {
                                     e.payment_status = 'paid';
+                                }
+                                if (paidEventIds.has(match.id) || activeManualEventIds.has(match.id)) {
+                                    e.isRegistered = true;
                                 }
                             }
                         });
@@ -935,7 +998,11 @@ const PlayerProfile = () => {
 
             const handleRegistrationsChanged = () => { fetchEvents(); };
             window.addEventListener('4m:registrations-changed', handleRegistrationsChanged);
-            return () => window.removeEventListener('4m:registrations-changed', handleRegistrationsChanged);
+            window.addEventListener(SCHEDULE_CHANGED_EVENT, handleRegistrationsChanged);
+            return () => {
+                window.removeEventListener('4m:registrations-changed', handleRegistrationsChanged);
+                window.removeEventListener(SCHEDULE_CHANGED_EVENT, handleRegistrationsChanged);
+            };
         }
     }, [player, player?.rankedin_id, player?.email, getPlayerEventsAsync]);
 
@@ -2029,6 +2096,11 @@ const PlayerProfile = () => {
                                                                     {event.isPaid && (
                                                                         <span className="text-[7.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-padel-green/10 border border-padel-green/20 text-padel-green">
                                                                             Paid
+                                                                        </span>
+                                                                    )}
+                                                                    {event.fromSchedule && !event.isPaid && !event.isRegistered && (
+                                                                        <span className="text-[7.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-padel-green/10 border border-padel-green/20 text-padel-green">
+                                                                            On Schedule
                                                                         </span>
                                                                     )}
                                                                     {hasPending && !event.isPaid && (
@@ -4685,6 +4757,13 @@ const PlayerProfile = () => {
                                                                                         <div className="absolute top-0 right-0 translate-x-[30%] translate-y-[20%] rotate-45 bg-[#ccff00] text-black text-[8px] font-black uppercase tracking-widest py-1 w-[140%] text-center shadow-lg flex items-center justify-center gap-1">
                                                                                             <CheckCircle2 size={8} strokeWidth={4} />
                                                                                             PAID
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ) : event.fromSchedule && !event.isRegistered ? (
+                                                                                    <div className="absolute top-0 right-0 w-20 h-20 overflow-hidden z-20 pointer-events-none rounded-tr-2xl">
+                                                                                        <div className="absolute top-0 right-0 translate-x-[30%] translate-y-[20%] rotate-45 bg-[#ccff00] text-black text-[7.5px] font-black uppercase tracking-wider py-1 w-[140%] text-center shadow-lg flex items-center justify-center gap-1">
+                                                                                            <CalendarIcon size={8} strokeWidth={4} />
+                                                                                            SCHEDULE
                                                                                         </div>
                                                                                     </div>
                                                                                 ) : null}
