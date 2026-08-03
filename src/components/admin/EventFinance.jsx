@@ -324,7 +324,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             try {
                 const { data: eData } = await supabase
                     .from('calendar')
-                    .select('id, event_name, start_date, end_date, rankedin_id, rankedin_url, entry_fee, category_fees, finance_managed, is_manual, allow_payments, slug, organiser_interim_payments, organiser_name, organiser_email')
+                    .select('id, event_name, start_date, end_date, rankedin_id, rankedin_url, entry_fee, category_fees, early_bird_fee, early_bird_ends_at, finance_managed, is_manual, allow_payments, slug, organiser_interim_payments, organiser_name, organiser_email')
                     .order('start_date', { ascending: false });
 
                 const pData = await fetchAllRows(() => supabase

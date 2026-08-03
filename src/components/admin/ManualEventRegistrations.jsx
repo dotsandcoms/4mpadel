@@ -31,6 +31,7 @@ import { sendEmail } from '../../utils/emails';
 import AdminPlayerProfileModal from './AdminPlayerProfileModal';
 import EventActivityLog from './EventActivityLog';
 import { logEventActivity } from '../../utils/eventActivityLog';
+import { parseEventDate } from '../../utils/eventEntryFee';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
@@ -230,11 +231,39 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         () => extractRankedinId(event?.rankedin_id) || extractRankedinId(event?.rankedin_url) || '',
     );
     const [linkedRankedinUrl, setLinkedRankedinUrl] = useState(() => event?.rankedin_url || '');
+    const [earlyBirdMeta, setEarlyBirdMeta] = useState(() => ({
+        early_bird_fee: event?.early_bird_fee ?? null,
+        early_bird_ends_at: event?.early_bird_ends_at ?? null,
+    }));
 
     useEffect(() => {
         setLinkedRankedinId(extractRankedinId(event?.rankedin_id) || extractRankedinId(event?.rankedin_url) || '');
         setLinkedRankedinUrl(event?.rankedin_url || '');
     }, [event?.id, event?.rankedin_id, event?.rankedin_url]);
+
+    useEffect(() => {
+        setEarlyBirdMeta({
+            early_bird_fee: event?.early_bird_fee ?? null,
+            early_bird_ends_at: event?.early_bird_ends_at ?? null,
+        });
+        if (!event?.id) return undefined;
+        // Parent list queries often omit early-bird columns — load them here so the card always works.
+        if (event?.early_bird_ends_at != null && event?.early_bird_fee != null) return undefined;
+        let cancelled = false;
+        (async () => {
+            const { data, error } = await supabase
+                .from('calendar')
+                .select('early_bird_fee, early_bird_ends_at')
+                .eq('id', event.id)
+                .maybeSingle();
+            if (cancelled || error || !data) return;
+            setEarlyBirdMeta({
+                early_bird_fee: data.early_bird_fee ?? null,
+                early_bird_ends_at: data.early_bird_ends_at ?? null,
+            });
+        })();
+        return () => { cancelled = true; };
+    }, [event?.id, event?.early_bird_fee, event?.early_bird_ends_at]);
 
     useEffect(() => {
         const rows = Array.isArray(event?.organiser_interim_payments)
@@ -2306,6 +2335,45 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         const dueBeforeInterim = Math.max(0, entryFeeBalance - commission);
         const dueToOrg = Math.max(0, dueBeforeInterim - interimPaid);
 
+        // Early bird vs normal sign-ups — prefer paid amount (survives after early bird ends),
+        // then registration time vs deadline. Infer early-bird fee from payment tiers if unset.
+        const earlyBirdEnds = parseEventDate(earlyBirdMeta?.early_bird_ends_at);
+        const configuredEbFee = (earlyBirdMeta?.early_bird_fee != null && earlyBirdMeta?.early_bird_fee !== '')
+            ? Number(earlyBirdMeta.early_bird_fee)
+            : null;
+        const successPays = successPaymentsOnly(payments);
+        const paidFeeAmounts = [];
+        activeRegistrations.forEach((r) => {
+            const payment = findStrictPaystackEntryPayment(successPays, r);
+            if (!payment) return;
+            const fee = getRegistrationEntryFeePaid(payment, r, 0);
+            if (fee > 0) paidFeeAmounts.push(Math.round(Number(fee) * 100) / 100);
+        });
+        const uniquePaidFees = [...new Set(paidFeeAmounts)].sort((a, b) => a - b);
+        const inferredEbFee = uniquePaidFees.length >= 2 ? uniquePaidFees[0] : null;
+        const earlyBirdFee = Number.isFinite(configuredEbFee) ? configuredEbFee : inferredEbFee;
+        const hasEarlyBirdPricing = earlyBirdFee != null
+            && Number.isFinite(Number(earlyBirdFee))
+            && (Boolean(earlyBirdEnds) || uniquePaidFees.length >= 2 || configuredEbFee != null);
+
+        let earlyBirdSignups = 0;
+        let normalSignups = 0;
+        activeRegistrations.forEach((r) => {
+            const payment = findStrictPaystackEntryPayment(successPays, r);
+            const paid = payment ? getRegistrationEntryFeePaid(payment, r, 0) : null;
+
+            let isEarly = false;
+            if (hasEarlyBirdPricing && paid != null && paid > 0 && earlyBirdFee != null) {
+                isEarly = Math.abs(Number(paid) - Number(earlyBirdFee)) < 0.51;
+            } else if (hasEarlyBirdPricing && earlyBirdEnds) {
+                const created = parseEventDate(r.created_at) || parseEventDate(r.registered_at);
+                isEarly = Boolean(created && created.getTime() <= earlyBirdEnds.getTime());
+            }
+
+            if (isEarly) earlyBirdSignups += 1;
+            else normalSignups += 1;
+        });
+
         return {
             unique,
             paid4M,
@@ -2322,8 +2390,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             fullLicenses,
             tempLicenses,
             noLicenses,
+            hasEarlyBirdPricing,
+            earlyBirdSignups,
+            normalSignups,
         };
-    }, [activeRegistrations, payments, divFee, formatPaymentMethodForExport, formatLicenseForExport, refundByReg, refunds, interimPayments]);
+    }, [activeRegistrations, payments, divFee, formatPaymentMethodForExport, formatLicenseForExport, refundByReg, refunds, interimPayments, earlyBirdMeta]);
 
     const incomeStatementRows = useMemo(() => {
         const rows = [];
@@ -2923,6 +2994,17 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             <span className="text-xl font-black text-padel-green">{fmtR(overviewStats.collected4M)}</span>
                                             <p className="text-[9px] text-gray-500 mt-1">Entry fees via Paystack before refunds</p>
                                         </div>
+                                        {overviewStats.hasEarlyBirdPricing && (
+                                            <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4 col-span-2 md:col-span-1">
+                                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Early Bird · Normal</p>
+                                                <div className="flex items-baseline gap-1.5">
+                                                    <span className="text-xl font-black text-padel-green">{overviewStats.earlyBirdSignups}</span>
+                                                    <span className="text-sm font-bold text-gray-500">·</span>
+                                                    <span className="text-xl font-black text-white">{overviewStats.normalSignups}</span>
+                                                </div>
+                                                <p className="text-[9px] text-gray-500 mt-1">Entries signed up</p>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-2xl p-5 space-y-3">
@@ -4221,7 +4303,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                 </button>
                             </div>
 
-                            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
                                 {[
                                     { label: 'Total Collected', value: fmtR(overviewStats.collected4M), color: 'text-padel-green' },
                                     { label: 'Entry Fees Refunded', value: `−${fmtR(overviewStats.entryFeesRefunded)}`, color: 'text-red-400' },
@@ -4234,6 +4316,17 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         <span className={`text-lg font-black ${card.color}`}>{card.value}</span>
                                     </div>
                                 ))}
+                                <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Early Bird · Normal</p>
+                                    <div className="flex items-baseline gap-1.5 flex-wrap">
+                                        <span className="text-lg font-black text-padel-green">{overviewStats.earlyBirdSignups}</span>
+                                        <span className="text-sm font-bold text-gray-500">·</span>
+                                        <span className="text-lg font-black text-white">{overviewStats.normalSignups}</span>
+                                    </div>
+                                    <p className="text-[9px] text-gray-500 mt-1">
+                                        {overviewStats.hasEarlyBirdPricing ? 'Entries signed up' : 'No early-bird split detected'}
+                                    </p>
+                                </div>
                             </div>
 
                             <div className="relative max-w-md">

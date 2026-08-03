@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, ShieldCheck, ChevronRight, Search, Filter, X, ChevronDown, Globe } from 'lucide-react';
+import { MapPin, ShieldCheck, ChevronRight, Search, Filter, X, ChevronDown, Globe, Landmark } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 import { fetchPublishedClubs, SA_REGIONS, clubCityLabel, clubRegionLabel, showFourMApprovedBadge } from '../utils/club';
 import VerifiedBadge from '../components/VerifiedBadge';
 import heroCourt from '../assets/home.jpeg';
@@ -22,7 +23,22 @@ const Clubs = () => {
         const load = async () => {
             try {
                 const data = await fetchPublishedClubs();
-                setClubs(data);
+                const ids = (data || []).map((c) => c.id).filter(Boolean);
+                let ownedIds = new Set();
+                if (ids.length > 0) {
+                    const { data: owners } = await supabase
+                        .from('club_members')
+                        .select('club_id')
+                        .in('club_id', ids)
+                        .eq('role', 'owner');
+                    ownedIds = new Set((owners || []).map((row) => row.club_id));
+                }
+                setClubs(
+                    (data || []).map((c) => ({
+                        ...c,
+                        _claimable: !ownedIds.has(c.id),
+                    })),
+                );
             } catch (err) {
                 console.error('Failed to load clubs:', err);
             } finally {
@@ -53,17 +69,23 @@ const Clubs = () => {
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
-        return clubsWithMeta.filter((c) => {
-            const matchesSearch = !q
-                || c.name?.toLowerCase().includes(q)
-                || c.short_name?.toLowerCase().includes(q)
-                || c._city?.toLowerCase().includes(q)
-                || c._region?.toLowerCase().includes(q)
-                || c.address?.toLowerCase().includes(q);
-            const matchesRegion = regionFilter === 'All' || c._region === regionFilter;
-            const matchesCity = cityFilter === 'All' || c._city === cityFilter;
-            return matchesSearch && matchesRegion && matchesCity;
-        });
+        return clubsWithMeta
+            .filter((c) => {
+                const matchesSearch = !q
+                    || c.name?.toLowerCase().includes(q)
+                    || c.short_name?.toLowerCase().includes(q)
+                    || c._city?.toLowerCase().includes(q)
+                    || c._region?.toLowerCase().includes(q)
+                    || c.address?.toLowerCase().includes(q);
+                const matchesRegion = regionFilter === 'All' || c._region === regionFilter;
+                const matchesCity = cityFilter === 'All' || c._city === cityFilter;
+                return matchesSearch && matchesRegion && matchesCity;
+            })
+            // Claimable clubs (no owner yet) first, then A–Z
+            .sort((a, b) => {
+                if (a._claimable !== b._claimable) return a._claimable ? -1 : 1;
+                return (a.short_name || a.name || '').localeCompare(b.short_name || b.name || '');
+            });
     }, [clubsWithMeta, search, regionFilter, cityFilter]);
 
     const activeFilterCount = (regionFilter !== 'All' ? 1 : 0) + (cityFilter !== 'All' ? 1 : 0);
@@ -265,6 +287,11 @@ const Clubs = () => {
                                     )}
                                     <div className="min-w-0 flex-1">
                                         <div className="flex flex-wrap gap-1.5 mb-1.5">
+                                            {c._claimable && (
+                                                <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border bg-padel-green/10 text-padel-green border-padel-green/25">
+                                                    <Landmark size={9} /> Claim
+                                                </span>
+                                            )}
                                             {showFourMApprovedBadge(c) && (
                                                 <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border bg-padel-green/10 text-padel-green border-padel-green/25">
                                                     <VerifiedBadge tone="green" size={11} title="4M approved" /> 4M approved
