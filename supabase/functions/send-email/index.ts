@@ -8,10 +8,32 @@ const corsHeaders = {
 
 const SITE_URL = 'https://4mpadel.co.za';
 const EMAIL_LOGO_URL = `${SITE_URL}/images/4m-padel-event-management-logo.png`;
+const EMAIL_CLUBS_LOGO_URL = `${SITE_URL}/images/4m-padel-clubs-logo.png`;
 const fmtR = (n: number) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
+const CLUB_EMAIL_TEMPLATES = new Set([
+  'club_applied',
+  'admin_club_applied',
+  'club_approved',
+  'club_rejected',
+  'club_member_added',
+  'club_claim_applied',
+  'admin_club_claim_applied',
+  'club_claim_invite',
+  'club_claim_approved',
+  'club_claim_rejected',
+]);
+
 // Unified Brand Wrapper for premium emails
-function wrapBrandTemplate(contentHtml: string, titleText: string, actionUrl?: string, actionLabel?: string) {
+function wrapBrandTemplate(
+  contentHtml: string,
+  titleText: string,
+  actionUrl?: string,
+  actionLabel?: string,
+  options?: { logoUrl?: string; logoAlt?: string },
+) {
+  const logoUrl = options?.logoUrl || EMAIL_LOGO_URL;
+  const logoAlt = options?.logoAlt || '4M Padel Event Management';
   const buttonHtml = actionUrl && actionLabel ? `
     <div style="margin-top: 32px; margin-bottom: 20px; text-align: center;">
       <a href="${actionUrl}" target="_blank" style="background-color: #9AE900; color: #000000; font-family: 'Outfit', 'Inter', Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 2.5px; text-decoration: none; padding: 18px 36px; border-radius: 14px; display: inline-block; box-shadow: 0 8px 25px rgba(154,233,0,0.25); border: 1px solid #B4F53C; transition: all 0.3s ease;">
@@ -40,7 +62,7 @@ function wrapBrandTemplate(contentHtml: string, titleText: string, actionUrl?: s
                 <tr>
                   <td style="background: linear-gradient(135deg, #111827, #0B0F19); padding: 32px 40px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.03);">
                     <a href="${SITE_URL}" target="_blank" style="text-decoration: none; display: inline-block;">
-                      <img src="${EMAIL_LOGO_URL}" alt="4M Padel Event Management" width="280" style="max-width: 280px; width: 100%; height: auto; display: block; margin: 0 auto; border: 0;" />
+                      <img src="${logoUrl}" alt="${logoAlt}" width="280" style="max-width: 280px; width: 100%; height: auto; display: block; margin: 0 auto; border: 0;" />
                     </a>
                   </td>
                 </tr>
@@ -1109,7 +1131,15 @@ async function generateEmailBody(
       contentHtml = `<p style="font-size: 14.5px; line-height: 1.7; color: #E2E8F0; font-family: 'Outfit', sans-serif;">${vars.message || ''}</p>`;
   }
 
-  const html = wrapBrandTemplate(contentHtml, subject, actionUrl, actionLabel);
+  const html = wrapBrandTemplate(
+    contentHtml,
+    subject,
+    actionUrl,
+    actionLabel,
+    CLUB_EMAIL_TEMPLATES.has(template)
+      ? { logoUrl: EMAIL_CLUBS_LOGO_URL, logoAlt: '4M Padel Clubs' }
+      : undefined,
+  );
   return { subject, html };
 }
 
