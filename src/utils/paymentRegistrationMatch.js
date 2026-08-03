@@ -81,19 +81,24 @@ export function paymentMatchesRegistration(payment, reg) {
         return true;
     }
 
-    const covered = paymentEntryCoversFor(meta).some(
-        (cover) => cover.type === 'entry'
-            && norm(cover.email) === email
+    const allCovers = paymentEntryCoversFor(meta);
+    const entryCovers = allCovers.filter((cover) => cover.type === 'entry');
+    const covered = entryCovers.some(
+        (cover) => norm(cover.email) === email
             && (!cover.division || !division || cover.division === division),
     );
     if (covered) return true;
 
+    // When covers[] list who was paid for, do not treat registration_rows partners
+    // (booked but not covered by this payment) as matches.
+    if (entryCovers.length > 0) return false;
+
     if (!paymentEmailsFor(meta).has(email)) return false;
 
-    const covers = paymentEntryCoversFor(meta).filter((cover) => norm(cover.email) === email);
-    if (covers.length === 0) return true;
+    const coversForEmail = allCovers.filter((cover) => norm(cover.email) === email);
+    if (coversForEmail.length === 0) return true;
 
-    return covers.some((cover) => !cover.division || !division || cover.division === division);
+    return coversForEmail.some((cover) => !cover.division || !division || cover.division === division);
 }
 
 /** Entry fee payment that explicitly covers this registration row (email + division). */
@@ -107,19 +112,9 @@ export function paymentStrictlyCoversRegistration(payment, reg) {
     if (!email) return false;
     if (meta.registration_id === reg.id) return true;
 
-    // Paystack-synced gateway rows (incl. legacy MANUAL-* refs from finance import)
-    if (isPaystackPaymentMethod(payment.payment_method)) {
-        const { top, inner } = getPaymentMetadataLayers(meta);
-        const payEventId = payment.event_id ?? top.event_id ?? inner.event_id ?? meta.original_trx?.metadata?.event_id;
-        const regEventId = reg.event_id;
-        if (payEventId != null && regEventId != null && Number(payEventId) === Number(regEventId)) {
-            if (paymentEmailsFor(meta).has(email)) {
-                const payDiv = top.division ?? inner.division;
-                if (!payDiv || !division || payDiv === division) return true;
-            }
-        }
-    }
-
+    // Require an explicit covers[] entry (email + division). Do NOT treat
+    // registration_rows alone as payment — partners appear there when only one
+    // player paid for themselves.
     if (!division) return false;
 
     return paymentEntryCoversFor(meta).some(
@@ -127,6 +122,63 @@ export function paymentStrictlyCoversRegistration(payment, reg) {
             && norm(cover.email) === email
             && cover.division === division,
     );
+}
+
+const isLicenseLineItem = (item) => {
+    const label = String(item?.label || item?.type || '').toLowerCase();
+    return label.includes('license') || label.includes('sapa') || label === 'temp_license' || label === 'full_license';
+};
+
+/**
+ * Entry-fee amount actually paid for this registration (early-bird snapshot, line
+ * items, or payment share) — not the live division fee after price changes.
+ */
+export function getRegistrationEntryFeePaid(payment, reg, fallbackFee = 0) {
+    const fallback = Number(fallbackFee) || 0;
+    if (!reg) return fallback;
+    if (!payment || String(payment.status || '').toLowerCase() !== 'success') return fallback;
+    if (isCompedEntryPayment(payment)) return 0;
+    if (isLicensePaymentRow(payment)) return fallback;
+
+    const meta = payment.metadata || {};
+    const email = norm(reg.email);
+    const division = reg.division || reg.class_name || '';
+    const fullName = String(reg.full_name || '').trim().toLowerCase();
+
+    if (Array.isArray(meta.line_items) && meta.line_items.length > 0) {
+        const entryItems = meta.line_items.filter((item) => !isLicenseLineItem(item));
+        const nameMatch = entryItems.find((item) => {
+            const label = String(item.label || '');
+            const namePart = label.split('—')[0].split(' - ')[0].trim().toLowerCase();
+            if (!fullName || !namePart) return false;
+            if (!(fullName === namePart || fullName.startsWith(namePart) || namePart.startsWith(fullName))) {
+                return false;
+            }
+            return !division || label.includes(division);
+        });
+        if (nameMatch?.amount != null) return Number(nameMatch.amount) || 0;
+
+        if (
+            entryItems.length === 1
+            && entryItems[0].amount != null
+            && (meta.registration_id === reg.id || paymentExplicitlyCoversEmail(payment, email))
+        ) {
+            return Number(entryItems[0].amount) || 0;
+        }
+    }
+
+    if (division && meta.division_entry_fees && meta.division_entry_fees[division] != null) {
+        return Number(meta.division_entry_fees[division]) || 0;
+    }
+
+    const entryCovers = paymentEntryCoversFor(meta).filter((cover) => cover.type === 'entry');
+    const amount = Number(payment.amount || 0);
+    if (amount > 0 && entryCovers.length > 1) {
+        return amount / entryCovers.length;
+    }
+    if (amount > 0) return amount;
+
+    return fallback;
 }
 
 export function findStrictPaystackEntryPayment(payments, reg) {

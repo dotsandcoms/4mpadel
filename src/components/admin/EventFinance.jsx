@@ -14,6 +14,7 @@ import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/player
 import { fetchAllRows } from '../../utils/fetchAllRows';
 import {
     findPaymentForRegistration,
+    getRegistrationEntryFeePaid,
     hasBlockingProcessedRefund,
     isEntryFeeRefund,
     isCompedEntryPayment,
@@ -63,7 +64,13 @@ const findManualRegistrationPayment = (payData, reg) =>
 
 const getParticipantPaidAmount = (p) => {
     if (!p?.is_paid) return 0;
-    if (p._isManualReg && p._divisionFee != null) return Number(p._divisionFee) || 0;
+    if (p._isManualReg) {
+        return getRegistrationEntryFeePaid(
+            p.actual_payment,
+            p._reg || { email: p.email, division: p.class_name, full_name: p.full_name, id: p.id },
+            p._divisionFee != null ? Number(p._divisionFee) : 0,
+        );
+    }
     if (p.actual_payment?.amount != null) return Number(p.actual_payment.amount) || 0;
     if (p._divisionFee != null) return Number(p._divisionFee) || 0;
     return 0;

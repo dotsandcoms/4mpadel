@@ -15,6 +15,7 @@ import {
     findAdminMarkedPayment,
     findPaymentForRegistration,
     findStrictPaystackEntryPayment,
+    getRegistrationEntryFeePaid,
     hasBlockingProcessedRefund,
     isEntryFeeRefund,
     isExplicitAdminMarkedPayment,
@@ -45,6 +46,36 @@ const isPaystackEntryPayment = (reg, payments, refundByRegMap = null) => {
 };
 
 const isWithdrawnRegistration = (reg) => String(reg?.status || '').toLowerCase() === 'withdrawn';
+
+/**
+ * Prefer one registration per email+division (paid / more complete partner info wins).
+ * Prevents abandoned-checkout duplicates from appearing twice in admin lists.
+ */
+const dedupeRegistrationsByEmailDivision = (regs) => {
+    const preferred = new Map();
+    const noEmail = [];
+    const scoreReg = (reg) => {
+        let score = 0;
+        if (String(reg.payment_status || '').toLowerCase() === 'paid') score += 100;
+        if (reg.partner_email || reg.partner_name) score += 10;
+        if (reg.phone || reg.contact_number) score += 1;
+        score += new Date(reg.created_at || 0).getTime() / 1e15;
+        return score;
+    };
+    (regs || []).forEach((reg) => {
+        const email = (reg.email || '').toLowerCase().trim();
+        if (!email) {
+            noEmail.push(reg);
+            return;
+        }
+        const key = `${email}::${reg.division || ''}`;
+        const existing = preferred.get(key);
+        if (!existing || scoreReg(reg) > scoreReg(existing)) {
+            preferred.set(key, reg);
+        }
+    });
+    return [...preferred.values(), ...noEmail];
+};
 
 /** Income-statement label for a registration payment row — never invents 'paid'. */
 const resolveIncomeStatementPaymentStatus = (reg, refundByRegMap = null, payments = null) => {
@@ -486,7 +517,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     };
 
     const stats = useMemo(() => {
-        const active = registrations.filter((r) => !isWithdrawnRegistration(r));
+        const active = dedupeRegistrationsByEmailDivision(
+            registrations.filter((r) => !isWithdrawnRegistration(r)),
+        );
         const paid = active.filter((r) => registrationCountsAsPaid(r, refundByReg, payments)).length;
         const pending = active.length - paid;
         const revenue = payments.filter((p) => p.status === 'success').reduce((s, p) => s + Number(p.amount || 0), 0);
@@ -507,7 +540,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             activeCheckoutCount: activeCheckouts.length,
             abandonedCheckoutTotal,
             abandonedCheckoutCount: abandonedCheckouts.length,
-            withdrawn: registrations.length - active.length,
+            withdrawn: registrations.filter((r) => isWithdrawnRegistration(r)).length,
         };
     }, [registrations, payments, refundByReg]);
 
@@ -1491,9 +1524,16 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         if (!registrationCountsAsPaid(r, refundByReg, payments)) return '';
 
         if (registrationIsCompedEntry(r, payments)) return 'Comped';
-        if (isPaystackEntryPayment(r, payments, refundByReg)) return 'Paystack';
 
         const payment = findPaymentForReg(r);
+        if (isExplicitAdminMarkedPayment(payment)) {
+            const method = resolveRegistrationPaymentMethod(r, payment);
+            if (method && method !== 'paystack') return labelPaymentMethod(method);
+            return 'Manual';
+        }
+
+        if (isPaystackEntryPayment(r, payments, refundByReg)) return 'Paystack';
+
         const method = resolveRegistrationPaymentMethod(r, payment);
         if (method && method !== 'paystack') return labelPaymentMethod(method);
 
@@ -1509,7 +1549,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         const note = payment?.metadata?.note || payment?.metadata?.payment_note || null;
         const isExplicitAdminMark = isExplicitAdminMarkedPayment(payment);
         const isCompedChannel = isCompedEntryPayment(payment) || registrationIsCompedEntry(reg, payments);
-        const isPaystackChannel = !isCompedChannel && isPaystackEntryPayment(reg, payments, refundByReg);
+        const isPaystackChannel = !isCompedChannel && !isExplicitAdminMark && isPaystackEntryPayment(reg, payments, refundByReg);
         const isManualChannel = !isPartnerPaid && !isPaystackChannel && !isCompedChannel;
 
         return {
@@ -1604,7 +1644,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         if (paymentFilter === 'withdrawn') {
             rows = rows.filter((r) => isWithdrawnRegistration(r));
         } else {
-            rows = rows.filter((r) => !isWithdrawnRegistration(r));
+            rows = dedupeRegistrationsByEmailDivision(
+                rows.filter((r) => !isWithdrawnRegistration(r)),
+            );
             if (paymentFilter !== 'all') {
                 rows = rows.filter((r) => regMatchesPaymentFilter(r));
             }
@@ -1633,7 +1675,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     }, [registrations, paymentFilter, licenseFilter, search, divisionFilter, sortBy, regMatchesPaymentFilter, regMatchesLicenseFilter]);
 
     const activeRegistrations = useMemo(
-        () => registrations.filter((r) => !isWithdrawnRegistration(r)),
+        () => dedupeRegistrationsByEmailDivision(
+            registrations.filter((r) => !isWithdrawnRegistration(r)),
+        ),
         [registrations],
     );
 
@@ -1660,11 +1704,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             result[d.name] = [];
             const divRegs = activeRegistrations.filter(r => r.division === d.name);
             const processed = new Set();
-            
+
             divRegs.forEach(reg => {
                 if (processed.has(reg.id)) return;
                 processed.add(reg.id);
-                
+
                 const partner = divRegs.find(r => r.id !== reg.id && (r.email || '').toLowerCase() === (reg.partner_email || '').toLowerCase());
                 if (partner) {
                     processed.add(partner.id);
@@ -2048,9 +2092,20 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
         activeRegistrations.forEach((r) => {
             const isComped = registrationIsCompedEntry(r, payments);
-            const fee = isComped ? 0 : divFee(r.division);
-            expected += fee;
-            if (registrationCountsAsPaid(r, refundByReg, payments) && !isComped) collected += fee;
+            const paid = registrationCountsAsPaid(r, refundByReg, payments);
+            if (isComped) {
+                // Comped entries are excluded from expected/collected
+            } else if (paid) {
+                const actualPaid = getRegistrationEntryFeePaid(
+                    findPaymentForRegistration(successPaymentsOnly(payments), r),
+                    r,
+                    divFee(r.division),
+                );
+                expected += actualPaid;
+                collected += actualPaid;
+            } else {
+                expected += divFee(r.division);
+            }
 
             const email = (r.email || '').toLowerCase().trim();
             if (email) uniqueEmails.add(email);
@@ -2097,7 +2152,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             // Gross Paystack entry fees: count whenever a successful Paystack entry payment exists,
             // including registrations later refunded/withdrawn — refunds are subtracted separately.
             if (hasPaystackEntryPaymentRecord(r, payments)) {
-                grossCollected4M += divFee(r.division);
+                grossCollected4M += getRegistrationEntryFeePaid(
+                    findStrictPaystackEntryPayment(successPaymentsOnly(payments), r),
+                    r,
+                    divFee(r.division),
+                );
             }
 
             if (!registrationCountsAsPaid(r, refundByReg, payments)) return;
@@ -2178,7 +2237,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             }
             if (!hasPaystackEntryPaymentRecord(r, payments)) return;
             const payment = findPaymentForReg(r);
-            const fee = divFee(r.division);
+            const fee = getRegistrationEntryFeePaid(payment, r, divFee(r.division));
             if (fee <= 0) return;
             rows.push({
                 id: `pay-${r.id}`,
@@ -3042,7 +3101,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                                             <TeamPlayerRows players={team.players}>
                                                                                 {(p) => (
                                                                                     <div className="text-sm font-bold text-white">
-                                                                                        {registrationCountsAsPaid(p, refundByReg, payments) ? fmtR(fee) : '—'}
+                                                                                        {registrationCountsAsPaid(p, refundByReg, payments)
+                                                                                            ? fmtR(getRegistrationEntryFeePaid(findPaymentForReg(p), p, fee))
+                                                                                            : '—'}
                                                                                     </div>
                                                                                 )}
                                                                             </TeamPlayerRows>
