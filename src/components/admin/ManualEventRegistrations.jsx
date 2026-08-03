@@ -188,6 +188,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const [addPlayerDivision, setAddPlayerDivision] = useState('');
     const [addPlayerNote, setAddPlayerNote] = useState('');
     const [addPlayerBusy, setAddPlayerBusy] = useState(false);
+    const [compTarget, setCompTarget] = useState(null);
+    const [compNote, setCompNote] = useState('');
+    const [compBusy, setCompBusy] = useState(false);
     const [removeTarget, setRemoveTarget] = useState(null);
     const [removePair, setRemovePair] = useState(false);
     const [removeBusy, setRemoveBusy] = useState(false);
@@ -656,7 +659,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         setAddPlayerBusy(false);
     };
 
-    // Search 4M players for admin complimentary entry
+    // Search 4M players for provisional admin add
     useEffect(() => {
         if (!addPlayerOpen || addPlayerSearch.trim().length < 2) {
             setAddPlayerResults([]);
@@ -695,12 +698,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             toast.error('Select a division');
             return;
         }
-        const note = addPlayerNote.trim();
-        if (!note) {
-            toast.error('A note is required for complimentary entries');
-            return;
-        }
 
+        const note = addPlayerNote.trim();
         const email = addPlayerSelected.email.trim();
         const alreadyEntered = registrations.some((r) =>
             r.status !== 'withdrawn'
@@ -716,6 +715,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             const div = divisions.find((d) => d.name === addPlayerDivision);
             const { data: { user } } = await supabase.auth.getUser();
             const adminEmail = user?.email || null;
+            const fee = Number(div?.entry_fee || 0);
 
             const { data: inserted, error: insErr } = await supabase
                 .from('event_registrations')
@@ -725,8 +725,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                     full_name: addPlayerSelected.name,
                     division: addPlayerDivision,
                     division_id: div?.id || null,
-                    payment_status: 'paid',
-                    payment_method: 'manual',
+                    payment_status: 'pending',
+                    payment_method: null,
                     status: 'registered',
                     registered_by: adminEmail || email,
                 })
@@ -734,31 +734,6 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 .maybeSingle();
             if (insErr) throw insErr;
             if (!inserted?.id) throw new Error('Registration was not created');
-
-            const reference = `MANUAL-ADMIN-COMP-${inserted.id}`;
-            const paymentMetadata = {
-                source: 'admin_add_player',
-                division: addPlayerDivision,
-                email,
-                registration_id: inserted.id,
-                marked_by_admin: true,
-                free_entry: true,
-                comp_entry: true,
-                note,
-                payment_note: note,
-                added_by: adminEmail,
-            };
-            const { error: payErr } = await supabase.from('payments').insert([{
-                event_id: event.id,
-                amount: 0,
-                currency: 'ZAR',
-                status: 'success',
-                payment_type: 'event_entry_fee',
-                payment_method: 'manual',
-                reference,
-                metadata: paymentMetadata,
-            }]);
-            if (payErr) throw payErr;
 
             const eventUrl = `https://4mpadel.co.za/calendar/${event.slug || event.id}`;
             const eventDates = event.event_dates
@@ -776,8 +751,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                     partnerName: 'TBD',
                     eventDates,
                     venue: [event.venue, event.city].filter(Boolean).join(', '),
-                    paid: true,
-                    amountDue: 'R 0.00',
+                    paid: false,
+                    amountDue: fmtR(fee),
                     eventUrl,
                 });
             } catch (mailErr) {
@@ -789,19 +764,19 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 eventId: event.id,
                 action: 'admin.added_player',
                 category: 'ADMIN',
-                summary: `Added ${addPlayerSelected.name} with free entry (${addPlayerDivision})`,
+                summary: `Added ${addPlayerSelected.name} provisionally (${addPlayerDivision}) — payment pending`,
                 details: {
                     registration_id: inserted.id,
                     player_name: addPlayerSelected.name,
                     player_email: email,
                     division: addPlayerDivision,
-                    note,
-                    free_entry: true,
+                    note: note || null,
+                    payment_status: 'pending',
                     added_by: adminEmail,
                 },
             });
 
-            toast.success(`Added ${addPlayerSelected.name} — free entry confirmed`);
+            toast.success(`Added ${addPlayerSelected.name} — payment pending`);
             setAddPlayerOpen(false);
             setAddPlayerSearch('');
             setAddPlayerResults([]);
@@ -813,6 +788,124 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             toast.error(err.message || 'Failed to add player');
         } finally {
             setAddPlayerBusy(false);
+        }
+    };
+
+    const openCompModal = (reg) => {
+        setCompTarget(reg);
+        setCompNote('');
+        setCompBusy(false);
+    };
+
+    const closeCompModal = () => {
+        setCompTarget(null);
+        setCompNote('');
+        setCompBusy(false);
+    };
+
+    const confirmCompPlayer = async () => {
+        if (!compTarget) return;
+        const reg = compTarget;
+        const note = compNote.trim();
+        if (!note) {
+            toast.error('A note is required for complimentary entries');
+            return;
+        }
+        if (String(reg.status || '').toLowerCase() === 'withdrawn') {
+            toast.error('Cannot comp a withdrawn player');
+            return;
+        }
+        if (registrationCountsAsPaid(reg, refundByReg, payments)) {
+            toast.error('This player is already paid');
+            return;
+        }
+
+        setCompBusy(true);
+        setMarkingId(reg.id);
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            const adminEmail = user?.email || null;
+
+            const { error } = await supabase
+                .from('event_registrations')
+                .update({
+                    payment_status: 'paid',
+                    payment_method: 'manual',
+                })
+                .eq('id', reg.id);
+            if (error) throw error;
+
+            const reference = `MANUAL-ADMIN-COMP-${reg.id}`;
+            const paymentMetadata = {
+                source: 'admin_add_player',
+                division: reg.division,
+                email: reg.email,
+                registration_id: reg.id,
+                marked_by_admin: true,
+                free_entry: true,
+                comp_entry: true,
+                note,
+                payment_note: note,
+                added_by: adminEmail,
+            };
+
+            const { data: existing } = await supabase
+                .from('payments')
+                .select('id, metadata')
+                .eq('reference', reference)
+                .maybeSingle();
+
+            if (existing) {
+                const { error: payErr } = await supabase
+                    .from('payments')
+                    .update({
+                        status: 'success',
+                        amount: 0,
+                        payment_method: 'manual',
+                        metadata: { ...(existing.metadata || {}), ...paymentMetadata },
+                    })
+                    .eq('id', existing.id);
+                if (payErr) throw payErr;
+            } else {
+                const { error: payErr } = await supabase.from('payments').insert([{
+                    event_id: event.id,
+                    amount: 0,
+                    currency: 'ZAR',
+                    status: 'success',
+                    payment_type: 'event_entry_fee',
+                    payment_method: 'manual',
+                    reference,
+                    metadata: paymentMetadata,
+                }]);
+                if (payErr) throw payErr;
+            }
+
+            await logEventActivity({
+                eventId: event.id,
+                action: 'admin.comped_entry',
+                category: 'ADMIN',
+                summary: `Comped entry for ${reg.full_name} (${reg.division})`,
+                details: {
+                    registration_id: reg.id,
+                    player_name: reg.full_name,
+                    player_email: reg.email,
+                    division: reg.division,
+                    note,
+                    free_entry: true,
+                    added_by: adminEmail,
+                },
+            });
+
+            toast.success(`Comped ${reg.full_name} — free entry`);
+            setCompTarget(null);
+            setCompNote('');
+            setCompBusy(false);
+            load();
+        } catch (err) {
+            toast.error(err.message || 'Failed to comp entry');
+            setCompBusy(false);
+        } finally {
+            setMarkingId(null);
         }
     };
 
@@ -853,8 +946,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             if (error) throw error;
 
             const reference = `MANUAL-ADMIN-${reg.id}`;
+            const compReference = `MANUAL-ADMIN-COMP-${reg.id}`;
             const payment = findAdminMarkedPayment(payments, reg)
-                || payments.find((p) => p.reference === reference);
+                || payments.find((p) => p.reference === reference)
+                || payments.find((p) => p.reference === compReference);
             if (payment) {
                 const { error: payErr } = await supabase
                     .from('payments')
@@ -1952,6 +2047,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 <span className="text-[9px] font-bold text-sky-300">
                     Paid by {details.payerName || 'partner'}
                 </span>
+            ) : details.isCompedChannel ? (
+                <span className="text-[9px] font-bold text-violet-300">
+                    Comped
+                </span>
             ) : details.isManualChannel ? (
                 details.method && details.method !== 'paystack' ? (
                     <span className="text-[9px] font-bold text-amber-300">
@@ -1969,15 +2068,25 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             <div className="flex flex-wrap items-center gap-1.5">
                 {paymentBadge(reg)}
                 {canMarkRegistrationPaid(reg) ? (
-                    <button
-                        type="button"
-                        onClick={() => openMarkPaidModal(reg)}
-                        disabled={markingId === reg.id}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold border bg-sky-500/10 text-sky-400 border-sky-500/25 hover:bg-sky-500/20 hover:text-sky-300 disabled:opacity-50 transition-colors"
-                    >
-                        {markingId === reg.id ? <Loader2 size={10} className="animate-spin" /> : <Pencil size={10} />}
-                        Add Note
-                    </button>
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => openMarkPaidModal(reg)}
+                            disabled={markingId === reg.id}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold border bg-sky-500/10 text-sky-400 border-sky-500/25 hover:bg-sky-500/20 hover:text-sky-300 disabled:opacity-50 transition-colors"
+                        >
+                            {markingId === reg.id ? <Loader2 size={10} className="animate-spin" /> : <Pencil size={10} />}
+                            Mark paid
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => openCompModal(reg)}
+                            disabled={markingId === reg.id || compBusy}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold border bg-violet-500/10 text-violet-300 border-violet-500/25 hover:bg-violet-500/20 hover:text-violet-200 disabled:opacity-50 transition-colors"
+                        >
+                            Comp
+                        </button>
+                    </>
                 ) : (
                     <>
                         {channelLabel}
@@ -1997,14 +2106,14 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold border bg-red-500/10 text-red-400 border-red-500/25 hover:bg-red-500/20 hover:text-red-300 disabled:opacity-50 transition-colors"
                             >
                                 {markingId === reg.id ? <Loader2 size={10} className="animate-spin" /> : <RotateCcw size={10} />}
-                                Unmark paid
+                                {details?.isCompedChannel ? 'Remove comp' : 'Unmark paid'}
                             </button>
                         )}
                     </>
                 )}
             </div>
         );
-    }, [paymentBadge, canMarkRegistrationPaid, canUnmarkAdminPaid, markingId, getPaymentDetails, openPaymentNoteId]);
+    }, [paymentBadge, canMarkRegistrationPaid, canUnmarkAdminPaid, markingId, getPaymentDetails, openPaymentNoteId, compBusy]);
 
     const renderWhatsAppToggle = useCallback((reg) => (
         <button
@@ -2155,7 +2264,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 grossCollected4M += getRegistrationEntryFeePaid(
                     findStrictPaystackEntryPayment(successPaymentsOnly(payments), r),
                     r,
-                    divFee(r.division),
+                    0,
                 );
             }
 
@@ -2235,13 +2344,15 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 });
                 return;
             }
-            if (!hasPaystackEntryPaymentRecord(r, payments)) return;
-            const payment = findPaymentForReg(r);
-            const fee = getRegistrationEntryFeePaid(payment, r, divFee(r.division));
+            // Recorded Paystack entry amount only — never fall back to the live division fee
+            // (that is what made early-bird R550 rows show as R850 after the price rose).
+            const payment = findStrictPaystackEntryPayment(successPaymentsOnly(payments), r);
+            if (!payment) return;
+            const fee = getRegistrationEntryFeePaid(payment, r, 0);
             if (fee <= 0) return;
             rows.push({
                 id: `pay-${r.id}`,
-                date: payment?.created_at || r.paid_at || r.created_at,
+                date: payment.created_at || r.paid_at || r.created_at,
                 description: `${r.division || 'Entry'} — Entry Fee`,
                 type: 'payment',
                 player: [r.full_name, r.partner_name].filter(Boolean).join(' / ') || r.email || '—',
@@ -2309,7 +2420,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         });
 
         return rows;
-    }, [activeRegistrations, payments, divFee, findPaymentForReg, refundByReg, refunds, registrations, overviewStats.commission, interimPayments, event?.organiser_name]);
+    }, [activeRegistrations, payments, findPaymentForReg, refundByReg, refunds, registrations, overviewStats.commission, interimPayments, event?.organiser_name]);
 
     const filteredIncomeStatementRows = useMemo(() => {
         const q = statementSearch.trim().toLowerCase();
@@ -3710,9 +3821,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         <UserPlus size={16} className="text-padel-green" />
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                        <h3 className="text-white font-bold">Add Player — Free Entry</h3>
+                                        <h3 className="text-white font-bold">Add Player</h3>
                                         <p className="text-xs text-gray-400 mt-0.5">
-                                            Search a 4M player, assign a division, and confirm complimentary entry.
+                                            Add them provisionally with payment pending. Comp or mark paid afterwards if needed.
                                         </p>
                                     </div>
                                     <button
@@ -3828,26 +3939,27 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                     </select>
                                 )}
 
-                                <div className="mb-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5">
-                                    <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">Entry status</p>
-                                    <p className="text-sm text-white font-semibold mt-0.5">Marked as paid · Free / complimentary entry (R 0)</p>
+                                <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-amber-400">Entry status</p>
+                                    <p className="text-sm text-white font-semibold mt-0.5">
+                                        Pending payment · {fmtR(divFee(addPlayerDivision))} due
+                                    </p>
+                                    <p className="text-[11px] text-gray-400 mt-1">
+                                        After adding, use Comp or Mark paid on their row if needed.
+                                    </p>
                                 </div>
 
                                 <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">
-                                    Note <span className="text-red-400">*</span>
+                                    Note <span className="text-gray-600 normal-case tracking-normal">(optional)</span>
                                 </label>
                                 <textarea
                                     value={addPlayerNote}
                                     onChange={(e) => setAddPlayerNote(e.target.value)}
-                                    placeholder='e.g. "Comp entry — sponsor guest", "Organiser guest place"'
-                                    rows={3}
-                                    required
+                                    placeholder='e.g. "Added for club — will pay later"'
+                                    rows={2}
                                     disabled={addPlayerBusy}
-                                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-padel-green/50 mb-1 resize-none"
+                                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-padel-green/50 mb-4 resize-none"
                                 />
-                                <p className={`text-[11px] mb-4 min-h-[1rem] ${addPlayerNote.trim() ? 'invisible' : 'text-amber-400/90'}`}>
-                                    Required — explain why this entry is complimentary.
-                                </p>
 
                                 <div className="flex flex-col gap-2">
                                     <button
@@ -3857,18 +3969,79 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             addPlayerBusy
                                             || !addPlayerSelected
                                             || !addPlayerDivision
-                                            || !addPlayerNote.trim()
                                             || divisions.length === 0
                                         }
                                         className="w-full py-2.5 rounded-lg text-sm font-bold bg-padel-green text-black hover:brightness-110 disabled:opacity-40 inline-flex items-center justify-center gap-2"
                                     >
                                         {addPlayerBusy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                                        Add player & send confirmation
+                                        Add player (pending)
                                     </button>
                                     <button
                                         type="button"
                                         onClick={closeAddPlayerModal}
                                         disabled={addPlayerBusy}
+                                        className="w-full py-2 rounded-lg text-xs font-semibold text-gray-400 hover:text-white disabled:opacity-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {compTarget && (
+                        <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/60" onClick={closeCompModal}>
+                            <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-start gap-3 mb-4">
+                                    <div className="w-9 h-9 rounded-xl bg-violet-500/15 flex items-center justify-center shrink-0">
+                                        <CheckCircle size={16} className="text-violet-300" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <h3 className="text-white font-bold truncate">Comp {compTarget.full_name}?</h3>
+                                        <p className="text-xs text-gray-400 mt-0.5">
+                                            {compTarget.division} · Free / complimentary entry (R 0)
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={closeCompModal}
+                                        disabled={compBusy}
+                                        className="p-1.5 text-gray-500 hover:text-white rounded-lg hover:bg-white/5 disabled:opacity-40"
+                                    >
+                                        <X size={18} />
+                                    </button>
+                                </div>
+
+                                <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">
+                                    Note <span className="text-red-400">*</span>
+                                </label>
+                                <textarea
+                                    value={compNote}
+                                    onChange={(e) => setCompNote(e.target.value)}
+                                    placeholder='e.g. "Comp entry — sponsor guest", "Organiser guest place"'
+                                    rows={3}
+                                    required
+                                    disabled={compBusy}
+                                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-violet-500/50 mb-1 resize-none"
+                                />
+                                <p className={`text-[11px] mb-4 min-h-[1rem] ${compNote.trim() ? 'invisible' : 'text-amber-400/90'}`}>
+                                    Required — explain why this entry is complimentary.
+                                </p>
+
+                                <div className="flex flex-col gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={confirmCompPlayer}
+                                        disabled={compBusy || !compNote.trim()}
+                                        className="w-full py-2.5 rounded-lg text-sm font-bold bg-violet-500 text-white hover:bg-violet-400 disabled:opacity-40 inline-flex items-center justify-center gap-2"
+                                    >
+                                        {compBusy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                                        Confirm free entry
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={closeCompModal}
+                                        disabled={compBusy}
                                         className="w-full py-2 rounded-lg text-xs font-semibold text-gray-400 hover:text-white disabled:opacity-50"
                                     >
                                         Cancel

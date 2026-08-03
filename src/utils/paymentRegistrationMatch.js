@@ -1,11 +1,27 @@
 const norm = (value) => String(value || '').toLowerCase().trim();
 
+/** Parse payment.metadata when it arrives as a JSON string (exports / edge cases). */
+export function normalizePaymentMetadata(metadata) {
+    if (!metadata) return {};
+    if (typeof metadata === 'string') {
+        try {
+            const parsed = JSON.parse(metadata);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch {
+            return {};
+        }
+    }
+    if (typeof metadata === 'object') return metadata;
+    return {};
+}
+
 export function isLicensePaymentRow(payment) {
     if (!payment) return false;
     const type = String(payment.payment_type || '').toLowerCase();
     if (type.includes('license') || type === 'membership') return true;
     if (String(payment.reference || '').startsWith('LIC-')) return true;
-    const covers = payment.metadata?.covers;
+    const meta = normalizePaymentMetadata(payment.metadata);
+    const covers = meta.covers;
     return Array.isArray(covers) && covers.length > 0 && covers.every((c) => c.type === 'license');
 }
 
@@ -30,8 +46,9 @@ export function isEntryFeeRefund(refund, payment = null) {
 }
 
 export function getPaymentMetadataLayers(metadata = {}) {
-    const inner = metadata.original_trx?.metadata || {};
-    return { top: metadata, inner };
+    const top = normalizePaymentMetadata(metadata);
+    const inner = normalizePaymentMetadata(top.original_trx?.metadata);
+    return { top, inner };
 }
 
 export function paymentEntryCoversFor(metadata = {}) {
@@ -65,7 +82,7 @@ export function paymentEmailsFor(metadata = {}) {
 export function paymentMatchesRegistration(payment, reg) {
     if (!payment || payment.status !== 'success') return false;
 
-    const meta = payment.metadata || {};
+    const meta = normalizePaymentMetadata(payment.metadata);
     const email = norm(reg.email);
     const division = reg.division || reg.class_name;
 
@@ -105,7 +122,7 @@ export function paymentMatchesRegistration(payment, reg) {
 export function paymentStrictlyCoversRegistration(payment, reg) {
     if (!payment || payment.status !== 'success') return false;
 
-    const meta = payment.metadata || {};
+    const meta = normalizePaymentMetadata(payment.metadata);
     const email = norm(reg.email);
     const division = reg.division || reg.class_name;
 
@@ -132,18 +149,26 @@ const isLicenseLineItem = (item) => {
 /**
  * Entry-fee amount actually paid for this registration (early-bird snapshot, line
  * items, or payment share) — not the live division fee after price changes.
+ *
+ * Priority: named line item → division_entry_fees snapshot → payment.amount share.
+ * Live `fallbackFee` is only used when the payment has no usable recorded amount.
  */
 export function getRegistrationEntryFeePaid(payment, reg, fallbackFee = 0) {
     const fallback = Number(fallbackFee) || 0;
     if (!reg) return fallback;
     if (!payment || String(payment.status || '').toLowerCase() !== 'success') return fallback;
-    if (isCompedEntryPayment(payment)) return 0;
-    if (isLicensePaymentRow(payment)) return fallback;
 
-    const meta = payment.metadata || {};
+    const meta = normalizePaymentMetadata(payment.metadata);
+    const paymentWithMeta = { ...payment, metadata: meta };
+
+    if (isCompedEntryPayment(paymentWithMeta)) return 0;
+    if (isLicensePaymentRow(paymentWithMeta)) return fallback;
+
     const email = norm(reg.email);
     const division = reg.division || reg.class_name || '';
     const fullName = String(reg.full_name || '').trim().toLowerCase();
+    const entryCovers = paymentEntryCoversFor(meta).filter((cover) => cover.type === 'entry');
+    const paymentAmount = Number(payment.amount || 0);
 
     if (Array.isArray(meta.line_items) && meta.line_items.length > 0) {
         const entryItems = meta.line_items.filter((item) => !isLicenseLineItem(item));
@@ -158,25 +183,34 @@ export function getRegistrationEntryFeePaid(payment, reg, fallbackFee = 0) {
         });
         if (nameMatch?.amount != null) return Number(nameMatch.amount) || 0;
 
-        if (
-            entryItems.length === 1
-            && entryItems[0].amount != null
-            && (meta.registration_id === reg.id || paymentExplicitlyCoversEmail(payment, email))
-        ) {
-            return Number(entryItems[0].amount) || 0;
+        if (entryItems.length === 1 && entryItems[0].amount != null) {
+            const coversSelf = meta.registration_id === reg.id
+                || entryCovers.some((c) => norm(c.email) === email);
+            if (coversSelf || entryCovers.length <= 1) {
+                return Number(entryItems[0].amount) || 0;
+            }
+        }
+
+        // Team checkout: match this player's share from entry line items by cover count
+        if (entryItems.length > 1 && email) {
+            const coverIndex = entryCovers.findIndex((c) => norm(c.email) === email
+                && (!division || !c.division || c.division === division));
+            if (coverIndex >= 0 && entryItems[coverIndex]?.amount != null) {
+                return Number(entryItems[coverIndex].amount) || 0;
+            }
         }
     }
 
-    if (division && meta.division_entry_fees && meta.division_entry_fees[division] != null) {
-        return Number(meta.division_entry_fees[division]) || 0;
+    if (division && meta.division_entry_fees) {
+        const snapped = meta.division_entry_fees[division];
+        if (snapped != null && snapped !== '') return Number(snapped) || 0;
     }
 
-    const entryCovers = paymentEntryCoversFor(meta).filter((cover) => cover.type === 'entry');
-    const amount = Number(payment.amount || 0);
-    if (amount > 0 && entryCovers.length > 1) {
-        return amount / entryCovers.length;
+    // Recorded gateway amount beats the live division fee (early bird vs current price).
+    if (paymentAmount > 0) {
+        if (entryCovers.length > 1) return paymentAmount / entryCovers.length;
+        return paymentAmount;
     }
-    if (amount > 0) return amount;
 
     return fallback;
 }
@@ -192,7 +226,7 @@ export function findStrictPaystackEntryPayment(payments, reg) {
     if (matches.length === 0) return null;
 
     const scorePayment = (payment) => {
-        const meta = payment.metadata || {};
+        const meta = normalizePaymentMetadata(payment.metadata);
         let score = 0;
         if (meta.registration_id === reg.id) score += 100;
         if (meta.source === 'paystack_sync') score += 10;
@@ -228,7 +262,7 @@ export function findPaymentForRegistration(payments, reg) {
     if (matches.length === 0) return null;
 
     const scorePayment = (payment) => {
-        const meta = payment.metadata || {};
+        const meta = normalizePaymentMetadata(payment.metadata);
         let score = 0;
         if (meta.registration_id === reg.id) score += 100;
         if (paymentEntryCoversFor(meta).some(
@@ -267,7 +301,7 @@ export function isManualPaymentMethod(method) {
 
 export function isExplicitAdminMarkedPayment(payment) {
     if (!payment) return false;
-    const meta = payment.metadata || {};
+    const meta = normalizePaymentMetadata(payment.metadata);
     return !!(
         meta.marked_by_admin
         || meta.source === 'manual_event_admin'
@@ -279,7 +313,7 @@ export function isExplicitAdminMarkedPayment(payment) {
 /** Complimentary / free admin entry — R0 and excluded from settlement balances. */
 export function isCompedEntryPayment(payment) {
     if (!payment) return false;
-    const meta = payment.metadata || {};
+    const meta = normalizePaymentMetadata(payment.metadata);
     if (meta.free_entry || meta.comp_entry || meta.source === 'admin_add_player') return true;
     return String(payment.reference || '').startsWith('MANUAL-ADMIN-COMP-');
 }
@@ -298,7 +332,7 @@ export function registrationIsCompedEntry(reg, payments) {
  * metadata layer Paystack/sync flows use. Returns null when unknown.
  */
 export function paymentPayerEmailFor(payment) {
-    const meta = payment?.metadata || {};
+    const meta = normalizePaymentMetadata(payment?.metadata);
     const { top, inner } = getPaymentMetadataLayers(meta);
     return norm(
         top.registrant_email || inner.registrant_email
@@ -314,7 +348,7 @@ export function paymentPayerEmailFor(payment) {
  * the team booking (both players), not of what this payment actually paid for.
  */
 export function paymentExplicitlyCoversEmail(payment, email) {
-    const meta = payment?.metadata || {};
+    const meta = normalizePaymentMetadata(payment?.metadata);
     const target = norm(email);
     if (!target) return false;
     return paymentEntryCoversFor(meta).some((c) => norm(c?.email) === target);
@@ -342,7 +376,7 @@ export function resolveRegistrationPayer(payment, reg) {
         return { isPartnerPaid: false, payerEmail: payerEmail || null };
     }
 
-    const meta = payment.metadata || {};
+    const meta = normalizePaymentMetadata(payment.metadata);
     const explicitlyCovers = meta.registration_id === reg.id
         || paymentExplicitlyCoversEmail(payment, selfEmail);
     if (!explicitlyCovers) {
