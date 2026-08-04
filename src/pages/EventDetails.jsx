@@ -311,26 +311,26 @@ const RegistrationCountdown = ({
     const showCta = Boolean(ctaLabel) && !ctaDisabled;
 
     return (
-        <div className="mt-2 rounded-2xl border border-white/10 bg-black/30 backdrop-blur-sm pl-3 pr-4 py-3 sm:pl-4 sm:pr-5 sm:py-4 flex items-center gap-2 sm:gap-3">
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink">
+        <div className="mt-2 rounded-2xl border border-white/10 bg-black/30 backdrop-blur-sm px-3 py-3 min-[420px]:pl-3 min-[420px]:pr-4 sm:pl-4 sm:pr-5 sm:py-4 flex flex-col min-[420px]:flex-row min-[420px]:items-center gap-2.5 min-[420px]:gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink overflow-hidden">
                 <div
                     className="w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center shrink-0 border"
                     style={{ backgroundColor: `${accentColor}20`, borderColor: `${accentColor}40` }}
                 >
                     <Clock className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: accentColor }} />
                 </div>
-                <div className="min-w-0">
-                    <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider sm:tracking-widest text-white/60 mb-0.5 leading-none">
+                <div className="min-w-0 overflow-hidden">
+                    <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider sm:tracking-widest text-white/60 mb-0.5 leading-none truncate">
                         {label}
                     </p>
-                    <p className="text-xs sm:text-sm font-bold leading-tight whitespace-nowrap" style={{ color: accentColor }}>
+                    <p className="text-xs sm:text-sm font-bold leading-tight whitespace-nowrap truncate" style={{ color: accentColor }}>
                         <span className="sm:hidden">{compactDate}</span>
                         <span className="hidden sm:inline">{formattedDate}</span>
                     </p>
                 </div>
             </div>
 
-            <div className={`flex items-center gap-2 sm:gap-3 min-w-0 ${showCta ? 'ml-auto shrink-0' : 'flex-1 justify-end'}`}>
+            <div className={`flex items-center gap-2 sm:gap-3 min-w-0 ${showCta ? 'min-[420px]:ml-auto shrink-0 justify-between min-[420px]:justify-end' : 'flex-1 justify-end'}`}>
                 {!isClosed && (
                     <div className={`flex items-center gap-1.5 sm:gap-3 ${showCta ? 'shrink-0' : 'flex-1 justify-evenly max-w-xs sm:max-w-sm ml-auto'}`}>
                         {[

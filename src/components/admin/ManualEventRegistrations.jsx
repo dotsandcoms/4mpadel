@@ -189,9 +189,6 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const [addPlayerDivision, setAddPlayerDivision] = useState('');
     const [addPlayerNote, setAddPlayerNote] = useState('');
     const [addPlayerBusy, setAddPlayerBusy] = useState(false);
-    const [compTarget, setCompTarget] = useState(null);
-    const [compNote, setCompNote] = useState('');
-    const [compBusy, setCompBusy] = useState(false);
     const [removeTarget, setRemoveTarget] = useState(null);
     const [removePair, setRemovePair] = useState(false);
     const [removeBusy, setRemoveBusy] = useState(false);
@@ -820,124 +817,6 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         }
     };
 
-    const openCompModal = (reg) => {
-        setCompTarget(reg);
-        setCompNote('');
-        setCompBusy(false);
-    };
-
-    const closeCompModal = () => {
-        setCompTarget(null);
-        setCompNote('');
-        setCompBusy(false);
-    };
-
-    const confirmCompPlayer = async () => {
-        if (!compTarget) return;
-        const reg = compTarget;
-        const note = compNote.trim();
-        if (!note) {
-            toast.error('A note is required for complimentary entries');
-            return;
-        }
-        if (String(reg.status || '').toLowerCase() === 'withdrawn') {
-            toast.error('Cannot comp a withdrawn player');
-            return;
-        }
-        if (registrationCountsAsPaid(reg, refundByReg, payments)) {
-            toast.error('This player is already paid');
-            return;
-        }
-
-        setCompBusy(true);
-        setMarkingId(reg.id);
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            const adminEmail = user?.email || null;
-
-            const { error } = await supabase
-                .from('event_registrations')
-                .update({
-                    payment_status: 'paid',
-                    payment_method: 'manual',
-                })
-                .eq('id', reg.id);
-            if (error) throw error;
-
-            const reference = `MANUAL-ADMIN-COMP-${reg.id}`;
-            const paymentMetadata = {
-                source: 'admin_add_player',
-                division: reg.division,
-                email: reg.email,
-                registration_id: reg.id,
-                marked_by_admin: true,
-                free_entry: true,
-                comp_entry: true,
-                note,
-                payment_note: note,
-                added_by: adminEmail,
-            };
-
-            const { data: existing } = await supabase
-                .from('payments')
-                .select('id, metadata')
-                .eq('reference', reference)
-                .maybeSingle();
-
-            if (existing) {
-                const { error: payErr } = await supabase
-                    .from('payments')
-                    .update({
-                        status: 'success',
-                        amount: 0,
-                        payment_method: 'manual',
-                        metadata: { ...(existing.metadata || {}), ...paymentMetadata },
-                    })
-                    .eq('id', existing.id);
-                if (payErr) throw payErr;
-            } else {
-                const { error: payErr } = await supabase.from('payments').insert([{
-                    event_id: event.id,
-                    amount: 0,
-                    currency: 'ZAR',
-                    status: 'success',
-                    payment_type: 'event_entry_fee',
-                    payment_method: 'manual',
-                    reference,
-                    metadata: paymentMetadata,
-                }]);
-                if (payErr) throw payErr;
-            }
-
-            await logEventActivity({
-                eventId: event.id,
-                action: 'admin.comped_entry',
-                category: 'ADMIN',
-                summary: `Comped entry for ${reg.full_name} (${reg.division})`,
-                details: {
-                    registration_id: reg.id,
-                    player_name: reg.full_name,
-                    player_email: reg.email,
-                    division: reg.division,
-                    note,
-                    free_entry: true,
-                    added_by: adminEmail,
-                },
-            });
-
-            toast.success(`Comped ${reg.full_name} — free entry`);
-            setCompTarget(null);
-            setCompNote('');
-            setCompBusy(false);
-            load();
-        } catch (err) {
-            toast.error(err.message || 'Failed to comp entry');
-            setCompBusy(false);
-        } finally {
-            setMarkingId(null);
-        }
-    };
-
     const handleToggleWhatsApp = async (reg) => {
         setUpdatingWhatsApp(reg.id);
         const newState = !reg.whatsapp_added;
@@ -1022,39 +901,50 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         if (!markPaidTarget) return;
         const reg = markPaidTarget;
         const note = markPaidNote.trim();
+        const isComp = markPaidMethod === 'comp';
         if (!note) {
-            toast.error('A payment note is required for manual payments');
+            toast.error(isComp ? 'A note is required for complimentary entries' : 'A payment note is required for manual payments');
+            return;
+        }
+        if (isComp && String(reg.status || '').toLowerCase() === 'withdrawn') {
+            toast.error('Cannot comp a withdrawn player');
             return;
         }
         setMarkPaidBusy(true);
         setMarkingId(reg.id);
         try {
+            // Comp is stored as a plain manual payment of R0 — 'comp' is a UI-only
+            // selection that flags the payment row as complimentary via metadata.
+            const storedMethod = isComp ? 'manual' : markPaidMethod;
             const { error } = await supabase
                 .from('event_registrations')
                 .update({
                     payment_status: 'paid',
-                    payment_method: markPaidMethod,
+                    payment_method: storedMethod,
                 })
                 .eq('id', reg.id);
             if (error) throw error;
 
-            const reference = `MANUAL-ADMIN-${reg.id}`;
+            const reference = isComp ? `MANUAL-ADMIN-COMP-${reg.id}` : `MANUAL-ADMIN-${reg.id}`;
+            const amount = isComp ? 0 : divFee(reg.division);
             const paymentMetadata = {
-                source: 'manual_event_admin',
+                source: isComp ? 'admin_add_player' : 'manual_event_admin',
                 division: reg.division,
                 email: reg.email,
                 registration_id: reg.id,
                 marked_by_admin: true,
                 note,
                 payment_note: note,
+                ...(isComp ? { free_entry: true, comp_entry: true } : {}),
             };
             const { data: existing } = await supabase.from('payments').select('id, metadata').eq('reference', reference).maybeSingle();
             if (existing) {
                 const { error: payErr } = await supabase
                     .from('payments')
                     .update({
-                        payment_method: markPaidMethod,
-                        amount: divFee(reg.division),
+                        status: 'success',
+                        payment_method: storedMethod,
+                        amount,
                         metadata: { ...(existing.metadata || {}), ...paymentMetadata },
                     })
                     .eq('id', existing.id);
@@ -1062,11 +952,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             } else {
                 const { error: payErr } = await supabase.from('payments').insert([{
                     event_id: event.id,
-                    amount: divFee(reg.division),
+                    amount,
                     currency: 'ZAR',
                     status: 'success',
                     payment_type: 'event_entry_fee',
-                    payment_method: markPaidMethod,
+                    payment_method: storedMethod,
                     reference,
                     metadata: paymentMetadata,
                 }]);
@@ -1075,20 +965,22 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
             await logEventActivity({
                 eventId: event.id,
-                action: 'admin.marked_paid',
+                action: isComp ? 'admin.comped_entry' : 'admin.marked_paid',
                 category: 'ADMIN',
-                summary: `Marked ${reg.full_name} as paid (${labelPaymentMethod(markPaidMethod) || 'manual'})`,
+                summary: isComp
+                    ? `Comped entry for ${reg.full_name} (${reg.division})`
+                    : `Marked ${reg.full_name} as paid (${labelPaymentMethod(markPaidMethod) || 'manual'})`,
                 details: {
                     registration_id: reg.id,
                     player_name: reg.full_name,
                     player_email: reg.email,
                     division: reg.division,
                     note,
-                    method: markPaidMethod,
+                    ...(isComp ? { free_entry: true } : { method: markPaidMethod }),
                 },
             });
 
-            toast.success(`Marked ${reg.full_name} as paid — ${note}`);
+            toast.success(isComp ? `Comped ${reg.full_name} — free entry` : `Marked ${reg.full_name} as paid — ${note}`);
             closeMarkPaidModal();
             load();
         } catch (err) {
@@ -1110,7 +1002,6 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             if (r.id === linkTarget.id) return false;
             if (r.division !== linkTarget.division) return false;        // same division only
             if (r.status === 'withdrawn') return false;
-            if (r.payment_status !== 'paid') return false;               // must already be paid
             if ((r.email || '').toLowerCase() === targetEmail) return false;
             if (r.partner_name?.trim() || r.partner_email?.trim()) return false; // must be solo
             // exclude anyone already listed as another active entry's partner in this division
@@ -1237,16 +1128,18 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const linkPartner = async (soloReg, partnerReg) => {
         setLinkBusy(true);
         try {
+            // Pairing is a pure link, not a payment event — each side's
+            // partner_payment_status just mirrors what the other has actually paid.
             const [a, b] = await Promise.all([
                 supabase.from('event_registrations').update({
                     partner_name: partnerReg.full_name,
                     partner_email: partnerReg.email,
-                    partner_payment_status: 'paid',
+                    partner_payment_status: partnerReg.payment_status === 'paid' ? 'paid' : 'pending',
                 }).eq('id', soloReg.id),
                 supabase.from('event_registrations').update({
                     partner_name: soloReg.full_name,
                     partner_email: soloReg.email,
-                    partner_payment_status: 'paid',
+                    partner_payment_status: soloReg.payment_status === 'paid' ? 'paid' : 'pending',
                 }).eq('id', partnerReg.id),
             ]);
             if (a.error) throw a.error;
@@ -2097,25 +1990,15 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             <div className="flex flex-wrap items-center gap-1.5">
                 {paymentBadge(reg)}
                 {canMarkRegistrationPaid(reg) ? (
-                    <>
-                        <button
-                            type="button"
-                            onClick={() => openMarkPaidModal(reg)}
-                            disabled={markingId === reg.id}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold border bg-sky-500/10 text-sky-400 border-sky-500/25 hover:bg-sky-500/20 hover:text-sky-300 disabled:opacity-50 transition-colors"
-                        >
-                            {markingId === reg.id ? <Loader2 size={10} className="animate-spin" /> : <Pencil size={10} />}
-                            Mark paid
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => openCompModal(reg)}
-                            disabled={markingId === reg.id || compBusy}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold border bg-violet-500/10 text-violet-300 border-violet-500/25 hover:bg-violet-500/20 hover:text-violet-200 disabled:opacity-50 transition-colors"
-                        >
-                            Comp
-                        </button>
-                    </>
+                    <button
+                        type="button"
+                        onClick={() => openMarkPaidModal(reg)}
+                        disabled={markingId === reg.id}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold border bg-sky-500/10 text-sky-400 border-sky-500/25 hover:bg-sky-500/20 hover:text-sky-300 disabled:opacity-50 transition-colors"
+                    >
+                        {markingId === reg.id ? <Loader2 size={10} className="animate-spin" /> : <Pencil size={10} />}
+                        Mark paid
+                    </button>
                 ) : (
                     <>
                         {channelLabel}
@@ -2142,7 +2025,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 )}
             </div>
         );
-    }, [paymentBadge, canMarkRegistrationPaid, canUnmarkAdminPaid, markingId, getPaymentDetails, openPaymentNoteId, compBusy]);
+    }, [paymentBadge, canMarkRegistrationPaid, canUnmarkAdminPaid, markingId, getPaymentDetails, openPaymentNoteId]);
 
     const renderWhatsAppToggle = useCallback((reg) => (
         <button
@@ -3337,7 +3220,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                                                     <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-2.5 space-y-2">
                                                                                         <p className="text-[9px] font-black uppercase tracking-widest text-amber-300">Solo entry</p>
                                                                                         <div className="flex items-center gap-1.5 justify-end flex-nowrap">
-                                                                                            {team.players[0].payment_status === 'paid' && !team.players[0].partner_name?.trim() && !team.players[0].partner_email?.trim() && (
+                                                                                            {team.players[0].status !== 'withdrawn' && !team.players[0].partner_name?.trim() && !team.players[0].partner_email?.trim() && (
                                                                                                 <button
                                                                                                     type="button"
                                                                                                     onClick={() => { setLinkSearch(''); setProfileResults([]); setLinkTarget(team.players[0]); }}
@@ -3532,7 +3415,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                         </td>
                                                         <td className="py-3 px-4 text-right">
                                                             <div className="inline-flex items-center gap-2 justify-end">
-                                                                {r.status !== 'withdrawn' && r.payment_status === 'paid' && !r.partner_name?.trim() && !r.partner_email?.trim() && (
+                                                                {r.status !== 'withdrawn' && !r.partner_name?.trim() && !r.partner_email?.trim() && (
                                                                     <button
                                                                         onClick={() => { setLinkSearch(''); setProfileResults([]); setLinkTarget(r); }}
                                                                         className="bg-sky-500/10 text-sky-400 border border-sky-500/20 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-sky-500 hover:text-white inline-flex items-center gap-1.5"
@@ -3635,7 +3518,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                     </div>
                                     <div className="min-w-0">
                                         <h3 className="text-white font-bold truncate">Add partner for {linkTarget.full_name}</h3>
-                                        <p className="text-xs text-gray-400 mt-0.5">{linkTarget.division} · pair with a paid solo player, or invite a 4M member to pay.</p>
+                                        <p className="text-xs text-gray-400 mt-0.5">{linkTarget.division} · pair with another solo entry, or invite a 4M member to pay.</p>
                                     </div>
                                 </div>
 
@@ -3645,17 +3528,17 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         autoFocus
                                         value={linkSearch}
                                         onChange={(e) => setLinkSearch(e.target.value)}
-                                        placeholder="Search paid solo players…"
+                                        placeholder="Search solo players…"
                                         className="w-full bg-black/30 border border-white/10 rounded-lg pl-9 pr-3 py-2 text-sm text-white outline-none focus:border-sky-500/50"
                                     />
                                 </div>
 
                                 <div className="max-h-72 overflow-y-auto -mx-1 px-1 space-y-3">
-                                    {/* Already-paid solo players in this division — instant pairing. */}
+                                    {/* Other solo entries in this division — pure link, no charge either way. */}
                                     <div className="space-y-1">
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 px-1">Paid solo players · instant team</p>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 px-1">Solo entries · pair as a team</p>
                                         {eligiblePartners.length === 0 ? (
-                                            <p className="text-xs text-gray-600 px-1 py-2">No paid solo players available in {linkTarget.division}.</p>
+                                            <p className="text-xs text-gray-600 px-1 py-2">No other solo entries available in {linkTarget.division}.</p>
                                         ) : eligiblePartners.map((p) => (
                                             <button
                                                 key={p.id}
@@ -3667,7 +3550,16 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                     <div className="text-sm font-semibold text-white truncate">{p.full_name}</div>
                                                     <div className="text-[11px] text-gray-500 truncate">{p.email}</div>
                                                 </div>
-                                                {linkBusy ? <Loader2 size={14} className="animate-spin text-sky-400 shrink-0" /> : <UserPlus size={14} className="text-sky-400 shrink-0" />}
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <span className={`text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded ${
+                                                        p.payment_status === 'paid'
+                                                            ? 'bg-emerald-500/10 text-emerald-400'
+                                                            : 'bg-amber-500/10 text-amber-400'
+                                                    }`}>
+                                                        {p.payment_status === 'paid' ? 'Paid' : 'Pending'}
+                                                    </span>
+                                                    {linkBusy ? <Loader2 size={14} className="animate-spin text-sky-400 shrink-0" /> : <UserPlus size={14} className="text-sky-400 shrink-0" />}
+                                                </div>
                                             </button>
                                         ))}
                                     </div>
@@ -3843,8 +3735,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         <Check size={16} className="text-emerald-400" />
                                     </div>
                                     <div className="min-w-0">
-                                        <h3 className="text-white font-bold truncate">Mark {markPaidTarget.full_name} as paid</h3>
-                                        <p className="text-xs text-gray-400 mt-0.5">{markPaidTarget.division} · {fmtR(divFee(markPaidTarget.division))}</p>
+                                        <h3 className="text-white font-bold truncate">
+                                            {markPaidMethod === 'comp' ? 'Comp ' : 'Mark '}{markPaidTarget.full_name}{markPaidMethod === 'comp' ? '?' : ' as paid'}
+                                        </h3>
+                                        <p className="text-xs text-gray-400 mt-0.5">
+                                            {markPaidTarget.division} · {markPaidMethod === 'comp' ? 'Free / complimentary entry (R 0)' : fmtR(divFee(markPaidTarget.division))}
+                                        </p>
                                     </div>
                                 </div>
 
@@ -3857,21 +3753,22 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                     <option value="manual">Manual / EFT</option>
                                     <option value="cash">Cash</option>
                                     <option value="paystack">Paystack (offline fix)</option>
+                                    <option value="comp">Comp (free entry)</option>
                                 </select>
 
                                 <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">
-                                    Payment note <span className="text-red-400">*</span>
+                                    {markPaidMethod === 'comp' ? 'Comp note' : 'Payment note'} <span className="text-red-400">*</span>
                                 </label>
                                 <textarea
                                     value={markPaidNote}
                                     onChange={(e) => setMarkPaidNote(e.target.value)}
-                                    placeholder='e.g. "EFT paid 6 Jul", "Cash at desk", "Comp entry"'
+                                    placeholder={markPaidMethod === 'comp' ? 'e.g. "Comp entry — sponsor guest", "Organiser guest place"' : 'e.g. "EFT paid 6 Jul", "Cash at desk"'}
                                     rows={3}
                                     required
                                     className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 mb-1 resize-none"
                                 />
                                 <p className={`text-[11px] mb-4 min-h-[1rem] ${markPaidNote.trim() ? 'invisible' : 'text-amber-400/90'}`}>
-                                    Required — explain how payment was received.
+                                    {markPaidMethod === 'comp' ? 'Required — explain why this entry is complimentary.' : 'Required — explain how payment was received.'}
                                 </p>
 
                                 <div className="flex flex-col gap-2">
@@ -3881,7 +3778,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         className="w-full py-2.5 rounded-lg text-sm font-bold bg-emerald-500 text-black hover:opacity-90 disabled:opacity-40 inline-flex items-center justify-center gap-2"
                                     >
                                         {markPaidBusy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                                        Confirm payment
+                                        {markPaidMethod === 'comp' ? 'Confirm comp' : 'Confirm payment'}
                                     </button>
                                     <button
                                         onClick={closeMarkPaidModal}
@@ -3905,7 +3802,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                     <div className="min-w-0 flex-1">
                                         <h3 className="text-white font-bold">Add Player</h3>
                                         <p className="text-xs text-gray-400 mt-0.5">
-                                            Add them provisionally with payment pending. Comp or mark paid afterwards if needed.
+                                            Add them provisionally with payment pending. Mark paid (or comp) afterwards if needed.
                                         </p>
                                     </div>
                                     <button
@@ -4027,7 +3924,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         Pending payment · {fmtR(divFee(addPlayerDivision))} due
                                     </p>
                                     <p className="text-[11px] text-gray-400 mt-1">
-                                        After adding, use Comp or Mark paid on their row if needed.
+                                        After adding, use Mark paid on their row (comp is an option there) if needed.
                                     </p>
                                 </div>
 
@@ -4062,68 +3959,6 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         type="button"
                                         onClick={closeAddPlayerModal}
                                         disabled={addPlayerBusy}
-                                        className="w-full py-2 rounded-lg text-xs font-semibold text-gray-400 hover:text-white disabled:opacity-50"
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {compTarget && (
-                        <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/60" onClick={closeCompModal}>
-                            <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
-                                <div className="flex items-start gap-3 mb-4">
-                                    <div className="w-9 h-9 rounded-xl bg-violet-500/15 flex items-center justify-center shrink-0">
-                                        <CheckCircle size={16} className="text-violet-300" />
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <h3 className="text-white font-bold truncate">Comp {compTarget.full_name}?</h3>
-                                        <p className="text-xs text-gray-400 mt-0.5">
-                                            {compTarget.division} · Free / complimentary entry (R 0)
-                                        </p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={closeCompModal}
-                                        disabled={compBusy}
-                                        className="p-1.5 text-gray-500 hover:text-white rounded-lg hover:bg-white/5 disabled:opacity-40"
-                                    >
-                                        <X size={18} />
-                                    </button>
-                                </div>
-
-                                <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">
-                                    Note <span className="text-red-400">*</span>
-                                </label>
-                                <textarea
-                                    value={compNote}
-                                    onChange={(e) => setCompNote(e.target.value)}
-                                    placeholder='e.g. "Comp entry — sponsor guest", "Organiser guest place"'
-                                    rows={3}
-                                    required
-                                    disabled={compBusy}
-                                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-violet-500/50 mb-1 resize-none"
-                                />
-                                <p className={`text-[11px] mb-4 min-h-[1rem] ${compNote.trim() ? 'invisible' : 'text-amber-400/90'}`}>
-                                    Required — explain why this entry is complimentary.
-                                </p>
-
-                                <div className="flex flex-col gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={confirmCompPlayer}
-                                        disabled={compBusy || !compNote.trim()}
-                                        className="w-full py-2.5 rounded-lg text-sm font-bold bg-violet-500 text-white hover:bg-violet-400 disabled:opacity-40 inline-flex items-center justify-center gap-2"
-                                    >
-                                        {compBusy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                                        Confirm free entry
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={closeCompModal}
-                                        disabled={compBusy}
                                         className="w-full py-2 rounded-lg text-xs font-semibold text-gray-400 hover:text-white disabled:opacity-50"
                                     >
                                         Cancel

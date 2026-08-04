@@ -13,6 +13,8 @@ import {
     fetchScheduledEventsWithCalendar,
     SCHEDULE_CHANGED_EVENT,
 } from '../utils/playerSchedule';
+import { resolveScheduleEntryCta } from '../utils/eventCta';
+import { getEventStatusColors, getContrastTextForAccent } from '../utils/eventStatus';
 
 const parseMatchDate = (dateStr) => {
     if (!dateStr) return new Date(0);
@@ -28,28 +30,6 @@ const getEventEndDate = (event) => {
     const eventEnd = event.end_date ? new Date(event.end_date) : new Date(event.start_date);
     eventEnd.setHours(23, 59, 59, 999);
     return eventEnd;
-};
-
-const getEventStatusColors = (sapaStatus) => {
-    if (sapaStatus === 'Major') return { border: 'border-red-500/40', text: 'text-red-500', fill: '#EF4444' };
-    if (sapaStatus === 'Super Gold' || sapaStatus === 'S Gold') return { border: 'border-amber-500/40', text: 'text-amber-500', fill: '#F59E0B' };
-    if (sapaStatus === 'Gold') return { border: 'border-yellow-400/40', text: 'text-yellow-400', fill: '#EAB308' };
-    if (sapaStatus === 'Silver') return { border: 'border-gray-400/40', text: 'text-gray-400', fill: '#9CA3AF' };
-    if (sapaStatus === 'Bronze') return { border: 'border-orange-700/40', text: 'text-orange-700', fill: '#C2410C' };
-    return { border: 'border-padel-green/40', text: 'text-padel-green', fill: '#CCFF00' };
-};
-
-/** Mirror EventDetails / FeaturedSections: outstanding fee → Pay Now; otherwise Manage Entry.
- *  Curated schedule-only events the user hasn't registered for get a Register CTA
- *  (same as FeaturedSections) — it just opens the event page to start registration. */
-const resolveScheduleEntryCta = (event) => {
-    if (event?.fromSchedule && !event?.isRegistered) return { label: 'Register', action: 'register' };
-    const hasFee = Number(event?.entry_fee) > 0
-        || (event?.category_fees && Object.keys(event.category_fees).length > 0);
-    const paymentsAllowed = event?.allow_payments === true;
-    const needsPay = event?.isPaid !== true && hasFee && paymentsAllowed;
-    if (needsPay) return { label: 'Pay Now', action: 'pay' };
-    return { label: 'Manage Entry', action: 'manage' };
 };
 
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -140,8 +120,6 @@ const Hero = () => {
     const [eventsLoading, setEventsLoading] = useState(false);
     const [activeHeroTab, setActiveHeroTab] = useState('matches'); // 'events' | 'matches'
     const [scheduleTimeFilter, setScheduleTimeFilter] = useState('upcoming'); // 'upcoming' | 'past'
-    const [pastEventSlide, setPastEventSlide] = useState(0);
-    const [upcomingEventSlide, setUpcomingEventSlide] = useState(0);
     const [pastMatchSlide, setPastMatchSlide] = useState(0);
     const [scheduleOpen, setScheduleOpen] = useState(false);
     const [pendingActionsOpen, setPendingActionsOpen] = useState(false);
@@ -748,18 +726,8 @@ const Hero = () => {
     }, [session, getOrganisationRankings]);
 
     useEffect(() => {
-        setPastEventSlide(0);
-        setUpcomingEventSlide(0);
         setPastMatchSlide(0);
     }, [activeHeroTab, scheduleTimeFilter]);
-
-    useEffect(() => {
-        setPastEventSlide(0);
-    }, [pastEvents.length]);
-
-    useEffect(() => {
-        setUpcomingEventSlide(0);
-    }, [upcomingEvents.length]);
 
     useEffect(() => {
         setPastMatchSlide(0);
@@ -905,7 +873,7 @@ const Hero = () => {
                                 style={{
                                     background: `linear-gradient(145deg, color-mix(in srgb, ${accent} 68%, white 32%) 0%, ${accent} 50%, color-mix(in srgb, ${accent} 82%, black 18%) 100%)`,
                                     borderColor: accent,
-                                    color: (accent === '#CCFF00' || accent === '#EAB308' || accent === '#F59E0B') ? '#0a0a0a' : '#ffffff',
+                                    color: getContrastTextForAccent(accent),
                                     boxShadow: `inset 0 1px 0 rgba(255,255,255,0.28), 0 1px 6px color-mix(in srgb, ${accent} 35%, transparent)`,
                                 }}
                             >
@@ -918,6 +886,12 @@ const Hero = () => {
             </div>
         );
     };
+
+    const renderEventList = (events, { showStartCountdown = false } = {}) => (
+        <div className="w-full bg-white/5 border border-white/10 rounded-2xl divide-y divide-white/10 overflow-hidden animate-fade-in">
+            {events.map((event) => renderSingleEventCard(event, '', { showStartCountdown }))}
+        </div>
+    );
 
     const renderPastPager = (items, page, setPage, renderItem) => {
         const maxPage = Math.max(0, items.length - 1);
@@ -1558,12 +1532,7 @@ const Hero = () => {
                                                 {activeHeroTab === 'events' && (
                                                     scheduleTimeFilter === 'upcoming' ? (
                                                         upcomingEvents.length > 0 ? (
-                                                            renderPastPager(
-                                                                upcomingEvents,
-                                                                upcomingEventSlide,
-                                                                setUpcomingEventSlide,
-                                                                (event, keySuffix) => renderSingleEventCard(event, keySuffix, { showStartCountdown: true }),
-                                                            )
+                                                            renderEventList(upcomingEvents, { showStartCountdown: true })
                                                         ) : (
                                                             <div className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-5 flex flex-col items-center justify-center text-center animate-fade-in">
                                                                 <Calendar size={28} strokeWidth={1.5} className="text-white/20 mb-2" />
@@ -1580,7 +1549,7 @@ const Hero = () => {
                                                         )
                                                     ) : (
                                                         pastEvents.length > 0 ? (
-                                                            renderPastPager(pastEvents, pastEventSlide, setPastEventSlide, renderSingleEventCard)
+                                                            renderEventList(pastEvents)
                                                         ) : (
                                                             <div className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-5 flex flex-col items-center justify-center text-center animate-fade-in">
                                                                 <Calendar size={28} strokeWidth={1.5} className="text-white/20 mb-2" />

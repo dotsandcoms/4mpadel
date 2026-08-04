@@ -12,12 +12,14 @@ import { useRankedin } from '../hooks/useRankedin';
 import { usePendingPayments } from '../hooks/usePendingPayments';
 import { useClubs } from '../hooks/useClubs';
 import SearchableSelect from '../components/SearchableSelect';
-import { User, Phone, Save, AlertCircle, CheckCircle, CheckCircle2, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Shield, Mail, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users, Instagram, TrendingUp, Edit3, X, RotateCcw, Building2, Building, Clock, LayoutDashboard } from 'lucide-react';
+import { User, Phone, Save, AlertCircle, CheckCircle, CheckCircle2, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Shield, Mail, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users, Instagram, TrendingUp, Edit3, X, RotateCcw, Building2, Building, Clock, LayoutDashboard, ArrowRight } from 'lucide-react';
 import { clubStatusLabel, isManageableClubStatus, isInReviewClubStatus } from '../utils/club';
 import {
     fetchScheduledEventsWithCalendar,
     SCHEDULE_CHANGED_EVENT,
 } from '../utils/playerSchedule';
+import { resolveScheduleEntryCta, navigateToEntryCta } from '../utils/eventCta';
+import { getEventStatusColors, getContrastTextForAccent } from '../utils/eventStatus';
 
 const REFUND_REASON_LABELS = {
     owner_withdraw: 'Withdrawal',
@@ -116,6 +118,8 @@ const PlayerProfile = () => {
     const [myOrgPending, setMyOrgPending] = useState([]);
     const [myOrgManaged, setMyOrgManaged] = useState([]);
     const navigate = useNavigate();
+    /** Same hand-off as Featured Events / Hero → EventDetails (state.eventCta). */
+    const handleEntryCta = (event, cta) => navigateToEntryCta(navigate, event, cta);
     const hasMyClub = myClubPending.length > 0 || myClubManaged.length > 0;
     const hasMyOrganisation = myOrgPending.length > 0 || myOrgManaged.length > 0;
     const [transactions, setTransactions] = useState([]);
@@ -890,7 +894,7 @@ const PlayerProfile = () => {
                 if (allFiltered.length > 0) {
                     const { data: dbEvents } = await supabase
                         .from('calendar')
-                        .select('id, slug, rankedin_url, city, venue, registered_players, organiser_name, sapa_status, image_url, entry_fee, category_fees, event_name, is_manual');
+                        .select('id, slug, rankedin_url, city, venue, registered_players, organiser_name, sapa_status, image_url, entry_fee, category_fees, event_name, is_manual, allow_payments');
 
                     // Fetch user's paid registrations
                     let paidRegs = [];
@@ -979,6 +983,7 @@ const PlayerProfile = () => {
                                 e.event_name = match.event_name || e.event_name;
                                 e.name = match.event_name || e.name;
                                 e.is_manual = match.is_manual;
+                                e.allow_payments = match.allow_payments;
                                 e.isPaid = paidEventIds.has(match.id);
                                 if (e.isPaid && e.payment_status === 'pending') {
                                     e.payment_status = 'paid';
@@ -2082,8 +2087,8 @@ const PlayerProfile = () => {
                                                 }
 
                                                 const hasPending = pendingPayments?.some(p => p.id === event.db_id);
-                                                const hasFee = event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0) || event.is_manual === true;
-                                                const needsPayment = currentTab !== 'past' && event.db_id && hasFee && !event.isPaid && (hasPending || event.payment_status === 'pending');
+                                                const cta = currentTab !== 'past' ? resolveScheduleEntryCta(event) : null;
+                                                const accent = getEventStatusColors(event.sapa_status).fill;
 
                                                 return (
                                                     <div key={idx} className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 flex flex-col gap-3 shadow-lg backdrop-blur-xl relative overflow-hidden group">
@@ -2120,28 +2125,26 @@ const PlayerProfile = () => {
                                                                     <span className="text-[9px] font-black text-padel-green uppercase tracking-widest block leading-none">
                                                                         {new Date(event.start_date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
                                                                     </span>
-                                                                    <span className="text-[8px] text-gray-500 font-bold mt-1 block">R {event.entry_fee || '450'}</span>
                                                                 </div>
-                                                                <a
-                                                                    href={event.slug ? `/calendar/${event.slug}` : '#'}
-                                                                    className="p-2 bg-white/5 border border-white/10 text-white rounded-lg hover:bg-white/10 hover:text-padel-green active:scale-90 transition-all flex items-center justify-center shrink-0"
-                                                                >
-                                                                    <ExternalLink size={10} />
-                                                                </a>
+                                                                {cta ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleEntryCta(event, cta)}
+                                                                        className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[8.5px] font-black uppercase tracking-wide transition-all hover:brightness-110 active:scale-95"
+                                                                        style={{ backgroundColor: accent, color: getContrastTextForAccent(accent) }}
+                                                                    >
+                                                                        {cta.label} <ArrowRight className="w-2.5 h-2.5" />
+                                                                    </button>
+                                                                ) : (
+                                                                    <a
+                                                                        href={event.slug ? `/calendar/${event.slug}` : '#'}
+                                                                        className="p-2 bg-white/5 border border-white/10 text-white rounded-lg hover:bg-white/10 hover:text-padel-green active:scale-90 transition-all flex items-center justify-center shrink-0"
+                                                                    >
+                                                                        <ExternalLink size={10} />
+                                                                    </a>
+                                                                )}
                                                             </div>
                                                         </div>
-                                                        
-                                                        {needsPayment && (
-                                                            <button
-                                                                onClick={() => {
-                                                                    navigate(`/calendar/${event.slug || event.db_id}?register=true`);
-                                                                }}
-                                                                className="w-full bg-padel-green text-black font-black uppercase tracking-widest text-[9px] py-2.5 rounded-xl hover:bg-white active:scale-95 transition-all shadow-md flex items-center justify-center gap-1.5 mt-1"
-                                                            >
-                                                                <CreditCard size={12} />
-                                                                Pay Event Fee
-                                                            </button>
-                                                        )}
                                                     </div>
                                                 );
                                             })}
@@ -4738,8 +4741,8 @@ const PlayerProfile = () => {
 
                                                                         const hasPending = pendingPayments?.some(p => p.id === event.db_id);
                                                                         const showPendingRibbon = currentTab !== 'past' && event.isPaid && hasPending;
-                                                                        const hasFee = event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0) || event.is_manual === true;
-                                                                        const needsPayment = currentTab !== 'past' && event.db_id && hasFee && !event.isPaid && (hasPending || event.payment_status === 'pending');
+                                                                        const cta = currentTab !== 'past' ? resolveScheduleEntryCta(event) : null;
+                                                                        const accent = getEventStatusColors(event.sapa_status).fill;
 
                                                                         return (
                                                                             <div key={event.id} className={`bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-6 ${hoverBorder} hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 group relative overflow-hidden flex flex-col justify-between`}>
@@ -4794,17 +4797,16 @@ const PlayerProfile = () => {
                                                                                         {event.name || event.event_name}
                                                                                     </h4>
 
-                                                                                    {needsPayment && (
+                                                                                    {cta && (
                                                                                         <motion.button
                                                                                             whileHover={{ scale: 1.02 }}
                                                                                             whileTap={{ scale: 0.98 }}
-                                                                                            onClick={() => {
-                                                                                                navigate(`/calendar/${event.slug || event.db_id}?register=true`);
-                                                                                            }}
-                                                                                            className="w-full bg-padel-green text-black font-black uppercase tracking-widest text-[10px] py-3 rounded-xl hover:bg-white transition-all shadow-lg shadow-padel-green/20 flex items-center justify-center gap-2 mt-2 group/pay"
+                                                                                            onClick={() => handleEntryCta(event, cta)}
+                                                                                            className="w-full font-black uppercase tracking-widest text-[10px] py-3 rounded-xl hover:brightness-110 transition-all shadow-lg flex items-center justify-center gap-2 mt-2 group/pay"
+                                                                                            style={{ backgroundColor: accent, color: getContrastTextForAccent(accent) }}
                                                                                         >
-                                                                                            <CreditCard size={14} className="group-hover/pay:rotate-12 transition-transform" />
-                                                                                            Pay Event Fee
+                                                                                            {cta.label}
+                                                                                            <ArrowRight size={14} className="group-hover/pay:translate-x-0.5 transition-transform" />
                                                                                         </motion.button>
                                                                                     )}
                                                                                 </div>
