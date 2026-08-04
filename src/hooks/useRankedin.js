@@ -564,17 +564,21 @@ export const useRankedin = () => {
                             // { MatchViewModel: {...} } (current API shape) — support both.
                             const unwrap = (cell) => cell.MatchCell || cell.MatchViewModel || cell;
 
+                            // Round/MatchId/MatchOrder live on the cell itself (both legacy
+                            // MatchCell and current MatchViewModel shapes) — NOT inside
+                            // MatchViewModel, which only holds Score/IsPlayed. Reading them
+                            // via unwrap() silently returned undefined for every current-shape
+                            // cell, so roundsMap stayed empty and no winner was ever found.
                             const roundsMap = {};
                             elimination.DrawData.forEach(row => {
 
                                 row.forEach(cell => {
                                     if (!cell || (!cell.MatchCell && !cell.MatchViewModel)) return;
-                                    const m = unwrap(cell);
-                                    const round = m.Round;
+                                    const round = cell.Round;
                                     if (typeof round === 'undefined') return;
                                     if (!roundsMap[round]) roundsMap[round] = [];
-                                    const matchId = m.MatchId;
-                                    if (!roundsMap[round].some(existing => unwrap(existing).MatchId === matchId)) {
+                                    const matchId = cell.MatchId;
+                                    if (!roundsMap[round].some(existing => existing.MatchId === matchId)) {
                                         roundsMap[round].push(cell);
                                     }
                                 });
@@ -582,8 +586,8 @@ export const useRankedin = () => {
 
                             const sortedRounds = Object.keys(roundsMap).map(Number).sort((a, b) => a - b).map(roundKey => {
                                 return roundsMap[roundKey].sort((a, b) => {
-                                    const ordA = unwrap(a).MatchOrder || 0;
-                                    const ordB = unwrap(b).MatchOrder || 0;
+                                    const ordA = a.MatchOrder || 0;
+                                    const ordB = b.MatchOrder || 0;
                                     return ordA - ordB;
                                 });
                             });
