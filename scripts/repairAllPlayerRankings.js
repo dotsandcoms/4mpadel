@@ -50,12 +50,21 @@ const COVERED_ORGS = new Set(LISTS.map((l) => l.orgName));
 const keepUncoveredRows = (rankings) =>
     (Array.isArray(rankings) ? rankings : []).filter((r) => !COVERED_ORGS.has(r.org));
 
+const PAGE_TAKE = 1000;
+
 async function fetchList({ orgId, type, age }) {
-    const url = `https://api.rankedin.com/v1/Ranking/GetRankingsAsync?rankingId=${orgId}&rankingType=${type}&ageGroup=${age}&weekFromNow=0&language=en&skip=0&take=1000`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-    const data = await res.json();
-    return data.Payload || [];
+    const rows = [];
+    for (let skip = 0; ; skip += PAGE_TAKE) {
+        const url = `https://api.rankedin.com/v1/Ranking/GetRankingsAsync?rankingId=${orgId}&rankingType=${type}&ageGroup=${age}&weekFromNow=0&language=en&skip=${skip}&take=${PAGE_TAKE}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+        const data = await res.json();
+        const page = data.Payload || [];
+        rows.push(...page);
+        if (page.length < PAGE_TAKE) break;
+        await sleep(150);
+    }
+    return rows;
 }
 
 async function fetchDetails(rankingParticipantId, ageGroup) {
