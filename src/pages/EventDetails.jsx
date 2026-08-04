@@ -272,16 +272,22 @@ const RegistrationCountdown = ({
         return () => clearInterval(id);
     }, [closesAt]);
 
-    if (!closesAt) return null;
+    // Only render an actionable CTA (skip disabled placeholders that leave empty space)
+    const showCta = Boolean(ctaLabel) && !ctaDisabled;
 
-    const closeDate = new Date(closesAt);
-    if (Number.isNaN(closeDate.getTime())) return null;
+    const closeDate = closesAt ? new Date(closesAt) : null;
+    const hasCloseDate = Boolean(closeDate) && !Number.isNaN(closeDate.getTime());
 
-    const diff = closeDate.getTime() - now;
-    const isClosed = diff <= 0;
-    const label = mode === 'opens'
-        ? `Registration ${isClosed ? 'open' : 'opens'}`
-        : `Registration ${isClosed ? 'closed' : 'closes'}`;
+    // Imported (non-4M-created) events often have no local registration_closes_at —
+    // still show the CTA (e.g. Register out to the source it was imported from)
+    // instead of hiding the whole row for lack of a date to count down to.
+    if (!hasCloseDate && !showCta) return null;
+
+    const diff = hasCloseDate ? closeDate.getTime() - now : 0;
+    const isClosed = hasCloseDate && diff <= 0;
+    const label = hasCloseDate
+        ? (mode === 'opens' ? `Registration ${isClosed ? 'open' : 'opens'}` : `Registration ${isClosed ? 'closed' : 'closes'}`)
+        : 'Registration Open';
     const parts = isClosed
         ? { days: 0, hours: 0, mins: 0, secs: 0 }
         : {
@@ -291,24 +297,22 @@ const RegistrationCountdown = ({
             secs: Math.floor((diff / 1000) % 60),
         };
 
-    const formattedDate = closeDate.toLocaleDateString('en-ZA', {
+    const formattedDate = hasCloseDate ? closeDate.toLocaleDateString('en-ZA', {
         day: 'numeric',
         month: 'short',
         year: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
-    });
+    }) : null;
     // Compact mobile date — day + month + time only
-    const compactDate = closeDate.toLocaleDateString('en-ZA', {
+    const compactDate = hasCloseDate ? closeDate.toLocaleDateString('en-ZA', {
         day: 'numeric',
         month: 'short',
         hour: '2-digit',
         minute: '2-digit',
-    });
+    }) : null;
 
     const pad = (n) => String(n).padStart(2, '0');
-    // Only render an actionable CTA (skip disabled placeholders that leave empty space)
-    const showCta = Boolean(ctaLabel) && !ctaDisabled;
 
     return (
         <div className="mt-2 rounded-2xl border border-white/10 bg-black/30 backdrop-blur-sm px-3 py-3 min-[420px]:pl-3 min-[420px]:pr-4 sm:pl-4 sm:pr-5 sm:py-4 flex flex-col min-[420px]:flex-row min-[420px]:items-center gap-2.5 min-[420px]:gap-2 sm:gap-3">
@@ -323,15 +327,17 @@ const RegistrationCountdown = ({
                     <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider sm:tracking-widest text-white/60 mb-0.5 leading-none truncate">
                         {label}
                     </p>
-                    <p className="text-xs sm:text-sm font-bold leading-tight whitespace-nowrap truncate" style={{ color: accentColor }}>
-                        <span className="sm:hidden">{compactDate}</span>
-                        <span className="hidden sm:inline">{formattedDate}</span>
-                    </p>
+                    {hasCloseDate && (
+                        <p className="text-xs sm:text-sm font-bold leading-tight whitespace-nowrap truncate" style={{ color: accentColor }}>
+                            <span className="sm:hidden">{compactDate}</span>
+                            <span className="hidden sm:inline">{formattedDate}</span>
+                        </p>
+                    )}
                 </div>
             </div>
 
             <div className={`flex items-center gap-2 sm:gap-3 min-w-0 ${showCta ? 'min-[420px]:ml-auto shrink-0 justify-between min-[420px]:justify-end' : 'flex-1 justify-end'}`}>
-                {!isClosed && (
+                {hasCloseDate && !isClosed && (
                     <div className={`flex items-center gap-1.5 sm:gap-3 ${showCta ? 'shrink-0' : 'flex-1 justify-evenly max-w-xs sm:max-w-sm ml-auto'}`}>
                         {[
                             { value: pad(parts.days), label: 'DAYS' },
@@ -1941,9 +1947,14 @@ const EventDetails = () => {
                         const isEmpty = winnersArray.length === 0;
                         const diffHrs = Math.abs(Date.now() - new Date(cacheRow.last_synced_at).getTime()) / 36e5;
 
-                        // Only invalidate empty winners for finished events. Upcoming tournaments
-                        // often have published draws with zero winners — do not wipe that state.
-                        if (hasPending || (isPassed && isEmpty && diffHrs > 2 && !cacheRow.has_draw)) {
+                        // Only invalidate empty winners for finished events — `isPassed` already
+                        // protects upcoming tournaments (which often have a published draw with
+                        // zero winners) from having that state wiped. A published draw on a
+                        // *finished* event is exactly the case where results are expected but
+                        // haven't synced yet, so `has_draw` must not block a re-fetch here —
+                        // otherwise a stale empty `winners: []` cache never gets retried once a
+                        // draw exists, and results silently never pull through.
+                        if (hasPending || (isPassed && isEmpty && diffHrs > 2)) {
                             useCache = false;
                             console.log('Cache invalidated because winners are empty/pending and cache is stale');
                         }
