@@ -896,15 +896,19 @@ const PlayerProfile = () => {
                         .from('calendar')
                         .select('id, slug, rankedin_url, city, venue, registered_players, organiser_name, sapa_status, image_url, entry_fee, category_fees, event_name, is_manual, allow_payments');
 
-                    // Fetch user's paid registrations
+                    // Fetch user's registrations (paid and unpaid) — event_registrations is the
+                    // authoritative payment record for any event where the user has a registration row.
                     let paidRegs = [];
+                    let registeredEventIds = new Set();
                     if (player?.email) {
                         const { data } = await supabase
                             .from('event_registrations')
                             .select('event_id, email, partner_email, payment_status, partner_payment_status')
                             .or(`email.ilike.${player.email},partner_email.ilike.${player.email}`)
                             .neq('status', 'withdrawn');
-                        
+
+                        registeredEventIds = new Set((data || []).map((r) => r.event_id));
+
                         paidRegs = (data || []).filter(r => {
                             const isRegistrant = r.email?.toLowerCase() === player.email.toLowerCase();
                             const isPartner = r.partner_email?.toLowerCase() === player.email.toLowerCase();
@@ -958,10 +962,15 @@ const PlayerProfile = () => {
                         });
                     }
 
+                    // For events where the user has an event_registrations row, that row's
+                    // payment_status is authoritative (matches the event page's registration widget).
+                    // tournament_participants/payments are only used as a fallback signal for events
+                    // with no registration row at all (e.g. manually-added participants), so a stale
+                    // is_paid flag or a loosely-matched payment can't override a genuinely pending registration.
                     const paidEventIds = new Set([
                         ...(paidRegs || []).map((r) => r.event_id),
-                        ...(paidParticipants || []).map((p) => p.event_id),
-                        ...(directPayments || []).map((p) => p.event_id),
+                        ...(paidParticipants || []).filter((p) => !registeredEventIds.has(p.event_id)).map((p) => p.event_id),
+                        ...(directPayments || []).filter((p) => !registeredEventIds.has(p.event_id)).map((p) => p.event_id),
                     ]);
 
                     if (dbEvents) {
