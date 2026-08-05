@@ -64,6 +64,12 @@ export const usePendingPayments = (email) => {
                     .neq('status', 'withdrawn')
                     .gte('calendar.start_date', todayStr);
 
+                // Events where the user has ANY event_registrations row (paid or not) — for these,
+                // event_registrations.payment_status is authoritative and a stale/loosely-matched
+                // tournament_participants or payments row must not be allowed to clear a genuinely
+                // pending registration (see findAndRemove guards below).
+                const registeredEventIdsForUser = new Set((rawRegistrations || []).map((r) => r.event_id));
+
                 const registrations = (rawRegistrations || []).filter(r => {
                     const isRegistrant = r.email?.toLowerCase() === email.toLowerCase();
                     const isPartner = r.partner_email?.toLowerCase() === email.toLowerCase();
@@ -219,10 +225,17 @@ export const usePendingPayments = (email) => {
                         paidRegs.forEach(r => findAndRemove(r.event_id, r.division));
                     }
                     if (paidParts) {
-                        paidParts.forEach(p => findAndRemove(p.event_id, p.class_name));
+                        // Skip events governed by an event_registrations row — a stale/duplicate
+                        // tournament_participants.is_paid=true must not clear a genuinely pending registration.
+                        paidParts
+                            .filter(p => !registeredEventIdsForUser.has(p.event_id))
+                            .forEach(p => findAndRemove(p.event_id, p.class_name));
                     }
                     if (directPayments) {
                         directPayments.forEach(p => {
+                            // Same reasoning: don't let a loosely-matched payments row override a
+                            // pending event_registrations status for this event.
+                            if (registeredEventIdsForUser.has(p.event_id)) return;
                             const meta = p.metadata || {};
                             const paymentBelongsToUser =
                                 (profileId && p.player_id === profileId) ||

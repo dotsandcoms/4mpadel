@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { motion, useScroll, useTransform, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import heroBg from '../assets/herobg.jpeg';
@@ -123,6 +123,7 @@ const Hero = () => {
     const [pastMatchSlide, setPastMatchSlide] = useState(0);
     const [scheduleOpen, setScheduleOpen] = useState(false);
     const [pendingActionsOpen, setPendingActionsOpen] = useState(false);
+    const didAutoOpenPendingActions = useRef(false);
     const [player, setPlayer] = useState(null);
     const { getPlayerEventsAsync, getPlayerMatches, getPlayerProfile, getOrganisationRankings } = useRankedin();
 
@@ -158,6 +159,15 @@ const Hero = () => {
     }, [pendingPayments, player]);
 
     const hasPendingActions = pendingActions.length > 0;
+
+    // Auto-expand the accordion the first time pending actions appear, without
+    // forcing it back open if the user has since collapsed it.
+    useEffect(() => {
+        if (hasPendingActions && !didAutoOpenPendingActions.current) {
+            didAutoOpenPendingActions.current = true;
+            setPendingActionsOpen(true);
+        }
+    }, [hasPendingActions]);
 
     const hasScheduleContent = upcomingEvents.length > 0
         || pastEvents.length > 0
@@ -1364,7 +1374,7 @@ const Hero = () => {
                                     aria-expanded={pendingActionsOpen}
                                     className={`flex w-full items-center justify-between px-1 text-left group ${pendingActionsOpen ? 'mb-3' : 'mb-0'}`}
                                 >
-                                    <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-white/80">Pending Actions</h2>
+                                    <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-white/80">Pending Actions ({pendingActions.length})</h2>
                                     <ChevronDown
                                         size={16}
                                         className={`text-white/50 shrink-0 transition-transform duration-300 group-hover:text-white/70 ${pendingActionsOpen ? '' : '-rotate-90'}`}
