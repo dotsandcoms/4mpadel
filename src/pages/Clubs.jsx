@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, ShieldCheck, ChevronRight, Search, Filter, X, ChevronDown, Globe, Landmark } from 'lucide-react';
+import { MapPin, ShieldCheck, ChevronRight, Search, Filter, X, ChevronDown, Globe } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { fetchPublishedClubs, SA_REGIONS, clubCityLabel, clubRegionLabel, showFourMApprovedBadge } from '../utils/club';
 import VerifiedBadge from '../components/VerifiedBadge';
@@ -287,11 +287,6 @@ const Clubs = () => {
                                     )}
                                     <div className="min-w-0 flex-1">
                                         <div className="flex flex-wrap gap-1.5 mb-1.5">
-                                            {c._claimable && (
-                                                <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border bg-padel-green/10 text-padel-green border-padel-green/25">
-                                                    <Landmark size={9} /> Claim
-                                                </span>
-                                            )}
                                             {showFourMApprovedBadge(c) && (
                                                 <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border bg-padel-green/10 text-padel-green border-padel-green/25">
                                                     <VerifiedBadge tone="green" size={11} title="4M approved" /> 4M approved

@@ -14,6 +14,12 @@
 //   node scripts/google-enrich-clubs.mjs --apply --with-photos --max-photos 3
 //   node scripts/google-enrich-clubs.mjs --with-photos --min-confidence 0.9   (only near-exact name matches; everything softer falls to low_confidence for manual review)
 //
+// If a batch comes back with a lot of low_confidence rows that look like real
+// matches on inspection, don't just re-run this whole script (that re-spends
+// Text Search + Details + Photos on the clubs you already matched correctly).
+// Use scripts/rescore-report.mjs on the existing report instead — it only
+// spends fresh API calls on rows that actually get promoted.
+//
 // --min-confidence raises the bar for what counts as "matched" (default effective
 // floor is 0.34). Anything below it is classified low_confidence instead — still
 // visible in the review queue's "Uncertain" tab, just not auto-treated as a real
@@ -35,6 +41,10 @@ import * as dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+    sleep, mapOpeningHours, extractAddressParts, textSearch, placeDetails,
+    fetchClubPhotos, nameOverlapScore,
+} from './lib/google-places-enrich.mjs';
 
 dotenv.config();
 
@@ -68,144 +78,6 @@ const MAX_PHOTOS = maxPhotosArg ? parseInt(maxPhotosArg.split('=')[1] || args[ar
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const PHOTOS_BUCKET = 'profile-pics';
 
-const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function hhmm(t) {
-    // Google returns "HHmm" e.g. "0630"
-    if (!t || t.length !== 4) return null;
-    return `${t.slice(0, 2)}:${t.slice(2)}`;
-}
-
-function mapOpeningHours(periods) {
-    if (!Array.isArray(periods) || periods.length === 0) return null;
-    const result = {};
-    for (const key of DAY_KEYS) {
-        result[key] = { open: '00:00', close: '00:00', closed: true };
-    }
-    for (const period of periods) {
-        const openDay = period.open?.day;
-        if (openDay === undefined || openDay === null) continue;
-        const dayKey = DAY_KEYS[openDay];
-        const open = hhmm(period.open?.time);
-        const close = period.close ? hhmm(period.close.time) : '23:59'; // no close = open 24h
-        if (!open) continue;
-        result[dayKey] = { open, close: close || '23:59', closed: false };
-    }
-    return result;
-}
-
-function extractAddressParts(components = []) {
-    const find = (type) => components.find((c) => c.types.includes(type))?.long_name || null;
-    return {
-        city: find('locality') || find('sublocality') || find('postal_town'),
-        province: find('administrative_area_level_1'),
-        country: find('country'),
-    };
-}
-
-async function textSearch(query) {
-    const url = new URL('https://maps.googleapis.com/maps/api/place/textsearch/json');
-    url.searchParams.set('query', query);
-    url.searchParams.set('key', MAPS_KEY);
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
-        throw new Error(`Text Search error: ${data.status} ${data.error_message || ''}`);
-    }
-    return data.results || [];
-}
-
-async function placeDetails(placeId) {
-    const fields = [
-        'name', 'formatted_address', 'address_component', 'geometry',
-        'international_phone_number', 'website', 'opening_hours',
-        'rating', 'user_ratings_total', 'url', 'business_status',
-        ...(WITH_PHOTOS ? ['photos'] : []),
-    ].join(',');
-    const url = new URL('https://maps.googleapis.com/maps/api/place/details/json');
-    url.searchParams.set('place_id', placeId);
-    url.searchParams.set('fields', fields);
-    url.searchParams.set('key', MAPS_KEY);
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data.status !== 'OK') {
-        throw new Error(`Place Details error: ${data.status} ${data.error_message || ''}`);
-    }
-    return data.result;
-}
-
-// Downloads one Google Places photo and re-hosts it in Supabase Storage.
-// A raw Google photo_reference can't be stored directly: it isn't guaranteed
-// stable and always needs our API key to resolve, so anything we keep in
-// clubs.cover_image_url/gallery has to be a URL that works on its own.
-async function downloadAndUploadPhoto(photoReference, clubId, index) {
-    const photoUrl = new URL('https://maps.googleapis.com/maps/api/place/photo');
-    photoUrl.searchParams.set('photo_reference', photoReference);
-    photoUrl.searchParams.set('maxwidth', '1600');
-    photoUrl.searchParams.set('key', MAPS_KEY);
-
-    const res = await fetch(photoUrl);
-    if (!res.ok) {
-        throw new Error(`Place Photo download failed: HTTP ${res.status}`);
-    }
-    const contentType = res.headers.get('content-type') || 'image/jpeg';
-    const ext = contentType.includes('png') ? 'png' : 'jpg';
-    const buffer = Buffer.from(await res.arrayBuffer());
-
-    const storagePath = `clubs/${clubId}/google-${index}.${ext}`;
-    const { error: uploadErr } = await supabase.storage
-        .from(PHOTOS_BUCKET)
-        .upload(storagePath, buffer, { contentType, upsert: true });
-    if (uploadErr) throw uploadErr;
-
-    const { data: { publicUrl } } = supabase.storage.from(PHOTOS_BUCKET).getPublicUrl(storagePath);
-    return publicUrl;
-}
-
-// Fetches up to MAX_PHOTOS Google photos for a place and uploads them, only for
-// whichever of cover_image_url/gallery the club doesn't already have set.
-async function fetchClubPhotos(details, club) {
-    const photos = Array.isArray(details.photos) ? details.photos.slice(0, MAX_PHOTOS) : [];
-    if (photos.length === 0) return {};
-
-    const needsCover = !club.cover_image_url;
-    const needsGallery = !Array.isArray(club.gallery) || club.gallery.length === 0;
-    if (!needsCover && !needsGallery) return {};
-
-    const urls = [];
-    for (let i = 0; i < photos.length; i += 1) {
-        try {
-            const url = await downloadAndUploadPhoto(photos[i].photo_reference, club.id, i);
-            urls.push(url);
-        } catch (err) {
-            console.error(`    ! photo ${i} failed for ${club.name}: ${err.message}`);
-        }
-        await sleep(150);
-    }
-    if (urls.length === 0) return {};
-
-    const result = {};
-    if (needsCover) result.cover_image_url = urls[0];
-    if (needsGallery) {
-        const galleryUrls = needsCover ? urls.slice(1) : urls;
-        if (galleryUrls.length > 0) {
-            result.gallery = galleryUrls.map((url) => ({ url, category: 'other', caption: '' }));
-        }
-    }
-    return result;
-}
-
-function nameOverlapScore(clubName, googleName) {
-    const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
-    const a = new Set(norm(clubName));
-    const b = new Set(norm(googleName));
-    let hits = 0;
-    for (const w of a) if (b.has(w)) hits += 1;
-    return a.size ? hits / a.size : 0;
-}
-
 async function main() {
     let query = supabase
         .from('clubs')
@@ -228,7 +100,7 @@ async function main() {
     for (const club of clubs) {
         const searchQuery = `${club.name} padel${club.city ? ` ${club.city}` : ''} South Africa`;
         try {
-            const results = await textSearch(searchQuery);
+            const results = await textSearch(searchQuery, MAPS_KEY);
             if (results.length === 0) {
                 unmatched += 1;
                 report.push({ club: club.name, status: 'no_match', query: searchQuery });
@@ -255,7 +127,7 @@ async function main() {
                 continue;
             }
 
-            const details = await placeDetails(best.place_id);
+            const details = await placeDetails(best.place_id, MAPS_KEY, { withPhotos: WITH_PHOTOS });
             const addressParts = extractAddressParts(details.address_components);
             const openingHours = mapOpeningHours(details.opening_hours?.periods);
 
@@ -272,7 +144,9 @@ async function main() {
                 fillIfEmpty.opening_hours = openingHours;
             }
             if (WITH_PHOTOS) {
-                const photoFields = await fetchClubPhotos(details, club);
+                const photoFields = await fetchClubPhotos(details, club, {
+                    mapsKey: MAPS_KEY, supabase, bucket: PHOTOS_BUCKET, maxPhotos: MAX_PHOTOS,
+                });
                 Object.assign(fillIfEmpty, photoFields);
             }
 

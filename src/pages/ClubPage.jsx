@@ -117,18 +117,18 @@ const ClubPage = () => {
     const [aboutExpanded, setAboutExpanded] = useState(false);
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
     const [openAccordions, setOpenAccordions] = useState({
-        facilities: true,
-        events: true,
-        courts: true,
-        gallery: true,
-        reviews: true,
-        location: true,
-        coaches: true,
-        contact: true,
-        admins: true,
-        hours: true,
-        orgs: true,
-        sponsors: true,
+        facilities: false,
+        events: false,
+        courts: false,
+        gallery: false,
+        reviews: false,
+        location: false,
+        coaches: false,
+        contact: false,
+        admins: false,
+        hours: false,
+        orgs: false,
+        sponsors: false,
     });
     const eventsRailRef = useRef(null);
 
