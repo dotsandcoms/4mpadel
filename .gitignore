@@ -44,3 +44,4 @@ exports/
 .vercel
 .env*.local
 organisations-dev/
+scripts/reports/

@@ -120,3 +120,78 @@ export async function attachPlacesAutocomplete(inputEl, options = {}) {
         },
     };
 }
+
+let placesServiceSingleton = null;
+async function getPlacesService() {
+    const google = await loadGoogleMaps();
+    if (!placesServiceSingleton) {
+        placesServiceSingleton = new google.maps.places.PlacesService(document.createElement('div'));
+    }
+    return { google, service: placesServiceSingleton };
+}
+
+/**
+ * Client-side Places Text Search — for manually locating a business the
+ * automated backend sync missed or matched to the wrong listing.
+ * @param {string} query
+ * @returns {Promise<google.maps.places.PlaceResult[]>}
+ */
+export async function searchPlacesText(query) {
+    const { google, service } = await getPlacesService();
+    return new Promise((resolve, reject) => {
+        service.textSearch({ query }, (results, status) => {
+            if (status === google.maps.places.PlacesServiceStatus.OK) {
+                resolve(results || []);
+            } else if (status === google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
+                resolve([]);
+            } else {
+                reject(new Error(`Google Places search failed: ${status}`));
+            }
+        });
+    });
+}
+
+const PLACE_DETAIL_FIELDS = [
+    'name', 'formatted_address', 'address_components', 'geometry',
+    'international_phone_number', 'website', 'opening_hours',
+    'rating', 'user_ratings_total', 'url', 'business_status', 'place_id',
+];
+
+/**
+ * @param {string} placeId
+ * @returns {Promise<google.maps.places.PlaceResult>}
+ */
+export async function getPlaceDetails(placeId) {
+    const { google, service } = await getPlacesService();
+    return new Promise((resolve, reject) => {
+        service.getDetails({ placeId, fields: PLACE_DETAIL_FIELDS }, (result, status) => {
+            if (status === google.maps.places.PlacesServiceStatus.OK && result) {
+                resolve(result);
+            } else {
+                reject(new Error(`Google Place details failed: ${status}`));
+            }
+        });
+    });
+}
+
+const PLACE_REVIEW_FIELDS = ['name', 'rating', 'user_ratings_total', 'reviews', 'url'];
+
+/**
+ * Live-fetches rating + reviews for a place. Deliberately not persisted anywhere —
+ * Google's Places API terms require review content to be requested live and
+ * displayed with attribution, not cached/warehoused in our own DB.
+ * @param {string} placeId
+ * @returns {Promise<google.maps.places.PlaceResult>}
+ */
+export async function getPlaceReviews(placeId) {
+    const { google, service } = await getPlacesService();
+    return new Promise((resolve, reject) => {
+        service.getDetails({ placeId, fields: PLACE_REVIEW_FIELDS }, (result, status) => {
+            if (status === google.maps.places.PlacesServiceStatus.OK && result) {
+                resolve(result);
+            } else {
+                reject(new Error(`Google Place reviews failed: ${status}`));
+            }
+        });
+    });
+}

@@ -15,6 +15,7 @@ import {
     clubRegionLabel,
 } from '../utils/club';
 import VerifiedBadge from '../components/VerifiedBadge';
+import ClubReviews from '../components/clubs/ClubReviews';
 import {
     MapPin, ShieldCheck, Globe, Mail, Phone, MessageCircle,
     ChevronRight, Building, Calendar, LayoutGrid, Instagram, Facebook,
@@ -120,6 +121,8 @@ const ClubPage = () => {
         events: true,
         courts: true,
         gallery: true,
+        reviews: true,
+        location: true,
         coaches: true,
         contact: true,
         admins: true,
@@ -754,6 +757,18 @@ const ClubPage = () => {
                         )}
                     </AccordionRow>
 
+                    {club.google_place_id && (
+                        <AccordionRow
+                            id="reviews"
+                            title="Google Reviews"
+                            open={openAccordions.reviews}
+                            onToggle={() => toggleAccordion('reviews')}
+                            accent={accent}
+                        >
+                            <ClubReviews placeId={club.google_place_id} accent={accent} />
+                        </AccordionRow>
+                    )}
+
                     {coaches.length > 0 && (
                         <AccordionRow
                             id="coaches"
@@ -802,6 +817,44 @@ const ClubPage = () => {
                         </AccordionRow>
                     )}
 
+                    {(club.address || locationLabel || mapEmbedUrl) && (
+                        <AccordionRow
+                            id="location"
+                            title="Location"
+                            open={openAccordions.location}
+                            onToggle={() => toggleAccordion('location')}
+                            accent={accent}
+                        >
+                            <div className="space-y-3 text-sm">
+                                {(club.address || locationLabel) && (
+                                    <div className="flex items-start justify-between gap-3">
+                                        <p className="text-gray-300 flex items-start gap-2 min-w-0">
+                                            <MapPin size={14} className="mt-0.5 shrink-0" style={{ color: accent }} />
+                                            <span>{club.address || locationLabel}</span>
+                                        </p>
+                                        {mapUrl && (
+                                            <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-black uppercase tracking-widest shrink-0" style={{ color: accent }}>
+                                                Directions
+                                            </a>
+                                        )}
+                                    </div>
+                                )}
+                                {mapEmbedUrl && (
+                                    <div className="rounded-2xl border border-white/10 bg-black/40 overflow-hidden">
+                                        <iframe
+                                            title={`${brandTitle} location`}
+                                            src={mapEmbedUrl}
+                                            className="w-full h-44 sm:h-52 block border-0"
+                                            loading="lazy"
+                                            referrerPolicy="no-referrer-when-downgrade"
+                                            allowFullScreen
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        </AccordionRow>
+                    )}
+
                     <AccordionRow
                         id="info"
                         title="Contact & Community"
@@ -810,31 +863,6 @@ const ClubPage = () => {
                         accent={accent}
                     >
                         <div className="space-y-3 text-sm">
-                            {(club.address || locationLabel) && (
-                                <div className="flex items-start justify-between gap-3">
-                                    <p className="text-gray-300 flex items-start gap-2 min-w-0">
-                                        <MapPin size={14} className="mt-0.5 shrink-0" style={{ color: accent }} />
-                                        <span>{club.address || locationLabel}</span>
-                                    </p>
-                                    {mapUrl && (
-                                        <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-black uppercase tracking-widest shrink-0" style={{ color: accent }}>
-                                            Directions
-                                        </a>
-                                    )}
-                                </div>
-                            )}
-                            {mapEmbedUrl && (
-                                <div className="rounded-2xl border border-white/10 bg-black/40 overflow-hidden">
-                                    <iframe
-                                        title={`${brandTitle} location`}
-                                        src={mapEmbedUrl}
-                                        className="w-full h-44 sm:h-52 block border-0"
-                                        loading="lazy"
-                                        referrerPolicy="no-referrer-when-downgrade"
-                                        allowFullScreen
-                                    />
-                                </div>
-                            )}
                             {club.contact_phone && (
                                 <a href={`tel:${club.contact_phone}`} className="flex items-center gap-2 text-gray-300 hover:text-white">
                                     <Phone size={14} style={{ color: accent }} /> {club.contact_phone}

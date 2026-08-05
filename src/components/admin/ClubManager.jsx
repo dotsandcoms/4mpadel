@@ -6,9 +6,12 @@ import {
     MapPin, Plus, RefreshCw, Users, Building, Save, Loader2, ExternalLink,
     Upload, Trash2, Image as ImageIcon, ChevronDown, Instagram, Facebook,
     Search, Check, X, Clock, Palette, Phone, ArrowLeft, ShieldCheck, UserPlus, User, Mail, Send, Info,
+    Sparkles, GitMerge,
 } from 'lucide-react';
 import ClubMembersManager from './ClubMembersManager';
 import ClubCreateWizard from '../clubs/ClubCreateWizard';
+import GoogleSyncManager from './GoogleSyncManager';
+import MergeClubModal from './MergeClubModal';
 import {
     slugifyClub,
     CLUB_STATUSES,
@@ -342,6 +345,7 @@ const ClubManager = ({ permissions }) => {
     const [form, setForm] = useState(emptyForm());
     const [slugManual, setSlugManual] = useState(false);
     const [membersClub, setMembersClub] = useState(null);
+    const [mergeSourceClub, setMergeSourceClub] = useState(null);
     const [showWizard, setShowWizard] = useState(false);
     const [assignOrgId, setAssignOrgId] = useState('');
     const [listSearch, setListSearch] = useState('');
@@ -1382,6 +1386,15 @@ const ClubManager = ({ permissions }) => {
                     >
                         <RefreshCw size={14} /> Refresh
                     </button>
+                    {isSuper && managerView === 'list' && (
+                        <button
+                            type="button"
+                            onClick={() => setManagerView('google-sync')}
+                            className="px-3 py-2 rounded-xl border border-padel-green/30 bg-padel-green/10 text-padel-green text-sm font-black flex items-center gap-2 hover:bg-padel-green/20"
+                        >
+                            <Sparkles size={14} /> Google Sync
+                        </button>
+                    )}
                     {(isSuper || permissions?.allowed_tabs?.includes('clubs')) && (
                         <button
                             type="button"
@@ -1536,7 +1549,9 @@ const ClubManager = ({ permissions }) => {
                 )}
             </AnimatePresence>
 
-            {managerView === 'list' ? (
+            {managerView === 'google-sync' ? (
+                <GoogleSyncManager onBack={() => setManagerView('list')} />
+            ) : managerView === 'list' ? (
                 <div className="space-y-4">
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                         {[
@@ -1688,6 +1703,11 @@ const ClubManager = ({ permissions }) => {
                                                         <button type="button" onClick={() => setMembersClub(club)} className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 inline-flex items-center gap-1">
                                                             <UserPlus size={10} /> Owner
                                                         </button>
+                                                        {isSuper && (
+                                                            <button type="button" onClick={() => setMergeSourceClub(club)} className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 inline-flex items-center gap-1">
+                                                                <GitMerge size={10} /> Merge
+                                                            </button>
+                                                        )}
                                                         <button type="button" onClick={() => handleDeleteClub(club)} className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 inline-flex items-center gap-1">
                                                             <Trash2 size={10} /> Delete
                                                         </button>
@@ -1768,6 +1788,16 @@ const ClubManager = ({ permissions }) => {
                                                         >
                                                             <UserPlus size={10} /> Owner
                                                         </button>
+                                                        {isSuper && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setMergeSourceClub(club)}
+                                                                className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white inline-flex items-center gap-1"
+                                                                title="Merge into another club"
+                                                            >
+                                                                <GitMerge size={10} />
+                                                            </button>
+                                                        )}
                                                         <button
                                                             type="button"
                                                             onClick={() => handleDeleteClub(club)}
@@ -2694,6 +2724,17 @@ const ClubManager = ({ permissions }) => {
                         </button>
                     </div>
                 </div>
+            )}
+
+            {mergeSourceClub && (
+                <MergeClubModal
+                    sourceClub={mergeSourceClub}
+                    onClose={() => setMergeSourceClub(null)}
+                    onMerged={() => {
+                        setMergeSourceClub(null);
+                        loadClubs();
+                    }}
+                />
             )}
 
             {rejectClaimTarget && (
