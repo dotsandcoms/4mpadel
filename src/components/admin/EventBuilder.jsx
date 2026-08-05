@@ -2393,6 +2393,35 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                         </div>
                                     )}
                                 </div>
+
+                                {/* Website Display */}
+                                <div className="space-y-2">
+                                    <PanelHeader id="websiteDisplay" title="Website Display" />
+                                    {openPanels.websiteDisplay && (
+                                        <div className="space-y-3 p-4 rounded-xl border border-white/10 bg-black/20">
+                                            {organisation ? (
+                                                <div className="bg-padel-green/5 border border-padel-green/20 rounded-xl px-4 py-3 text-xs text-padel-green font-semibold">
+                                                    {isAmendment
+                                                        ? 'This event is already sanctioned. Your changes will be submitted as an amendment for 4M Padel approval — the event stays live with its current details until approved.'
+                                                        : 'This event will be submitted to 4M Padel for sanctioning. It goes live on the calendar once approved.'}
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                    {[
+                                                        ['featured_event', 'Featured event'],
+                                                        ['show_in_recent_results', 'Show in recent results'],
+                                                        ['is_visible', 'Visible on website'],
+                                                    ].map(([key, label]) => (
+                                                        <label key={key} className="flex items-center justify-between bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
+                                                            <span className="text-sm font-medium text-gray-200">{label}</span>
+                                                            <input type="checkbox" name={key} checked={!!form[key]} onChange={handleInput} className="accent-padel-green w-5 h-5" />
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -3421,34 +3450,6 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                     )}
                                 </div>
 
-                                {/* Website Display */}
-                                <div className="space-y-2">
-                                    <PanelHeader id="websiteDisplay" title="Website Display" />
-                                    {openPanels.websiteDisplay && (
-                                        <div className="space-y-3 p-4 rounded-xl border border-white/10 bg-black/20">
-                                            {organisation ? (
-                                                <div className="bg-padel-green/5 border border-padel-green/20 rounded-xl px-4 py-3 text-xs text-padel-green font-semibold">
-                                                    {isAmendment
-                                                        ? 'This event is already sanctioned. Your changes will be submitted as an amendment for 4M Padel approval — the event stays live with its current details until approved.'
-                                                        : 'This event will be submitted to 4M Padel for sanctioning. It goes live on the calendar once approved.'}
-                                                </div>
-                                            ) : (
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                    {[
-                                                        ['featured_event', 'Featured event'],
-                                                        ['show_in_recent_results', 'Show in recent results'],
-                                                        ['is_visible', 'Visible on website'],
-                                                    ].map(([key, label]) => (
-                                                        <label key={key} className="flex items-center justify-between bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
-                                                            <span className="text-sm font-medium text-gray-200">{label}</span>
-                                                            <input type="checkbox" name={key} checked={!!form[key]} onChange={handleInput} className="accent-padel-green w-5 h-5" />
-                                                        </label>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
                             </div>
                         )}
 

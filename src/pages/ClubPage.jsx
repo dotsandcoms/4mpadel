@@ -454,6 +454,12 @@ const ClubPage = () => {
 
             {/* Hero */}
             <div className="relative">
+                <Link
+                    to="/clubs"
+                    className="absolute top-20 left-4 z-20 inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-black/50 backdrop-blur-sm border border-white/15 text-white text-[10px] sm:text-[11px] font-black uppercase tracking-widest hover:bg-black/70 transition-colors"
+                >
+                    <ChevronLeft size={14} /> Back to Clubs
+                </Link>
                 <div
                     className={`relative overflow-hidden bg-gradient-to-br from-[#0B0F19] via-black to-[#0B0F19] ${
                         club.cover_image_url ? 'h-48 sm:h-64 md:h-80' : 'h-28 sm:h-36'
@@ -1024,7 +1030,7 @@ const ClubPage = () => {
 
             {lightboxIndex != null && filteredGallery[lightboxIndex] && (
                 <div
-                    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+                    className="fixed inset-0 z-[1010] flex items-center justify-center bg-black/90 p-4"
                     onClick={closeLightbox}
                     role="dialog"
                     aria-modal="true"
