@@ -10,8 +10,8 @@ import { supabase } from '../../supabaseClient';
  * profile fields on the target, then permanently deletes the source club.
  * Backed by the public.merge_clubs(source, target) DB function.
  */
-const MergeClubModal = ({ sourceClub, onClose, onMerged }) => {
-    const [query, setQuery] = useState('');
+const MergeClubModal = ({ sourceClub, onClose, onMerged, initialQuery = '' }) => {
+    const [query, setQuery] = useState(initialQuery);
     const [results, setResults] = useState([]);
     const [searching, setSearching] = useState(false);
     const [target, setTarget] = useState(null);

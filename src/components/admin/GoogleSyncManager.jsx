@@ -2,10 +2,11 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
     ArrowLeft, Sparkles, MapPin, ExternalLink, Check, X, Loader2,
-    AlertTriangle, HelpCircle, Ban, Star, Search, ChevronDown,
+    AlertTriangle, HelpCircle, Ban, Star, Search, ChevronDown, Unlink, Pencil, GitMerge,
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { searchPlacesText, getPlaceDetails } from '../../utils/googleMaps';
+import MergeClubModal from './MergeClubModal';
 
 const STATUS_META = {
     conflict: { label: 'Conflict', icon: AlertTriangle, className: 'bg-red-500/10 text-red-300 border-red-500/25' },
@@ -20,9 +21,20 @@ const FILTER_TABS = [
     { value: 'matched', label: 'Weak matches' },
     { value: 'low_confidence', label: 'Uncertain' },
     { value: 'no_match', label: 'No match' },
+    { value: 'applied', label: 'Applied' },
 ];
 
-const CLUB_SELECT_FIELDS = 'id, name, short_name, city, province, country, address, lat, lng, website_url, contact_phone, opening_hours, slug, logo_url, cover_image_url, gallery';
+const META_KEYS = ['google_place_id', 'google_maps_url', 'google_rating', 'google_ratings_total', 'google_synced_at'];
+
+/** True if a club's current field value is still exactly what a past sync wrote —
+ * used by Delist to only clear fields nobody has manually edited since. */
+const valuesMatch = (a, b) => {
+    if (a && typeof a === 'object') return JSON.stringify(a) === JSON.stringify(b);
+    if (typeof a === 'number' || typeof b === 'number') return Number(a) === Number(b);
+    return a === b;
+};
+
+const CLUB_SELECT_FIELDS = 'id, name, short_name, city, province, country, address, lat, lng, website_url, contact_phone, opening_hours, slug, logo_url, cover_image_url, gallery, google_place_id, google_maps_url, google_rating, google_ratings_total, google_synced_at';
 
 const mapsLinkForRow = (row) => {
     if (row.google_place_id) {
@@ -124,6 +136,11 @@ const GoogleSyncManager = ({ onBack }) => {
     const [candidate, setCandidate] = useState(null); // { placeId, name, address, fillFields, metaFields, details }
     const [candidateLoading, setCandidateLoading] = useState(false);
     const [applyingManual, setApplyingManual] = useState(false);
+    const [renamingRowId, setRenamingRowId] = useState(null);
+    const [renameValue, setRenameValue] = useState('');
+    const [renameBusy, setRenameBusy] = useState(false);
+    const [mergeSourceClub, setMergeSourceClub] = useState(null);
+    const [mergeInitialQuery, setMergeInitialQuery] = useState('');
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -148,9 +165,15 @@ const GoogleSyncManager = ({ onBack }) => {
 
     useEffect(() => { load(); }, [load]);
 
+    // "Applied" = the club actually has a Google link right now (ground truth on
+    // clubs.google_place_id), not just review_status — a club can end up linked
+    // without its review row ever being marked applied (e.g. edited outside this
+    // flow), and Delist needs to find those too.
+    const isRowApplied = (r) => Boolean(r.clubs?.google_place_id);
+
     const stats = useMemo(() => {
-        const applied = rows.filter((r) => r.review_status === 'applied').length;
-        const pending = rows.filter((r) => r.review_status === 'pending');
+        const applied = rows.filter(isRowApplied).length;
+        const pending = rows.filter((r) => r.review_status === 'pending' && !isRowApplied(r));
         return {
             applied,
             pending: pending.length,
@@ -161,8 +184,9 @@ const GoogleSyncManager = ({ onBack }) => {
         };
     }, [rows]);
 
-    const pendingRows = useMemo(() => {
-        const pending = rows.filter((r) => r.review_status === 'pending');
+    const visibleRows = useMemo(() => {
+        if (filter === 'applied') return rows.filter(isRowApplied);
+        const pending = rows.filter((r) => r.review_status === 'pending' && !isRowApplied(r));
         if (filter === 'all') return pending;
         return pending.filter((r) => r.match_status === filter);
     }, [rows, filter]);
@@ -263,8 +287,8 @@ const GoogleSyncManager = ({ onBack }) => {
             if (matchErr) throw matchErr;
 
             toast.success(`Applied — ${row.clubs?.name} matched to "${candidate.name}"`);
-            setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, review_status: 'applied' } : r)));
             closeFindMatch();
+            await load();
         } catch (err) {
             console.error(err);
             toast.error(err.message || 'Failed to apply manual match');
@@ -298,12 +322,17 @@ const GoogleSyncManager = ({ onBack }) => {
             }
             const { error: matchErr } = await supabase
                 .from('club_google_matches')
-                .update({ review_status: 'applied', reviewed_at: new Date().toISOString() })
+                .update({
+                    match_status: 'matched',
+                    review_status: 'applied',
+                    conflict_note: null,
+                    reviewed_at: new Date().toISOString(),
+                })
                 .eq('id', row.id);
             if (matchErr) throw matchErr;
 
             toast.success(`Applied Google data to ${row.clubs?.name || 'club'}`);
-            setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, review_status: 'applied' } : r)));
+            await load();
         } catch (err) {
             console.error(err);
             toast.error(err.message || 'Failed to apply');
@@ -326,6 +355,171 @@ const GoogleSyncManager = ({ onBack }) => {
             toast.error(err.message || 'Failed to dismiss');
         } finally {
             setBusyId(null);
+        }
+    };
+
+    /** Core of "delist": clear a club's Google link and revert any fields
+     * nobody has touched since (fields already edited manually are left alone),
+     * then reset its review row to a clean slate. Shared by delisting a club's
+     * own wrong match and by removing a *conflicting* club's claim so a
+     * different club can correctly take the listing instead. */
+    const delistRow = async (targetRow) => {
+        const { data: freshClub, error: fetchErr } = await supabase
+            .from('clubs')
+            .select(CLUB_SELECT_FIELDS)
+            .eq('id', targetRow.club_id)
+            .maybeSingle();
+        if (fetchErr) throw fetchErr;
+
+        const revertPayload = {};
+        META_KEYS.forEach((k) => { revertPayload[k] = null; });
+        Object.entries(targetRow.fill_fields || {}).forEach(([key, val]) => {
+            if (freshClub && valuesMatch(freshClub[key], val)) revertPayload[key] = null;
+        });
+
+        const { error: clubErr } = await supabase.from('clubs').update(revertPayload).eq('id', targetRow.club_id);
+        if (clubErr) throw clubErr;
+
+        const { error: matchErr } = await supabase
+            .from('club_google_matches')
+            .update({
+                match_status: 'no_match',
+                review_status: 'pending',
+                google_place_id: null,
+                google_name: null,
+                google_address: null,
+                confidence: null,
+                fill_fields: {},
+                meta_fields: {},
+                business_status: null,
+                conflict_note: null,
+                reviewed_at: null,
+            })
+            .eq('id', targetRow.id);
+        if (matchErr) throw matchErr;
+    };
+
+    /** Undo a wrongly-applied match on this row, then re-open Find match so
+     * the admin can search for the correct listing right away. */
+    const handleDelist = async (row) => {
+        if (!window.confirm(
+            `Remove the Google link for ${row.clubs?.name || 'this club'}? Fields that came from this match and haven't been edited since will be cleared too.`,
+        )) return;
+        setBusyId(row.id);
+        try {
+            await delistRow(row);
+            toast.success(`Delisted — cleared the Google link for ${row.clubs?.name}. Search again below.`);
+            await load();
+            openFindMatch(row);
+        } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Failed to delist');
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+    /** For a conflict row: the OTHER club is holding the listing this row
+     * matched too. If that other match is genuinely wrong (not a duplicate —
+     * use Merge for that), this frees the listing from the other club so it
+     * can be approved here instead. */
+    const handleRemoveConflictingListing = async (row) => {
+        if (!row.google_place_id) {
+            toast.error('No Google listing on record for this conflict.');
+            return;
+        }
+        setBusyId(row.id);
+        try {
+            const { data: otherClub, error: findErr } = await supabase
+                .from('clubs')
+                .select('id, name')
+                .eq('google_place_id', row.google_place_id)
+                .neq('id', row.club_id)
+                .maybeSingle();
+            if (findErr) throw findErr;
+            if (!otherClub) {
+                toast.info('That listing is already free — try Approve again.');
+                await load();
+                return;
+            }
+            if (!window.confirm(
+                `Remove the Google link from "${otherClub.name}"? This treats "${row.clubs?.name || 'this club'}" as the correct match instead. Fields on "${otherClub.name}" that came from that match and haven't been edited since will be cleared.`,
+            )) return;
+
+            const otherRow = rows.find((r) => r.club_id === otherClub.id);
+            if (otherRow) {
+                await delistRow(otherRow);
+            } else {
+                const clearPayload = {};
+                META_KEYS.forEach((k) => { clearPayload[k] = null; });
+                const { error } = await supabase.from('clubs').update(clearPayload).eq('id', otherClub.id);
+                if (error) throw error;
+            }
+
+            toast.success(`Removed the Google link from "${otherClub.name}" — you can now approve this match.`);
+            await load();
+        } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Failed to remove the conflicting listing');
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+    const startRename = (row) => {
+        setRenamingRowId(row.id);
+        setRenameValue(row.clubs?.name || '');
+    };
+
+    const cancelRename = () => {
+        setRenamingRowId(null);
+        setRenameValue('');
+    };
+
+    const saveRename = async (row) => {
+        const name = renameValue.trim();
+        if (!name) {
+            toast.error('Club name cannot be empty');
+            return;
+        }
+        if (name === row.clubs?.name) {
+            cancelRename();
+            return;
+        }
+        setRenameBusy(true);
+        try {
+            const { error } = await supabase.from('clubs').update({ name }).eq('id', row.club_id);
+            if (error) throw error;
+            setRows((prev) => prev.map((r) => (
+                r.id === row.id ? { ...r, clubs: { ...r.clubs, name } } : r
+            )));
+            toast.success(`Renamed to "${name}"`);
+            cancelRename();
+        } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Failed to rename club');
+        } finally {
+            setRenameBusy(false);
+        }
+    };
+
+    /** Conflict rows already know the place_id another club is holding —
+     * look that club up so the merge picker opens pre-filled with its name. */
+    const openMergeForConflict = async (row) => {
+        setMergeSourceClub(row.clubs);
+        setMergeInitialQuery('');
+        if (row.google_place_id) {
+            try {
+                const { data } = await supabase
+                    .from('clubs')
+                    .select('name')
+                    .eq('google_place_id', row.google_place_id)
+                    .neq('id', row.club_id)
+                    .maybeSingle();
+                if (data?.name) setMergeInitialQuery(data.name);
+            } catch (err) {
+                console.error(err);
+            }
         }
     };
 
@@ -398,13 +592,14 @@ const GoogleSyncManager = ({ onBack }) => {
                     <div className="p-10 text-center text-gray-500 flex items-center justify-center gap-2">
                         <Loader2 size={16} className="animate-spin" /> Loading…
                     </div>
-                ) : pendingRows.length === 0 ? (
+                ) : visibleRows.length === 0 ? (
                     <div className="p-10 text-center text-sm text-gray-500">
                         Nothing here — every club in this filter has been reviewed.
                     </div>
                 ) : (
                     <div className="divide-y divide-white/5">
-                        {pendingRows.map((row) => {
+                        {visibleRows.map((row) => {
+                            const isApplied = isRowApplied(row);
                             const meta = STATUS_META[row.match_status] || STATUS_META.no_match;
                             const StatusIcon = meta.icon;
                             const canApply = Boolean(
@@ -414,6 +609,7 @@ const GoogleSyncManager = ({ onBack }) => {
                             const previewPhotos = photoUrlsFromFillFields(row.fill_fields);
                             const isBusy = busyId === row.id;
                             const panelOpen = searchRowId === row.id;
+                            const isRenaming = renamingRowId === row.id;
                             return (
                                 <div key={row.id} className="p-4 space-y-3">
                                     <div className="flex flex-col md:flex-row md:items-start gap-4">
@@ -426,17 +622,65 @@ const GoogleSyncManager = ({ onBack }) => {
                                                 </div>
                                             )}
                                             <div className="min-w-0 flex-1 space-y-1.5">
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <p className="text-sm font-bold text-white truncate">{row.clubs?.name || 'Unknown club'}</p>
-                                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border ${meta.className}`}>
-                                                        <StatusIcon size={10} /> {meta.label}
-                                                    </span>
-                                                    {row.confidence != null && (
-                                                        <span className="text-[10px] text-gray-500">
-                                                            {Math.round(row.confidence * 100)}% name match
-                                                        </span>
-                                                    )}
-                                                </div>
+                                                {isRenaming ? (
+                                                    <div className="flex items-center gap-1.5">
+                                                        <input
+                                                            autoFocus
+                                                            value={renameValue}
+                                                            onChange={(e) => setRenameValue(e.target.value)}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') saveRename(row);
+                                                                if (e.key === 'Escape') cancelRename();
+                                                            }}
+                                                            disabled={renameBusy}
+                                                            className="min-w-0 flex-1 bg-black/40 border border-padel-green/40 rounded-lg px-2 py-1 text-sm text-white focus:outline-none focus:border-padel-green"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            disabled={renameBusy}
+                                                            onClick={() => saveRename(row)}
+                                                            className="p-1.5 rounded-lg bg-padel-green text-black disabled:opacity-40"
+                                                            title="Save name"
+                                                        >
+                                                            {renameBusy ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            disabled={renameBusy}
+                                                            onClick={cancelRename}
+                                                            className="p-1.5 rounded-lg border border-white/10 text-gray-400 hover:text-white disabled:opacity-40"
+                                                            title="Cancel"
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        <p className="text-sm font-bold text-white truncate">{row.clubs?.name || 'Unknown club'}</p>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => startRename(row)}
+                                                            title="Rename club"
+                                                            className="p-1 rounded text-gray-500 hover:text-white hover:bg-white/10 shrink-0"
+                                                        >
+                                                            <Pencil size={11} />
+                                                        </button>
+                                                        {isApplied ? (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border bg-padel-green/10 text-padel-green border-padel-green/25">
+                                                                <Check size={10} /> Applied
+                                                            </span>
+                                                        ) : (
+                                                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border ${meta.className}`}>
+                                                                <StatusIcon size={10} /> {meta.label}
+                                                            </span>
+                                                        )}
+                                                        {row.confidence != null && (
+                                                            <span className="text-[10px] text-gray-500">
+                                                                {Math.round(row.confidence * 100)}% name match
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
                                                 {row.google_name && (
                                                     <p className="text-xs text-gray-400 truncate">
                                                         Google: <span className="text-gray-300">{row.google_name}</span>
@@ -448,7 +692,7 @@ const GoogleSyncManager = ({ onBack }) => {
                                                 )}
                                                 {filledKeys.length > 0 && (
                                                     <p className="text-[11px] text-gray-500">
-                                                        Would fill: {filledKeys.map((k) => fieldLabels[k] || k).join(', ')}
+                                                        {isApplied ? 'Filled' : 'Would fill'}: {filledKeys.map((k) => fieldLabels[k] || k).join(', ')}
                                                     </p>
                                                 )}
                                                 {previewPhotos.length > 0 && (
@@ -477,36 +721,72 @@ const GoogleSyncManager = ({ onBack }) => {
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                                            <button
-                                                type="button"
-                                                disabled={isBusy || !canApply}
-                                                onClick={() => handleApprove(row)}
-                                                title={canApply ? 'Apply this data to the club' : 'No data available to apply'}
-                                                className="px-3 py-2 rounded-xl bg-padel-green text-black text-xs font-black flex items-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed"
-                                            >
-                                                {isBusy ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Approve
-                                            </button>
-                                            <button
-                                                type="button"
-                                                disabled={isBusy}
-                                                onClick={() => (panelOpen ? closeFindMatch() : openFindMatch(row))}
-                                                className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 disabled:opacity-30 ${
-                                                    panelOpen
-                                                        ? 'border-padel-green/40 bg-padel-green/10 text-padel-green'
-                                                        : 'border-white/10 text-gray-300 hover:bg-white/5'
-                                                }`}
-                                            >
-                                                <Search size={12} /> Find match
-                                                <ChevronDown size={12} className={`transition-transform ${panelOpen ? 'rotate-180' : ''}`} />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                disabled={isBusy}
-                                                onClick={() => handleDismiss(row)}
-                                                className="px-3 py-2 rounded-xl border border-white/10 text-gray-300 hover:bg-white/5 text-xs font-bold flex items-center gap-1.5 disabled:opacity-30"
-                                            >
-                                                <X size={12} /> Dismiss
-                                            </button>
+                                            {isApplied ? (
+                                                <button
+                                                    type="button"
+                                                    disabled={isBusy}
+                                                    onClick={() => handleDelist(row)}
+                                                    title="Synced to the wrong listing? Clear it and search again."
+                                                    className="px-3 py-2 rounded-xl border border-red-500/25 bg-red-500/10 text-red-300 hover:bg-red-500/20 text-xs font-bold flex items-center gap-1.5 disabled:opacity-30"
+                                                >
+                                                    {isBusy ? <Loader2 size={12} className="animate-spin" /> : <Unlink size={12} />} Delist
+                                                </button>
+                                            ) : (
+                                                <>
+                                                    {row.match_status === 'conflict' && (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                disabled={isBusy}
+                                                                onClick={() => openMergeForConflict(row)}
+                                                                title="Merge this club with the one already holding the listing"
+                                                                className="px-3 py-2 rounded-xl border border-sky-500/25 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 text-xs font-bold flex items-center gap-1.5 disabled:opacity-30"
+                                                            >
+                                                                <GitMerge size={12} /> Merge
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                disabled={isBusy}
+                                                                onClick={() => handleRemoveConflictingListing(row)}
+                                                                title="Not a duplicate — the other club's match is just wrong. Free the listing so this club can take it."
+                                                                className="px-3 py-2 rounded-xl border border-red-500/25 bg-red-500/10 text-red-300 hover:bg-red-500/20 text-xs font-bold flex items-center gap-1.5 disabled:opacity-30"
+                                                            >
+                                                                {isBusy ? <Loader2 size={12} className="animate-spin" /> : <Unlink size={12} />} Remove listing
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        disabled={isBusy || !canApply}
+                                                        onClick={() => handleApprove(row)}
+                                                        title={canApply ? 'Apply this data to the club' : 'No data available to apply'}
+                                                        className="px-3 py-2 rounded-xl bg-padel-green text-black text-xs font-black flex items-center gap-1.5 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                    >
+                                                        {isBusy ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Approve
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        disabled={isBusy}
+                                                        onClick={() => (panelOpen ? closeFindMatch() : openFindMatch(row))}
+                                                        className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 disabled:opacity-30 ${
+                                                            panelOpen
+                                                                ? 'border-padel-green/40 bg-padel-green/10 text-padel-green'
+                                                                : 'border-white/10 text-gray-300 hover:bg-white/5'
+                                                        }`}
+                                                    >
+                                                        <Search size={12} /> Find match
+                                                        <ChevronDown size={12} className={`transition-transform ${panelOpen ? 'rotate-180' : ''}`} />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        disabled={isBusy}
+                                                        onClick={() => handleDismiss(row)}
+                                                        className="px-3 py-2 rounded-xl border border-white/10 text-gray-300 hover:bg-white/5 text-xs font-bold flex items-center gap-1.5 disabled:opacity-30"
+                                                    >
+                                                        <X size={12} /> Dismiss
+                                                    </button>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
 
@@ -611,6 +891,15 @@ const GoogleSyncManager = ({ onBack }) => {
                 <p className="text-xs text-gray-500 flex items-center gap-1.5">
                     <Star size={12} className="text-padel-green" /> {stats.applied} clubs already auto-filled from Google — visible directly on their club edit page.
                 </p>
+            )}
+
+            {mergeSourceClub && (
+                <MergeClubModal
+                    sourceClub={mergeSourceClub}
+                    initialQuery={mergeInitialQuery}
+                    onClose={() => { setMergeSourceClub(null); setMergeInitialQuery(''); }}
+                    onMerged={() => { setMergeSourceClub(null); setMergeInitialQuery(''); load(); }}
+                />
             )}
         </div>
     );

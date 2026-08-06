@@ -166,7 +166,7 @@ const inputClass = 'mt-1 w-full bg-black/40 border border-white/10 rounded-xl px
 const labelClass = 'block text-[10px] font-black uppercase tracking-wider text-gray-400';
 const ghostBtnClass = 'px-3 py-1.5 rounded-lg border border-white/10 text-xs font-bold text-gray-300 hover:bg-white/5 flex items-center gap-1';
 
-const CLUB_LIST_GRID = 'md:grid-cols-[minmax(160px,1.5fr)_minmax(90px,0.85fr)_minmax(150px,1.15fr)_0.85fr_0.65fr_0.7fr_0.7fr_0.8fr_1fr]';
+const CLUB_LIST_GRID = 'md:grid-cols-[minmax(280px,2.4fr)_minmax(90px,0.85fr)_minmax(150px,1.15fr)_0.85fr_0.65fr_0.7fr_0.7fr_0.8fr_1fr]';
 
 /**
  * @param {string|null|undefined} name
@@ -1622,7 +1622,7 @@ const ClubManager = ({ permissions }) => {
                             </div>
                         ) : (
                             <div className="overflow-x-auto">
-                                <div className={`hidden md:grid ${CLUB_LIST_GRID} gap-3 px-4 py-3 border-b border-white/5 text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 min-w-[1100px]`}>
+                                <div className={`hidden md:grid ${CLUB_LIST_GRID} gap-3 px-4 py-3 border-b border-white/5 text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 min-w-[1250px]`}>
                                     <div>Club</div>
                                     <div>City</div>
                                     <div>Owner / Admin</div>
@@ -1633,7 +1633,7 @@ const ClubManager = ({ permissions }) => {
                                     <div>Status</div>
                                     <div>Actions</div>
                                 </div>
-                                <div className="divide-y divide-white/5 md:min-w-[1100px]">
+                                <div className="divide-y divide-white/5 md:min-w-[1250px]">
                                     {paginatedClubRows.map((club) => {
                                         const isClaimed = (club.admins || []).length > 0;
                                         const isPendingInvite = !isClaimed && !!club.pendingInvite?.email;
@@ -1728,9 +1728,9 @@ const ClubManager = ({ permissions }) => {
                                                             </div>
                                                         )}
                                                         <div className="min-w-0">
-                                                            <p className="text-sm font-bold text-white truncate transition-colors duration-200 group-hover:text-padel-green">{club.short_name || club.name}</p>
+                                                            <p title={club.short_name || club.name} className="text-sm font-bold text-white leading-snug transition-colors duration-200 group-hover:text-padel-green">{club.short_name || club.name}</p>
                                                             {club.short_name && club.short_name !== club.name && (
-                                                                <p className="text-xs text-gray-500 truncate">{club.name}</p>
+                                                                <p title={club.name} className="text-xs text-gray-500 leading-snug">{club.name}</p>
                                                             )}
                                                         </div>
                                                     </button>
