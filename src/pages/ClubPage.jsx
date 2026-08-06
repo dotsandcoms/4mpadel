@@ -574,26 +574,201 @@ const ClubPage = () => {
 
             <div className="container mx-auto px-4 md:px-6 mt-7 sm:mt-9">
                 <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 sm:px-5">
-                    {facilityItems.length > 0 && (
+                    <AccordionRow
+                        id="info"
+                        title="Contact & Community"
+                        open={openAccordions.contact}
+                        onToggle={() => toggleAccordion('contact')}
+                        accent={accent}
+                    >
+                        <div className="space-y-3 text-sm">
+                            {club.contact_phone && (
+                                <a href={`tel:${club.contact_phone}`} className="flex items-center gap-2 text-gray-300 hover:text-white">
+                                    <Phone size={14} style={{ color: accent }} /> {club.contact_phone}
+                                </a>
+                            )}
+                            {website && (
+                                <a href={website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-gray-300 hover:text-white">
+                                    <Globe size={14} style={{ color: accent }} />
+                                    <span className="truncate">{website.replace(/^https?:\/\/(www\.)?/, '')}</span>
+                                    <ExternalLink size={12} className="shrink-0 text-gray-500" />
+                                </a>
+                            )}
+                            {club.contact_email && (
+                                <a href={`mailto:${club.contact_email}`} className="flex items-center gap-2 text-gray-300 hover:text-white">
+                                    <Mail size={14} style={{ color: accent }} /> {club.contact_email}
+                                </a>
+                            )}
+                            {waLink(club.whatsapp_number) && (
+                                <a
+                                    href={waLink(club.whatsapp_number)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center justify-between gap-2 text-gray-300 hover:text-white py-1"
+                                >
+                                    <span className="inline-flex items-center gap-2">
+                                        <MessageCircle size={14} style={{ color: accent }} /> WhatsApp
+                                    </span>
+                                    <ChevronRight size={14} className="text-gray-600" />
+                                </a>
+                            )}
+                            {socialLinks.length > 0 && (
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                    {socialLinks.map((item) => {
+                                        const SocialIcon = item.icon;
+                                        return (
+                                            <a
+                                                key={item.key}
+                                                href={item.href}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-wider text-gray-300 hover:text-white"
+                                            >
+                                                <SocialIcon size={12} /> {item.label}
+                                            </a>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </AccordionRow>
+
+                    {(club.address || locationLabel || mapEmbedUrl) && (
                         <AccordionRow
-                            id="facilities"
-                            title="Club Facilities"
-                            open={openAccordions.facilities}
-                            onToggle={() => toggleAccordion('facilities')}
+                            id="location"
+                            title="Location"
+                            open={openAccordions.location}
+                            onToggle={() => toggleAccordion('location')}
                             accent={accent}
                         >
-                            <div className="flex gap-3 sm:gap-0 overflow-x-auto sm:overflow-visible scrollbar-hide no-scrollbar pb-1 -mx-1 px-1 sm:mx-0 sm:px-0 sm:justify-between">
-                                {facilityItems.map((item) => {
-                                    const Icon = item.Icon;
-                                    return (
-                                        <div key={item.id} className="shrink-0 w-[4.5rem] sm:w-auto sm:flex-1 flex flex-col items-center gap-2 text-center px-1">
-                                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white/[0.06] border border-white/10 flex items-center justify-center">
-                                                <Icon size={20} className="text-gray-300" />
-                                            </div>
-                                            <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 leading-tight line-clamp-2 max-w-[5.5rem] sm:max-w-[7rem]">{item.title}</p>
+                            <div className="space-y-3 text-sm">
+                                {(club.address || locationLabel) && (
+                                    <div className="flex items-start justify-between gap-3">
+                                        <p className="text-gray-300 flex items-start gap-2 min-w-0">
+                                            <MapPin size={14} className="mt-0.5 shrink-0" style={{ color: accent }} />
+                                            <span>{club.address || locationLabel}</span>
+                                        </p>
+                                        {mapUrl && (
+                                            <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-black uppercase tracking-widest shrink-0" style={{ color: accent }}>
+                                                Directions
+                                            </a>
+                                        )}
+                                    </div>
+                                )}
+                                {mapEmbedUrl && (
+                                    <div className="rounded-2xl border border-white/10 bg-black/40 overflow-hidden">
+                                        <iframe
+                                            title={`${brandTitle} location`}
+                                            src={mapEmbedUrl}
+                                            className="w-full h-44 sm:h-52 block border-0"
+                                            loading="lazy"
+                                            referrerPolicy="no-referrer-when-downgrade"
+                                            allowFullScreen
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        </AccordionRow>
+                    )}
+
+                    {club.google_place_id && (
+                        <AccordionRow
+                            id="reviews"
+                            title="Google Reviews"
+                            open={openAccordions.reviews}
+                            onToggle={() => toggleAccordion('reviews')}
+                            accent={accent}
+                        >
+                            <ClubReviews placeId={club.google_place_id} accent={accent} />
+                        </AccordionRow>
+                    )}
+
+                    <AccordionRow
+                        id="gallery"
+                        title="Club Pictures"
+                        open={openAccordions.gallery}
+                        onToggle={() => toggleAccordion('gallery')}
+                        accent={accent}
+                    >
+                        {gallery.length === 0 ? (
+                            <p className="text-sm text-gray-500">No photos yet.</p>
+                        ) : (
+                            <>
+                                <div className="flex flex-wrap gap-1.5 mb-3">
+                                    {galleryCategories.map((cat) => (
+                                        <button
+                                            key={cat}
+                                            type="button"
+                                            onClick={() => setGalleryFilter(cat)}
+                                            className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border-0 cursor-pointer ${
+                                                galleryFilter === cat ? 'text-black' : 'bg-white/5 text-gray-400'
+                                            }`}
+                                            style={galleryFilter === cat ? { background: accent } : undefined}
+                                        >
+                                            {cat}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="flex gap-2 overflow-x-auto scrollbar-hide no-scrollbar pb-1 sm:grid sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 sm:overflow-visible">
+                                    {filteredGallery.map((img, idx) => (
+                                        <button
+                                            key={idx}
+                                            type="button"
+                                            onClick={() => openLightbox(idx)}
+                                            className="shrink-0 w-28 sm:w-auto aspect-[4/3] sm:aspect-square rounded-xl overflow-hidden border border-white/10 bg-white/5 p-0 cursor-pointer hover:border-white/25 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-padel-green/60"
+                                        >
+                                            <img src={img.url} alt={img.caption || ''} className="w-full h-full object-cover" />
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                    </AccordionRow>
+
+                    {coaches.length > 0 && (
+                        <AccordionRow
+                            id="coaches"
+                            title="Coaches"
+                            open={openAccordions.coaches}
+                            onToggle={() => toggleAccordion('coaches')}
+                            accent={accent}
+                            action={(
+                                <Link to="/academy/coaches" className="text-[10px] font-black uppercase tracking-widest" style={{ color: accent }}>
+                                    View all
+                                </Link>
+                            )}
+                        >
+                            <div className="flex gap-3 overflow-x-auto scrollbar-hide no-scrollbar pb-1">
+                                {coaches.map((coach) => (
+                                    <Link
+                                        key={coach.id}
+                                        to={`/academy/coaches?id=${coach.id}`}
+                                        className="shrink-0 w-40 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-center hover:border-white/20 transition-colors"
+                                    >
+                                        <div className="w-16 h-16 mx-auto rounded-full overflow-hidden border border-white/10 bg-white/5 mb-2.5">
+                                            {coach.profile_pic_url ? (
+                                                <img src={coach.profile_pic_url} alt="" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center">
+                                                    <User size={22} className="text-gray-500" />
+                                                </div>
+                                            )}
                                         </div>
-                                    );
-                                })}
+                                        <p className="text-[12px] font-bold text-white truncate">{coach.full_name}</p>
+                                        <p className="text-[10px] text-gray-500 mt-0.5">Coach</p>
+                                        {waLink(coach.contact_number) && (
+                                            <a
+                                                href={waLink(coach.contact_number)}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex mt-2 w-7 h-7 rounded-full items-center justify-center bg-[#25D366]/15 text-[#25D366]"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                <MessageCircle size={13} />
+                                            </a>
+                                        )}
+                                    </Link>
+                                ))}
                             </div>
                         </AccordionRow>
                     )}
@@ -684,6 +859,50 @@ const ClubPage = () => {
                         )}
                     </AccordionRow>
 
+                    {hoursEntries.length > 0 && (
+                        <AccordionRow
+                            title="Opening Hours"
+                            open={openAccordions.hours}
+                            onToggle={() => toggleAccordion('hours')}
+                            accent={accent}
+                        >
+                            <ul className="rounded-xl bg-black/30 border border-white/5 divide-y divide-white/5">
+                                {hoursEntries.map(({ day, h }) => (
+                                    <li key={day} className="flex justify-between px-3.5 py-2.5 text-sm">
+                                        <span className="text-gray-400 font-bold">{DAY_LABELS[day]}</span>
+                                        <span className="text-white font-bold">
+                                            {h.closed ? 'Closed' : `${h.open || '—'} – ${h.close || '—'}`}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </AccordionRow>
+                    )}
+
+                    {facilityItems.length > 0 && (
+                        <AccordionRow
+                            id="facilities"
+                            title="Club Facilities"
+                            open={openAccordions.facilities}
+                            onToggle={() => toggleAccordion('facilities')}
+                            accent={accent}
+                        >
+                            <div className="flex gap-3 sm:gap-0 overflow-x-auto sm:overflow-visible scrollbar-hide no-scrollbar pb-1 -mx-1 px-1 sm:mx-0 sm:px-0 sm:justify-between">
+                                {facilityItems.map((item) => {
+                                    const Icon = item.Icon;
+                                    return (
+                                        <div key={item.id} className="shrink-0 w-[4.5rem] sm:w-auto sm:flex-1 flex flex-col items-center gap-2 text-center px-1">
+                                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white/[0.06] border border-white/10 flex items-center justify-center">
+                                                <Icon size={20} className="text-gray-300" />
+                                            </div>
+                                            <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 leading-tight line-clamp-2 max-w-[5.5rem] sm:max-w-[7rem]">{item.title}</p>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </AccordionRow>
+                    )}
+
                     {(indoorCount > 0 || outdoorCount > 0) && (
                         <AccordionRow
                             id="courts"
@@ -721,205 +940,6 @@ const ClubPage = () => {
                         </AccordionRow>
                     )}
 
-                    <AccordionRow
-                        id="gallery"
-                        title="Club Pictures"
-                        open={openAccordions.gallery}
-                        onToggle={() => toggleAccordion('gallery')}
-                        accent={accent}
-                    >
-                        {gallery.length === 0 ? (
-                            <p className="text-sm text-gray-500">No photos yet.</p>
-                        ) : (
-                            <>
-                                <div className="flex flex-wrap gap-1.5 mb-3">
-                                    {galleryCategories.map((cat) => (
-                                        <button
-                                            key={cat}
-                                            type="button"
-                                            onClick={() => setGalleryFilter(cat)}
-                                            className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border-0 cursor-pointer ${
-                                                galleryFilter === cat ? 'text-black' : 'bg-white/5 text-gray-400'
-                                            }`}
-                                            style={galleryFilter === cat ? { background: accent } : undefined}
-                                        >
-                                            {cat}
-                                        </button>
-                                    ))}
-                                </div>
-                                <div className="flex gap-2 overflow-x-auto scrollbar-hide no-scrollbar pb-1 sm:grid sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 sm:overflow-visible">
-                                    {filteredGallery.map((img, idx) => (
-                                        <button
-                                            key={idx}
-                                            type="button"
-                                            onClick={() => openLightbox(idx)}
-                                            className="shrink-0 w-28 sm:w-auto aspect-[4/3] sm:aspect-square rounded-xl overflow-hidden border border-white/10 bg-white/5 p-0 cursor-pointer hover:border-white/25 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-padel-green/60"
-                                        >
-                                            <img src={img.url} alt={img.caption || ''} className="w-full h-full object-cover" />
-                                        </button>
-                                    ))}
-                                </div>
-                            </>
-                        )}
-                    </AccordionRow>
-
-                    {club.google_place_id && (
-                        <AccordionRow
-                            id="reviews"
-                            title="Google Reviews"
-                            open={openAccordions.reviews}
-                            onToggle={() => toggleAccordion('reviews')}
-                            accent={accent}
-                        >
-                            <ClubReviews placeId={club.google_place_id} accent={accent} />
-                        </AccordionRow>
-                    )}
-
-                    {coaches.length > 0 && (
-                        <AccordionRow
-                            id="coaches"
-                            title="Coaching Team"
-                            open={openAccordions.coaches}
-                            onToggle={() => toggleAccordion('coaches')}
-                            accent={accent}
-                            action={(
-                                <Link to="/academy/coaches" className="text-[10px] font-black uppercase tracking-widest" style={{ color: accent }}>
-                                    View all
-                                </Link>
-                            )}
-                        >
-                            <div className="flex gap-3 overflow-x-auto scrollbar-hide no-scrollbar pb-1">
-                                {coaches.map((coach) => (
-                                    <Link
-                                        key={coach.id}
-                                        to={`/academy/coaches?id=${coach.id}`}
-                                        className="shrink-0 w-40 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-center hover:border-white/20 transition-colors"
-                                    >
-                                        <div className="w-16 h-16 mx-auto rounded-full overflow-hidden border border-white/10 bg-white/5 mb-2.5">
-                                            {coach.profile_pic_url ? (
-                                                <img src={coach.profile_pic_url} alt="" className="w-full h-full object-cover" />
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center">
-                                                    <User size={22} className="text-gray-500" />
-                                                </div>
-                                            )}
-                                        </div>
-                                        <p className="text-[12px] font-bold text-white truncate">{coach.full_name}</p>
-                                        <p className="text-[10px] text-gray-500 mt-0.5">Coach</p>
-                                        {waLink(coach.contact_number) && (
-                                            <a
-                                                href={waLink(coach.contact_number)}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex mt-2 w-7 h-7 rounded-full items-center justify-center bg-[#25D366]/15 text-[#25D366]"
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                <MessageCircle size={13} />
-                                            </a>
-                                        )}
-                                    </Link>
-                                ))}
-                            </div>
-                        </AccordionRow>
-                    )}
-
-                    {(club.address || locationLabel || mapEmbedUrl) && (
-                        <AccordionRow
-                            id="location"
-                            title="Location"
-                            open={openAccordions.location}
-                            onToggle={() => toggleAccordion('location')}
-                            accent={accent}
-                        >
-                            <div className="space-y-3 text-sm">
-                                {(club.address || locationLabel) && (
-                                    <div className="flex items-start justify-between gap-3">
-                                        <p className="text-gray-300 flex items-start gap-2 min-w-0">
-                                            <MapPin size={14} className="mt-0.5 shrink-0" style={{ color: accent }} />
-                                            <span>{club.address || locationLabel}</span>
-                                        </p>
-                                        {mapUrl && (
-                                            <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-black uppercase tracking-widest shrink-0" style={{ color: accent }}>
-                                                Directions
-                                            </a>
-                                        )}
-                                    </div>
-                                )}
-                                {mapEmbedUrl && (
-                                    <div className="rounded-2xl border border-white/10 bg-black/40 overflow-hidden">
-                                        <iframe
-                                            title={`${brandTitle} location`}
-                                            src={mapEmbedUrl}
-                                            className="w-full h-44 sm:h-52 block border-0"
-                                            loading="lazy"
-                                            referrerPolicy="no-referrer-when-downgrade"
-                                            allowFullScreen
-                                        />
-                                    </div>
-                                )}
-                            </div>
-                        </AccordionRow>
-                    )}
-
-                    <AccordionRow
-                        id="info"
-                        title="Contact & Community"
-                        open={openAccordions.contact}
-                        onToggle={() => toggleAccordion('contact')}
-                        accent={accent}
-                    >
-                        <div className="space-y-3 text-sm">
-                            {club.contact_phone && (
-                                <a href={`tel:${club.contact_phone}`} className="flex items-center gap-2 text-gray-300 hover:text-white">
-                                    <Phone size={14} style={{ color: accent }} /> {club.contact_phone}
-                                </a>
-                            )}
-                            {website && (
-                                <a href={website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-gray-300 hover:text-white">
-                                    <Globe size={14} style={{ color: accent }} />
-                                    <span className="truncate">{website.replace(/^https?:\/\/(www\.)?/, '')}</span>
-                                    <ExternalLink size={12} className="shrink-0 text-gray-500" />
-                                </a>
-                            )}
-                            {club.contact_email && (
-                                <a href={`mailto:${club.contact_email}`} className="flex items-center gap-2 text-gray-300 hover:text-white">
-                                    <Mail size={14} style={{ color: accent }} /> {club.contact_email}
-                                </a>
-                            )}
-                            {waLink(club.whatsapp_number) && (
-                                <a
-                                    href={waLink(club.whatsapp_number)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center justify-between gap-2 text-gray-300 hover:text-white py-1"
-                                >
-                                    <span className="inline-flex items-center gap-2">
-                                        <MessageCircle size={14} style={{ color: accent }} /> WhatsApp
-                                    </span>
-                                    <ChevronRight size={14} className="text-gray-600" />
-                                </a>
-                            )}
-                            {socialLinks.length > 0 && (
-                                <div className="flex flex-wrap gap-2 pt-1">
-                                    {socialLinks.map((item) => {
-                                        const SocialIcon = item.icon;
-                                        return (
-                                            <a
-                                                key={item.key}
-                                                href={item.href}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-wider text-gray-300 hover:text-white"
-                                            >
-                                                <SocialIcon size={12} /> {item.label}
-                                            </a>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    </AccordionRow>
-
                     {admins.length > 0 && (
                         <AccordionRow
                             title="Club Admins"
@@ -944,26 +964,6 @@ const ClubPage = () => {
                                     </div>
                                 ))}
                             </div>
-                        </AccordionRow>
-                    )}
-
-                    {hoursEntries.length > 0 && (
-                        <AccordionRow
-                            title="Opening Hours"
-                            open={openAccordions.hours}
-                            onToggle={() => toggleAccordion('hours')}
-                            accent={accent}
-                        >
-                            <ul className="rounded-xl bg-black/30 border border-white/5 divide-y divide-white/5">
-                                {hoursEntries.map(({ day, h }) => (
-                                    <li key={day} className="flex justify-between px-3.5 py-2.5 text-sm">
-                                        <span className="text-gray-400 font-bold">{DAY_LABELS[day]}</span>
-                                        <span className="text-white font-bold">
-                                            {h.closed ? 'Closed' : `${h.open || '—'} – ${h.close || '—'}`}
-                                        </span>
-                                    </li>
-                                ))}
-                            </ul>
                         </AccordionRow>
                     )}
 
