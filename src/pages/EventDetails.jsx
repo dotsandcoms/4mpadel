@@ -19,6 +19,7 @@ import { useMembersOnly } from '../context/MembersOnlyContext';
 import {
     fetchScheduledEventIds,
     toggleEventOnSchedule,
+    addEventToSchedule,
     SCHEDULE_CHANGED_EVENT,
 } from '../utils/playerSchedule';
 
@@ -1328,6 +1329,12 @@ const EventDetails = () => {
         return () => { active = false; listener?.subscription?.unsubscribe?.(); };
     }, []);
 
+    const hasEnteredEvent = !!(
+        manualRegStatus.hasAnyRegistration
+        || manualRegStatus.hasRegistrations
+        || (manualRegStatus.entries || []).length > 0
+    );
+
     useEffect(() => {
         let cancelled = false;
         const loadScheduleState = async () => {
@@ -1337,20 +1344,33 @@ const EventDetails = () => {
             }
             try {
                 const ids = await fetchScheduledEventIds(manualUserEmail);
-                if (!cancelled) setIsOnSchedule(ids.map(Number).includes(Number(event.id)));
+                let saved = ids.map(Number).includes(Number(event.id));
+                // Registered entries belong on My Schedule — sync if missing (shows the tick).
+                if (!saved && hasEnteredEvent) {
+                    try {
+                        await addEventToSchedule(manualUserEmail, event.id);
+                        saved = true;
+                    } catch (syncErr) {
+                        console.warn('Could not sync registration to My Schedule:', syncErr);
+                    }
+                }
+                if (!cancelled) setIsOnSchedule(saved || hasEnteredEvent);
             } catch (err) {
                 console.warn('Failed to load schedule state:', err);
-                if (!cancelled) setIsOnSchedule(false);
+                if (!cancelled) setIsOnSchedule(hasEnteredEvent);
             }
         };
         loadScheduleState();
         const onScheduleChanged = () => loadScheduleState();
+        const onRegsChanged = () => loadScheduleState();
         window.addEventListener(SCHEDULE_CHANGED_EVENT, onScheduleChanged);
+        window.addEventListener('4m:registrations-changed', onRegsChanged);
         return () => {
             cancelled = true;
             window.removeEventListener(SCHEDULE_CHANGED_EVENT, onScheduleChanged);
+            window.removeEventListener('4m:registrations-changed', onRegsChanged);
         };
-    }, [manualUserEmail, event?.id]);
+    }, [manualUserEmail, event?.id, hasEnteredEvent]);
 
     const handleToggleMySchedule = useCallback(async () => {
         if (!manualUserEmail) {
@@ -1360,22 +1380,27 @@ const EventDetails = () => {
         if (!event?.id || scheduleBusy) return;
 
         const eventId = Number(event.id);
+        // Registered players stay on schedule (tick) — same as Calendar when entered.
+        if (hasEnteredEvent && isOnSchedule) {
+            toast.message("You're registered for this event — it stays on My Schedule");
+            return;
+        }
         const currentlyOn = isOnSchedule;
         setScheduleBusy(true);
         setIsOnSchedule(!currentlyOn);
 
         try {
             const nowOn = await toggleEventOnSchedule(manualUserEmail, eventId, currentlyOn);
-            setIsOnSchedule(nowOn);
+            setIsOnSchedule(nowOn || hasEnteredEvent);
             toast.success(nowOn ? 'Added to My Schedule' : 'Removed from My Schedule');
         } catch (err) {
             console.error('Schedule toggle failed:', err);
-            setIsOnSchedule(currentlyOn);
+            setIsOnSchedule(currentlyOn || hasEnteredEvent);
             toast.error(err?.message || 'Could not update My Schedule');
         } finally {
             setScheduleBusy(false);
         }
-    }, [manualUserEmail, event?.id, isOnSchedule, scheduleBusy, promptMembersOnly]);
+    }, [manualUserEmail, event?.id, isOnSchedule, scheduleBusy, promptMembersOnly, hasEnteredEvent]);
 
     const loadManualRegistrationSummary = useCallback(async () => {
         if (!event?.is_manual || !manualUserEmail) {

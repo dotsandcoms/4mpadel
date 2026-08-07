@@ -33,6 +33,7 @@ import {
     getWeeklyCapacity,
     weeklySpotsRemaining,
 } from '../utils/weeklyRegistration';
+import { addEventToSchedule } from '../utils/playerSchedule';
 
 const STEPS = [
     { id: 1, label: 'Profile' },
@@ -2493,6 +2494,20 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
     };
 
+    const addRegisteredWeeksToSchedule = useCallback(async (weeks = selectedWeeks) => {
+        if (!userEmail) return;
+        const ids = isWeeklyEvent
+            ? (weeks?.length ? weeks.map((w) => w.id) : [event.id])
+            : [event.id];
+        await Promise.all(
+            [...new Set(ids.filter(Boolean))].map((id) =>
+                addEventToSchedule(userEmail, id).catch((err) => {
+                    console.warn('Could not add event to My Schedule:', err);
+                }),
+            ),
+        );
+    }, [userEmail, isWeeklyEvent, selectedWeeks, event?.id]);
+
     const handlePaymentSuccess = useCallback(async (paidRef, paidAmount) => {
         try {
             const data = await confirmManualPayment(paidRef);
@@ -2524,8 +2539,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         await loadMyRegs();
         loadDivisionRegs();
         loadRegisteredWeekIds();
+        await addRegisteredWeeksToSchedule();
         onParticipantsChange?.();
-    }, [loadMyRegs, loadDivisionRegs, loadRegisteredWeekIds, onParticipantsChange]);
+    }, [loadMyRegs, loadDivisionRegs, loadRegisteredWeekIds, onParticipantsChange, addRegisteredWeeksToSchedule]);
 
     const launchPaystackCheckout = useCallback(async (reference, amount, paymentMetadata) => {
         if (!isPaystackConfigured()) {
@@ -2821,6 +2837,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             loadMyRegs();
             loadDivisionRegs();
             loadRegisteredWeekIds();
+            await addRegisteredWeeksToSchedule(isWeeklyEvent ? selectedWeeks : undefined);
             onParticipantsChange?.();
             if (isReserve) {
                 toast.success('Weeks reserved — we will remind you to pay before each night.');
