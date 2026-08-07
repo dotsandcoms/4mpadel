@@ -1288,6 +1288,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 allow_temporary_license: false,
                 show_in_recent_results: false,
                 featured_result: false,
+                featured_event: false,
+                // Private by default — share the event link; toggle on to list on /calendar
+                is_visible: false,
                 rankedin_id: '',
                 rankedin_url: '',
                 points: '',
@@ -1912,7 +1915,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             payload.organisation_id = organisation.id;
             if (!isEditing) {
                 if (isWeekly && mode === 'publish') {
-                    payload.is_visible = true;
+                    // Weekly: respect visibility toggle (default hidden for private links)
+                    payload.is_visible = !!form.is_visible;
                     payload.sanction_status = 'approved';
                     payload.featured_event = false;
                     payload.show_in_recent_results = false;
@@ -1926,13 +1930,16 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         } else {
             payload.organisation_id = form.organisation_id || null;
             if (!isEditing) {
-                payload.is_visible = mode === 'publish';
-                if (isWeekly && mode === 'publish') {
-                    payload.sanction_status = 'approved';
+                if (isWeekly) {
+                    payload.is_visible = !!form.is_visible;
+                    if (mode === 'publish') payload.sanction_status = 'approved';
+                } else {
+                    payload.is_visible = mode === 'publish';
                 }
-            } else if (mode === 'publish') {
+            } else if (mode === 'publish' && !isWeekly) {
                 payload.is_visible = true;
             }
+            // Weekly edits keep form.is_visible (cascade via persistWeeklySeriesUpdate)
         }
 
         // Finished Gold / Super Gold / Major events auto-enter Recent Results.
@@ -2307,7 +2314,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                         early_bird_ends_at: form.early_bird_ends_at
                             ? safeISOString(addDaysToLocalDateTime(form.early_bird_ends_at, dayOffset))
                             : null,
-                        is_visible: true,
+                        is_visible: !!payload.is_visible,
                         sanction_status: 'approved',
                     };
                     instancePayload.slug = await ensureUniqueSlug(
@@ -3001,26 +3008,32 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                     <PanelHeader id="websiteDisplay" title="Website Display" />
                                     {openPanels.websiteDisplay && (
                                         <div className="space-y-3 p-4 rounded-xl border border-white/10 bg-black/20">
-                                            {organisation ? (
+                                            {organisation && !form.is_weekly ? (
                                                 <div className="bg-padel-green/5 border border-padel-green/20 rounded-xl px-4 py-3 text-xs text-padel-green font-semibold">
-                                                    {form.is_weekly
-                                                        ? 'Weekly social events publish live immediately — no SAPA sanctioning required.'
-                                                        : (isAmendment
-                                                            ? 'This event is already sanctioned. Your changes will be submitted as an amendment for 4M Padel approval — the event stays live with its current details until approved.'
-                                                            : 'This event will be submitted to 4M Padel for sanctioning. It goes live on the calendar once approved.')}
+                                                    {isAmendment
+                                                        ? 'This event is already sanctioned. Your changes will be submitted as an amendment for 4M Padel approval — the event stays live with its current details until approved.'
+                                                        : 'This event will be submitted to 4M Padel for sanctioning. It goes live on the calendar once approved.'}
                                                 </div>
                                             ) : (
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                    {[
-                                                        ['featured_event', 'Featured event'],
-                                                        ...(!form.is_weekly ? [['show_in_recent_results', 'Show in recent results']] : []),
-                                                        ['is_visible', 'Visible on website'],
-                                                    ].map(([key, label]) => (
-                                                        <label key={key} className="flex items-center justify-between bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
-                                                            <span className="text-sm font-medium text-gray-200">{label}</span>
-                                                            <input type="checkbox" name={key} checked={!!form[key]} onChange={handleInput} className="accent-padel-green w-5 h-5" />
-                                                        </label>
-                                                    ))}
+                                                <div className="space-y-3">
+                                                    {form.is_weekly && (
+                                                        <div className="rounded-xl border border-white/10 bg-[#1a1a1a] px-4 py-3 text-[11px] text-gray-400 leading-relaxed">
+                                                            Leave <span className="text-gray-200 font-medium">Visible on website</span> off to keep this series off the public calendar.
+                                                            Anyone with the event link can still open and register. Copy links from Calendar Manager.
+                                                        </div>
+                                                    )}
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                        {[
+                                                            ...(!form.is_weekly ? [['featured_event', 'Featured event']] : []),
+                                                            ...(!form.is_weekly ? [['show_in_recent_results', 'Show in recent results']] : []),
+                                                            ['is_visible', form.is_weekly ? 'Visible on public calendar' : 'Visible on website'],
+                                                        ].map(([key, label]) => (
+                                                            <label key={key} className="flex items-center justify-between bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
+                                                                <span className="text-sm font-medium text-gray-200">{label}</span>
+                                                                <input type="checkbox" name={key} checked={!!form[key]} onChange={handleInput} className="accent-padel-green w-5 h-5" />
+                                                            </label>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
@@ -4304,7 +4317,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                             </>
                                         )}
                                         {!organisation && (
-                                            <p className="text-gray-300"><span className="text-gray-500">Visible on website:</span> {form.is_visible ? 'Yes' : 'No'}</p>
+                                        <p className="text-gray-300"><span className="text-gray-500">Visible on public calendar:</span> {form.is_visible ? 'Yes' : 'No (link-only)'}</p>
                                         )}
                                     </div>
                                 </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, CalendarDays, Flag, MapPin, Users, RefreshCw, Trophy, PlayCircle, ChevronLeft, ChevronRight, UploadCloud, Loader2, Trash, CreditCard, Briefcase } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, CalendarDays, Flag, MapPin, Users, RefreshCw, Trophy, PlayCircle, ChevronLeft, ChevronRight, UploadCloud, Loader2, Trash, CreditCard, Briefcase, Link2, ExternalLink } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useRankedin } from '../../hooks/useRankedin';
 import EventBuilder from './EventBuilder';
@@ -455,9 +455,48 @@ const CalendarManager = () => {
         }
     };
 
+    const getEventPublicUrl = (event) => {
+        const path = `/calendar/${event.slug || event.id}`;
+        if (typeof window !== 'undefined' && window.location?.origin) {
+            return `${window.location.origin}${path}`;
+        }
+        return `https://4mpadel.co.za${path}`;
+    };
+
+    const copyEventLink = async (event) => {
+        const url = getEventPublicUrl(event);
+        try {
+            await navigator.clipboard.writeText(url);
+            toast.success('Event link copied');
+        } catch (err) {
+            console.error('Copy link failed:', err);
+            toast.error('Could not copy link');
+        }
+    };
+
     const toggleVisibility = async (event) => {
         try {
             const newVisibility = !event.is_visible;
+            if (event.is_weekly && event.series_id) {
+                const { error } = await supabase
+                    .from('calendar')
+                    .update({ is_visible: newVisibility })
+                    .eq('series_id', event.series_id)
+                    .eq('is_weekly', true);
+                if (error) throw error;
+                setEvents((prev) => prev.map((e) => (
+                    e.series_id === event.series_id && e.is_weekly
+                        ? { ...e, is_visible: newVisibility }
+                        : e
+                )));
+                toast.success(
+                    newVisibility
+                        ? 'Series is now visible on the public calendar'
+                        : 'Series hidden from the public calendar (links still work)',
+                );
+                return;
+            }
+
             const { error } = await supabase
                 .from('calendar')
                 .update({ is_visible: newVisibility })
@@ -465,8 +504,7 @@ const CalendarManager = () => {
 
             if (error) throw error;
 
-            // Optimistic update
-            setEvents(prev => prev.map(e => e.id === event.id ? { ...e, is_visible: newVisibility } : e));
+            setEvents((prev) => prev.map((e) => (e.id === event.id ? { ...e, is_visible: newVisibility } : e)));
             toast.success(`Event is now ${newVisibility ? 'visible' : 'hidden'}`);
         } catch (error) {
             console.error('Error toggling visibility:', error);
@@ -1307,7 +1345,13 @@ const CalendarManager = () => {
                                             <button
                                                 onClick={() => toggleVisibility(event)}
                                                 className={`p-1 rounded-md transition-colors ${event.is_visible !== false ? 'text-padel-green bg-padel-green/10' : 'text-gray-600 hover:text-gray-400'}`}
-                                                title={event.is_visible !== false ? 'Visible - click to hide' : 'Hidden - click to show'}
+                                                title={
+                                                    event.is_weekly && event.series_id
+                                                        ? (event.is_visible !== false
+                                                            ? 'Series visible — click to hide all weeks from public calendar'
+                                                            : 'Series hidden — click to show all weeks on public calendar')
+                                                        : (event.is_visible !== false ? 'Visible - click to hide' : 'Hidden - click to show')
+                                                }
                                             >
                                                 {event.is_visible !== false ? (
                                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
@@ -1318,6 +1362,23 @@ const CalendarManager = () => {
                                         </td>
                                         <td className="py-3 px-4 align-middle text-right">
                                             <div className="flex justify-end gap-2 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => copyEventLink(event)}
+                                                    className="p-1.5 bg-white/5 text-gray-300 rounded-lg hover:bg-padel-green/20 hover:text-padel-green"
+                                                    title={`Copy event link: ${getEventPublicUrl(event)}`}
+                                                >
+                                                    <Link2 size={14} />
+                                                </button>
+                                                <a
+                                                    href={getEventPublicUrl(event)}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="p-1.5 bg-white/5 text-gray-300 rounded-lg hover:bg-sky-500/20 hover:text-sky-300"
+                                                    title="Open event page"
+                                                >
+                                                    <ExternalLink size={14} />
+                                                </a>
                                                 <button
                                                     onClick={() => handleForceSync(event)}
                                                     disabled={isSyncing}
