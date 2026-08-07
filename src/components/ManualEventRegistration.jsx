@@ -2678,6 +2678,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
 
         setProcessing(true);
+        let paystackHandoff = false;
         try {
             if (!isWeeklyEvent && wizardMode !== 'payOnly') {
                 for (const d of selectedDivisions) {
@@ -2691,7 +2692,6 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     );
                     if (!check.ok) {
                         toast.error(check.message);
-                        setProcessing(false);
                         return;
                     }
                 }
@@ -2701,48 +2701,47 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             const isReserve = isWeeklyEvent && allowWeeklyReserve && weeklyCheckoutIntent === 'reserve';
 
             if (total > 0 && !isReserve) {
-                if (!isPaystackConfigured()) { toast.error('Payments not configured'); setProcessing(false); return; }
+                if (!isPaystackConfigured()) {
+                    toast.error('Payments not configured');
+                    return;
+                }
                 paymentRetryRef.current = false;
 
                 const prep = checkoutPrepRef.current;
                 const payload = prep?.reference ? prep : buildManualPaymentPayload();
 
-                try {
-                    const { error: insertError } = await insertProcessingPayment(payload);
-                    if (insertError) throw insertError;
+                const { error: insertError } = await insertProcessingPayment(payload);
+                if (insertError) throw insertError;
 
-                    if (prep?.launcher) {
-                        prep.launcher();
-                        return;
-                    }
-
-                    await launchPaystackCheckout(payload.reference, payload.amount, payload.paymentMetadata);
-                } catch (err) {
-                    console.error('Manual registration error:', err);
-                    toast.error(`Registration failed: ${err.message}`);
-                    setProcessing(false);
+                // Keep processing=true until Paystack onSuccess / onCancel clears it.
+                if (prep?.launcher) {
+                    prep.launcher();
+                    paystackHandoff = true;
+                    return;
                 }
+
+                await launchPaystackCheckout(payload.reference, payload.amount, payload.paymentMetadata);
+                paystackHandoff = true;
                 return;
-            } else {
-                const savedRows = await persistRegistrations(rows, soloLinks, covers);
-                await sendRegistrationEmails(savedRows, isReserve ? false : (wizardMode === 'addPartner' ? total > 0 : true));
-                setConfirmedPaidTotal(isReserve ? null : 0);
-                setWizardStep(5);
-                loadMyRegs();
-                loadDivisionRegs();
-                loadRegisteredWeekIds();
-                onParticipantsChange?.();
-                if (isReserve) {
-                    toast.success('Weeks reserved — we will remind you to pay before each night.');
-                }
+            }
+
+            const savedRows = await persistRegistrations(rows, soloLinks, covers);
+            await sendRegistrationEmails(savedRows, isReserve ? false : (wizardMode === 'addPartner' ? total > 0 : true));
+            setConfirmedPaidTotal(isReserve ? null : 0);
+            setWizardStep(5);
+            loadMyRegs();
+            loadDivisionRegs();
+            loadRegisteredWeekIds();
+            onParticipantsChange?.();
+            if (isReserve) {
+                toast.success('Weeks reserved — we will remind you to pay before each night.');
             }
         } catch (err) {
             console.error('Manual registration error:', err);
             toast.error(`Registration failed: ${err.message}`);
-            setProcessing(false);
         } finally {
-            const isReserve = isWeeklyEvent && allowWeeklyReserve && weeklyCheckoutIntent === 'reserve';
-            if (total <= 0 || isReserve) setProcessing(false);
+            // Paystack owns the spinner until success/cancel callbacks fire.
+            if (!paystackHandoff) setProcessing(false);
         }
     };
 
