@@ -5,7 +5,7 @@ import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { fetchAllRows } from '../utils/fetchAllRows';
 import { useRankedin } from '../hooks/useRankedin';
-import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, ChevronUp, FileText, User, Users, UserPlus, Trophy, AlertCircle, Heart, ChevronRight, Gift, Award, Layout, Circle, Check, Clock, Crown, Coins, Grid2x2 } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, ChevronUp, FileText, User, Users, UserPlus, Trophy, AlertCircle, Heart, ChevronRight, Gift, Award, Layout, Circle, Check, Clock, Crown, Coins, Grid2x2, Plus } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import PaystackPop from '@paystack/inline-js';
 import { toPaystackAmount, FEES } from '../constants/fees';
@@ -16,6 +16,11 @@ import { toast } from 'sonner';
 import { sendEmail } from '../utils/emails';
 import { canAccessHiddenEvents } from '../hooks/useAdminPermissions';
 import { useMembersOnly } from '../context/MembersOnlyContext';
+import {
+    fetchScheduledEventIds,
+    toggleEventOnSchedule,
+    SCHEDULE_CHANGED_EVENT,
+} from '../utils/playerSchedule';
 
 import { PAYSTACK_PUBLIC_KEY, isPaystackTestMode as isTestMode } from '../utils/paystackConfig';
 
@@ -1166,6 +1171,8 @@ const EventDetails = () => {
     });
     const manualRegActionsRef = React.useRef({});
     const [participantsRefreshKey, setParticipantsRefreshKey] = useState(0);
+    const [isOnSchedule, setIsOnSchedule] = useState(false);
+    const [scheduleBusy, setScheduleBusy] = useState(false);
 
     useEffect(() => {
         if (!isCalendarMenuOpen) return;
@@ -1277,6 +1284,55 @@ const EventDetails = () => {
         const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => applySession(session));
         return () => { active = false; listener?.subscription?.unsubscribe?.(); };
     }, []);
+
+    useEffect(() => {
+        let cancelled = false;
+        const loadScheduleState = async () => {
+            if (!manualUserEmail || !event?.id) {
+                if (!cancelled) setIsOnSchedule(false);
+                return;
+            }
+            try {
+                const ids = await fetchScheduledEventIds(manualUserEmail);
+                if (!cancelled) setIsOnSchedule(ids.map(Number).includes(Number(event.id)));
+            } catch (err) {
+                console.warn('Failed to load schedule state:', err);
+                if (!cancelled) setIsOnSchedule(false);
+            }
+        };
+        loadScheduleState();
+        const onScheduleChanged = () => loadScheduleState();
+        window.addEventListener(SCHEDULE_CHANGED_EVENT, onScheduleChanged);
+        return () => {
+            cancelled = true;
+            window.removeEventListener(SCHEDULE_CHANGED_EVENT, onScheduleChanged);
+        };
+    }, [manualUserEmail, event?.id]);
+
+    const handleToggleMySchedule = useCallback(async () => {
+        if (!manualUserEmail) {
+            promptMembersOnly();
+            return;
+        }
+        if (!event?.id || scheduleBusy) return;
+
+        const eventId = Number(event.id);
+        const currentlyOn = isOnSchedule;
+        setScheduleBusy(true);
+        setIsOnSchedule(!currentlyOn);
+
+        try {
+            const nowOn = await toggleEventOnSchedule(manualUserEmail, eventId, currentlyOn);
+            setIsOnSchedule(nowOn);
+            toast.success(nowOn ? 'Added to My Schedule' : 'Removed from My Schedule');
+        } catch (err) {
+            console.error('Schedule toggle failed:', err);
+            setIsOnSchedule(currentlyOn);
+            toast.error(err?.message || 'Could not update My Schedule');
+        } finally {
+            setScheduleBusy(false);
+        }
+    }, [manualUserEmail, event?.id, isOnSchedule, scheduleBusy, promptMembersOnly]);
 
     const loadManualRegistrationSummary = useCallback(async () => {
         if (!event?.is_manual || !manualUserEmail) {
@@ -3718,8 +3774,25 @@ const EventDetails = () => {
                                     }
                                 }}
                                 className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white hover:bg-white/40 transition-all shadow-lg cursor-pointer"
+                                aria-label="Share event"
                             >
                                 <Share2 className="w-4 h-4" />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleToggleMySchedule}
+                                disabled={scheduleBusy}
+                                title={isOnSchedule ? 'Remove from My Schedule' : 'Add to My Schedule'}
+                                aria-label={isOnSchedule ? 'Remove from My Schedule' : 'Add to My Schedule'}
+                                className={`w-10 h-10 rounded-full backdrop-blur-md border flex items-center justify-center transition-all shadow-lg cursor-pointer ${
+                                    isOnSchedule
+                                        ? 'bg-padel-green border-padel-green text-black hover:bg-white'
+                                        : 'bg-white/20 border-white/30 text-white hover:bg-white/40'
+                                } ${scheduleBusy ? 'opacity-50 cursor-wait' : ''}`}
+                            >
+                                {isOnSchedule
+                                    ? <Check className="w-4 h-4" strokeWidth={3} />
+                                    : <Plus className="w-4 h-4" strokeWidth={2.5} />}
                             </button>
                         </div>
                     </div>
