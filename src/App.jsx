@@ -26,6 +26,8 @@ import Federations from './pages/Federations';
 import FederationPage from './pages/FederationPage';
 import Clubs from './pages/Clubs';
 import ClubPage from './pages/ClubPage';
+import ClubGroups from './pages/ClubGroups';
+import ClubGroupPage from './pages/ClubGroupPage';
 import PlayerProfile from './pages/PlayerProfile'; // Added import
 import ApprovedCoaches from './pages/ApprovedCoaches';
 import CoachingVideos from './pages/CoachingVideos';
@@ -96,7 +98,7 @@ function AppContent() {
     };
   }, [navigate]);
 
-  const isHeroRoute = location.pathname === '/' || location.pathname === '/calendar' || location.pathname.startsWith('/calendar/') || location.pathname === '/players' || location.pathname === '/rankings' || location.pathname === '/federations' || location.pathname.startsWith('/federations/') || location.pathname === '/clubs' || location.pathname.startsWith('/clubs/');
+  const isHeroRoute = location.pathname === '/' || location.pathname === '/calendar' || location.pathname.startsWith('/calendar/') || location.pathname === '/players' || location.pathname === '/rankings' || location.pathname === '/federations' || location.pathname.startsWith('/federations/') || location.pathname === '/clubs' || location.pathname.startsWith('/clubs/') || location.pathname === '/groups' || location.pathname.startsWith('/groups/');
   const isAdminRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/reports');
   const routeRequiresAuth = requiresAuth(location.pathname);
   const showMembersOnly =
@@ -140,6 +142,8 @@ function AppContent() {
           <Route path="/federations/:slug" element={<FederationPage />} />
           <Route path="/clubs" element={<Clubs />} />
           <Route path="/clubs/:slug" element={<ClubPage />} />
+          <Route path="/groups" element={<ClubGroups />} />
+          <Route path="/groups/:slug" element={<ClubGroupPage />} />
           <Route path="/tournaments/broll" element={<Broll />} />
           <Route path="/tournaments/kit-kat-league" element={<KitKatLeague />} />
           <Route path="/tournaments/north-vs-south" element={<NorthVsSouth />} />

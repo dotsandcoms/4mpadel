@@ -1,18 +1,26 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, ShieldCheck, ChevronRight, Search, Filter, X, ChevronDown, Globe } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { MapPin, ShieldCheck, ChevronRight, Search, Filter, X, ChevronDown, Globe, Building2 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { fetchPublishedClubs, SA_REGIONS, clubCityLabel, clubRegionLabel, showFourMApprovedBadge } from '../utils/club';
+import {
+    fetchPublishedClubGroups,
+    fetchClubGroupVenueCounts,
+    getClubGroup,
+    resolveClubLogo,
+} from '../utils/clubGroup';
 import VerifiedBadge from '../components/VerifiedBadge';
 import heroCourt from '../assets/home.jpeg';
 
 /**
- * Public directory of published clubs — /clubs
+ * Public directory of published clubs and club groups — /clubs
  */
 const Clubs = () => {
     const [clubs, setClubs] = useState([]);
+    const [groups, setGroups] = useState([]);
+    const [venueCounts, setVenueCounts] = useState({});
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [regionFilter, setRegionFilter] = useState('All');
@@ -22,8 +30,11 @@ const Clubs = () => {
     useEffect(() => {
         const load = async () => {
             try {
-                const data = await fetchPublishedClubs();
-                const ids = (data || []).map((c) => c.id).filter(Boolean);
+                const [clubData, groupData] = await Promise.all([
+                    fetchPublishedClubs(),
+                    fetchPublishedClubGroups(),
+                ]);
+                const ids = (clubData || []).map((c) => c.id).filter(Boolean);
                 let ownedIds = new Set();
                 if (ids.length > 0) {
                     const { data: owners } = await supabase
@@ -34,11 +45,14 @@ const Clubs = () => {
                     ownedIds = new Set((owners || []).map((row) => row.club_id));
                 }
                 setClubs(
-                    (data || []).map((c) => ({
+                    (clubData || []).map((c) => ({
                         ...c,
                         _claimable: !ownedIds.has(c.id),
                     })),
                 );
+                setGroups(groupData || []);
+                const counts = await fetchClubGroupVenueCounts((groupData || []).map((g) => g.id));
+                setVenueCounts(counts);
             } catch (err) {
                 console.error('Failed to load clubs:', err);
             } finally {
@@ -53,40 +67,103 @@ const Clubs = () => {
             ...c,
             _city: clubCityLabel(c),
             _region: clubRegionLabel(c),
+            _logo: resolveClubLogo(c),
+            _group: getClubGroup(c),
         })),
         [clubs],
+    );
+
+    const groupsWithMeta = useMemo(
+        () => groups.map((g) => ({
+            ...g,
+            _city: g.city || '',
+            _region: g.province || clubRegionLabel({ city: g.city, address: '', name: g.name }),
+            _venueCount: venueCounts[g.id] || 0,
+            _venueCities: clubsWithMeta
+                .filter((c) => c.group_id === g.id)
+                .map((c) => ({ city: c._city, region: c._region })),
+        })),
+        [groups, venueCounts, clubsWithMeta],
     );
 
     const uniqueRegions = useMemo(() => ['All', ...SA_REGIONS], []);
 
     const uniqueCities = useMemo(() => {
-        const cities = clubsWithMeta
-            .filter((c) => regionFilter === 'All' || c._region === regionFilter)
-            .map((c) => c._city)
-            .filter(Boolean);
+        const cities = [
+            ...clubsWithMeta
+                .filter((c) => regionFilter === 'All' || c._region === regionFilter)
+                .map((c) => c._city),
+            ...groupsWithMeta
+                .filter((g) => regionFilter === 'All' || g._region === regionFilter)
+                .map((g) => g._city),
+        ].filter(Boolean);
         return ['All', ...[...new Set(cities)].sort((a, b) => a.localeCompare(b))];
-    }, [clubsWithMeta, regionFilter]);
+    }, [clubsWithMeta, groupsWithMeta, regionFilter]);
 
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
-        return clubsWithMeta
-            .filter((c) => {
-                const matchesSearch = !q
-                    || c.name?.toLowerCase().includes(q)
-                    || c.short_name?.toLowerCase().includes(q)
-                    || c._city?.toLowerCase().includes(q)
-                    || c._region?.toLowerCase().includes(q)
-                    || c.address?.toLowerCase().includes(q);
-                const matchesRegion = regionFilter === 'All' || c._region === regionFilter;
-                const matchesCity = cityFilter === 'All' || c._city === cityFilter;
-                return matchesSearch && matchesRegion && matchesCity;
-            })
-            // Claimable clubs (no owner yet) first, then A–Z
-            .sort((a, b) => {
-                if (a._claimable !== b._claimable) return a._claimable ? -1 : 1;
-                return (a.short_name || a.name || '').localeCompare(b.short_name || b.name || '');
-            });
-    }, [clubsWithMeta, search, regionFilter, cityFilter]);
+
+        const matchingClubs = clubsWithMeta.filter((c) => {
+            const matchesSearch = !q
+                || c.name?.toLowerCase().includes(q)
+                || c.short_name?.toLowerCase().includes(q)
+                || c._city?.toLowerCase().includes(q)
+                || c._region?.toLowerCase().includes(q)
+                || c.address?.toLowerCase().includes(q)
+                || c._group?.name?.toLowerCase().includes(q);
+            const matchesRegion = regionFilter === 'All' || c._region === regionFilter;
+            const matchesCity = cityFilter === 'All' || c._city === cityFilter;
+            return matchesSearch && matchesRegion && matchesCity;
+        });
+
+        const matchingGroups = groupsWithMeta.filter((g) => {
+            const venueMatch = g._venueCities.some(
+                (v) =>
+                    (regionFilter === 'All' || v.region === regionFilter)
+                    && (cityFilter === 'All' || v.city === cityFilter),
+            );
+            const groupLocationMatch =
+                (regionFilter === 'All' || g._region === regionFilter)
+                && (cityFilter === 'All' || !g._city || g._city === cityFilter);
+            const matchesFilters =
+                regionFilter === 'All' && cityFilter === 'All'
+                    ? true
+                    : venueMatch || groupLocationMatch;
+
+            const matchesSearch = !q
+                || g.name?.toLowerCase().includes(q)
+                || g.short_name?.toLowerCase().includes(q)
+                || g._city?.toLowerCase().includes(q)
+                || g._region?.toLowerCase().includes(q)
+                || clubsWithMeta.some(
+                    (c) =>
+                        c.group_id === g.id
+                        && (
+                            c.name?.toLowerCase().includes(q)
+                            || c.short_name?.toLowerCase().includes(q)
+                            || c._city?.toLowerCase().includes(q)
+                        ),
+                );
+
+            return matchesSearch && matchesFilters;
+        });
+
+        const items = [
+            ...matchingGroups.map((g) => ({ kind: 'group', sortName: g.short_name || g.name || '', data: g })),
+            ...matchingClubs.map((c) => ({
+                kind: 'club',
+                sortName: c.short_name || c.name || '',
+                claimable: !!c._claimable,
+                data: c,
+            })),
+        ];
+
+        return items.sort((a, b) => {
+            if (a.kind !== b.kind) return a.kind === 'group' ? -1 : 1;
+            if (a.kind === 'club' && a.claimable !== b.claimable) return a.claimable ? -1 : 1;
+            return a.sortName.localeCompare(b.sortName);
+        });
+    }, [clubsWithMeta, groupsWithMeta, search, regionFilter, cityFilter]);
 
     const activeFilterCount = (regionFilter !== 'All' ? 1 : 0) + (cityFilter !== 'All' ? 1 : 0);
 
@@ -99,7 +176,7 @@ const Clubs = () => {
         <div className="min-h-screen bg-black text-white pb-24">
             <Helmet>
                 <title>Clubs | 4M Padel</title>
-                <meta name="description" content="Padel clubs on 4M Padel — courts, facilities, organisations and events." />
+                <meta name="description" content="Padel clubs and club groups on 4M Padel — courts, facilities, organisations and events." />
             </Helmet>
 
             <div className="relative overflow-hidden border-b border-white/5 bg-gradient-to-br from-black via-[#0B0F19] to-black">
@@ -121,7 +198,7 @@ const Clubs = () => {
                         Padel <span className="text-padel-green">Clubs</span>
                     </h1>
                     <p className="text-gray-400 text-sm md:text-base mt-3 max-w-xl">
-                        Venues across South Africa — courts, facilities, and links to tournament organisers.
+                        Venues and club groups across South Africa — courts, facilities, and links to tournament organisers.
                     </p>
 
                     <div className="relative z-10 flex gap-1.5 md:gap-2 items-center max-w-2xl mt-6">
@@ -131,7 +208,7 @@ const Clubs = () => {
                                 type="text"
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                placeholder="Search clubs..."
+                                placeholder="Search clubs and groups..."
                                 className="w-full bg-transparent py-3 md:py-3.5 pl-12 md:pl-14 pr-4 text-[14px] md:text-base text-white focus:outline-none placeholder-gray-500 rounded-full"
                             />
                         </div>
@@ -271,49 +348,97 @@ const Clubs = () => {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {filtered.map((c) => (
-                            <Link
-                                key={c.id}
-                                to={`/clubs/${c.slug}`}
-                                className="group block bg-white/[0.02] border border-white/10 hover:border-padel-green/40 rounded-2xl p-5 transition-all h-full"
-                            >
-                                <div className="flex items-start gap-4">
-                                    {c.logo_url ? (
-                                        <img src={c.logo_url} alt="" className="w-14 h-14 rounded-2xl object-cover border border-white/10 shrink-0" />
-                                    ) : (
-                                        <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-                                            <MapPin size={20} className="text-gray-500" />
+                        {filtered.map((item) => {
+                            if (item.kind === 'group') {
+                                const g = item.data;
+                                return (
+                                    <Link
+                                        key={`group-${g.id}`}
+                                        to={`/groups/${g.slug}`}
+                                        className="group block bg-white/[0.02] border border-white/10 hover:border-padel-green/40 rounded-2xl p-5 transition-all h-full"
+                                    >
+                                        <div className="flex items-start gap-4">
+                                            {g.logo_url ? (
+                                                <img src={g.logo_url} alt="" className="w-14 h-14 rounded-2xl object-cover border border-white/10 shrink-0" />
+                                            ) : (
+                                                <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                                                    <Building2 size={20} className="text-gray-500" />
+                                                </div>
+                                            )}
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-wrap gap-1.5 mb-1.5">
+                                                    <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-300 border-sky-500/25">
+                                                        <Building2 size={9} /> Group
+                                                    </span>
+                                                    <span className="inline-flex items-center text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border bg-white/5 text-gray-400 border-white/10">
+                                                        {g._venueCount} {g._venueCount === 1 ? 'venue' : 'venues'}
+                                                    </span>
+                                                </div>
+                                                <h2 className="text-lg font-bold font-display tracking-tighter text-white group-hover:text-padel-green transition-colors truncate">
+                                                    {g.short_name || g.name}
+                                                </h2>
+                                                {(g._city || g._region) && (
+                                                    <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                                                        <MapPin size={11} /> {[g._city, g._region].filter(Boolean).join(' · ')}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <ChevronRight size={16} className="text-gray-600 group-hover:text-padel-green shrink-0 mt-1" />
                                         </div>
-                                    )}
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex flex-wrap gap-1.5 mb-1.5">
-                                            {showFourMApprovedBadge(c) && (
-                                                <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border bg-padel-green/10 text-padel-green border-padel-green/25">
-                                                    <VerifiedBadge tone="green" size={11} title="4M approved" /> 4M approved
-                                                </span>
-                                            )}
-                                            {c.sapa_registered && (
-                                                <span className="inline-flex items-center gap-0.5 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/25">
-                                                    <ShieldCheck size={9} /> SAPA
-                                                </span>
-                                            )}
-                                        </div>
-                                        <h2 className="text-lg font-bold font-display tracking-tighter text-white group-hover:text-padel-green transition-colors flex items-center gap-1.5 min-w-0">
-                                            <span className="truncate min-w-0">{c.short_name || c.name}</span>
-                                            {showFourMApprovedBadge(c) && (
-                                                <VerifiedBadge tone="green" size={16} className="shrink-0" title="4M approved" />
-                                            )}
-                                        </h2>
-                                        {(c._city || c._region) && (
-                                            <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
-                                                <MapPin size={11} /> {[c._city, c._region].filter(Boolean).join(' · ')}
-                                            </p>
+                                    </Link>
+                                );
+                            }
+
+                            const c = item.data;
+                            return (
+                                <Link
+                                    key={`club-${c.id}`}
+                                    to={`/clubs/${c.slug}`}
+                                    className="group block bg-white/[0.02] border border-white/10 hover:border-padel-green/40 rounded-2xl p-5 transition-all h-full"
+                                >
+                                    <div className="flex items-start gap-4">
+                                        {c._logo ? (
+                                            <img src={c._logo} alt="" className="w-14 h-14 rounded-2xl object-cover border border-white/10 shrink-0" />
+                                        ) : (
+                                            <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+                                                <MapPin size={20} className="text-gray-500" />
+                                            </div>
                                         )}
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex flex-wrap gap-1.5 mb-1.5">
+                                                {showFourMApprovedBadge(c) && (
+                                                    <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border bg-padel-green/10 text-padel-green border-padel-green/25">
+                                                        <VerifiedBadge tone="green" size={11} title="4M approved" /> 4M approved
+                                                    </span>
+                                                )}
+                                                {c.sapa_registered && (
+                                                    <span className="inline-flex items-center gap-0.5 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-400 border-emerald-500/25">
+                                                        <ShieldCheck size={9} /> SAPA
+                                                    </span>
+                                                )}
+                                                {c._group?.slug && (
+                                                    <span className="inline-flex items-center gap-0.5 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border bg-sky-500/10 text-sky-300 border-sky-500/25">
+                                                        {c._group.short_name || c._group.name}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <h2 className="text-lg font-bold font-display tracking-tighter text-white group-hover:text-padel-green transition-colors flex items-center gap-1.5 min-w-0">
+                                                <span className="truncate min-w-0">{c.short_name || c.name}</span>
+                                                {showFourMApprovedBadge(c) && (
+                                                    <VerifiedBadge tone="green" size={16} className="shrink-0" title="4M approved" />
+                                                )}
+                                            </h2>
+                                            {(c._city || c._region) && (
+                                                <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                                                    <MapPin size={11} /> {[c._city, c._region].filter(Boolean).join(' · ')}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <ChevronRight size={16} className="text-gray-600 group-hover:text-padel-green shrink-0 mt-1" />
                                     </div>
-                                    <ChevronRight size={16} className="text-gray-600 group-hover:text-padel-green shrink-0 mt-1" />
-                                </div>
-                            </Link>
-                        ))}
+                                </Link>
+                            );
+                        })}
                     </div>
                 )}
             </div>

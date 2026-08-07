@@ -133,7 +133,9 @@ export const accentOnDark = (hex, fallback = '#C8F500') => {
 export async function fetchClubBySlug(slug) {
     const { data, error } = await supabase
         .from('clubs')
-        .select('*, federations(id, name, short_name, slug, logo_url)')
+        .select(
+            '*, federations(id, name, short_name, slug, logo_url), club_groups(id, name, slug, short_name, logo_url, website_url, brand_color, share_logo, share_website, status)',
+        )
         .eq('slug', slug)
         .maybeSingle();
     if (error) throw error;
@@ -146,7 +148,9 @@ export async function fetchClubBySlug(slug) {
 export async function fetchPublishedClubs() {
     const { data, error } = await supabase
         .from('clubs')
-        .select('id, name, short_name, slug, logo_url, city, address, about, brand_color, verified, sapa_registered, status')
+        .select(
+            'id, name, short_name, slug, logo_url, website_url, city, address, province, about, brand_color, verified, sapa_registered, status, group_id, club_groups(id, name, slug, logo_url, website_url, brand_color, share_logo, share_website, status)',
+        )
         .in('status', PUBLIC_CLUB_STATUSES)
         .order('name', { ascending: true });
     if (error) throw error;

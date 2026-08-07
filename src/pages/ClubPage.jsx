@@ -14,13 +14,20 @@ import {
     clubCityLabel,
     clubRegionLabel,
 } from '../utils/club';
+import {
+    fetchClubGroupVenues,
+    getClubGroup,
+    resolveClubLogo,
+    resolveClubWebsite,
+} from '../utils/clubGroup';
 import VerifiedBadge from '../components/VerifiedBadge';
 import ClubReviews from '../components/clubs/ClubReviews';
+import { getPlaceReviews } from '../utils/googleMaps';
 import {
     MapPin, ShieldCheck, Globe, Mail, Phone, MessageCircle,
-    ChevronRight, Building, Calendar, LayoutGrid, Instagram, Facebook,
+    ChevronRight, Building, Building2, Calendar, LayoutGrid, Instagram, Facebook,
     ExternalLink, Coffee, Landmark, ChevronDown, ChevronLeft, Users, Trophy,
-    ShoppingBag, Droplets, Dumbbell, Wifi, Car, ParkingCircle, Utensils, User, X,
+    ShoppingBag, Droplets, Dumbbell, Wifi, Car, ParkingCircle, Utensils, User, X, Star,
 } from 'lucide-react';
 
 const DAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -116,8 +123,9 @@ const ClubPage = () => {
     const [lightboxIndex, setLightboxIndex] = useState(null);
     const [aboutExpanded, setAboutExpanded] = useState(false);
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+    const [googleRating, setGoogleRating] = useState(null);
+    const [siblingVenues, setSiblingVenues] = useState([]);
     const [openAccordions, setOpenAccordions] = useState({
-        facilities: false,
         events: false,
         courts: false,
         gallery: false,
@@ -129,6 +137,7 @@ const ClubPage = () => {
         hours: false,
         orgs: false,
         sponsors: false,
+        siblings: false,
     });
     const eventsRailRef = useRef(null);
 
@@ -148,6 +157,15 @@ const ClubPage = () => {
                     return;
                 }
                 setClub(data);
+
+                if (data.group_id) {
+                    const siblings = await fetchClubGroupVenues(data.group_id);
+                    if (!cancelled) {
+                        setSiblingVenues((siblings || []).filter((v) => v.id !== data.id));
+                    }
+                } else if (!cancelled) {
+                    setSiblingVenues([]);
+                }
 
                 const linked = await fetchClubOrganisations(data.id);
                 if (!cancelled) setOrgs(linked);
@@ -308,7 +326,9 @@ const ClubPage = () => {
         { key: 'tiktok', href: safeUrl(socials.tiktok), icon: ExternalLink, label: 'TikTok' },
         { key: 'playtomic', href: safeUrl(socials.playtomic), icon: ExternalLink, label: 'Playtomic' },
     ].filter((s) => s.href);
-    const website = safeUrl(club?.website_url);
+    const clubGroup = getClubGroup(club);
+    const resolvedLogo = resolveClubLogo(club);
+    const website = safeUrl(resolveClubWebsite(club));
     const mapUrl = useMemo(() => {
         if (!club) return null;
         if (club.lat != null && club.lng != null) {
@@ -334,6 +354,21 @@ const ClubPage = () => {
     const cityLabel = club ? clubCityLabel(club) : '';
     const regionLabel = club ? (club.province || clubRegionLabel(club)) : '';
     const locationLabel = [cityLabel, regionLabel].filter(Boolean).join(', ');
+
+    // Live rating for the header badge — same Places live-fetch pattern as
+    // ClubReviews below; never persisted, per Google's Places API terms.
+    useEffect(() => {
+        if (!club?.google_place_id) {
+            setGoogleRating(null);
+            return undefined;
+        }
+        let cancelled = false;
+        getPlaceReviews(club.google_place_id)
+            .then((result) => { if (!cancelled) setGoogleRating(result); })
+            .catch(() => { if (!cancelled) setGoogleRating(null); });
+        return () => { cancelled = true; };
+    }, [club?.google_place_id]);
+
     const blurb = (club?.tagline || club?.about || '').trim();
     const playerCount = Number(club?.stats?.members) || memberCount || 0;
     const playerLabel = playerCount >= 30 ? `${playerCount}+` : String(playerCount || '—');
@@ -460,6 +495,16 @@ const ClubPage = () => {
                 >
                     <ChevronLeft size={14} /> Back to Clubs
                 </Link>
+                {!hasClubOwner && (
+                    <button
+                        type="button"
+                        onClick={() => setIsAuthModalOpen(true)}
+                        className="md:hidden absolute top-20 right-4 z-20 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-padel-green text-black text-[8px] font-black uppercase tracking-widest hover:bg-white transition-colors"
+                    >
+                        <Landmark size={10} />
+                        Claim Club
+                    </button>
+                )}
                 <div
                     className={`relative overflow-hidden bg-gradient-to-br from-[#0B0F19] via-black to-[#0B0F19] ${
                         club.cover_image_url ? 'h-48 sm:h-64 md:h-80' : 'h-28 sm:h-36'
@@ -481,8 +526,8 @@ const ClubPage = () => {
                             className="w-[4.5rem] h-[4.5rem] sm:w-28 sm:h-28 rounded-2xl sm:rounded-3xl border-4 border-black bg-[#111] overflow-hidden shadow-2xl shrink-0 flex items-center justify-center"
                             style={{ boxShadow: `0 0 0 1px ${accent}40` }}
                         >
-                            {club.logo_url ? (
-                                <img src={club.logo_url} alt={brandTitle} className="w-full h-full object-cover" />
+                            {resolvedLogo ? (
+                                <img src={resolvedLogo} alt={brandTitle} className="w-full h-full object-cover" />
                             ) : (
                                 <MapPin size={28} style={{ color: accent }} />
                             )}
@@ -504,6 +549,14 @@ const ClubPage = () => {
                                         {club.club_type}
                                     </span>
                                 )}
+                                {clubGroup?.slug && (
+                                    <Link
+                                        to={`/groups/${clubGroup.slug}`}
+                                        className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-lg border bg-sky-500/10 text-sky-300 border-sky-500/25 hover:bg-sky-500/20"
+                                    >
+                                        <Building2 size={11} /> Part of {clubGroup.short_name || clubGroup.name}
+                                    </Link>
+                                )}
                             </div>
                             <div className="flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between">
                                 <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold font-display leading-[1.05] tracking-tighter flex items-center gap-2 min-w-0">
@@ -516,17 +569,43 @@ const ClubPage = () => {
                                     <button
                                         type="button"
                                         onClick={() => setIsAuthModalOpen(true)}
-                                        className="inline-flex items-center justify-center gap-2 self-start shrink-0 px-4 py-2.5 rounded-2xl bg-padel-green text-black text-[10px] sm:text-[11px] font-black uppercase tracking-widest hover:bg-white transition-colors"
+                                        className="hidden md:inline-flex items-center justify-center gap-2 self-start shrink-0 px-4 py-2.5 rounded-2xl bg-padel-green text-black text-[11px] font-black uppercase tracking-widest hover:bg-white transition-colors"
                                     >
                                         <Landmark size={14} />
                                         Claim Club
                                     </button>
                                 )}
                             </div>
-                            {locationLabel && (
-                                <p className="text-gray-400 text-sm mt-1.5 flex items-center gap-1.5">
-                                    <MapPin size={13} style={{ color: accent }} /> {locationLabel}
-                                </p>
+                            {(locationLabel || googleRating?.rating != null) && (
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
+                                    {locationLabel && (
+                                        <p className="text-gray-400 text-sm flex items-center gap-1.5">
+                                            <MapPin size={13} style={{ color: accent }} /> {locationLabel}
+                                        </p>
+                                    )}
+                                    {locationLabel && googleRating?.rating != null && (
+                                        <span className="text-gray-700">•</span>
+                                    )}
+                                    {googleRating?.rating != null && (
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-sm font-bold text-white">{googleRating.rating.toFixed(1)}</span>
+                                            <div className="flex items-center gap-0.5" aria-label={`${googleRating.rating} out of 5 stars`}>
+                                                {[1, 2, 3, 4, 5].map((n) => (
+                                                    <Star
+                                                        key={n}
+                                                        size={12}
+                                                        className={n <= Math.round(googleRating.rating) ? 'text-amber-400 fill-amber-400' : 'text-white/15'}
+                                                    />
+                                                ))}
+                                            </div>
+                                            {googleRating.user_ratings_total != null && (
+                                                <span className="text-gray-500 text-xs">
+                                                    {googleRating.user_ratings_total.toLocaleString()} Google reviews
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             )}
                         </div>
                     </div>
@@ -571,6 +650,27 @@ const ClubPage = () => {
                     </div>
                 </div>
             </div>
+
+            {facilityItems.length > 0 && (
+                <div className="container mx-auto px-4 md:px-6 mt-5">
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 sm:px-5 py-4">
+                        <p className="text-[11px] sm:text-xs font-black uppercase tracking-[0.16em] text-white mb-3.5">Club Facilities</p>
+                        <div className="flex gap-3 sm:gap-0 overflow-x-auto sm:overflow-visible scrollbar-hide no-scrollbar pb-1 -mx-1 px-1 sm:mx-0 sm:px-0 sm:justify-between">
+                            {facilityItems.map((item) => {
+                                const Icon = item.Icon;
+                                return (
+                                    <div key={item.id} className="shrink-0 w-[4.5rem] sm:w-auto sm:flex-1 flex flex-col items-center gap-2 text-center px-1">
+                                        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white/[0.06] border border-white/10 flex items-center justify-center">
+                                            <Icon size={20} className="text-gray-300" />
+                                        </div>
+                                        <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 leading-tight line-clamp-2 max-w-[5.5rem] sm:max-w-[7rem]">{item.title}</p>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="container mx-auto px-4 md:px-6 mt-7 sm:mt-9">
                 <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 sm:px-5">
@@ -879,24 +979,37 @@ const ClubPage = () => {
                         </AccordionRow>
                     )}
 
-                    {facilityItems.length > 0 && (
+                    {siblingVenues.length > 0 && clubGroup && (
                         <AccordionRow
-                            id="facilities"
-                            title="Club Facilities"
-                            open={openAccordions.facilities}
-                            onToggle={() => toggleAccordion('facilities')}
+                            title="Other Venues"
+                            open={openAccordions.siblings}
+                            onToggle={() => toggleAccordion('siblings')}
                             accent={accent}
+                            action={clubGroup.slug ? (
+                                <Link to={`/groups/${clubGroup.slug}`} className="text-[10px] font-black uppercase tracking-widest" style={{ color: accent }}>
+                                    View group
+                                </Link>
+                            ) : null}
                         >
-                            <div className="flex gap-3 sm:gap-0 overflow-x-auto sm:overflow-visible scrollbar-hide no-scrollbar pb-1 -mx-1 px-1 sm:mx-0 sm:px-0 sm:justify-between">
-                                {facilityItems.map((item) => {
-                                    const Icon = item.Icon;
+                            <div className="flex gap-3 overflow-x-auto scrollbar-hide no-scrollbar pb-1">
+                                {siblingVenues.map((venue) => {
+                                    const logo = resolveClubLogo({ ...venue, club_groups: clubGroup });
                                     return (
-                                        <div key={item.id} className="shrink-0 w-[4.5rem] sm:w-auto sm:flex-1 flex flex-col items-center gap-2 text-center px-1">
-                                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white/[0.06] border border-white/10 flex items-center justify-center">
-                                                <Icon size={20} className="text-gray-300" />
+                                        <Link
+                                            key={venue.id}
+                                            to={`/clubs/${venue.slug}`}
+                                            className="shrink-0 w-40 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-center hover:border-white/20 transition-colors"
+                                        >
+                                            <div className="w-14 h-14 mx-auto rounded-xl overflow-hidden border border-white/10 bg-white/5 mb-2 flex items-center justify-center">
+                                                {logo ? (
+                                                    <img src={logo} alt="" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <MapPin size={18} className="text-gray-500" />
+                                                )}
                                             </div>
-                                            <p className="text-[9px] sm:text-[10px] font-bold text-gray-400 leading-tight line-clamp-2 max-w-[5.5rem] sm:max-w-[7rem]">{item.title}</p>
-                                        </div>
+                                            <p className="text-[12px] font-bold text-white truncate">{venue.short_name || venue.name}</p>
+                                            <p className="text-[10px] text-gray-500 mt-0.5 truncate">{clubCityLabel(venue) || 'Venue'}</p>
+                                        </Link>
                                     );
                                 })}
                             </div>

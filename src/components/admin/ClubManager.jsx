@@ -6,10 +6,11 @@ import {
     MapPin, Plus, RefreshCw, Users, Building, Save, Loader2, ExternalLink,
     Upload, Trash2, Image as ImageIcon, ChevronDown, Instagram, Facebook,
     Search, Check, X, Clock, Palette, Phone, ArrowLeft, ShieldCheck, UserPlus, User, Mail, Send, Info,
-    Sparkles, GitMerge,
+    Sparkles, GitMerge, Building2,
 } from 'lucide-react';
 import ClubMembersManager from './ClubMembersManager';
 import ClubCreateWizard from '../clubs/ClubCreateWizard';
+import ClubGroupManager from './ClubGroupManager';
 import GoogleSyncManager from './GoogleSyncManager';
 import MergeClubModal from './MergeClubModal';
 import {
@@ -23,6 +24,7 @@ import {
     clubCityLabel,
     clubRegionLabel,
 } from '../../utils/club';
+import { fetchAllClubGroups } from '../../utils/clubGroup';
 import { sendEmail } from '../../utils/emails';
 import { attachPlacesAutocomplete } from '../../utils/googleMaps';
 import clubsManagerLogo from '../../assets/logo_4m_clubs.png';
@@ -123,6 +125,7 @@ const emptyForm = () => ({
     verified: false,
     sapa_registered: false,
     federation_id: '',
+    group_id: '',
     socials: emptySocials(),
     contacts: [],
     opening_hours: emptyHours(),
@@ -335,6 +338,7 @@ const ClubManager = ({ permissions }) => {
     const [clubs, setClubs] = useState([]);
     const [federations, setFederations] = useState([]);
     const [approvedOrgs, setApprovedOrgs] = useState([]);
+    const [clubGroups, setClubGroups] = useState([]);
     const [linkedOrgIds, setLinkedOrgIds] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -412,6 +416,13 @@ const ClubManager = ({ permissions }) => {
         () => clubs.find((c) => c.id === selectedId) || null,
         [clubs, selectedId],
     );
+
+    const selectedClubGroup = useMemo(
+        () => clubGroups.find((g) => g.id === form.group_id) || null,
+        [clubGroups, form.group_id],
+    );
+    const inheritLogo = !!(selectedClubGroup?.share_logo && selectedClubGroup?.logo_url);
+    const inheritWebsite = !!(selectedClubGroup?.share_website && selectedClubGroup?.website_url);
 
     const myClubIds = useMemo(
         () => new Set((permissions?.clubs || []).map((c) => c.id)),
@@ -1045,12 +1056,14 @@ const ClubManager = ({ permissions }) => {
     }, [isSuper, permissions?.clubs, selectedId, isCreating, loadClubMetrics]);
 
     const loadLookups = useCallback(async () => {
-        const [{ data: feds }, { data: orgs }] = await Promise.all([
+        const [{ data: feds }, { data: orgs }, groups] = await Promise.all([
             supabase.from('federations').select('id, name, short_name, slug').order('name'),
             supabase.from('organisations').select('id, name, slug, logo_url').eq('status', 'approved').order('name'),
+            fetchAllClubGroups().catch(() => []),
         ]);
         setFederations(feds || []);
         setApprovedOrgs(orgs || []);
+        setClubGroups(Array.isArray(groups) ? groups : []);
     }, []);
 
     const loadLinkedOrgs = useCallback(async (clubId) => {
@@ -1090,6 +1103,7 @@ const ClubManager = ({ permissions }) => {
             lat: club.lat ?? '',
             lng: club.lng ?? '',
             federation_id: club.federation_id || '',
+            group_id: club.group_id || '',
             socials: normaliseSocials(club.socials),
             contacts: Array.isArray(club.contacts) ? club.contacts : [],
             opening_hours: { ...emptyHours(), ...(club.opening_hours || {}) },
@@ -1230,12 +1244,19 @@ const ClubManager = ({ permissions }) => {
         }
         setSaving(true);
         try {
+            const linkedGroup = clubGroups.find((g) => g.id === form.group_id) || null;
+            const websiteUrl = (linkedGroup?.share_website && linkedGroup.website_url)
+                ? linkedGroup.website_url
+                : (form.website_url || null);
+            const logoUrl = (linkedGroup?.share_logo && linkedGroup.logo_url)
+                ? linkedGroup.logo_url
+                : (form.logo_url || null);
             const payload = {
                 name: form.name.trim(),
                 short_name: form.short_name?.trim() || null,
                 slug: slugifyClub(form.slug),
                 about: form.about || null,
-                website_url: form.website_url || null,
+                website_url: websiteUrl,
                 brand_color: form.brand_color || null,
                 status: normalizeClubStatus(form.status) || 'unclaimed',
                 contact_email: form.contact_email || null,
@@ -1245,11 +1266,12 @@ const ClubManager = ({ permissions }) => {
                 address: form.address || null,
                 lat: form.lat === '' || form.lat == null ? null : Number(form.lat),
                 lng: form.lng === '' || form.lng == null ? null : Number(form.lng),
-                logo_url: form.logo_url || null,
+                logo_url: logoUrl,
                 cover_image_url: form.cover_image_url || null,
                 verified: !!form.verified,
                 sapa_registered: !!form.sapa_registered,
                 federation_id: form.federation_id || null,
+                group_id: form.group_id || null,
                 socials: normaliseSocials(form.socials),
                 contacts: Array.isArray(form.contacts) ? form.contacts : [],
                 opening_hours: form.opening_hours || emptyHours(),
@@ -1395,7 +1417,16 @@ const ClubManager = ({ permissions }) => {
                             <Sparkles size={14} /> Google Sync
                         </button>
                     )}
-                    {(isSuper || permissions?.allowed_tabs?.includes('clubs')) && (
+                    {(isSuper || permissions?.allowed_tabs?.includes('clubs')) && managerView === 'list' && (
+                        <button
+                            type="button"
+                            onClick={() => setManagerView('groups')}
+                            className="px-3 py-2 rounded-xl border border-white/10 text-gray-300 hover:bg-white/5 text-sm font-bold flex items-center gap-2"
+                        >
+                            <Building2 size={14} /> Groups
+                        </button>
+                    )}
+                    {(isSuper || permissions?.allowed_tabs?.includes('clubs')) && managerView === 'list' && (
                         <button
                             type="button"
                             onClick={startCreate}
@@ -1551,6 +1582,8 @@ const ClubManager = ({ permissions }) => {
 
             {managerView === 'google-sync' ? (
                 <GoogleSyncManager onBack={() => setManagerView('list')} />
+            ) : managerView === 'groups' ? (
+                <ClubGroupManager onBack={() => { setManagerView('list'); loadLookups(); }} />
             ) : managerView === 'list' ? (
                 <div className="space-y-4">
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
@@ -2046,12 +2079,37 @@ const ClubManager = ({ permissions }) => {
                                         />
                                     </label>
                                     <label className={labelClass}>
+                                        Club group
+                                        <select
+                                            value={form.group_id || ''}
+                                            onChange={(e) => updateField('group_id', e.target.value)}
+                                            className={inputClass}
+                                        >
+                                            <option value="">None (standalone venue)</option>
+                                            {clubGroups.map((g) => (
+                                                <option key={g.id} value={g.id}>
+                                                    {g.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <span className="text-[10px] text-gray-500 normal-case tracking-normal font-medium">
+                                            Optional — link this venue to a brand group (e.g. Atlantic Padel).
+                                        </span>
+                                    </label>
+                                    <label className={labelClass}>
                                         Website
                                         <input
-                                            value={form.website_url ?? ''}
+                                            value={inheritWebsite ? (selectedClubGroup?.website_url || '') : (form.website_url ?? '')}
                                             onChange={(e) => updateField('website_url', e.target.value)}
                                             className={inputClass}
+                                            disabled={inheritWebsite}
+                                            readOnly={inheritWebsite}
                                         />
+                                        {inheritWebsite && (
+                                            <span className="text-[10px] text-padel-green normal-case tracking-normal font-medium">
+                                                Inherited from {selectedClubGroup.name}
+                                            </span>
+                                        )}
                                     </label>
                                     <label className={labelClass}>
                                         Contact email
@@ -2099,8 +2157,12 @@ const ClubManager = ({ permissions }) => {
 
                                 <div className="grid md:grid-cols-2 gap-3">
                                     <div className="bg-black/30 border border-white/5 rounded-2xl p-4 flex items-center gap-4">
-                                        {form.logo_url ? (
-                                            <img src={form.logo_url} alt="logo" className="w-16 h-16 rounded-2xl object-cover bg-white border border-white/10 shrink-0" />
+                                        {(inheritLogo ? selectedClubGroup?.logo_url : form.logo_url) ? (
+                                            <img
+                                                src={inheritLogo ? selectedClubGroup.logo_url : form.logo_url}
+                                                alt="logo"
+                                                className="w-16 h-16 rounded-2xl object-cover bg-white border border-white/10 shrink-0"
+                                            />
                                         ) : (
                                             <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-500 shrink-0">
                                                 <MapPin size={24} />
@@ -2108,10 +2170,16 @@ const ClubManager = ({ permissions }) => {
                                         )}
                                         <div className="flex-1 min-w-0">
                                             <p className="text-xs font-bold text-white">Club Logo</p>
-                                            <label className="inline-flex items-center gap-1.5 mt-2 bg-white/5 border border-white/10 text-gray-200 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg cursor-pointer">
-                                                <Upload size={11} /> {uploading === 'logo' ? 'Uploading…' : 'Upload'}
-                                                <input type="file" accept="image/*" className="hidden" onChange={(e) => handleUpload(e, 'logo')} disabled={!!uploading} />
-                                            </label>
+                                            {inheritLogo ? (
+                                                <p className="text-[10px] text-padel-green mt-2 font-medium">
+                                                    Inherited from {selectedClubGroup.name}
+                                                </p>
+                                            ) : (
+                                                <label className="inline-flex items-center gap-1.5 mt-2 bg-white/5 border border-white/10 text-gray-200 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg cursor-pointer">
+                                                    <Upload size={11} /> {uploading === 'logo' ? 'Uploading…' : 'Upload'}
+                                                    <input type="file" accept="image/*" className="hidden" onChange={(e) => handleUpload(e, 'logo')} disabled={!!uploading} />
+                                                </label>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="bg-black/30 border border-white/5 rounded-2xl p-4 flex items-center gap-4">
