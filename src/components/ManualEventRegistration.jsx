@@ -2494,10 +2494,20 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
     };
 
-    const addRegisteredWeeksToSchedule = useCallback(async (weeks = selectedWeeks) => {
+    /**
+     * Snapshot weeks from selectedWeekIds (not selectedWeeks) so schedule sync
+     * is not affected by loadRegisteredWeekIds filtering selectedWeeks empty.
+     */
+    const snapshotSelectedWeeksForSchedule = useCallback(() => {
+        if (!isWeeklyEvent) return null;
+        return seriesWeeks.filter((w) => selectedWeekIds.has(w.id));
+    }, [isWeeklyEvent, seriesWeeks, selectedWeekIds]);
+
+    const addRegisteredWeeksToSchedule = useCallback(async (weeks) => {
         if (!userEmail) return;
+        const weekList = weeks ?? snapshotSelectedWeeksForSchedule() ?? [];
         const ids = isWeeklyEvent
-            ? (weeks?.length ? weeks.map((w) => w.id) : [event.id])
+            ? (weekList.length ? weekList.map((w) => w.id) : [event.id])
             : [event.id];
         await Promise.all(
             [...new Set(ids.filter(Boolean))].map((id) =>
@@ -2506,7 +2516,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 }),
             ),
         );
-    }, [userEmail, isWeeklyEvent, selectedWeeks, event?.id]);
+    }, [userEmail, isWeeklyEvent, snapshotSelectedWeeksForSchedule, event?.id]);
 
     const handlePaymentSuccess = useCallback(async (paidRef, paidAmount) => {
         try {
@@ -2533,15 +2543,24 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         } catch (amountErr) {
             console.error('Could not load charged amount, falling back to client total:', amountErr);
         }
+        // Capture weeks before registeredWeekIds refresh can empty selectedWeeks.
+        const weeksToSchedule = snapshotSelectedWeeksForSchedule();
         setConfirmedPaidTotal(confirmedAmount);
         setProcessing(false);
         setWizardStep(5);
         await loadMyRegs();
         loadDivisionRegs();
-        loadRegisteredWeekIds();
-        await addRegisteredWeeksToSchedule();
+        await addRegisteredWeeksToSchedule(weeksToSchedule);
+        await loadRegisteredWeekIds();
         onParticipantsChange?.();
-    }, [loadMyRegs, loadDivisionRegs, loadRegisteredWeekIds, onParticipantsChange, addRegisteredWeeksToSchedule]);
+    }, [
+        loadMyRegs,
+        loadDivisionRegs,
+        loadRegisteredWeekIds,
+        onParticipantsChange,
+        addRegisteredWeeksToSchedule,
+        snapshotSelectedWeeksForSchedule,
+    ]);
 
     const launchPaystackCheckout = useCallback(async (reference, amount, paymentMetadata) => {
         if (!isPaystackConfigured()) {
@@ -2830,14 +2849,15 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 return;
             }
 
+            const weeksToSchedule = snapshotSelectedWeeksForSchedule();
             const savedRows = await persistRegistrations(rows, soloLinks, covers);
             await sendRegistrationEmails(savedRows, isReserve ? false : (wizardMode === 'addPartner' ? total > 0 : true));
             setConfirmedPaidTotal(isReserve ? null : 0);
             setWizardStep(5);
             loadMyRegs();
             loadDivisionRegs();
-            loadRegisteredWeekIds();
-            await addRegisteredWeeksToSchedule(isWeeklyEvent ? selectedWeeks : undefined);
+            await addRegisteredWeeksToSchedule(weeksToSchedule);
+            await loadRegisteredWeekIds();
             onParticipantsChange?.();
             if (isReserve) {
                 toast.success('Weeks reserved — we will remind you to pay before each night.');
