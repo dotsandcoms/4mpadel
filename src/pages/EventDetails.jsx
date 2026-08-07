@@ -475,12 +475,30 @@ const formatPrizeAmount = (amount) => {
     return `R ${raw}`;
 };
 
-const EventHeroBranding = ({ event, theme, variant = 'hero', title = null, centered = false, dateLabel = null, locationLabel = null }) => {
+const EventHeroBranding = ({
+    event,
+    theme,
+    variant = 'hero',
+    title = null,
+    centered = false,
+    dateLabel = null,
+    locationLabel = null,
+    brandLogoUrl = null,
+    brandLogoAlt = '',
+}) => {
+    const isWeekly = !!event?.is_weekly;
     const badgeText = event?.organiser_badge_text?.trim()
-        || (event?.sapa_status && event.sapa_status !== 'None'
+        || (!isWeekly && event?.sapa_status && event.sapa_status !== 'None'
             ? `SAPA ${event.sapa_status}${event?.points ? ` ${event.points}` : ''}`.trim()
             : '');
-    const showSapaBranding = Boolean(badgeText);
+    const logoUrl = isWeekly
+        ? (brandLogoUrl || event?.organiser_logo_url || '').trim() || null
+        : (badgeText ? sapaLogo : null);
+    const logoAlt = isWeekly
+        ? (brandLogoAlt || event?.organiser_name || 'Organiser')
+        : 'SAPA';
+    const showLogo = Boolean(logoUrl);
+    const showBadge = Boolean(badgeText);
     const dateRow = dateLabel ? (
         <div className="flex items-center gap-1 sm:gap-1.5 text-white/90 text-xs sm:text-sm font-normal shrink-0">
             <CalendarIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" style={{ color: theme.fill }} />
@@ -496,34 +514,41 @@ const EventHeroBranding = ({ event, theme, variant = 'hero', title = null, cente
     const sep = <span className="text-white/35 text-xs sm:text-sm font-light select-none shrink-0" aria-hidden>|</span>;
 
     if (variant === 'nav') {
-        if (!showSapaBranding) return null;
+        if (!showLogo && !showBadge) return null;
         return (
             <div className="flex items-center gap-2 min-w-0">
-                <img
-                    src={sapaLogo}
-                    alt="SAPA"
-                    className="w-8 h-8 md:w-9 md:h-9 rounded-full object-contain bg-white border border-white/30 shrink-0 p-0.5"
-                />
-                <span
-                    className="text-xs md:text-sm font-bold uppercase tracking-wide truncate drop-shadow-md"
-                    style={{ color: theme.fill }}
-                >
-                    {badgeText}
-                </span>
+                {showLogo && (
+                    <img
+                        src={logoUrl}
+                        alt={logoAlt}
+                        className={`w-8 h-8 md:w-9 md:h-9 rounded-full border border-white/30 shrink-0 ${
+                            isWeekly ? 'object-cover bg-black' : 'object-contain bg-white p-0.5'
+                        }`}
+                    />
+                )}
+                {showBadge && (
+                    <span
+                        className="text-xs md:text-sm font-bold uppercase tracking-wide truncate drop-shadow-md"
+                        style={{ color: theme.fill }}
+                    >
+                        {badgeText}
+                    </span>
+                )}
             </div>
         );
     }
 
-    // Hero: large SAPA logo left, title + badge text right; date/location below.
-    // Organisation logo is reserved for the sponsors strip (first).
+    // Hero: brand logo left (org for weekly, SAPA for sanctioned), title + badge right.
     return (
         <div className={`flex flex-col gap-2.5 min-w-0 ${centered ? 'items-center' : ''}`}>
             <div className={`flex items-center gap-3.5 sm:gap-4 min-w-0 ${centered ? 'justify-center' : ''}`}>
-                {showSapaBranding && (
+                {showLogo && (
                     <img
-                        src={sapaLogo}
-                        alt="SAPA"
-                        className="w-16 h-16 sm:w-[4.5rem] sm:h-[4.5rem] md:w-20 md:h-20 rounded-full object-contain bg-white border border-white/30 shrink-0 shadow-md p-1"
+                        src={logoUrl}
+                        alt={logoAlt}
+                        className={`w-16 h-16 sm:w-[4.5rem] sm:h-[4.5rem] md:w-20 md:h-20 rounded-full border border-white/30 shrink-0 shadow-md ${
+                            isWeekly ? 'object-cover bg-black' : 'object-contain bg-white p-1'
+                        }`}
                     />
                 )}
                 <div className={`min-w-0 flex-1 ${centered ? 'text-center' : ''}`}>
@@ -532,7 +557,7 @@ const EventHeroBranding = ({ event, theme, variant = 'hero', title = null, cente
                             {title}
                         </h1>
                     )}
-                    {showSapaBranding && (
+                    {showBadge && (
                         <p
                             className={`text-sm sm:text-base font-bold uppercase tracking-wide drop-shadow-md ${title ? 'mt-1' : ''}`}
                             style={{ color: theme.fill }}
@@ -843,21 +868,24 @@ const EventDetails = () => {
 
     const entryFeeStatLabel = useMemo(() => {
         const fmt = (n) => `R${Number(n).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
+        if (isEarlyBirdActive(event) && event.early_bird_fee != null && event.early_bird_fee !== '') {
+            return fmt(event.early_bird_fee);
+        }
+        // Weekly socials use calendar.entry_fee (no divisions).
+        if (event?.is_weekly) {
+            return Number(event?.entry_fee || 0) > 0 ? fmt(event.entry_fee) : '-';
+        }
         if (event?.is_manual) {
-            if (isEarlyBirdActive(event) && event.early_bird_fee != null && event.early_bird_fee !== '') {
-                return fmt(event.early_bird_fee);
-            }
             const fees = playerDivisions
                 .map((d) => Number(d.EntryFee ?? d.StandardEntryFee ?? 0))
                 .filter((f) => f > 0);
-            if (fees.length === 0) return '-';
+            if (fees.length === 0) {
+                return Number(event?.entry_fee || 0) > 0 ? fmt(event.entry_fee) : '-';
+            }
             const min = Math.min(...fees);
             const max = Math.max(...fees);
             if (min === max) return fmt(min);
             return `${fmt(min)}–${fmt(max)}`;
-        }
-        if (isEarlyBirdActive(event) && event.early_bird_fee != null && event.early_bird_fee !== '') {
-            return fmt(event.early_bird_fee);
         }
         return Number(event?.entry_fee || 0) > 0 ? fmt(event.entry_fee) : '-';
     }, [event, playerDivisions]);
@@ -865,6 +893,7 @@ const EventDetails = () => {
     const entryFeeStatSublabel = useMemo(() => {
         if (entryFeeStatLabel === '-') return null;
         if (isEarlyBirdActive(event)) return 'EARLY BIRD PER PLAYER';
+        if (event?.is_weekly) return 'PER PLAYER / WEEK';
         return '';
     }, [entryFeeStatLabel, event]);
 
@@ -3841,6 +3870,8 @@ const EventDetails = () => {
                                     theme={theme}
                                     variant="hero"
                                     title={event.event_name}
+                                    brandLogoUrl={linkedOrgLogoUrl}
+                                    brandLogoAlt={linkedOrgName || event.organiser_name || ''}
                                     dateLabel={event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}
                                     locationLabel={
                                         (() => {
@@ -3978,8 +4009,10 @@ const EventDetails = () => {
                                     </div>
                                     {[
                                         { label: 'Entries', value: event.is_manual ? manualEntriesCount : totalPlayersCount, icon: Users },
-                                        { label: 'Points', value: event.points || '1000', icon: Trophy },
-                                        { label: 'Divisions', value: event.is_manual ? playerDivisions.length : (playerDivisions.length > 0 ? playerDivisions.length : (tournamentClasses.length || event.allowed_divisions?.length || 0)), icon: Grid2x2 },
+                                        ...(!event.is_weekly ? [
+                                            { label: 'Points', value: event.points || '1000', icon: Trophy },
+                                            { label: 'Divisions', value: event.is_manual ? playerDivisions.length : (playerDivisions.length > 0 ? playerDivisions.length : (tournamentClasses.length || event.allowed_divisions?.length || 0)), icon: Grid2x2 },
+                                        ] : []),
                                         { label: 'Entry Fee', value: entryFeeStatLabel, sublabel: entryFeeStatSublabel, icon: Coins },
                                     ].map(({ label, value, sublabel, icon: Icon }, idx) => (
                                         <div key={idx} className="flex-1 py-4 px-1 flex flex-col items-center justify-center text-center min-w-0">

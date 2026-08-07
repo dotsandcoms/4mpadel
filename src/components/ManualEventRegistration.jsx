@@ -23,11 +23,26 @@ import { sanitizeHtml } from '../utils/sanitizeHtml';
 import { isRegistrationClosed } from '../utils/registrationClose';
 import { resolvePartnerPaid } from '../utils/partnerPaymentStatus';
 import { isEarlyBirdActive, resolveDivisionEntryFee } from '../utils/eventEntryFee';
+import {
+    WEEKLY_OPEN_DIVISION,
+    buildWeeklyOpenDivision,
+    buildWeeklyRegistrationRows,
+    computeWeeklySubtotal,
+    formatWeeklyDateLabel,
+} from '../utils/weeklyRegistration';
 
 const STEPS = [
     { id: 1, label: 'Profile' },
     { id: 2, label: 'Division' },
     { id: 3, label: 'Partner' },
+    { id: 4, label: 'Review & Pay' },
+    { id: 5, label: 'Confirmed' },
+];
+
+const WEEKLY_STEPS = [
+    { id: 1, label: 'Profile' },
+    { id: 2, label: 'Dates' },
+    { id: 3, label: 'Entry' },
     { id: 4, label: 'Review & Pay' },
     { id: 5, label: 'Confirmed' },
 ];
@@ -326,16 +341,16 @@ const WizardStepTitle = ({ title, subtitle }) => (
     </div>
 );
 
-const ProgressBar = ({ step, theme }) => (
+const ProgressBar = ({ step, theme, steps = STEPS }) => (
     <div className="flex items-start px-1">
-        {STEPS.map((s, i) => {
+        {steps.map((s, i) => {
             const active = step === s.id;
             const done = step > s.id;
             const accentColor = theme.fill || '#CCFF00';
             const activeTextColor = theme.primaryText?.includes('text-white') ? '#fff' : '#0a0a0a';
             return (
                 <React.Fragment key={s.id}>
-                    <div className="flex flex-col items-center min-w-0 shrink-0" style={{ width: `${100 / STEPS.length}%` }}>
+                    <div className="flex flex-col items-center min-w-0 shrink-0" style={{ width: `${100 / steps.length}%` }}>
                         <div
                             className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 transition-colors ${done || active ? '' : 'bg-gray-100 text-gray-400'}`}
                             style={done || active ? { backgroundColor: accentColor, color: activeTextColor } : undefined}
@@ -346,7 +361,7 @@ const ProgressBar = ({ step, theme }) => (
                             {s.label}
                         </span>
                     </div>
-                    {i < STEPS.length - 1 && (
+                    {i < steps.length - 1 && (
                         <div
                             className="h-px flex-1 mt-3.5 mx-0.5"
                             style={{ backgroundColor: done || active ? accentColor : '#E5E7EB' }}
@@ -395,6 +410,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const [agreeRules, setAgreeRules] = useState(false);
     const [agreeComplete, setAgreeComplete] = useState(false);
     const [agreeSapa, setAgreeSapa] = useState(false);
+    const requiresSapaAgreement = !event?.is_weekly;
     const [showRulesModal, setShowRulesModal] = useState(false);
     const [showPartnerPayAck, setShowPartnerPayAck] = useState(false);
     const [partnerPayAckChecked, setPartnerPayAckChecked] = useState(false);
@@ -424,6 +440,16 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const [addPartnerTarget, setAddPartnerTarget] = useState(null);
     const [confirmedPaidTotal, setConfirmedPaidTotal] = useState(null);
     const [isCalendarMenuOpen, setIsCalendarMenuOpen] = useState(false);
+
+    // Weekly series multi-date registration
+    const isWeeklyEvent = !!event?.is_weekly;
+    const allowWeeklyReserve = isWeeklyEvent && event?.weekly_payment_policy === 'allow_reserve';
+    const [seriesWeeks, setSeriesWeeks] = useState([]);
+    const [selectedWeekIds, setSelectedWeekIds] = useState(() => new Set(event?.id ? [event.id] : []));
+    const [registeredWeekIds, setRegisteredWeekIds] = useState(() => new Set());
+    const [weeklyEntryMode, setWeeklyEntryMode] = useState('single'); // single | partner
+    const [weeklyCheckoutIntent, setWeeklyCheckoutIntent] = useState('pay'); // pay | reserve
+    const wizardSteps = isWeeklyEvent ? WEEKLY_STEPS : STEPS;
 
     const accent = theme?.fill || '#CCFF00';
     const btnTextColor = theme?.primaryText?.includes('text-white') ? '#ffffff' : '#0a0a0a';
@@ -514,9 +540,63 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (error) {
             console.error('[ManualEventRegistration] loadDivisions failed:', error.message);
         }
-        setDivisions(data || []);
+        let list = data || [];
+        if (event.is_weekly && list.length === 0) {
+            list = [buildWeeklyOpenDivision(event)];
+        }
+        setDivisions(list);
         setLoading(false);
-    }, [event.id]);
+    }, [event]);
+
+    const loadSeriesWeeks = useCallback(async () => {
+        if (!event?.is_weekly || !event?.series_id) {
+            setSeriesWeeks(event?.is_weekly ? [{
+                id: event.id,
+                start_date: event.start_date,
+                start_time: event.start_time,
+                entry_fee: event.entry_fee,
+                early_bird_fee: event.early_bird_fee,
+                early_bird_ends_at: event.early_bird_ends_at,
+                registration_opens_at: event.registration_opens_at,
+                registration_closes_at: event.registration_closes_at,
+                event_name: event.event_name,
+                slug: event.slug,
+            }] : []);
+            return;
+        }
+        const { data, error } = await supabase
+            .from('calendar')
+            .select('id, start_date, start_time, end_time, entry_fee, early_bird_fee, early_bird_ends_at, registration_opens_at, registration_closes_at, event_name, slug, is_weekly, series_id, weekly_payment_policy, max_teams_capacity')
+            .eq('series_id', event.series_id)
+            .eq('is_weekly', true)
+            .order('start_date', { ascending: true });
+        if (error) {
+            console.error('[ManualEventRegistration] loadSeriesWeeks failed:', error.message);
+            setSeriesWeeks([]);
+            return;
+        }
+        setSeriesWeeks(data || []);
+    }, [event]);
+
+    const loadRegisteredWeekIds = useCallback(async () => {
+        if (!userEmail || !event?.is_weekly) {
+            setRegisteredWeekIds(new Set());
+            return;
+        }
+        const weekIds = seriesWeeks.map((w) => w.id);
+        if (weekIds.length === 0) {
+            setRegisteredWeekIds(new Set());
+            return;
+        }
+        const { data } = await supabase
+            .from('event_registrations')
+            .select('event_id')
+            .in('event_id', weekIds)
+            .ilike('email', userEmail)
+            .eq('division', WEEKLY_OPEN_DIVISION)
+            .neq('status', 'withdrawn');
+        setRegisteredWeekIds(new Set((data || []).map((r) => r.event_id)));
+    }, [userEmail, event?.is_weekly, seriesWeeks]);
 
     const loadDivisionRegs = useCallback(async () => {
         const { data } = await supabase
@@ -604,7 +684,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         loadDivisionRegs();
         loadProfile();
         loadMyRegs();
-    }, [loadDivisions, loadDivisionRegs, loadProfile, loadMyRegs]);
+        loadSeriesWeeks();
+    }, [loadDivisions, loadDivisionRegs, loadProfile, loadMyRegs, loadSeriesWeeks]);
+
+    useEffect(() => {
+        loadRegisteredWeekIds();
+    }, [loadRegisteredWeekIds]);
 
     useEffect(() => {
         if (profile?.rankedin_id) {
@@ -997,7 +1082,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         paymentRetryRef.current = false;
         setConfirmedPaidTotal(null);
         setWizardStep(1);
-        setHasRankedinAccount(null);
+        setHasRankedinAccount(isWeeklyEvent ? false : null);
         setSelfPlaytomicLevel('');
         setAgreeRules(false);
         setAgreeComplete(false);
@@ -1007,9 +1092,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setPartnerPayAckAccepted(false);
         setTshirtSize('');
         setPartnerTshirtSizes({});
+        setWeeklyEntryMode('single');
+        setWeeklyCheckoutIntent('pay');
+        setSelectedWeekIds(new Set(event?.id ? [event.id] : []));
         loadProfile();
         loadDivisionRegs();
         loadDivisions();
+        loadSeriesWeeks();
         setShowWizard(true);
     };
 
@@ -1467,6 +1556,81 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         [divisions, selected]
     );
 
+    const selectedWeeks = useMemo(() => {
+        if (!isWeeklyEvent) return [];
+        return seriesWeeks
+            .filter((w) => selectedWeekIds.has(w.id))
+            .map((w) => ({
+                ...w,
+                fee: resolveDivisionEntryFee({ entry_fee: w.entry_fee }, w),
+            }));
+    }, [isWeeklyEvent, seriesWeeks, selectedWeekIds]);
+
+    /** Ensure weekly wizard always has the synthetic Open division selected. */
+    useEffect(() => {
+        if (!isWeeklyEvent || !showWizard || wizardMode !== 'register') return;
+        const openDiv = divisions.find((d) => d.name === WEEKLY_OPEN_DIVISION || d._synthetic);
+        if (!openDiv) return;
+        setSelected((prev) => {
+            if (prev[openDiv.id]) return prev;
+            return {
+                [openDiv.id]: {
+                    partnerName: '',
+                    partnerEmail: '',
+                    partnerId: null,
+                    partnerProfile: null,
+                    payForSelf: true,
+                    payForPartner: weeklyEntryMode === 'partner',
+                    partnerLicenseChoice: null,
+                    partnerPlaytomicLevel: '',
+                    linkSoloRegId: null,
+                },
+            };
+        });
+    }, [isWeeklyEvent, showWizard, wizardMode, divisions, weeklyEntryMode]);
+
+    useEffect(() => {
+        if (!isWeeklyEvent) return;
+        const openDiv = divisions.find((d) => d.name === WEEKLY_OPEN_DIVISION || d._synthetic);
+        if (!openDiv) return;
+        setSelected((prev) => {
+            const cur = prev[openDiv.id];
+            if (!cur) return prev;
+            if (weeklyEntryMode === 'single') {
+                return {
+                    ...prev,
+                    [openDiv.id]: {
+                        ...cur,
+                        partnerName: '',
+                        partnerEmail: '',
+                        partnerId: null,
+                        partnerProfile: null,
+                        payForPartner: false,
+                    },
+                };
+            }
+            return {
+                ...prev,
+                [openDiv.id]: { ...cur, payForPartner: payMode === 'both' },
+            };
+        });
+        setHasPartner(weeklyEntryMode === 'partner');
+    }, [weeklyEntryMode, isWeeklyEvent, divisions, payMode]);
+
+    const toggleWeek = (week) => {
+        if (registeredWeekIds.has(week.id)) return;
+        if (isRegistrationClosed(null, week)) {
+            toast.error('Registration has closed for this week');
+            return;
+        }
+        setSelectedWeekIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(week.id)) next.delete(week.id);
+            else next.add(week.id);
+            return next;
+        });
+    };
+
     const collectTshirtSize = !!event?.collect_tshirt_size;
 
     const selfTshirtChart = useMemo(
@@ -1610,6 +1774,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     };
 
     const subtotal = useMemo(() => {
+        if (isWeeklyEvent) {
+            const openDiv = selectedDivisions[0];
+            const sel = openDiv ? selected[openDiv.id] : null;
+            const paySelf = !sel || sel.payForSelf !== false;
+            const payPartner = weeklyEntryMode === 'partner' && !!(sel?.partnerName) && !!sel?.payForPartner;
+            return computeWeeklySubtotal(selectedWeeks, { paySelf, payPartner });
+        }
         let t = 0;
         for (const d of selectedDivisions) {
             const sel = selected[d.id];
@@ -1622,12 +1793,48 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             t += licenseFee(purchase.choice);
         }
         return t;
-    }, [selectedDivisions, selected, myRegs, divisionRegs, buyLicenseSelf, licenseSelfChoice, partnerLicensePurchases, userEmail, event]);
+    }, [isWeeklyEvent, selectedWeeks, weeklyEntryMode, selectedDivisions, selected, myRegs, divisionRegs, buyLicenseSelf, licenseSelfChoice, partnerLicensePurchases, userEmail, event]);
 
     const total = subtotal;
 
     const entrySummary = useMemo(() => {
         const selfName = displayProfile?.name || profile?.name || 'You';
+
+        if (isWeeklyEvent) {
+            const openDiv = selectedDivisions[0];
+            const sel = openDiv ? selected[openDiv.id] : null;
+            const selfPays = !sel || sel.payForSelf !== false;
+            const payPartner = weeklyEntryMode === 'partner' && !!(sel?.partnerName) && !!sel?.payForPartner;
+            const selfDivisions = selfPays
+                ? selectedWeeks.map((w) => ({
+                    name: formatWeeklyDateLabel(w.start_date, w.start_time),
+                    fee: Number(w.fee ?? 0),
+                }))
+                : [];
+            const players = [];
+            if (selfDivisions.length > 0) {
+                players.push({
+                    name: selfName,
+                    role: 'You',
+                    divisions: selfDivisions,
+                    total: selfDivisions.reduce((sum, div) => sum + div.fee, 0),
+                });
+            }
+            if (payPartner && sel?.partnerName) {
+                const partnerDivs = selectedWeeks.map((w) => ({
+                    name: formatWeeklyDateLabel(w.start_date, w.start_time),
+                    fee: Number(w.fee ?? 0),
+                }));
+                players.push({
+                    name: sel.partnerName,
+                    role: 'Partner',
+                    divisions: partnerDivs,
+                    total: partnerDivs.reduce((sum, div) => sum + div.fee, 0),
+                });
+            }
+            return { players, extras: [] };
+        }
+
         const selfDivisions = [];
 
         for (const d of selectedDivisions) {
@@ -1684,12 +1891,51 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
         return { players, extras };
     }, [
-        selectedDivisions, selected, myRegs, divisionRegs, buyLicenseSelf, licenseSelfChoice,
-        partnerLicenseCache, partnerLicensePurchases, profile?.name, displayProfile?.name, event,
+        isWeeklyEvent, selectedWeeks, weeklyEntryMode, selectedDivisions, selected, myRegs, divisionRegs,
+        buyLicenseSelf, licenseSelfChoice, partnerLicenseCache, partnerLicensePurchases,
+        profile?.name, displayProfile?.name, event,
     ]);
 
     const reviewPaySummary = useMemo(() => {
         const selfName = displayProfile?.name || profile?.name || 'You';
+
+        if (isWeeklyEvent) {
+            const openDiv = selectedDivisions[0];
+            const sel = openDiv ? selected[openDiv.id] : null;
+            const hasPartnerRow = weeklyEntryMode === 'partner' && !!(sel?.partnerName && sel?.partnerEmail);
+            const userPaysPartner = hasPartnerRow && !!sel?.payForPartner;
+            const selfPays = !sel || sel.payForSelf !== false;
+            const entries = selectedWeeks.map((week) => {
+                const fee = Number(week.fee ?? 0);
+                const payerCount = (selfPays ? 1 : 0) + (userPaysPartner ? 1 : 0);
+                const payTag = !hasPartnerRow
+                    ? 'Your Entry'
+                    : userPaysPartner
+                        ? 'You Paying both Entries'
+                        : 'Partner Pays Their Entry';
+                return {
+                    id: week.id,
+                    divisionName: formatWeeklyDateLabel(week.start_date, week.start_time),
+                    selfName,
+                    partnerName: hasPartnerRow ? sel.partnerName : null,
+                    partnerImageUrl: sel?.partnerProfile?.image_url?.trim() || null,
+                    hasPartner: hasPartnerRow,
+                    payTag,
+                    payerCount,
+                    fee,
+                    entryTotal: payerCount * fee,
+                };
+            });
+            const entryFeesTotal = entries.reduce((sum, entry) => sum + entry.entryTotal, 0);
+            return {
+                entries,
+                entryFeesTotal,
+                licenseLines: [],
+                licensesSubtotal: 0,
+                totalPayable: entryFeesTotal,
+            };
+        }
+
         const entries = selectedDivisions.map((d) => {
             const sel = selected[d.id];
             const fee = resolveDivisionEntryFee(d, event);
@@ -1749,9 +1995,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             totalPayable: entryFeesTotal + licensesSubtotal,
         };
     }, [
-        selectedDivisions, selected, myRegs, divisionRegs, buyLicenseSelf, licenseSelfChoice,
-        hasLicense, anySelectedRequiresLicense, partnerLicenseCache, partnerLicensePurchases,
-        profile?.name, displayProfile?.name, profileImageUrl, event,
+        isWeeklyEvent, selectedWeeks, weeklyEntryMode, selectedDivisions, selected, myRegs, divisionRegs,
+        buyLicenseSelf, licenseSelfChoice, hasLicense, anySelectedRequiresLicense, partnerLicenseCache,
+        partnerLicensePurchases, profile?.name, displayProfile?.name, profileImageUrl, event,
     ]);
 
     const lineItems = useMemo(() => {
@@ -1882,10 +2128,34 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     };
 
     const buildRegistrationRows = () => {
+        const selfName = profile?.name || (userEmail ? userEmail.split('@')[0] : 'Player');
+
+        if (isWeeklyEvent) {
+            const openDiv = selectedDivisions[0] || divisions.find((d) => d._synthetic || d.name === WEEKLY_OPEN_DIVISION);
+            const sel = openDiv ? selected[openDiv.id] : null;
+            const isReserve = allowWeeklyReserve && weeklyCheckoutIntent === 'reserve';
+            const markPaid = !isReserve && total <= 0;
+            const built = buildWeeklyRegistrationRows({
+                weeks: selectedWeeks,
+                userEmail,
+                selfName,
+                phone: profile?.contact_number || null,
+                partnerName: weeklyEntryMode === 'partner' ? (sel?.partnerName || null) : null,
+                partnerEmail: weeklyEntryMode === 'partner' ? (sel?.partnerEmail || null) : null,
+                payForPartner: weeklyEntryMode === 'partner' && !!sel?.payForPartner,
+                paymentStatus: markPaid ? 'paid' : 'pending',
+                tshirtSize: tshirtSize || null,
+                tshirtSponsorName: (tshirtSponsorName || '').trim() || null,
+                tshirtLogoUrl: tshirtLogoUrl || null,
+            });
+            // Reserve path must not treat covers as paid; Paystack path uses covers after charge.
+            if (isReserve) return { ...built, covers: [] };
+            return built;
+        }
+
         const rows = [];
         const soloLinks = [];
         const covers = [];
-        const selfName = profile?.name || (userEmail ? userEmail.split('@')[0] : 'Player');
         for (const d of selectedDivisions) {
             const sel = selected[d.id];
             const fee = resolveDivisionEntryFee(d, event);
@@ -1992,14 +2262,18 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const buildManualPaymentPayload = useCallback(() => {
         const { rows, covers, soloLinks } = buildRegistrationRows();
         const reference = `REGEV-${event.id}-${Date.now()}`;
-        const divisionEntryFees = Object.fromEntries(
-            selectedDivisions.map((d) => [d.name, resolveDivisionEntryFee(d, event)]),
-        );
+        const divisionEntryFees = isWeeklyEvent
+            ? { [WEEKLY_OPEN_DIVISION]: Number(selectedWeeks[0]?.fee ?? resolveDivisionEntryFee(null, event)) }
+            : Object.fromEntries(
+                selectedDivisions.map((d) => [d.name, resolveDivisionEntryFee(d, event)]),
+            );
         const paymentMetadata = {
             source: 'manual_event',
             is_test: isPaystackTestMode,
             event_id: event.id,
             event_name: event.event_name,
+            is_weekly: !!isWeeklyEvent,
+            series_id: event.series_id || null,
             registrant_email: userEmail,
             registrant_name: profile?.name || '',
             covers,
@@ -2007,7 +2281,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             event_url: eventUrl,
             registration_rows: rows,
             solo_link_updates: soloLinks,
-            division_names: selectedDivisions.map((d) => d.name).join(', '),
+            division_names: isWeeklyEvent
+                ? selectedWeeks.map((w) => formatWeeklyDateLabel(w.start_date, w.start_time)).join(', ')
+                : selectedDivisions.map((d) => d.name).join(', '),
             primary_partner_name: hasPartner ? (primaryPartner.partnerName || 'TBD') : 'TBD',
             event_dates: event.event_dates || '',
             event_venue: [event.venue, event.city].filter(Boolean).join(', '),
@@ -2030,6 +2306,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         event.event_dates,
         event.venue,
         event.city,
+        event.series_id,
         eventUrl,
         userEmail,
         profile?.name,
@@ -2050,6 +2327,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         partnerTshirtSizes,
         partnerTshirtSponsors,
         partnerTshirtLogos,
+        isWeeklyEvent,
+        selectedWeeks,
+        weeklyEntryMode,
+        weeklyCheckoutIntent,
+        allowWeeklyReserve,
+        divisions,
     ]);
 
     const persistRegistrations = async (rows, soloLinks = [], covers = []) => {
@@ -2161,8 +2444,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setWizardStep(5);
         await loadMyRegs();
         loadDivisionRegs();
+        loadRegisteredWeekIds();
         onParticipantsChange?.();
-    }, [loadMyRegs, loadDivisionRegs, onParticipantsChange]);
+    }, [loadMyRegs, loadDivisionRegs, loadRegisteredWeekIds, onParticipantsChange]);
 
     const launchPaystackCheckout = useCallback(async (reference, amount, paymentMetadata) => {
         if (!isPaystackConfigured()) {
@@ -2226,7 +2510,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     }, [event.id, profile?.id, expireAbandonedCheckouts]);
 
     useEffect(() => {
-        if (wizardStep !== 4 || total <= 0 || !userEmail || !isPaystackConfigured()) {
+        if (
+            wizardStep !== 4
+            || total <= 0
+            || !userEmail
+            || !isPaystackConfigured()
+            || (allowWeeklyReserve && weeklyCheckoutIntent === 'reserve')
+        ) {
             checkoutPrepRef.current = null;
             setCheckoutPreparing(false);
             return;
@@ -2288,6 +2578,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         displayProfile?.name,
         buildManualPaymentPayload,
         handlePaymentSuccess,
+        allowWeeklyReserve,
+        weeklyCheckoutIntent,
     ]);
 
     const resumePaymentByReference = useCallback(async (reference) => {
@@ -2354,11 +2646,24 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const handleRegister = async () => {
         if (!userEmail) { toast.error('Please log in to register'); return; }
-        if (selectedDivisions.length === 0) { toast.error('Select at least one division'); return; }
-        if (anySelectedRequiresLicense && !hasLicense && !buyLicenseSelf) {
+        if (isWeeklyEvent) {
+            if (selectedWeeks.length === 0) { toast.error('Select at least one week'); return; }
+            if (weeklyEntryMode === 'partner') {
+                const openDiv = selectedDivisions[0];
+                const sel = openDiv ? selected[openDiv.id] : null;
+                if (!sel?.partnerName || !sel?.partnerEmail) {
+                    toast.error('Search and select your partner');
+                    return;
+                }
+            }
+        } else if (selectedDivisions.length === 0) {
+            toast.error('Select at least one division');
+            return;
+        }
+        if (!isWeeklyEvent && anySelectedRequiresLicense && !hasLicense && !buyLicenseSelf) {
             toast.error('A selected division requires a license'); return;
         }
-        if (!agreeRules || !agreeComplete || !agreeSapa) {
+        if (!agreeRules || !agreeComplete || (requiresSapaAgreement && !agreeSapa)) {
             toast.error('Please accept all agreements'); return;
         }
         if (needsSelfTshirt && !tshirtSize) {
@@ -2374,7 +2679,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
         setProcessing(true);
         try {
-            if (wizardMode !== 'payOnly') {
+            if (!isWeeklyEvent && wizardMode !== 'payOnly') {
                 for (const d of selectedDivisions) {
                     const sel = selected[d.id];
                     if (!sel?.partnerEmail) continue;
@@ -2393,8 +2698,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             }
 
             const { rows, covers, soloLinks } = buildRegistrationRows();
+            const isReserve = isWeeklyEvent && allowWeeklyReserve && weeklyCheckoutIntent === 'reserve';
 
-            if (total > 0) {
+            if (total > 0 && !isReserve) {
                 if (!isPaystackConfigured()) { toast.error('Payments not configured'); setProcessing(false); return; }
                 paymentRetryRef.current = false;
 
@@ -2419,19 +2725,24 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 return;
             } else {
                 const savedRows = await persistRegistrations(rows, soloLinks, covers);
-                await sendRegistrationEmails(savedRows, wizardMode === 'addPartner' ? total > 0 : true);
-                setConfirmedPaidTotal(0);
+                await sendRegistrationEmails(savedRows, isReserve ? false : (wizardMode === 'addPartner' ? total > 0 : true));
+                setConfirmedPaidTotal(isReserve ? null : 0);
                 setWizardStep(5);
                 loadMyRegs();
                 loadDivisionRegs();
+                loadRegisteredWeekIds();
                 onParticipantsChange?.();
+                if (isReserve) {
+                    toast.success('Weeks reserved — we will remind you to pay before each night.');
+                }
             }
         } catch (err) {
             console.error('Manual registration error:', err);
             toast.error(`Registration failed: ${err.message}`);
             setProcessing(false);
         } finally {
-            if (total <= 0) setProcessing(false);
+            const isReserve = isWeeklyEvent && allowWeeklyReserve && weeklyCheckoutIntent === 'reserve';
+            if (total <= 0 || isReserve) setProcessing(false);
         }
     };
 
@@ -2664,11 +2975,22 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
         if (wizardStep === 1) {
             if (!userEmail) { toast.error('Please log in to continue'); return; }
-            if (hasRankedinAccount === null) { toast.error('Please confirm whether you have a Rankedin account'); return; }
+            if (!isWeeklyEvent && hasRankedinAccount === null) {
+                toast.error('Please confirm whether you have a Rankedin account');
+                return;
+            }
             setWizardStep(2);
             return;
         }
         if (wizardStep === 2) {
+            if (isWeeklyEvent) {
+                if (selectedWeeks.length === 0) {
+                    toast.error('Select at least one week');
+                    return;
+                }
+                setWizardStep(3);
+                return;
+            }
             if (selectedDivisions.length === 0) { toast.error('Select at least one division'); return; }
             for (const d of selectedDivisions) {
                 const sel = selected[d.id];
@@ -2706,8 +3028,28 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             setWizardStep(4);
             return;
         }
-        if (wizardStep === 3 && hasPartner && (!primaryPartner.partnerId || !primaryPartner.partnerEmail)) {
-            toast.error('Search and select your partner from their 4M profile'); return;
+        if (wizardStep === 3) {
+            if (isWeeklyEvent) {
+                if (weeklyEntryMode === 'partner') {
+                    const openDiv = selectedDivisions[0];
+                    const sel = openDiv ? selected[openDiv.id] : null;
+                    if (!sel?.partnerName || !sel?.partnerEmail) {
+                        toast.error('Search and select your partner');
+                        return;
+                    }
+                    if (sel.payForPartner === false && !partnerPayAckAccepted) {
+                        setPartnerPayAckChecked(false);
+                        setShowPartnerPayAck(true);
+                        return;
+                    }
+                }
+                setHasPartner(weeklyEntryMode === 'partner');
+                setWizardStep(4);
+                return;
+            }
+            if (hasPartner && (!primaryPartner.partnerId || !primaryPartner.partnerEmail)) {
+                toast.error('Search and select your partner from their 4M profile'); return;
+            }
         }
         if (wizardStep === 4) {
             if (needsSelfTshirt && !tshirtSize) {
@@ -2720,16 +3062,18 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     return;
                 }
             }
-            const hasPayableSelection = selectedDivisions.some((d) => {
-                const sel = selected[d.id];
-                const fee = resolveDivisionEntryFee(d, event);
-                if (fee === 0) return true;
-                if (isSelfPayingDivision(d.id, sel)) return true;
-                if (sel?.partnerName && sel?.payForPartner) return true;
-                return false;
-            });
-            if (!hasPayableSelection && total === 0 && !buyLicenseSelf && !buyLicensePartner) {
-                toast.error('Select at least one entry to pay for'); return;
+            if (!isWeeklyEvent) {
+                const hasPayableSelection = selectedDivisions.some((d) => {
+                    const sel = selected[d.id];
+                    const fee = resolveDivisionEntryFee(d, event);
+                    if (fee === 0) return true;
+                    if (isSelfPayingDivision(d.id, sel)) return true;
+                    if (sel?.partnerName && sel?.payForPartner) return true;
+                    return false;
+                });
+                if (!hasPayableSelection && total === 0 && !buyLicenseSelf && !buyLicensePartner) {
+                    toast.error('Select at least one entry to pay for'); return;
+                }
             }
         }
         setWizardStep((s) => Math.min(5, s + 1));
@@ -2742,6 +3086,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
         setPartnerPayAckAccepted(true);
         setShowPartnerPayAck(false);
+        if (isWeeklyEvent) {
+            setHasPartner(weeklyEntryMode === 'partner');
+            setWizardStep(4);
+            return;
+        }
         const anyPartner = selectedDivisions.some((d) => {
             const sel = selected[d.id];
             return !!(sel?.partnerId && sel?.partnerEmail);
@@ -2756,7 +3105,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             return;
         }
         if (wizardStep === 4) {
-            setWizardStep(wizardMode === 'addPartner' ? 2 : 2);
+            setWizardStep(isWeeklyEvent ? 3 : (wizardMode === 'addPartner' ? 2 : 2));
             return;
         }
         setWizardStep((s) => Math.max(1, s - 1));
@@ -2994,6 +3343,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     </CardBody>
                                 </Card>
 
+                                {!isWeeklyEvent && (
                                 <Card>
                                     <CardHeader title="Rankedin Account" soft />
                                     <CardBody className="space-y-3">
@@ -3036,12 +3386,74 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                         )}
                                     </CardBody>
                                 </Card>
+                                )}
                             </>
                         )}
                     </WizardStepWrap>
                 );
 
             case 2:
+                if (isWeeklyEvent) {
+                    const bookableWeeks = seriesWeeks.filter((w) => {
+                        const closed = isRegistrationClosed(null, w);
+                        const past = w.start_date && new Date(`${w.start_date}T23:59:59`) < new Date();
+                        return !past || selectedWeekIds.has(w.id);
+                    });
+                    return (
+                        <WizardStepWrap>
+                            <WizardStepTitle
+                                title="Choose your weeks"
+                                subtitle="Select one or more nights. Each week is booked and paid separately (you can pay several at once)."
+                            />
+                            <div className="space-y-2">
+                                {(bookableWeeks.length ? bookableWeeks : seriesWeeks).map((week) => {
+                                    const checked = selectedWeekIds.has(week.id);
+                                    const alreadyIn = registeredWeekIds.has(week.id);
+                                    const closed = isRegistrationClosed(null, week);
+                                    const fee = resolveDivisionEntryFee({ entry_fee: week.entry_fee }, week);
+                                    const disabled = alreadyIn || closed;
+                                    return (
+                                        <button
+                                            key={week.id}
+                                            type="button"
+                                            disabled={disabled}
+                                            onClick={() => toggleWeek(week)}
+                                            className={`w-full text-left rounded-xl border px-4 py-3 flex items-center gap-3 transition-colors ${
+                                                checked
+                                                    ? 'border-slate-900 bg-slate-50'
+                                                    : disabled
+                                                        ? 'border-gray-100 bg-gray-50 opacity-60'
+                                                        : 'border-gray-200 bg-white hover:border-gray-300'
+                                            }`}
+                                        >
+                                            <div
+                                                className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                                                    checked ? 'border-transparent' : 'border-gray-300'
+                                                }`}
+                                                style={checked ? { backgroundColor: accent, color: btnTextColor } : undefined}
+                                            >
+                                                {checked ? <Check size={14} /> : null}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-semibold text-slate-900">
+                                                    {formatWeeklyDateLabel(week.start_date, week.start_time)}
+                                                </p>
+                                                <p className="text-[11px] text-slate-500 mt-0.5">
+                                                    {alreadyIn ? 'Already registered' : closed ? 'Registration closed' : `${fmtRWhole(fee)} per player`}
+                                                </p>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {selectedWeeks.length > 0 && (
+                                <p className="text-xs text-slate-600 pt-2">
+                                    {selectedWeeks.length} week{selectedWeeks.length === 1 ? '' : 's'} selected
+                                </p>
+                            )}
+                        </WizardStepWrap>
+                    );
+                }
                 return (
                     <WizardStepWrap>
                         <WizardStepTitle
@@ -3344,6 +3756,122 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 );
 
             case 3:
+                if (isWeeklyEvent) {
+                    const openDiv = selectedDivisions[0] || divisions.find((d) => d._synthetic || d.name === WEEKLY_OPEN_DIVISION);
+                    const sel = openDiv ? selected[openDiv.id] : null;
+                    const searchState = openDiv
+                        ? (divisionPartnerSearch[openDiv.id] || { query: '', results: [], open: false, hasSearched: false })
+                        : { query: '', results: [], open: false, hasSearched: false };
+                    return (
+                        <WizardStepWrap>
+                            <WizardStepTitle
+                                title="How are you entering?"
+                                subtitle="Most social nights allow single entries. Bring a partner if you want to play as a pair."
+                            />
+                            <div className="grid grid-cols-1 gap-2">
+                                {[
+                                    ['single', 'Single entry', 'Enter on your own'],
+                                    ['partner', 'With partner', 'Play as a pair'],
+                                ].map(([mode, label, hint]) => {
+                                    const active = weeklyEntryMode === mode;
+                                    return (
+                                        <button
+                                            key={mode}
+                                            type="button"
+                                            onClick={() => setWeeklyEntryMode(mode)}
+                                            className={`text-left rounded-xl border px-4 py-3 ${
+                                                active ? 'border-slate-900 bg-slate-50' : 'border-gray-200 bg-white'
+                                            }`}
+                                        >
+                                            <p className="text-sm font-semibold text-slate-900">{label}</p>
+                                            <p className="text-[11px] text-slate-500 mt-0.5">{hint}</p>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {weeklyEntryMode === 'partner' && openDiv && (
+                                <Card allowOverflow>
+                                    <CardHeader title="Partner" soft subtitle="Search their 4M profile" />
+                                    <CardBody className="space-y-3 overflow-visible">
+                                        <div className="relative z-20">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                                            <input
+                                                value={searchState.open ? searchState.query : (sel?.partnerName || '')}
+                                                onChange={(e) => handleDivisionPartnerSearch(openDiv.id, e.target.value)}
+                                                onFocus={() => setDivisionPartnerSearch((prev) => ({
+                                                    ...prev,
+                                                    [openDiv.id]: {
+                                                        query: sel?.partnerName || prev[openDiv.id]?.query || '',
+                                                        results: prev[openDiv.id]?.results || [],
+                                                        open: true,
+                                                        hasSearched: prev[openDiv.id]?.hasSearched || false,
+                                                    },
+                                                }))}
+                                                placeholder="Search partner name or email"
+                                                className="w-full border border-gray-200 rounded-lg pl-9 pr-8 py-2 text-xs text-slate-900 bg-white placeholder:text-slate-500 font-normal"
+                                            />
+                                            {sel?.partnerName ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => clearDivisionPartner(openDiv.id)}
+                                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 rounded hover:bg-gray-50"
+                                                    aria-label="Remove partner"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            ) : null}
+                                            {searchState.open && searchState.query.length >= 2 && searchState.hasSearched && (
+                                                <div className="absolute z-[60] left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                                    {searchState.results.length === 0 ? (
+                                                        <PartnerProfileInvite
+                                                            compact
+                                                            event={event}
+                                                            inviterName={inviterDisplayName}
+                                                            inviterEmail={userEmail}
+                                                            searchName={searchState.query}
+                                                            divisionName={WEEKLY_OPEN_DIVISION}
+                                                        />
+                                                    ) : (
+                                                        searchState.results.map((p) => (
+                                                            <PartnerSearchOption
+                                                                key={p.id || p.email}
+                                                                player={p}
+                                                                onSelect={(player) => setDivisionPartner(openDiv.id, player)}
+                                                                compact
+                                                            />
+                                                        ))
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {sel?.partnerName && (
+                                            <div className="flex w-full rounded-full border border-gray-200 overflow-hidden p-0.5 bg-white">
+                                                {[
+                                                    ['self', 'I pay both'],
+                                                    ['partner', 'Partner pays own'],
+                                                ].map(([mode, label]) => {
+                                                    const active = mode === 'self' ? !!sel.payForPartner : !sel.payForPartner;
+                                                    return (
+                                                        <button
+                                                            key={mode}
+                                                            type="button"
+                                                            onClick={() => setDivisionPayMode(openDiv.id, mode)}
+                                                            className={`flex-1 px-4 py-2 rounded-full text-xs font-semibold transition-colors ${active ? '' : 'bg-white text-slate-600'}`}
+                                                            style={active ? { backgroundColor: accent, color: btnTextColor } : undefined}
+                                                        >
+                                                            {label}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </CardBody>
+                                </Card>
+                            )}
+                        </WizardStepWrap>
+                    );
+                }
                 return (
                     <WizardStepWrap>
                         <WizardStepTitle title="Partner entry" subtitle="Add your partner and confirm license requirements" />
@@ -3553,18 +4081,22 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     <WizardStepWrap>
                         <WizardStepTitle
                             title="Review & Pay"
-                            subtitle="Please review your entries and fees below. Registration is only confirmed once payment is completed successfully."
+                            subtitle={isWeeklyEvent
+                                ? 'Review the weeks you selected. Each week is a separate booking.'
+                                : 'Please review your entries and fees below. Registration is only confirmed once payment is completed successfully.'}
                         />
 
+                        {!isWeeklyEvent && (
                         <div className={`rounded-2xl border px-4 py-3 flex items-center justify-between ${sapaHighlightClass}`}>
                             <span className="text-xs text-slate-700 font-normal">Your current SAPA Points</span>
                             <span className="text-sm font-bold text-slate-900 tabular-nums">
                                 {sapaPoints != null ? Number(sapaPoints).toLocaleString() : '—'}
                             </span>
                         </div>
+                        )}
 
                         <Card className={sapaHighlightClass}>
-                            <CardHeader title="Entries" soft />
+                            <CardHeader title={isWeeklyEvent ? 'Selected weeks' : 'Entries'} soft />
                             <CardBody className="space-y-0">
                                 {reviewPaySummary.entries.map((entry) => (
                                     <div key={entry.id} className="py-3 border-b border-gray-100 last:border-b-0">
@@ -3626,6 +4158,34 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             </CardBody>
                         </Card>
 
+                        {allowWeeklyReserve && total > 0 && (
+                            <Card>
+                                <CardHeader title="Payment option" soft />
+                                <CardBody className="space-y-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setWeeklyCheckoutIntent('pay')}
+                                        className={`w-full text-left rounded-xl border px-4 py-3 ${
+                                            weeklyCheckoutIntent === 'pay' ? 'border-slate-900 bg-slate-50' : 'border-gray-200'
+                                        }`}
+                                    >
+                                        <p className="text-sm font-semibold text-slate-900">Pay now</p>
+                                        <p className="text-[11px] text-slate-500 mt-0.5">Pay for all selected weeks upfront</p>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setWeeklyCheckoutIntent('reserve')}
+                                        className={`w-full text-left rounded-xl border px-4 py-3 ${
+                                            weeklyCheckoutIntent === 'reserve' ? 'border-slate-900 bg-slate-50' : 'border-gray-200'
+                                        }`}
+                                    >
+                                        <p className="text-sm font-semibold text-slate-900">Reserve &amp; pay later</p>
+                                        <p className="text-[11px] text-slate-500 mt-0.5">Hold your spots — we will email payment reminders before each week</p>
+                                    </button>
+                                </CardBody>
+                            </Card>
+                        )}
+
                         {reviewPaySummary.licenseLines.length > 0 && (
                             <Card>
                                 <CardHeader title="Licenses" soft />
@@ -3672,7 +4232,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
                         <Card className={`border-2 ${sapaHighlightClass}`} style={{ borderColor: accent }}>
                             <CardBody className="flex justify-between items-center py-4">
-                                <span className="text-sm font-semibold text-slate-900">Total payable</span>
+                                <span className="text-sm font-semibold text-slate-900">
+                                    {allowWeeklyReserve && weeklyCheckoutIntent === 'reserve'
+                                        ? 'Amount due later'
+                                        : 'Total payable'}
+                                </span>
                                 <span className="text-xl font-bold text-slate-900 tabular-nums">{fmtR(reviewPaySummary.totalPayable)}</span>
                             </CardBody>
                         </Card>
@@ -3907,8 +4471,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                         'I agree to the tournament rules, code of conduct, and terms & conditions.'
                                     ),
                                 ],
-                                [agreeComplete, setAgreeComplete, 'I confirm that my registration is only complete once all required license and payment obligations are met.'],
-                                [agreeSapa, setAgreeSapa, 'This is a SAPA sanctioned event and I agree to all SAPA rules and regulations.'],
+                                [agreeComplete, setAgreeComplete, requiresSapaAgreement
+                                    ? 'I confirm that my registration is only complete once all required license and payment obligations are met.'
+                                    : 'I confirm that my registration is only complete once payment obligations are met.'],
+                                ...(requiresSapaAgreement
+                                    ? [[agreeSapa, setAgreeSapa, 'This is a SAPA sanctioned event and I agree to all SAPA rules and regulations.']]
+                                    : []),
                             ].map(([checked, setter, label], i) => (
                                 <label key={i} className="flex items-start gap-2 cursor-pointer text-xs text-slate-600 font-normal leading-snug">
                                     <input type="checkbox" checked={checked} onChange={(e) => setter(e.target.checked)} className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ accentColor: accent }} />
@@ -4133,15 +4701,18 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (wizardMode === 'addPartner' && wizardStep === 2) return 'Continue to Review';
         if (wizardStep === 4) {
             if (processing) return 'Processing...';
-            if (checkoutPreparing && total > 0) return 'Preparing payment...';
+            if (checkoutPreparing && total > 0 && weeklyCheckoutIntent !== 'reserve') return 'Preparing payment...';
             if (wizardMode === 'addPartner') {
                 return total > 0 ? 'Pay & Add Partner' : 'Add Partner';
             }
+            if (isWeeklyEvent && allowWeeklyReserve && weeklyCheckoutIntent === 'reserve') {
+                return 'Reserve weeks';
+            }
             return total > 0 ? 'Pay & Complete Registration' : 'Complete Registration';
         }
-        if (wizardStep === 3) return 'Continue to Payment';
-        if (wizardStep === 2) return 'Continue to Review & Pay';
-        return 'Continue to Division';
+        if (wizardStep === 3) return isWeeklyEvent ? 'Continue to Review' : 'Continue to Payment';
+        if (wizardStep === 2) return isWeeklyEvent ? 'Continue to Entry' : 'Continue to Review & Pay';
+        return isWeeklyEvent ? 'Continue to Dates' : 'Continue to Division';
     };
 
     const handleWizardPrimaryAction = () => {
@@ -4166,7 +4737,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         );
     }
 
-    if (divisions.length === 0) return null;
+    if (divisions.length === 0 && !isWeeklyEvent) return null;
 
     return (
         <>
@@ -4349,13 +4920,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     <div className="w-10" />
                                 </div>
                                 <div className="max-w-xl mx-auto mt-3">
-                                    <ProgressBar step={wizardStep} theme={theme} />
+                                    <ProgressBar step={wizardStep} theme={theme} steps={wizardSteps} />
                                 </div>
                             </div>
 
                             {/* Step content */}
-                            <div className="flex-1 px-4 py-4">
-                                <div className="max-w-xl mx-auto">
+                            <div className="flex-1 px-4 py-4 pb-28">
+                                <div className="max-w-xl mx-auto overflow-visible">
                                     <AnimatePresence mode="wait">
                                         <motion.div
                                             key={wizardStep}
@@ -4363,6 +4934,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                             animate={{ opacity: 1, x: 0 }}
                                             exit={{ opacity: 0, x: -16 }}
                                             transition={{ duration: 0.2 }}
+                                            className="overflow-visible"
+                                            style={{ overflow: 'visible' }}
                                         >
                                             {renderStep()}
                                         </motion.div>
@@ -4393,7 +4966,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     <div className="flex-1">
                                         <PrimaryBtn
                                             onClick={wizardStep === 4 || wizardStep === 5 ? handleWizardPrimaryAction : (wizardMode === 'addPartner' && wizardStep === 2 ? goNext : goNext)}
-                                            disabled={processing || checkoutPreparing || (wizardStep === 1 && (!userEmail || hasRankedinAccount === null)) || (wizardStep === 4 && (!agreeRules || !agreeComplete || !agreeSapa))}
+                                            disabled={processing || checkoutPreparing || (wizardStep === 1 && (!userEmail || (!isWeeklyEvent && hasRankedinAccount === null))) || (wizardStep === 4 && (!agreeRules || !agreeComplete || (requiresSapaAgreement && !agreeSapa)))}
                                         >
                                             {processing && wizardStep === 4 ? <Loader2 className="animate-spin w-5 h-5" /> : (
                                                 <>

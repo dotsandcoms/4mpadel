@@ -20,6 +20,7 @@ type CalendarRow = {
   end_date: string | null;
   is_manual: boolean | null;
   allow_payments: boolean | null;
+  is_weekly?: boolean | null;
 };
 
 type ReminderStage = '7d' | '3d' | '1d';
@@ -79,7 +80,9 @@ function isManualEventRegistration(reg: {
   const cal = reg.calendar;
   if (!cal?.is_manual) return false;
   if (cal.allow_payments === false) return false;
-  if (!reg.division_id || !reg.pay_token) return false;
+  if (!reg.pay_token) return false;
+  // Weekly Open entries use division_id = null
+  if (!reg.division_id && !cal.is_weekly) return false;
   return true;
 }
 
@@ -213,14 +216,14 @@ serve(async (req: Request) => {
           start_date,
           end_date,
           is_manual,
-          allow_payments
+          allow_payments,
+          is_weekly
         )
       `)
       .eq('payment_status', 'pending')
       .eq('status', 'registered')
       .eq('calendar.is_manual', true)
       .eq('calendar.allow_payments', true)
-      .not('division_id', 'is', null)
       .not('pay_token', 'is', null)
       .not('calendar.registration_closes_at', 'is', null);
 

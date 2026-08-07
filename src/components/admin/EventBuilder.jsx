@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import {
     X, Save, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Plus, Trash2, UploadCloud, Loader2,
     Info, Layers, FileText, ImageIcon, Check, Eye, Copy, Pencil, ClipboardList, Shield, AlertTriangle,
-    Bold, Italic, Underline, List, ListOrdered, Heading, UserPlus, RefreshCcw, ExternalLink
+    Bold, Italic, Underline, List, ListOrdered, Heading, UserPlus, RefreshCcw, ExternalLink, Repeat
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useClubs } from '../../hooks/useClubs';
@@ -682,6 +682,21 @@ const blankForm = {
     // RankedIn link (manual events stay is_manual; used for draws/results sync)
     rankedin_id: '',
     rankedin_url: '',
+    // Weekly social nights (UI + persisted is_weekly / series_id on publish)
+    is_weekly: false,
+    weekly_count: 8,
+    weekly_payment_policy: 'pay_now', // pay_now | allow_reserve
+    series_id: null,
+};
+
+const SOCIAL_DEFAULTS = {
+    description: `<p>This is a weekly social / club event hosted on 4M Padel. Register and pay on the event page to secure your spot.</p><p>Event details, format and any partner requirements are listed on this page. Please arrive on time and ready to play.</p>`,
+    points: '',
+    points_breakdown: '',
+    sanctioning_details: '',
+    rules_regs: `<p>By entering this event, players agree to follow the organiser’s house rules and the venue’s code of conduct. The organiser reserves the right to adjust format, schedule or entries to ensure a fair and enjoyable night.</p>`,
+    withdrawal_substitution: `<p>Please contact the organiser if you need to withdraw. Refunds are at the organiser’s discretion unless otherwise stated.</p>`,
+    cut_off_times: `<p>Registration closes at the time shown on the event card. Late entries may not be accepted once the session is full.</p>`,
 };
 
 const SAPA_DEFAULTS = {
@@ -712,6 +727,72 @@ const opensOneMonthBefore = (startDateStr) => {
     d.setMonth(d.getMonth() - 1);
     const pad = (n) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T09:00`;
+};
+
+/**
+ * Shift a YYYY-MM-DD date by N days.
+ * @param {string} dateStr
+ * @param {number} days
+ */
+const addDaysToDate = (dateStr, days) => {
+    if (!dateStr) return '';
+    const d = new Date(`${dateStr}T12:00:00`);
+    if (Number.isNaN(d.getTime())) return '';
+    d.setDate(d.getDate() + days);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+/**
+ * Shift a datetime-local value (YYYY-MM-DDTHH:mm) by N days.
+ * @param {string} value
+ * @param {number} days
+ */
+const addDaysToLocalDateTime = (value, days) => {
+    if (!value) return '';
+    const [datePart, timePart = '00:00'] = String(value).split('T');
+    const nextDate = addDaysToDate(datePart, days);
+    if (!nextDate) return '';
+    return `${nextDate}T${timePart.slice(0, 5)}`;
+};
+
+/**
+ * List of weekly occurrence dates from the first start date.
+ * @param {string} startDate
+ * @param {number} count
+ */
+const buildWeeklyDates = (startDate, count) => {
+    const n = Math.min(26, Math.max(2, Number(count) || 8));
+    const dates = [];
+    for (let i = 0; i < n; i += 1) {
+        dates.push(addDaysToDate(startDate, i * 7));
+    }
+    return dates.filter(Boolean);
+};
+
+/**
+ * Fields that must stay unique / untouched when cascading a weekly series edit.
+ */
+const stripWeeklySiblingSharedPayload = (payload) => {
+    const shared = { ...payload };
+    delete shared.id;
+    delete shared.slug;
+    delete shared.created_at;
+    delete shared.updated_at;
+    delete shared.weekly_count;
+    delete shared.pending_changes;
+    delete shared.pending_changes_status;
+    delete shared.pending_changes_notes;
+    delete shared.pending_changes_submitted_at;
+    delete shared.sanction_status;
+    delete shared.rejection_notes;
+    delete shared.start_date;
+    delete shared.end_date;
+    delete shared.event_dates;
+    delete shared.registration_opens_at;
+    delete shared.registration_closes_at;
+    delete shared.early_bird_ends_at;
+    return shared;
 };
 
 const genderFromDivisionName = (name) => {
@@ -755,6 +836,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const [bulkCloseDate, setBulkCloseDate] = useState('');
     const [showPrizeBreakdown, setShowPrizeBreakdown] = useState(false);
     const [saving, setSaving] = useState(false);
+    /** Sibling calendar rows for the weekly series being edited (sorted by start_date). */
+    const [seriesSiblings, setSeriesSiblings] = useState([]);
     const [uploadingCover, setUploadingCover] = useState(false);
     const [uploadingPoster, setUploadingPoster] = useState(false);
     const [uploadingOrgLogo, setUploadingOrgLogo] = useState(false);
@@ -958,9 +1041,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     useEffect(() => {
         if (!isOpen) {
             setWorkingEvent(null);
+            setSeriesSiblings([]);
             return;
         }
         setWorkingEvent(editingEvent);
+        setSeriesSiblings([]);
         setStep(1);
         setRemovedDivisionIds([]);
         setStandardPrice('');
@@ -993,7 +1078,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             regOpenTouchedRef.current = false;
             pointsTouchedRef.current = false;
             // New events start with the standard SAPA content pre-filled (editable per event).
-            const base = { ...blankForm, ...SAPA_DEFAULTS };
+            const base = { ...blankForm, ...SAPA_DEFAULTS, is_weekly: false, weekly_count: 8 };
             // Org portal mode: prefill organiser identity from the organisation
             setForm(organisation ? {
                 ...base,
@@ -1093,7 +1178,34 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             venue: venuesFromEvent(ev).join(' / ') || ev.venue || '',
             rankedin_id: ev.rankedin_id ? String(ev.rankedin_id) : '',
             rankedin_url: ev.rankedin_url || '',
+            is_weekly: !!ev.is_weekly,
+            weekly_count: 8,
+            weekly_payment_policy: ev.weekly_payment_policy === 'allow_reserve' ? 'allow_reserve' : 'pay_now',
+            series_id: ev.series_id || null,
+            entry_fee: ev.entry_fee != null && ev.entry_fee !== '' ? String(ev.entry_fee) : '',
         });
+        if (ev.is_weekly && ev.series_id) {
+            const { data: siblings, error: seriesErr } = await supabase
+                .from('calendar')
+                .select('id, start_date, slug, event_name')
+                .eq('series_id', ev.series_id)
+                .eq('is_weekly', true)
+                .order('start_date', { ascending: true });
+            if (seriesErr) {
+                console.error('[EventBuilder] load series siblings failed:', seriesErr.message);
+                setSeriesSiblings([]);
+            } else {
+                const list = siblings || [];
+                setSeriesSiblings(list);
+                setForm((prev) => ({
+                    ...prev,
+                    weekly_count: Math.max(2, list.length || 8),
+                    series_id: ev.series_id,
+                }));
+            }
+        } else {
+            setSeriesSiblings([]);
+        }
         // Prefer the linked organisation profile logo over a stale event.organiser_logo_url
         // (that field often still holds a SAPA mark from older edits).
         if (ev.organisation_id) {
@@ -1110,6 +1222,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         }
         if (draftDivisions && draftDivisions.length > 0) {
             setDivisions(draftDivisions.map((d, i) => mapDivisionRow(d, d.id || `draft_${i}`)));
+            if (ev.entry_fee != null && ev.entry_fee !== '') setStandardPrice(String(ev.entry_fee));
             return;
         }
         const { data, error } = await supabase
@@ -1119,12 +1232,88 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             .order('sort_order', { ascending: true });
         if (!error && data && data.length > 0) {
             setDivisions(data.map((d) => mapDivisionRow(d, d.id)));
+            if (ev.entry_fee != null && ev.entry_fee !== '') {
+                setStandardPrice(String(ev.entry_fee));
+            } else if (data[0]?.entry_fee != null) {
+                setStandardPrice(String(data[0].entry_fee));
+            }
         } else {
             setDivisions([emptyDivision(!!ev.license_required_default, resolveScoringPoint(ev))]);
+            if (ev.entry_fee != null && ev.entry_fee !== '') setStandardPrice(String(ev.entry_fee));
         }
     };
 
     const setField = (name, value) => setForm((prev) => ({ ...prev, [name]: value }));
+
+    /**
+     * Enable/disable weekly social occurrence mode and apply non-SAPA defaults.
+     * Turning OFF restores standard SAPA starter content for new events only.
+     * @param {boolean} enabled
+     */
+    const setWeeklyMode = (enabled) => {
+        setForm((prev) => {
+            if (!enabled) {
+                if (isEditing) {
+                    return { ...prev, is_weekly: false };
+                }
+                // Restore the normal EventBuilder defaults so toggling weekly
+                // on/off does not leave Social-only content on a SAPA draft.
+                return {
+                    ...prev,
+                    ...SAPA_DEFAULTS,
+                    is_weekly: false,
+                    weekly_count: Math.min(26, Math.max(2, Number(prev.weekly_count) || 8)),
+                    weekly_payment_policy: 'pay_now',
+                    sapa_status: prev.sapa_status === 'None' ? 'None' : (prev.sapa_status || 'None'),
+                    tournament_tag: prev.tournament_tag === 'Social' ? 'None' : (prev.tournament_tag || 'None'),
+                    partner_requirement: 'Required',
+                    allow_temporary_license: true,
+                    license_required_default: false,
+                    organiser_badge_text: '',
+                };
+            }
+            const start = prev.start_date || '';
+            const next = {
+                ...prev,
+                ...SOCIAL_DEFAULTS,
+                is_weekly: true,
+                weekly_count: Math.min(26, Math.max(2, Number(prev.weekly_count) || 8)),
+                weekly_payment_policy: prev.weekly_payment_policy === 'allow_reserve' ? 'allow_reserve' : 'pay_now',
+                end_date: start || prev.end_date,
+                sapa_status: 'None',
+                tournament_tag: 'Social',
+                organiser_badge_text: prev.organiser_badge_text?.trim() ? prev.organiser_badge_text : 'Weekly',
+                partner_requirement: 'Optional',
+                license_required_default: false,
+                allow_temporary_license: false,
+                show_in_recent_results: false,
+                featured_result: false,
+                rankedin_id: '',
+                rankedin_url: '',
+                points: '',
+                points_breakdown: '',
+                prize_money_total: '',
+                prize_money_breakdown: [],
+                sanctioning_details: '',
+            };
+            if (organisation) {
+                next.organiser_name = organisation.name || next.organiser_name;
+            }
+            if (start && !isEditing) {
+                if (!regCloseTouchedRef.current) {
+                    next.registration_closes_at = `${start}T${(prev.start_time || '17:00').slice(0, 5)}`;
+                }
+                if (!regOpenTouchedRef.current) {
+                    next.registration_opens_at = `${addDaysToDate(start, -7)}T09:00`;
+                }
+            }
+            return next;
+        });
+        if (enabled) {
+            setDivisions((prev) => prev.map((d) => ({ ...d, license_required: false })));
+            if (step === 3 || step === 4) setStep(2);
+        }
+    };
 
     const handleInput = (e) => {
         const { name, value, type, checked } = e.target;
@@ -1137,13 +1326,22 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             if (name === 'event_name' && !isEditing) next.slug = slugify(value);
             // When start date changes, default the end date to match so the picker
             // opens on the right month (only if empty or before the new start date).
-            if (name === 'start_date' && val && (!prev.end_date || prev.end_date < val)) {
+            if (name === 'start_date' && val && (!prev.end_date || prev.end_date < val || prev.is_weekly)) {
                 next.end_date = val;
             }
             // Auto-set registration opens/closes for new events until user edits them.
             if (name === 'start_date' && val && !isEditing) {
-                if (!regCloseTouchedRef.current) next.registration_closes_at = mondayCloseFor(val);
-                if (!regOpenTouchedRef.current) next.registration_opens_at = opensOneMonthBefore(val);
+                if (prev.is_weekly) {
+                    if (!regCloseTouchedRef.current) {
+                        next.registration_closes_at = `${val}T${(prev.start_time || '17:00').slice(0, 5)}`;
+                    }
+                    if (!regOpenTouchedRef.current) {
+                        next.registration_opens_at = `${addDaysToDate(val, -7)}T09:00`;
+                    }
+                } else {
+                    if (!regCloseTouchedRef.current) next.registration_closes_at = mondayCloseFor(val);
+                    if (!regOpenTouchedRef.current) next.registration_opens_at = opensOneMonthBefore(val);
+                }
             }
             // Keep homepage Recent Results flag in sync with Event Builder toggle.
             if (name === 'show_in_recent_results') {
@@ -1437,16 +1635,44 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const validateBasics = () => {
         if (!form.event_name.trim()) { toast.error('Event name is required'); return false; }
         if (!form.start_date) { toast.error('Start date is required'); return false; }
+        if (form.is_weekly) {
+            if (!form.start_time) { toast.error('Start time is required for weekly events'); return false; }
+            if (!isEditing) {
+                const count = Number(form.weekly_count);
+                if (!Number.isFinite(count) || count < 2 || count > 26) {
+                    toast.error('Weekly count must be between 2 and 26');
+                    return false;
+                }
+            }
+        }
         return true;
     };
 
     const validateDivisionsNamed = () => {
+        if (form.is_weekly) return true;
         const valid = divisions.filter((d) => d.name.trim());
         if (valid.length === 0) { toast.error('Add at least one division'); return false; }
         return true;
     };
 
+    /** Event-level fee required for weekly series (no divisions). */
+    const resolveWeeklyEntryFee = () => {
+        const raw = standardPrice !== '' ? standardPrice : form.entry_fee;
+        if (raw === '' || raw == null) return null;
+        const n = Number(raw);
+        return Number.isFinite(n) ? n : null;
+    };
+
     const confirmLowFees = () => {
+        if (form.is_weekly) {
+            const fee = resolveWeeklyEntryFee();
+            if (fee === 1 || (fee > 0 && fee < ENTRY_FEE_WARN_THRESHOLD)) {
+                return window.confirm(
+                    `Warning: entry fee is low (under R${ENTRY_FEE_WARN_THRESHOLD} or R1). Continue anyway?`
+                );
+            }
+            return true;
+        }
         const named = divisions.filter((d) => d.name.trim());
         const low = named.filter((d) => {
             if (d.entry_fee === '' || d.entry_fee == null) return false;
@@ -1462,10 +1688,22 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const validateDraft = () => {
         if (!form.event_name.trim()) { toast.error('Event name is required'); return false; }
         if (!form.start_date) { toast.error('Start date is required'); return false; }
-        if (!form.end_date) { toast.error('End date is required'); return false; }
+        if (form.is_weekly) {
+            if (!form.start_time) { toast.error('Start time is required for weekly events'); return false; }
+            if (!isEditing) {
+                const count = Number(form.weekly_count);
+                if (!Number.isFinite(count) || count < 2 || count > 26) {
+                    toast.error('Weekly count must be between 2 and 26');
+                    return false;
+                }
+            }
+        } else if (!form.end_date) {
+            toast.error('End date is required');
+            return false;
+        }
         if (!normalizeVenues(form.venues).length) { toast.error('Add at least one venue'); return false; }
         if (!form.city.trim()) { toast.error('City is required'); return false; }
-        if (!validateDivisionsNamed()) return false;
+        if (!form.is_weekly && !validateDivisionsNamed()) return false;
         return true;
     };
 
@@ -1478,6 +1716,14 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!form.organiser_phone?.trim() && !form.organiser_email?.trim()) {
             toast.error('Contact phone or email is required');
             return false;
+        }
+        if (form.is_weekly) {
+            const fee = resolveWeeklyEntryFee();
+            if (fee === null || fee < 0) {
+                toast.error('Entry fee is required for weekly events');
+                return false;
+            }
+            return true;
         }
         const named = divisions.filter((d) => d.name.trim());
         for (const d of named) {
@@ -1503,7 +1749,22 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         const warnings = [];
         if (!form.event_name?.trim()) errors.push('Event name is required');
         if (!form.start_date) errors.push('Start date is required');
-        if (!form.end_date) errors.push('End date is required');
+        if (form.is_weekly) {
+            if (!form.start_time) errors.push('Start time is required for weekly events');
+            if (!isEditing) {
+                const count = Number(form.weekly_count);
+                if (!Number.isFinite(count) || count < 2 || count > 26) {
+                    errors.push('Weekly count must be between 2 and 26');
+                }
+            }
+            const fee = resolveWeeklyEntryFee();
+            if (fee === null || fee < 0) errors.push('Entry fee is required');
+            else if (fee === 1 || (fee > 0 && fee < ENTRY_FEE_WARN_THRESHOLD)) {
+                warnings.push(`Low entry fee (R${fee})`);
+            }
+        } else if (!form.end_date) {
+            errors.push('End date is required');
+        }
         if (!normalizeVenues(form.venues).length) errors.push('Add at least one venue');
         if (!form.city?.trim()) errors.push('City is required');
         if (!form.registration_opens_at) errors.push('Registration opens date is required');
@@ -1512,21 +1773,25 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!form.organiser_phone?.trim() && !form.organiser_email?.trim()) {
             errors.push('Contact phone or email is required');
         }
-        const named = divisions.filter((d) => d.name.trim());
-        if (named.length === 0) errors.push('Add at least one division');
-        named.forEach((d) => {
-            if (d.entry_fee === '' || d.entry_fee == null) errors.push(`Entry fee missing: ${d.name}`);
-            if (!d.gender) errors.push(`Gender missing: ${d.name}`);
-            if (!d.format) errors.push(`Format missing: ${d.name}`);
-            const fee = Number(d.entry_fee);
-            if (d.entry_fee !== '' && d.entry_fee != null && (fee === 1 || (fee > 0 && fee < ENTRY_FEE_WARN_THRESHOLD))) {
-                warnings.push(`Low entry fee on ${d.name} (R${d.entry_fee})`);
-            }
-        });
-        if (!form.custom_image_url) {
-            warnings.push('No custom poster uploaded — SAPA tier default hero will be used on the site');
+        if (!form.is_weekly) {
+            const named = divisions.filter((d) => d.name.trim());
+            if (named.length === 0) errors.push('Add at least one division');
+            named.forEach((d) => {
+                if (d.entry_fee === '' || d.entry_fee == null) errors.push(`Entry fee missing: ${d.name}`);
+                if (!d.gender) errors.push(`Gender missing: ${d.name}`);
+                if (!d.format) errors.push(`Format missing: ${d.name}`);
+                const fee = Number(d.entry_fee);
+                if (d.entry_fee !== '' && d.entry_fee != null && (fee === 1 || (fee > 0 && fee < ENTRY_FEE_WARN_THRESHOLD))) {
+                    warnings.push(`Low entry fee on ${d.name} (R${d.entry_fee})`);
+                }
+            });
         }
-        if (!form.organiser_badge_text?.trim() && form.sapa_status && form.sapa_status !== 'None') {
+        if (!form.custom_image_url) {
+            warnings.push(form.is_weekly
+                ? 'No custom poster uploaded — a default hero will be used'
+                : 'No custom poster uploaded — SAPA tier default hero will be used on the site');
+        }
+        if (!form.is_weekly && !form.organiser_badge_text?.trim() && form.sapa_status && form.sapa_status !== 'None') {
             warnings.push('No event subtitle / badge text set');
         }
         if (!(form.sponsor_logos || []).length) warnings.push('No sponsor logos added');
@@ -1550,23 +1815,46 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
 
     const next = () => {
         if (step === 1 && !validateBasics()) return;
-        if (step === 3 && !validateDivisionsNamed()) return;
-        if (step === 3 && showPrizeBreakdown) syncPrizeBreakdownToDivisions();
-        setStep((s) => Math.min(6, s + 1));
+        if (step === 3 && !form.is_weekly && !validateDivisionsNamed()) return;
+        if (step === 3 && !form.is_weekly && showPrizeBreakdown) syncPrizeBreakdownToDivisions();
+        setStep((s) => {
+            let n = Math.min(6, s + 1);
+            // Weekly: skip Divisions (3) and Tournament Info (4)
+            if (form.is_weekly && (n === 3 || n === 4)) n = 5;
+            return n;
+        });
     };
-    const back = () => setStep((s) => Math.max(1, s - 1));
+    const back = () => {
+        setStep((s) => {
+            let n = Math.max(1, s - 1);
+            if (form.is_weekly && (n === 3 || n === 4)) n = 2;
+            return n;
+        });
+    };
 
     const buildPayload = (mode = 'publish') => {
         const venues = normalizeVenues(form.venues);
-        const linkedRankedinId = extractRankedinId(form.rankedin_id) || extractRankedinId(form.rankedin_url);
+        const isWeekly = !!form.is_weekly;
+        const linkedRankedinId = isWeekly
+            ? null
+            : (extractRankedinId(form.rankedin_id) || extractRankedinId(form.rankedin_url));
+        const endDate = isWeekly ? (form.start_date || form.end_date) : form.end_date;
+        const weeklyFee = isWeekly ? resolveWeeklyEntryFee() : null;
         const payload = {
             ...form,
             is_manual: true,
+            is_weekly: isWeekly,
+            weekly_payment_policy: isWeekly
+                ? (form.weekly_payment_policy === 'allow_reserve' ? 'allow_reserve' : 'pay_now')
+                : 'pay_now',
+            entry_fee: isWeekly
+                ? (weeklyFee ?? 0)
+                : (form.entry_fee === '' || form.entry_fee == null ? null : Number(form.entry_fee)),
             slug: form.slug || slugify(form.event_name),
             venues,
             venue: venues.join(' / '),
-            event_dates: formatEventDates(form.start_date, form.end_date),
-            points: form.points === '' || form.points == null ? null : String(form.points),
+            event_dates: formatEventDates(form.start_date, endDate),
+            points: isWeekly || form.points === '' || form.points == null ? null : String(form.points),
             prize_money_total: form.prize_money_total === '' ? null : Number(form.prize_money_total),
             prize_money_breakdown: (form.prize_money_breakdown || [])
                 .filter((r) => r.label && r.amount)
@@ -1577,9 +1865,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             early_bird_fee: form.early_bird_fee === '' || form.early_bird_fee == null
                 ? null
                 : Number(form.early_bird_fee),
-            rankings_updated_at: safeISOString(form.rankings_updated_at),
+            rankings_updated_at: isWeekly ? null : safeISOString(form.rankings_updated_at),
             start_date: form.start_date || null,
-            end_date: form.end_date || null,
+            end_date: endDate || null,
             start_time: form.start_time || null,
             end_time: form.end_time || null,
             max_teams_capacity: form.max_teams_capacity === '' || form.max_teams_capacity == null
@@ -1592,8 +1880,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 .split(',')
                 .map((s) => s.trim())
                 .filter(Boolean),
-            allow_temporary_license: !!form.allow_temporary_license,
-            license_required_default: !!form.license_required_default,
+            allow_temporary_license: isWeekly ? false : !!form.allow_temporary_license,
+            license_required_default: isWeekly ? false : !!form.license_required_default,
             collect_tshirt_size: !!form.collect_tshirt_size,
             entry_fee_notes: form.entry_fee_notes || null,
             custom_image_url: form.custom_image_url || null,
@@ -1607,29 +1895,48 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                     ? form.rankedin_url
                     : buildRankedinTournamentUrl(linkedRankedinId, form.slug || form.event_name))
                 : null,
+            sapa_status: isWeekly ? 'None' : form.sapa_status,
+            tournament_tag: isWeekly ? 'Social' : form.tournament_tag,
         };
+        // UI-only — never send to calendar table
+        delete payload.weekly_count;
+        // Never invent a series for normal events
+        if (!isWeekly) {
+            delete payload.series_id;
+            delete payload.weekly_payment_policy;
+        } else {
+            payload.series_id = form.series_id || activeEvent?.series_id || null;
+        }
+
         if (organisation) {
-            // Org-created events: tie to the org and stay hidden until a 4M
-            // admin sanctions them (DB trigger also forces sanction_status).
             payload.organisation_id = organisation.id;
             if (!isEditing) {
-                payload.is_visible = false;
-                payload.featured_event = false;
-                payload.show_in_recent_results = false;
+                if (isWeekly && mode === 'publish') {
+                    payload.is_visible = true;
+                    payload.sanction_status = 'approved';
+                    payload.featured_event = false;
+                    payload.show_in_recent_results = false;
+                } else {
+                    // Org-created events: stay hidden until 4M sanctions (DB trigger too).
+                    payload.is_visible = false;
+                    payload.featured_event = false;
+                    payload.show_in_recent_results = false;
+                }
             }
         } else {
-            // Admin calendar: link to selected organisation (or clear)
             payload.organisation_id = form.organisation_id || null;
             if (!isEditing) {
-                // Admin create: draft stays hidden; publish is visible.
                 payload.is_visible = mode === 'publish';
+                if (isWeekly && mode === 'publish') {
+                    payload.sanction_status = 'approved';
+                }
             } else if (mode === 'publish') {
                 payload.is_visible = true;
             }
         }
 
         // Finished Gold / Super Gold / Major events auto-enter Recent Results.
-        if (isRecentResultsAutoTier(payload.sapa_status) && isCalendarEventFinished(payload)) {
+        if (!isWeekly && isRecentResultsAutoTier(payload.sapa_status) && isCalendarEventFinished(payload)) {
             payload.show_in_recent_results = true;
         }
         // Keep Calendar Manager + homepage flag aligned with the Event Builder toggle.
@@ -1803,6 +2110,75 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     };
 
     /**
+     * Apply a weekly edit to every occurrence in the series.
+     * Shared fields copy from the edited form; dates/reg windows stay week-offset
+     * relative to the occurrence being edited.
+     * @param {object} payload - built calendar payload for the edited occurrence
+     * @param {{ id: number|string, start_date?: string, series_id?: string }} editedEvent
+     */
+    const persistWeeklySeriesUpdate = async (payload, editedEvent) => {
+        const seriesId = payload.series_id || editedEvent.series_id || form.series_id;
+        if (!seriesId) {
+            const { error } = await supabase.from('calendar').update(payload).eq('id', editedEvent.id);
+            if (error) throw error;
+            return 1;
+        }
+
+        let siblings = seriesSiblings;
+        if (!siblings.length) {
+            const { data, error } = await supabase
+                .from('calendar')
+                .select('id, start_date, slug')
+                .eq('series_id', seriesId)
+                .eq('is_weekly', true)
+                .order('start_date', { ascending: true });
+            if (error) throw error;
+            siblings = data || [];
+            setSeriesSiblings(siblings);
+        }
+        if (!siblings.length) {
+            const { error } = await supabase.from('calendar').update(payload).eq('id', editedEvent.id);
+            if (error) throw error;
+            return 1;
+        }
+
+        const editIdx = Math.max(0, siblings.findIndex((s) => String(s.id) === String(editedEvent.id)));
+        const shared = stripWeeklySiblingSharedPayload(payload);
+        shared.series_id = seriesId;
+        shared.is_weekly = true;
+
+        for (let j = 0; j < siblings.length; j += 1) {
+            const sibling = siblings[j];
+            const weekOffsetDays = (j - editIdx) * 7;
+            const occurrenceDate = addDaysToDate(form.start_date, weekOffsetDays);
+            const instancePayload = {
+                ...shared,
+                start_date: occurrenceDate,
+                end_date: occurrenceDate,
+                event_dates: formatEventDates(occurrenceDate, occurrenceDate),
+                registration_opens_at: form.registration_opens_at
+                    ? safeISOString(addDaysToLocalDateTime(form.registration_opens_at, weekOffsetDays))
+                    : null,
+                registration_closes_at: form.registration_closes_at
+                    ? safeISOString(addDaysToLocalDateTime(form.registration_closes_at, weekOffsetDays))
+                    : null,
+                early_bird_ends_at: form.early_bird_ends_at
+                    ? safeISOString(addDaysToLocalDateTime(form.early_bird_ends_at, weekOffsetDays))
+                    : null,
+            };
+            // Keep existing slug so public links stay stable
+            delete instancePayload.slug;
+
+            const { error } = await supabase
+                .from('calendar')
+                .update(instancePayload)
+                .eq('id', sibling.id);
+            if (error) throw error;
+        }
+        return siblings.length;
+    };
+
+    /**
      * @param {'draft'|'publish'} mode
      * @param {{ stayOpen?: boolean }} options - stayOpen (default true) keeps the builder open after save
      */
@@ -1820,9 +2196,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             const payload = buildPayload(mode);
             let eventId = activeEvent?.id;
 
-            if (isAmendment) {
+            if (isAmendment && !form.is_weekly) {
                 // Store draft amendment only — live event data stays untouched
                 // until a 4M admin approves. Divisions draft included.
+                // Weekly series skip this path — edits apply live across the series.
                 const divisionsDraft = divisions
                     .filter((d) => d.name.trim())
                     .map((d, i) => ({
@@ -1863,8 +2240,115 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                         startDate: form.start_date,
                     });
                 }
+                if (form.is_weekly) {
+                    payload.series_id = payload.series_id || activeEvent.series_id || form.series_id || null;
+                    const updatedCount = await persistWeeklySeriesUpdate(payload, {
+                        id: activeEvent.id,
+                        start_date: activeEvent.start_date || form.start_date,
+                        series_id: payload.series_id,
+                    });
+                    eventId = activeEvent.id;
+                    setWorkingEvent((prev) => ({
+                        ...(prev || activeEvent || {}),
+                        id: eventId,
+                        event_name: payload.event_name,
+                        slug: activeEvent.slug || payload.slug,
+                        series_id: payload.series_id,
+                        is_weekly: true,
+                        sanction_status: prev?.sanction_status || activeEvent?.sanction_status || 'approved',
+                    }));
+                    toast.success(
+                        updatedCount > 1
+                            ? `Updated all ${updatedCount} weekly events in this series`
+                            : 'Weekly event updated',
+                    );
+                    onSaved?.({
+                        eventId,
+                        isNew: false,
+                        eventName: payload.event_name,
+                        mode,
+                        stayOpen,
+                        seriesCount: updatedCount,
+                    });
+                    if (!stayOpen) onClose?.();
+                    return;
+                }
                 const { error } = await supabase.from('calendar').update(payload).eq('id', activeEvent.id);
                 if (error) throw error;
+                await persistDivisions(eventId);
+            } else if (form.is_weekly && mode === 'publish') {
+                const weeklyDates = buildWeeklyDates(form.start_date, form.weekly_count);
+                if (weeklyDates.length < 2) {
+                    throw new Error('Weekly events need at least 2 dates');
+                }
+                const seriesId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+                    ? crypto.randomUUID()
+                    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+                const divisionRows = divisions
+                    .filter((d) => d.name.trim())
+                    .map((d, i) => divisionRecord({ ...d, id: null }, i));
+                const createdIds = [];
+                for (let i = 0; i < weeklyDates.length; i += 1) {
+                    const occurrenceDate = weeklyDates[i];
+                    const dayOffset = i * 7;
+                    const instancePayload = {
+                        ...payload,
+                        series_id: seriesId,
+                        is_weekly: true,
+                        start_date: occurrenceDate,
+                        end_date: occurrenceDate,
+                        event_dates: formatEventDates(occurrenceDate, occurrenceDate),
+                        registration_opens_at: safeISOString(
+                            addDaysToLocalDateTime(form.registration_opens_at, dayOffset),
+                        ),
+                        registration_closes_at: safeISOString(
+                            addDaysToLocalDateTime(form.registration_closes_at, dayOffset),
+                        ),
+                        early_bird_ends_at: form.early_bird_ends_at
+                            ? safeISOString(addDaysToLocalDateTime(form.early_bird_ends_at, dayOffset))
+                            : null,
+                        is_visible: true,
+                        sanction_status: 'approved',
+                    };
+                    instancePayload.slug = await ensureUniqueSlug(
+                        `${payload.slug || form.event_name}-${occurrenceDate}`,
+                        { startDate: occurrenceDate },
+                    );
+                    const { data, error } = await supabase
+                        .from('calendar')
+                        .insert([instancePayload])
+                        .select('id')
+                        .single();
+                    if (error) throw error;
+                    createdIds.push(data.id);
+                    if (divisionRows.length > 0) {
+                        const { error: divErr } = await supabase
+                            .from('tournament_divisions')
+                            .insert(divisionRows.map((row) => ({ ...row, event_id: data.id })));
+                        if (divErr) throw divErr;
+                    }
+                }
+                eventId = createdIds[0];
+                setWorkingEvent({
+                    id: eventId,
+                    event_name: payload.event_name,
+                    slug: payload.slug,
+                    sanction_status: 'approved',
+                    is_weekly: true,
+                    series_id: seriesId,
+                });
+                await reloadDivisionsForEvent(eventId);
+                toast.success(`Created ${createdIds.length} weekly events`);
+                onSaved?.({
+                    eventId,
+                    isNew: true,
+                    eventName: payload.event_name,
+                    mode,
+                    stayOpen,
+                    seriesCount: createdIds.length,
+                });
+                if (!stayOpen) onClose?.();
+                return;
             } else {
                 payload.slug = await ensureUniqueSlug(payload.slug || form.event_name, {
                     startDate: form.start_date,
@@ -1872,8 +2356,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 const { data, error } = await supabase.from('calendar').insert([payload]).select('id').single();
                 if (error) throw error;
                 eventId = data.id;
+                await persistDivisions(eventId);
             }
-            await persistDivisions(eventId);
 
             // Stay in edit mode for this session and sync division IDs so the next save updates rows.
             setWorkingEvent((prev) => ({
@@ -1881,7 +2365,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 id: eventId,
                 event_name: payload.event_name,
                 slug: payload.slug,
-                sanction_status: prev?.sanction_status || activeEvent?.sanction_status || (organisation ? 'pending' : undefined),
+                sanction_status: prev?.sanction_status || activeEvent?.sanction_status
+                    || (form.is_weekly ? 'approved' : (organisation ? 'pending' : undefined)),
             }));
             await reloadDivisionsForEvent(eventId);
 
@@ -1942,7 +2427,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                             <h2 className="text-xl font-bold text-white">
                                 {isEditing ? 'Edit Event' : 'Create Event'}
                             </h2>
-                            <p className="text-xs text-gray-400">Step {step} of 6 — {STEPS[step - 1].label}</p>
+                            <p className="text-xs text-gray-400">
+                                Step {step} of 6 — {STEPS[step - 1]?.label}
+                                {form.is_weekly ? ' · Weekly series' : ''}
+                            </p>
                         </div>
                         <button onClick={onClose} className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5">
                             <X size={20} />
@@ -1952,21 +2440,28 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                     {/* Stepper */}
                     <div className="flex items-center gap-2 px-6 py-4 border-b border-white/5 overflow-x-auto">
                         {STEPS.map((s) => {
+                            if (form.is_weekly && (s.id === 3 || s.id === 4)) return null;
                             const Icon = s.icon;
                             const active = s.id === step;
                             const done = s.id < step;
                             return (
                                 <button
                                     key={s.id}
-                                    onClick={() => setStep(s.id)}
-                                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-colors ${active
-                                        ? 'bg-padel-green text-black'
-                                        : done
-                                            ? 'bg-padel-green/10 text-padel-green'
-                                            : 'bg-white/5 text-gray-400 hover:text-white'
-                                        }`}
+                                    type="button"
+                                    onClick={() => {
+                                        let target = s.id;
+                                        if (form.is_weekly && (target === 3 || target === 4)) target = 5;
+                                        setStep(target);
+                                    }}
+                                    className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-colors ${
+                                        active
+                                            ? 'bg-padel-green text-black'
+                                            : done
+                                                ? 'bg-white/10 text-white'
+                                                : 'bg-white/5 text-gray-500'
+                                    }`}
                                 >
-                                    {done ? <Check size={14} /> : <Icon size={14} />}
+                                    <Icon size={14} />
                                     {s.label}
                                 </button>
                             );
@@ -1977,6 +2472,38 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                     <div className="flex-1 overflow-y-auto px-6 py-6 custom-scrollbar">
                         {step === 1 && (
                             <div className="space-y-4">
+                                {!isEditing && (
+                                    <label className="flex items-center justify-between bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
+                                        <div className="pr-3">
+                                            <span className="text-sm font-medium text-gray-200 flex items-center gap-2">
+                                                <Repeat size={14} className="text-padel-green" /> Weekly occurrence
+                                            </span>
+                                            <span className="text-[11px] text-gray-500 block mt-0.5">
+                                                Create a series of weekly social nights (non-SAPA, book &amp; pay on 4M)
+                                            </span>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={!!form.is_weekly}
+                                            onChange={(e) => setWeeklyMode(e.target.checked)}
+                                            className="accent-padel-green w-5 h-5"
+                                        />
+                                    </label>
+                                )}
+
+                                {isEditing && form.is_weekly && (
+                                    <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3">
+                                        <p className="text-xs font-bold text-sky-300 flex items-center gap-2">
+                                            <Repeat size={14} /> Editing weekly series
+                                        </p>
+                                        <p className="text-[11px] text-gray-400 mt-1">
+                                            Saving updates all {seriesSiblings.length || form.weekly_count || ''} nights in this series
+                                            (name, fee, times, venue, policy, and content). Date and registration windows
+                                            shift for each week relative to this occurrence.
+                                        </p>
+                                    </div>
+                                )}
+
                                 {/* Event Identity */}
                                 <div className="space-y-2">
                                     <PanelHeader id="identity" title="Event Identity" />
@@ -1986,25 +2513,39 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                 <label className={labelClass}>Event Name *</label>
                                                 <input name="event_name" value={form.event_name} onChange={handleInput} className={inputClass} required />
                                             </div>
-                                            <div>
-                                                <label className={labelClass}>SAPA Status</label>
-                                                <SelectMenu value={form.sapa_status} onChange={handleSapaStatusChange} options={SAPA_STATUSES} />
-                                            </div>
-                                            <div>
-                                                <label className={labelClass}>Event Series / Tag</label>
-                                                <SelectMenu value={form.tournament_tag} onChange={(v) => setField('tournament_tag', v)} options={TOURNAMENT_TAGS} />
-                                            </div>
-                                            <div className="md:col-span-2">
-                                                <label className={labelClass}>Event subtitle / badge text</label>
-                                                <input
-                                                    name="organiser_badge_text"
-                                                    value={form.organiser_badge_text}
-                                                    onChange={handleInput}
-                                                    placeholder="e.g. SAPA GOLD 1000"
-                                                    className={inputClass}
-                                                />
-                                                <p className="text-[11px] text-gray-500 mt-1">Auto-filled from SAPA status — editable if needed.</p>
-                                            </div>
+                                            {!form.is_weekly && (
+                                                <>
+                                                    <div>
+                                                        <label className={labelClass}>SAPA Status</label>
+                                                        <SelectMenu value={form.sapa_status} onChange={handleSapaStatusChange} options={SAPA_STATUSES} />
+                                                    </div>
+                                                    <div>
+                                                        <label className={labelClass}>Event Series / Tag</label>
+                                                        <SelectMenu value={form.tournament_tag} onChange={(v) => setField('tournament_tag', v)} options={TOURNAMENT_TAGS} />
+                                                    </div>
+                                                    <div className="md:col-span-2">
+                                                        <label className={labelClass}>Event subtitle / badge text</label>
+                                                        <input
+                                                            name="organiser_badge_text"
+                                                            value={form.organiser_badge_text}
+                                                            onChange={handleInput}
+                                                            placeholder="e.g. SAPA GOLD 1000"
+                                                            className={inputClass}
+                                                        />
+                                                        <p className="text-[11px] text-gray-500 mt-1">Auto-filled from SAPA status — editable if needed.</p>
+                                                    </div>
+                                                </>
+                                            )}
+                                            {form.is_weekly && (
+                                                <div className="md:col-span-2 rounded-xl border border-padel-green/30 bg-padel-green/5 px-4 py-3">
+                                                    <p className="text-xs font-bold text-padel-green flex items-center gap-2">
+                                                        <Repeat size={14} /> Weekly social event
+                                                    </p>
+                                                    <p className="text-[11px] text-gray-400 mt-1">
+                                                        Non-ranking · Social tag · No SAPA sanctioning. Book and pay on 4M.
+                                                    </p>
+                                                </div>
+                                            )}
                                             <div className="relative md:col-span-2" ref={orgSearchRef}>
                                                 <label className={labelClass}>Organiser</label>
                                                 <input
@@ -2129,21 +2670,80 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                     {openPanels.venue && (
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl border border-white/10 bg-black/20">
                                             <div>
-                                                <label className={labelClass}>Start Date *</label>
+                                                <label className={labelClass}>
+                                                    {form.is_weekly
+                                                        ? (isEditing ? 'This occurrence date *' : 'First date *')
+                                                        : 'Start Date *'}
+                                                </label>
                                                 <input type="date" name="start_date" value={form.start_date} onChange={handleInput} className={inputClass} />
                                             </div>
+                                            {!form.is_weekly ? (
+                                                <div>
+                                                    <label className={labelClass}>End Date *</label>
+                                                    <input type="date" name="end_date" value={form.end_date} onChange={handleInput} className={inputClass} />
+                                                </div>
+                                            ) : isEditing ? (
+                                                <div>
+                                                    <label className={labelClass}>Series length</label>
+                                                    <div className="rounded-xl border border-white/10 bg-[#1a1a1a] px-4 py-3">
+                                                        <p className="text-sm font-medium text-gray-200">
+                                                            {seriesSiblings.length || form.weekly_count || '—'} weekly events
+                                                        </p>
+                                                        <p className="text-[11px] text-gray-500 mt-0.5">
+                                                            Changing this date shifts every night in the series by the same amount.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    <label className={labelClass}>Number of weeks *</label>
+                                                    <input
+                                                        type="number"
+                                                        min={2}
+                                                        max={26}
+                                                        name="weekly_count"
+                                                        value={form.weekly_count}
+                                                        onChange={handleInput}
+                                                        className={inputClass}
+                                                    />
+                                                    <p className="text-[11px] text-gray-500 mt-1">Creates {Math.min(26, Math.max(2, Number(form.weekly_count) || 8))} events on the same weekday.</p>
+                                                </div>
+                                            )}
                                             <div>
-                                                <label className={labelClass}>End Date *</label>
-                                                <input type="date" name="end_date" value={form.end_date} onChange={handleInput} className={inputClass} />
-                                            </div>
-                                            <div>
-                                                <label className={labelClass}>Start Time</label>
+                                                <label className={labelClass}>{form.is_weekly ? 'Start Time *' : 'Start Time'}</label>
                                                 <input type="time" name="start_time" value={form.start_time} onChange={handleInput} className={inputClass} />
                                             </div>
                                             <div>
                                                 <label className={labelClass}>End Time</label>
                                                 <input type="time" name="end_time" value={form.end_time} onChange={handleInput} className={inputClass} />
                                             </div>
+                                            {form.is_weekly && form.start_date && !isEditing && (
+                                                <div className="md:col-span-2 text-[11px] text-gray-400 leading-relaxed">
+                                                    Occurrences:{' '}
+                                                    {buildWeeklyDates(form.start_date, form.weekly_count)
+                                                        .slice(0, 6)
+                                                        .map((d) => d)
+                                                        .join(', ')}
+                                                    {Number(form.weekly_count) > 6 ? '…' : ''}
+                                                </div>
+                                            )}
+                                            {form.is_weekly && isEditing && seriesSiblings.length > 0 && (
+                                                <div className="md:col-span-2 text-[11px] text-gray-400 leading-relaxed">
+                                                    Series dates:{' '}
+                                                    {seriesSiblings
+                                                        .slice(0, 8)
+                                                        .map((s) => {
+                                                            const editIdx = seriesSiblings.findIndex((x) => String(x.id) === String(activeEvent?.id));
+                                                            const idx = seriesSiblings.findIndex((x) => x.id === s.id);
+                                                            const preview = form.start_date
+                                                                ? addDaysToDate(form.start_date, (idx - Math.max(0, editIdx)) * 7)
+                                                                : (s.start_date || '').substring(0, 10);
+                                                            return preview;
+                                                        })
+                                                        .join(', ')}
+                                                    {seriesSiblings.length > 8 ? '…' : ''}
+                                                </div>
+                                            )}
                                             <div className="relative md:col-span-2">
                                                 <label className={labelClass}>Venues / Clubs *</label>
                                                 {selectedVenues.length > 0 && (
@@ -2230,6 +2830,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                 </div>
 
                                 {/* RankedIn link (for draws & results) */}
+                                {!form.is_weekly && (
                                 <div className="space-y-2">
                                     <PanelHeader id="rankedin" title="RankedIn (Draws & Results)" />
                                     {openPanels.rankedin && (
@@ -2301,6 +2902,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                         </div>
                                     )}
                                 </div>
+                                )}
 
                                 {/* Public Display */}
                                 <div className="space-y-2">
@@ -2401,15 +3003,17 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                         <div className="space-y-3 p-4 rounded-xl border border-white/10 bg-black/20">
                                             {organisation ? (
                                                 <div className="bg-padel-green/5 border border-padel-green/20 rounded-xl px-4 py-3 text-xs text-padel-green font-semibold">
-                                                    {isAmendment
-                                                        ? 'This event is already sanctioned. Your changes will be submitted as an amendment for 4M Padel approval — the event stays live with its current details until approved.'
-                                                        : 'This event will be submitted to 4M Padel for sanctioning. It goes live on the calendar once approved.'}
+                                                    {form.is_weekly
+                                                        ? 'Weekly social events publish live immediately — no SAPA sanctioning required.'
+                                                        : (isAmendment
+                                                            ? 'This event is already sanctioned. Your changes will be submitted as an amendment for 4M Padel approval — the event stays live with its current details until approved.'
+                                                            : 'This event will be submitted to 4M Padel for sanctioning. It goes live on the calendar once approved.')}
                                                 </div>
                                             ) : (
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                     {[
                                                         ['featured_event', 'Featured event'],
-                                                        ['show_in_recent_results', 'Show in recent results'],
+                                                        ...(!form.is_weekly ? [['show_in_recent_results', 'Show in recent results']] : []),
                                                         ['is_visible', 'Visible on website'],
                                                     ].map(([key, label]) => (
                                                         <label key={key} className="flex items-center justify-between bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
@@ -2587,7 +3191,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                                 className={inputClass}
                                                             />
                                                             <p className="text-[11px] text-gray-500 mt-1">
-                                                                Overrides each division’s entry fee until early bird ends.
+                                                                {form.is_weekly
+                                                                    ? 'Overrides the event entry fee until early bird ends.'
+                                                                    : 'Overrides each division’s entry fee until early bird ends.'}
                                                             </p>
                                                         </div>
                                                     </div>
@@ -2620,20 +3226,67 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                             </div>
                                             <div className="flex flex-wrap items-end gap-3">
                                                 <div className="flex-1 min-w-[160px]">
-                                                    <label className={labelClass}>Standard entry fee (R)</label>
+                                                    <label className={labelClass}>
+                                                        {form.is_weekly ? 'Entry fee per player (R) *' : 'Standard entry fee (R)'}
+                                                    </label>
                                                     <input
                                                         type="number"
                                                         value={standardPrice}
-                                                        onChange={(e) => setStandardPrice(e.target.value)}
-                                                        placeholder="e.g. 500"
+                                                        onChange={(e) => {
+                                                            setStandardPrice(e.target.value);
+                                                            if (form.is_weekly) {
+                                                                setForm((prev) => ({ ...prev, entry_fee: e.target.value }));
+                                                            }
+                                                        }}
+                                                        placeholder="e.g. 150"
+                                                        min="0"
                                                         className={inputClass}
                                                     />
-                                                    <p className="text-[11px] text-gray-500 mt-1">Can be applied to all divisions.</p>
+                                                    <p className="text-[11px] text-gray-500 mt-1">
+                                                        {form.is_weekly
+                                                            ? 'One price for the night — charged per selected week.'
+                                                            : 'Can be applied to all divisions.'}
+                                                    </p>
                                                 </div>
-                                                <button type="button" onClick={applyStandardPrice} className="bg-white/10 text-white px-4 py-3 rounded-lg font-bold hover:bg-white/20 transition-colors">
-                                                    Apply to all
-                                                </button>
+                                                {!form.is_weekly && (
+                                                    <button type="button" onClick={applyStandardPrice} className="bg-white/10 text-white px-4 py-3 rounded-lg font-bold hover:bg-white/20 transition-colors">
+                                                        Apply to all
+                                                    </button>
+                                                )}
                                             </div>
+                                            {form.is_weekly && (
+                                                <div className="space-y-2">
+                                                    <label className={labelClass}>Payment policy</label>
+                                                    <div className="grid grid-cols-1 gap-2">
+                                                        <label className={`flex items-start gap-3 rounded-xl border px-4 py-3 cursor-pointer ${form.weekly_payment_policy !== 'allow_reserve' ? 'border-padel-green/50 bg-padel-green/5' : 'border-white/10 bg-[#1a1a1a]'}`}>
+                                                            <input
+                                                                type="radio"
+                                                                name="weekly_payment_policy"
+                                                                checked={form.weekly_payment_policy !== 'allow_reserve'}
+                                                                onChange={() => setField('weekly_payment_policy', 'pay_now')}
+                                                                className="accent-padel-green mt-1"
+                                                            />
+                                                            <span>
+                                                                <span className="text-sm font-medium text-gray-200 block">Pay selected weeks upfront</span>
+                                                                <span className="text-[11px] text-gray-500">Players must pay for every week they book at checkout.</span>
+                                                            </span>
+                                                        </label>
+                                                        <label className={`flex items-start gap-3 rounded-xl border px-4 py-3 cursor-pointer ${form.weekly_payment_policy === 'allow_reserve' ? 'border-padel-green/50 bg-padel-green/5' : 'border-white/10 bg-[#1a1a1a]'}`}>
+                                                            <input
+                                                                type="radio"
+                                                                name="weekly_payment_policy"
+                                                                checked={form.weekly_payment_policy === 'allow_reserve'}
+                                                                onChange={() => setField('weekly_payment_policy', 'allow_reserve')}
+                                                                className="accent-padel-green mt-1"
+                                                            />
+                                                            <span>
+                                                                <span className="text-sm font-medium text-gray-200 block">Allow reserve + remind later</span>
+                                                                <span className="text-[11px] text-gray-500">Players can book seats unpaid and get payment reminders before each week.</span>
+                                                            </span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            )}
                                             <div>
                                                 <label className={labelClass}>Entry fee notes</label>
                                                 <textarea
@@ -2656,16 +3309,25 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl border border-white/10 bg-black/20">
                                             <div>
                                                 <label className={labelClass}>Partner Requirement</label>
-                                                <select
-                                                    name="partner_requirement"
-                                                    value={form.partner_requirement}
-                                                    onChange={handleInput}
-                                                    className={inputClass}
-                                                >
+                                                {form.is_weekly ? (
+                                                    <div className="rounded-xl border border-white/10 bg-[#1a1a1a] px-4 py-3">
+                                                        <p className="text-sm font-medium text-gray-200">Optional — players choose</p>
+                                                        <p className="text-[11px] text-gray-500 mt-0.5">
+                                                            At registration, players pick Single entry or With partner.
+                                                        </p>
+                                                    </div>
+                                                ) : (
+                                                    <select
+                                                        name="partner_requirement"
+                                                        value={form.partner_requirement}
+                                                        onChange={handleInput}
+                                                        className={inputClass}
+                                                    >
                                                     <option value="Required">Required</option>
                                                     <option value="Optional">Optional</option>
                                                     <option value="Not required">Not required</option>
-                                                </select>
+                                                    </select>
+                                                )}
                                             </div>
                                             <div>
                                                 <label className={labelClass}>Maximum Teams / Entries</label>
@@ -2720,6 +3382,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                 </div>
 
                                 {/* License Defaults */}
+                                {!form.is_weekly && (
                                 <div className="space-y-2">
                                     <PanelHeader id="licenseDefaults" title="License Defaults" />
                                     {openPanels.licenseDefaults && (
@@ -2744,6 +3407,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                         </div>
                                     )}
                                 </div>
+                                )}
 
                                 {/* Player gifts */}
                                 <div className="space-y-2">
@@ -3106,7 +3770,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                             </div>
                         )}
 
-                        {step === 4 && (
+                        {step === 4 && !form.is_weekly && (
                             <div className="space-y-4">
                                 <p className="text-xs text-gray-400">
                                     Grouped tournament details — open a section to edit, leave the rest collapsed.
@@ -3493,6 +4157,47 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                     </div>
                                 )}
 
+                                {form.is_weekly && !isEditing && (
+                                    <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 space-y-2">
+                                        <p className="text-xs font-bold uppercase tracking-wide text-sky-300 flex items-center gap-2">
+                                            <Repeat size={14} /> Creates {buildWeeklyDates(form.start_date, form.weekly_count).length} weekly events
+                                        </p>
+                                        <p className="text-[11px] text-gray-400">
+                                            Same time each week · Social / non-ranking · Publishes live (no SAPA sanction wait)
+                                        </p>
+                                        <ul className="text-sm text-sky-100/90 space-y-0.5 max-h-40 overflow-y-auto">
+                                            {buildWeeklyDates(form.start_date, form.weekly_count).map((d) => (
+                                                <li key={d}>• {d}{form.start_time ? ` · ${form.start_time}` : ''}{form.end_time ? `–${form.end_time}` : ''}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                {form.is_weekly && isEditing && (
+                                    <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 space-y-2">
+                                        <p className="text-xs font-bold uppercase tracking-wide text-sky-300 flex items-center gap-2">
+                                            <Repeat size={14} /> Updates {seriesSiblings.length || form.weekly_count || 'all'} weekly events
+                                        </p>
+                                        <p className="text-[11px] text-gray-400">
+                                            Shared details apply to every night. Dates and registration windows stay week-offset from this occurrence.
+                                        </p>
+                                        {seriesSiblings.length > 0 && form.start_date && (
+                                            <ul className="text-sm text-sky-100/90 space-y-0.5 max-h-40 overflow-y-auto">
+                                                {seriesSiblings.map((s, idx) => {
+                                                    const editIdx = Math.max(0, seriesSiblings.findIndex((x) => String(x.id) === String(activeEvent?.id)));
+                                                    const d = addDaysToDate(form.start_date, (idx - editIdx) * 7);
+                                                    return (
+                                                        <li key={s.id}>
+                                                            • {d}{form.start_time ? ` · ${form.start_time}` : ''}{form.end_time ? `–${form.end_time}` : ''}
+                                                            {String(s.id) === String(activeEvent?.id) ? ' (editing)' : ''}
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        )}
+                                    </div>
+                                )}
+
                                 {/* Event Summary */}
                                 <div className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
                                     <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">Event Summary</p>
@@ -3527,7 +4232,25 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                     </div>
                                 </div>
 
-                                {/* Division Summary */}
+                                {/* Division / fee Summary */}
+                                {form.is_weekly ? (
+                                    <div className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-2">
+                                        <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">Entry</p>
+                                        <p className="text-sm text-gray-300">
+                                            <span className="text-gray-500">Fee per player / week:</span>{' '}
+                                            R{resolveWeeklyEntryFee() ?? '—'}
+                                        </p>
+                                        <p className="text-sm text-gray-300">
+                                            <span className="text-gray-500">Payment policy:</span>{' '}
+                                            {form.weekly_payment_policy === 'allow_reserve'
+                                                ? 'Allow reserve + remind later'
+                                                : 'Pay selected weeks upfront'}
+                                        </p>
+                                        <p className="text-sm text-gray-300">
+                                            <span className="text-gray-500">Entry mode:</span> Single or with partner (player chooses)
+                                        </p>
+                                    </div>
+                                ) : (
                                 <div className="rounded-xl border border-white/10 bg-black/20 p-4 overflow-x-auto">
                                     <p className="text-gray-400 text-xs font-bold uppercase tracking-wide mb-3">Division Summary</p>
                                     <table className="w-full text-sm text-left min-w-[640px]">
@@ -3565,16 +4288,21 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                         </tbody>
                                     </table>
                                 </div>
+                                )}
 
                                 {/* Settings Summary */}
                                 <div className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
                                     <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">Settings Summary</p>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
                                         <p className="text-gray-300"><span className="text-gray-500">Payments enabled:</span> {form.allow_payments ? 'Yes' : 'No'}</p>
-                                        <p className="text-gray-300"><span className="text-gray-500">Partner requirement:</span> {form.partner_requirement || '—'}</p>
+                                        <p className="text-gray-300"><span className="text-gray-500">Partner requirement:</span> {form.is_weekly ? 'Optional (player chooses)' : (form.partner_requirement || '—')}</p>
                                         <p className="text-gray-300"><span className="text-gray-500">Maximum teams / entries:</span> {form.max_teams_capacity || 'Unlimited'}</p>
-                                        <p className="text-gray-300"><span className="text-gray-500">Plate / back draw:</span> {form.back_draw_options || '—'}</p>
-                                        <p className="text-gray-300"><span className="text-gray-500">Deciding point:</span> {scoringPointLabel(form.scoring_point)}</p>
+                                        {!form.is_weekly && (
+                                            <>
+                                                <p className="text-gray-300"><span className="text-gray-500">Plate / back draw:</span> {form.back_draw_options || '—'}</p>
+                                                <p className="text-gray-300"><span className="text-gray-500">Deciding point:</span> {scoringPointLabel(form.scoring_point)}</p>
+                                            </>
+                                        )}
                                         {!organisation && (
                                             <p className="text-gray-300"><span className="text-gray-500">Visible on website:</span> {form.is_visible ? 'Yes' : 'No'}</p>
                                         )}
