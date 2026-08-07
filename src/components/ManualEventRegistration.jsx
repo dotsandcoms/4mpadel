@@ -28,7 +28,10 @@ import {
     buildWeeklyOpenDivision,
     buildWeeklyRegistrationRows,
     computeWeeklySubtotal,
+    countWeeklyEntries,
     formatWeeklyDateLabel,
+    getWeeklyCapacity,
+    weeklySpotsRemaining,
 } from '../utils/weeklyRegistration';
 
 const STEPS = [
@@ -435,6 +438,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const divisionPartnerSearchTimeout = useRef({});
     const paymentRetryRef = useRef(false);
     const checkoutPrepRef = useRef(null);
+    const openWizardRef = useRef(null);
     const [checkoutPreparing, setCheckoutPreparing] = useState(false);
     const [wizardMode, setWizardMode] = useState('register'); // register | addPartner | payOnly
     const [addPartnerTarget, setAddPartnerTarget] = useState(null);
@@ -447,9 +451,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const [seriesWeeks, setSeriesWeeks] = useState([]);
     const [selectedWeekIds, setSelectedWeekIds] = useState(() => new Set(event?.id ? [event.id] : []));
     const [registeredWeekIds, setRegisteredWeekIds] = useState(() => new Set());
+    /** @type {[Record<string|number, number>, Function]} weekId → entry (team) count */
+    const [weekEntryCounts, setWeekEntryCounts] = useState({});
     const [weeklyEntryMode, setWeeklyEntryMode] = useState('single'); // single | partner
     const [weeklyCheckoutIntent, setWeeklyCheckoutIntent] = useState('pay'); // pay | reserve
     const wizardSteps = isWeeklyEvent ? WEEKLY_STEPS : STEPS;
+    const weeklyCapacity = getWeeklyCapacity(event);
 
     const accent = theme?.fill || '#CCFF00';
     const btnTextColor = theme?.primaryText?.includes('text-white') ? '#ffffff' : '#0a0a0a';
@@ -540,10 +547,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (error) {
             console.error('[ManualEventRegistration] loadDivisions failed:', error.message);
         }
-        let list = data || [];
-        if (event.is_weekly && list.length === 0) {
-            list = [buildWeeklyOpenDivision(event)];
-        }
+        // Weekly socials have no real divisions — always use the synthetic Open row
+        // (ignore leftover tournament_divisions from earlier publishes).
+        let list = event.is_weekly
+            ? [buildWeeklyOpenDivision(event)]
+            : (data || []);
         setDivisions(list);
         setLoading(false);
     }, [event]);
@@ -579,23 +587,45 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     }, [event]);
 
     const loadRegisteredWeekIds = useCallback(async () => {
-        if (!userEmail || !event?.is_weekly) {
+        if (!event?.is_weekly) {
             setRegisteredWeekIds(new Set());
+            setWeekEntryCounts({});
             return;
         }
         const weekIds = seriesWeeks.map((w) => w.id);
         if (weekIds.length === 0) {
             setRegisteredWeekIds(new Set());
+            setWeekEntryCounts({});
             return;
         }
-        const { data } = await supabase
+
+        const { data: allRegs } = await supabase
             .from('event_registrations')
-            .select('event_id')
+            .select('event_id, email, registered_by, status')
             .in('event_id', weekIds)
-            .ilike('email', userEmail)
             .eq('division', WEEKLY_OPEN_DIVISION)
             .neq('status', 'withdrawn');
-        setRegisteredWeekIds(new Set((data || []).map((r) => r.event_id)));
+
+        const counts = {};
+        for (const id of weekIds) counts[id] = 0;
+        const byWeek = new Map();
+        for (const reg of allRegs || []) {
+            if (!byWeek.has(reg.event_id)) byWeek.set(reg.event_id, []);
+            byWeek.get(reg.event_id).push(reg);
+        }
+        byWeek.forEach((regs, eventId) => {
+            counts[eventId] = countWeeklyEntries(regs);
+        });
+        setWeekEntryCounts(counts);
+
+        if (!userEmail) {
+            setRegisteredWeekIds(new Set());
+            return;
+        }
+        const mine = (allRegs || []).filter(
+            (r) => String(r.email || '').toLowerCase() === String(userEmail).toLowerCase(),
+        );
+        setRegisteredWeekIds(new Set(mine.map((r) => r.event_id)));
     }, [userEmail, event?.is_weekly, seriesWeeks]);
 
     const loadDivisionRegs = useCallback(async () => {
@@ -775,11 +805,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             const partnerPaid = hasPartner && (
                 resolvePartnerPaid(reg, partnerReg)
             );
+            const regClosed = isWeeklyEvent
+                ? isRegistrationClosed(null, event)
+                : (!div || isClosed(div, event));
             const canAddPartner = isPaid
                 && !hasPartner
                 && reg.status !== 'withdrawn'
-                && div
-                && !isClosed(div, event);
+                && !!div
+                && !regClosed;
             const selfEm = normEmail(userEmail);
             const registeredBy = normEmail(reg.registered_by);
             const wasAddedByPartner = !!(registeredBy && registeredBy !== selfEm);
@@ -808,19 +841,23 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 partnerStatusClassName: partnerPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
                 canAddPartner,
                 isBookingOwner: !wasAddedByPartner,
-                canWithdraw: !!div && !isClosed(div, event),
+                canWithdraw: reg.status !== 'withdrawn' && !regClosed,
             };
         }),
-        [myRegs, divisions, divisionRegs, userEmail, event],
+        [myRegs, divisions, divisionRegs, userEmail, event, isWeeklyEvent],
     );
 
     const panelEntries = registrationEntries;
 
     const divisionsAvailableToRegister = useMemo(
-        () => divisions.filter((d) => !registeredDivisionIds.has(d.id) && !isClosed(d, event)),
-        [divisions, registeredDivisionIds, event]
+        () => {
+            if (isWeeklyEvent) return [];
+            return divisions.filter((d) => !registeredDivisionIds.has(d.id) && !isClosed(d, event));
+        },
+        [divisions, registeredDivisionIds, event, isWeeklyEvent]
     );
-    const canAddDivision = divisionsAvailableToRegister.length > 0;
+    /** Weekly events have no divisions — never show "Add Division". */
+    const canAddDivision = !isWeeklyEvent && divisionsAvailableToRegister.length > 0;
 
     const divisionMetaLine = (d) => {
         const saved = getDivisionSavedDetails(d);
@@ -966,7 +1003,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             allRegistrationsPaid,
             hasAnyRegistration,
             entries: registrationEntries,
-            canAddDivision: divisionsAvailableToRegister.length > 0,
+            canAddDivision,
         });
         if (registrationActionsRef) {
             registrationActionsRef.current = {
@@ -978,18 +1015,27 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 openWithdraw: (regId) => {
                     const reg = myRegs.find((r) => r.id === regId);
                     if (!reg) return;
-                    const div = divisions.find((d) => d.id === reg.division_id);
-                    if (isClosed(div, event)) {
+                    const div = divisions.find((d) => d.id === reg.division_id || d.name === reg.division);
+                    const closed = isWeeklyEvent
+                        ? isRegistrationClosed(null, event)
+                        : isClosed(div, event);
+                    if (closed) {
                         toast.error('Registration has closed — withdrawals are no longer available.');
                         return;
                     }
+                    setWithdrawAll(false);
+                    setSwitchMode(false);
+                    setSwitchTargetDivId('');
                     setWithdrawTarget(reg);
                 },
                 openRemovePartner: (regId) => {
                     const reg = myRegs.find((r) => r.id === regId);
                     if (!reg) return;
-                    const div = divisions.find((d) => d.id === reg.division_id);
-                    if (isClosed(div, event)) {
+                    const div = divisions.find((d) => d.id === reg.division_id || d.name === reg.division);
+                    const closed = isWeeklyEvent
+                        ? isRegistrationClosed(null, event)
+                        : isClosed(div, event);
+                    if (closed) {
                         toast.error('Registration has closed — partner changes are no longer available.');
                         return;
                     }
@@ -1005,22 +1051,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     });
                 },
                 openRegistration: () => {
-                    if (!userEmail) {
-                        promptMembersOnly();
-                        return;
-                    }
-                    setWizardMode('register');
-                    setAddPartnerTarget(null);
-                    paymentRetryRef.current = false;
-                    setWizardStep(1);
-                    setHasRankedinAccount(null);
-                    setAgreeRules(false);
-                    setAgreeComplete(false);
-                    setAgreeSapa(false);
-                    loadProfile();
-                    loadDivisionRegs();
-                    loadDivisions();
-                    setShowWizard(true);
+                    // Deferred via ref so this effect does not depend on openWizard
+                    // (defined below) and hit a TDZ ReferenceError on render.
+                    openWizardRef.current?.();
                 },
             };
         }
@@ -1030,7 +1063,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         allRegistrationsPaid,
         hasAnyRegistration,
         registrationEntries,
-        divisionsAvailableToRegister.length,
+        canAddDivision,
+        isWeeklyEvent,
+        registeredWeekIds,
         onStatusChange,
         registrationActionsRef,
         openPayWizard,
@@ -1077,6 +1112,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             promptMembersOnly();
             return;
         }
+        if (isWeeklyEvent && event?.id && registeredWeekIds.has(event.id)) {
+            toast.error('You are already registered for this event');
+            return;
+        }
         setWizardMode('register');
         setAddPartnerTarget(null);
         paymentRetryRef.current = false;
@@ -1094,13 +1133,23 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setPartnerTshirtSizes({});
         setWeeklyEntryMode('single');
         setWeeklyCheckoutIntent('pay');
-        setSelectedWeekIds(new Set(event?.id ? [event.id] : []));
+        const initialWeeks = new Set();
+        if (event?.id && !registeredWeekIds.has(event.id)) {
+            const capacity = weeklyCapacity;
+            const filled = weekEntryCounts[event.id] || 0;
+            const spotsLeft = weeklySpotsRemaining(filled, capacity);
+            if (spotsLeft == null || spotsLeft > 0) {
+                initialWeeks.add(event.id);
+            }
+        }
+        setSelectedWeekIds(initialWeeks);
         loadProfile();
         loadDivisionRegs();
         loadDivisions();
         loadSeriesWeeks();
         setShowWizard(true);
     };
+    openWizardRef.current = openWizard;
 
     const closeWizard = () => {
         if (processing) return;
@@ -1559,12 +1608,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const selectedWeeks = useMemo(() => {
         if (!isWeeklyEvent) return [];
         return seriesWeeks
-            .filter((w) => selectedWeekIds.has(w.id))
+            .filter((w) => selectedWeekIds.has(w.id) && !registeredWeekIds.has(w.id))
             .map((w) => ({
                 ...w,
                 fee: resolveDivisionEntryFee({ entry_fee: w.entry_fee }, w),
             }));
-    }, [isWeeklyEvent, seriesWeeks, selectedWeekIds]);
+    }, [isWeeklyEvent, seriesWeeks, selectedWeekIds, registeredWeekIds]);
 
     /** Ensure weekly wizard always has the synthetic Open division selected. */
     useEffect(() => {
@@ -1618,18 +1667,48 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     }, [weeklyEntryMode, isWeeklyEvent, divisions, payMode]);
 
     const toggleWeek = (week) => {
-        if (registeredWeekIds.has(week.id)) return;
+        if (registeredWeekIds.has(week.id)) {
+            toast.error('You are already registered for this week');
+            return;
+        }
         if (isRegistrationClosed(null, week)) {
             toast.error('Registration has closed for this week');
             return;
         }
+        const capacity = getWeeklyCapacity(week) ?? weeklyCapacity;
+        const filled = weekEntryCounts[week.id] || 0;
+        const spotsLeft = weeklySpotsRemaining(filled, capacity);
         setSelectedWeekIds((prev) => {
             const next = new Set(prev);
-            if (next.has(week.id)) next.delete(week.id);
-            else next.add(week.id);
+            if (next.has(week.id)) {
+                next.delete(week.id);
+                return next;
+            }
+            if (spotsLeft != null && spotsLeft <= 0) {
+                toast.error(`This week is full (${capacity} entries)`);
+                return prev;
+            }
+            next.add(week.id);
             return next;
         });
     };
+
+    // Drop already-registered weeks from the selection (e.g. after loadRegisteredWeekIds).
+    useEffect(() => {
+        if (!isWeeklyEvent || registeredWeekIds.size === 0) return;
+        setSelectedWeekIds((prev) => {
+            let changed = false;
+            const next = new Set();
+            prev.forEach((id) => {
+                if (registeredWeekIds.has(id)) {
+                    changed = true;
+                    return;
+                }
+                next.add(id);
+            });
+            return changed ? next : prev;
+        });
+    }, [isWeeklyEvent, registeredWeekIds]);
 
     const collectTshirtSize = !!event?.collect_tshirt_size;
 
@@ -2648,6 +2727,16 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (!userEmail) { toast.error('Please log in to register'); return; }
         if (isWeeklyEvent) {
             if (selectedWeeks.length === 0) { toast.error('Select at least one week'); return; }
+            // Re-check capacity before charging / writing (counts may have changed).
+            for (const week of selectedWeeks) {
+                const capacity = getWeeklyCapacity(week) ?? weeklyCapacity;
+                if (capacity == null) continue;
+                const filled = weekEntryCounts[week.id] || 0;
+                if (filled >= capacity) {
+                    toast.error(`${formatWeeklyDateLabel(week.start_date, week.start_time)} is full (${capacity} entries)`);
+                    return;
+                }
+            }
             if (weeklyEntryMode === 'partner') {
                 const openDiv = selectedDivisions[0];
                 const sel = openDiv ? selected[openDiv.id] : null;
@@ -2753,7 +2842,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (!reg || withdrawing) return;
 
         const div = divisions.find((d) => d.id === reg.division_id || d.name === reg.division);
-        if (isClosed(div, event)) {
+        const closed = isWeeklyEvent
+            ? isRegistrationClosed(null, event)
+            : isClosed(div, event);
+        if (closed) {
             toast.error('Registration has closed — please contact the organiser.');
             return;
         }
@@ -2761,7 +2853,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setWithdrawing(true);
         try {
             const result = await invokePaystackRefund(
-                withdrawAll
+                !isWeeklyEvent && withdrawAll
                     ? { action: 'withdraw_all', event_id: event.id }
                     : { action: 'withdraw', registration_id: reg.id },
             );
@@ -2769,6 +2861,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             const refunded = Number(result?.total_refunded_rands || 0);
             if (refunded > 0) {
                 toast.success(`Withdrawn — R ${refunded.toLocaleString('en-ZA')} refund initiated (3–10 business days).`);
+            } else if (isWeeklyEvent) {
+                toast.success('Withdrawn from this event');
             } else {
                 toast.success(withdrawAll ? 'Withdrawn from all divisions' : `Withdrawn from ${reg.division}`);
             }
@@ -2777,6 +2871,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             setWithdrawAll(false);
             loadMyRegs();
             loadDivisionRegs();
+            loadRegisteredWeekIds();
             onParticipantsChange?.();
         } catch (err) {
             console.error('Withdraw failed:', err);
@@ -2820,7 +2915,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     // Divisions a withdrawing player can switch their paid entry into instead of
     // refunding: open, active, not already entered, gender-matched, not current.
     const switchEligibleDivisions = useMemo(() => {
-        if (!withdrawTarget) return [];
+        if (!withdrawTarget || isWeeklyEvent) return [];
         const cur = divisions.find((d) => d.id === withdrawTarget.division_id || d.name === withdrawTarget.division);
         return divisions.filter((d) => {
             if (cur && d.id === cur.id) return false;          // not the current division
@@ -2829,7 +2924,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             if (registeredDivisionIds.has(d.id)) return false;  // not already entered
             return true;
         });
-    }, [withdrawTarget, divisions, event, registeredDivisionIds]);
+    }, [withdrawTarget, divisions, event, registeredDivisionIds, isWeeklyEvent]);
 
     const finishSwitch = () => {
         setSwitching(false);
@@ -2986,6 +3081,15 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 if (selectedWeeks.length === 0) {
                     toast.error('Select at least one week');
                     return;
+                }
+                for (const week of selectedWeeks) {
+                    const capacity = getWeeklyCapacity(week) ?? weeklyCapacity;
+                    if (capacity == null) continue;
+                    const filled = weekEntryCounts[week.id] || 0;
+                    if (filled >= capacity) {
+                        toast.error(`${formatWeeklyDateLabel(week.start_date, week.start_time)} is full (${capacity} entries)`);
+                        return;
+                    }
                 }
                 setWizardStep(3);
                 return;
@@ -3406,11 +3510,15 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             />
                             <div className="space-y-2">
                                 {(bookableWeeks.length ? bookableWeeks : seriesWeeks).map((week) => {
-                                    const checked = selectedWeekIds.has(week.id);
                                     const alreadyIn = registeredWeekIds.has(week.id);
+                                    const checked = !alreadyIn && selectedWeekIds.has(week.id);
                                     const closed = isRegistrationClosed(null, week);
                                     const fee = resolveDivisionEntryFee({ entry_fee: week.entry_fee }, week);
-                                    const disabled = alreadyIn || closed;
+                                    const capacity = getWeeklyCapacity(week) ?? weeklyCapacity;
+                                    const filled = weekEntryCounts[week.id] || 0;
+                                    const spotsLeft = weeklySpotsRemaining(filled, capacity);
+                                    const isFull = spotsLeft != null && spotsLeft <= 0 && !alreadyIn;
+                                    const disabled = alreadyIn || closed || isFull;
                                     return (
                                         <button
                                             key={week.id}
@@ -3421,7 +3529,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                 checked
                                                     ? 'border-slate-900 bg-slate-50'
                                                     : disabled
-                                                        ? 'border-gray-100 bg-gray-50 opacity-60'
+                                                        ? 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
                                                         : 'border-gray-200 bg-white hover:border-gray-300'
                                             }`}
                                         >
@@ -3438,7 +3546,15 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                     {formatWeeklyDateLabel(week.start_date, week.start_time)}
                                                 </p>
                                                 <p className="text-[11px] text-slate-500 mt-0.5">
-                                                    {alreadyIn ? 'Already registered' : closed ? 'Registration closed' : `${fmtRWhole(fee)} per player`}
+                                                    {alreadyIn
+                                                        ? 'Already registered'
+                                                        : closed
+                                                            ? 'Registration closed'
+                                                            : isFull
+                                                                ? `Full · ${filled}/${capacity}`
+                                                                : capacity != null
+                                                                    ? `${fmtRWhole(fee)} per player · ${filled}/${capacity} (${spotsLeft} left)`
+                                                                    : `${fmtRWhole(fee)} per player`}
                                                 </p>
                                             </div>
                                         </button>
@@ -5033,7 +5149,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 </div>
                                 <div className="min-w-0">
                                     <h3 className="text-base font-semibold text-slate-900">
-                                        Withdraw from {withdrawTarget.division}?
+                                        {isWeeklyEvent
+                                            ? 'Withdraw from this event?'
+                                            : `Withdraw from ${withdrawTarget.division}?`}
                                     </h3>
                                     <p className="text-xs text-slate-600 mt-1 font-normal leading-snug">
                                         {(() => {
@@ -5042,12 +5160,16 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                             const wasAdded = addedBy && addedBy !== selfEm;
                                             const addedByName = withdrawTarget._payerName || withdrawTarget.partner_name || 'your partner';
                                             if (wasAdded) {
-                                                return `${addedByName} added you to this division. Withdrawing removes your entry only — they stay registered and can partner with someone else.`;
+                                                return isWeeklyEvent
+                                                    ? `${addedByName} added you to this event. Withdrawing removes your entry only — they stay registered and can partner with someone else.`
+                                                    : `${addedByName} added you to this division. Withdrawing removes your entry only — they stay registered and can partner with someone else.`;
                                             }
                                             if (withdrawTarget.partner_name) {
                                                 return `Your partner ${withdrawTarget.partner_name} will be notified. Their entry will remain active — only your registration will be withdrawn.`;
                                             }
-                                            return 'This will remove your entry from the event.';
+                                            return isWeeklyEvent
+                                                ? 'This removes your entry. If you paid, a refund will be initiated to your original payment method.'
+                                                : 'This will remove your entry from the event.';
                                         })()}
                                     </p>
                                 </div>
@@ -5063,12 +5185,15 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
                             {(() => {
                                 const wdDiv = divisions.find((d) => d.id === withdrawTarget.division_id || d.name === withdrawTarget.division);
-                                const wdFee = resolveDivisionEntryFee(wdDiv, event);
+                                const wdFee = isWeeklyEvent
+                                    ? Number(event?.entry_fee ?? resolveDivisionEntryFee(wdDiv, event) ?? 0)
+                                    : resolveDivisionEntryFee(wdDiv, event);
                                 const wdPaid = withdrawTarget.payment_status === 'paid';
                                 if (wdPaid && wdFee > 0) {
                                     return (
                                         <div className="mx-6 mt-4 px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 font-normal leading-snug">
-                                            Your entry fee of {fmtRWhole(wdFee)} will be refunded to your original payment method (3–10 business days). Any temporary SAPA license bought in the same checkout is refunded too; annual licenses are non-refundable.
+                                            Your entry fee of {fmtRWhole(wdFee)} will be refunded to your original payment method (3–10 business days).
+                                            {!isWeeklyEvent && ' Any temporary SAPA license bought in the same checkout is refunded too; annual licenses are non-refundable.'}
                                         </div>
                                     );
                                 }
@@ -5079,7 +5204,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 );
                             })()}
 
-                            {!switchMode && panelEntries.length >= 2 && (
+                            {!isWeeklyEvent && !switchMode && panelEntries.length >= 2 && (
                                 <label className="mx-6 mt-3 flex items-start gap-2.5 px-3 py-2.5 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50">
                                     <input
                                         type="checkbox"

@@ -32,6 +32,11 @@ import { sanitizeHtml } from '../utils/sanitizeHtml';
 import { isRegistrationClosed } from '../utils/registrationClose';
 import { resolvePartnerPaid } from '../utils/partnerPaymentStatus';
 import { isEarlyBirdActive, resolveDivisionEntryFee } from '../utils/eventEntryFee';
+import {
+    countWeeklyEntries,
+    getWeeklyCapacity,
+    weeklySpotsRemaining,
+} from '../utils/weeklyRegistration';
 import TournamentProgressBar from '../components/TournamentProgressBar';
 
 const formatPlayerName = (fullName) => {
@@ -844,13 +849,22 @@ const EventDetails = () => {
         return result;
     }, [event?.is_manual, playerDivisions, participants, playerRankingsMap, getMainCategoryPoints]);
 
-    // Total registered entries for manual events — counts every active
-    // registration row (incl. pending payment; each player's division entry
-    // separately), matching the admin "Entries" total.
+    // Total registered entries for manual events.
+    // Weekly: count bookable teams (not partner-mirror rows) for capacity display.
+    // Other manual: count every active registration row (admin Entries total).
     useEffect(() => {
         if (!event?.id || !event?.is_manual) { setManualEntriesCount(0); return; }
         let cancelled = false;
         const countEntries = async () => {
+            if (event.is_weekly) {
+                const { data } = await supabase
+                    .from('event_registrations')
+                    .select('email, registered_by, status')
+                    .eq('event_id', event.id)
+                    .neq('status', 'withdrawn');
+                if (!cancelled) setManualEntriesCount(countWeeklyEntries(data || []));
+                return;
+            }
             const { count } = await supabase
                 .from('event_registrations')
                 .select('id', { count: 'exact', head: true })
@@ -864,7 +878,7 @@ const EventDetails = () => {
             cancelled = true;
             window.removeEventListener('4m:registrations-changed', countEntries);
         };
-    }, [event?.id, event?.is_manual]);
+    }, [event?.id, event?.is_manual, event?.is_weekly]);
 
     const entryFeeStatLabel = useMemo(() => {
         const fmt = (n) => `R${Number(n).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
@@ -1405,7 +1419,7 @@ const EventDetails = () => {
                 allRegistrationsPaid: false,
                 hasAnyRegistration: false,
                 entries: [],
-                canAddDivision: divisions.some((d) => !isRegistrationClosed(d, event)),
+                canAddDivision: !event?.is_weekly && divisions.some((d) => !isRegistrationClosed(d, event)),
             });
             return;
         }
@@ -1447,13 +1461,17 @@ const EventDetails = () => {
         );
 
         const entries = enrichedRegs.map((reg) => {
-            const div = divisions.find((d) => d.id === reg.division_id);
-            const fee = Number(div?.entry_fee || 0);
+            const div = divisions.find((d) => d.id === reg.division_id)
+                || divisions.find((d) => d.name === reg.division);
+            const fee = event?.is_weekly
+                ? Number(event?.entry_fee || 0)
+                : Number(div?.entry_fee || 0);
             const isPaid = reg.payment_status === 'paid' || fee === 0;
             const hasPartner = !!(reg.partner_name?.trim() || reg.partner_email?.trim());
             const partnerReg = hasPartner && reg.partner_email
                 ? (divisionRegs || []).find((r) =>
-                    r.division_id === reg.division_id
+                    (r.division_id === reg.division_id
+                        || (event?.is_weekly && (r.division || '').toLowerCase() === (reg.division || '').toLowerCase()))
                     && (r.email || '').toLowerCase() === (reg.partner_email || '').toLowerCase()
                     && r.status !== 'withdrawn',
                 )
@@ -1466,13 +1484,15 @@ const EventDetails = () => {
             const addedByName = wasAddedByPartner
                 ? (reg._payerName || reg.partner_name || 'your partner')
                 : null;
-            const divClosed = isRegistrationClosed(div, event);
-            const canWithdraw = !!div && !divClosed && reg.status !== 'withdrawn';
+            const regClosed = event?.is_weekly
+                ? isRegistrationClosed(null, event)
+                : isRegistrationClosed(div, event);
+            const canWithdraw = reg.status !== 'withdrawn' && !regClosed && (!!div || !!event?.is_weekly);
             const canAddPartner = isPaid
                 && !hasPartner
                 && reg.status !== 'withdrawn'
-                && !!div
-                && !divClosed;
+                && (!!div || !!event?.is_weekly)
+                && !regClosed;
             return {
                 id: reg.id,
                 division: reg.division,
@@ -1499,7 +1519,7 @@ const EventDetails = () => {
             };
         });
 
-        const canAddDivision = divisions.some((d) => {
+        const canAddDivision = !event?.is_weekly && divisions.some((d) => {
             if (registeredDivisionIds.has(d.id)) return false;
             return !isRegistrationClosed(d, event);
         });
@@ -1530,7 +1550,7 @@ const EventDetails = () => {
             entries,
             canAddDivision,
         });
-    }, [event?.is_manual, event?.id, event?.registration_closes_at, manualUserEmail]);
+    }, [event?.is_manual, event?.id, event?.is_weekly, event?.registration_closes_at, manualUserEmail]);
 
     useEffect(() => {
         loadManualRegistrationSummary();
@@ -2184,8 +2204,8 @@ const EventDetails = () => {
                         if (partnerEmail) seenEmails.add(partnerEmail);
 
                         const players = [{ Name: reg.full_name, Email: reg.email }];
-                        if (reg.partner_name && (!partnerEmail || activeEmails.has(partnerEmail) || reg.partner_name)) {
-                            // Include named partner even if they have not paid yet (weekly reserve flow)
+                        // Weekly: always show a named partner (including unpaid reserve flow).
+                        if (reg.partner_name?.trim()) {
                             if (!players.some((p) => (p.Name || '').toLowerCase() === (reg.partner_name || '').toLowerCase())) {
                                 players.push({ Name: reg.partner_name, Email: reg.partner_email || null });
                             }
@@ -3737,7 +3757,7 @@ const EventDetails = () => {
                                 Registration has closed. Unpaid entries may be removed from the draw.
                             </p>
                         )}
-                        {manualRegStatus.canAddDivision && (
+                        {manualRegStatus.canAddDivision && !event?.is_weekly && (
                             <button
                                 type="button"
                                 onClick={() => manualRegActionsRef.current?.openRegistration?.()}
@@ -4067,7 +4087,20 @@ const EventDetails = () => {
                                         </p>
                                     </div>
                                     {[
-                                        { label: 'Entries', value: event.is_manual ? manualEntriesCount : totalPlayersCount, icon: Users },
+                                        (() => {
+                                            const count = event.is_manual ? manualEntriesCount : totalPlayersCount;
+                                            const cap = event.is_weekly ? getWeeklyCapacity(event) : null;
+                                            if (cap != null) {
+                                                const left = weeklySpotsRemaining(count, cap);
+                                                return {
+                                                    label: 'Entries',
+                                                    value: `${count}/${cap}`,
+                                                    sublabel: left === 0 ? 'FULL' : `${left} LEFT`,
+                                                    icon: Users,
+                                                };
+                                            }
+                                            return { label: 'Entries', value: count, icon: Users };
+                                        })(),
                                         ...(!event.is_weekly ? [
                                             { label: 'Points', value: event.points || '1000', icon: Trophy },
                                             { label: 'Divisions', value: event.is_manual ? playerDivisions.length : (playerDivisions.length > 0 ? playerDivisions.length : (tournamentClasses.length || event.allowed_divisions?.length || 0)), icon: Grid2x2 },
@@ -4863,12 +4896,18 @@ const EventDetails = () => {
                                         event.is_weekly ? (() => {
                                             const weeklyCls = playerDivisions[0];
                                             const clsParticipants = participants[weeklyCls?.Id] || [];
+                                            const filled = clsParticipants.length;
+                                            const cap = getWeeklyCapacity(event);
+                                            const spotsLeft = weeklySpotsRemaining(filled, cap);
+                                            const badgeLabel = cap != null
+                                                ? `${filled}/${cap}${spotsLeft === 0 ? ' · Full' : ` · ${spotsLeft} left`}`
+                                                : `${filled} ${filled === 1 ? 'Entry' : 'Entries'}`;
                                             return (
                                                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                                                     <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                                                         <h3 className="font-semibold text-slate-900 text-base tracking-normal">Entries</h3>
                                                         <span className="text-[10px] font-semibold uppercase tracking-wide bg-[#CCFF00] text-[#0a0a0a] px-3 py-1.5 rounded-full">
-                                                            {clsParticipants.length} {clsParticipants.length === 1 ? 'Entry' : 'Entries'}
+                                                            {badgeLabel}
                                                         </span>
                                                     </div>
                                                     {clsParticipants.length > 0 ? (
