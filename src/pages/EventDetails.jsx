@@ -2147,7 +2147,65 @@ const EventDetails = () => {
                 let participantsMap = {};
 
                 // Manual events: divisions come only from tournament_divisions (never RankedIn).
-                if (event.is_manual) {
+                // Weekly socials have no divisions — one flat entries list.
+                if (event.is_manual && event.is_weekly) {
+                    const weeklyDiv = { Id: 'weekly_entries', Name: 'Entries' };
+                    divisions = [weeklyDiv];
+                    participantsMap[weeklyDiv.Id] = [];
+
+                    const { data: localRegs } = await supabase
+                        .from('event_registrations')
+                        .select('*')
+                        .eq('event_id', event.id)
+                        .neq('status', 'withdrawn')
+                        .order('created_at', { ascending: true });
+
+                    const activeEmails = new Set(
+                        (localRegs || [])
+                            .map((r) => (r.email || '').toLowerCase())
+                            .filter(Boolean),
+                    );
+                    const seenEmails = new Set();
+
+                    (localRegs || []).forEach((reg) => {
+                        const emailKey = (reg.email || '').toLowerCase();
+                        if (emailKey && seenEmails.has(emailKey)) return;
+                        if (emailKey) seenEmails.add(emailKey);
+
+                        const partnerEmail = (reg.partner_email || '').toLowerCase();
+                        // Skip pure partner-mirror rows when the partner already registered as primary
+                        if (
+                            partnerEmail
+                            && activeEmails.has(partnerEmail)
+                            && (reg.registered_by || '').toLowerCase() === partnerEmail
+                        ) {
+                            return;
+                        }
+                        if (partnerEmail) seenEmails.add(partnerEmail);
+
+                        const players = [{ Name: reg.full_name, Email: reg.email }];
+                        if (reg.partner_name && (!partnerEmail || activeEmails.has(partnerEmail) || reg.partner_name)) {
+                            // Include named partner even if they have not paid yet (weekly reserve flow)
+                            if (!players.some((p) => (p.Name || '').toLowerCase() === (reg.partner_name || '').toLowerCase())) {
+                                players.push({ Name: reg.partner_name, Email: reg.partner_email || null });
+                            }
+                        }
+
+                        participantsMap[weeklyDiv.Id].push({
+                            Participant: {
+                                Id: `local_${reg.id}`,
+                                Name: players.length > 1
+                                    ? `${reg.full_name} / ${reg.partner_name}`
+                                    : reg.full_name,
+                                Players: players,
+                            },
+                            _paymentStatus: reg.payment_status,
+                        });
+                    });
+
+                    setPlayerDivisions(divisions);
+                    setParticipants(participantsMap);
+                } else if (event.is_manual) {
                     const { data: manualDivs } = await supabase
                         .from('tournament_divisions')
                         .select('*')
@@ -3646,6 +3704,7 @@ const EventDetails = () => {
                             variant="banner"
                             accent={theme?.fill || '#CCFF00'}
                             showActions
+                            hideDivision={!!event?.is_weekly}
                             withdrawLabel={entry.wasAddedByPartner && !entry.isPaid ? 'Decline' : 'Withdraw'}
                             onAddPartner={entry.canAddPartner
                                 ? () => manualRegActionsRef.current?.openAddPartner?.(entry.id)
@@ -4801,6 +4860,86 @@ const EventDetails = () => {
                                             <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Loading Players...</p>
                                         </div>
                                     ) : playerDivisions.length > 0 ? (
+                                        event.is_weekly ? (() => {
+                                            const weeklyCls = playerDivisions[0];
+                                            const clsParticipants = participants[weeklyCls?.Id] || [];
+                                            return (
+                                                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                                    <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                                                        <h3 className="font-semibold text-slate-900 text-base tracking-normal">Entries</h3>
+                                                        <span className="text-[10px] font-semibold uppercase tracking-wide bg-[#CCFF00] text-[#0a0a0a] px-3 py-1.5 rounded-full">
+                                                            {clsParticipants.length} {clsParticipants.length === 1 ? 'Entry' : 'Entries'}
+                                                        </span>
+                                                    </div>
+                                                    {clsParticipants.length > 0 ? (
+                                                        <div className="divide-y divide-gray-100">
+                                                            {clsParticipants.map((item, pIdx) => {
+                                                                const p = item.Participant || {};
+                                                                const players = (p.Players && p.Players.length > 0)
+                                                                    ? p.Players
+                                                                    : [p.FirstPlayer, p.SecondPlayer].filter(Boolean);
+                                                                const getProfileImage = (playerObj) => {
+                                                                    if (!playerObj) return null;
+                                                                    const rId = playerObj.RankedinId || playerObj.Id?.toString();
+                                                                    const pName = (playerObj.Name || '').toLowerCase();
+                                                                    if (rId && fourMPlayers[rId]) return fourMPlayers[rId];
+                                                                    if (pName && fourMPlayers[pName]) return fourMPlayers[pName];
+                                                                    return playerObj.Image;
+                                                                };
+                                                                return (
+                                                                    <div key={p.Id || pIdx} className="bg-white px-4 py-2.5 sm:px-5 sm:py-3 border-b border-gray-100 last:border-0 hover:bg-gray-50/50 transition-colors">
+                                                                        <div className="flex items-center gap-3 sm:gap-4">
+                                                                            <div className="flex-shrink-0 w-8 sm:w-9 text-center self-center">
+                                                                                <span className="text-lg sm:text-xl font-black text-[#0a0a0a] tabular-nums leading-none">
+                                                                                    {pIdx + 1}
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-3 sm:gap-5 flex-1 min-w-0">
+                                                                                {players.map((player, idx) => {
+                                                                                    const pName = (player.Name || '').split(' ')[0];
+                                                                                    const avatarUrl = getProfileImage(player);
+                                                                                    return (
+                                                                                        <button
+                                                                                            key={idx}
+                                                                                            type="button"
+                                                                                            onClick={() => openPlayerProfile(player)}
+                                                                                            disabled={loadingPlayerProfile}
+                                                                                            title={`View ${player.Name || 'player'} profile`}
+                                                                                            className="flex flex-col items-center min-w-[80px] group cursor-pointer disabled:opacity-60 disabled:cursor-wait bg-transparent border-0 p-0"
+                                                                                        >
+                                                                                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-200 flex items-center justify-center shadow-sm transition-transform group-hover:scale-105 group-hover:border-slate-300 group-focus-visible:ring-2 group-focus-visible:ring-offset-2 group-focus-visible:ring-slate-400">
+                                                                                                {avatarUrl ? (
+                                                                                                    <img src={avatarUrl} alt={player.Name} className="w-full h-full object-cover" />
+                                                                                                ) : (
+                                                                                                    <User className="w-7 h-7 text-gray-400" />
+                                                                                                )}
+                                                                                            </div>
+                                                                                            <span className="text-sm font-bold text-slate-800 mt-1.5 text-center max-w-[96px] truncate group-hover:underline underline-offset-2">
+                                                                                                {pName}
+                                                                                            </span>
+                                                                                        </button>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+                                                                            {item._paymentStatus && item._paymentStatus !== 'paid' && (
+                                                                                <span className="text-[9px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full flex-shrink-0">
+                                                                                    Reserved
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="px-6 py-10 text-center">
+                                                            <Users className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+                                                            <p className="text-xs font-bold text-gray-400">No entries yet</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })() : (
                                         playerDivisions.map((cls) => {
                                             const clsParticipants = participants[cls.Id] || [];
                                             const isExpanded = !!expandedDivisions[cls.Id];
@@ -4976,6 +5115,7 @@ const EventDetails = () => {
                                                 </div>
                                             );
                                         })
+                                    )
                                     ) : (
                                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-16 flex flex-col items-center text-center">
                                             <Users className="w-12 h-12 text-gray-200 mb-4" />

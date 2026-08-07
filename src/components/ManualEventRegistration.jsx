@@ -4489,7 +4489,30 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
             case 5: {
                 const confirmSelfName = displayProfile?.name || profile?.name || 'You';
-                const confirmEntries = selectedDivisions.map((d) => {
+                const confirmEntries = isWeeklyEvent
+                    ? selectedWeeks.map((week) => {
+                        const openDiv = selectedDivisions[0];
+                        const sel = openDiv ? selected[openDiv.id] : null;
+                        const fee = Number(week.fee ?? resolveDivisionEntryFee(openDiv, event) ?? 0);
+                        const userPaysPartner = !!(sel?.partnerName && sel?.payForPartner);
+                        const partnerPaysSelf = !!(sel?.partnerName && !sel?.payForPartner);
+                        const partnerUnpaid = partnerPaysSelf && fee > 0;
+                        const namesLine = sel?.partnerName
+                            ? `${confirmSelfName} + ${sel.partnerName}`
+                            : confirmSelfName;
+                        return {
+                            id: week.id,
+                            divisionName: formatWeeklyDateLabel(week.start_date, week.start_time),
+                            namesLine,
+                            partnerName: sel?.partnerName || null,
+                            partnerImageUrl: sel?.partnerProfile?.image_url?.trim() || null,
+                            hasPartner: !!sel?.partnerName,
+                            payBadge: !sel?.partnerName || userPaysPartner ? 'You Pay' : 'Partner Pays',
+                            payBadgeVariant: partnerPaysSelf ? 'partner' : 'you',
+                            showPartnerReminder: partnerUnpaid,
+                        };
+                    })
+                    : selectedDivisions.map((d) => {
                     const sel = selected[d.id];
                     const fee = resolveDivisionEntryFee(d, event);
                     const userPaysPartner = !!(sel?.partnerName && sel?.payForPartner);
@@ -4753,11 +4776,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         <h2 className="text-sm font-semibold text-slate-900 tracking-normal">
                             {hasAnyRegistration
                                 ? registrationEntries.length > 1
-                                    ? `You are Registered for this Event (${registrationEntries.length} divisions)`
+                                    ? `You are Registered for this Event (${registrationEntries.length} ${isWeeklyEvent ? 'entries' : 'divisions'})`
                                     : 'You are Registered for this Event'
                                 : hasPendingPayment
                                     ? 'Complete Your Registration'
-                                    : 'Divisions'}
+                                    : isWeeklyEvent
+                                        ? 'Registration'
+                                        : 'Divisions'}
                         </h2>
                     </div>
                     <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 shrink-0 ${divisionsBlockOpen ? '' : '-rotate-90'}`} />
@@ -4813,6 +4838,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                             accent={accent}
                                             btnTextColor={btnTextColor}
                                             showActions={!!reg}
+                                            hideDivision={isWeeklyEvent}
                                             onAddPartner={() => openAddPartnerWizard(reg)}
                                             onPay={needsPay && !hasPendingPayment ? openPayWizard : undefined}
                                             onWithdraw={reg && entry.canWithdraw ? () => { setWithdrawAll(false); setSwitchMode(false); setSwitchTargetDivId(''); setWithdrawTarget(reg); } : undefined}

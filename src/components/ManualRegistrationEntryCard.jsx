@@ -52,6 +52,7 @@ const PersonCell = ({ role, name, avatarUrl, paid, label }) => (
  * @param {() => void} [props.onRemovePartner]
  * @param {string} [props.withdrawLabel]
  * @param {boolean} [props.showActions]
+ * @param {boolean} [props.hideDivision] — weekly / no-division events
  */
 const ManualRegistrationEntryCard = ({
     entry,
@@ -67,6 +68,7 @@ const ManualRegistrationEntryCard = ({
     onRemovePartner,
     withdrawLabel = 'Withdraw',
     showActions = false,
+    hideDivision = false,
 }) => {
     const shellClass = variant === 'banner'
         ? 'rounded-xl border border-white/80 bg-white shadow-sm shadow-green-900/5'
@@ -76,22 +78,30 @@ const ManualRegistrationEntryCard = ({
     const playerLabel = playerPaid ? 'Paid & Confirmed' : 'Payment Pending';
     const partnerPaid = entry.partnerPaid;
     const partnerLabel = entry.partnerPaymentLabel || (partnerPaid ? 'Paid & Confirmed' : 'Payment Pending');
+    const showHeader = !hideDivision || (entry.wasAddedByPartner && entry.addedByName);
 
     return (
         <div className={`${shellClass} p-3.5 sm:p-4`}>
-            <div className="min-w-0">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide leading-none mb-1">
-                    Division
-                </p>
-                <p className="text-sm font-semibold text-slate-900 leading-snug">{entry.division}</p>
-                {entry.wasAddedByPartner && entry.addedByName && (
-                    <p className="text-[11px] text-slate-500 mt-0.5 font-normal">
-                        Added by {entry.addedByName}
-                    </p>
-                )}
-            </div>
-
-            <div className="my-2.5 border-t border-slate-200/70" />
+            {showHeader && (
+                <>
+                    <div className="min-w-0">
+                        {!hideDivision && (
+                            <>
+                                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide leading-none mb-1">
+                                    Division
+                                </p>
+                                <p className="text-sm font-semibold text-slate-900 leading-snug">{entry.division}</p>
+                            </>
+                        )}
+                        {entry.wasAddedByPartner && entry.addedByName && (
+                            <p className={`text-[11px] text-slate-500 font-normal ${hideDivision ? '' : 'mt-0.5'}`}>
+                                Added by {entry.addedByName}
+                            </p>
+                        )}
+                    </div>
+                    <div className="my-2.5 border-t border-slate-200/70" />
+                </>
+            )}
 
             <div className={`flex gap-3 ${entry.hasPartner || entry.canAddPartner ? '' : 'flex-col'}`}>
                 <div className={entry.hasPartner || entry.canAddPartner ? 'flex-1 min-w-0' : 'w-full'}>
