@@ -146,9 +146,8 @@ async function fetchProfilesByName(names) {
         .join(',');
 
     const { data, error } = await supabase
-        .from('players')
+        .from('players_public')
         .select('*')
-        .eq('approved', true)
         .or(orClause);
 
     if (error) {

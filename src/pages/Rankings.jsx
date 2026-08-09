@@ -799,9 +799,8 @@ const Rankings = () => {
 
       while (hasMore) {
         const { data, error } = await supabase
-          .from('players')
+          .from('players_public')
           .select('*')
-          .eq('approved', true)
           .range(page * pageSize, (page + 1) * pageSize - 1);
         
         if (error) {

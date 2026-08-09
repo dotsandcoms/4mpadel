@@ -859,18 +859,21 @@ const EventDetails = () => {
         const countEntries = async () => {
             if (event.is_weekly) {
                 const { data } = await supabase
-                    .from('event_registrations')
-                    .select('email, registered_by, status')
-                    .eq('event_id', event.id)
-                    .neq('status', 'withdrawn');
-                if (!cancelled) setManualEntriesCount(countWeeklyEntries(data || []));
+                    .from('event_registrations_public')
+                    .select('email_hash, registered_by_hash, status')
+                    .eq('event_id', event.id);
+                const mapped = (data || []).map((r) => ({
+                    email: r.email_hash,
+                    registered_by: r.registered_by_hash,
+                    status: r.status,
+                }));
+                if (!cancelled) setManualEntriesCount(countWeeklyEntries(mapped));
                 return;
             }
             const { count } = await supabase
-                .from('event_registrations')
+                .from('event_registrations_public')
                 .select('id', { count: 'exact', head: true })
-                .eq('event_id', event.id)
-                .neq('status', 'withdrawn');
+                .eq('event_id', event.id);
             if (!cancelled) setManualEntriesCount(count || 0);
         };
         countEntries();
@@ -1252,12 +1255,12 @@ const EventDetails = () => {
 
         setLoadingPlayerProfile(true);
         try {
-            const selectCols = 'id, name, email, image_url, rankedin_id, rankings, points, skill_rating, sponsors, additional_images, home_club, region, racket_brand, rank_label, category, active_ranking_label, contact_number, level';
+            const selectCols = 'id, name, image_url, rankedin_id, rankings, points, skill_rating, sponsors, additional_images, home_club, region, racket_brand, rank_label, category, active_ranking_label, level';
             let profile = null;
 
             if (rId) {
                 const { data } = await supabase
-                    .from('players')
+                    .from('players_public')
                     .select(selectCols)
                     .eq('rankedin_id', rId)
                     .maybeSingle();
@@ -1266,7 +1269,7 @@ const EventDetails = () => {
 
             if (!profile && pName) {
                 const { data } = await supabase
-                    .from('players')
+                    .from('players_public')
                     .select(selectCols)
                     .ilike('name', pName)
                     .limit(5);
@@ -1819,10 +1822,10 @@ const EventDetails = () => {
             // Fetch profiles for any found partners
             const partnerNames = Object.values(divPartnersMap).filter(Boolean);
             if (partnerNames.length > 0) {
-                const { data: partnerProfiles } = await supabase
-                    .from('players')
-                    .select('id, name, email, paid_registration, license_type')
-                    .in('name', partnerNames);
+                const partnerResults = await Promise.all(
+                    partnerNames.map((pName) => supabase.rpc('find_registration_partner', { p_name: pName, p_event_id: event?.id })),
+                );
+                const partnerProfiles = partnerResults.flatMap((r) => r.data || []);
 
                 setDivisionPartners(prev => {
                     const next = { ...prev };
@@ -1863,11 +1866,9 @@ const EventDetails = () => {
             }
             setEmailCheckStatus('checking');
             try {
-                const { data } = await supabase
-                    .from('players')
-                    .select('id, name, email, paid_registration, license_type')
-                    .ilike('email', formData.email.trim())
-                    .maybeSingle();
+                const { data: rows } = await supabase
+                    .rpc('find_registration_partner', { p_email: formData.email.trim(), p_event_id: event?.id });
+                const data = Array.isArray(rows) ? rows[0] : rows;
 
                 if (data) {
                     if (data.license_type === 'temporary') {
@@ -2199,40 +2200,39 @@ const EventDetails = () => {
                     participantsMap[weeklyDiv.Id] = [];
 
                     const { data: localRegs } = await supabase
-                        .from('event_registrations')
-                        .select('*')
+                        .from('event_registrations_public')
+                        .select('id, full_name, partner_name, payment_status, email_hash, partner_email_hash, registered_by_hash, created_at')
                         .eq('event_id', event.id)
-                        .neq('status', 'withdrawn')
                         .order('created_at', { ascending: true });
 
                     const activeEmails = new Set(
                         (localRegs || [])
-                            .map((r) => (r.email || '').toLowerCase())
+                            .map((r) => (r.email_hash || '').toLowerCase())
                             .filter(Boolean),
                     );
                     const seenEmails = new Set();
 
                     (localRegs || []).forEach((reg) => {
-                        const emailKey = (reg.email || '').toLowerCase();
+                        const emailKey = (reg.email_hash || '').toLowerCase();
                         if (emailKey && seenEmails.has(emailKey)) return;
                         if (emailKey) seenEmails.add(emailKey);
 
-                        const partnerEmail = (reg.partner_email || '').toLowerCase();
+                        const partnerEmail = (reg.partner_email_hash || '').toLowerCase();
                         // Skip pure partner-mirror rows when the partner already registered as primary
                         if (
                             partnerEmail
                             && activeEmails.has(partnerEmail)
-                            && (reg.registered_by || '').toLowerCase() === partnerEmail
+                            && (reg.registered_by_hash || '').toLowerCase() === partnerEmail
                         ) {
                             return;
                         }
                         if (partnerEmail) seenEmails.add(partnerEmail);
 
-                        const players = [{ Name: reg.full_name, Email: reg.email }];
+                        const players = [{ Name: reg.full_name, Email: null }];
                         // Weekly: always show a named partner (including unpaid reserve flow).
                         if (reg.partner_name?.trim()) {
                             if (!players.some((p) => (p.Name || '').toLowerCase() === (reg.partner_name || '').toLowerCase())) {
-                                players.push({ Name: reg.partner_name, Email: reg.partner_email || null });
+                                players.push({ Name: reg.partner_name, Email: null });
                             }
                         }
 
@@ -2266,10 +2266,9 @@ const EventDetails = () => {
                     }));
 
                     const { data: localRegs } = await supabase
-                        .from('event_registrations')
-                        .select('*')
-                        .eq('event_id', event.id)
-                        .neq('status', 'withdrawn');
+                        .from('event_registrations_public')
+                        .select('id, full_name, partner_name, division, division_id, payment_status, email_hash, partner_email_hash')
+                        .eq('event_id', event.id);
 
                     const activeEmailsByDiv = new Map();
                     (localRegs || []).forEach((reg) => {
@@ -2277,7 +2276,7 @@ const EventDetails = () => {
                             || (reg.division_id ? divisions.find((d) => d.Id === reg.division_id) : null);
                         if (!div) return;
                         if (!activeEmailsByDiv.has(div.Id)) activeEmailsByDiv.set(div.Id, new Set());
-                        if (reg.email) activeEmailsByDiv.get(div.Id).add(reg.email.toLowerCase());
+                        if (reg.email_hash) activeEmailsByDiv.get(div.Id).add(reg.email_hash.toLowerCase());
                     });
 
                     (localRegs || []).forEach((reg) => {
@@ -2297,10 +2296,10 @@ const EventDetails = () => {
 
                         if (!existing) {
                             const activeEmails = activeEmailsByDiv.get(div.Id) || new Set();
-                            const players = [{ Name: reg.full_name, Email: reg.email }];
-                            const partnerEmail = (reg.partner_email || '').toLowerCase();
+                            const players = [{ Name: reg.full_name, Email: null }];
+                            const partnerEmail = (reg.partner_email_hash || '').toLowerCase();
                             if (reg.partner_name && (!partnerEmail || activeEmails.has(partnerEmail))) {
-                                players.push({ Name: reg.partner_name, Email: reg.partner_email || null });
+                                players.push({ Name: reg.partner_name, Email: null });
                             }
                             participantsMap[div.Id].push({
                                 Participant: {
@@ -2338,7 +2337,10 @@ const EventDetails = () => {
                     }
 
                     // 2. Fetch from local event_registrations
-                    const { data: localRegs } = await supabase.from('event_registrations').select('*').eq('event_id', event.id);
+                    const { data: localRegs } = await supabase
+                        .from('event_registrations_public')
+                        .select('id, full_name, partner_name, division, payment_status, status')
+                        .eq('event_id', event.id);
 
                     if (localRegs && localRegs.length > 0) {
                         localRegs.forEach(reg => {
@@ -2372,7 +2374,7 @@ const EventDetails = () => {
                                 });
 
                                 if (!existingInRankedin) {
-                                    const players = [{ Name: reg.full_name, Email: reg.email }];
+                                    const players = [{ Name: reg.full_name, Email: null }];
                                     if (reg.partner_name) {
                                         players.push({ Name: reg.partner_name });
                                     }
@@ -2426,7 +2428,7 @@ const EventDetails = () => {
 
                 if (namesArray.length > 0 || idsArray.length > 0) {
                     // Query the Supabase players table for profile photos
-                    const query = supabase.from('players').select('name, image_url, rankedin_id');
+                    const query = supabase.from('players_public').select('name, image_url, rankedin_id');
 
                     const filters = [];
                     if (namesArray.length > 0) {
@@ -2468,7 +2470,7 @@ const EventDetails = () => {
         const fetchFourMPlayers = async () => {
             try {
                 const data = await fetchAllRows(() => supabase
-                    .from('players')
+                    .from('players_public')
                     .select('name, rankedin_id, image_url')
                     .not('image_url', 'is', null)
                     .order('id', { ascending: true }));
@@ -2503,7 +2505,7 @@ const EventDetails = () => {
 
                 while (hasMore) {
                     const { data, error } = await supabase
-                        .from('players')
+                        .from('players_public')
                         .select('name, rankedin_id, rankings, points')
                         .range(page * pageSize, (page + 1) * pageSize - 1);
 
@@ -2712,30 +2714,23 @@ const EventDetails = () => {
                 let enrichedData = [];
 
                 if (event?.is_manual) {
-                    const { data, error } = await supabase
-                        .from('players')
-                        .select('id, name, email, paid_registration, license_type, category, temporary_licenses(event_id)')
-                        .ilike('name', `%${name.trim()}%`)
-                        .limit(8);
+                    const { data } = await supabase
+                        .rpc('find_registration_partner', { p_name_partial: name.trim(), p_event_id: event?.id });
 
                     if (data && data.length > 0) {
-                        enrichedData = data.map(player => {
-                            if (player.license_type === 'temporary') {
-                                const hasTempForEvent = player.temporary_licenses?.some(lic => lic.event_id === event?.id);
-                                return { ...player, paid_registration: hasTempForEvent ? player.paid_registration : false };
-                            }
-                            return player;
-                        }).filter(p => p.id !== playerProfileData?.id);
+                        enrichedData = data.map(player => ({
+                            ...player,
+                            paid_registration: player.license_type === 'temporary'
+                                ? (player.has_temp_license_for_event ? player.paid_registration : false)
+                                : player.paid_registration,
+                        })).filter(p => p.id !== playerProfileData?.id);
                     }
                 } else {
                     // RankedIn event: search tournament_participants registered for this event, in this division
-                    const { data: participants, error: pError } = await supabase
-                        .from('tournament_participants')
-                        .select('profile_id, full_name, email, class_name')
-                        .eq('event_id', event.id)
-                        .ilike('class_name', division.trim())
-                        .ilike('full_name', `%${name.trim()}%`)
-                        .limit(8);
+                    const { data: participants } = await supabase
+                        .rpc('search_tournament_participants_for_partner', {
+                            p_event_id: event.id, p_class_name: division.trim(), p_query: name.trim(),
+                        });
 
                     if (participants && participants.length > 0) {
                         const profileIds = participants.map(p => p.profile_id).filter(Boolean);
@@ -2743,9 +2738,7 @@ const EventDetails = () => {
 
                         if (profileIds.length > 0) {
                             const { data: players } = await supabase
-                                .from('players')
-                                .select('id, name, email, paid_registration, license_type, category, temporary_licenses(event_id)')
-                                .in('id', profileIds);
+                                .rpc('find_registration_partner', { p_ids: profileIds, p_event_id: event?.id });
 
                             if (players) {
                                 players.forEach(p => playersMap.set(p.id, p));
@@ -2756,8 +2749,7 @@ const EventDetails = () => {
                             const playerProfile = p.profile_id ? playersMap.get(p.profile_id) : null;
                             if (playerProfile) {
                                 if (playerProfile.license_type === 'temporary') {
-                                    const hasTempForEvent = playerProfile.temporary_licenses?.some(lic => lic.event_id === event?.id);
-                                    return { ...playerProfile, paid_registration: hasTempForEvent ? playerProfile.paid_registration : false };
+                                    return { ...playerProfile, paid_registration: playerProfile.has_temp_license_for_event ? playerProfile.paid_registration : false };
                                 }
                                 return playerProfile;
                             }
@@ -2860,13 +2852,15 @@ const EventDetails = () => {
             let finalEmail = pEmail;
 
             if (pEmail) {
-                const { data: pData } = await supabase.from('players').select('id, email').ilike('email', pEmail).maybeSingle();
+                const { data: pRows } = await supabase.rpc('find_registration_partner', { p_email: pEmail });
+                const pData = pRows?.[0];
                 if (pData) {
                     pId = pData.id;
                     finalEmail = pData.email;
                 }
             } else if (pName) {
-                const { data: pData } = await supabase.from('players').select('id, email').ilike('name', pName).maybeSingle();
+                const { data: pRows } = await supabase.rpc('find_registration_partner', { p_name: pName });
+                const pData = pRows?.[0];
                 if (pData) {
                     pId = pData.id;
                     finalEmail = pData.email;
@@ -2874,29 +2868,14 @@ const EventDetails = () => {
             }
 
             for (const div of targetDivs) {
-                const { data: existing } = await supabase.from('tournament_participants')
-                    .select('id')
-                    .eq('event_id', event.id)
-                    .ilike('full_name', pName)
-                    .ilike('class_name', div)
-                    .maybeSingle();
-
-                if (!existing) {
-                    await supabase.from('tournament_participants').insert({
-                        event_id: event.id,
-                        full_name: pName,
-                        email: finalEmail || null,
-                        class_name: div,
-                        profile_id: pId,
-                        is_paid: overrideIsPaid,
-                        last_synced_at: new Date().toISOString()
-                    });
-                } else {
-                    await supabase.from('tournament_participants').update({
-                        is_paid: overrideIsPaid,
-                        last_synced_at: new Date().toISOString()
-                    }).eq('id', existing.id);
-                }
+                await supabase.rpc('upsert_tournament_participant', {
+                    p_event_id: event.id,
+                    p_full_name: pName,
+                    p_email: finalEmail || null,
+                    p_class_name: div,
+                    p_profile_id: pId,
+                    p_is_paid: overrideIsPaid,
+                });
             }
         };
 
@@ -3218,8 +3197,8 @@ const EventDetails = () => {
                 console.error("Reg Error:", regError);
             }
 
-            const { data: pData } = await supabase.from('players').select('id').ilike('email', formData.email).maybeSingle();
-            const playerId = pData?.id || null;
+            const { data: pRows } = await supabase.rpc('find_registration_partner', { p_email: formData.email });
+            const playerId = pRows?.[0]?.id || null;
 
             const paymentsToInsert = [];
             selectedDivisions.forEach(division => {
@@ -3340,11 +3319,7 @@ const EventDetails = () => {
             for (const license of licensesToGrant) {
                 if (!license.playerId) continue;
                 if (license.isFull) {
-                    await supabase.from('players').update({
-                        paid_registration: true,
-                        license_type: 'Full',
-                        payment_reference: paystackRef
-                    }).eq('id', license.playerId);
+                    await supabase.rpc('grant_partner_full_license', { p_player_id: license.playerId });
                 } else {
                     await supabase.from('temporary_licenses').insert({
                         player_id: license.playerId,

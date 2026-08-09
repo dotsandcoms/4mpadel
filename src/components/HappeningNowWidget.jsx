@@ -56,10 +56,9 @@ const HappeningNowWidget = () => {
                 const manualEventIds = eventsData.filter(e => e.is_manual).map(e => e.id);
                 if (manualEventIds.length > 0) {
                     const { data: regs } = await supabase
-                        .from('event_registrations')
+                        .from('event_registrations_public')
                         .select('event_id, full_name, partner_name')
-                        .in('event_id', manualEventIds)
-                        .neq('status', 'withdrawn');
+                        .in('event_id', manualEventIds);
 
                     if (regs) {
                         const counts = {};

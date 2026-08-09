@@ -81,9 +81,8 @@ const KitKatLeague = () => {
 
             // 1b. Fetch players from Supabase to get profile images & full info for modals
             const dbPlayers = await fetchAllRows(() => supabase
-                .from('players')
+                .from('players_public')
                 .select('*')
-                .eq('approved', true)
                 .order('id', { ascending: true })).catch(() => null);
 
             if (dbPlayers) {

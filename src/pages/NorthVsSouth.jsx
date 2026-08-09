@@ -1134,7 +1134,7 @@ const NorthVsSouth = () => {
   };
 
   useEffect(() => {
-    fetchAllRows(() => supabase.from('players').select('name, image_url').order('id', { ascending: true }))
+    fetchAllRows(() => supabase.from('players_public').select('name, image_url').order('id', { ascending: true }))
       .then((data) => { if (data) setDbPlayers(data); })
       .catch(() => {});
   }, []);

@@ -72,9 +72,8 @@ const Broll = () => {
     useEffect(() => {
         const fetchLocalProfiles = async () => {
             const data = await fetchAllRows(() => supabase
-                .from('players')
+                .from('players_public')
                 .select('*')
-                .eq('approved', true)
                 .order('id', { ascending: true })).catch(() => null);
 
             if (data) {
