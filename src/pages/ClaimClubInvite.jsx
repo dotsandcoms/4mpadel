@@ -69,23 +69,8 @@ const ClaimClubInvite = () => {
                 return;
             }
 
-            const { error: memberErr } = await supabase
-                .from('club_members')
-                .upsert(
-                    { club_id: club.id, player_id: player.id, user_email: email, role: 'owner' },
-                    { onConflict: 'club_id,user_email' },
-                );
-            if (memberErr) throw memberErr;
-
-            const status = club.status;
-            if (['unclaimed', 'draft', 'archived'].includes(status)) {
-                await supabase.from('clubs').update({ status: 'published', is_verified: true }).eq('id', club.id);
-            }
-
-            await supabase
-                .from('club_claim_invites')
-                .update({ status: 'accepted', accepted_at: new Date().toISOString() })
-                .eq('id', invite.id);
+            const { error: acceptErr } = await supabase.rpc('accept_club_claim_invite', { p_token: token });
+            if (acceptErr) throw acceptErr;
 
             sendEmail(email, 'club_claim_approved', { clubName: club.name });
 
