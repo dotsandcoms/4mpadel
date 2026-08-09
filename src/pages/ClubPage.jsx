@@ -171,11 +171,11 @@ const ClubPage = () => {
                 if (!cancelled) setOrgs(linked);
 
                 const [{ count }, { count: ownerCount }, { data: memberRows }] = await Promise.all([
-                    supabase.from('players').select('id', { count: 'exact', head: true }).eq('club_id', data.id),
-                    supabase.from('club_members').select('club_id', { count: 'exact', head: true }).eq('club_id', data.id).eq('role', 'owner'),
+                    supabase.from('players_public').select('id', { count: 'exact', head: true }).eq('club_id', data.id),
+                    supabase.from('club_members_public').select('club_id', { count: 'exact', head: true }).eq('club_id', data.id).eq('role', 'owner'),
                     supabase
-                        .from('club_members')
-                        .select('role, user_email, players!player_id(id, name, image_url)')
+                        .from('club_members_public')
+                        .select('role, player_id')
                         .eq('club_id', data.id)
                         .in('role', ['owner', 'admin', 'staff'])
                         .limit(12),
@@ -184,14 +184,25 @@ const ClubPage = () => {
                 if (!cancelled) {
                     setMemberCount(count || 0);
                     setHasClubOwner((ownerCount || 0) > 0);
-                    setAdmins(
-                        (memberRows || []).map((row) => ({
-                            role: row.role,
-                            email: row.user_email,
-                            name: row.players?.name || row.user_email?.split('@')[0] || 'Admin',
-                            image_url: row.players?.image_url || null,
-                        })),
-                    );
+
+                    const playerIds = (memberRows || []).map((row) => row.player_id).filter(Boolean);
+                    let playersById = {};
+                    if (playerIds.length > 0) {
+                        const { data: playerRows } = await supabase
+                            .from('players_public')
+                            .select('id, name, image_url')
+                            .in('id', playerIds);
+                        playersById = Object.fromEntries((playerRows || []).map((p) => [p.id, p]));
+                    }
+                    if (!cancelled) {
+                        setAdmins(
+                            (memberRows || []).map((row) => ({
+                                role: row.role,
+                                name: playersById[row.player_id]?.name || 'Admin',
+                                image_url: playersById[row.player_id]?.image_url || null,
+                            })),
+                        );
+                    }
                 }
 
                 const clubNames = [data.name, data.short_name].filter(Boolean);
@@ -1062,7 +1073,7 @@ const ClubPage = () => {
                         >
                             <div className="flex gap-4 overflow-x-auto scrollbar-hide no-scrollbar pb-1">
                                 {admins.map((person, idx) => (
-                                    <div key={`${person.email}-${idx}`} className="shrink-0 flex flex-col items-center gap-1.5 w-20 text-center">
+                                    <div key={`${person.name}-${idx}`} className="shrink-0 flex flex-col items-center gap-1.5 w-20 text-center">
                                         <div className="w-12 h-12 rounded-full overflow-hidden border border-white/10 bg-white/5">
                                             {person.image_url ? (
                                                 <img src={person.image_url} alt="" className="w-full h-full object-cover" />

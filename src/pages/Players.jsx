@@ -42,9 +42,8 @@ const Players = () => {
       let error = null;
       for (let from = 0; ; from += PAGE) {
         const { data: page, error: pageError } = await supabase
-          .from('players')
+          .from('players_public')
           .select('*')
-          .eq('approved', true)
           .order('name', { ascending: true })
           .order('id', { ascending: true })
           .range(from, from + PAGE - 1);

@@ -733,12 +733,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const token = params.get('pay_token');
         if (!token) return;
         (async () => {
-            const { data } = await supabase
-                .from('event_registrations')
-                .select('*')
-                .eq('pay_token', token)
-                .eq('event_id', event.id)
-                .maybeSingle();
+            const { data: rows } = await supabase
+                .rpc('get_registration_by_pay_token', { p_token: token, p_event_id: event.id });
+            const data = Array.isArray(rows) ? rows[0] : rows;
             if (data && data.payment_status !== 'paid') {
                 setShowWizard(true);
                 setWizardStep(4);

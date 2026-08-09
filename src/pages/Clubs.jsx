@@ -38,7 +38,7 @@ const Clubs = () => {
                 let ownedIds = new Set();
                 if (ids.length > 0) {
                     const { data: owners } = await supabase
-                        .from('club_members')
+                        .from('club_members_public')
                         .select('club_id')
                         .in('club_id', ids)
                         .eq('role', 'owner');

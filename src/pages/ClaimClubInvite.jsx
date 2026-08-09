@@ -31,16 +31,21 @@ const ClaimClubInvite = () => {
     useEffect(() => {
         if (!token) { setError('No invite token provided.'); setLoading(false); return; }
         (async () => {
-            const { data, error: fetchErr } = await supabase
-                .from('club_claim_invites')
-                .select('*, clubs(id, name, short_name, logo_url, city, status)')
-                .eq('token', token)
-                .maybeSingle();
+            const { data: rows, error: fetchErr } = await supabase
+                .rpc('get_club_claim_invite_by_token', { p_token: token });
+            const data = Array.isArray(rows) ? rows[0] : rows;
             if (fetchErr) { setError(fetchErr.message); setLoading(false); return; }
             if (!data) { setError('Invite not found or has expired.'); setLoading(false); return; }
             if (data.status !== 'pending') { setError(`This invite has already been ${data.status}.`); setLoading(false); return; }
             setInvite(data);
-            setClub(data.clubs);
+            setClub({
+                id: data.club_id,
+                name: data.club_name,
+                short_name: data.club_short_name,
+                logo_url: data.club_logo_url,
+                city: data.club_city,
+                status: data.club_status,
+            });
             setLoading(false);
         })();
     }, [token]);
