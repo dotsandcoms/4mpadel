@@ -2595,6 +2595,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const insertProcessingPayment = useCallback(async (payload) => {
         await expireAbandonedCheckouts();
+        const metadata = {
+            ...(payload.paymentMetadata || {}),
+            // RLS ownership keys — must match auth JWT email for insert policy.
+            email: userEmail,
+            registrant_email: userEmail,
+        };
         return supabase.from('payments').insert([{
             player_id: profile?.id || null,
             event_id: event.id,
@@ -2605,9 +2611,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             payment_method: 'paystack',
             reference: payload.reference,
             is_test: isPaystackTestMode,
-            metadata: payload.paymentMetadata,
+            metadata,
         }]);
-    }, [event.id, profile?.id, expireAbandonedCheckouts]);
+    }, [event.id, profile?.id, userEmail, expireAbandonedCheckouts]);
 
     useEffect(() => {
         if (
@@ -2983,6 +2989,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     target_division_id: targetDiv.id,
                     target_division: targetDiv.name,
                     from_division: reg.division,
+                    email: userEmail,
                     registrant_email: userEmail,
                     registrant_name: profile?.name,
                     reference,
