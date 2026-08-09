@@ -218,7 +218,7 @@ const resolveRegPartnerName = (divRegs, partnerEmail, fallbackName) => {
 };
 
 /** Whether a player can be selected as partner for a division (solo entries can be linked). */
-const getPartnerAvailability = (regs, divisionId, player, divisionName) => {
+const getPartnerAvailability = (regs, divisionId, player, divisionName, currentUserEmail) => {
     const email = normEmail(player?.email);
     const name = player?.name || player?.full_name || 'This player';
     const divLabel = divisionName || 'this division';
@@ -247,9 +247,14 @@ const getPartnerAvailability = (regs, divisionId, player, divisionName) => {
         }
         if (primary.partner_name?.trim() || primary.partner_email?.trim()) {
             const partnerEm = normEmail(primary.partner_email);
-            const mutualLink = partnerEm && divRegs.some(
-                (r) => normEmail(r.email) === partnerEm && normEmail(r.partner_email) === email,
-            );
+            // Only treat this as "still available" when the searching user IS the
+            // confirmed mutual partner re-selecting themselves — not any third
+            // party, who must never be allowed to join an already-complete pair.
+            const mutualLink = partnerEm
+                && partnerEm === normEmail(currentUserEmail)
+                && divRegs.some(
+                    (r) => normEmail(r.email) === partnerEm && normEmail(r.partner_email) === email,
+                );
             if (mutualLink) {
                 return { ok: true };
             }
@@ -1288,7 +1293,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const results = (data || []).map((p) => {
             const divs = divisions.filter((d) => selected[d.id]);
             for (const d of divs) {
-                const check = getPartnerAvailability(divisionRegs, d.id, p, d.name);
+                const check = getPartnerAvailability(divisionRegs, d.id, p, d.name, userEmail);
                 if (!check.ok) {
                     return { ...p, _unavailable: true, _unavailableMessage: check.message };
                 }
@@ -1330,7 +1335,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
 
         for (const d of selectedDivisions) {
-            const check = getPartnerAvailability(divisionRegs, d.id, p, d.name);
+            const check = getPartnerAvailability(divisionRegs, d.id, p, d.name, userEmail);
             if (!check.ok) {
                 toast.error(check.message);
                 return;
@@ -1341,7 +1346,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             const next = { ...prev };
             Object.keys(next).forEach((divId) => {
                 const div = divisions.find((d) => d.id === divId);
-                const check = getPartnerAvailability(divisionRegs, divId, p, div?.name);
+                const check = getPartnerAvailability(divisionRegs, divId, p, div?.name, userEmail);
                 let inheritedLicenseChoice = null;
                 for (const id of Object.keys(prev)) {
                     if (id !== divId && prev[id]?.partnerId === p.id && prev[id]?.partnerLicenseChoice) {
@@ -1392,7 +1397,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
 
         const div = divisions.find((d) => d.id === divId);
-        const check = getPartnerAvailability(divisionRegs, divId, player, div?.name);
+        const check = getPartnerAvailability(divisionRegs, divId, player, div?.name, userEmail);
         if (!check.ok) {
             toast.error(check.message);
             return;
@@ -1526,7 +1531,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             const em = normEmail(p.email);
             if (!em || seen.has(em)) continue;
             seen.add(em);
-            const check = getPartnerAvailability(divisionRegs, divId, p, div?.name);
+            const check = getPartnerAvailability(divisionRegs, divId, p, div?.name, userEmail);
             merged.push({
                 ...p,
                 _soloRegId: check.linkSoloRegId || null,
@@ -2794,6 +2799,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         d.id,
                         { email: sel.partnerEmail, name: sel.partnerName },
                         d.name,
+                        userEmail,
                     );
                     if (!check.ok) {
                         toast.error(check.message);
@@ -3064,6 +3070,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     d.id,
                     { email: sel.partnerEmail, name: sel.partnerName },
                     d.name,
+                    userEmail,
                 );
                 if (!check.ok) {
                     toast.error(check.message);
@@ -3121,6 +3128,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         d.id,
                         { email: sel.partnerEmail, name: sel.partnerName },
                         d.name,
+                        userEmail,
                     );
                     if (!check.ok) {
                         toast.error(check.message);
