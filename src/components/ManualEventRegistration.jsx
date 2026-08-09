@@ -601,18 +601,17 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
 
         const { data: allRegs } = await supabase
-            .from('event_registrations')
-            .select('event_id, email, registered_by, status')
+            .from('event_registrations_public')
+            .select('event_id, email_hash, registered_by_hash, status')
             .in('event_id', weekIds)
-            .eq('division', WEEKLY_OPEN_DIVISION)
-            .neq('status', 'withdrawn');
+            .eq('division', WEEKLY_OPEN_DIVISION);
 
         const counts = {};
         for (const id of weekIds) counts[id] = 0;
         const byWeek = new Map();
         for (const reg of allRegs || []) {
             if (!byWeek.has(reg.event_id)) byWeek.set(reg.event_id, []);
-            byWeek.get(reg.event_id).push(reg);
+            byWeek.get(reg.event_id).push({ email: reg.email_hash, registered_by: reg.registered_by_hash, status: reg.status });
         }
         byWeek.forEach((regs, eventId) => {
             counts[eventId] = countWeeklyEntries(regs);
@@ -623,18 +622,15 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             setRegisteredWeekIds(new Set());
             return;
         }
-        const mine = (allRegs || []).filter(
-            (r) => String(r.email || '').toLowerCase() === String(userEmail).toLowerCase(),
-        );
-        setRegisteredWeekIds(new Set(mine.map((r) => r.event_id)));
+        const { data: mine } = await supabase.rpc('get_my_weekly_registration_ids', {
+            p_event_ids: weekIds,
+            p_email: userEmail,
+        });
+        setRegisteredWeekIds(new Set((mine || []).map((r) => r.event_id)));
     }, [userEmail, event?.is_weekly, seriesWeeks]);
 
     const loadDivisionRegs = useCallback(async () => {
-        const { data } = await supabase
-            .from('event_registrations')
-            .select('id, email, full_name, partner_name, partner_email, division_id, division, status, registered_by, payment_status')
-            .eq('event_id', event.id)
-            .neq('status', 'withdrawn');
+        const { data } = await supabase.rpc('get_event_registrations_for_matching', { p_event_id: event.id });
         setDivisionRegs(data || []);
     }, [event.id]);
 
@@ -666,8 +662,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 if (em && row.full_name) payerNames[em] = row.full_name;
             }
             for (const em of payerEmails.filter((e) => !payerNames[e])) {
-                const { data: p } = await supabase.from('players').select('name').ilike('email', em).maybeSingle();
-                if (p?.name) payerNames[em] = p.name;
+                const { data: pRows } = await supabase.rpc('find_registration_partner', { p_email: em });
+                if (pRows?.[0]?.name) payerNames[em] = pRows[0].name;
             }
         }
 
@@ -902,12 +898,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
             let partnerProfile = null;
             if (reg.partner_email) {
-                const { data: p } = await supabase
-                    .from('players')
-                    .select('id, name, email, image_url, license_type, paid_registration')
-                    .ilike('email', reg.partner_email)
-                    .maybeSingle();
-                partnerProfile = p;
+                const { data: pRows } = await supabase.rpc('find_registration_partner', { p_email: reg.partner_email });
+                partnerProfile = pRows?.[0] || null;
             }
 
             const partnerRow = pendingPartner.find((p) => p.division_id === reg.division_id);
@@ -1287,14 +1279,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
         const seq = ++partnerSearchSeq.current;
         const excludeId = profile?.id || displayProfile?.id;
-        let playerQuery = supabase
-            .from('players')
-            .select('id, name, email, license_type, paid_registration, image_url, level')
-            .or(`name.ilike.%${searchTerm.trim()}%,email.ilike.%${searchTerm.trim()}%`)
-            .limit(8);
-        if (excludeId) playerQuery = playerQuery.neq('id', excludeId);
-
-        const { data } = await playerQuery;
+        const { data } = await supabase.rpc('find_registration_partner', {
+            p_search: searchTerm.trim(),
+            p_exclude_id: excludeId || null,
+        });
         if (seq !== partnerSearchSeq.current) return;
 
         const results = (data || []).map((p) => {
@@ -1514,14 +1502,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const term = searchTerm.trim().toLowerCase();
         const div = divisions.find((d) => d.id === divId);
 
-        let playerQuery = supabase
-            .from('players')
-            .select('id, name, email, license_type, paid_registration, image_url, level')
-            .or(`name.ilike.%${searchTerm.trim()}%,email.ilike.%${searchTerm.trim()}%`)
-            .limit(8);
-        if (excludeId) playerQuery = playerQuery.neq('id', excludeId);
-
-        const { data } = await playerQuery;
+        const { data } = await supabase.rpc('find_registration_partner', {
+            p_search: searchTerm.trim(),
+            p_exclude_id: excludeId || null,
+        });
         if (seq !== divisionPartnerSearchSeq.current[divId]) return;
 
         const regMatches = (divisionRegs || [])
