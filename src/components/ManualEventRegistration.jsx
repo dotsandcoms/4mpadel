@@ -858,6 +858,28 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     /** Weekly events have no divisions — never show "Add Division". */
     const canAddDivision = !isWeeklyEvent && divisionsAvailableToRegister.length > 0;
 
+    /** True when no new entries can be started (all divisions / event closed). */
+    const registrationFullyClosed = useMemo(() => {
+        if (isWeeklyEvent) return isRegistrationClosed(null, event);
+        if (divisions.length === 0) return isRegistrationClosed(null, event);
+        return divisions.every((d) => isClosed(d, event));
+    }, [isWeeklyEvent, divisions, event]);
+
+    const canStartRegistration = useMemo(() => {
+        if (registrationFullyClosed) return false;
+        if (isWeeklyEvent) {
+            if (event?.id && registeredWeekIds.has(event.id)) return false;
+            return true;
+        }
+        return divisionsAvailableToRegister.length > 0;
+    }, [
+        registrationFullyClosed,
+        isWeeklyEvent,
+        event?.id,
+        registeredWeekIds,
+        divisionsAvailableToRegister.length,
+    ]);
+
     const divisionMetaLine = (d) => {
         const saved = getDivisionSavedDetails(d);
         if (saved) return saved;
@@ -999,6 +1021,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             hasAnyRegistration,
             entries: registrationEntries,
             canAddDivision,
+            registrationFullyClosed,
+            canStartRegistration,
         });
         if (registrationActionsRef) {
             registrationActionsRef.current = {
@@ -1059,6 +1083,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         hasAnyRegistration,
         registrationEntries,
         canAddDivision,
+        registrationFullyClosed,
+        canStartRegistration,
         isWeeklyEvent,
         registeredWeekIds,
         onStatusChange,
@@ -1105,6 +1131,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const openWizard = () => {
         if (!userEmail) {
             promptMembersOnly();
+            return;
+        }
+        if (!canStartRegistration) {
+            toast.error(registrationFullyClosed
+                ? 'Registration has closed for this event'
+                : 'No divisions are open for registration');
             return;
         }
         if (isWeeklyEvent && event?.id && registeredWeekIds.has(event.id)) {
@@ -5063,9 +5095,18 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     );
                                 })}
                             </div>
-                            <PrimaryBtn onClick={openWizard}>
-                                Register <ArrowRight className="w-4 h-4" />
-                            </PrimaryBtn>
+                            {canStartRegistration ? (
+                                <PrimaryBtn onClick={openWizard}>
+                                    Register <ArrowRight className="w-4 h-4" />
+                                </PrimaryBtn>
+                            ) : (
+                                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center">
+                                    <p className="text-sm font-semibold text-slate-800">Registration closed</p>
+                                    <p className="text-xs text-slate-500 mt-1 font-normal leading-snug">
+                                        Entries are no longer being accepted for this event.
+                                    </p>
+                                </div>
+                            )}
                         </>
                     )}
                             </div>

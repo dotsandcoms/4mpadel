@@ -928,8 +928,8 @@ const EventDetails = () => {
         return eventDate < today;
     }, [event]);
 
-    // For manual events, registration closing is driven by the event-wide close date
-    // (per-division close dates are handled inside the registration widget itself).
+    // Event-wide close date for hero/countdown. Per-division closes are handled
+    // in ManualEventRegistration (Register button) and via manualRegStatus.
     const isManualRegClosed = useMemo(() => {
         if (!event?.is_manual) return false;
         if (!event.registration_closes_at) return false;
@@ -1215,6 +1215,8 @@ const EventDetails = () => {
         hasAnyRegistration: false,
         entries: [],
         canAddDivision: false,
+        registrationFullyClosed: false,
+        canStartRegistration: false,
     });
     const manualRegActionsRef = React.useRef({});
     const [participantsRefreshKey, setParticipantsRefreshKey] = useState(0);
@@ -1414,6 +1416,8 @@ const EventDetails = () => {
                 hasAnyRegistration: false,
                 entries: [],
                 canAddDivision: false,
+                registrationFullyClosed: false,
+                canStartRegistration: false,
             });
             return;
         }
@@ -1440,14 +1444,22 @@ const EventDetails = () => {
 
         const myRegs = regs || [];
         const divisions = divs || [];
+        const registrationFullyClosed = event?.is_weekly
+            ? isRegistrationClosed(null, event)
+            : (divisions.length > 0
+                ? divisions.every((d) => isRegistrationClosed(d, event))
+                : isRegistrationClosed(null, event));
         if (myRegs.length === 0) {
+            const canAddDivision = !event?.is_weekly && divisions.some((d) => !isRegistrationClosed(d, event));
             setManualRegStatus({
                 hasPendingPayment: false,
                 hasRegistrations: false,
                 allRegistrationsPaid: false,
                 hasAnyRegistration: false,
                 entries: [],
-                canAddDivision: !event?.is_weekly && divisions.some((d) => !isRegistrationClosed(d, event)),
+                canAddDivision,
+                registrationFullyClosed,
+                canStartRegistration: event?.is_weekly ? !registrationFullyClosed : canAddDivision,
             });
             return;
         }
@@ -1577,6 +1589,8 @@ const EventDetails = () => {
             hasAnyRegistration: true,
             entries,
             canAddDivision,
+            registrationFullyClosed,
+            canStartRegistration: canAddDivision || (event?.is_weekly && !registrationFullyClosed),
         });
     }, [event?.is_manual, event?.id, event?.is_weekly, event?.registration_closes_at, manualUserEmail]);
 
@@ -3468,6 +3482,10 @@ const EventDetails = () => {
             promptMembersOnly();
             return;
         }
+        if (registrationClosed || manualRegStatus.registrationFullyClosed) {
+            toast.error('Registration has closed for this event');
+            return;
+        }
         manualRegActionsRef.current?.openRegistration?.();
     };
 
@@ -4138,7 +4156,12 @@ const EventDetails = () => {
                                                 countdownCta = { label: 'Pay Now', onClick: openManualPayFlow };
                                             } else if (manualRegStatus.hasPendingPayment || manualRegStatus.hasRegistrations || manualRegStatus.hasAnyRegistration) {
                                                 countdownCta = { label: 'Manage Entry', onClick: openManageEntry };
-                                            } else if (!registrationNotYetOpen && !registrationClosed) {
+                                            } else if (
+                                                !registrationNotYetOpen
+                                                && !registrationClosed
+                                                && !manualRegStatus.registrationFullyClosed
+                                                && (event.is_weekly || manualRegStatus.canStartRegistration || manualRegStatus.canAddDivision)
+                                            ) {
                                                 countdownCta = { label: 'Register', onClick: openManualRegistration };
                                             }
                                         } else if (isRegistered && isPaid && registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) {
