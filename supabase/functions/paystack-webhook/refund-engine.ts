@@ -576,7 +576,7 @@ export function checkRefundEligibility(
 // ----------------------------------------------------------------------------
 
 /**
- * Single source of truth for admin authorization: presence of a row in
+ * Platform admin authorization: presence of a row in
  * admin_sidebar_permissions for the given email.
  */
 export async function resolveIsAdmin(
@@ -590,4 +590,60 @@ export async function resolveIsAdmin(
         .ilike('email', email)
         .maybeSingle();
     return !!data;
+}
+
+/**
+ * Event-scoped manager: org owner/admin, organiser email, or event co-admin.
+ * Mirrors public.can_manage_event used by RLS.
+ */
+export async function resolveCanManageEvent(
+    supabaseAdmin: SupabaseClient,
+    email: string | null | undefined,
+    eventId: string | number | null | undefined,
+): Promise<boolean> {
+    if (!email || eventId == null || eventId === '') return false;
+    const caller = String(email).trim().toLowerCase();
+
+    const { data: event } = await supabaseAdmin
+        .from('calendar')
+        .select('id, organisation_id, organiser_email, event_co_admins')
+        .eq('id', eventId)
+        .maybeSingle();
+    if (!event) return false;
+
+    if (event.organiser_email && String(event.organiser_email).trim().toLowerCase() === caller) {
+        return true;
+    }
+
+    const coAdmins = Array.isArray(event.event_co_admins) ? event.event_co_admins : [];
+    if (coAdmins.some((e) => String(e || '').trim().toLowerCase() === caller)) {
+        return true;
+    }
+
+    const orgId = event.organisation_id;
+    if (!orgId) return false;
+
+    const { data: membership } = await supabaseAdmin
+        .from('organisation_members')
+        .select('role')
+        .eq('organisation_id', orgId)
+        .ilike('user_email', caller)
+        .in('role', ['owner', 'admin'])
+        .maybeSingle();
+    if (membership) return true;
+
+    const { data: org } = await supabaseAdmin
+        .from('organisations')
+        .select('created_by')
+        .eq('id', orgId)
+        .maybeSingle();
+    if (!org?.created_by) return false;
+
+    const { data: player } = await supabaseAdmin
+        .from('players')
+        .select('id')
+        .eq('id', org.created_by)
+        .ilike('email', caller)
+        .maybeSingle();
+    return !!player;
 }

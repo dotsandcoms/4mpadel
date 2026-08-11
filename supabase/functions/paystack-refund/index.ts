@@ -10,6 +10,7 @@ import {
     cancelEventTempLicense,
     checkRefundEligibility,
     isLedgerSplitPayment,
+    resolveCanManageEvent,
     resolveIsAdmin,
     resolvePaystackGatewayReference,
     resolveRefundableItems,
@@ -984,11 +985,8 @@ serve(async (req: Request) => {
             isAdmin = await resolveIsAdmin(supabaseAdmin, user.email);
         }
 
-        // skip_paystack and no_refund are admin-only. [CORRECTION 4]
-        const skipPaystack = !!skip_paystack && isAdmin && action === 'admin_remove';
-        const noRefund = !!no_refund && isAdmin && action === 'admin_remove';
-
-        if ((action === 'admin_remove' || action === 'retry_failed') && !isAdmin) {
+        // retry_failed stays platform-admin / service-role only.
+        if (action === 'retry_failed' && !isAdmin) {
             return json(403, { error: 'Admin only' });
         }
 
@@ -999,19 +997,6 @@ serve(async (req: Request) => {
                 callerEmail,
                 json,
             });
-        }
-
-        // ===== Division switch (move the entry instead of refunding) =====
-        if (action === 'switch_division') {
-            const result = await handleSwitchDivision(supabaseAdmin, {
-                registrationId: registration_id,
-                targetDivisionId: target_division_id,
-                topUpReference: top_up_reference,
-                callerEmail,
-                isAdmin,
-                json,
-            });
-            return result;
         }
 
         // ----- Load the target registration(s) -----
@@ -1059,6 +1044,35 @@ serve(async (req: Request) => {
             } else {
                 targets = [reg as RegistrationRow];
             }
+        }
+
+        // Org owners/admins managing their own event (not in admin_sidebar_permissions)
+        // need admin_remove + cash/no-refund flags for ManualEventRegistrations.
+        if (action === 'admin_remove' && !isAdmin) {
+            const canManage = await resolveCanManageEvent(supabaseAdmin, callerEmail, eventId);
+            if (!canManage) return json(403, { error: 'Admin only' });
+            isAdmin = true;
+        }
+
+        // skip_paystack and no_refund are admin / event-manager only. [CORRECTION 4]
+        const skipPaystack = !!skip_paystack && isAdmin && action === 'admin_remove';
+        const noRefund = !!no_refund && isAdmin && action === 'admin_remove';
+
+        // ===== Division switch (move the entry instead of refunding) =====
+        if (action === 'switch_division') {
+            // Org managers may move any entry on their event; players still use
+            // the existing owner/self path inside handleSwitchDivision.
+            if (!isAdmin) {
+                isAdmin = await resolveCanManageEvent(supabaseAdmin, callerEmail, eventId);
+            }
+            return await handleSwitchDivision(supabaseAdmin, {
+                registrationId: registration_id,
+                targetDivisionId: target_division_id,
+                topUpReference: top_up_reference,
+                callerEmail,
+                isAdmin,
+                json,
+            });
         }
 
         if (targets.length === 0) {
