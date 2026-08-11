@@ -1590,7 +1590,9 @@ const EventDetails = () => {
             entries,
             canAddDivision,
             registrationFullyClosed,
-            canStartRegistration: canAddDivision || (event?.is_weekly && !registrationFullyClosed),
+            // Weekly: already entered for this event/week — no new registration.
+            // Non-weekly: only if another open division remains.
+            canStartRegistration: event?.is_weekly ? false : canAddDivision,
         });
     }, [event?.is_manual, event?.id, event?.is_weekly, event?.registration_closes_at, manualUserEmail]);
 

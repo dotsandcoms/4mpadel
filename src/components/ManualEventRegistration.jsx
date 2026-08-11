@@ -1133,14 +1133,18 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             promptMembersOnly();
             return;
         }
+        // Check already-registered before the generic canStartRegistration gate so
+        // weekly users get a clear message (canStartRegistration is false for them).
+        if (isWeeklyEvent && event?.id && registeredWeekIds.has(event.id)) {
+            toast.error('You are already registered for this event');
+            return;
+        }
         if (!canStartRegistration) {
             toast.error(registrationFullyClosed
                 ? 'Registration has closed for this event'
-                : 'No divisions are open for registration');
-            return;
-        }
-        if (isWeeklyEvent && event?.id && registeredWeekIds.has(event.id)) {
-            toast.error('You are already registered for this event');
+                : isWeeklyEvent
+                    ? 'Registration is not available for this event'
+                    : 'No divisions are open for registration');
             return;
         }
         setWizardMode('register');
