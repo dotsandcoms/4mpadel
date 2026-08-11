@@ -724,6 +724,24 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                     console.warn('Could not load event_registrations fallback:', legacyError.message);
                 }
 
+                // event_registrations is source of truth for division after admin moves.
+                // Drop stale tournament_participants rows when a paid registration exists
+                // for the same email in a different division (prevents "still in 40+").
+                const regByEmail = new Map();
+                (legacyRegs || []).forEach((r) => {
+                    const email = (r.email || '').toLowerCase();
+                    if (!email) return;
+                    if (!regByEmail.has(email)) regByEmail.set(email, []);
+                    regByEmail.get(email).push((r.division || '').trim());
+                });
+                enriched = enriched.filter((e) => {
+                    const email = (e.email || '').toLowerCase();
+                    const regs = regByEmail.get(email);
+                    if (!regs || regs.length === 0) return true;
+                    const className = (e.class_name || '').trim();
+                    return regs.some((d) => d.toLowerCase() === className.toLowerCase());
+                });
+
                 const existingKeys = new Set(
                     enriched.map(e => `${(e.email || '').toLowerCase()}|${e.class_name || ''}`)
                 );

@@ -13,6 +13,7 @@ import {
 } from '../../utils/registrationLicense';
 import {
     findAdminMarkedPayment,
+    findParentEntryPayment,
     findPaymentForRegistration,
     findStrictPaystackEntryPayment,
     getRegistrationEntryFeePaid,
@@ -21,6 +22,7 @@ import {
     isExplicitAdminMarkedPayment,
     isCompedEntryPayment,
     isLicensePaymentRow,
+    isPaystackPaymentMethod,
     registrationCountsAsPaid,
     registrationHasPaystackEntryPayment,
     registrationIsCompedEntry,
@@ -1353,8 +1355,72 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                     updates.partner_payment_status = null;
                 }
 
-                const { error } = await supabase.from('event_registrations').update(updates).eq('id', reg.id);
+                // .select() surfaces silent RLS no-ops (0 rows, no error) that left
+                // players stuck in the old division on the public Players tab.
+                const { data: movedRows, error } = await supabase
+                    .from('event_registrations')
+                    .update(updates)
+                    .eq('id', reg.id)
+                    .select('id, division');
                 if (error) throw error;
+                if (!movedRows?.length) {
+                    throw new Error(
+                        `Could not move ${reg.full_name || reg.email}. You may not have permission to update this event's registrations — ask a 4M admin to apply the org-admin RLS migration.`,
+                    );
+                }
+
+                const { error: partErr } = await supabase.rpc('reassign_tournament_participant_division', {
+                    p_event_id: event.id,
+                    p_email: reg.email || '',
+                    p_full_name: reg.full_name || '',
+                    p_from_class: sourceDivision,
+                    p_to_class: targetDiv.name,
+                    p_is_paid: newStatus === 'paid',
+                });
+                if (partErr) {
+                    console.warn('Participant division sync failed:', partErr.message);
+                }
+
+                // Keep Paystack covers on the new division so status stays Via Paystack.
+                const regEmail = (reg.email || '').toLowerCase();
+                const relatedPays = (payments || []).filter((p) => {
+                    if (p.status !== 'success') return false;
+                    const blob = JSON.stringify(p.metadata || {}).toLowerCase();
+                    return regEmail && blob.includes(regEmail);
+                });
+                await Promise.all(relatedPays.map(async (p) => {
+                    let meta = p.metadata || {};
+                    if (typeof meta === 'string') {
+                        try { meta = JSON.parse(meta); } catch { meta = {}; }
+                    }
+                    const covers = Array.isArray(meta.covers) ? meta.covers : [];
+                    let changed = false;
+                    const nextCovers = covers.map((c) => {
+                        if (
+                            c?.type === 'entry'
+                            && (c.email || '').toLowerCase() === regEmail
+                            && (c.division || '') === sourceDivision
+                        ) {
+                            changed = true;
+                            return { ...c, division: targetDiv.name };
+                        }
+                        return c;
+                    });
+                    if (!changed) return;
+                    const fees = { ...(meta.division_entry_fees || {}) };
+                    fees[targetDiv.name] = newFee;
+                    const { error: payErr } = await supabase
+                        .from('payments')
+                        .update({
+                            metadata: {
+                                ...meta,
+                                covers: nextCovers,
+                                division_entry_fees: fees,
+                            },
+                        })
+                        .eq('id', p.id);
+                    if (payErr) console.warn('Payment cover rewrite on move failed:', payErr.message);
+                }));
 
                 let feeNote = 'There was no change to your entry fee.';
                 if (owesMore) feeNote = `Your new division has a higher entry fee of ${fmtR(newFee)}. Your entry is now marked pending — please complete payment to confirm your spot.`;
@@ -1560,13 +1626,23 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const getPaymentDetails = useCallback((reg) => {
         if (!registrationCountsAsPaid(reg, refundByReg, payments)) return null;
 
-        const payment = findPaymentForReg(reg);
+        let payment = findPaymentForReg(reg);
+        // Never surface LIC-* split ledger rows as the entry payment (wrong Manual note).
+        if (payment && isLicensePaymentRow(payment)) {
+            payment = findParentEntryPayment(payments, payment) || payment;
+        }
         const { isPartnerPaid, payerName } = resolvePaymentPayer(reg, payment);
         const method = resolveRegistrationPaymentMethod(reg, payment) || (isPartnerPaid ? 'partner' : 'paystack');
-        const note = payment?.metadata?.note || payment?.metadata?.payment_note || null;
+        const rawNote = payment?.metadata?.note || payment?.metadata?.payment_note || null;
+        const note = (rawNote && /license portion split/i.test(String(rawNote)))
+            ? null
+            : rawNote;
         const isExplicitAdminMark = isExplicitAdminMarkedPayment(payment);
         const isCompedChannel = isCompedEntryPayment(payment) || registrationIsCompedEntry(reg, payments);
-        const isPaystackChannel = !isCompedChannel && !isExplicitAdminMark && isPaystackEntryPayment(reg, payments, refundByReg);
+        const isPaystackChannel = !isCompedChannel && !isExplicitAdminMark && (
+            isPaystackEntryPayment(reg, payments, refundByReg)
+            || (payment && isPaystackPaymentMethod(payment.payment_method) && !isLicensePaymentRow(payment))
+        );
         const isManualChannel = !isPartnerPaid && !isPaystackChannel && !isCompedChannel;
 
         return {
@@ -1880,11 +1956,55 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const linkRegistrationToProfile = async (reg, player) => {
         setProfileLinkBusy(true);
         try {
+            const fromEmail = String(reg.email || '').trim();
+            const toEmail = String(player.email || '').trim();
             const { error } = await supabase
                 .from('event_registrations')
                 .update({ email: player.email, full_name: player.name })
                 .eq('id', reg.id);
             if (error) throw error;
+
+            // Keep partner pointers + payment covers in sync when linking rewrites
+            // the registration email (otherwise Paystack team payments look "manual").
+            if (fromEmail && toEmail && fromEmail.toLowerCase() !== toEmail.toLowerCase()) {
+                await supabase
+                    .from('event_registrations')
+                    .update({ partner_email: toEmail })
+                    .eq('event_id', event.id)
+                    .ilike('partner_email', fromEmail);
+
+                const rewriteEmailDeep = (value) => {
+                    if (Array.isArray(value)) return value.map(rewriteEmailDeep);
+                    if (!value || typeof value !== 'object') return value;
+                    const next = { ...value };
+                    for (const key of Object.keys(next)) {
+                        if (typeof next[key] === 'string' && next[key].toLowerCase() === fromEmail.toLowerCase()) {
+                            next[key] = toEmail;
+                        } else if (next[key] && typeof next[key] === 'object') {
+                            next[key] = rewriteEmailDeep(next[key]);
+                        }
+                    }
+                    return next;
+                };
+
+                const relatedPayments = (payments || []).filter((p) => {
+                    const blob = JSON.stringify(p.metadata || {}).toLowerCase();
+                    return blob.includes(fromEmail.toLowerCase());
+                });
+                await Promise.all(relatedPayments.map(async (p) => {
+                    let base = p.metadata || {};
+                    if (typeof base === 'string') {
+                        try { base = JSON.parse(base); } catch { base = {}; }
+                    }
+                    const metadata = rewriteEmailDeep(base);
+                    const { error: payErr } = await supabase
+                        .from('payments')
+                        .update({ metadata })
+                        .eq('id', p.id);
+                    if (payErr) console.warn('Payment cover rewrite failed:', payErr.message);
+                }));
+            }
+
             await logEventActivity({
                 eventId: event.id,
                 action: 'admin.linked_profile',
@@ -1893,6 +2013,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 details: {
                     registration_id: reg.id,
                     from_name: reg.full_name,
+                    from_email: fromEmail,
                     to_name: player.name,
                     to_email: player.email,
                 },

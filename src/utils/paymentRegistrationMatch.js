@@ -79,8 +79,49 @@ export function paymentEmailsFor(metadata = {}) {
     return emails;
 }
 
+const namesMatch = (a, b) => {
+    const left = String(a || '').trim().toLowerCase();
+    const right = String(b || '').trim().toLowerCase();
+    if (!left || !right) return false;
+    return left === right || left.startsWith(right) || right.startsWith(left);
+};
+
+const paymentRegistrationRows = (meta = {}) => {
+    const { top, inner } = getPaymentMetadataLayers(meta);
+    return [...(top.registration_rows || []), ...(inner.registration_rows || [])];
+};
+
+/**
+ * True when an entry cover is for this registration even if the live email
+ * changed after checkout (typo correction / 4M profile link). Uses the
+ * payment's registration_rows snapshot (name + division) as an alias for the
+ * cover email — never treats an uncovered partner booking as paid.
+ */
+export function entryCoverMatchesRegistration(cover, reg, meta = {}) {
+    if (!cover || cover.type !== 'entry' || !reg) return false;
+    const email = norm(reg.email);
+    const division = reg.division || reg.class_name;
+    if (!email) return false;
+    if (cover.division && division && cover.division !== division) return false;
+
+    if (norm(cover.email) === email) return true;
+
+    // Cover email is stale (e.g. ridhaa@.clm) but snapshot names this player.
+    const snap = paymentRegistrationRows(meta).find(
+        (row) => norm(row?.email) === norm(cover.email)
+            && (!cover.division || !row.division || row.division === cover.division),
+    );
+    if (!snap) return false;
+    if (division && snap.division && snap.division !== division) return false;
+    return namesMatch(snap.full_name, reg.full_name);
+}
+
 export function paymentMatchesRegistration(payment, reg) {
     if (!payment || payment.status !== 'success') return false;
+    // License ledger splits (LIC-* from bundled checkout) must never stand in
+    // for an entry-fee payment — they only cover SAPA license and carry the
+    // "License portion split from REGEV-…" note that was leaking into Manual.
+    if (isLicensePaymentRow(payment)) return false;
 
     const meta = normalizePaymentMetadata(payment.metadata);
     const email = norm(reg.email);
@@ -100,10 +141,7 @@ export function paymentMatchesRegistration(payment, reg) {
 
     const allCovers = paymentEntryCoversFor(meta);
     const entryCovers = allCovers.filter((cover) => cover.type === 'entry');
-    const covered = entryCovers.some(
-        (cover) => norm(cover.email) === email
-            && (!cover.division || !division || cover.division === division),
-    );
+    const covered = entryCovers.some((cover) => entryCoverMatchesRegistration(cover, reg, meta));
     if (covered) return true;
 
     // When covers[] list who was paid for, do not treat registration_rows partners
@@ -118,27 +156,38 @@ export function paymentMatchesRegistration(payment, reg) {
     return coversForEmail.some((cover) => !cover.division || !division || cover.division === division);
 }
 
-/** Entry fee payment that explicitly covers this registration row (email + division). */
-export function paymentStrictlyCoversRegistration(payment, reg) {
-    if (!payment || payment.status !== 'success') return false;
+/**
+ * True when payment has an entry cover for this player.
+ * @param {{ requireDivision?: boolean }} [opts] - when false, still match after an
+ *   admin division move (cover keeps the original division name).
+ */
+export function paymentHasEntryCoverForRegistration(payment, reg, opts = {}) {
+    const { requireDivision = true } = opts;
+    if (!payment || payment.status !== 'success' || isLicensePaymentRow(payment)) return false;
 
     const meta = normalizePaymentMetadata(payment.metadata);
     const email = norm(reg.email);
     const division = reg.division || reg.class_name;
-
     if (!email) return false;
     if (meta.registration_id === reg.id) return true;
 
-    // Require an explicit covers[] entry (email + division). Do NOT treat
-    // registration_rows alone as payment — partners appear there when only one
-    // player paid for themselves.
-    if (!division) return false;
+    return paymentEntryCoversFor(meta).some((cover) => {
+        if (cover.type !== 'entry') return false;
+        if (requireDivision) {
+            if (!division) return false;
+            return entryCoverMatchesRegistration(cover, reg, meta) && cover.division === division;
+        }
+        if (norm(cover.email) === email) return true;
+        const snap = paymentRegistrationRows(meta).find(
+            (row) => norm(row?.email) === norm(cover.email),
+        );
+        return !!(snap && namesMatch(snap.full_name, reg.full_name));
+    });
+}
 
-    return paymentEntryCoversFor(meta).some(
-        (cover) => cover.type === 'entry'
-            && norm(cover.email) === email
-            && cover.division === division,
-    );
+/** Entry fee payment that explicitly covers this registration row (email + division). */
+export function paymentStrictlyCoversRegistration(payment, reg) {
+    return paymentHasEntryCoverForRegistration(payment, reg, { requireDivision: true });
 }
 
 const isLicenseLineItem = (item) => {
@@ -215,27 +264,76 @@ export function getRegistrationEntryFeePaid(payment, reg, fallbackFee = 0) {
     return fallback;
 }
 
+/**
+ * Bundled checkout: LIC-* row for this email → parent REGEV-* entry payment
+ * (e.g. Ali Carrim / REGEV-463-… where the UI previously bound the license split).
+ */
+export function findPaystackEntryViaLicenseSplit(payments, reg) {
+    const email = norm(reg?.email);
+    if (!email) return null;
+
+    const licenseRows = (payments || []).filter((payment) => {
+        if (payment.status !== 'success' || !isLicensePaymentRow(payment)) return false;
+        const meta = normalizePaymentMetadata(payment.metadata);
+        return paymentEntryCoversFor(meta).some(
+            (cover) => cover.type === 'license' && norm(cover.email) === email,
+        );
+    });
+
+    for (const lic of licenseRows) {
+        const parent = findParentEntryPayment(payments, lic);
+        if (!parent || !isPaystackPaymentMethod(parent.payment_method)) continue;
+        // Parent REGEV is the real entry payment even if division was later changed.
+        if (
+            paymentHasEntryCoverForRegistration(parent, reg, { requireDivision: false })
+            || paymentMatchesRegistration(parent, reg)
+        ) {
+            return parent;
+        }
+        // License was for this player on this checkout — trust parent REGEV when
+        // it still lists them on registration_rows / registrant.
+        const meta = normalizePaymentMetadata(parent.metadata);
+        const named = paymentRegistrationRows(meta).some(
+            (row) => norm(row?.email) === email || namesMatch(row?.full_name, reg.full_name),
+        );
+        if (named || norm(meta.registrant_email) === email) return parent;
+    }
+    return null;
+}
+
 export function findStrictPaystackEntryPayment(payments, reg) {
     const email = norm(reg?.email);
-    const matches = (payments || []).filter(
-        (payment) => payment.status === 'success'
-            && isPaystackPaymentMethod(payment.payment_method)
-            && !isLicensePaymentRow(payment)
-            && paymentStrictlyCoversRegistration(payment, reg),
-    );
-    if (matches.length === 0) return null;
-
     const scorePayment = (payment) => {
         const meta = normalizePaymentMetadata(payment.metadata);
         let score = 0;
         if (meta.registration_id === reg.id) score += 100;
+        if (paymentHasEntryCoverForRegistration(payment, reg, { requireDivision: true })) score += 50;
         if (meta.source === 'paystack_sync') score += 10;
         if (paymentEmailsFor(meta).has(email)) score += 1;
         score += new Date(payment.created_at || 0).getTime() / 1e15;
         return score;
     };
 
-    return [...matches].sort((a, b) => scorePayment(b) - scorePayment(a))[0];
+    const paystackEntries = (payments || []).filter(
+        (payment) => payment.status === 'success'
+            && isPaystackPaymentMethod(payment.payment_method)
+            && !isLicensePaymentRow(payment),
+    );
+
+    const exact = paystackEntries.filter((payment) => paymentStrictlyCoversRegistration(payment, reg));
+    if (exact.length > 0) {
+        return [...exact].sort((a, b) => scorePayment(b) - scorePayment(a))[0];
+    }
+
+    // Same player, entry cover email match after an admin division move.
+    const moved = paystackEntries.filter((payment) => (
+        paymentHasEntryCoverForRegistration(payment, reg, { requireDivision: false })
+    ));
+    if (moved.length > 0) {
+        return [...moved].sort((a, b) => scorePayment(b) - scorePayment(a))[0];
+    }
+
+    return findPaystackEntryViaLicenseSplit(payments, reg);
 }
 
 export function findAdminMarkedPayment(payments, reg) {
@@ -250,6 +348,22 @@ export function registrationHasPaystackEntryPayment(reg, payments) {
     return !!findStrictPaystackEntryPayment(payments, reg);
 }
 
+/**
+ * When a bundled checkout was split, prefer the parent REGEV entry row over any
+ * LIC-* sibling so status/notes reflect the entry fee payment.
+ */
+export function findParentEntryPayment(payments, licensePayment) {
+    if (!licensePayment || !isLicensePaymentRow(licensePayment)) return null;
+    const meta = normalizePaymentMetadata(licensePayment.metadata);
+    const parentRef = String(meta.parent_reference || '').trim();
+    if (!parentRef) return null;
+    return (payments || []).find(
+        (p) => p.status === 'success'
+            && !isLicensePaymentRow(p)
+            && String(p.reference || '') === parentRef,
+    ) || null;
+}
+
 export function findPaymentForRegistration(payments, reg) {
     const strict = findStrictPaystackEntryPayment(payments, reg);
     if (strict) return strict;
@@ -258,7 +372,9 @@ export function findPaymentForRegistration(payments, reg) {
     if (admin) return admin;
 
     const email = norm(reg?.email);
-    const matches = (payments || []).filter((payment) => paymentMatchesRegistration(payment, reg));
+    const matches = (payments || []).filter(
+        (payment) => !isLicensePaymentRow(payment) && paymentMatchesRegistration(payment, reg),
+    );
     if (matches.length === 0) return null;
 
     const scorePayment = (payment) => {
@@ -378,6 +494,7 @@ export function resolveRegistrationPayer(payment, reg) {
 
     const meta = normalizePaymentMetadata(payment.metadata);
     const explicitlyCovers = meta.registration_id === reg.id
+        || paymentStrictlyCoversRegistration(payment, reg)
         || paymentExplicitlyCoversEmail(payment, selfEmail);
     if (!explicitlyCovers) {
         // A differently-owned payment that doesn't explicitly cover this player
