@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Web-only font stack, consumed by src/constants/theme.ts on the web target.
+   Native resolves these through Fonts in that same file. */
+:root {
+  --font-display:
+    'SF Pro Rounded', Nunito, ui-rounded, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-rounded: 'SF Pro Rounded', Nunito, ui-rounded, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  --font-serif: Georgia, 'Times New Roman', serif;
+}

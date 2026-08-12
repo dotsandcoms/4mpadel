@@ -38,9 +38,17 @@ exports/
 *.png
 !src/assets/**/*.png
 !public/**/*.png
+!mobile/assets/**/*.png
 *.jpg
 !src/assets/**/*.jpg
 !public/**/*.jpg
+!mobile/assets/**/*.jpg
+
+# Expo / React Native
+mobile/.expo/
+mobile/ios/
+mobile/android/
+mobile/dist/
 .vercel
 .env*.local
 organisations-dev/
