@@ -17,7 +17,10 @@ import { brand } from '@/theme/tokens';
 export default function TabsLayout() {
   return (
     <NativeTabs
-      backgroundColor={brand.page}
+      // No backgroundColor on purpose: leaving it unset lets iOS 26 render its
+      // own Liquid Glass material and Android its Material 3 surface. Setting a
+      // flat fill here would paint over both.
+      tintColor={brand.padel}
       indicatorColor={brand.panel}
       minimizeBehavior="onScrollDown"
       labelStyle={{ selected: { color: brand.padel } }}>
