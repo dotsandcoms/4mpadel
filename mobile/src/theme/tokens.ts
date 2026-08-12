@@ -7,6 +7,9 @@
 export const brand = {
   /** Electric lime. The only accent. One per screen, ideally. */
   padel: '#CCFF00',
+  /** Lime at 60%. For large areas — borders, fills — where full strength
+   *  shouts over everything else on the screen. */
+  padelSoft: 'rgba(204,255,0,0.6)',
 
   /** Surface ramp, darkest to lightest. */
   page: '#0a0a0a',

@@ -10,7 +10,6 @@ import {
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -25,6 +24,7 @@ import {
   signInWithGoogle,
   signUpWithEmail,
 } from '@/lib/auth';
+import { LiquidField } from '@/components/liquid-field';
 import { brand, motion } from '@/theme/tokens';
 
 type Mode = 'signin' | 'signup';
@@ -137,7 +137,7 @@ export default function SignInScreen() {
           <View className="h-px flex-1 bg-edge" />
         </View>
 
-        <Field
+        <LiquidField
           label="Email"
           value={email}
           onChangeText={setEmail}
@@ -146,7 +146,7 @@ export default function SignInScreen() {
           autoComplete="email"
           textContentType="emailAddress"
         />
-        <Field
+        <LiquidField
           label="Password"
           value={password}
           onChangeText={setPassword}
@@ -232,23 +232,6 @@ export default function SignInScreen() {
   );
 }
 
-function Field({ label, ...props }: { label: string } & React.ComponentProps<typeof TextInput>) {
-  return (
-    <View className="mb-4">
-      <Text className="mb-2 text-xs font-semibold uppercase text-faint" style={{ letterSpacing: 1.2 }}>
-        {label}
-      </Text>
-      <TextInput
-        {...props}
-        placeholderTextColor={brand.faint}
-        autoCapitalize="none"
-        autoCorrect={false}
-        className="h-13 rounded-xl border border-edge bg-elevated px-4 text-[16px] text-premium"
-        style={{ height: 52 }}
-      />
-    </View>
-  );
-}
 
 /**
  * Supabase error text is written for developers. Rewrite the ones users
