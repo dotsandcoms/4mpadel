@@ -13,7 +13,14 @@
       "bundleIdentifier": "com.fourmpadel.app",
       "supportsTablet": false,
       "infoPlist": {
-        "NSFaceIDUsageDescription": "Use Face ID to sign in to 4M Padel without entering your password."
+        "NSFaceIDUsageDescription": "Use Face ID to sign in to 4M Padel without entering your password.",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.777893152228-fgqp4i3hj3qqe3qlcssstn8t5pfkv9hq"
+            ]
+          }
+        ]
       }
     },
     "android": {
@@ -48,7 +55,8 @@
           "imageWidth": 170,
           "resizeMode": "contain"
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true,

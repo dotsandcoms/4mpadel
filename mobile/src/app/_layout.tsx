@@ -1,50 +1,73 @@
+import type { Session } from '@supabase/supabase-js';
 import { DarkTheme, Stack, ThemeProvider, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import '@/global.css';
 import { hasSeenOnboarding } from '@/lib/onboarding';
+import { supabase } from '@/lib/supabase';
 import { brand } from '@/theme/tokens';
 
 SplashScreen.preventAutoHideAsync();
-
-// Fade the native splash out rather than cutting, so launch feels continuous.
 SplashScreen.setOptions({ duration: 320, fade: true });
 
 /**
- * Root layout. The app is dark-only by design — the 4M Padel identity is
- * electric lime on near-black and has no light counterpart, so we commit to
- * one world rather than ship a washed-out light mode.
+ * Root layout and session gate.
  *
- * The splash is held open until we know where the user belongs. Once sign-in
- * lands, the Supabase session check joins this same gate, so the app never
- * flashes signed-out content before deciding which group to show.
+ * The app is dark-only by design — the 4M Padel identity is electric lime on
+ * near-black and has no light counterpart, so we commit to one world rather
+ * than ship a washed-out light mode.
+ *
+ * The native splash is held until we know both whether onboarding has been
+ * seen and whether a session was restored from the keychain. That ordering is
+ * deliberate: hiding the splash first would flash the signed-out screen at
+ * every returning user for the fraction of a second it takes SecureStore to
+ * answer.
  */
 export default function RootLayout() {
   const router = useRouter();
-  const [routed, setRouted] = useState(false);
+  const [ready, setReady] = useState(false);
+  const settled = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      const seen = await hasSeenOnboarding();
+      const [seen, { data }] = await Promise.all([
+        hasSeenOnboarding(),
+        supabase.auth.getSession(),
+      ]);
       if (cancelled) return;
 
-      if (!seen) router.replace('/(auth)/onboarding');
-
-      setRouted(true);
+      route(seen, data.session);
+      settled.current = true;
+      setReady(true);
     })();
+
+    // Keeps navigation honest after sign-out, token expiry, or a sign-in that
+    // happened on another screen.
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!settled.current) return;
+      if (event === 'SIGNED_OUT') router.replace('/(auth)/sign-in');
+      if (event === 'SIGNED_IN' && session) router.replace('/(tabs)');
+    });
 
     return () => {
       cancelled = true;
+      sub.subscription.unsubscribe();
     };
   }, [router]);
 
+  function route(seen: boolean, session: Session | null) {
+    if (!seen) router.replace('/(auth)/onboarding');
+    else if (!session) router.replace('/(auth)/sign-in');
+    // A restored session needs no redirect — (tabs) is already the initial route.
+  }
+
   useEffect(() => {
-    if (routed) SplashScreen.hideAsync();
-  }, [routed]);
+    if (ready) SplashScreen.hideAsync();
+  }, [ready]);
 
   return (
     <ThemeProvider

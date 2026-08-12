@@ -67,7 +67,7 @@ export default function OnboardingScreen() {
   const finish = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await markOnboardingSeen();
-    router.replace('/(tabs)');
+    router.replace('/(auth)/sign-in');
   }, [router]);
 
   const advance = useCallback(() => {
