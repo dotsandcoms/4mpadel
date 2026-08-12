@@ -7,13 +7,10 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   globalIgnores([
     'dist',
-    // Throwaway experiment snapshots kept at the repo root. They are not imported
-    // anywhere and contain intentionally-incomplete JSX, so exclude them from lint.
-    'branch_*.jsx',
-    'modal_debug.jsx',
-    'else_debug.jsx',
-    'summary.jsx',
-    'ternary.jsx',
+    // Retired one-off scripts, scraper experiments and throwaway JSX snapshots.
+    // Nothing here is imported by the app; much of it is intentionally-incomplete
+    // JSX or Node-only code, so exclude it from lint.
+    'archive/**',
     'scratch/**',
   ]),
   {
