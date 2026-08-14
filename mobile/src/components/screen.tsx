@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { MenuButton } from '@/components/app-drawer';
+
 type ScreenProps = {
   title: string;
   eyebrow?: string;
@@ -9,30 +11,36 @@ type ScreenProps = {
 };
 
 /**
- * Standard scrollable screen shell. Scrolling is what drives the iOS 26 tab
- * bar's minimize-on-scroll behaviour, so screens should scroll rather than
- * being fixed-height wherever there's a choice.
+ * Standard scrollable screen shell. The hamburger stays pinned on the right;
+ * the rest scrolls so the iOS 26 tab bar can still minimize on scroll.
  */
 export function Screen({ title, eyebrow, children }: ScreenProps) {
   const insets = useSafeAreaInsets();
 
   return (
-    <ScrollView
-      className="flex-1 bg-page"
-      contentContainerStyle={{
-        paddingTop: insets.top + 12,
-        paddingBottom: insets.bottom + 120,
-        paddingHorizontal: 20,
-      }}
-      contentInsetAdjustmentBehavior="automatic">
-      {eyebrow ? (
-        <Text className="mb-1 text-xs font-bold uppercase tracking-widest text-padel">
-          {eyebrow}
-        </Text>
-      ) : null}
-      <Text className="mb-6 text-4xl font-extrabold text-premium">{title}</Text>
-      {children}
-    </ScrollView>
+    <View className="flex-1 bg-page">
+      <View
+        className="flex-row items-center justify-end px-3"
+        style={{ paddingTop: insets.top + 4, minHeight: insets.top + 48 }}>
+        <MenuButton />
+      </View>
+      <ScrollView
+        className="flex-1 bg-page"
+        contentContainerStyle={{
+          paddingTop: 8,
+          paddingBottom: insets.bottom + 120,
+          paddingHorizontal: 20,
+        }}
+        contentInsetAdjustmentBehavior="automatic">
+        {eyebrow ? (
+          <Text className="mb-1 text-xs font-bold uppercase tracking-widest text-padel">
+            {eyebrow}
+          </Text>
+        ) : null}
+        <Text className="mb-6 text-4xl font-extrabold text-premium">{title}</Text>
+        {children}
+      </ScrollView>
+    </View>
   );
 }
 

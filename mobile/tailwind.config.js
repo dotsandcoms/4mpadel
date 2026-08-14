@@ -17,8 +17,9 @@ module.exports = {
         panel: '#1a1a1a',
         // Text
         premium: '#F8FAFC',
-        muted: '#94A3B8',
-        faint: '#64748B',
+        muted: '#B4C2D4',
+        faint: '#7A8BA3',
+        danger: '#E68577',
         // Hairlines and glass edges
         edge: 'rgba(255,255,255,0.10)',
         glass: 'rgba(255,255,255,0.05)',

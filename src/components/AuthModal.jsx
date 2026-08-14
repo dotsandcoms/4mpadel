@@ -12,6 +12,7 @@ import { Trophy } from 'lucide-react';
 import { fetchUpcomingCalendarEvents } from '../utils/calendarEvents';
 
 import { PAYSTACK_PUBLIC_KEY, isPaystackConfigured } from '../utils/paystackConfig';
+import { collectWebSignupDevice } from '../utils/signupDevice';
 import RegisterOrganisationForm from './RegisterOrganisationForm';
 import RegisterCoachForm from './RegisterCoachForm';
 import ClubCreateWizard from './clubs/ClubCreateWizard';
@@ -343,6 +344,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email,
                 password,
+                options: { data: { signup_source: 'web', signup_device: collectWebSignupDevice() } },
             });
 
             if (authError) {
@@ -404,6 +406,11 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
                 setLoading(false);
                 return;
             }
+
+            await supabase.rpc('set_player_signup_source', {
+                p_source: 'web',
+                p_device: collectWebSignupDevice(),
+            });
 
             // 3. Handle Payment or Finish
             if (paymentOption === 'pay_later') {

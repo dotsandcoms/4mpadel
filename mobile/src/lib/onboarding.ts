@@ -12,7 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  * Auth tokens stay in SecureStore, where hardware-backed storage matters and
  * surviving a reinstall is acceptable.
  */
-const KEY = 'onboarding_complete_v1';
+const KEY = 'onboarding_complete_v3';
 
 export async function hasSeenOnboarding(): Promise<boolean> {
   try {

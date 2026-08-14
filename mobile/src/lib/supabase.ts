@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
+import './polyfill-webcrypto';
+
 /**
  * Supabase client for the native app.
  *

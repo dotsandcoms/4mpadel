@@ -1,80 +1,195 @@
-import { useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { SymbolView } from 'expo-symbols';
+import { forwardRef, type ReactNode, useEffect, useId, useState } from 'react';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import Animated, {
   interpolateColor,
   useAnimatedStyle,
-  useDerivedValue,
-  withSpring,
+  useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
 
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { brand, motion } from '@/theme/tokens';
 
-const AnimatedInput = Animated.createAnimatedComponent(TextInput);
+export type FieldIcon =
+  | 'envelope.fill'
+  | 'lock.fill'
+  | 'person.fill'
+  | 'phone.fill';
 
 type Props = {
   label: string;
+  icon?: FieldIcon;
+  error?: string;
+  hint?: string;
+  invalid?: boolean;
+  valid?: boolean;
+  labelAccessory?: ReactNode;
 } & React.ComponentProps<typeof TextInput>;
 
+const ANDROID_ICON: Record<FieldIcon, string> = {
+  'envelope.fill': 'mail',
+  'lock.fill': 'lock',
+  'person.fill': 'person',
+  'phone.fill': 'phone',
+};
+
 /**
- * Text field with a liquid focus treatment.
- *
- * The genuine "gooey" effect is a blur plus a contrast colour-matrix, which
- * merges overlapping shapes. That is an SVG/Skia filter technique, and running
- * it over a text field would destroy the glyph antialiasing and make the value
- * unreadable — so the liquid quality here comes from motion instead: a spring
- * with real overshoot, a glow that swells and settles, and a bar that stretches
- * past its target before snapping back.
- *
- * Everything animates on the UI thread as Reanimated worklets, so it holds
- * frame rate while the sign-in request is in flight.
+ * Auth field. Persistent label above the input. Lime 2px ring + restrained
+ * glow on focus; 2px danger ring + text after blur/submit. Valid fields
+ * cross-fade a lime check. Never colour alone.
  */
-export function LiquidField({ label, onFocus, onBlur, ...props }: Props) {
+export const LiquidField = forwardRef<TextInput, Props>(function LiquidField(
+  {
+    label,
+    icon,
+    error,
+    hint,
+    invalid,
+    valid,
+    labelAccessory,
+    onFocus,
+    onBlur,
+    secureTextEntry,
+    placeholder,
+    autoCapitalize,
+    autoCorrect,
+    spellCheck,
+    multiline,
+    ...props
+  },
+  ref
+) {
+  const reduced = useReducedMotion();
+  const uid = useId();
+  const labelId = `${uid}-label`;
+  const hintId = `${uid}-hint`;
+  const errorId = `${uid}-error`;
   const [focused, setFocused] = useState(false);
+  const [hidden, setHidden] = useState(!!secureTextEntry);
+  const [heldError, setHeldError] = useState(error);
 
-  // Springy, with enough damping to overshoot once and settle — that single
-  // bounce is what reads as "liquid" rather than "animated".
-  const t = useDerivedValue(() =>
-    withSpring(focused ? 1 : 0, { damping: 13, stiffness: 170, mass: 0.9 })
-  );
+  const ms = reduced ? 1 : motion.duration.base;
+  const focusT = useSharedValue(0);
+  const errorT = useSharedValue(0);
+  const limeT = useSharedValue(0);
+  const checkT = useSharedValue(0);
 
-  const container = useAnimatedStyle(() => ({
-    // Border sits at 60% lime, not full strength. At full opacity it outshouts
-    // everything else on the screen; softened, it frames the field and lets
-    // the glow and the underline carry the focus state.
-    borderColor: interpolateColor(t.value, [0, 1], [brand.edge, brand.padelSoft]),
-    backgroundColor: interpolateColor(t.value, [0, 1], [brand.elevated, brand.surface]),
-    transform: [{ scale: 1 + t.value * 0.012 }],
-    // Glow does more work now the border does less.
-    shadowColor: brand.padel,
-    shadowOpacity: t.value * 0.45,
-    shadowRadius: 6 + t.value * 14,
-    shadowOffset: { width: 0, height: 0 },
+  useEffect(() => {
+    if (error) setHeldError(error);
+  }, [error]);
+
+  useEffect(() => {
+    focusT.value = withTiming(focused ? 1 : 0, { duration: ms });
+  }, [focusT, focused, ms]);
+
+  useEffect(() => {
+    errorT.value = withTiming(invalid ? 1 : 0, { duration: ms });
+  }, [errorT, invalid, ms]);
+
+  useEffect(() => {
+    const lime = !invalid && (focused || !!valid);
+    limeT.value = withTiming(lime ? 1 : 0, { duration: ms });
+    checkT.value = withTiming(valid && !invalid ? 1 : 0, {
+      duration: reduced ? 1 : 300,
+    });
+  }, [checkT, focused, invalid, limeT, ms, reduced, valid]);
+
+  const container = useAnimatedStyle(() => {
+    const rest = interpolateColor(limeT.value, [0, 1], [brand.edge, brand.padel]);
+    const active = interpolateColor(focusT.value, [0, 1], [rest, brand.padel]);
+    const glow = (1 - errorT.value) * Math.max(focusT.value, limeT.value);
+    return {
+      borderColor: interpolateColor(errorT.value, [0, 1], [active, brand.danger]),
+      shadowOpacity: reduced ? 0 : glow * 0.32,
+      elevation: reduced ? 0 : glow * 6,
+    };
+  });
+
+  const mutedIcon = useAnimatedStyle(() => ({
+    opacity: 1 - limeT.value,
+  }));
+  const limeIcon = useAnimatedStyle(() => ({
+    opacity: limeT.value,
+  }));
+  const checkStyle = useAnimatedStyle(() => ({
+    opacity: checkT.value,
+    transform: [{ scale: 0.25 + checkT.value * 0.75 }],
+    filter: [{ blur: 4 * (1 - checkT.value) }],
+  }));
+  const errorStyle = useAnimatedStyle(() => ({
+    opacity: errorT.value,
+    maxHeight: errorT.value * 32,
+    marginTop: errorT.value * 8,
   }));
 
-  // Underline stretches from the centre, overshooting the full width slightly
-  // before settling — the liquid "pull".
-  const bar = useAnimatedStyle(() => ({
-    width: `${t.value * 100}%`,
-    opacity: t.value,
-  }));
+  const describedBy = [invalid && heldError ? errorId : null, !invalid && hint ? hintId : null]
+    .filter(Boolean)
+    .join(' ');
 
-  const labelStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(t.value, [0, 1], [brand.faint, brand.padel]),
-    transform: [{ translateX: withTiming(focused ? 2 : 0, { duration: motion.duration.base }) }],
-  }));
+  function focusInput() {
+    if (ref && typeof ref !== 'function') ref.current?.focus();
+  }
+
+  const symbol = icon
+    ? {
+        ios: icon,
+        android: ANDROID_ICON[icon],
+        web: ANDROID_ICON[icon],
+      }
+    : null;
 
   return (
-    <View className="mb-4">
-      <Animated.Text
-        style={[labelStyle, { letterSpacing: 1.2 }]}
-        className="mb-2 text-xs font-semibold uppercase">
-        {label}
-      </Animated.Text>
+    <View className="mb-3">
+      <View
+        className={`mb-1.5 flex-row items-center justify-between ${labelAccessory ? 'min-h-[44px]' : ''}`}>
+        <Pressable
+          onPress={focusInput}
+          hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+          accessible={false}
+          className="justify-center pr-3">
+          <Text
+            nativeID={labelId}
+            className="text-[14px] font-semibold"
+            style={{ color: brand.label }}>
+            {label}
+          </Text>
+        </Pressable>
+        {labelAccessory}
+      </View>
 
-      <Animated.View style={container} className="overflow-hidden rounded-xl border">
-        <AnimatedInput
+      <Animated.View
+        style={[
+          container,
+          {
+            borderWidth: 2,
+            shadowColor: brand.padel,
+            shadowOffset: { width: 0, height: 0 },
+            shadowRadius: 10,
+          },
+        ]}
+        className={`flex-row items-center rounded-[14px] bg-elevated px-3.5 ${multiline ? 'min-h-[120px] items-start py-3' : 'h-[52px]'}`}>
+        {symbol ? (
+          <View style={{ width: 18, height: 18 }}>
+            <Animated.View style={[{ position: 'absolute', width: 18, height: 18 }, mutedIcon]}>
+              <SymbolView name={symbol} size={18} tintColor={brand.placeholder} accessibilityElementsHidden />
+            </Animated.View>
+            <Animated.View style={[{ position: 'absolute', width: 18, height: 18 }, limeIcon]}>
+              <SymbolView name={symbol} size={18} tintColor={brand.padel} accessibilityElementsHidden />
+            </Animated.View>
+          </View>
+        ) : null}
+        <TextInput
           {...props}
+          ref={ref}
+          secureTextEntry={secureTextEntry ? hidden : false}
+          placeholder={placeholder}
+          placeholderTextColor={brand.placeholder}
+          accessibilityLabel={label}
+          accessibilityLabelledBy={labelId}
+          accessibilityState={{ invalid: !!invalid }}
+          aria-invalid={!!invalid}
+          accessibilityDescribedBy={describedBy || undefined}
           onFocus={(e) => {
             setFocused(true);
             onFocus?.(e);
@@ -83,16 +198,69 @@ export function LiquidField({ label, onFocus, onBlur, ...props }: Props) {
             setFocused(false);
             onBlur?.(e);
           }}
-          placeholderTextColor={brand.faint}
-          autoCapitalize="none"
-          autoCorrect={false}
-          className="px-4 text-[16px] text-premium"
-          style={{ height: 52 }}
+          autoCapitalize={autoCapitalize ?? 'none'}
+          autoCorrect={autoCorrect ?? false}
+          spellCheck={spellCheck ?? false}
+          multiline={multiline}
+          textAlignVertical={multiline ? 'top' : 'center'}
+          importantForAutofill="yes"
+          cursorColor={brand.padel}
+          selectionColor="rgba(204,255,0,0.35)"
+          keyboardAppearance="dark"
+          className="flex-1 text-[16px]"
+          style={{
+            color: brand.premium,
+            marginLeft: icon ? 10 : 0,
+            minHeight: multiline ? 96 : 52,
+            height: multiline ? undefined : 52,
+          }}
         />
-        <View className="absolute bottom-0 left-0 right-0 h-[2px] items-center">
-          <Animated.View style={bar} className="h-full rounded-full bg-padel" />
-        </View>
+        {valid !== undefined ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[checkStyle, { width: 22, alignItems: 'center' }]}>
+            <SymbolView
+              name={{ ios: 'checkmark', android: 'check', web: 'check' }}
+              size={16}
+              tintColor={brand.padel}
+              accessibilityElementsHidden
+            />
+          </Animated.View>
+        ) : null}
+        {secureTextEntry ? (
+          <Pressable
+            onPress={() => setHidden((v) => !v)}
+            hitSlop={4}
+            accessibilityRole="button"
+            accessibilityLabel={hidden ? 'Show password' : 'Hide password'}
+            className="h-11 w-11 items-center justify-center">
+            <SymbolView
+              name={{
+                ios: hidden ? 'eye' : 'eye.slash',
+                android: hidden ? 'visibility' : 'visibility_off',
+                web: hidden ? 'visibility' : 'visibility_off',
+              }}
+              size={18}
+              tintColor={brand.placeholder}
+            />
+          </Pressable>
+        ) : null}
       </Animated.View>
+
+      <Animated.View style={errorStyle} pointerEvents="none">
+        <Text
+          nativeID={invalid ? errorId : undefined}
+          accessibilityLiveRegion="polite"
+          accessibilityElementsHidden={!invalid}
+          className="px-1 text-[13px] leading-5 text-danger">
+          {heldError}
+        </Text>
+      </Animated.View>
+      {!invalid && hint ? (
+        <Text nativeID={hintId} className="mt-2 px-1 text-[13px] leading-5" style={{ color: brand.label }}>
+          {hint}
+        </Text>
+      ) : null}
     </View>
   );
-}
+});

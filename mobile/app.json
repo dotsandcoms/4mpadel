@@ -13,7 +13,11 @@
       "bundleIdentifier": "com.fourmpadel.app",
       "supportsTablet": false,
       "infoPlist": {
+        "UIStatusBarStyle": "UIStatusBarStyleLightContent",
         "NSFaceIDUsageDescription": "Use Face ID to sign in to 4M Padel without entering your password.",
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
@@ -25,6 +29,11 @@
     },
     "android": {
       "package": "com.fourmpadel.app",
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#0a0a0a",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -48,12 +57,17 @@
         }
       ],
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#CCFF00",
+          "defaultChannel": "default"
+        }
+      ],
+      [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0a0a0a",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 170,
-          "resizeMode": "contain"
+          "backgroundColor": "#0a0a0a"
         }
       ],
       "@react-native-google-signin/google-signin"

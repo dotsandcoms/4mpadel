@@ -2,6 +2,8 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { Platform } from 'react-native';
 
+import { unregisterPushToken } from './notifications';
+import { collectSignupDevice, deviceSignupSource, recordAppDevice } from './signup-source';
 import { supabase } from './supabase';
 
 /**
@@ -30,6 +32,13 @@ export class AuthCancelled extends Error {
   constructor() {
     super('cancelled');
     this.name = 'AuthCancelled';
+  }
+}
+
+export class AuthAlreadyRegistered extends Error {
+  constructor() {
+    super('already registered');
+    this.name = 'AuthAlreadyRegistered';
   }
 }
 
@@ -63,6 +72,8 @@ export async function signInWithApple() {
     token: credential.identityToken,
   });
   if (error) throw error;
+  await stampSignupSource(data.user);
+  await recordAppDevice();
 
   /**
    * Apple returns the user's name ONLY on the very first authorisation, and
@@ -103,6 +114,8 @@ export async function signInWithGoogle() {
     token: idToken,
   });
   if (error) throw error;
+  await stampSignupSource(data.user);
+  await recordAppDevice();
 
   return data;
 }
@@ -113,16 +126,55 @@ export async function signInWithEmail(email: string, password: string) {
     password,
   });
   if (error) throw error;
+  await recordAppDevice();
   return data;
 }
 
 export async function signUpWithEmail(email: string, password: string) {
+  const normalized = email.trim().toLowerCase();
   const { data, error } = await supabase.auth.signUp({
-    email: email.trim().toLowerCase(),
+    email: normalized,
     password,
+    options: {
+      data: {
+        signup_source: deviceSignupSource(),
+        signup_device: collectSignupDevice(),
+      },
+    },
   });
-  if (error) throw error;
+  if (error) {
+    const code = String(error.code ?? '').toLowerCase();
+    const msg = String(error.message ?? '').toLowerCase();
+    if (
+      code === 'user_already_exists' ||
+      code === 'email_exists' ||
+      code === 'identity_already_exists' ||
+      msg.includes('already registered') ||
+      msg.includes('user already')
+    ) {
+      throw new AuthAlreadyRegistered();
+    }
+    throw error;
+  }
   return data;
+}
+
+/**
+ * Record web / iOS / Android on first-time auth only. Returning users
+ * already have a source (or are pre-app, which we treat as web).
+ */
+async function stampSignupSource(
+  user: { created_at?: string; user_metadata?: Record<string, unknown> } | null
+) {
+  if (!user || user.user_metadata?.signup_source) return;
+  const created = user.created_at ? new Date(user.created_at).getTime() : 0;
+  if (!created || Date.now() - created > 120_000) return;
+  await supabase.auth.updateUser({
+    data: {
+      signup_source: deviceSignupSource(),
+      signup_device: collectSignupDevice(),
+    },
+  });
 }
 
 export async function sendPasswordReset(email: string) {
@@ -133,6 +185,11 @@ export async function sendPasswordReset(email: string) {
 }
 
 export async function signOut() {
+  try {
+    await unregisterPushToken();
+  } catch {
+    // Token drop is best-effort — still sign out.
+  }
   try {
     await GoogleSignin.signOut();
   } catch {

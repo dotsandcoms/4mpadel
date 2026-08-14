@@ -6,6 +6,7 @@ import {
 import { supabase } from '../supabaseClient';
 import { sendEmail } from '../utils/emails';
 import { toast } from 'sonner';
+import { collectWebSignupDevice } from '../utils/signupDevice';
 
 const TOTAL_STEPS = 6;
 
@@ -436,6 +437,7 @@ const RegisterOrganisationForm = ({
         const { data: authData, error: authError } = await supabase.auth.signUp({
             email: email.trim(),
             password,
+            options: { data: { signup_source: 'web', signup_device: collectWebSignupDevice() } },
         });
 
         if (authError) {

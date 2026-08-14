@@ -19,8 +19,15 @@ export const brand = {
 
   /** Text ramp. */
   premium: '#F8FAFC',
-  muted: '#94A3B8',
-  faint: '#64748B',
+  muted: '#B4C2D4',
+  /** Dimmer than muted, still ≥4.5:1 on page and elevated. */
+  faint: '#7A8BA3',
+  /** Field labels — neutral grey, not the blue-grey muted ramp. */
+  label: '#D0D0D0',
+  /** Empty-field hint. Neutral, ≥4.5:1 on elevated. */
+  placeholder: '#A3A3A3',
+  /** Errors and destructive copy. Not SA-flag red — that's national context only. */
+  danger: '#E68577',
 
   /** Hairlines and glass edges — matches the web `.glass-panel` treatment. */
   edge: 'rgba(255,255,255,0.10)',
@@ -45,6 +52,8 @@ export const motion = {
     instant: 120,
     fast: 200,
     base: 280,
+    /** Staged reveals — onboarding cards, copy. 250–350ms, no bounce. */
+    enter: 320,
     slow: 420,
   },
   /** Cubic-bezier control points, for Easing.bezier(...). */
