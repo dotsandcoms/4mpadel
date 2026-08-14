@@ -26,6 +26,7 @@ import {
 import { HomeHeader } from '@/components/home-header';
 import { HomeGreeting, HomePlayerCard } from '@/components/home-player-card';
 import { PressableScale } from '@/components/pressable-scale';
+import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
 import {
   EMPTY_HOME,
   eventPath,
@@ -82,6 +83,7 @@ type OpenMap = {
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const tabPad = useTabScenePadding();
   const [bundle, setBundle] = useState<HomeBundle>(EMPTY_HOME);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -164,7 +166,7 @@ export default function HomeScreen() {
       <ScrollView
         className="flex-1 bg-page"
         contentContainerStyle={{
-          paddingBottom: insets.bottom + 120,
+          paddingBottom: tabPad,
         }}
         keyboardShouldPersistTaps="handled"
         refreshControl={
@@ -254,66 +256,22 @@ export default function HomeScreen() {
                   }
                 : null,
             ].filter(Boolean) as { label: string }[]}>
-            <View className="mb-3 flex-row items-center rounded-xl border border-white/10 p-1">
-              <Pressable
-                onPress={() => setScheduleKind('matches')}
-                accessibilityRole="button"
-                accessibilityState={{ selected: scheduleKind === 'matches' }}
-                className={`min-h-10 flex-row items-center px-2.5 ${
-                  scheduleKind === 'matches' ? 'rounded-lg border border-white/40 bg-white/5' : ''
-                }`}>
-                <SymbolView
-                  name="trophy.fill"
-                  size={13}
-                  tintColor={scheduleKind === 'matches' ? brand.premium : 'rgba(255,255,255,0.5)'}
+            <View className="mb-3 flex-row items-end">
+              <View accessibilityRole="tablist" className="flex-row items-end">
+                <KindTab
+                  label="Matches"
+                  count={bundle.upcomingMatches.length}
+                  selected={scheduleKind === 'matches'}
+                  onPress={() => setScheduleKind('matches')}
                 />
-                <Text
-                  className={`ml-1.5 text-[11px] font-bold ${
-                    scheduleKind === 'matches' ? 'text-premium' : 'text-white/50'
-                  }`}>
-                  Matches
-                </Text>
-                {bundle.upcomingMatches.length ? (
-                  <View
-                    className="ml-1.5 min-w-[18px] items-center rounded-full px-1.5 py-0.5"
-                    style={{ backgroundColor: '#F97316' }}>
-                    <Text
-                      className="text-[10px] font-black text-black"
-                      style={{ fontVariant: ['tabular-nums'] }}>
-                      {bundle.upcomingMatches.length}
-                    </Text>
-                  </View>
-                ) : null}
-              </Pressable>
-              <Pressable
-                onPress={() => setScheduleKind('events')}
-                accessibilityRole="button"
-                accessibilityState={{ selected: scheduleKind === 'events' }}
-                className={`ml-1 min-h-10 flex-row items-center px-2.5 ${
-                  scheduleKind === 'events' ? 'rounded-lg border border-white/40 bg-white/5' : ''
-                }`}>
-                <SymbolView
-                  name="calendar"
-                  size={13}
-                  tintColor={scheduleKind === 'events' ? brand.premium : 'rgba(255,255,255,0.5)'}
+                <KindTab
+                  label="Events"
+                  count={bundle.upcomingSchedule.length}
+                  selected={scheduleKind === 'events'}
+                  onPress={() => setScheduleKind('events')}
                 />
-                <Text
-                  className={`ml-1.5 text-[11px] font-bold ${
-                    scheduleKind === 'events' ? 'text-premium' : 'text-white/50'
-                  }`}>
-                  Events
-                </Text>
-                {bundle.upcomingSchedule.length ? (
-                  <View className="ml-1.5 min-w-[18px] items-center rounded-full bg-padel px-1.5 py-0.5">
-                    <Text
-                      className="text-[10px] font-black text-black"
-                      style={{ fontVariant: ['tabular-nums'] }}>
-                      {bundle.upcomingSchedule.length}
-                    </Text>
-                  </View>
-                ) : null}
-              </Pressable>
-              <View className="ml-auto flex-row rounded-lg border border-white/15 p-0.5">
+              </View>
+              <View className="mb-0.5 ml-auto flex-row rounded-lg border border-white/15 p-0.5">
                 {(
                   [
                     { key: false, label: 'Upcoming' },
@@ -325,11 +283,11 @@ export default function HomeScreen() {
                     onPress={() => setSchedulePast(tab.key)}
                     accessibilityRole="button"
                     accessibilityState={{ selected: schedulePast === tab.key }}
-                    className={`min-h-8 px-2.5 ${
+                    className={`min-h-10 justify-center px-2.5 ${
                       schedulePast === tab.key ? 'rounded-md bg-white/10' : ''
                     }`}>
                     <Text
-                      className={`py-1.5 text-[10px] font-bold ${
+                      className={`text-[11px] font-semibold ${
                         schedulePast === tab.key ? 'text-premium' : 'text-white/45'
                       }`}>
                       {tab.label}
@@ -341,25 +299,30 @@ export default function HomeScreen() {
 
             {scheduleKind === 'matches' ? (
               matches.length ? (
-                <View className="overflow-hidden rounded-2xl border border-edge bg-white/5">
+                <View>
                   {!schedulePast ? (
-                    <View className="border-b border-white/10 p-4">
-                      <NextMatchCard
-                        match={matches[0]}
-                        onPress={() => router.push('/(tabs)/profile')}
-                      />
+                    <NextMatchCard
+                      match={matches[0]}
+                      onPress={() => router.push('/(tabs)/profile')}
+                    />
+                  ) : null}
+                  {(schedulePast ? matches : matches.slice(1)).length ? (
+                    <View
+                      className={`overflow-hidden rounded-2xl border border-edge bg-white/5 ${
+                        schedulePast ? '' : 'mt-3'
+                      }`}>
+                      {(schedulePast ? matches : matches.slice(1)).map((match, i) => (
+                        <View key={matchKey(match, i)}>
+                          {i > 0 ? <View className="h-px bg-edge" /> : null}
+                          <MatchRow
+                            match={match}
+                            showResult={schedulePast}
+                            onPress={() => router.push('/(tabs)/profile')}
+                          />
+                        </View>
+                      ))}
                     </View>
                   ) : null}
-                  {(schedulePast ? matches : matches.slice(1)).map((match, i) => (
-                    <View key={matchKey(match, i)}>
-                      {i > 0 || !schedulePast ? <View className="h-px bg-edge" /> : null}
-                      <MatchRow
-                        match={match}
-                        showResult={schedulePast}
-                        onPress={() => router.push('/(tabs)/profile')}
-                      />
-                    </View>
-                  ))}
                 </View>
               ) : (
                 <EmptyBlock
@@ -481,6 +444,47 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
     </View>
+  );
+}
+
+function KindTab({
+  label,
+  count,
+  selected,
+  onPress,
+}: {
+  label: string;
+  count: number;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="tab"
+      accessibilityState={{ selected }}
+      className="relative mr-5 min-h-11 justify-end pb-2">
+      <View className="flex-row items-baseline">
+        <Text
+          className={`text-[15px] font-semibold ${selected ? 'text-premium' : 'text-white/45'}`}>
+          {label}
+        </Text>
+        {count > 0 ? (
+          <Text
+            className="ml-1.5 text-[12px] font-semibold"
+            style={{
+              color: selected ? brand.padel : 'rgba(255,255,255,0.35)',
+              fontVariant: ['tabular-nums'],
+            }}>
+            {count}
+          </Text>
+        ) : null}
+      </View>
+      <View
+        className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
+        style={{ backgroundColor: selected ? brand.padel : 'transparent' }}
+      />
+    </Pressable>
   );
 }
 

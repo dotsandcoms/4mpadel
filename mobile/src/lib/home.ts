@@ -145,7 +145,7 @@ export async function fetchSearchEvents(): Promise<CalendarEvent[]> {
       .order('start_date', { ascending: true })
       .limit(120);
     if (error || !data) return [];
-    return enrichManualCounts(data as CalendarEvent[]);
+    return await enrichManualCounts(data as CalendarEvent[]);
   } catch {
     return [];
   }

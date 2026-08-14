@@ -70,6 +70,7 @@ export default function SignInScreen() {
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
   const confirmRef = useRef<TextInput>(null);
+  const pendingPasswordFocus = useRef(false);
 
   const [mode, setMode] = useState<Mode>(intent === 'signup' ? 'signup' : 'signin');
   const [email, setEmail] = useState('');
@@ -179,6 +180,24 @@ export default function SignInScreen() {
   function revealPassword() {
     setEmailOpen(true);
   }
+
+  function revealAndFocusPassword() {
+    if (emailOpen) {
+      passwordRef.current?.focus();
+      return;
+    }
+    pendingPasswordFocus.current = true;
+    setEmailOpen(true);
+  }
+
+  useEffect(() => {
+    if (!emailOpen || !pendingPasswordFocus.current) return;
+    pendingPasswordFocus.current = false;
+    const id = requestAnimationFrame(() => {
+      passwordRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [emailOpen]);
 
   function submitEmail() {
     setAttempted(true);
@@ -344,10 +363,7 @@ export default function SignInScreen() {
             textContentType="emailAddress"
             autoCapitalize="none"
             returnKeyType="next"
-            onSubmitEditing={() => {
-              revealPassword();
-              requestAnimationFrame(() => passwordRef.current?.focus());
-            }}
+            onSubmitEditing={revealAndFocusPassword}
           />
           <ExpandReveal open={emailOpen}>
             <LiquidField

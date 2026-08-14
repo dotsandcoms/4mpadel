@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { LIVE_AFTER_MS } from '@/lib/when';
 
 const RANKEDIN_PROFILE =
   'https://api.rankedin.com/v1/player/playerprofileinfoasync';
@@ -79,16 +80,6 @@ export function parseMatchDate(dateStr?: string | null) {
   return Number.isNaN(fallback.getTime()) ? new Date(0) : fallback;
 }
 
-export function matchDayParts(dateStr?: string | null) {
-  const date = parseMatchDate(dateStr);
-  if (!date.getTime()) return { day: '–', month: '', weekday: '' };
-  return {
-    day: String(date.getDate()),
-    month: new Intl.DateTimeFormat('en-GB', { month: 'short' }).format(date).toUpperCase(),
-    weekday: new Intl.DateTimeFormat('en-GB', { weekday: 'short' }).format(date).toUpperCase(),
-  };
-}
-
 export function matchKey(match: PlayerMatch, index: number) {
   const info = match.Info || {};
   return `${info.EventName || 'match'}|${info.Date || ''}|${info.Challenger?.Name || ''}|${info.Challenged?.Name || ''}|${index}`;
@@ -109,7 +100,7 @@ function splitUpcoming(matches: PlayerMatch[]) {
   const now = Date.now();
   return matches
     .filter(isRealMatch)
-    .filter((match) => parseMatchDate(match.Info?.Date).getTime() >= now)
+    .filter((match) => parseMatchDate(match.Info?.Date).getTime() + LIVE_AFTER_MS >= now)
     .sort((a, b) => parseMatchDate(a.Info?.Date).getTime() - parseMatchDate(b.Info?.Date).getTime());
 }
 
@@ -118,7 +109,7 @@ function mergePast(past: PlayerMatch[], upcoming: PlayerMatch[]) {
   const list = past.filter(isRealMatch);
   const keys = new Set(list.map((match) => matchKey(match, 0)));
   upcoming.filter(isRealMatch).forEach((match) => {
-    if (parseMatchDate(match.Info?.Date).getTime() >= now) return;
+    if (parseMatchDate(match.Info?.Date).getTime() + LIVE_AFTER_MS >= now) return;
     const key = matchKey(match, 0);
     if (keys.has(key)) return;
     keys.add(key);

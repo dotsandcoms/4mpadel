@@ -5,16 +5,17 @@ import { Text, View } from 'react-native';
 import { PressableScale } from '@/components/pressable-scale';
 import { PulseDot } from '@/components/pulse-dot';
 import {
-  eventDayParts,
   eventLocation,
   formatEventRange,
+  parseDay,
   type CalendarEvent,
 } from '@/lib/home';
 import {
   isMatchWinner,
-  matchDayParts,
+  parseMatchDate,
   type PlayerMatch,
 } from '@/lib/matches';
+import { formatHomeRange, formatHomeWhen, matchTiming } from '@/lib/when';
 import { sapaLabel, sapaTone } from '@/theme/sapa';
 import { brand } from '@/theme/tokens';
 
@@ -29,11 +30,12 @@ type CardProps = {
 
 /** Happening-now row — date block, venue, registration count, LIVE + tier. */
 export function NowOnCard({ event, live = true, showLabel = true, onPress }: CardProps) {
-  const parts = eventDayParts(event.start_date);
   const tone = sapaTone(event.sapa_status);
   const label = sapaLabel(event.sapa_status);
   const location = eventLocation(event);
   const registered = Number(event.registered_players || 0);
+  const start = parseDay(event.start_date);
+  const when = start ? formatHomeWhen(start, event.start_date) : '';
 
   return (
     <View>
@@ -53,26 +55,13 @@ export function NowOnCard({ event, live = true, showLabel = true, onPress }: Car
         accessibilityLabel={`${event.event_name || 'Event'}${live ? ', live' : ''}. ${location}`}
         className="overflow-hidden rounded-[16px] border border-white/5 bg-elevated">
         <View className="flex-row items-center px-4 py-3">
-          <View className="mr-3.5 w-14 items-center border-r border-edge pr-3">
-            <Text className="text-[10px] font-black uppercase tracking-widest text-padel">
-              {parts.month}
-            </Text>
-            <Text
-              className="text-[22px] font-bold leading-none text-premium"
-              style={{ fontVariant: ['tabular-nums'] }}>
-              {parts.day}
-            </Text>
-            <Text className="mt-0.5 text-[8px] font-bold uppercase tracking-widest text-padel">
-              {parts.weekday}
-            </Text>
-          </View>
-
           <View className="min-w-0 flex-1 pr-2">
             <Text
               numberOfLines={2}
               className="text-[13px] font-bold uppercase tracking-tight text-premium">
               {event.event_name}
             </Text>
+            <Text className="mt-1 text-[12px] text-muted">{when}</Text>
             {location ? (
               <View className="mt-1.5 flex-row items-center">
                 <SymbolView name="mappin" size={11} tintColor={brand.faint} />
@@ -127,30 +116,20 @@ export function NowOnCard({ event, live = true, showLabel = true, onPress }: Car
 
 /** Compact schedule / featured / results row. */
 export function EventRow({ event, onPress }: CardProps) {
-  const parts = eventDayParts(event.start_date);
   const tone = sapaTone(event.sapa_status);
   const label = sapaLabel(event.sapa_status);
   const location = eventLocation(event);
-  const range = formatEventRange(event.start_date, event.end_date);
+  const start = parseDay(event.start_date);
+  const when = start ? formatHomeWhen(start, event.start_date) : '';
+  const meta = [when, location].filter(Boolean).join('  ·  ');
 
   return (
     <PressableScale
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${event.event_name || 'Event'}. ${range}. ${location}`}
+      accessibilityLabel={`${event.event_name || 'Event'}. ${meta}`}
       className="flex-row items-center px-4 py-3.5">
-      <View className="w-11 items-center">
-        <Text
-          className="text-[18px] font-bold leading-none text-premium"
-          style={{ fontVariant: ['tabular-nums'] }}>
-          {parts.day}
-        </Text>
-        <Text className="mt-1 text-[9px] font-black uppercase tracking-widest text-padel">
-          {parts.month}
-        </Text>
-      </View>
-
-      <View className="ml-3 min-w-0 flex-1">
+      <View className="min-w-0 flex-1">
         <View className="flex-row items-center">
           <Text
             numberOfLines={1}
@@ -169,9 +148,9 @@ export function EventRow({ event, onPress }: CardProps) {
             </View>
           ) : null}
         </View>
-        {location ? (
-          <Text numberOfLines={1} className="mt-1 text-[11px] text-white/50">
-            {location}
+        {meta ? (
+          <Text numberOfLines={1} className="mt-1 text-[12px] text-white/50">
+            {meta}
           </Text>
         ) : null}
       </View>
@@ -184,7 +163,9 @@ export function EventRow({ event, onPress }: CardProps) {
 export function FeaturedCard({ event, onPress }: CardProps) {
   const tone = sapaTone(event.sapa_status);
   const label = sapaLabel(event.sapa_status);
-  const range = formatEventRange(event.start_date, event.end_date);
+  const start = parseDay(event.start_date);
+  const end = parseDay(event.end_date);
+  const range = start ? formatHomeRange(start, end) : formatEventRange(event.start_date, event.end_date);
   const city = event.city || eventLocation(event);
 
   return (
@@ -218,12 +199,12 @@ export function FeaturedCard({ event, onPress }: CardProps) {
         </Text>
         <View className="mt-2 flex-row flex-wrap items-center">
           {range ? (
-            <Text className="mr-3 text-[11px] font-bold uppercase" style={{ color: tone.fill }}>
+            <Text className="mr-3 text-[12px] font-medium" style={{ color: tone.fill }}>
               {range}
             </Text>
           ) : null}
           {city ? (
-            <Text className="text-[11px] font-bold uppercase" style={{ color: tone.fill }}>
+            <Text className="text-[12px] font-medium" style={{ color: tone.fill }}>
               {city}
             </Text>
           ) : null}
@@ -278,6 +259,17 @@ export function PendingRow({
 
 function pad2(n: number) {
   return String(n).padStart(2, '0');
+}
+
+function useMatchTiming(dateStr?: string | null) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(id);
+  }, []);
+
+  return matchTiming(parseMatchDate(dateStr), dateStr, now);
 }
 
 function RegCountdown({
@@ -388,27 +380,38 @@ export function NextMatchCard({
   const team1P2 = info.Challenger1?.Name;
   const team2P2 = info.Challenged1?.Name;
   const place = info.Location || info.Venue || 'Location TBD';
+  const timing = useMatchTiming(info.Date);
+  const live = timing.kind === 'live';
 
   return (
     <PressableScale
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Next match, ${info.EventName || 'match'}. ${info.Challenger?.Name || 'TBD'} versus ${info.Challenged?.Name || 'TBD'}`}
+      accessibilityLabel={`${live ? 'Live now' : timing.label}. ${info.EventName || 'match'}. ${info.Challenger?.Name || 'TBD'} versus ${info.Challenged?.Name || 'TBD'}`}
       className="overflow-hidden rounded-[16px] border bg-elevated p-3.5"
       style={{ borderColor: 'rgba(249,115,22,0.35)' }}>
       <View className="flex-row items-start justify-between border-b border-white/5 pb-2">
         <View className="min-w-0 flex-1 flex-row items-center">
-          <PulseDot color={MATCH_ORANGE} size={6} />
+          <PulseDot color={live ? brand.sa.red : MATCH_ORANGE} size={6} />
           <Text
             numberOfLines={1}
             className="ml-1.5 text-[12px] font-bold uppercase tracking-widest"
-            style={{ color: MATCH_ORANGE }}>
-            {info.EventName || 'Next Match'}
+            style={{ color: live ? brand.sa.red : MATCH_ORANGE }}>
+            {info.EventName || 'Next up'}
           </Text>
         </View>
-        {info.Date ? (
-          <Text className="ml-2 shrink-0 rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[11px] text-white/70">
-            {info.Date}
+        {timing.label ? (
+          <Text
+            className="ml-2 shrink-0 text-[12px] font-medium"
+            style={{
+              color: live
+                ? brand.sa.red
+                : timing.kind === 'imminent'
+                  ? MATCH_ORANGE
+                  : 'rgba(255,255,255,0.7)',
+              fontVariant: ['tabular-nums'],
+            }}>
+            {timing.label}
           </Text>
         ) : null}
       </View>
@@ -475,34 +478,24 @@ export function MatchRow({
   onPress: () => void;
 }) {
   const info = match.Info || {};
-  const parts = matchDayParts(info.Date);
+  const date = parseMatchDate(info.Date);
+  const when = date.getTime() ? formatHomeWhen(date, info.Date) : '';
   const winner = isMatchWinner(match);
   const sets = match.Score?.Score ?? [];
+  const vs = `${info.Challenger?.Name || 'TBD'} vs ${info.Challenged?.Name || 'TBD'}`;
 
   return (
     <PressableScale
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${info.EventName || 'Match'}. ${info.Challenger?.Name || 'TBD'} versus ${info.Challenged?.Name || 'TBD'}`}
+      accessibilityLabel={`${info.EventName || 'Match'}. ${vs}. ${when}`}
       className="flex-row items-center px-4 py-3.5">
-      <View className="w-11 items-center">
-        <Text
-          className="text-[18px] font-bold leading-none text-premium"
-          style={{ fontVariant: ['tabular-nums'] }}>
-          {parts.day}
-        </Text>
-        {parts.month ? (
-          <Text className="mt-1 text-[9px] font-black uppercase tracking-widest" style={{ color: MATCH_ORANGE }}>
-            {parts.month}
-          </Text>
-        ) : null}
-      </View>
-      <View className="ml-3 min-w-0 flex-1">
+      <View className="min-w-0 flex-1">
         <Text numberOfLines={1} className="text-[13px] font-bold uppercase text-premium">
           {info.EventName || 'Match'}
         </Text>
-        <Text numberOfLines={1} className="mt-1 text-[11px] text-white/50">
-          {info.Challenger?.Name || 'TBD'} vs {info.Challenged?.Name || 'TBD'}
+        <Text numberOfLines={1} className="mt-1 text-[12px] text-white/50">
+          {[when, vs].filter(Boolean).join('  ·  ')}
         </Text>
       </View>
       {showResult ? <MatchResult sets={sets} winner={winner} /> : null}

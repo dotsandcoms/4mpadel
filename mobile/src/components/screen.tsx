@@ -3,6 +3,7 @@ import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MenuButton } from '@/components/app-drawer';
+import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
 
 type ScreenProps = {
   title: string;
@@ -16,6 +17,7 @@ type ScreenProps = {
  */
 export function Screen({ title, eyebrow, children }: ScreenProps) {
   const insets = useSafeAreaInsets();
+  const tabPad = useTabScenePadding();
 
   return (
     <View className="flex-1 bg-page">
@@ -28,7 +30,7 @@ export function Screen({ title, eyebrow, children }: ScreenProps) {
         className="flex-1 bg-page"
         contentContainerStyle={{
           paddingTop: 8,
-          paddingBottom: insets.bottom + 120,
+          paddingBottom: tabPad,
           paddingHorizontal: 20,
         }}
         contentInsetAdjustmentBehavior="automatic">
