@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { LegalSheet } from '@/components/legal-sheet';
 import { LiquidField } from '@/components/liquid-field';
 import { PressableScale } from '@/components/pressable-scale';
 import {
@@ -40,6 +39,7 @@ import {
   type ClubRow,
   type PlayerDraft,
 } from '@/lib/profile';
+import { openLegal } from '@/lib/legal';
 import {
   CATEGORIES,
   GENDERS,
@@ -52,7 +52,6 @@ import { supabase } from '@/lib/supabase';
 import { brand } from '@/theme/tokens';
 
 type Errors = Partial<Record<string, string>>;
-type Legal = 'terms' | 'privacy' | null;
 
 const CONTROL_H = 52;
 const CONTROL_R = 14;
@@ -80,7 +79,6 @@ export default function CompleteProfileScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Errors>({});
   const [clubs, setClubs] = useState<ClubRow[]>([]);
-  const [legal, setLegal] = useState<Legal>(null);
   const [accepted, setAccepted] = useState(false);
   const [toast, setToast] = useState<{ id: number; message: string; kind: ToastKind } | null>(
     null
@@ -703,14 +701,14 @@ export default function CompleteProfileScreen() {
                   <Text className="min-h-11 flex-1 pt-2.5 text-[14px] leading-5 text-muted">
                     I agree to the{' '}
                     <Text
-                      onPress={() => setLegal('terms')}
+                      onPress={() => openLegal('terms')}
                       accessibilityRole="link"
                       className="font-semibold text-padel">
                       Terms
                     </Text>
                     {' and '}
                     <Text
-                      onPress={() => setLegal('privacy')}
+                      onPress={() => openLegal('privacy')}
                       accessibilityRole="link"
                       className="font-semibold text-padel">
                       Privacy Policy
@@ -760,7 +758,6 @@ export default function CompleteProfileScreen() {
         </>
         ) : null}
       </View>
-      <LegalSheet kind={legal} onClose={() => setLegal(null)} />
       <Toast
         key={toast?.id ?? 0}
         message={toast?.message ?? null}

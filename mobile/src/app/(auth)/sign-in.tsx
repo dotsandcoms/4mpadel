@@ -35,7 +35,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ExpandReveal } from '@/components/expand-reveal';
 import { FadeUp } from '@/components/fade-up';
-import { LegalSheet } from '@/components/legal-sheet';
 import { LimeRule } from '@/components/lime-rule';
 import { LiquidField } from '@/components/liquid-field';
 import { PressableScale } from '@/components/pressable-scale';
@@ -52,11 +51,11 @@ import {
   signUpWithEmail,
 } from '@/lib/auth';
 import { destinationAfterAuth } from '@/lib/profile';
+import { openLegal } from '@/lib/legal';
 import { supabase } from '@/lib/supabase';
 import { brand, motion } from '@/theme/tokens';
 
 type Mode = 'signin' | 'signup';
-type Legal = 'terms' | 'privacy' | null;
 
 const CONTROL_H = 52;
 const SOCIAL_H = 46;
@@ -88,7 +87,6 @@ export default function SignInScreen() {
   const [attempted, setAttempted] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [appleReady, setAppleReady] = useState(false);
-  const [legal, setLegal] = useState<Legal>(null);
   const [toast, setToast] = useState<{ id: number; message: string; kind: ToastKind } | null>(
     null
   );
@@ -430,7 +428,7 @@ export default function SignInScreen() {
                   </Text>
                   <View className="flex-row items-center">
                     <Pressable
-                      onPress={() => setLegal('terms')}
+                      onPress={() => openLegal('terms')}
                       accessibilityRole="link"
                       accessibilityLabel="Terms"
                       className="min-h-11 justify-center px-1">
@@ -440,7 +438,7 @@ export default function SignInScreen() {
                       and
                     </Text>
                     <Pressable
-                      onPress={() => setLegal('privacy')}
+                      onPress={() => openLegal('privacy')}
                       accessibilityRole="link"
                       accessibilityLabel="Privacy Policy"
                       className="min-h-11 justify-center px-1">
@@ -496,7 +494,6 @@ export default function SignInScreen() {
         </FadeUp>
         </ScrollView>
 
-      <LegalSheet kind={legal} onClose={() => setLegal(null)} />
       <Toast
         key={toast?.id ?? 0}
         message={toast?.message ?? null}

@@ -142,6 +142,36 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: brand.page } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
+        <Stack.Screen
+          name="search"
+          options={{
+            presentation: 'formSheet',
+            sheetAllowedDetents: [0.62, 1],
+            sheetGrabberVisible: true,
+            sheetCornerRadius: 24,
+            contentStyle: { backgroundColor: brand.page },
+          }}
+        />
+        <Stack.Screen
+          name="notifications"
+          options={{
+            presentation: 'formSheet',
+            sheetAllowedDetents: [0.42, 0.78],
+            sheetGrabberVisible: true,
+            sheetCornerRadius: 24,
+            contentStyle: { backgroundColor: brand.page },
+          }}
+        />
+        <Stack.Screen
+          name="legal"
+          options={{
+            presentation: 'formSheet',
+            sheetAllowedDetents: [0.72, 1],
+            sheetGrabberVisible: true,
+            sheetCornerRadius: 24,
+            contentStyle: { backgroundColor: brand.page },
+          }}
+        />
       </Stack>
       {showSplash ? <AnimatedSplash onFinish={onSplashFinish} /> : null}
     </ThemeProvider>

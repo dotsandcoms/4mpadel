@@ -29,10 +29,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { LegalSheet } from '@/components/legal-sheet';
 import { LimeRule } from '@/components/lime-rule';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { signOut } from '@/lib/auth';
+import { openLegal } from '@/lib/legal';
 import { nameFromUser } from '@/lib/profile';
 import { supabase } from '@/lib/supabase';
 import { brand, motion } from '@/theme/tokens';
@@ -265,7 +265,6 @@ function DrawerPanel({ visible }: { visible: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const { closeDrawer } = useDrawer();
-  const [legal, setLegal] = useState<'terms' | 'privacy' | null>(null);
   const [busy, setBusy] = useState(false);
   const [account, setAccount] = useState<{ name: string; email: string }>({ name: '', email: '' });
 
@@ -364,14 +363,20 @@ function DrawerPanel({ visible }: { visible: boolean }) {
           Account
         </Text>
         <Pressable
-          onPress={() => setLegal('terms')}
+          onPress={() => {
+            closeDrawer();
+            openLegal('terms');
+          }}
           accessibilityRole="menuitem"
           accessibilityLabel="Terms"
           className="min-h-12 justify-center px-3">
           <Text className="text-[16px] text-premium">Terms</Text>
         </Pressable>
         <Pressable
-          onPress={() => setLegal('privacy')}
+          onPress={() => {
+            closeDrawer();
+            openLegal('privacy');
+          }}
           accessibilityRole="menuitem"
           accessibilityLabel="Privacy Policy"
           className="min-h-12 justify-center px-3">
@@ -415,8 +420,6 @@ function DrawerPanel({ visible }: { visible: boolean }) {
         {busy ? <ActivityIndicator color={brand.muted} style={{ marginRight: 8 }} /> : null}
         <Text className="text-[15px] font-semibold text-muted">Sign out</Text>
       </Pressable>
-
-      <LegalSheet kind={legal} onClose={() => setLegal(null)} />
     </View>
   );
 }
