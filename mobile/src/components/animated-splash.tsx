@@ -94,11 +94,10 @@ export function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
 
   return (
     <Animated.View
-      style={[StyleSheet.absoluteFill, { backgroundColor: brand.page }]}
+      style={[StyleSheet.absoluteFill, { backgroundColor: brand.page, pointerEvents: 'none' }]}
       exiting={reduced ? undefined : FadeOut.duration(280)}
       accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-      pointerEvents="none">
+      importantForAccessibility="no-hide-descendants">
       <Animated.View style={[StyleSheet.absoluteFill, photoStyle]}>
         <Image
           source={HERO}
@@ -111,7 +110,7 @@ export function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
 
       <Animated.View style={[styles.bloom, bloomStyle]} />
 
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}>
         <View style={styles.veilTop} />
         <View style={styles.veilMid} />
         <View style={styles.veilBottom} />
@@ -160,10 +159,7 @@ const styles = StyleSheet.create({
     right: -64,
     borderRadius: 160,
     backgroundColor: 'rgba(10,10,10,0.5)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.95,
-    shadowRadius: 56,
+    boxShadow: '0px 0px 56px rgba(0, 0, 0, 0.95)',
   },
   mark: {
     ...StyleSheet.absoluteFill,

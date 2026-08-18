@@ -9,9 +9,9 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { SymbolView } from 'expo-symbols';
-import * as Haptics from 'expo-haptics';
 
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
+import { hapticLight } from '@/lib/haptics';
 import { brand, motion } from '@/theme/tokens';
 
 type Badge = { label: string; count?: boolean };
@@ -50,7 +50,7 @@ export function HomeAccordion({ title, open, onToggle, badges, children }: Props
         accessibilityState={{ expanded: open }}
         accessibilityLabel={title}
         onPress={() => {
-          Haptics.selectionAsync();
+          hapticLight();
           onToggle();
         }}
         className="min-h-11 flex-row items-center justify-between px-1">

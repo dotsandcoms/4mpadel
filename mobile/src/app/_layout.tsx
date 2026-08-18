@@ -172,6 +172,15 @@ export default function RootLayout() {
             contentStyle: { backgroundColor: brand.page },
           }}
         />
+        <Stack.Screen
+          name="edit-profile"
+          options={{
+            animation: 'slide_from_right',
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+            contentStyle: { backgroundColor: brand.page },
+          }}
+        />
       </Stack>
       {showSplash ? <AnimatedSplash onFinish={onSplashFinish} /> : null}
     </ThemeProvider>

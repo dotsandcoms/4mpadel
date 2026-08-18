@@ -1,5 +1,5 @@
-import * as AppleAuthentication from 'expo-apple-authentication';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { Platform } from 'react-native';
 
 import { unregisterPushToken } from './notifications';
@@ -20,13 +20,13 @@ import { supabase } from './supabase';
  * are not what the device presents.
  */
 
-GoogleSignin.configure({
-  // Supabase validates against the WEB client, so that's what we request the
-  // ID token audience for — even though this is a native app.
-  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-  iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-  scopes: ['email', 'profile'],
-});
+if (Platform.OS !== 'web') {
+  GoogleSignin.configure({
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    scopes: ['email', 'profile'],
+  });
+}
 
 export class AuthCancelled extends Error {
   constructor() {

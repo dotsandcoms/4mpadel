@@ -38,30 +38,30 @@ export default function SearchSheet() {
   }
 
   return (
-    <View className="flex-1 bg-page">
-      <SheetHeader title="Search events" />
-
-      <View className="mx-5 mt-1 flex-row items-center rounded-[14px] border border-edge bg-elevated px-3.5">
-        <SymbolView name="magnifyingglass" size={16} tintColor={brand.placeholder} />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Cape Town Open"
-          placeholderTextColor={brand.placeholder}
-          autoFocus
-          autoCorrect={false}
-          autoCapitalize="none"
-          returnKeyType="search"
-          className="ml-2 h-[48px] flex-1 text-[16px] text-premium"
-          accessibilityLabel="Search events"
-        />
-      </View>
+    <>
+      <SheetHeader title="Search events">
+        <View className="mx-5 mt-1 flex-row items-center rounded-[14px] border border-edge bg-elevated px-3.5">
+          <SymbolView name="magnifyingglass" size={16} tintColor={brand.placeholder} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Cape Town Open"
+            placeholderTextColor={brand.placeholder}
+            autoFocus
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            className="ml-2 h-[48px] flex-1 text-[16px] text-premium"
+            accessibilityLabel="Search events"
+          />
+        </View>
+      </SheetHeader>
 
       <ScrollView
-        className="mt-2 flex-1"
+        className="flex-1 bg-page"
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
-        contentContainerStyle={{ paddingBottom: 28 }}>
+        contentContainerStyle={{ paddingTop: 8, paddingBottom: 28 }}>
         {query.trim() && results.length === 0 ? (
           <Text className="px-5 pt-6 text-[14px] leading-5 text-muted">
             No events match “{query.trim()}”. Try a city or tournament name.
@@ -72,6 +72,6 @@ export default function SearchSheet() {
           ))
         )}
       </ScrollView>
-    </View>
+    </>
   );
 }

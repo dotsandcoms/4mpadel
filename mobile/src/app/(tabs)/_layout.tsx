@@ -1,6 +1,7 @@
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 
 import { AppDrawer } from '@/components/app-drawer';
+import { hapticMedium } from '@/lib/haptics';
 import { brand } from '@/theme/tokens';
 
 /**
@@ -25,7 +26,12 @@ export default function TabsLayout() {
         tintColor={brand.padel}
         indicatorColor={brand.panel}
         minimizeBehavior="onScrollDown"
-        labelStyle={{ selected: { color: brand.padel } }}>
+        labelStyle={{ selected: { color: brand.padel } }}
+        screenListeners={{
+          tabPress: () => {
+            hapticMedium();
+          },
+        }}>
         <NativeTabs.Trigger name="index">
           <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf="house.fill" drawable="home" />

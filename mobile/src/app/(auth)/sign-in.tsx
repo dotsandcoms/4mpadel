@@ -1,5 +1,4 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
-import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -50,10 +49,11 @@ import {
   signInWithGoogle,
   signUpWithEmail,
 } from '@/lib/auth';
+import { hapticError, hapticSuccess } from '@/lib/haptics';
 import { destinationAfterAuth } from '@/lib/profile';
 import { openLegal } from '@/lib/legal';
 import { supabase } from '@/lib/supabase';
-import { brand, motion } from '@/theme/tokens';
+import { brand, motion, padelGlow } from '@/theme/tokens';
 
 type Mode = 'signin' | 'signup';
 
@@ -114,7 +114,7 @@ export default function SignInScreen() {
     setBusy(kind);
     try {
       await fn();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      hapticSuccess();
       const { data } = await supabase.auth.getSession();
       if (!data.session) {
         const confirmMsg = 'Confirm your email, then sign in to finish your player profile.';
@@ -126,7 +126,7 @@ export default function SignInScreen() {
       router.replace(await destinationAfterAuth(data.session));
     } catch (e: any) {
       if (e instanceof AuthCancelled) return;
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      hapticError();
       if (kind === 'email' && mode === 'signin' && isInvalidCredentials(e)) {
         const msg = 'Email or password is incorrect. Try again or reset your password.';
         setPasswordError(msg);
@@ -544,10 +544,13 @@ function EmailCta({
     });
   }, [ready, readyT, reduced]);
 
-  const surface = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(readyT.value, [0, 1], ['#9FCB00', brand.padel]),
-    shadowOpacity: reduced ? 0 : 0.14 + readyT.value * 0.2,
-  }));
+  const surface = useAnimatedStyle(() => {
+    const glow = reduced ? 0 : 0.14 + readyT.value * 0.2;
+    return {
+      backgroundColor: interpolateColor(readyT.value, [0, 1], ['#9FCB00', brand.padel]),
+      boxShadow: padelGlow(12, 20, glow),
+    };
+  });
 
   const idle = signin ? 'Sign in' : 'Create account';
   const label = busy ? (signin ? 'Signing in…' : 'Creating account…') : idle;
@@ -571,9 +574,6 @@ function EmailCta({
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
-            shadowColor: brand.padel,
-            shadowOffset: { width: 0, height: 12 },
-            shadowRadius: 20,
             elevation: 10,
           },
         ]}>

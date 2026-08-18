@@ -63,9 +63,9 @@ export function MotionBorder({ children }: Props) {
       }}>
       {reduced || box.w < 2 ? null : (
         <Animated.View
-          pointerEvents="none"
           style={[
             styles.sweep,
+            { pointerEvents: 'none' },
             {
               width: spinner,
               height: spinner,

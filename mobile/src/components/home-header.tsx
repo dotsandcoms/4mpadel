@@ -15,6 +15,7 @@ import Animated, {
 
 import { MenuButton } from '@/components/app-drawer';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
+import { hapticLight } from '@/lib/haptics';
 import { brand } from '@/theme/tokens';
 
 type Props = {
@@ -52,11 +53,11 @@ export function HomeHeader({ onSearch, onNotifications, noticeCount = 0 }: Props
       </View>
 
       <View className="flex-row items-center">
-        <BellButton
-          label={noticeLabel}
-          onPress={onNotifications}
-          ringing={noticeCount > 0}
-        />
+          <NotificationBell
+            label={noticeLabel}
+            onPress={onNotifications}
+            ringing={noticeCount > 0}
+          />
         <HeaderIcon name="magnifyingglass" label="Search" onPress={onSearch} />
         <MenuButton />
       </View>
@@ -64,7 +65,7 @@ export function HomeHeader({ onSearch, onNotifications, noticeCount = 0 }: Props
   );
 }
 
-function BellButton({
+export function NotificationBell({
   label,
   onPress,
   ringing,
@@ -124,7 +125,10 @@ function BellButton({
 
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        hapticLight();
+        onPress();
+      }}
       accessibilityRole="button"
       accessibilityLabel={label}
       hitSlop={8}
@@ -135,7 +139,6 @@ function BellButton({
       {ringing ? (
         <>
           <Animated.View
-            pointerEvents="none"
             accessibilityElementsHidden
             style={[
               {
@@ -146,6 +149,7 @@ function BellButton({
                 height: 8,
                 borderRadius: 4,
                 backgroundColor: '#EF4444',
+                pointerEvents: 'none',
               },
               pingStyle,
             ]}
@@ -182,7 +186,10 @@ function HeaderIcon({
 }) {
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        hapticLight();
+        onPress();
+      }}
       accessibilityRole="button"
       accessibilityLabel={label}
       hitSlop={8}

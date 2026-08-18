@@ -11,10 +11,10 @@ export default function LegalSheet() {
   const copy = LEGAL[kind];
 
   return (
-    <View className="flex-1 bg-page">
+    <>
       <SheetHeader title={copy.title} />
       <ScrollView
-        className="flex-1 px-5"
+        className="flex-1 bg-page px-5"
         contentContainerStyle={{ paddingBottom: 32 }}
         keyboardShouldPersistTaps="handled">
         <Text className="mb-4 text-[15px] leading-6 text-muted">{copy.intro}</Text>
@@ -31,6 +31,6 @@ export default function LegalSheet() {
           </Text>
         ) : null}
       </ScrollView>
-    </View>
+    </>
   );
 }

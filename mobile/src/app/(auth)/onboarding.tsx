@@ -1,4 +1,3 @@
-import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
@@ -16,6 +15,7 @@ import {
 } from '@/components/onboarding-previews';
 import { PressableScale } from '@/components/pressable-scale';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
+import { hapticLight, hapticMedium } from '@/lib/haptics';
 import { markOnboardingSeen } from '@/lib/onboarding';
 import { brand, motion } from '@/theme/tokens';
 
@@ -59,13 +59,13 @@ export default function OnboardingScreen() {
     const next = indexRef.current + dir;
     if (next < 0 || next >= SLIDES.length) return;
     setIndex(next);
-    Haptics.selectionAsync();
+    hapticLight();
   }, []);
 
   const goTo = useCallback((next: number) => {
     if (next === indexRef.current) return;
     setIndex(next);
-    Haptics.selectionAsync();
+    hapticLight();
   }, []);
 
   const pan = useMemo(
@@ -82,7 +82,7 @@ export default function OnboardingScreen() {
 
   const leave = useCallback(
     async (intent: 'signin' | 'signup') => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      hapticMedium();
       await markOnboardingSeen();
       router.replace(
         intent === 'signup' ? '/(auth)/sign-in?intent=signup' : '/(auth)/sign-in'

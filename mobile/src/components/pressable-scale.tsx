@@ -2,6 +2,7 @@ import { Pressable, type PressableProps } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
+import { hapticLight } from '@/lib/haptics';
 import { motion } from '@/theme/tokens';
 
 type Props = PressableProps & {
@@ -22,6 +23,7 @@ export function PressableScale({ children, onPressIn, onPressOut, ...props }: Pr
       <Pressable
         {...props}
         onPressIn={(e) => {
+          if (!props.disabled) hapticLight();
           if (!reduced) scale.value = withTiming(0.96, { duration: motion.duration.instant });
           onPressIn?.(e);
         }}

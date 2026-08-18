@@ -38,7 +38,7 @@ export default function NotificationsSheet() {
   const count = actions.length;
 
   return (
-    <View className="flex-1 bg-page">
+    <>
       <SheetHeader
         title="Notifications"
         trailing={
@@ -56,17 +56,17 @@ export default function NotificationsSheet() {
         }
       />
 
-      {count === 0 ? (
-        <View className="px-5 pb-6 pt-4">
-          <Text className="text-[15px] font-semibold text-premium">Nothing waiting</Text>
-          <Text className="mt-1.5 text-[14px] leading-5 text-muted">
-            Partner updates, payments and match reminders will land here once they
-            are sent.
-          </Text>
-        </View>
-      ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 28 }}>
-          {actions.map((action) => (
+      <ScrollView className="flex-1 bg-page" contentContainerStyle={{ paddingBottom: 28 }}>
+        {count === 0 ? (
+          <View className="px-5 pb-6 pt-4">
+            <Text className="text-[15px] font-semibold text-premium">Nothing waiting</Text>
+            <Text className="mt-1.5 text-[14px] leading-5 text-muted">
+              Partner updates, payments and match reminders will land here once they
+              are sent.
+            </Text>
+          </View>
+        ) : (
+          actions.map((action) => (
             <Pressable
               key={action.key}
               onPress={() => openAction(action)}
@@ -88,9 +88,9 @@ export default function NotificationsSheet() {
                 </Text>
               </View>
             </Pressable>
-          ))}
-        </ScrollView>
-      )}
-    </View>
+          ))
+        )}
+      </ScrollView>
+    </>
   );
 }

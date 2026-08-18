@@ -7,6 +7,7 @@ import Animated, {
   FadeInDown,
   FadeOut,
   FadeOutUp,
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -43,7 +44,10 @@ export function Toast({ message, kind = 'error', onDismiss }: Props) {
   const accent = error ? brand.danger : brand.padel;
 
   useEffect(() => {
-    if (!message) return;
+    if (!message) {
+      cancelAnimation(drain);
+      return;
+    }
     drain.value = 1;
     if (!reduced) {
       drain.value = withTiming(0, {
@@ -52,7 +56,10 @@ export function Toast({ message, kind = 'error', onDismiss }: Props) {
       });
     }
     const id = setTimeout(onDismiss, HOLD_MS[kind]);
-    return () => clearTimeout(id);
+    return () => {
+      clearTimeout(id);
+      cancelAnimation(drain);
+    };
   }, [drain, kind, message, onDismiss, reduced]);
 
   const bar = useAnimatedStyle(() => ({
@@ -74,23 +81,20 @@ export function Toast({ message, kind = 'error', onDismiss }: Props) {
       exiting={exit}
       accessibilityRole={error ? 'alert' : 'text'}
       accessibilityLiveRegion={error ? 'assertive' : 'polite'}
-      pointerEvents="box-none"
       style={{
         position: 'absolute',
         top: insets.top + 10,
         left: 16,
         right: 16,
         zIndex: 50,
+        pointerEvents: 'box-none',
       }}>
       <View
         className="overflow-hidden rounded-[18px] bg-surface"
         style={{
           borderWidth: 1,
           borderColor: brand.edge,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 10 },
-          shadowOpacity: 0.5,
-          shadowRadius: 24,
+          boxShadow: '0px 10px 24px rgba(0, 0, 0, 0.5)',
           elevation: 12,
         }}>
         <View className="flex-row items-center px-3.5 py-3">

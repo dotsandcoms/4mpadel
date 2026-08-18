@@ -66,3 +66,14 @@ export const motion = {
   /** Stagger interval for list and card entrances. */
   stagger: 45,
 } as const;
+
+/**
+ * Lime `boxShadow` for Reanimated worklets. Alpha is quantized so JS never
+ * interpolates `rgba(..., 7e-7)` — Reanimated's color parser rejects that.
+ */
+export function padelGlow(offsetY: number, blur: number, alpha: number): string {
+  'worklet';
+  const a = Math.round(Math.min(1, Math.max(0, alpha)) * 1000) / 1000;
+  if (a <= 0) return 'none';
+  return `0px ${offsetY}px ${blur}px rgba(204, 255, 0, ${a})`;
+}

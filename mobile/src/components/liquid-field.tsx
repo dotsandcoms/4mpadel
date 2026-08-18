@@ -9,7 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
-import { brand, motion } from '@/theme/tokens';
+import { brand, motion, padelGlow } from '@/theme/tokens';
 
 export type FieldIcon =
   | 'envelope.fill'
@@ -101,7 +101,7 @@ export const LiquidField = forwardRef<TextInput, Props>(function LiquidField(
     const glow = (1 - errorT.value) * Math.max(focusT.value, limeT.value);
     return {
       borderColor: interpolateColor(errorT.value, [0, 1], [active, brand.danger]),
-      shadowOpacity: reduced ? 0 : glow * 0.32,
+      boxShadow: padelGlow(0, 10, reduced ? 0 : glow * 0.32),
       elevation: reduced ? 0 : glow * 6,
     };
   });
@@ -163,9 +163,6 @@ export const LiquidField = forwardRef<TextInput, Props>(function LiquidField(
           container,
           {
             borderWidth: 2,
-            shadowColor: brand.padel,
-            shadowOffset: { width: 0, height: 0 },
-            shadowRadius: 10,
           },
         ]}
         className={`flex-row items-center rounded-[14px] bg-elevated px-3.5 ${multiline ? 'min-h-[120px] items-start py-3' : 'h-[52px]'}`}>
@@ -217,8 +214,7 @@ export const LiquidField = forwardRef<TextInput, Props>(function LiquidField(
         />
         {valid !== undefined ? (
           <Animated.View
-            pointerEvents="none"
-            style={[checkStyle, { width: 22, alignItems: 'center' }]}>
+            style={[checkStyle, { width: 22, alignItems: 'center', pointerEvents: 'none' }]}>
             <SymbolView
               name={{ ios: 'checkmark', android: 'check', web: 'check' }}
               size={16}
@@ -247,7 +243,7 @@ export const LiquidField = forwardRef<TextInput, Props>(function LiquidField(
         ) : null}
       </Animated.View>
 
-      <Animated.View style={errorStyle} pointerEvents="none">
+      <Animated.View style={[errorStyle, { pointerEvents: 'none' }]}>
         <Text
           nativeID={invalid ? errorId : undefined}
           accessibilityLiveRegion="polite"

@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { siteUrl } from '@/lib/site';
 
 const CALENDAR_FIELDS =
-  'id, event_name, start_date, end_date, city, venue, sapa_status, slug, registered_players, featured_event, is_spotlight, is_manual, featured_live, live_youtube_url, registration_opens_at, registration_closes_at, rankedin_url, organiser_name';
+  'id, event_name, start_date, end_date, city, venue, sapa_status, slug, registered_players, featured_event, is_spotlight, is_manual, featured_live, live_youtube_url, registration_opens_at, registration_closes_at, rankedin_url, organiser_name, organiser_badge_text, points, entry_fee, category_fees, allow_payments';
 
 const RANKEDIN_PROFILE =
   'https://api.rankedin.com/v1/player/playerprofileinfoasync';
@@ -27,6 +27,20 @@ export type CalendarEvent = {
   registration_closes_at: string | null;
   rankedin_url: string | null;
   organiser_name: string | null;
+  organiser_badge_text: string | null;
+  points: number | string | null;
+  entry_fee?: number | string | null;
+  category_fees?: Record<string, unknown> | null;
+  allow_payments?: boolean | null;
+  fromSchedule?: boolean;
+  isRegistered?: boolean;
+  isPaid?: boolean;
+  winnerName?: string | null;
+};
+
+export type ScheduleEntryCta = {
+  label: string;
+  action: 'register' | 'pay' | 'manage';
 };
 
 export type HomePlayer = {
@@ -185,6 +199,87 @@ export function eventWebUrl(event: Pick<CalendarEvent, 'id' | 'slug'>) {
 
 export function eventLocation(event: Pick<CalendarEvent, 'venue' | 'city'>) {
   return [event.venue, event.city].filter(Boolean).join(', ');
+}
+
+/** SAPA tier hero bundled with the app so the featured card never waits on the site. */
+export function featuredBackgroundSource(
+  event: Pick<CalendarEvent, 'sapa_status' | 'event_name'>
+) {
+  const status = (event.sapa_status || '').toLowerCase();
+  const name = (event.event_name || '').toLowerCase();
+  if (status === 'major' || name.includes('major')) {
+    return require('@/assets/images/events/major_bg.jpg');
+  }
+  if (status === 'super gold' || status === 's gold' || name.includes('super gold')) {
+    return require('@/assets/images/events/super_gold_bg.jpg');
+  }
+  if (status === 'gold' || name.includes('gold')) {
+    return require('@/assets/images/events/gold_bg.jpg');
+  }
+  if (status === 'silver' || name.includes('silver')) {
+    return require('@/assets/images/events/silver_bg.jpg');
+  }
+  if (status === 'bronze' || name.includes('bronze')) {
+    return require('@/assets/images/events/bronze_bg.jpg');
+  }
+  if (
+    status === 'special event' ||
+    status === 'key event' ||
+    status === 'fip event' ||
+    name.includes('special')
+  ) {
+    return require('@/assets/images/events/special_event_bg.jpg');
+  }
+  return require('@/assets/images/events/social_bg.jpg');
+}
+
+/** Same rules as website `resolveScheduleEntryCta`. */
+export function resolveScheduleEntryCta(event: CalendarEvent): ScheduleEntryCta {
+  if (event.fromSchedule && !event.isRegistered) return { label: 'Register', action: 'register' };
+  const hasFee =
+    Number(event.entry_fee) > 0
+    || (event.category_fees && Object.keys(event.category_fees).length > 0);
+  const needsPay = event.isPaid !== true && Boolean(hasFee) && event.allow_payments === true;
+  if (needsPay) return { label: 'Pay Now', action: 'pay' };
+  return { label: 'Manage Entry', action: 'manage' };
+}
+
+export function featuredCtaLabel(event: Pick<CalendarEvent, 'registration_opens_at' | 'registration_closes_at'>) {
+  const now = Date.now();
+  const opens = event.registration_opens_at ? Date.parse(event.registration_opens_at) : NaN;
+  const closes = event.registration_closes_at ? Date.parse(event.registration_closes_at) : NaN;
+  if (Number.isFinite(opens) && opens > now) return 'View';
+  if (Number.isFinite(closes) && closes <= now) return 'View';
+  return 'Register';
+}
+
+/** Men's Open champions from the RankedIn winners cache, same as the website. */
+export function mensOpenWinner(winners: unknown): string | null {
+  let list: {
+    CategoryName?: string;
+    className?: string;
+    Winner?: { Name?: string | null } | null;
+    winners?: string | null;
+  }[] | null = null;
+
+  if (Array.isArray(winners)) {
+    list = winners;
+  } else if (typeof winners === 'string') {
+    try {
+      const parsed = JSON.parse(winners) as unknown;
+      if (Array.isArray(parsed)) list = parsed;
+    } catch {
+      return null;
+    }
+  }
+  if (!list) return null;
+
+  const match = list.find((row) => {
+    const cat = (row.CategoryName || row.className || '').toLowerCase();
+    return cat.includes('men') && !cat.includes('wom') && cat.includes('open');
+  });
+  const name = match?.Winner?.Name || match?.winners;
+  return typeof name === 'string' && name.trim() ? name.trim() : null;
 }
 
 export function parseDay(iso: string | null | undefined) {
@@ -366,9 +461,35 @@ async function fetchRecentResults(): Promise<CalendarEvent[]> {
         if (!byId.has(event.id)) byId.set(event.id, event);
       });
 
-    return [...byId.values()]
+    const merged = [...byId.values()]
       .sort((a, b) => (b.start_date || '').localeCompare(a.start_date || ''))
       .slice(0, 10);
+
+    if (!merged.length) return [];
+
+    let winnersByEvent = new Map<number, unknown>();
+    try {
+      const { data: cache } = await supabase
+        .from('rankedin_results_cache')
+        .select('event_id, winners')
+        .in(
+          'event_id',
+          merged.map((event) => event.id)
+        );
+      for (const row of cache ?? []) {
+        const id = (row as { event_id?: number }).event_id;
+        if (typeof id === 'number') {
+          winnersByEvent.set(id, (row as { winners?: unknown }).winners);
+        }
+      }
+    } catch {
+      winnersByEvent = new Map();
+    }
+
+    return merged.map((event) => ({
+      ...event,
+      winnerName: mensOpenWinner(winnersByEvent.get(event.id)),
+    }));
   } catch {
     return [];
   }
@@ -376,29 +497,68 @@ async function fetchRecentResults(): Promise<CalendarEvent[]> {
 
 async function fetchSchedule(email: string) {
   try {
-    const [{ data: scheduled }, { data: regs }] = await Promise.all([
+    const [{ data: scheduled }, { data: regs }, { data: paidParts }] = await Promise.all([
       supabase
         .from('player_schedule_events')
         .select(`event_id, calendar(${CALENDAR_FIELDS})`)
         .ilike('user_email', email),
       supabase
         .from('event_registrations')
-        .select(`event_id, calendar(${CALENDAR_FIELDS})`)
+        .select(
+          `event_id, email, partner_email, payment_status, partner_payment_status, calendar(${CALENDAR_FIELDS})`
+        )
         .or(`email.ilike.${email},partner_email.ilike.${email}`)
         .neq('status', 'withdrawn'),
+      supabase
+        .from('tournament_participants')
+        .select('event_id')
+        .ilike('email', email)
+        .eq('is_paid', true),
     ]);
 
     const byId = new Map<number, CalendarEvent>();
-    for (const row of [...(scheduled ?? []), ...(regs ?? [])]) {
+    const scheduledIds = new Set<number>();
+    const registeredIds = new Set<number>();
+    const paidIds = new Set<number>();
+
+    for (const row of scheduled ?? []) {
       const cal = (row as { calendar?: CalendarEvent | null }).calendar;
-      if (cal?.id) byId.set(cal.id, cal);
+      if (!cal?.id) continue;
+      scheduledIds.add(cal.id);
+      byId.set(cal.id, cal);
+    }
+
+    for (const row of (regs ?? []) as Array<{
+      email: string | null;
+      partner_email: string | null;
+      payment_status: string | null;
+      partner_payment_status: string | null;
+      calendar?: CalendarEvent | null;
+    }>) {
+      const cal = row.calendar;
+      if (!cal?.id) continue;
+      registeredIds.add(cal.id);
+      const isRegistrant = row.email?.toLowerCase() === email;
+      const status = isRegistrant ? row.payment_status : row.partner_payment_status;
+      if (String(status || '').toLowerCase() === 'paid') paidIds.add(cal.id);
+      byId.set(cal.id, cal);
+    }
+
+    for (const row of (paidParts ?? []) as Array<{ event_id: number | null }>) {
+      if (row.event_id) paidIds.add(row.event_id);
     }
 
     const upcoming: CalendarEvent[] = [];
     const past: CalendarEvent[] = [];
     for (const event of byId.values()) {
-      if (isEventFinished(event)) past.push(event);
-      else upcoming.push(event);
+      const tagged: CalendarEvent = {
+        ...event,
+        fromSchedule: scheduledIds.has(event.id),
+        isRegistered: registeredIds.has(event.id),
+        isPaid: paidIds.has(event.id),
+      };
+      if (isEventFinished(tagged)) past.push(tagged);
+      else upcoming.push(tagged);
     }
     upcoming.sort((a, b) => (a.start_date || '').localeCompare(b.start_date || ''));
     past.sort((a, b) => (b.start_date || '').localeCompare(a.start_date || ''));

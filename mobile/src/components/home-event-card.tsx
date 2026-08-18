@@ -1,13 +1,20 @@
+import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { useEffect, useState, type ComponentProps } from 'react';
+import { Text, View, type ViewStyle } from 'react-native';
 
+import { MapPin } from '@/components/map-pin';
+import { MotionBorder } from '@/components/motion-border';
 import { PressableScale } from '@/components/pressable-scale';
 import { PulseDot } from '@/components/pulse-dot';
 import {
+  eventDayParts,
   eventLocation,
+  featuredBackgroundSource,
+  featuredCtaLabel,
   formatEventRange,
   parseDay,
+  resolveScheduleEntryCta,
   type CalendarEvent,
 } from '@/lib/home';
 import {
@@ -15,17 +22,97 @@ import {
   parseMatchDate,
   type PlayerMatch,
 } from '@/lib/matches';
-import { formatHomeRange, formatHomeWhen, matchTiming } from '@/lib/when';
+import { formatHomeWhen, matchTiming } from '@/lib/when';
 import { sapaLabel, sapaTone } from '@/theme/sapa';
 import { brand } from '@/theme/tokens';
 
 const MATCH_ORANGE = '#F97316';
 
+function contrastOnAccent(accent: string) {
+  return accent === '#CCFF00' || accent === '#EAB308' || accent === '#F59E0B' ? '#0a0a0a' : '#ffffff';
+}
+
+function hexRgb(hex: string) {
+  const n = hex.replace('#', '');
+  return {
+    r: parseInt(n.slice(0, 2), 16),
+    g: parseInt(n.slice(2, 4), 16),
+    b: parseInt(n.slice(4, 6), 16),
+  };
+}
+
+function mixHex(hex: string, other: string, hexWeight: number) {
+  const a = hexRgb(hex);
+  const b = hexRgb(other);
+  const t = Math.min(1, Math.max(0, hexWeight));
+  const to = (x: number) => Math.round(x).toString(16).padStart(2, '0');
+  return `#${to(a.r * t + b.r * (1 - t))}${to(a.g * t + b.g * (1 - t))}${to(a.b * t + b.b * (1 - t))}`;
+}
+
+function hexAlpha(hex: string, alpha: number) {
+  const { r, g, b } = hexRgb(hex);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/** Website hero CTA: 145° gloss + top sheen. RN has no gradient Button — this is a Pressable with a linear-gradient fill. */
+function AccentGradientButton({
+  label,
+  accent,
+  onPress,
+}: {
+  label: string;
+  accent: string;
+  onPress: () => void;
+}) {
+  const highlight = mixHex(accent, '#ffffff', 0.68);
+  const shade = mixHex(accent, '#000000', 0.82);
+  const color = contrastOnAccent(accent);
+  const fill = {
+    experimental_backgroundImage: `linear-gradient(145deg, ${highlight} 0%, ${accent} 50%, ${shade} 100%)`,
+  } as ViewStyle;
+
+  return (
+    <PressableScale
+      onPress={onPress}
+      hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+      accessibilityRole="button"
+      accessibilityLabel={label}>
+      <View
+        className="min-h-11 shrink-0 justify-center overflow-hidden rounded-full border px-3.5"
+        style={[
+          {
+            borderColor: accent,
+            boxShadow: `inset 0px 1px 0px rgba(255,255,255,0.28), 0px 1px 6px ${hexAlpha(accent, 0.35)}`,
+          },
+          fill,
+        ]}>
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            experimental_backgroundImage:
+              'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.06) 45%, transparent 100%)',
+          } as ViewStyle}
+        />
+        <Text className="text-[11px] font-bold uppercase tracking-wide" style={{ color }}>
+          {label}
+        </Text>
+      </View>
+    </PressableScale>
+  );
+}
+
 type CardProps = {
   event: CalendarEvent;
   live?: boolean;
   showLabel?: boolean;
+  showStartCountdown?: boolean;
   onPress: () => void;
+  onCta?: () => void;
 };
 
 /** Happening-now row — date block, venue, registration count, LIVE + tier. */
@@ -64,7 +151,7 @@ export function NowOnCard({ event, live = true, showLabel = true, onPress }: Car
             <Text className="mt-1 text-[12px] text-muted">{when}</Text>
             {location ? (
               <View className="mt-1.5 flex-row items-center">
-                <SymbolView name="mappin" size={11} tintColor={brand.faint} />
+                <MapPin size={12} color={brand.faint} />
                 <Text
                   numberOfLines={1}
                   className="ml-1 flex-1 text-[10px] font-medium uppercase tracking-widest text-muted">
@@ -114,48 +201,184 @@ export function NowOnCard({ event, live = true, showLabel = true, onPress }: Car
   );
 }
 
-/** Compact schedule / featured / results row. */
-export function EventRow({ event, onPress }: CardProps) {
+/** My Schedule event row — date block, venue, countdown and entry CTA from the website hero. */
+export function EventRow({ event, showStartCountdown = false, onPress, onCta }: CardProps) {
   const tone = sapaTone(event.sapa_status);
   const label = sapaLabel(event.sapa_status);
   const location = eventLocation(event);
-  const start = parseDay(event.start_date);
-  const when = start ? formatHomeWhen(start, event.start_date) : '';
-  const meta = [when, location].filter(Boolean).join('  ·  ');
+  const parts = eventDayParts(event.start_date);
+  const cta = showStartCountdown ? resolveScheduleEntryCta(event) : null;
+
+  return (
+    <View className="w-full">
+    <PressableScale
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${event.event_name || 'Event'}. ${parts.weekday} ${parts.day} ${parts.month}. ${location}`}>
+      <View className="w-full gap-2.5 px-4 py-4">
+        <View className="flex-row items-center">
+          <View className="mr-3 shrink-0 flex-row items-start self-start pt-0.5">
+            <SymbolView
+              name={{ ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }}
+              size={18}
+              weight="medium"
+              tintColor={brand.padel}
+            />
+            <View className="ml-3 items-center">
+              <Text
+                className="text-xl font-bold leading-none text-premium"
+                style={{ fontVariant: ['tabular-nums'] }}>
+                {parts.day}
+              </Text>
+              {parts.month ? (
+                <Text className="mt-1.5 text-[9px] font-black uppercase tracking-widest text-padel">
+                  {parts.month}
+                </Text>
+              ) : null}
+              {parts.weekday ? (
+                <Text className="mt-0.5 text-[8px] font-bold uppercase tracking-widest text-white/40">
+                  {parts.weekday}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+
+          <View className="min-w-0 flex-1">
+            <View className="flex-row items-center">
+              <Text
+                numberOfLines={1}
+                className="min-w-0 flex-1 text-sm font-bold uppercase text-premium">
+                {event.event_name}
+              </Text>
+              {label ? (
+                <View
+                  className="ml-2 shrink-0 rounded-full border px-2 py-0.5"
+                  style={{ borderColor: tone.border }}>
+                  <Text
+                    className="text-[8px] font-black uppercase tracking-widest"
+                    style={{ color: tone.text }}>
+                    {label}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            {location ? (
+              <View className="mt-1 flex-row items-center">
+                <MapPin size={12} color="rgba(255,255,255,0.4)" />
+                <Text numberOfLines={1} className="ml-1 min-w-0 flex-1 text-[11px] text-white/50">
+                  {location}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View className="ml-1 shrink-0">
+            <SymbolView name="chevron.right" size={18} tintColor={brand.padel} />
+          </View>
+        </View>
+
+        {showStartCountdown || cta ? (
+          <View
+            className="w-full flex-row items-center"
+            style={{ justifyContent: 'space-between', gap: 8 }}>
+            <View className="min-w-0 flex-1">
+              {showStartCountdown ? (
+                <EventStartsCountdown
+                  startDate={event.start_date}
+                  accent={tone.fill}
+                  cutout={brand.elevated}
+                />
+              ) : null}
+            </View>
+            {cta ? (
+              <AccentGradientButton
+                label={cta.label}
+                accent={tone.fill}
+                onPress={onCta ?? onPress}
+              />
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+    </PressableScale>
+    </View>
+  );
+}
+
+export function RecentResultCard({ event, onPress }: CardProps) {
+  const tone = sapaTone(event.sapa_status);
+  const label = sapaLabel(event.sapa_status);
+  const parts = eventDayParts(event.start_date);
+  const location = eventLocation(event);
+  const rawTitle = event.event_name || 'Result';
+  const title = rawTitle.replace('🏆', '').trim();
+  const trophy =
+    rawTitle.includes('🏆') || /open|cup|1000/i.test(title);
+  const winner = event.winnerName?.trim();
 
   return (
     <PressableScale
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${event.event_name || 'Event'}. ${meta}`}
-      className="flex-row items-center px-4 py-3.5">
-      <View className="min-w-0 flex-1">
-        <View className="flex-row items-center">
-          <Text
-            numberOfLines={1}
-            className="min-w-0 flex-1 text-[13px] font-bold uppercase text-premium">
-            {event.event_name}
-          </Text>
-          {label ? (
+      accessibilityLabel={`${title}${winner ? `. Winner ${winner}` : ''}. ${location}`}>
+      <MotionBorder>
+        <View className="flex-row items-center px-3.5 py-3.5">
+          {parts.month ? (
             <View
-              className="ml-2 rounded-full border px-2 py-0.5"
-              style={{ borderColor: tone.border }}>
+              className="h-14 w-14 shrink-0 items-center justify-center rounded-xl"
+              style={{ borderWidth: 1, borderColor: 'rgba(204,255,0,0.3)' }}>
+              <Text className="text-[9px] font-black uppercase tracking-widest text-padel">
+                {parts.month}
+              </Text>
               <Text
-                className="text-[8px] font-black uppercase tracking-widest"
-                style={{ color: tone.text }}>
-                {label}
+                className="mt-0.5 text-[20px] font-bold leading-none text-premium"
+                style={{ fontVariant: ['tabular-nums'] }}>
+                {parts.day}
               </Text>
             </View>
           ) : null}
-        </View>
-        {meta ? (
-          <Text numberOfLines={1} className="mt-1 text-[12px] text-white/50">
-            {meta}
-          </Text>
-        ) : null}
-      </View>
 
-      <SymbolView name="chevron.right" size={14} tintColor={brand.padel} />
+          <View className={`${parts.month ? 'ml-3.5' : ''} min-w-0 flex-1`}>
+            {label ? (
+              <View
+                className="mb-1.5 self-start rounded-full border px-2 py-0.5"
+                style={{ borderColor: tone.border }}>
+                <Text
+                  className="text-[8px] font-black uppercase tracking-widest"
+                  style={{ color: tone.fill }}>
+                  {label}
+                </Text>
+              </View>
+            ) : null}
+            <Text
+              numberOfLines={1}
+              className="text-[14px] font-bold uppercase leading-tight tracking-tight text-premium">
+              {title}
+              {trophy ? ' 🏆' : ''}
+            </Text>
+            {location ? (
+              <View className="mt-1 flex-row items-center">
+                <MapPin size={12} color={brand.faint} />
+                <Text numberOfLines={1} className="ml-1.5 flex-1 text-[10px] text-muted">
+                  {location}
+                </Text>
+              </View>
+            ) : null}
+            {winner ? (
+              <View className="mt-1 flex-row items-center">
+                <SymbolView
+                  name={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
+                  size={11}
+                  tintColor={tone.fill}
+                />
+                <Text numberOfLines={1} className="ml-1.5 flex-1 text-[10px] text-muted">
+                  Winner: {winner}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </MotionBorder>
     </PressableScale>
   );
 }
@@ -163,59 +386,160 @@ export function EventRow({ event, onPress }: CardProps) {
 export function FeaturedCard({ event, onPress }: CardProps) {
   const tone = sapaTone(event.sapa_status);
   const label = sapaLabel(event.sapa_status);
-  const start = parseDay(event.start_date);
-  const end = parseDay(event.end_date);
-  const range = start ? formatHomeRange(start, end) : formatEventRange(event.start_date, event.end_date);
-  const city = event.city || eventLocation(event);
+  const range = formatEventRange(event.start_date, event.end_date);
+  const city = (event.city || '').trim();
+  const badge = featuredBadgeText(event);
+  const cta = featuredCtaLabel(event);
+  const name = event.event_name || 'Featured event';
 
   return (
-    <PressableScale
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${event.event_name || 'Featured event'}. ${range}`}
-      className="overflow-hidden rounded-2xl border bg-elevated"
+    <View
+      className="overflow-hidden rounded-2xl border bg-page"
       style={{ borderColor: tone.border }}>
-      <View className="px-4 py-3.5">
-        <View className="flex-row items-start justify-between">
-          {label ? (
-            <View
-              className="rounded-full border px-2 py-0.5"
-              style={{ borderColor: tone.fill }}>
-              <Text
-                className="text-[8px] font-black uppercase tracking-widest"
-                style={{ color: tone.fill }}>
-                {label}
-              </Text>
-            </View>
-          ) : (
-            <View />
-          )}
-          <SymbolView name="chevron.right" size={14} tintColor={brand.padel} />
-        </View>
-        <Text
-          numberOfLines={2}
-          className="mt-2 text-[16px] font-bold uppercase leading-snug tracking-tight text-premium">
-          {event.event_name}
-        </Text>
-        <View className="mt-2 flex-row flex-wrap items-center">
-          {range ? (
-            <Text className="mr-3 text-[12px] font-medium" style={{ color: tone.fill }}>
-              {range}
+      <Image
+        source={featuredBackgroundSource(event)}
+        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, pointerEvents: 'none' }}
+        contentFit="cover"
+        contentPosition={{ top: '28%', left: '82%' }}
+        accessibilityElementsHidden
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          backgroundColor: 'rgba(0,0,0,0.18)',
+          pointerEvents: 'none',
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          bottom: 0,
+          left: 0,
+          width: '58%',
+          backgroundColor: 'rgba(0,0,0,0.72)',
+          pointerEvents: 'none',
+        }}
+      />
+
+      <View className="px-3 pt-3 pb-2.5">
+        <PressableScale
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={`${name}. ${range}${city ? `. ${city}` : ''}`}>
+          <View className="flex-row items-start justify-between">
+            {label ? (
+              <View
+                className="rounded-full border bg-black/40 px-2 py-0.5"
+                style={{ borderColor: tone.fill }}>
+                <Text
+                  className="text-[8px] font-black uppercase tracking-widest"
+                  style={{ color: tone.fill }}>
+                  {label}
+                </Text>
+              </View>
+            ) : (
+              <View />
+            )}
+            {badge ? <FeaturedBadgeWords text={badge} accent={tone.fill} /> : null}
+          </View>
+
+          <Text
+            numberOfLines={2}
+            className="mt-1.5 text-[15px] font-bold uppercase leading-snug tracking-tight text-premium">
+            {event.event_name}
+          </Text>
+
+          <View className="mt-1.5 flex-row flex-wrap items-center">
+            {range ? (
+              <View className="mr-3 flex-row items-center">
+                <SymbolView
+                  name={{ ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }}
+                  size={12}
+                  tintColor={tone.fill}
+                />
+                <Text
+                  className="ml-1 text-[11px] font-bold uppercase"
+                  style={{ color: tone.fill }}>
+                  {range}
+                </Text>
+              </View>
+            ) : null}
+            {city ? (
+              <View className="flex-row items-center">
+                <MapPin size={12} color={tone.fill} />
+                <Text
+                  numberOfLines={1}
+                  className="ml-1 text-[11px] font-bold uppercase"
+                  style={{ color: tone.fill }}>
+                  {city}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </PressableScale>
+
+        <View className="mt-2.5 flex-row items-end">
+          <View className="min-w-0 flex-1 pr-2">
+            <RegCountdown
+              opensAt={event.registration_opens_at}
+              closesAt={event.registration_closes_at}
+              accent={tone.fill}
+              cutout={brand.page}
+              compact
+            />
+          </View>
+          <PressableScale
+            onPress={onPress}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel={cta}
+            className="h-9 shrink-0 flex-row items-center justify-center rounded-full bg-padel pl-3.5 pr-3">
+            <Text className="text-[10px] font-black uppercase tracking-wide text-black">
+              {cta}
             </Text>
-          ) : null}
-          {city ? (
-            <Text className="text-[12px] font-medium" style={{ color: tone.fill }}>
-              {city}
-            </Text>
-          ) : null}
+            {cta !== 'View' ? (
+              <View className="ml-1">
+                <SymbolView
+                  name={{ ios: 'arrow.right', android: 'arrow_forward', web: 'arrow_forward' }}
+                  size={11}
+                  tintColor="#000"
+                />
+              </View>
+            ) : null}
+          </PressableScale>
         </View>
-        <RegCountdown
-          opensAt={event.registration_opens_at}
-          closesAt={event.registration_closes_at}
-          accent={tone.fill}
-        />
       </View>
-    </PressableScale>
+    </View>
+  );
+}
+
+function featuredBadgeText(event: CalendarEvent) {
+  const custom = event.organiser_badge_text?.trim();
+  if (custom) return custom;
+  const status = event.sapa_status?.trim();
+  if (!status || status.toLowerCase() === 'none') return '';
+  const pts = event.points ? ` ${event.points}` : '';
+  return `SAPA ${status}${pts}`;
+}
+
+function FeaturedBadgeWords({ text, accent }: { text: string; accent: string }) {
+  return (
+    <Text className="shrink-0 text-right text-[9px] font-black uppercase tracking-wide">
+      {text.split(/\s+/).map((word, i) => {
+        const tier = /^(gold|silver|bronze|major|super)$/i.test(word);
+        return (
+          <Text key={`${word}-${i}`} style={{ color: tier ? accent : '#fff' }}>
+            {i > 0 ? ' ' : ''}
+            {word}
+          </Text>
+        );
+      })}
+    </Text>
   );
 }
 
@@ -261,6 +585,84 @@ function pad2(n: number) {
   return String(n).padStart(2, '0');
 }
 
+function CountdownBox({
+  label,
+  target,
+  accent,
+  cutout = brand.elevated,
+  compact = false,
+}: {
+  label: string;
+  target: number;
+  accent: string;
+  cutout?: string;
+  compact?: boolean;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const diff = target - now;
+  if (diff <= 0) return null;
+
+  const parts = [
+    { value: pad2(Math.floor(diff / 86400000)), unit: 'DAYS' },
+    { value: pad2(Math.floor((diff / 3600000) % 24)), unit: 'HRS' },
+    { value: pad2(Math.floor((diff / 60000) % 60)), unit: 'MINS' },
+    { value: pad2(Math.floor((diff / 1000) % 60)), unit: 'SECS' },
+  ];
+
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      className={`relative self-start rounded-lg border px-2.5 pb-1.5 pt-2.5 ${compact ? '' : 'mt-3'}`}
+      style={{ borderColor: `${accent}80` }}>
+      <Text
+        className="absolute -top-1.5 left-2 px-1 text-[8px] font-bold uppercase tracking-wider"
+        style={{ color: accent, backgroundColor: cutout }}>
+        {label}
+      </Text>
+      <View className="flex-row items-end">
+        {parts.map((part, i) => (
+          <View key={part.unit} className="flex-row items-end">
+            {i > 0 ? (
+              <Text className="px-1 pb-1.5 text-[12px] font-bold text-white/40">:</Text>
+            ) : null}
+            <View className="min-w-[1.6rem] items-center">
+              <Text
+                className="text-sm font-black leading-none text-premium"
+                style={{ fontVariant: ['tabular-nums'] }}>
+                {part.value}
+              </Text>
+              <Text className="mt-0.5 text-[7px] font-bold tracking-wider text-white/50">
+                {part.unit}
+              </Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function EventStartsCountdown({
+  startDate,
+  accent,
+  cutout,
+}: {
+  startDate: string | null;
+  accent: string;
+  cutout?: string;
+}) {
+  const start = startDate ? new Date(startDate).getTime() : NaN;
+  if (!Number.isFinite(start)) return null;
+  return <CountdownBox label="Event starts in" target={start} accent={accent} cutout={cutout} />;
+}
+
 function useMatchTiming(dateStr?: string | null) {
   const [now, setNow] = useState(() => Date.now());
 
@@ -276,10 +678,14 @@ function RegCountdown({
   opensAt,
   closesAt,
   accent,
+  cutout = brand.elevated,
+  compact = false,
 }: {
   opensAt: string | null;
   closesAt: string | null;
   accent: string;
+  cutout?: string;
+  compact?: boolean;
 }) {
   const [now, setNow] = useState(() => Date.now());
 
@@ -301,43 +707,14 @@ function RegCountdown({
   }
   if (!label) return null;
 
-  const diff = Math.max(0, target - now);
-  const parts = [
-    { value: pad2(Math.floor(diff / 86400000)), unit: 'DAYS' },
-    { value: pad2(Math.floor((diff / 3600000) % 24)), unit: 'HRS' },
-    { value: pad2(Math.floor((diff / 60000) % 60)), unit: 'MINS' },
-    { value: pad2(Math.floor((diff / 1000) % 60)), unit: 'SECS' },
-  ];
-
   return (
-    <View
-      className="relative mt-3 self-start rounded-lg border px-2.5 pb-1.5 pt-2.5"
-      style={{ borderColor: `${accent}80` }}>
-      <Text
-        className="absolute -top-1.5 left-2 bg-elevated px-1 text-[8px] font-bold uppercase tracking-wider"
-        style={{ color: accent }}>
-        {label}
-      </Text>
-      <View className="flex-row items-end">
-        {parts.map((part, i) => (
-          <View key={part.unit} className="flex-row items-end">
-            {i > 0 ? (
-              <Text className="px-1 pb-1.5 text-[12px] font-bold text-white/40">:</Text>
-            ) : null}
-            <View className="items-center">
-              <Text
-                className="text-[14px] font-black leading-none text-premium"
-                style={{ fontVariant: ['tabular-nums'] }}>
-                {part.value}
-              </Text>
-              <Text className="mt-0.5 text-[7px] font-bold tracking-wider text-white/50">
-                {part.unit}
-              </Text>
-            </View>
-          </View>
-        ))}
-      </View>
-    </View>
+    <CountdownBox
+      label={label}
+      target={target}
+      accent={accent}
+      cutout={cutout}
+      compact={compact}
+    />
   );
 }
 
@@ -346,23 +723,53 @@ export function EmptyBlock({
   body,
   actionLabel,
   onAction,
+  icon,
 }: {
   title: string;
   body: string;
   actionLabel?: string;
   onAction?: () => void;
+  icon?: ComponentProps<typeof SymbolView>['name'];
 }) {
+  const centered = Boolean(icon);
+
   return (
-    <View className="rounded-2xl border border-edge bg-elevated px-4 py-5">
-      <Text className="text-[14px] font-semibold text-premium">{title}</Text>
-      <Text className="mt-1 text-[13px] leading-5 text-muted">{body}</Text>
+    <View
+      className={`rounded-2xl border border-edge bg-white/5 px-4 py-5 ${
+        centered ? 'items-center' : ''
+      }`}>
+      {icon ? (
+        <View className="mb-2" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <SymbolView name={icon} size={28} weight="light" tintColor="rgba(255,255,255,0.2)" />
+        </View>
+      ) : null}
+      <Text
+        className={`text-sm font-bold text-premium ${centered ? 'text-center' : ''}`}>
+        {title}
+      </Text>
+      <Text
+        className={`mt-1 text-[11px] font-medium leading-4 text-white/50 ${
+          centered ? 'text-center' : ''
+        }`}>
+        {body}
+      </Text>
       {actionLabel && onAction ? (
         <PressableScale
           onPress={onAction}
           accessibilityRole="button"
           accessibilityLabel={actionLabel}
-          className="mt-3 h-11 items-center justify-center rounded-full bg-padel">
-          <Text className="text-[13px] font-bold text-black">{actionLabel}</Text>
+          className={
+            centered
+              ? 'mt-3 min-h-11 flex-row items-center justify-center gap-1'
+              : 'mt-3 h-11 items-center justify-center rounded-full bg-padel'
+          }>
+          <Text
+            className={
+              centered ? 'text-xs font-bold text-padel' : 'text-[13px] font-bold text-black'
+            }>
+            {actionLabel}
+          </Text>
+          {centered ? <SymbolView name="chevron.right" size={14} tintColor={brand.padel} /> : null}
         </PressableScale>
       ) : null}
     </View>
@@ -446,7 +853,7 @@ export function NextMatchCard({
 
       <View className="flex-row items-center justify-between border-t border-white/5 pt-2">
         <View className="min-w-0 flex-1 flex-row items-center">
-          <SymbolView name="mappin" size={12} tintColor={brand.padel} />
+          <MapPin size={12} color={brand.padel} />
           <Text numberOfLines={1} className="ml-1.5 text-[12px] uppercase text-white/70">
             {place}
           </Text>
