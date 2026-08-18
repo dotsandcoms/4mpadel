@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
-    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy, Link2, Info, MessageCircle, XCircle, Pencil, FileText, ArrowRight, ArrowDownLeft, ArrowUpRight, Phone, RefreshCcw, ExternalLink, Plus
+    X, Users, CheckCircle, Clock, DollarSign, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy, Link2, Info, MessageCircle, XCircle, Pencil, FileText, ArrowRight, ArrowDownLeft, ArrowUpRight, Phone, RefreshCcw, ExternalLink, Plus, FileSpreadsheet
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
@@ -19,10 +19,12 @@ import {
     getRegistrationEntryFeePaid,
     hasBlockingProcessedRefund,
     isEntryFeeRefund,
+    isLicenseRefund,
     isExplicitAdminMarkedPayment,
     isCompedEntryPayment,
     isLicensePaymentRow,
     isPaystackPaymentMethod,
+    normalizePaymentMetadata,
     registrationCountsAsPaid,
     registrationHasPaystackEntryPayment,
     registrationIsCompedEntry,
@@ -34,6 +36,7 @@ import AdminPlayerProfileModal from './AdminPlayerProfileModal';
 import EventActivityLog from './EventActivityLog';
 import { logEventActivity } from '../../utils/eventActivityLog';
 import { parseEventDate } from '../../utils/eventEntryFee';
+import { downloadEventFinanceWorkbook } from '../../utils/eventFinanceExport';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
@@ -220,6 +223,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const [payoutModalOpen, setPayoutModalOpen] = useState(false);
     const [payoutRequestAmount, setPayoutRequestAmount] = useState('');
     const [statementSearch, setStatementSearch] = useState('');
+    const [exportingFinance, setExportingFinance] = useState(false);
     const [syncingRankedin, setSyncingRankedin] = useState(false);
     const [interimPayments, setInterimPayments] = useState([]);
     const [interimAmount, setInterimAmount] = useState('');
@@ -2282,6 +2286,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const overviewStats = useMemo(() => {
         let paid4M = 0;
         let paidClub = 0;
+        let collectedManual = 0;
+        let pendingCount = 0;
+        let pendingAmount = 0;
         let compedEntries = 0;
         let grossCollected4M = 0;
         let licenseRevenue4M = 0;
@@ -2314,8 +2321,16 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             }
 
             const method = formatPaymentMethodForExport(r);
-            if (method === 'Paystack') paid4M++;
-            else paidClub++;
+            if (method === 'Paystack') {
+                paid4M++;
+            } else {
+                paidClub++;
+                collectedManual += getRegistrationEntryFeePaid(
+                    findPaymentForRegistration(successPaymentsOnly(payments), r),
+                    r,
+                    divFee(r.division),
+                );
+            }
         });
 
         payments.forEach((p) => {
@@ -2326,10 +2341,24 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             }
         });
 
+        activeRegistrations.forEach((r) => {
+            if (registrationIsCompedEntry(r, payments)) return;
+            if (registrationCountsAsPaid(r, refundByReg, payments)) return;
+            const ps = String(r.payment_status || '').toLowerCase();
+            if (ps === 'refunded' || hasBlockingProcessedRefund(r, refundByReg, payments)) return;
+            pendingCount += 1;
+            pendingAmount += divFee(r.division);
+        });
+
+        const withdrawnCount = registrations.filter((r) => isWithdrawnRegistration(r)).length;
+
         // Entry-fee refunds only — temp/full license refunds stay with 4M and must not reduce organiser due.
         const paymentById = new Map((payments || []).map((p) => [p.id, p]));
         const entryFeesRefunded = refunds
             .filter((r) => isEntryFeeRefund(r, paymentById.get(r.payment_id)))
+            .reduce((sum, r) => sum + Number(r.amount || 0), 0);
+        const licenseRefunds = refunds
+            .filter((r) => isLicenseRefund(r, paymentById.get(r.payment_id)) && r.status !== 'failed')
             .reduce((sum, r) => sum + Number(r.amount || 0), 0);
 
         const entryFeeBalance = Math.max(0, grossCollected4M - entryFeesRefunded);
@@ -2382,9 +2411,14 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             unique,
             paid4M,
             paidClub,
+            collectedManual,
+            pendingCount,
+            pendingAmount,
+            withdrawnCount,
             compedEntries,
             collected4M: grossCollected4M,
             entryFeesRefunded,
+            licenseRefunds,
             entryFeeBalance,
             licenseRevenue4M,
             commission,
@@ -2398,62 +2432,178 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             earlyBirdSignups,
             normalSignups,
         };
-    }, [activeRegistrations, payments, divFee, formatPaymentMethodForExport, formatLicenseForExport, refundByReg, refunds, interimPayments, earlyBirdMeta]);
+    }, [activeRegistrations, payments, divFee, formatPaymentMethodForExport, formatLicenseForExport, refundByReg, refunds, interimPayments, earlyBirdMeta, registrations]);
 
     const incomeStatementRows = useMemo(() => {
         const rows = [];
+        const usedPaymentIds = new Set();
+        const teamLabel = (r) => [r.full_name, r.partner_name].filter(Boolean).join(' / ') || r.email || '—';
+        const successPays = successPaymentsOnly(payments);
 
         activeRegistrations.forEach((r) => {
+            const player = teamLabel(r);
+            const email = r.email || '';
+            const division = r.division || 'Entry';
+            const status = resolveIncomeStatementPaymentStatus(r, refundByReg, payments);
+
             if (registrationIsCompedEntry(r, payments)) {
                 const payment = findPaymentForReg(r);
+                if (payment?.id) usedPaymentIds.add(payment.id);
                 rows.push({
                     id: `comp-${r.id}`,
                     date: payment?.created_at || r.paid_at || r.created_at,
-                    description: `${r.division || 'Entry'} — Comped Entry`,
+                    description: `${division} — Comped Entry`,
+                    category: 'Comped entry',
+                    bucket: 'Informational',
                     type: 'comped',
-                    player: [r.full_name, r.partner_name].filter(Boolean).join(' / ') || r.email || '—',
+                    player,
+                    email,
+                    division,
                     amount: 0,
                     status: 'comped',
                     method: 'Comped',
-                    note: payment?.metadata?.note || payment?.metadata?.payment_note || null,
+                    reference: payment?.reference || '',
+                    note: payment?.metadata?.note || payment?.metadata?.payment_note || '',
                 });
                 return;
             }
-            // Recorded Paystack entry amount only — never fall back to the live division fee
-            // (that is what made early-bird R550 rows show as R850 after the price rose).
-            const payment = findStrictPaystackEntryPayment(successPaymentsOnly(payments), r);
-            if (!payment) return;
-            const fee = getRegistrationEntryFeePaid(payment, r, 0);
-            if (fee <= 0) return;
-            rows.push({
-                id: `pay-${r.id}`,
-                date: payment.created_at || r.paid_at || r.created_at,
-                description: `${r.division || 'Entry'} — Entry Fee`,
-                type: 'payment',
-                player: [r.full_name, r.partner_name].filter(Boolean).join(' / ') || r.email || '—',
-                amount: fee,
-                status: resolveIncomeStatementPaymentStatus(r, refundByReg, payments),
-                method: 'Paystack',
-            });
+
+            const paystackPay = findStrictPaystackEntryPayment(successPays, r);
+            if (paystackPay) {
+                usedPaymentIds.add(paystackPay.id);
+                const fee = getRegistrationEntryFeePaid(paystackPay, r, 0);
+                if (fee > 0) {
+                    rows.push({
+                        id: `pay-${r.id}`,
+                        date: paystackPay.created_at || r.paid_at || r.created_at,
+                        description: `${division} — Entry Fee`,
+                        category: 'Entry payment',
+                        bucket: '4M Paystack',
+                        type: 'payment',
+                        player,
+                        email,
+                        division,
+                        amount: fee,
+                        status,
+                        method: 'Paystack',
+                        reference: paystackPay.reference || '',
+                        note: '',
+                    });
+                }
+            } else if (registrationCountsAsPaid(r, refundByReg, payments)) {
+                const payment = findPaymentForReg(r);
+                if (payment?.id) usedPaymentIds.add(payment.id);
+                const fee = getRegistrationEntryFeePaid(payment, r, divFee(r.division));
+                rows.push({
+                    id: `manual-${r.id}`,
+                    date: payment?.created_at || r.paid_at || r.created_at,
+                    description: `${division} — Entry Fee (Manual)`,
+                    category: 'Entry payment',
+                    bucket: 'Manual / club',
+                    type: 'payment',
+                    player,
+                    email,
+                    division,
+                    amount: fee,
+                    status,
+                    method: formatPaymentMethodForExport(r) || 'Manual',
+                    reference: payment?.reference || '',
+                    note: payment?.metadata?.note || payment?.metadata?.payment_note || '',
+                });
+            } else if (status !== 'refunded' && status !== 'withdrawn') {
+                rows.push({
+                    id: `pending-${r.id}`,
+                    date: r.created_at,
+                    description: `${division} — Outstanding entry fee`,
+                    category: 'Pending / unpaid',
+                    bucket: 'Outstanding',
+                    type: 'pending',
+                    player,
+                    email,
+                    division,
+                    amount: divFee(r.division),
+                    status: 'pending',
+                    method: '—',
+                    reference: '',
+                    note: '',
+                });
+            }
         });
 
         const paymentById = new Map((payments || []).map((p) => [p.id, p]));
         refunds.forEach((rf) => {
-            if (!isEntryFeeRefund(rf, paymentById.get(rf.payment_id))) return;
+            const linkedPayment = paymentById.get(rf.payment_id);
+            const isLicense = isLicenseRefund(rf, linkedPayment);
+            if (!isLicense && !isEntryFeeRefund(rf, linkedPayment)) return;
             const reg = registrations.find((r) => r.id === rf.event_registration_id);
             rows.push({
                 id: `refund-${rf.id}`,
                 date: rf.processed_at || rf.created_at,
-                description: reg?.division
-                    ? `${reg.division} — Entry Fee Refund`
-                    : 'Entry Fee Refund',
+                description: isLicense
+                    ? 'License Refund'
+                    : (reg?.division ? `${reg.division} — Entry Fee Refund` : 'Entry Fee Refund'),
+                category: isLicense ? 'License refund' : 'Entry refund',
+                bucket: isLicense ? '4M retained' : '4M Paystack',
                 type: 'refund',
                 player: reg
                     ? ([reg.full_name, reg.partner_name].filter(Boolean).join(' / ') || reg.email || '—')
                     : '—',
+                email: reg?.email || '',
+                division: reg?.division || '',
                 amount: -Math.abs(Number(rf.amount || 0)),
                 status: rf.status === 'processed' ? 'processed' : (rf.status || 'pending'),
-                method: 'Card reversal',
+                method: isLicense ? 'License reversal' : 'Card reversal',
+                reference: rf.paystack_refund_id || rf.provider_refund_id || '',
+                note: rf.failure_reason || '',
+            });
+        });
+
+        (payments || []).forEach((p) => {
+            if (!isLicensePaymentRow(p)) return;
+            usedPaymentIds.add(p.id);
+            const meta = p.metadata && typeof p.metadata === 'object' ? p.metadata : {};
+            rows.push({
+                id: `lic-${p.id}`,
+                date: p.created_at,
+                description: `${p.payment_type || 'License'} — ${p.status === 'success' ? 'License fee' : `License (${p.status})`}`,
+                category: 'License payment',
+                bucket: '4M retained',
+                type: 'license',
+                player: meta.paid_by_name || meta.email || p.player_email || '—',
+                email: meta.email || p.player_email || '',
+                division: '',
+                amount: Number(p.amount || 0),
+                status: p.status || '',
+                method: labelPaymentMethod(p.payment_method) || p.payment_method || 'Paystack',
+                reference: p.reference || '',
+                note: meta.note || meta.payment_note || '',
+            });
+        });
+
+        (payments || []).forEach((p) => {
+            if (usedPaymentIds.has(p.id)) return;
+            if (isLicensePaymentRow(p)) return;
+            const status = String(p.status || '').toLowerCase();
+            if (status === 'abandoned') return;
+            const meta = p.metadata && typeof p.metadata === 'object' ? p.metadata : {};
+            const isPendingCheckout = status === 'processing' || status === 'pending';
+            rows.push({
+                id: `other-${p.id}`,
+                date: p.created_at,
+                description: isPendingCheckout
+                    ? `${p.payment_type || 'Payment'} — Checkout not completed`
+                    : `${p.payment_type || 'Payment'} — ${p.status}`,
+                category: isPendingCheckout ? 'Pending checkout' : 'Other payment',
+                bucket: isPendingCheckout ? 'Outstanding' : 'Informational',
+                type: isPendingCheckout ? 'pending' : 'other',
+                player: meta.paid_by_name || meta.email || '—',
+                email: meta.email || '',
+                division: meta.division || '',
+                amount: Number(p.amount || 0),
+                status: p.status || '',
+                method: labelPaymentMethod(p.payment_method) || p.payment_method || '',
+                reference: p.reference || '',
+                note: meta.note || meta.payment_note || '',
             });
         });
 
@@ -2461,12 +2611,18 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             rows.push({
                 id: 'platform-fee',
                 date: null,
-                description: `Platform Fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}%)`,
+                description: `Platform Fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}% of 4M Paystack gross)`,
+                category: 'Platform / commission fee',
+                bucket: '4M retained',
                 type: 'fee',
                 player: '—',
+                email: '',
+                division: '',
                 amount: -overviewStats.commission,
                 status: 'processed',
                 method: '—',
+                reference: '',
+                note: '5% of Paystack entry fees collected, before refunds',
             });
         }
 
@@ -2479,11 +2635,17 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 description: p.note
                     ? `Interim payment to organiser — ${p.note}`
                     : 'Interim payment to organiser',
+                category: 'Interim payout',
+                bucket: 'Organiser payout',
                 type: 'interim',
                 player: event?.organiser_name || 'Organiser',
+                email: event?.organiser_email || '',
+                division: '',
                 amount: -amount,
                 status: 'processed',
                 method: 'Manual',
+                reference: '',
+                note: p.note || '',
             });
         });
 
@@ -2495,7 +2657,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         });
 
         return rows;
-    }, [activeRegistrations, payments, findPaymentForReg, refundByReg, refunds, registrations, overviewStats.commission, interimPayments, event?.organiser_name]);
+    }, [activeRegistrations, payments, findPaymentForReg, refundByReg, refunds, registrations, overviewStats.commission, interimPayments, event?.organiser_name, event?.organiser_email, divFee, formatPaymentMethodForExport]);
 
     const filteredIncomeStatementRows = useMemo(() => {
         const q = statementSearch.trim().toLowerCase();
@@ -2504,9 +2666,14 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             const haystack = [
                 row.description,
                 row.type,
+                row.category,
+                row.bucket,
                 row.player,
+                row.email,
                 row.status,
                 row.method,
+                row.reference,
+                row.note,
                 row.amount != null ? String(row.amount) : '',
                 row.date
                     ? new Date(row.date).toLocaleString('en-GB', {
@@ -2683,43 +2850,107 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         }
     };
 
-    const exportCsv = () => {
-        // Export the same rows currently shown (withdrawn excluded unless that filter is on).
-        const rowsToExport = filtered;
-        const headers = [
-            'Name', 'Email', 'Phone', 'Division', 'Partner', 'Partner Email',
-            'T-Shirt Size', 'T-Shirt Sponsor', 'T-Shirt Logo URL',
-            'License', 'Payment Status', 'Payment Channel', 'Payment Note', 'Registration Status', 'Registered',
-        ];
-        const lines = [headers.join(',')];
-        for (const r of rowsToExport) {
-            const details = getPaymentDetails(r);
-            let channel = '';
-            if (details) {
-                if (details.isPartnerPaid) channel = `Partner (${details.payerName || 'partner'})`;
-                else if (details.isCompedChannel) channel = 'Comped';
-                else if (details.isManualChannel) channel = `Manual (${labelPaymentMethod(details.method) || 'Admin'})`;
-                else channel = labelPaymentMethod(details.method) || 'Paystack';
-            }
-            const row = [
-                r.full_name, r.email, r.phone || '', r.division, r.partner_name || '', r.partner_email || '',
-                r.tshirt_size || '',
-                r.tshirt_sponsor_name || '',
-                r.tshirt_logo_url || '',
-                formatLicenseForExport(r), formatPaymentStatusForExport(r), channel,
-                details?.note || '',
-                r.status || '',
-                r.created_at ? new Date(r.created_at).toLocaleString() : '',
-            ].map((v) => `"${String(v).replace(/"/g, '""')}"`);
-            lines.push(row.join(','));
+    const exportFinanceExcel = async () => {
+        setExportingFinance(true);
+        try {
+            const eventDate = event?.start_date
+                ? new Date(event.start_date).toLocaleDateString('en-ZA', {
+                    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+                })
+                : '';
+
+            const summary = [
+                { section: 'Entries', label: 'Total entries', value: dashboardStats.totalEntries },
+                { section: 'Entries', label: 'Unique players', value: dashboardStats.uniquePlayers },
+                { section: 'Entries', label: 'Paid', value: dashboardStats.paidCount },
+                { section: 'Entries', label: 'Pending / unpaid', value: overviewStats.pendingCount, note: fmtR(overviewStats.pendingAmount) },
+                { section: 'Entries', label: 'Comped (free)', value: overviewStats.compedEntries },
+                { section: 'Entries', label: 'Withdrawn', value: overviewStats.withdrawnCount },
+                { section: 'Entries', label: 'Early bird sign-ups', value: overviewStats.earlyBirdSignups },
+                { section: 'Entries', label: 'Normal sign-ups', value: overviewStats.normalSignups },
+
+                { section: 'Billed vs collected (all channels)', label: 'Amount billed', value: dashboardStats.expected, money: true, note: 'Paid amounts + outstanding division fees' },
+                { section: 'Billed vs collected (all channels)', label: 'Collected (before refunds)', value: dashboardStats.collected, money: true, note: 'Paystack + manual currently marked paid' },
+                { section: 'Billed vs collected (all channels)', label: '  of which Paystack (gross, incl. later refunds)', value: overviewStats.collected4M, money: true },
+                { section: 'Billed vs collected (all channels)', label: '  of which Manual / club', value: overviewStats.collectedManual, money: true, note: 'Stays with the club — not in 4M payout' },
+                { section: 'Billed vs collected (all channels)', label: 'Outstanding', value: dashboardStats.outstanding, money: true },
+
+                { section: 'Refunds', label: 'Entry fee refunds', value: overviewStats.entryFeesRefunded, money: true },
+                { section: 'Refunds', label: 'License refunds (stay with 4M)', value: overviewStats.licenseRefunds, money: true },
+
+                { section: 'Organiser payout (4M Paystack only)', label: 'Paystack entry fees (gross)', value: overviewStats.collected4M, money: true },
+                { section: 'Organiser payout (4M Paystack only)', label: 'Minus entry refunds', value: -overviewStats.entryFeesRefunded, money: true },
+                { section: 'Organiser payout (4M Paystack only)', label: 'Entry fee balance', value: overviewStats.entryFeeBalance, money: true, note: 'Gross Paystack − entry refunds' },
+                { section: 'Organiser payout (4M Paystack only)', label: `Minus platform fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}% of gross)`, value: -overviewStats.commission, money: true, note: 'Charged on gross Paystack entry fees before refunds' },
+                { section: 'Organiser payout (4M Paystack only)', label: 'Minus interim paid', value: -overviewStats.interimPaid, money: true },
+                { section: 'Organiser payout (4M Paystack only)', label: 'Net payout to organiser', value: overviewStats.dueToOrg, money: true },
+
+                { section: 'Retained by 4M', label: 'License revenue', value: overviewStats.licenseRevenue4M, money: true },
+                { section: 'Retained by 4M', label: 'Platform / commission fees', value: overviewStats.commission, money: true },
+            ];
+
+            const registrationRows = registrations.map((r) => {
+                const details = getPaymentDetails(r);
+                let channel = '';
+                if (details) {
+                    if (details.isPartnerPaid) channel = `Partner (${details.payerName || 'partner'})`;
+                    else if (details.isCompedChannel) channel = 'Comped';
+                    else if (details.isManualChannel) channel = `Manual (${labelPaymentMethod(details.method) || 'Admin'})`;
+                    else channel = labelPaymentMethod(details.method) || 'Paystack';
+                }
+                const paystackPay = findStrictPaystackEntryPayment(successPaymentsOnly(payments), r);
+                const payment = paystackPay || findPaymentForReg(r);
+                const isComped = registrationIsCompedEntry(r, payments);
+                const paid = registrationCountsAsPaid(r, refundByReg, payments);
+                let entryAmount = 0;
+                if (isComped) entryAmount = 0;
+                else if (paystackPay) entryAmount = getRegistrationEntryFeePaid(paystackPay, r, 0);
+                else if (paid) entryAmount = getRegistrationEntryFeePaid(payment, r, divFee(r.division));
+                else entryAmount = divFee(r.division);
+
+                return {
+                    name: r.full_name,
+                    email: r.email,
+                    phone: r.phone || '',
+                    division: r.division,
+                    partner: r.partner_name || '',
+                    partnerEmail: r.partner_email || '',
+                    license: formatLicenseForExport(r),
+                    paymentStatus: formatPaymentStatusForExport(r),
+                    channel,
+                    entryAmount,
+                    comped: isComped,
+                    registrationStatus: r.status || '',
+                    registeredAt: r.created_at,
+                    note: details?.note || '',
+                };
+            });
+
+            await downloadEventFinanceWorkbook({
+                eventName: event?.event_name || 'Event',
+                eventDate,
+                summary,
+                lineItems: incomeStatementRows,
+                registrations: registrationRows,
+                payments: (payments || []).map((p) => ({
+                    ...p,
+                    metadata: normalizePaymentMetadata(p.metadata),
+                })),
+                refunds: refunds.map((rf) => {
+                    const linked = (payments || []).find((p) => p.id === rf.payment_id);
+                    return {
+                        ...rf,
+                        cover: isLicenseRefund(rf, linked) ? 'license' : 'entry',
+                    };
+                }),
+            });
+            toast.success('Finance Excel downloaded');
+        } catch (err) {
+            console.error('Finance Excel export failed:', err);
+            toast.error(err.message || 'Failed to generate Excel export');
+        } finally {
+            setExportingFinance(false);
         }
-        const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${(event.slug || event.event_name || 'event').toString().replace(/[^a-z0-9]+/gi, '-')}-registrations.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
     };
 
     if (!isActive) return null;
@@ -2781,8 +3012,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                 )}
                                             </>
                                         )}
-                                        <button onClick={exportCsv} className="bg-white/5 text-white border border-white/10 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-white/10 shrink-0">
-                                            <Download size={16} /> Export CSV
+                                        <button
+                                            onClick={exportFinanceExcel}
+                                            disabled={exportingFinance}
+                                            className="bg-white/5 text-white border border-white/10 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-white/10 shrink-0 disabled:opacity-40"
+                                        >
+                                            {exportingFinance ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
+                                            Export Excel
                                         </button>
                                     </div>
                                 </div>
@@ -2820,8 +3056,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             Sync
                                         </button>
                                     )}
-                                    <button onClick={exportCsv} className="bg-white/5 text-white border border-white/10 px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-white/10">
-                                        <Download size={16} /> Export CSV
+                                    <button
+                                        onClick={exportFinanceExcel}
+                                        disabled={exportingFinance}
+                                        className="bg-white/5 text-white border border-white/10 px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-white/10 disabled:opacity-40"
+                                    >
+                                        {exportingFinance ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
+                                        Excel
                                     </button>
                                     <button onClick={onClose} className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5">
                                         <X size={20} />
@@ -2894,9 +3135,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             {dashboardStats.outstanding > 0 && (
                                                 <p className="text-[10px] text-red-400 font-bold uppercase mt-1">Outstanding R {dashboardStats.outstanding.toLocaleString()}</p>
                                             )}
+                                            <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">
+                                                Paystack {fmtR(overviewStats.collected4M)} · Manual {fmtR(overviewStats.collectedManual)}
+                                            </p>
                                             {overviewStats.entryFeesRefunded > 0 && (
                                                 <p className="text-[10px] text-sky-400 font-bold uppercase mt-1">
-                                                    Refunded R {overviewStats.entryFeesRefunded.toLocaleString()} · Net entry fees R {overviewStats.entryFeeBalance.toLocaleString()}
+                                                    Entry refunds {fmtR(overviewStats.entryFeesRefunded)} · 4M entry balance {fmtR(overviewStats.entryFeeBalance)}
                                                 </p>
                                             )}
                                         </div>
@@ -2987,6 +3231,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
                                             <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Entry Payments (Manual)</p>
                                             <span className="text-xl font-black text-white">{overviewStats.paidClub}</span>
+                                            <p className="text-[9px] text-gray-500 mt-1">{fmtR(overviewStats.collectedManual)} collected</p>
+                                        </div>
+                                        <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
+                                            <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Pending / unpaid</p>
+                                            <span className="text-xl font-black text-amber-300">{overviewStats.pendingCount}</span>
+                                            <p className="text-[9px] text-gray-500 mt-1">{fmtR(overviewStats.pendingAmount)} outstanding</p>
                                         </div>
                                         <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
                                             <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Comped Entries</p>
@@ -3013,9 +3263,18 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
                                     <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-2xl p-5 space-y-3">
                                         <div className="flex items-center justify-between gap-4 text-sm">
-                                            <span className="text-gray-400">Funds collected for entry fees</span>
+                                            <span className="text-gray-400">Funds collected for entry fees (Paystack)</span>
                                             <span className="font-bold text-white">{fmtR(overviewStats.collected4M)}</span>
                                         </div>
+                                        {overviewStats.collectedManual > 0 && (
+                                            <div className="flex items-center justify-between gap-4 text-sm">
+                                                <span className="text-gray-400">
+                                                    Manual / club collections
+                                                    <span className="text-gray-600 font-normal"> · not in 4M payout</span>
+                                                </span>
+                                                <span className="font-bold text-white">{fmtR(overviewStats.collectedManual)}</span>
+                                            </div>
+                                        )}
                                         {overviewStats.compedEntries > 0 && (
                                             <div className="flex items-center justify-between gap-4 text-sm">
                                                 <span className="text-gray-400">
@@ -3121,9 +3380,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Amount due to organiser</p>
                                                 <span className="text-3xl font-black text-padel-green">{fmtR(overviewStats.dueToOrg)}</span>
                                                 <p className="text-[9px] text-gray-500 mt-1">
-                                                    (Entry collected − Entry refunds) − {Math.round(PLATFORM_COMMISSION_RATE * 100)}% commission
+                                                    (Paystack collected − entry refunds) − {Math.round(PLATFORM_COMMISSION_RATE * 100)}% of Paystack gross
                                                     {overviewStats.interimPaid > 0 ? ` − interim paid (${fmtR(overviewStats.interimPaid)})` : ''}
-                                                    {' · '}licenses stay with 4M
+                                                    {' · '}manual collections and licenses stay with the club / 4M
                                                 </p>
                                                 {!payoutRequestRules.canRequest && payoutRequestRules.blockedReason && overviewStats.dueToOrg > 0 && (
                                                     <p className="text-[10px] text-amber-400 mt-2">{payoutRequestRules.blockedReason}</p>
@@ -4244,28 +4503,40 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         Income Statement
                                     </h3>
                                     <p className="text-xs text-gray-500 mt-1">
-                                        Line-by-line entry-fee transactions for {event?.event_name || 'this event'}
+                                        Every payment, refund, comp, pending entry, license fee, and commission for {event?.event_name || 'this event'}
                                     </p>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={openPayoutRequestModal}
-                                    disabled={requestingPayout || !payoutRequestRules.canRequest}
-                                    className="inline-flex items-center justify-center gap-2 bg-padel-green text-black px-5 py-2.5 rounded-xl text-sm font-black hover:bg-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-                                >
-                                    {requestingPayout ? <Loader2 size={16} className="animate-spin" /> : null}
-                                    Request Payout
-                                    <ArrowRight size={16} />
-                                </button>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                        type="button"
+                                        onClick={exportFinanceExcel}
+                                        disabled={exportingFinance}
+                                        className="inline-flex items-center justify-center gap-2 bg-white/5 text-white border border-white/10 px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-white/10 disabled:opacity-40"
+                                    >
+                                        {exportingFinance ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
+                                        Export Excel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={openPayoutRequestModal}
+                                        disabled={requestingPayout || !payoutRequestRules.canRequest}
+                                        className="inline-flex items-center justify-center gap-2 bg-padel-green text-black px-5 py-2.5 rounded-xl text-sm font-black hover:bg-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                    >
+                                        {requestingPayout ? <Loader2 size={16} className="animate-spin" /> : null}
+                                        Request Payout
+                                        <ArrowRight size={16} />
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
                                 {[
-                                    { label: 'Total Collected', value: fmtR(overviewStats.collected4M), color: 'text-padel-green' },
+                                    { label: '4M Paystack collected', value: fmtR(overviewStats.collected4M), color: 'text-padel-green' },
                                     { label: 'Entry Fees Refunded', value: `−${fmtR(overviewStats.entryFeesRefunded)}`, color: 'text-red-400' },
                                     { label: 'Platform Fees', value: `−${fmtR(overviewStats.commission)}`, color: 'text-red-400' },
                                     { label: 'Interim Paid', value: `−${fmtR(overviewStats.interimPaid)}`, color: 'text-red-400' },
                                     { label: 'Net Payout to Organiser', value: fmtR(overviewStats.dueToOrg), color: 'text-padel-green' },
+                                    { label: 'Manual / club', value: fmtR(overviewStats.collectedManual), color: 'text-white' },
                                 ].map((card) => (
                                     <div key={card.label} className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
                                         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">{card.label}</p>
@@ -4308,6 +4579,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                 <th className="px-4 py-3">Date</th>
                                                 <th className="px-4 py-3">Description</th>
                                                 <th className="px-4 py-3">Type</th>
+                                                <th className="px-4 py-3">Bucket</th>
                                                 <th className="px-4 py-3">Player / Team</th>
                                                 <th className="px-4 py-3 text-right">Amount</th>
                                                 <th className="px-4 py-3">Status</th>
@@ -4317,25 +4589,35 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         <tbody className="divide-y divide-white/5">
                                             {incomeStatementRows.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan={7} className="px-4 py-10 text-center text-gray-500 text-sm">
-                                                        No entry-fee transactions yet.
+                                                    <td colSpan={8} className="px-4 py-10 text-center text-gray-500 text-sm">
+                                                        No finance line items yet.
                                                     </td>
                                                 </tr>
                                             ) : filteredIncomeStatementRows.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan={7} className="px-4 py-10 text-center text-gray-500 text-sm">
+                                                    <td colSpan={8} className="px-4 py-10 text-center text-gray-500 text-sm">
                                                         No transactions match “{statementSearch.trim()}”.
                                                     </td>
                                                 </tr>
                                             ) : filteredIncomeStatementRows.map((row) => {
-                                                const isCredit = row.amount >= 0;
+                                                const isPendingLike = row.type === 'pending' || row.type === 'comped';
+                                                const amountClass = isPendingLike
+                                                    ? 'text-amber-300'
+                                                    : Number(row.amount) < 0
+                                                        ? 'text-red-400'
+                                                        : 'text-padel-green';
                                                 const typeIcon = row.type === 'payment'
                                                     ? <ArrowDownLeft size={12} className="text-padel-green" />
                                                     : row.type === 'comped'
                                                         ? <Check size={12} className="text-violet-300" />
-                                                        : <ArrowUpRight size={12} className="text-red-400" />;
+                                                        : row.type === 'pending'
+                                                            ? <Clock size={12} className="text-amber-400" />
+                                                            : row.type === 'license'
+                                                                ? <DollarSign size={12} className="text-sky-400" />
+                                                                : <ArrowUpRight size={12} className="text-red-400" />;
                                                 const statusClass = {
                                                     paid: 'bg-emerald-500/15 text-emerald-400',
+                                                    success: 'bg-emerald-500/15 text-emerald-400',
                                                     pending: 'bg-amber-500/15 text-amber-400',
                                                     unpaid: 'bg-amber-500/15 text-amber-400',
                                                     processing: 'bg-amber-500/15 text-amber-400',
@@ -4364,9 +4646,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                                 {row.type}
                                                             </span>
                                                         </td>
+                                                        <td className="px-4 py-3 text-gray-500 text-[10px] uppercase tracking-wide whitespace-nowrap">{row.bucket || '—'}</td>
                                                         <td className="px-4 py-3 text-gray-300 text-xs max-w-[180px] truncate" title={row.player}>{row.player}</td>
-                                                        <td className={`px-4 py-3 text-right font-bold whitespace-nowrap ${isCredit ? 'text-padel-green' : 'text-red-400'}`}>
-                                                            {isCredit ? fmtR(row.amount) : `−${fmtR(Math.abs(row.amount))}`}
+                                                        <td className={`px-4 py-3 text-right font-bold whitespace-nowrap ${amountClass}`}>
+                                                            {Number(row.amount) < 0 ? `−${fmtR(Math.abs(row.amount))}` : fmtR(row.amount)}
                                                         </td>
                                                         <td className="px-4 py-3">
                                                             <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-md ${statusClass}`}>
