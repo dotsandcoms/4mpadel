@@ -1,17 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mail, Lock, User, Phone, CheckCircle, AlertCircle, Eye, EyeOff, Info, Camera, Upload, Search, Calendar, ChevronRight, Check, Building, GraduationCap, Landmark, ChevronLeft } from 'lucide-react';
+import { X, Mail, Lock, User, Phone, CheckCircle, AlertCircle, Eye, EyeOff, Info, Camera, Upload, ChevronRight, Building, GraduationCap, Landmark, ChevronLeft } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useNavigate, useLocation } from 'react-router-dom';
-import PaystackPop from '@paystack/inline-js';
-import { FEES, toPaystackAmount, formatCurrency } from '../constants/fees';
-import { useRankedin } from '../hooks/useRankedin';
 import { useClubs } from '../hooks/useClubs';
 import SearchableSelect from './SearchableSelect';
 import { Trophy } from 'lucide-react';
-import { fetchUpcomingCalendarEvents } from '../utils/calendarEvents';
-
-import { PAYSTACK_PUBLIC_KEY, isPaystackConfigured } from '../utils/paystackConfig';
 import { collectWebSignupDevice } from '../utils/signupDevice';
 import RegisterOrganisationForm from './RegisterOrganisationForm';
 import RegisterCoachForm from './RegisterCoachForm';
@@ -67,13 +61,6 @@ const REGISTER_HEADINGS = {
     },
 };
 
-console.log('Paystack Config Check:', {
-    keyPrefix: PAYSTACK_PUBLIC_KEY ? PAYSTACK_PUBLIC_KEY.substring(0, 12) + '...' : 'MISSING',
-    keyLength: PAYSTACK_PUBLIC_KEY.length,
-    isLive: PAYSTACK_PUBLIC_KEY.startsWith('pk_live_'),
-    isTestMode: PAYSTACK_PUBLIC_KEY.startsWith('pk_test_'),
-});
-
 const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType = null, initialClubClaim = null }) => {
     const [activeTab, setActiveTab] = useState(initialTab); // 'login', 'register', 'forgot_password'
     const [loading, setLoading] = useState(false);
@@ -100,7 +87,6 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
     const [instagramLink, setInstagramLink] = useState('');
     const [acceptTerms, setAcceptTerms] = useState(false);
     const [showTermsModal, setShowTermsModal] = useState(false);
-    const [paymentOption, setPaymentOption] = useState('pay_now'); // 'pay_now' | 'temporary' | 'pay_later'
     const [showPassword, setShowPassword] = useState(false);
     const [profilePic, setProfilePic] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(null);
@@ -108,12 +94,6 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
     const [region, setRegion] = useState('');
     const [racketBrand, setRacketBrand] = useState('');
     const [customRacketBrand, setCustomRacketBrand] = useState('');
-
-    // Temporary License Addition
-    const [upcomingEvents, setUpcomingEvents] = useState([]);
-    const [selectedEventId, setSelectedEventId] = useState('');
-    const [eventSearchQuery, setEventSearchQuery] = useState('');
-    const [eventsLoading, setEventsLoading] = useState(false);
     const [registerType, setRegisterType] = useState(null);
     const { clubs } = useClubs();
 
@@ -123,27 +103,6 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
             setRegisterType(initialRegisterType || null);
         }
     }, [isOpen, initialTab, initialRegisterType]);
-
-    const filteredEvents = upcomingEvents.filter((event) =>
-        event.event_name?.toLowerCase().includes(eventSearchQuery.toLowerCase()),
-    );
-
-    React.useEffect(() => {
-        if (step === 3 && paymentOption === 'temporary' && upcomingEvents.length === 0) {
-            const fetchEvents = async () => {
-                setEventsLoading(true);
-                try {
-                    const events = await fetchUpcomingCalendarEvents(supabase);
-                    setUpcomingEvents(events);
-                } catch (e) {
-                    console.error("Failed to load events", e);
-                } finally {
-                    setEventsLoading(false);
-                }
-            };
-            fetchEvents();
-        }
-    }, [step, paymentOption, upcomingEvents.length]);
 
     const resetForm = () => {
         setStep(1);
@@ -163,10 +122,6 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
         setSponsors('');
         setInstagramLink('');
         setAcceptTerms(false);
-        setPaymentOption('pay_now');
-        setSelectedEventId('');
-        setEventSearchQuery('');
-        setUpcomingEvents([]);
         setRegion('');
         setRacketBrand('');
         setCustomRacketBrand('');
@@ -310,161 +265,96 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
             return;
         }
 
-        // Validation for Step 2: Padel Profile
-        if (step === 2) {
-            if (!category || !clubId || (clubId === 'Other' && !customClub) || !bio) {
-                setMessage({ type: 'error', text: 'Please fill in all required fields for Step 2.' });
-                return;
-            }
-            if (!acceptTerms) {
-                setMessage({ type: 'error', text: 'You must accept the Terms & Conditions to register.' });
-                return;
-            }
-            setStep(3);
+        if (step !== 2) return;
+
+        if (!category || !clubId || (clubId === 'Other' && !customClub) || !bio) {
+            setMessage({ type: 'error', text: 'Please fill in all required fields for Step 2.' });
+            return;
+        }
+        if (!acceptTerms) {
+            setMessage({ type: 'error', text: 'You must accept the Terms & Conditions to register.' });
             return;
         }
 
-        // Validation for Step 3: Payment Options
-        if (step === 3) {
-            if (paymentOption === 'temporary' && !selectedEventId) {
-                setMessage({ type: 'error', text: 'Please select an event for your temporary license.' });
-                return;
-            }
+        setLoading(true);
 
-            setLoading(true);
+        const hasSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
+        if (!hasSupabase) {
+            showMessage('Supabase is not configured. Add VITE_SUPABASE_URL to your .env file.', 'error');
+            setLoading(false);
+            return;
+        }
 
-            const hasSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
-            if (!hasSupabase) {
-                showMessage('Supabase is not configured. Add VITE_SUPABASE_URL to your .env file.', 'error');
-                setLoading(false);
-                return;
-            }
+        const { error: authError } = await supabase.auth.signUp({
+            email,
+            password,
+            options: { data: { signup_source: 'web', signup_device: collectWebSignupDevice() } },
+        });
 
-            // 1. Always try to sign up the account first
-            const { data: authData, error: authError } = await supabase.auth.signUp({
-                email,
-                password,
-                options: { data: { signup_source: 'web', signup_device: collectWebSignupDevice() } },
-            });
+        if (authError) {
+            showMessage('Registration failed: ' + authError.message, 'error');
+            setLoading(false);
+            return;
+        }
 
-            if (authError) {
-                showMessage('Registration failed: ' + authError.message, 'error');
-                setLoading(false);
-                return;
-            }
+        let uploadedImageUrl = null;
+        if (profilePic) {
+            setIsUploading(true);
+            try {
+                const fileExt = profilePic.name.split('.').pop();
+                const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+                const filePath = `registration/${fileName}`;
 
-            // 3. Handle image upload if selected
-            let uploadedImageUrl = null;
-            if (profilePic) {
-                setIsUploading(true);
-                try {
-                    const fileExt = profilePic.name.split('.').pop();
-                    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-                    const filePath = `registration/${fileName}`;
+                const { error: uploadError } = await supabase.storage
+                    .from('profile-pics')
+                    .upload(filePath, profilePic);
 
-                    const { error: uploadError } = await supabase.storage
-                        .from('profile-pics')
-                        .upload(filePath, profilePic);
+                if (uploadError) throw uploadError;
 
-                    if (uploadError) throw uploadError;
+                const { data: { publicUrl } } = supabase.storage
+                    .from('profile-pics')
+                    .getPublicUrl(filePath);
 
-                    const { data: { publicUrl } } = supabase.storage
-                        .from('profile-pics')
-                        .getPublicUrl(filePath);
-
-                    uploadedImageUrl = publicUrl;
-                } catch (error) {
-                    console.error('Error uploading image:', error);
-                    // Continue without image if upload fails? User might want to know.
-                    // For now, let's just proceed.
-                } finally {
-                    setIsUploading(false);
-                }
-            }
-
-            const { error: insertError } = await supabase.rpc('create_player_profile', {
-                p_email: email,
-                p_name: `${firstName} ${lastName}`.replace(/\s+/g, ' ').trim(),
-                p_contact: contactNumber,
-                p_category: category || 'Unranked',
-                p_gender: gender,
-                p_nationality: nationality,
-                p_id_number: idNumber,
-                p_bio: bio,
-                p_home_club: clubId === 'Other' ? customClub : (clubId ? clubs.find(c => c.id === clubId)?.name : ''),
-                p_sponsors: sponsors,
-                p_region: region,
-                p_paid_registration: false,
-                p_license_type: 'none',
-                p_image_url: uploadedImageUrl,
-                p_racket_brand: racketBrand === 'Other' ? customRacketBrand : racketBrand,
-                p_club_id: clubId === 'Other' ? null : (clubId || null)
-            });
-
-            if (insertError) {
-                showMessage('Account created, but failed to setup profile: ' + insertError.message, 'error');
-                setLoading(false);
-                return;
-            }
-
-            await supabase.rpc('set_player_signup_source', {
-                p_source: 'web',
-                p_device: collectWebSignupDevice(),
-            });
-
-            // 3. Handle Payment or Finish
-            if (paymentOption === 'pay_later') {
-                showMessage('Registration successful! Your profile is created. Pay for a license to make it visible on the Players page.', 'success');
-                setLoading(false);
-            } else {
-                console.log(`Initializing Paystack for ${formatCurrency(paymentOption === 'temporary' ? FEES.TEMPORARY_LICENSE : FEES.FULL_LICENSE)} Registration...`);
-                const paystackPop = new PaystackPop();
-                await paystackPop.checkout({
-                    key: PAYSTACK_PUBLIC_KEY,
-                    reference: (new Date()).getTime().toString(),
-                    email: email,
-                    amount: toPaystackAmount(paymentOption === 'temporary' ? FEES.TEMPORARY_LICENSE : FEES.FULL_LICENSE),
-                    currency: 'ZAR',
-                    firstname: firstName,
-                    lastname: lastName,
-                    onSuccess: async (reference) => {
-                        console.log('Payment successful. Reference:', reference);
-
-                        const { error: updateError } = await supabase.rpc('mark_player_paid', {
-                            p_license_type: paymentOption === 'temporary' ? 'temporary' : 'full',
-                        });
-
-                        if (updateError) {
-                            showMessage('Payment successful, but failed to update profile status. Please contact support.', 'error');
-                            setLoading(false);
-                            return;
-                        }
-
-                        if (paymentOption === 'temporary' && selectedEventId) {
-                            const eventDetails = upcomingEvents.find(e => e.id?.toString() === selectedEventId.toString());
-                            if (eventDetails) {
-                                const { data: pData } = await supabase.from('players').select('id').ilike('email', email).maybeSingle();
-                                if (pData?.id) {
-                                    await supabase.from('temporary_licenses').insert({
-                                        player_id: pData.id,
-                                        event_id: eventDetails.id,
-                                        event_name: eventDetails.event_name || 'Calendar Event',
-                                        event_date: eventDetails.start_date
-                                    });
-                                }
-                            }
-                        }
-
-                        showMessage('Payment and Registration successful! Welcome to 4m Padel.', 'success');
-                        setLoading(false);
-                    },
-                    onCancel: () => {
-                        showMessage('Registration successful, but payment was cancelled. You can pay later from your profile.', 'error');
-                        setLoading(false);
-                    }
-                });
+                uploadedImageUrl = publicUrl;
+            } catch (error) {
+                console.error('Error uploading image:', error);
+            } finally {
+                setIsUploading(false);
             }
         }
+
+        const { error: insertError } = await supabase.rpc('create_player_profile', {
+            p_email: email,
+            p_name: `${firstName} ${lastName}`.replace(/\s+/g, ' ').trim(),
+            p_contact: contactNumber,
+            p_category: category || 'Unranked',
+            p_gender: gender,
+            p_nationality: nationality,
+            p_id_number: idNumber,
+            p_bio: bio,
+            p_home_club: clubId === 'Other' ? customClub : (clubId ? clubs.find(c => c.id === clubId)?.name : ''),
+            p_sponsors: sponsors,
+            p_region: region,
+            p_paid_registration: false,
+            p_license_type: 'none',
+            p_image_url: uploadedImageUrl,
+            p_racket_brand: racketBrand === 'Other' ? customRacketBrand : racketBrand,
+            p_club_id: clubId === 'Other' ? null : (clubId || null)
+        });
+
+        if (insertError) {
+            showMessage('Account created, but failed to setup profile: ' + insertError.message, 'error');
+            setLoading(false);
+            return;
+        }
+
+        await supabase.rpc('set_player_signup_source', {
+            p_source: 'web',
+            p_device: collectWebSignupDevice(),
+        });
+
+        showMessage('Registration successful! Your profile is created. When you enter an event, you can add a temporary license if sales are open.', 'success');
+        setLoading(false);
     };
 
 
@@ -610,7 +500,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
                                             </button>
                                             <div className="flex items-center justify-between mb-2">
                                                 <span className="text-padel-green text-[10px] font-black uppercase tracking-widest">Step 1: Personal</span>
-                                                <span className="text-gray-500 text-[10px] font-bold">1 / 3</span>
+                                                <span className="text-gray-500 text-[10px] font-bold">1 / 2</span>
                                             </div>
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div className="relative">
@@ -757,11 +647,11 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
                                                 {loading ? 'Checking...' : 'Next Step'}
                                             </button>
                                         </div>
-                                    ) : step === 2 ? (
+                                    ) : (
                                         <div className="space-y-4">
                                             <div className="flex items-center justify-between mb-4">
                                                 <span className="text-padel-green text-[10px] font-black uppercase tracking-widest">Step 2: Padel Profile</span>
-                                                <span className="text-gray-500 text-[10px] font-bold">2 / 3</span>
+                                                <span className="text-gray-500 text-[10px] font-bold">2 / 2</span>
                                             </div>
 
                                             {/* Profile Picture Upload */}
@@ -918,209 +808,15 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
                                                 </button>
                                                 <button
                                                     type="submit"
-                                                    className="flex-1 bg-padel-green text-black font-black uppercase tracking-widest py-4 rounded-xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-padel-green/20"
-                                                >
-                                                    Next Step
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-4">
-                                            <div className="flex items-center justify-between mb-2">
-                                                <span className="text-padel-green text-[10px] font-black uppercase tracking-widest">Step 3: Payment Options</span>
-                                                <span className="text-gray-500 text-[10px] font-bold">3 / 3</span>
-                                            </div>
-
-                                            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
-                                                <label className="block text-[10px] font-black text-padel-green uppercase tracking-widest mb-3">Payment Option</label>
-                                                <div className="space-y-3">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setPaymentOption('pay_now')}
-                                                        className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${paymentOption === 'pay_now' ? 'bg-black/40 border-padel-green/50' : 'bg-black/30 border-white/10 hover:border-white/20'}`}
-                                                    >
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1.5">
-                                                                <img src="https://upload.wikimedia.org/wikipedia/commons/0/0b/Paystack_Logo.png" alt="Paystack" className="w-full h-full object-contain" />
-                                                            </div>
-                                                            <div className="text-left">
-                                                                <p className="text-white font-bold text-sm">Pay Now</p>
-                                                                <p className="text-gray-500 text-[10px] uppercase font-bold">Annual License Fee: {formatCurrency(FEES.FULL_LICENSE)} • Profile visible immediately</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentOption === 'pay_now' ? 'border-padel-green' : 'border-white/30'}`}>
-                                                            {paymentOption === 'pay_now' && <div className="w-2.5 h-2.5 bg-padel-green rounded-full"></div>}
-                                                        </div>
-                                                    </button>
-                                                    <div className={`w-full flex-col rounded-xl border transition-all ${paymentOption === 'temporary' ? 'bg-black/40 border-padel-green/50' : 'bg-black/30 border-white/10 hover:border-white/20'}`}>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setPaymentOption('temporary')}
-                                                            className="w-full flex items-center justify-between p-4"
-                                                        >
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1.5">
-                                                                    <img src="https://upload.wikimedia.org/wikipedia/commons/0/0b/Paystack_Logo.png" alt="Paystack" className="w-full h-full object-contain" />
-                                                                </div>
-                                                                <div className="text-left">
-                                                                    <p className="text-white font-bold text-sm">Temporary License</p>
-                                                                    <p className="text-gray-500 text-[10px] uppercase font-bold">Single Event Fee: {formatCurrency(FEES.TEMPORARY_LICENSE)}</p>
-                                                                </div>
-                                                            </div>
-                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentOption === 'temporary' ? 'border-padel-green' : 'border-white/30'}`}>
-                                                                {paymentOption === 'temporary' && <div className="w-2.5 h-2.5 bg-padel-green rounded-full"></div>}
-                                                            </div>
-                                                        </button>
-
-                                                        {paymentOption === 'temporary' && (
-                                                            <div className="p-4 border-t border-white/10 w-full animate-in fade-in slide-in-from-top-2">
-                                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 text-left">Select Event</label>
-                                                                {eventsLoading ? (
-                                                                    <div className="text-center py-4 bg-black/40 rounded-xl border border-white/5">
-                                                                        <div className="w-5 h-5 border-2 border-padel-green border-t-transparent rounded-full animate-spin mx-auto"></div>
-                                                                    </div>
-                                                                ) : upcomingEvents?.length > 0 ? (
-                                                                    selectedEventId ? (
-                                                                        (() => {
-                                                                            const selectedEvent = upcomingEvents.find(
-                                                                                (e) => e.id?.toString() === selectedEventId.toString(),
-                                                                            );
-                                                                            if (!selectedEvent) return null;
-                                                                            return (
-                                                                                <div className="bg-black/40 border border-padel-green/30 rounded-xl p-4 flex items-center justify-between gap-3">
-                                                                                    <div className="flex-1 min-w-0 text-left">
-                                                                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-padel-green/10 border border-padel-green/20 text-[9px] font-bold text-padel-green uppercase tracking-wide mb-1.5">
-                                                                                            <Check size={10} className="stroke-[3]" /> Selected Event
-                                                                                        </span>
-                                                                                        <h4 className="text-white font-bold text-sm truncate">{selectedEvent.event_name}</h4>
-                                                                                        <p className="text-gray-400 text-[10px] mt-1 flex items-center gap-1">
-                                                                                            <Calendar size={12} className="text-gray-500" />
-                                                                                            {new Date(selectedEvent.start_date).toLocaleDateString(undefined, {
-                                                                                                day: 'numeric',
-                                                                                                month: 'short',
-                                                                                                year: 'numeric',
-                                                                                            })}
-                                                                                        </p>
-                                                                                    </div>
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            setSelectedEventId('');
-                                                                                            setEventSearchQuery('');
-                                                                                        }}
-                                                                                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-bold text-white transition-all whitespace-nowrap"
-                                                                                    >
-                                                                                        Change
-                                                                                    </button>
-                                                                                </div>
-                                                                            );
-                                                                        })()
-                                                                    ) : (
-                                                                        <div className="flex flex-col gap-2.5">
-                                                                            <div className="relative">
-                                                                                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                                                                                <input
-                                                                                    type="text"
-                                                                                    placeholder="Type to search events..."
-                                                                                    value={eventSearchQuery}
-                                                                                    onChange={(e) => setEventSearchQuery(e.target.value)}
-                                                                                    className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white text-sm focus:border-padel-green outline-none placeholder:text-gray-500"
-                                                                                    onClick={(e) => e.stopPropagation()}
-                                                                                    autoFocus
-                                                                                />
-                                                                                {eventSearchQuery && (
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            setEventSearchQuery('');
-                                                                                        }}
-                                                                                        className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 bg-white/5 hover:bg-white/10 rounded text-gray-400 hover:text-white"
-                                                                                    >
-                                                                                        <X size={14} />
-                                                                                    </button>
-                                                                                )}
-                                                                            </div>
-                                                                            <div className="max-h-[160px] overflow-y-auto flex flex-col gap-1.5 pr-0.5 custom-scrollbar">
-                                                                                {filteredEvents.length > 0 ? (
-                                                                                    filteredEvents.map((event, i) => (
-                                                                                        <button
-                                                                                            key={event.id || i}
-                                                                                            type="button"
-                                                                                            onClick={(e) => {
-                                                                                                e.stopPropagation();
-                                                                                                setSelectedEventId(event.id.toString());
-                                                                                                setEventSearchQuery('');
-                                                                                            }}
-                                                                                            className="w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all group bg-black/30 border-white/5 hover:border-padel-green/30 hover:bg-padel-green/5 cursor-pointer"
-                                                                                        >
-                                                                                            <div className="min-w-0 flex-1 pr-3">
-                                                                                                <p className="font-bold text-xs truncate text-white group-hover:text-padel-green transition-colors">
-                                                                                                    {event.event_name}
-                                                                                                </p>
-                                                                                                <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wider mt-0.5 flex items-center gap-1">
-                                                                                                    <Calendar size={10} className="text-gray-600" />
-                                                                                                    {new Date(event.start_date).toLocaleDateString(undefined, {
-                                                                                                        day: 'numeric',
-                                                                                                        month: 'short',
-                                                                                                        year: 'numeric',
-                                                                                                    })}
-                                                                                                </p>
-                                                                                            </div>
-                                                                                            <span className="inline-flex items-center gap-0.5 text-[8px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-padel-green/10 text-padel-green border border-padel-green/20 group-hover:bg-padel-green group-hover:text-black transition-all">
-                                                                                                Select <ChevronRight size={10} />
-                                                                                            </span>
-                                                                                        </button>
-                                                                                    ))
-                                                                                ) : (
-                                                                                    <div className="py-6 text-center text-gray-500 bg-black/20 rounded-xl border border-white/5">
-                                                                                        <Search className="w-5 h-5 mx-auto mb-1.5 opacity-20 text-padel-green" />
-                                                                                        <p className="text-[10px] font-medium text-white/60">No matching events found</p>
-                                                                                        <p className="text-[8px] mt-0.5 text-gray-600">Try typing a different name</p>
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    )
-                                                                ) : (
-                                                                    <p className="text-[10px] text-yellow-500 bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/20 text-left">No upcoming events found. You must wait for an event to be posted to buy a temporary license.</p>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setPaymentOption('pay_later')}
-                                                        className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${paymentOption === 'pay_later' ? 'bg-black/40 border-padel-green/50' : 'bg-black/30 border-white/10 hover:border-white/20'}`}
-                                                    >
-                                                        <div className="text-left">
-                                                            <p className="text-white font-bold text-sm">Pay Later</p>
-                                                            <p className="text-gray-500 text-[10px] uppercase font-bold">Create profile now • Pay for license later to appear on Players page</p>
-                                                        </div>
-                                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentOption === 'pay_later' ? 'border-padel-green' : 'border-white/30'}`}>
-                                                            {paymentOption === 'pay_later' && <div className="w-2.5 h-2.5 bg-padel-green rounded-full"></div>}
-                                                        </div>
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            <div className="flex gap-3 pt-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setStep(2)}
-                                                    className="w-1/3 bg-white/5 text-white font-bold py-4 rounded-xl hover:bg-white/10 transition-all border border-white/10"
-                                                >
-                                                    Back
-                                                </button>
-                                                <button
-                                                    type="submit"
-                                                    disabled={loading || (paymentOption === 'pay_now' && !isPaystackConfigured())}
+                                                    disabled={loading || isUploading}
                                                     className="flex-1 bg-padel-green text-black font-black uppercase tracking-widest py-4 rounded-xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-padel-green/20 disabled:opacity-50"
                                                 >
-                                                    {loading ? 'Processing...' : paymentOption === 'pay_later' ? 'Register' : !isPaystackConfigured() ? 'Paystack Key Missing' : 'Pay & Register'}
+                                                    {loading ? 'Registering...' : 'Register'}
                                                 </button>
                                             </div>
+                                            <p className="text-[10px] text-gray-500 text-center leading-relaxed">
+                                                A temporary license can be added when you enter an event, if sales are open.
+                                            </p>
                                         </div>
                                     )}
                                 </>

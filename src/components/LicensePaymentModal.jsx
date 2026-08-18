@@ -3,10 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search, Calendar, Check, ChevronRight } from 'lucide-react';
 import PaystackPop from '@paystack/inline-js';
 import { supabase } from '../supabaseClient';
-import { FEES, toPaystackAmount, formatCurrency } from '../constants/fees';
+import { toPaystackAmount, formatCurrency } from '../constants/fees';
 import { useRankedin } from '../hooks/useRankedin';
 import { PAYSTACK_PUBLIC_KEY, isPaystackConfigured } from '../utils/paystackConfig';
 import { fetchUpcomingCalendarEvents } from '../utils/calendarEvents';
+import { useCommerceConfig } from '../hooks/useCommerceConfig';
+import { commerceSnapshot, formatQuoteCaption } from '../utils/commerce';
 
 console.log('Paystack Config Check (Modal):', {
     keyPrefix: PAYSTACK_PUBLIC_KEY ? PAYSTACK_PUBLIC_KEY.substring(0, 12) + '...' : 'MISSING',
@@ -30,6 +32,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [showTempOptions, setShowTempOptions] = useState(false);
+    const { config: commerce, full: fullQuote, temp: tempQuote, licenseSalesOpen } = useCommerceConfig();
 
     // Temporary License Addition
     const [upcomingEvents, setUpcomingEvents] = useState([]);
@@ -81,7 +84,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
     }, [isOpen, userEmail]);
 
 
-    const getConfig = (amountInRands) => {
+    const getConfig = (quote) => {
         let nameParams = {};
         if (userName) {
             const parts = userName.trim().split(' ');
@@ -91,18 +94,26 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
             }
         }
 
-        const isTemp = amountInRands < 450;
+        const isTemp = quote.type === 'temporary';
         const eventDetails = isTemp ? upcomingEvents.find(e => e.id?.toString() === selectedEventId.toString()) : null;
 
         return {
-            reference: `${(new Date()).getTime()}-${amountInRands}`,
+            reference: `${(new Date()).getTime()}-${quote.total}`,
             email: userEmail || '',
-            amount: toPaystackAmount(amountInRands),
+            amount: toPaystackAmount(quote.total),
             key: PAYSTACK_PUBLIC_KEY,
             currency: 'ZAR',
             metadata: {
-                license_type: isTemp ? 'temporary' : 'full',
+                license_type: quote.type,
                 source: 'web_license_modal',
+                pricing: {
+                    base: quote.base,
+                    fee: quote.fee,
+                    percent: quote.percent,
+                    total: quote.total,
+                    fee_label: quote.feeLabel,
+                },
+                commerce: commerceSnapshot(commerce),
                 ...(isTemp && eventDetails ? {
                     event_id: eventDetails.id,
                     event_name: eventDetails.event_name
@@ -112,7 +123,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
         };
     };
 
-    const runPayment = (amountInRands, licenseType) => {
+    const runPayment = (quote) => {
         setError(null);
 
         // Guard: Paystack requires a valid email address
@@ -121,7 +132,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
             return;
         }
 
-        if (licenseType === 'temporary' && selectedEventId) {
+        if (quote.type === 'temporary' && selectedEventId) {
             const hasLicense = existingLicenses.includes(selectedEventId.toString());
             if (hasLicense) {
                 setError('You already have an active temporary license for this event.');
@@ -136,11 +147,11 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
             // NOTE: checkout() is NOT async — do NOT await it.
             // It opens the Paystack popup and calls onSuccess/onCancel when done.
             paystackPop.checkout({
-                ...getConfig(amountInRands),
+                ...getConfig(quote),
                 onSuccess: async () => {
                     let successCallback = onPaymentSuccess;
 
-                    if (licenseType === 'temporary' && selectedEventId) {
+                    if (quote.type === 'temporary' && selectedEventId) {
                         const eventDetails = upcomingEvents.find(e => e.id?.toString() === selectedEventId.toString());
                         if (eventDetails) {
                             try {
@@ -167,7 +178,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
                         successCallback,
                         setError,
                         onClose,
-                        licenseType
+                        quote.type
                     );
                 },
                 onCancel: () => setLoading(false),
@@ -222,31 +233,42 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
                             </div>
                         )}
 
+                        {!licenseSalesOpen && (
+                            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-sm mb-4">
+                                License sales are closed. You can pay from your profile when a license type is turned back on.
+                            </div>
+                        )}
+
                         <div className="space-y-3">
+                            {fullQuote.enabled && (
                             <button
-                                onClick={() => runPayment(FEES.FULL_LICENSE, 'full')}
+                                type="button"
+                                onClick={() => runPayment(fullQuote)}
                                 disabled={loading || !isPaystackConfigured()}
                                 className="w-full flex items-center justify-between p-4 rounded-xl bg-padel-green/20 border border-padel-green/50 hover:bg-padel-green/30 transition-all group"
                             >
                                 <div className="text-left">
                                     <p className="text-white font-bold">Pay Now - Full License</p>
-                                    <p className="text-gray-400 text-xs">{formatCurrency(FEES.FULL_LICENSE)} • Profile visible on Players page</p>
+                                    <p className="text-gray-400 text-xs">{formatQuoteCaption(fullQuote, formatCurrency)} • Profile visible on Players page</p>
                                 </div>
                                 <div className="bg-padel-green text-black font-black px-4 py-2 rounded-lg text-sm group-hover:scale-105 transition-transform">
                                     {loading ? 'Processing...' : 'Pay'}
                                 </div>
                             </button>
+                            )}
 
+                            {tempQuote.enabled && (
                             <div className={`w-full flex-col rounded-xl transition-all ${
                                 showTempOptions 
                                     ? 'bg-blue-500/[0.02] border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.05)]' 
                                     : 'bg-white/5 border border-white/10 hover:border-white/20'
                             }`}>
                                 <button
+                                    type="button"
                                     onClick={() => {
                                         if (showTempOptions) {
                                             if (selectedEventId) {
-                                                runPayment(FEES.TEMPORARY_LICENSE, 'temporary');
+                                                runPayment(tempQuote);
                                             }
                                         } else {
                                             setShowTempOptions(true);
@@ -257,7 +279,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
                                 >
                                     <div className="text-left">
                                         <p className="text-white font-bold">Buy Temporary License</p>
-                                        <p className="text-gray-400 text-xs">{formatCurrency(FEES.TEMPORARY_LICENSE)}</p>
+                                        <p className="text-gray-400 text-xs">{formatQuoteCaption(tempQuote, formatCurrency)}</p>
                                     </div>
                                     <div className={`font-black px-4 py-2 rounded-lg text-sm transition-transform ${
                                         (!showTempOptions || (selectedEventId && upcomingEvents.length > 0 && !existingLicenses.includes(selectedEventId.toString()))) 
@@ -422,6 +444,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
                                     </div>
                                 )}
                             </div>
+                            )}
                         </div>
 
                         <p className="text-gray-500 text-xs mt-4 text-center">

@@ -10,7 +10,16 @@ import {
 import PaystackPop from '@paystack/inline-js';
 import { supabase } from '../supabaseClient';
 import { sendEmail } from '../utils/emails';
-import { toPaystackAmount, FEES } from '../constants/fees';
+import { toPaystackAmount } from '../constants/fees';
+import { useCommerceConfig } from '../hooks/useCommerceConfig';
+import {
+    availableLicenseTypes,
+    coerceLicenseChoice,
+    commerceSnapshot,
+    eventEntryQuote,
+    formatPercent,
+    licenseQuote,
+} from '../utils/commerce';
 import { getEventImage } from '../utils/imageUtils';
 import sapaLogo from '../assets/sapa-logo.svg';
 
@@ -385,6 +394,7 @@ const ProgressBar = ({ step, theme, steps = STEPS }) => (
 const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null, fourMPlayers = {}, onStatusChange, onParticipantsChange, registrationActionsRef, highlightClassName = '' }) => {
     const navigate = useNavigate();
     const { promptMembersOnly } = useMembersOnly();
+    const { config: commerce } = useCommerceConfig();
     const [divisions, setDivisions] = useState([]);
     const [divisionRegs, setDivisionRegs] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -1787,6 +1797,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const showPartnerLicenseOptions = showPartnerLicenseWarning;
 
+    const licenseFee = (choice) => licenseQuote(choice === 'full' ? 'full' : 'temporary', commerce).total;
+    const allowTemporaryLicense = event?.allow_temporary_license !== false;
+    const licenseTypes = useMemo(
+        () => availableLicenseTypes(commerce, { allowTemporary: allowTemporaryLicense }),
+        [commerce, allowTemporaryLicense],
+    );
+    const licenseSalesOpen = licenseTypes.length > 0;
+
     useEffect(() => {
         if (!primaryPartner.partnerProfile) {
             setPartnerLicenseInfo({ active: false, label: 'No active license' });
@@ -1796,10 +1814,18 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     }, [primaryPartner.partnerProfile, resolvePartnerLicense]);
 
     useEffect(() => {
-        if (anySelectedRequiresLicense && !hasLicense) setBuyLicenseSelf(true);
-    }, [anySelectedRequiresLicense, hasLicense]);
+        if (anySelectedRequiresLicense && !hasLicense && licenseSalesOpen) setBuyLicenseSelf(true);
+    }, [anySelectedRequiresLicense, hasLicense, licenseSalesOpen]);
 
     useEffect(() => {
+        if (partnerLicenseOption === 'annual' && !licenseTypes.includes('full')) {
+            setPartnerLicenseOption(licenseTypes.includes('temporary') ? 'temporary' : 'none');
+            return;
+        }
+        if (partnerLicenseOption === 'temporary' && !licenseTypes.includes('temporary')) {
+            setPartnerLicenseOption(licenseTypes.includes('full') ? 'annual' : 'none');
+            return;
+        }
         if (partnerLicenseOption === 'annual') {
             setBuyLicensePartner(true);
             setLicensePartnerChoice('full');
@@ -1809,7 +1835,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         } else {
             setBuyLicensePartner(false);
         }
-    }, [partnerLicenseOption]);
+    }, [partnerLicenseOption, licenseTypes]);
 
     useEffect(() => {
         const payForPartner = payMode === 'both';
@@ -1827,7 +1853,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
     }, [selectedDivisions, selected, myRegs, divisionRegs, payMode]);
 
-    const licenseFee = (choice) => (choice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE);
+    useEffect(() => {
+        const next = coerceLicenseChoice(licenseSelfChoice, commerce, { allowTemporary: allowTemporaryLicense });
+        if (next && next !== licenseSelfChoice) setLicenseSelfChoice(next);
+        const nextPartner = coerceLicenseChoice(licensePartnerChoice, commerce, { allowTemporary: allowTemporaryLicense });
+        if (nextPartner && nextPartner !== licensePartnerChoice) setLicensePartnerChoice(nextPartner);
+    }, [commerce, allowTemporaryLicense, licenseSelfChoice, licensePartnerChoice]);
 
     const partnerLicensePurchases = useMemo(() => {
         const byPartnerId = new Map();
@@ -1881,21 +1912,23 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             const sel = openDiv ? selected[openDiv.id] : null;
             const paySelf = !sel || sel.payForSelf !== false;
             const payPartner = weeklyEntryMode === 'partner' && !!(sel?.partnerName) && !!sel?.payForPartner;
-            return computeWeeklySubtotal(selectedWeeks, { paySelf, payPartner });
+            const entryBase = computeWeeklySubtotal(selectedWeeks, { paySelf, payPartner });
+            return eventEntryQuote(entryBase, commerce).total;
         }
-        let t = 0;
+        let entryBase = 0;
         for (const d of selectedDivisions) {
             const sel = selected[d.id];
             const fee = resolveDivisionEntryFee(d, event);
-            if (isSelfPayingDivision(d.id, sel)) t += fee;
-            if (sel?.partnerName && sel?.payForPartner && !isPartnerDivisionPaid(d.id)) t += fee;
+            if (isSelfPayingDivision(d.id, sel)) entryBase += fee;
+            if (sel?.partnerName && sel?.payForPartner && !isPartnerDivisionPaid(d.id)) entryBase += fee;
         }
+        let t = eventEntryQuote(entryBase, commerce).total;
         if (buyLicenseSelf) t += licenseFee(licenseSelfChoice);
         for (const purchase of partnerLicensePurchases) {
             t += licenseFee(purchase.choice);
         }
         return t;
-    }, [isWeeklyEvent, selectedWeeks, weeklyEntryMode, selectedDivisions, selected, myRegs, divisionRegs, buyLicenseSelf, licenseSelfChoice, partnerLicensePurchases, userEmail, event]);
+    }, [isWeeklyEvent, selectedWeeks, weeklyEntryMode, selectedDivisions, selected, myRegs, divisionRegs, buyLicenseSelf, licenseSelfChoice, partnerLicensePurchases, userEmail, event, commerce]);
 
     const total = subtotal;
 
@@ -1934,7 +1967,15 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     total: partnerDivs.reduce((sum, div) => sum + div.fee, 0),
                 });
             }
-            return { players, extras: [] };
+            return { players, extras: (() => {
+                const entryBase = players.reduce((sum, player) => sum + player.total, 0);
+                const entryQuote = eventEntryQuote(entryBase, commerce);
+                if (entryQuote.fee <= 0) return [];
+                return [{
+                    label: `${commerce.fee_label} (${formatPercent(entryQuote.percent)}% on entries)`,
+                    amount: entryQuote.fee,
+                }];
+            })() };
         }
 
         const selfDivisions = [];
@@ -1991,11 +2032,20 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             });
         }
 
+        const entryBase = players.reduce((sum, player) => sum + player.total, 0);
+        const entryQuote = eventEntryQuote(entryBase, commerce);
+        if (entryQuote.fee > 0) {
+            extras.push({
+                label: `${commerce.fee_label} (${formatPercent(entryQuote.percent)}% on entries)`,
+                amount: entryQuote.fee,
+            });
+        }
+
         return { players, extras };
     }, [
         isWeeklyEvent, selectedWeeks, weeklyEntryMode, selectedDivisions, selected, myRegs, divisionRegs,
         buyLicenseSelf, licenseSelfChoice, partnerLicenseCache, partnerLicensePurchases,
-        profile?.name, displayProfile?.name, event,
+        profile?.name, displayProfile?.name, event, commerce,
     ]);
 
     const reviewPaySummary = useMemo(() => {
@@ -2028,13 +2078,17 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     entryTotal: payerCount * fee,
                 };
             });
-            const entryFeesTotal = entries.reduce((sum, entry) => sum + entry.entryTotal, 0);
+            const entryFeesBase = entries.reduce((sum, entry) => sum + entry.entryTotal, 0);
+            const entryQuote = eventEntryQuote(entryFeesBase, commerce);
             return {
                 entries,
-                entryFeesTotal,
+                entryFeesTotal: entryFeesBase,
+                entryManagementFee: entryQuote.fee,
                 licenseLines: [],
+                licensesBase: 0,
+                licensesFee: 0,
                 licensesSubtotal: 0,
-                totalPayable: entryFeesTotal,
+                totalPayable: entryQuote.total,
             };
         }
 
@@ -2069,37 +2123,52 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             };
         });
 
-        const entryFeesTotal = entries.reduce((sum, entry) => sum + entry.entryTotal, 0);
+        const entryFeesBase = entries.reduce((sum, entry) => sum + entry.entryTotal, 0);
+        const entryQuote = eventEntryQuote(entryFeesBase, commerce);
 
         const licenseLines = [];
-        if (buyLicenseSelf || (!hasLicense && anySelectedRequiresLicense)) {
+        const pushLicenseLine = (choice, label) => {
+            const quote = licenseQuote(choice === 'full' ? 'full' : 'temporary', commerce);
             licenseLines.push({
-                label: licenseSelfChoice === 'full' ? 'Your SAPA annual license' : 'Your SAPA temporary license',
-                amount: licenseFee(licenseSelfChoice),
+                label,
+                base: quote.base,
+                fee: quote.fee,
+                amount: quote.total,
             });
+        };
+        if (licenseSalesOpen && (buyLicenseSelf || (!hasLicense && anySelectedRequiresLicense))) {
+            pushLicenseLine(
+                licenseSelfChoice,
+                licenseSelfChoice === 'full' ? 'Your SAPA annual license' : 'Your SAPA temporary license',
+            );
         }
         for (const purchase of partnerLicensePurchases) {
-            licenseLines.push({
-                label: purchase.choice === 'full'
+            pushLicenseLine(
+                purchase.choice,
+                purchase.choice === 'full'
                     ? `${purchase.partnerName} annual SAPA license`
                     : `${purchase.partnerName} temporary SAPA license`,
-                amount: licenseFee(purchase.choice),
-            });
+            );
         }
 
+        const licensesBase = licenseLines.reduce((sum, line) => sum + line.base, 0);
+        const licensesFee = licenseLines.reduce((sum, line) => sum + line.fee, 0);
         const licensesSubtotal = licenseLines.reduce((sum, line) => sum + line.amount, 0);
 
         return {
             entries,
-            entryFeesTotal,
+            entryFeesTotal: entryFeesBase,
+            entryManagementFee: entryQuote.fee,
             licenseLines,
+            licensesBase,
+            licensesFee,
             licensesSubtotal,
-            totalPayable: entryFeesTotal + licensesSubtotal,
+            totalPayable: entryQuote.total + licensesSubtotal,
         };
     }, [
         isWeeklyEvent, selectedWeeks, weeklyEntryMode, selectedDivisions, selected, myRegs, divisionRegs,
         buyLicenseSelf, licenseSelfChoice, hasLicense, anySelectedRequiresLicense, partnerLicenseCache,
-        partnerLicensePurchases, profile?.name, displayProfile?.name, profileImageUrl, event,
+        partnerLicensePurchases, profile?.name, displayProfile?.name, profileImageUrl, event, commerce,
     ]);
 
     const lineItems = useMemo(() => {
@@ -2390,6 +2459,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             event_dates: event.event_dates || '',
             event_venue: [event.venue, event.city].filter(Boolean).join(', '),
             division_entry_fees: divisionEntryFees,
+            commerce: commerceSnapshot(commerce),
             reference,
         };
         const payUrl = `${eventUrl}?pay_ref=${encodeURIComponent(reference)}`;
@@ -2435,6 +2505,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         weeklyCheckoutIntent,
         allowWeeklyReserve,
         divisions,
+        commerce,
     ]);
 
     const persistRegistrations = async (rows, soloLinks = [], covers = []) => {
@@ -2810,6 +2881,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             }
         } else if (selectedDivisions.length === 0) {
             toast.error('Select at least one division');
+            return;
+        }
+        if (!isWeeklyEvent && anySelectedRequiresLicense && !hasLicense && !licenseSalesOpen) {
+            toast.error('License sales are closed. You cannot enter this division until a license type is available.');
             return;
         }
         if (!isWeeklyEvent && anySelectedRequiresLicense && !hasLicense && !buyLicenseSelf) {
@@ -3507,7 +3582,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                         </p>
                                                     </div>
                                                     <p className="mt-2 text-slate-700 font-normal pl-6">
-                                                        If a license is required for this tournament, you will be prompted at checkout to purchase either a temporary or annual SAPA license.
+                                                        If a license is required for this tournament, you will be prompted at checkout to add a temporary or annual SAPA license when sales are open.
                                                     </p>
                                                 </div>
                                             )}
@@ -3881,14 +3956,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                                 <AlertCircle size={16} className="shrink-0 mt-0.5 text-red-600" />
                                                                 <p className="text-xs leading-snug font-normal text-slate-700">
                                                                     <span className="font-semibold text-slate-900">{sel.partnerName} does not have an active SAPA license.</span>
-                                                                    {' '}Because you are paying for this partner, add one temporary ({fmtRWhole(FEES.TEMPORARY_LICENSE)}) or annual ({fmtRWhole(FEES.FULL_LICENSE)}) SAPA license for this event — it covers all divisions they enter with you.
+                                                                    {' '}Because you are paying for this partner, add a SAPA license for this event — it covers all divisions they enter with you.
                                                                 </p>
                                                             </div>
                                                             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-6">
                                                                 {[
-                                                                    ['temporary', `Temporary SAPA license (${fmtRWhole(FEES.TEMPORARY_LICENSE)})`],
-                                                                    ['full', `Annual SAPA license (${fmtRWhole(FEES.FULL_LICENSE)})`],
-                                                                ].map(([val, label]) => (
+                                                                    licenseTypes.includes('temporary') && ['temporary', `Temporary SAPA license (${fmtRWhole(licenseFee('temporary'))})`],
+                                                                    licenseTypes.includes('full') && ['full', `Annual SAPA license (${fmtRWhole(licenseFee('full'))})`],
+                                                                ].filter(Boolean).map(([val, label]) => (
                                                                     <label key={val} className="flex items-center gap-2 text-xs text-slate-900 cursor-pointer font-normal whitespace-nowrap">
                                                                         <input
                                                                             type="radio"
@@ -3910,7 +3985,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                             <Check size={16} className="shrink-0 mt-0.5 text-emerald-600" />
                                                             <p>
                                                                 SAPA license already selected for {sel.partnerName}
-                                                                {' '}({eventPartnerLicenseChoice === 'full' ? `annual — ${fmtRWhole(FEES.FULL_LICENSE)}` : `temporary — ${fmtRWhole(FEES.TEMPORARY_LICENSE)}`}).
+                                                                {' '}({eventPartnerLicenseChoice === 'full' ? `annual — ${fmtRWhole(licenseFee('full'))}` : `temporary — ${fmtRWhole(licenseFee('temporary'))}`}).
                                                                 {' '}One license covers all divisions for this event.
                                                             </p>
                                                         </div>
@@ -4090,16 +4165,25 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                         </div>
                                         <div className="min-w-0">
                                             <p className="font-semibold text-slate-900 text-sm leading-tight">A SAPA license is required.</p>
-                                            <p className="text-xs text-slate-600 font-normal leading-snug">Add a license to enter this division.</p>
+                                            <p className="text-xs text-slate-600 font-normal leading-snug">
+                                                {licenseSalesOpen
+                                                    ? 'Add a license to enter this division.'
+                                                    : 'License sales are closed. You cannot enter this division until a license type is available.'}
+                                            </p>
                                         </div>
                                     </div>
+                                    {licenseSalesOpen && (
+                                    <>
                                     <label className="flex items-center gap-2 text-xs cursor-pointer text-slate-900 font-normal">
                                         <input type="checkbox" checked={buyLicenseSelf} disabled={anySelectedRequiresLicense} onChange={(e) => setBuyLicenseSelf(e.target.checked)} className="w-3.5 h-3.5" style={{ accentColor: accent }} />
                                         Add a SAPA license to my entry
                                     </label>
                                     {buyLicenseSelf && (
                                         <div className="flex flex-col sm:flex-row gap-1.5">
-                                            {[['temporary', 'Temporary', FEES.TEMPORARY_LICENSE], ['full', 'Annual', FEES.FULL_LICENSE]].map(([val, label, fee]) => (
+                                            {[
+                                                licenseTypes.includes('temporary') && ['temporary', 'Temporary', licenseFee('temporary')],
+                                                licenseTypes.includes('full') && ['full', 'Annual', licenseFee('full')],
+                                            ].filter(Boolean).map(([val, label, fee]) => (
                                                 <button
                                                     key={val}
                                                     type="button"
@@ -4111,6 +4195,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                 </button>
                                             ))}
                                         </div>
+                                    )}
+                                    </>
                                     )}
                                 </CardBody>
                             </Card>
@@ -4235,10 +4321,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     </p>
                                     <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 overflow-hidden">
                                         {[
-                                            ['annual', `Add annual SAPA license for partner — ${fmtRWhole(FEES.FULL_LICENSE)}`],
-                                            ['temporary', `Add temporary SAPA license for partner — ${fmtRWhole(FEES.TEMPORARY_LICENSE)}`],
+                                            licenseTypes.includes('full') && ['annual', `Add annual SAPA license for partner — ${fmtRWhole(licenseFee('full'))}`],
+                                            licenseTypes.includes('temporary') && ['temporary', `Add temporary SAPA license for partner — ${fmtRWhole(licenseFee('temporary'))}`],
                                             ['none', 'Do not add now — notify partner to complete later'],
-                                        ].map(([val, label]) => (
+                                        ].filter(Boolean).map(([val, label]) => (
                                             <label key={val} className="flex items-center gap-2 px-2.5 py-2 cursor-pointer hover:bg-gray-50 min-h-0">
                                                 <input
                                                     type="radio"
@@ -4339,6 +4425,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     <span className="text-xs font-semibold text-slate-900">Total entry fees</span>
                                     <span className="text-sm font-bold text-slate-900 tabular-nums">{fmtR(reviewPaySummary.entryFeesTotal)}</span>
                                 </div>
+                                {reviewPaySummary.entryManagementFee > 0 && (
+                                    <div className="flex justify-between items-start gap-3 pt-2">
+                                        <span className="text-xs text-slate-600 font-normal">
+                                            {commerce.fee_label} ({formatPercent(commerce.event_fee_percent)}% of {fmtR(reviewPaySummary.entryFeesTotal)})
+                                        </span>
+                                        <span className="text-sm font-semibold text-slate-900 tabular-nums shrink-0">{fmtR(reviewPaySummary.entryManagementFee)}</span>
+                                    </div>
+                                )}
                             </CardBody>
                         </Card>
 
@@ -4379,9 +4473,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                             <p className="text-[11px] text-slate-600 font-normal mb-2">Your SAPA license</p>
                                             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                                                 {[
-                                                    ['temporary', `Temporary SAPA license (${fmtRWhole(FEES.TEMPORARY_LICENSE)})`],
-                                                    ['full', `Annual SAPA license (${fmtRWhole(FEES.FULL_LICENSE)})`],
-                                                ].map(([val, label]) => (
+                                                    licenseTypes.includes('temporary') && ['temporary', `Temporary SAPA license (${fmtRWhole(licenseFee('temporary'))})`],
+                                                    licenseTypes.includes('full') && ['full', `Annual SAPA license (${fmtRWhole(licenseFee('full'))})`],
+                                                ].filter(Boolean).map(([val, label]) => (
                                                     <label key={val} className="flex items-center gap-2 text-xs text-slate-900 cursor-pointer font-normal whitespace-nowrap">
                                                         <input
                                                             type="radio"
@@ -4403,9 +4497,17 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     {reviewPaySummary.licenseLines.map((line, i) => (
                                         <div key={`${line.label}-${i}`} className="flex justify-between items-center py-2 text-xs">
                                             <span className="text-slate-700 font-normal">{line.label}</span>
-                                            <span className="font-medium text-slate-900 tabular-nums">{fmtR(line.amount)}</span>
+                                            <span className="font-medium text-slate-900 tabular-nums">{fmtR(line.base)}</span>
                                         </div>
                                     ))}
+                                    {reviewPaySummary.licensesFee > 0 && (
+                                        <div className="flex justify-between items-start gap-3 py-2 text-xs">
+                                            <span className="text-slate-600 font-normal">
+                                                {commerce.fee_label} ({formatPercent(commerce.license_fee_percent)}% of {fmtR(reviewPaySummary.licensesBase)})
+                                            </span>
+                                            <span className="font-medium text-slate-900 tabular-nums shrink-0">{fmtR(reviewPaySummary.licensesFee)}</span>
+                                        </div>
+                                    )}
                                     <div className="flex justify-between items-center pt-3 mt-1 border-t border-dashed border-gray-200">
                                         <span className="text-xs font-medium text-slate-600">Subtotal</span>
                                         <span className="text-sm font-semibold text-slate-900 tabular-nums">{fmtR(reviewPaySummary.licensesSubtotal)}</span>

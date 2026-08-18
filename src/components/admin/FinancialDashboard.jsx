@@ -118,14 +118,14 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
                     // License Breakdown — everything that isn't a true entry row,
                     // split full vs temp by explicit type, falling back to amount.
                     const licenseRows = filteredPayments.filter(p => !isEntryRow(p));
+                    const isTypedFull = (p) => ['full_license', 'membership'].includes(p.payment_type) || p.metadata?.license_type === 'full';
+                    const isTypedTemp = (p) => ['temporary_license', 'temp_license'].includes(p.payment_type) || p.metadata?.license_type === 'temporary';
                     const fullLicRev = licenseRows.filter(p =>
-                        ['full_license', 'membership'].includes(p.payment_type) ||
-                        (!['temporary_license', 'temp_license'].includes(p.payment_type) && Number(p.amount) >= 400)
+                        isTypedFull(p) || (!isTypedTemp(p) && Number(p.amount) === 450)
                     ).reduce((acc, curr) => acc + Number(curr.amount), 0);
 
                     const tempLicRev = licenseRows.filter(p =>
-                        ['temporary_license', 'temp_license'].includes(p.payment_type) ||
-                        (!['full_license', 'membership'].includes(p.payment_type) && Number(p.amount) < 400 && Number(p.amount) > 0)
+                        isTypedTemp(p) || (!isTypedFull(p) && (Number(p.amount) === 120))
                     ).reduce((acc, curr) => acc + Number(curr.amount), 0);
 
                     // Refunds grouped by the event of the refunded (entry) payment.

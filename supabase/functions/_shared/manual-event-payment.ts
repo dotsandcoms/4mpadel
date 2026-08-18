@@ -5,6 +5,7 @@
  *   - paystack-webhook/manual-event-payment.ts
  */
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { fetchCommerceConfig, licenseQuote } from './commerce.ts';
 
 export type ManualRegistrationRow = Record<string, unknown>;
 export type ManualPaymentCover = { type: string; email: string; division?: string; license?: string };
@@ -114,9 +115,6 @@ export async function persistManualEventRegistrations(
     return { savedRows: savedRows || [], persisted: true };
 }
 
-const FULL_LICENSE_RANDS = 450;
-const TEMP_LICENSE_RANDS = 120;
-
 /**
  * Split a combined event payment into separate ledger rows so a bundled
  * license shows as its own entry in the User Ledger (and reconciles per type).
@@ -156,8 +154,9 @@ export async function recordLicensePaymentSplit(
         ? (meta.line_items as Array<{ label: string; amount: number }>)
         : [];
     const isLicenseLabel = (label: unknown) => /licen[cs]e/i.test(String(label || ''));
+    const config = await fetchCommerceConfig(supabaseAdmin);
     const stdFee = (c: ManualPaymentCover) =>
-        c.license === 'full' ? FULL_LICENSE_RANDS : TEMP_LICENSE_RANDS;
+        licenseQuote(c.license === 'full' ? 'full' : 'temporary', config).total;
 
     // License total: prefer the explicit license line item(s); fall back to the
     // standard fee for the license type when the breakdown is unavailable.

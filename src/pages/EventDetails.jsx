@@ -8,7 +8,14 @@ import { useRankedin } from '../hooks/useRankedin';
 import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, ChevronUp, FileText, User, Users, UserPlus, Trophy, AlertCircle, Heart, ChevronRight, Gift, Award, Layout, Circle, Check, Clock, Crown, Coins, Grid2x2, Plus } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import PaystackPop from '@paystack/inline-js';
-import { toPaystackAmount, FEES } from '../constants/fees';
+import { toPaystackAmount, formatCurrency } from '../constants/fees';
+import { useCommerceConfig } from '../hooks/useCommerceConfig';
+import {
+    availableLicenseTypes,
+    coerceLicenseChoice,
+    eventEntryQuote,
+    licenseQuote,
+} from '../utils/commerce';
 import ManualEventRegistration from '../components/ManualEventRegistration';
 import ManualRegistrationEntryCard from '../components/ManualRegistrationEntryCard';
 import PlayerModal from '../components/PlayerModal';
@@ -669,6 +676,7 @@ const ModuleAccordion = ({ title, icon: Icon, children, defaultOpen = false, cla
 };
 
 const EventDetails = () => {
+    const { config: commerce } = useCommerceConfig();
     const getPlaylistEmbedUrl = (url) => {
         if (!url) return null;
         const match = url.match(/[&?]list=([^&]+)/);
@@ -1079,6 +1087,19 @@ const EventDetails = () => {
     const [playerProfileData, setPlayerProfileData] = useState(null);
     const [licenseChoice, setLicenseChoice] = useState('temporary'); // 'temporary' | 'full'
     const [partnerLicenseChoice, setPartnerLicenseChoice] = useState('temporary'); // 'temporary' | 'full'
+    const eventAllowsTemporary = event?.allow_temporary_license !== false;
+    const eventLicenseOpts = { allowTemporary: eventAllowsTemporary };
+    const licenseTypes = availableLicenseTypes(commerce, eventLicenseOpts);
+    const licenseCharge = (choice) => licenseQuote(choice === 'full' ? 'full' : 'temporary', commerce).total;
+    const entryCharge = (base) => eventEntryQuote(base, commerce).total;
+    const licenseSalesOpen = licenseTypes.length > 0;
+
+    useEffect(() => {
+        const next = coerceLicenseChoice(licenseChoice, commerce, eventLicenseOpts);
+        if (next && next !== licenseChoice) setLicenseChoice(next);
+        const nextPartner = coerceLicenseChoice(partnerLicenseChoice, commerce, eventLicenseOpts);
+        if (nextPartner && nextPartner !== partnerLicenseChoice) setPartnerLicenseChoice(nextPartner);
+    }, [commerce, eventAllowsTemporary, licenseChoice, partnerLicenseChoice]);
 
     const [collapsedSections, setCollapsedSections] = useState({
         about: true,
@@ -1854,7 +1875,7 @@ const EventDetails = () => {
                                 partnerName: pProf ? pProf.name : pName,
                                 partnerProfile: pProf || null,
                                 payForPartner: false,
-                                partnerLicenseChoice: 'temporary'
+                                partnerLicenseChoice: coerceLicenseChoice('temporary', commerce, eventLicenseOpts) || 'temporary'
                             };
                         }
                     }
@@ -2674,24 +2695,21 @@ const EventDetails = () => {
         let partnerTotal = 0;
 
         selectedDivisions.forEach(div => {
-            // Add base entry fee
-            entryFeesTotal += getEntryFeeForCategory(div);
+            entryFeesTotal += entryCharge(getEntryFeeForCategory(div));
 
-            // Add partner costs for this division
             const pState = divisionPartners[div];
             if (pState && pState.partnerProfile && pState.payForPartner) {
-                partnerTotal += getEntryFeeForCategory(div);
-                if (!pState.partnerProfile.paid_registration && pState.payForPartnerLicense) {
-                    partnerTotal += pState.partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
+                partnerTotal += entryCharge(getEntryFeeForCategory(div));
+                if (!pState.partnerProfile.paid_registration && pState.payForPartnerLicense && licenseSalesOpen) {
+                    partnerTotal += licenseCharge(pState.partnerLicenseChoice);
                 }
             }
         });
 
         let total = entryFeesTotal + partnerTotal;
 
-        // Add Temp License or Full License fee if player doesn't have a valid license
-        if (playerProfileData && !playerProfileData.paid_registration) {
-            total += licenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
+        if (playerProfileData && !playerProfileData.paid_registration && licenseSalesOpen) {
+            total += licenseCharge(licenseChoice);
         }
 
         return total;
@@ -2822,7 +2840,7 @@ const EventDetails = () => {
                 partnerName: player.name,
                 partnerSearchResults: [],
                 partnerLookupError: null,
-                partnerLicenseChoice: 'temporary'
+                partnerLicenseChoice: coerceLicenseChoice('temporary', commerce, eventLicenseOpts) || 'temporary'
             }
         }));
     };
@@ -3007,6 +3025,11 @@ const EventDetails = () => {
             return;
         }
 
+        if (playerProfileData && !playerProfileData.paid_registration && !licenseSalesOpen) {
+            toast.error('License sales are closed. You cannot enter this event until a license type is available.');
+            return;
+        }
+
         if (!PAYSTACK_PUBLIC_KEY.startsWith('pk_')) {
             toast.error('Payment system not configured. Please contact support.');
             return;
@@ -3033,11 +3056,11 @@ const EventDetails = () => {
                 partner_id: partnerProfile?.id,
                 division: selectedDivisions.length > 0 ? selectedDivisions.join(', ') : formData.division,
                 is_test: isTestMode,
-                includes_license: playerProfileData && !playerProfileData.paid_registration,
-                license_type: licenseChoice,
+                includes_license: playerProfileData && !playerProfileData.paid_registration && licenseSalesOpen,
+                license_type: playerProfileData && !playerProfileData.paid_registration && licenseSalesOpen ? licenseChoice : null,
                 paying_for_partner: hasPartner && payForPartner,
-                partner_needs_license: hasPartner && payForPartner && partnerProfile && !partnerProfile.paid_registration,
-                partner_license_type: hasPartner && payForPartner && partnerProfile && !partnerProfile.paid_registration ? partnerLicenseChoice : null
+                partner_needs_license: hasPartner && payForPartner && partnerProfile && !partnerProfile.paid_registration && licenseSalesOpen,
+                partner_license_type: hasPartner && payForPartner && partnerProfile && !partnerProfile.paid_registration && licenseSalesOpen ? partnerLicenseChoice : null
             },
             onSuccess: (ref) => handlePaymentSuccess(ref),
             onCancel: () => {
@@ -3218,7 +3241,7 @@ const EventDetails = () => {
 
             const paymentsToInsert = [];
             selectedDivisions.forEach(division => {
-                const fee = getEntryFeeForCategory(division);
+                const fee = entryCharge(getEntryFeeForCategory(division));
                 const partnerState = divisionPartners[division] || {};
                 const partnerEntryFee = (partnerState.payForPartner && partnerState.partnerProfile) ? fee : 0;
 
@@ -3262,9 +3285,9 @@ const EventDetails = () => {
                 }
             });
 
-            if (playerProfileData && !playerProfileData.paid_registration) {
+            if (playerProfileData && !playerProfileData.paid_registration && licenseSalesOpen) {
                 const isFull = licenseChoice === 'full';
-                const licenseAmount = isFull ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
+                const licenseAmount = licenseCharge(licenseChoice);
                 paymentsToInsert.push({
                     player_id: playerId,
                     event_id: event.id,
@@ -3280,9 +3303,9 @@ const EventDetails = () => {
 
             selectedDivisions.forEach(division => {
                 const partnerState = divisionPartners[division];
-                if (partnerState?.payForPartner && partnerState?.partnerProfile && !partnerState.partnerProfile.paid_registration && partnerState.payForPartnerLicense) {
+                if (partnerState?.payForPartner && partnerState?.partnerProfile && !partnerState.partnerProfile.paid_registration && partnerState.payForPartnerLicense && licenseSalesOpen) {
                     const isFull = partnerState.partnerLicenseChoice === 'full';
-                    const licenseAmount = isFull ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
+                    const licenseAmount = licenseCharge(partnerState.partnerLicenseChoice);
                     const existingLicensePayment = paymentsToInsert.find(p => p.player_id === partnerState.partnerProfile.id && (p.payment_type === 'full_license' || p.payment_type === 'temp_license'));
 
                     if (!existingLicensePayment) {
@@ -3310,23 +3333,23 @@ const EventDetails = () => {
             const licensesToGrant = [];
 
             // Player License
-            if (playerProfileData && !playerProfileData.paid_registration) {
+            if (playerProfileData && !playerProfileData.paid_registration && licenseSalesOpen) {
                 licensesToGrant.push({
                     playerId: playerId,
                     isFull: licenseChoice === 'full',
-                    amount: licenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE
+                    amount: licenseCharge(licenseChoice)
                 });
             }
 
             // Partner Licenses
             selectedDivisions.forEach(division => {
                 const partnerState = divisionPartners[division];
-                if (partnerState?.payForPartner && partnerState?.partnerProfile && !partnerState.partnerProfile.paid_registration && partnerState.payForPartnerLicense) {
+                if (partnerState?.payForPartner && partnerState?.partnerProfile && !partnerState.partnerProfile.paid_registration && partnerState.payForPartnerLicense && licenseSalesOpen) {
                     if (!licensesToGrant.some(l => l.playerId === partnerState.partnerProfile.id)) {
                         licensesToGrant.push({
                             playerId: partnerState.partnerProfile.id,
                             isFull: partnerState.partnerLicenseChoice === 'full',
-                            amount: partnerState.partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE
+                            amount: licenseCharge(partnerState.partnerLicenseChoice)
                         });
                     }
                 }
@@ -5706,25 +5729,33 @@ const EventDetails = () => {
                                                                                                 </div>
                                                                                                 <div>
                                                                                                     <p className="text-xs font-bold text-white uppercase tracking-tight">Partner License</p>
-                                                                                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Choose License Type</p>
+                                                                                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">
+                                                                                                        {licenseSalesOpen ? 'Choose license type' : 'License sales are closed'}
+                                                                                                    </p>
                                                                                                 </div>
                                                                                             </div>
+                                                                                            {licenseSalesOpen && (
                                                                                             <div className="flex bg-white/10 rounded-full p-1 border border-white/10">
+                                                                                                {licenseTypes.includes('temporary') && (
                                                                                                 <button
                                                                                                     type="button"
                                                                                                     onClick={() => setPartnerLicenseChoice('temporary')}
                                                                                                     className={`text-[10px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'temporary' ? 'bg-blue-400 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                                                                                 >
-                                                                                                    Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
+                                                                                                    Temp <span className="opacity-70">({formatCurrency(licenseCharge('temporary'))})</span>
                                                                                                 </button>
+                                                                                                )}
+                                                                                                {licenseTypes.includes('full') && (
                                                                                                 <button
                                                                                                     type="button"
                                                                                                     onClick={() => setPartnerLicenseChoice('full')}
                                                                                                     className={`text-[10px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'full' ? 'bg-[#0a0a0a] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                                                                                 >
-                                                                                                    Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
+                                                                                                    Full <span className="opacity-70">({formatCurrency(licenseCharge('full'))})</span>
                                                                                                 </button>
+                                                                                                )}
                                                                                             </div>
+                                                                                            )}
                                                                                         </div>
                                                                                     </motion.div>
                                                                                 )}
@@ -5747,25 +5778,33 @@ const EventDetails = () => {
                                                                     </div>
                                                                     <div>
                                                                         <p className="text-xs font-bold text-white uppercase tracking-tight">License Required</p>
-                                                                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Choose License Type</p>
+                                                                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">
+                                                                            {licenseSalesOpen ? 'Choose license type' : 'License sales are closed'}
+                                                                        </p>
                                                                     </div>
                                                                 </div>
+                                                                {licenseSalesOpen && (
                                                                 <div className="flex bg-white/10 rounded-full p-1 border border-white/10">
+                                                                    {licenseTypes.includes('temporary') && (
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => setLicenseChoice('temporary')}
                                                                         className={`text-[10px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'temporary' ? 'bg-padel-green text-black shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                                                     >
-                                                                        Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
+                                                                        Temp <span className="opacity-70">({formatCurrency(licenseCharge('temporary'))})</span>
                                                                     </button>
+                                                                    )}
+                                                                    {licenseTypes.includes('full') && (
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => setLicenseChoice('full')}
                                                                         className={`text-[10px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'full' ? 'bg-[#0a0a0a] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                                                     >
-                                                                        Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
+                                                                        Full <span className="opacity-70">({formatCurrency(licenseCharge('full'))})</span>
                                                                     </button>
+                                                                    )}
                                                                 </div>
+                                                                )}
                                                             </motion.div>
                                                         )}
                                                     </div>
@@ -5947,12 +5986,16 @@ const EventDetails = () => {
                                                                                                                     <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-[#0a0a0a] shadow transition ${pState.payForPartnerLicense ? 'translate-x-4' : 'translate-x-0'}`} />
                                                                                                                 </button>
                                                                                                             </div>
-                                                                                                            {pState.payForPartnerLicense && (
+                                                                                                            {pState.payForPartnerLicense && licenseSalesOpen && (
                                                                                                                 <div className="mt-3 flex items-center justify-between pt-2 border-t border-white/5">
                                                                                                                     <span className="text-[9px] font-bold text-gray-400 uppercase">License Choice</span>
                                                                                                                     <div className="flex bg-white/10 rounded-full p-0.5 border border-white/10">
+                                                                                                                        {licenseTypes.includes('temporary') && (
                                                                                                                         <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'temporary' } }))} className={`text-[8px] font-semibold uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice !== 'full' ? 'bg-blue-400 text-white' : 'text-gray-400'}`}>Temp</button>
+                                                                                                                        )}
+                                                                                                                        {licenseTypes.includes('full') && (
                                                                                                                         <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'full' } }))} className={`text-[8px] font-semibold uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice === 'full' ? 'bg-[#0a0a0a] text-white shadow-sm' : 'text-gray-400'}`}>Full</button>
+                                                                                                                        )}
                                                                                                                     </div>
                                                                                                                 </div>
                                                                                                             )}
@@ -5977,10 +6020,10 @@ const EventDetails = () => {
                                                                     )}
                                                                 </div>
 
-                                                                {playerProfileData && !playerProfileData.paid_registration && (
+                                                                {playerProfileData && !playerProfileData.paid_registration && licenseSalesOpen && (
                                                                     <div className="flex justify-between items-center bg-padel-green/10 p-2.5 rounded-xl border border-padel-green/20 mt-2">
                                                                         <span className="text-[8px] font-semibold uppercase tracking-[0.2em] text-padel-green">4M Padel {licenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
-                                                                        <span className="text-[10px] font-semibold text-padel-green">R{licenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
+                                                                        <span className="text-[10px] font-semibold text-padel-green">{formatCurrency(licenseCharge(licenseChoice))}</span>
                                                                     </div>
                                                                 )}
 
@@ -5998,12 +6041,12 @@ const EventDetails = () => {
                                                                                             <p className="text-[9px] font-bold uppercase tracking-widest text-white">{pState.partnerProfile.name} <span className="text-gray-500">(Partner)</span></p>
                                                                                             <p className="text-[8px] font-semibold text-blue-500 uppercase tracking-wider italic">{div}</p>
                                                                                         </div>
-                                                                                        <span className="text-[10px] font-semibold tracking-tight whitespace-nowrap pt-0.5 text-white">R{pState.payForPartner ? getEntryFeeForCategory(div) : 0}</span>
+                                                                                        <span className="text-[10px] font-semibold tracking-tight whitespace-nowrap pt-0.5 text-white">R{pState.payForPartner ? entryCharge(getEntryFeeForCategory(div)) : 0}</span>
                                                                                     </div>
-                                                                                    {pState.payForPartner && !pState.partnerProfile.paid_registration && pState.payForPartnerLicense && (
+                                                                                    {pState.payForPartner && !pState.partnerProfile.paid_registration && pState.payForPartnerLicense && licenseSalesOpen && (
                                                                                         <div className="flex justify-between items-center bg-blue-400/10 p-2.5 rounded-xl border border-blue-400/20 mt-1">
                                                                                             <span className="text-[8px] font-semibold uppercase tracking-[0.2em] text-blue-500">Partner {pState.partnerLicenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
-                                                                                            <span className="text-[10px] font-semibold text-blue-500">R{pState.partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
+                                                                                            <span className="text-[10px] font-semibold text-blue-500">{formatCurrency(licenseCharge(pState.partnerLicenseChoice))}</span>
                                                                                         </div>
                                                                                     )}
                                                                                 </React.Fragment>

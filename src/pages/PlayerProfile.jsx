@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import LicensePaymentModal from '../components/LicensePaymentModal';
+import { useCommerceConfig } from '../hooks/useCommerceConfig';
 import CoachProfileModal from '../components/CoachProfileModal';
 import OrgHostBanner from '../components/OrgHostBanner';
 import heroBg from '../assets/hero_bg.png';
@@ -95,7 +96,61 @@ const formatRefundStatus = (status) => {
 
 const formatTransactionAmount = (amount) => `R ${Number(amount || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`;
 
+const LicensePurchaseActions = ({ licenseType, fullEnabled, tempEnabled, onPay, compact = false }) => {
+    const btnBase = compact
+        ? 'flex-1 text-[9px] font-black uppercase tracking-widest px-3 py-2.5 rounded-xl transition-all cursor-pointer active:scale-[0.97] flex items-center justify-center gap-1.5'
+        : 'text-[11px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5';
+    const hasTemp = licenseType === 'temporary';
+
+    if (hasTemp && !fullEnabled) return null;
+    if (!hasTemp && !fullEnabled && !tempEnabled) {
+        return (
+            <p className={`${compact ? 'text-[10px]' : 'text-xs'} text-gray-400 leading-relaxed`}>
+                License sales are closed. You can pay from this page when a license type is turned back on.
+            </p>
+        );
+    }
+
+    if (hasTemp) {
+        return (
+            <button
+                type="button"
+                onClick={onPay}
+                className={`${btnBase} ${compact ? '' : 'hover:scale-[1.02] active:scale-[0.98]'} bg-blue-500 hover:bg-blue-600 text-white shadow-md shadow-blue-500/10`}
+            >
+                <ShieldCheck size={compact ? 12 : 13} />
+                Upgrade to Full License
+            </button>
+        );
+    }
+
+    return (
+        <>
+            {tempEnabled && (
+                <button
+                    type="button"
+                    onClick={onPay}
+                    className={`${btnBase} bg-white/5 hover:bg-white/10 text-white border border-white/10`}
+                >
+                    Buy Temp License
+                </button>
+            )}
+            {fullEnabled && (
+                <button
+                    type="button"
+                    onClick={onPay}
+                    className={`${btnBase} ${compact ? '' : 'hover:scale-[1.02] active:scale-[0.98]'} bg-[#CCFF00] hover:bg-[#CCFF00]/90 text-black shadow-md shadow-[#CCFF00]/10`}
+                >
+                    <ShieldCheck size={compact ? 12 : 13} />
+                    Pay Now - Full License
+                </button>
+            )}
+        </>
+    );
+};
+
 const PlayerProfile = () => {
+    const { full: fullQuote, temp: tempQuote } = useCommerceConfig();
     const [loading, setLoading] = useState(true);
     const [hasSession, setHasSession] = useState(null);
     const [isMobileAccordionOpen, setIsMobileAccordionOpen] = useState(false);
@@ -1872,31 +1927,13 @@ const PlayerProfile = () => {
 
                                     {/* Action Buttons */}
                                     <div className="flex items-center gap-2 pt-0.5">
-                                        {player.license_type === 'temporary' ? (
-                                            <button
-                                                onClick={() => setShowPaymentModal(true)}
-                                                className="flex-1 text-[9px] font-black uppercase tracking-widest px-3 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl transition-all cursor-pointer shadow-md shadow-blue-500/10 active:scale-[0.97] flex items-center justify-center gap-1.5"
-                                            >
-                                                <ShieldCheck size={12} />
-                                                Upgrade to Full License
-                                            </button>
-                                        ) : (
-                                            <>
-                                                <button
-                                                    onClick={() => setShowPaymentModal(true)}
-                                                    className="flex-1 text-[9px] font-black uppercase tracking-widest px-3 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition-all cursor-pointer active:scale-[0.97]"
-                                                >
-                                                    Buy Temp License
-                                                </button>
-                                                <button
-                                                    onClick={() => setShowPaymentModal(true)}
-                                                    className="flex-1 text-[9px] font-black uppercase tracking-widest px-3 py-2.5 bg-[#CCFF00] hover:bg-[#CCFF00]/90 text-black rounded-xl transition-all cursor-pointer shadow-md shadow-[#CCFF00]/10 active:scale-[0.97] flex items-center justify-center gap-1.5"
-                                                >
-                                                    <ShieldCheck size={12} />
-                                                    Pay Now - Full License
-                                                </button>
-                                            </>
-                                        )}
+                                        <LicensePurchaseActions
+                                            licenseType={player.license_type}
+                                            fullEnabled={fullQuote.enabled}
+                                            tempEnabled={tempQuote.enabled}
+                                            onPay={() => setShowPaymentModal(true)}
+                                            compact
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -3298,36 +3335,12 @@ const PlayerProfile = () => {
                             </div>
 
                             <div className="shrink-0 flex flex-wrap items-center justify-between md:justify-end gap-2 relative z-10 w-full md:w-auto border-t md:border-t-0 border-white/5 pt-3 md:pt-0">
-                                {player.license_type === 'temporary' ? (
-                                    <>
-                                        <span className="text-[10px] text-gray-500 hidden xl:inline uppercase tracking-widest font-black">
-
-                                        </span>
-                                        <button
-                                            onClick={() => setShowPaymentModal(true)}
-                                            className="text-[11px] font-black uppercase tracking-widest px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-xl transition-all cursor-pointer shadow-md shadow-blue-500/10 hover:scale-[1.02] active:scale-[0.98] flex items-center gap-1.5"
-                                        >
-                                            <ShieldCheck size={13} />
-                                            Upgrade to Full License
-                                        </button>
-                                    </>
-                                ) : (
-                                    <>
-                                        <button
-                                            onClick={() => setShowPaymentModal(true)}
-                                            className="text-[11px] font-black uppercase tracking-widest px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition-all cursor-pointer"
-                                        >
-                                            Buy Temp License
-                                        </button>
-                                        <button
-                                            onClick={() => setShowPaymentModal(true)}
-                                            className="text-[11px] font-black uppercase tracking-widest px-4 py-2 bg-[#CCFF00] hover:bg-[#CCFF00]/90 text-black rounded-xl transition-all cursor-pointer shadow-md shadow-[#CCFF00]/10 hover:scale-[1.02] active:scale-[0.98] flex items-center gap-1.5"
-                                        >
-                                            <ShieldCheck size={13} />
-                                            Pay Now - Full License
-                                        </button>
-                                    </>
-                                )}
+                                <LicensePurchaseActions
+                                    licenseType={player.license_type}
+                                    fullEnabled={fullQuote.enabled}
+                                    tempEnabled={tempQuote.enabled}
+                                    onPay={() => setShowPaymentModal(true)}
+                                />
                             </div>
                         </motion.div>
                     )}

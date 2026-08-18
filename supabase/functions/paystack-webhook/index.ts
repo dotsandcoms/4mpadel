@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { parseMetadata, verifyPaystackWebhookSignature } from './paystack.ts';
 import { persistManualEventRegistrations, recordLicensePaymentSplit } from './manual-event-payment.ts';
+import { fetchCommerceConfig, matchLicenseTypeByAmount } from './commerce.ts';
 
 async function sendEmailViaEdge(payload: {
     to: string;
@@ -514,14 +515,13 @@ serve(async (req: Request) => {
             // a standalone license and finalize now — same trx-id keying, so it
             // reconciles with the cron / admin backfill instead of duplicating.
             const fallbackAmountRands = Number(data?.amount || 0) / 100;
-            const FULL_LICENSE_RANDS = 450;
-            const TEMP_LICENSE_RANDS = 120;
-            if (!payment && !eventMeta.source &&
-                (fallbackAmountRands === FULL_LICENSE_RANDS || fallbackAmountRands === TEMP_LICENSE_RANDS)) {
+            const commerce = await fetchCommerceConfig(supabaseAdmin);
+            const inferredLicense = matchLicenseTypeByAmount(fallbackAmountRands, commerce);
+            if (!payment && !eventMeta.source && inferredLicense) {
                 const inferredMeta = {
                     ...eventMeta,
                     source: 'web_license_modal',
-                    license_type: fallbackAmountRands === TEMP_LICENSE_RANDS ? 'temporary' : 'full',
+                    license_type: inferredLicense,
                     inferred_from: 'webhook_amount_fallback',
                 };
                 const result = await finalizeWebLicensePayment(supabaseAdmin, data || {}, inferredMeta);

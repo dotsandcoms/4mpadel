@@ -259,7 +259,12 @@ export function resolveRefundableItems(
     for (const p of licensePayments) {
         const remaining = remainingOf(p);
         if (remaining <= 0) continue;
-        const amount = Math.min(TEMP_LICENSE_RANDS, remaining);
+        const meta = parseMeta(p.metadata);
+        const lineItems = Array.isArray(meta.line_items) ? meta.line_items as Array<{ label?: string; type?: string; amount?: number }> : [];
+        const licenseLine = lineItems.find((li) => /licen[cs]e/i.test(String(li.label || li.type || '')));
+        const fromLine = Number(licenseLine?.amount || 0);
+        const licenseAmount = fromLine > 0 ? fromLine : TEMP_LICENSE_RANDS;
+        const amount = Math.min(licenseAmount, remaining);
         if (amount <= 0) continue;
         items.push({
             payment_id: p.id,

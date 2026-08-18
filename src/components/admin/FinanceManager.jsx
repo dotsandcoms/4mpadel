@@ -11,8 +11,11 @@ import UserPayments from './UserPayments';
 import FinancialSummaryReport from './FinancialSummaryReport';
 import EventFinance from './EventFinance';
 import { useAdminPermissions } from '../../hooks/useAdminPermissions';
+import { useCommerceConfig } from '../../hooks/useCommerceConfig';
+import { licenseQuote, matchLicenseTypeByAmount } from '../../utils/commerce';
 
 const FinanceManager = () => {
+    const { config: commerce } = useCommerceConfig();
     const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'users', 'events', 'transactions', 'summary'
     const [paystackEnabled, setPaystackEnabled] = useState(true);
     const [transactions, setTransactions] = useState([]);
@@ -254,9 +257,12 @@ const FinanceManager = () => {
                 }
             }
 
-            // Determine base license type from amount (for standalone payments)
-            // We use 450 (Membership) and 120 (Temp) as standard markers.
-            let licenseType = isEventReg ? null : (amount === 450 ? 'full' : (amount === 120 ? 'temporary' : (amount > 450 ? 'full' : 'temporary')));
+            const fullLicenseTotal = licenseQuote('full', commerce).total;
+            const tempLicenseTotal = licenseQuote('temporary', commerce).total;
+            const matchedStandalone = isEventReg ? null : matchLicenseTypeByAmount(amount, commerce);
+            let licenseType = isEventReg
+                ? null
+                : (matchedStandalone || (amount > fullLicenseTotal ? 'full' : 'temporary'));
             let paymentType = isEventReg ? 'event_entry_fee' : (licenseType === 'full' ? 'membership' : 'temp_license');
             let licensePortion = 0;
 
@@ -303,7 +309,7 @@ const FinanceManager = () => {
             const entryCovers = coversMeta.filter((c) => c?.type === 'entry' && c.email);
 
             if (licenseCovers.length > 0) {
-                licensePortion = licenseCovers.reduce((s, c) => s + (c.license === 'full' ? 450 : 120), 0);
+                licensePortion = licenseCovers.reduce((s, c) => s + licenseQuote(c.license === 'full' ? 'full' : 'temporary', commerce).total, 0);
                 const ownLicense = licenseCovers.find((c) => String(c.email).toLowerCase() === email);
                 if (ownLicense) licenseType = ownLicense.license === 'full' ? 'full' : 'temporary';
                 // License-only transaction: label the ledger row correctly instead of event_entry_fee
@@ -463,15 +469,14 @@ const FinanceManager = () => {
                     const needsLicense = !player.paid_registration;
 
                     if (coversMeta.length === 0) {
-                        if (amount === 770 || amount === 120 || (amount > 120 && (amount - 120) % entryFee === 0)) {
-                            licensePortion = 120;
+                        if (amount === 770 || amount === tempLicenseTotal || amount === 120 || (amount > tempLicenseTotal && (amount - tempLicenseTotal) % entryFee === 0)) {
+                            licensePortion = tempLicenseTotal;
                             licenseType = 'temporary';
-                        } else if (amount === 1100 || amount === 450 || (amount > 450 && (amount - 450) % entryFee === 0)) {
-                            licensePortion = 450;
+                        } else if (amount === 1100 || amount === fullLicenseTotal || amount === 450 || (amount > fullLicenseTotal && (amount - fullLicenseTotal) % entryFee === 0)) {
+                            licensePortion = fullLicenseTotal;
                             licenseType = 'full';
-                        } else if (needsLicense && amount >= 120 && amount < totalExpectedEntryFees) {
-                            // Fallback for non-standard fees: if they need a license and paid less than entries
-                            licensePortion = 120;
+                        } else if (needsLicense && amount >= tempLicenseTotal && amount < totalExpectedEntryFees) {
+                            licensePortion = tempLicenseTotal;
                             licenseType = 'temporary';
                         }
                     }
@@ -871,8 +876,8 @@ const FinanceManager = () => {
         if (statusFilter === 'pending' && isSuccess) return false;
 
         const matchesLicense = filter === 'all' || 
-            (filter === 'full' && parseFloat(trx.amount.replace('R ', '').replace(',', '')) >= 450) ||
-            (filter === 'temp' && parseFloat(trx.amount.replace('R ', '').replace(',', '')) === 120);
+            (filter === 'full' && parseFloat(trx.amount.replace('R ', '').replace(',', '')) >= licenseQuote('full', commerce).total) ||
+            (filter === 'temp' && [120, licenseQuote('temporary', commerce).total].includes(parseFloat(trx.amount.replace('R ', '').replace(',', ''))));
 
         if (filter === 'reconcile') {
             if (trx.status !== 'Success') return false;
