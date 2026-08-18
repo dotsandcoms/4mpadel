@@ -848,7 +848,7 @@ const Rankings = () => {
   }, [rankingsLoading]);
 
   // Format rankings using useMemo to ensure latest localProfileMap is used
-  const formatRankings = (data, profileMap) => {
+  const formatRankings = (data, profileMap, ageGroup) => {
     if (!data) return [];
     return data.map(item => {
       const playerRecord = profileMap[item.Name?.trim().toLowerCase()];
@@ -856,6 +856,8 @@ const Rankings = () => {
 
       return {
         id: item.Participant?.Id || item.RankedinId,
+        rankingParticipantId: item.Participant?.Id || item.ParticipantPoints?.RankingParticipantId || null,
+        ageGroup: ageGroup || null,
         name: item.Name,
         rawRank: item.Standing,
         rank: `Rank #${item.Standing}`,
@@ -873,7 +875,7 @@ const Rankings = () => {
     const categories = ORG_CATEGORIES[selectedOrgId] || ORG_CATEGORIES[15809];
     const formatted = {};
     categories.forEach(cat => {
-      formatted[cat.id] = formatRankings(rankingsDataRaw[cat.id], localProfileMap);
+      formatted[cat.id] = formatRankings(rankingsDataRaw[cat.id], localProfileMap, cat.ageGroup);
     });
     return formatted;
   }, [rankingsDataRaw, localProfileMap, selectedOrgId]);
@@ -1256,6 +1258,7 @@ const Rankings = () => {
             }
             selectedOrgId={selectedOrgId}
             categoryLabel={(ORG_CATEGORIES[selectedOrgId] || ORG_CATEGORIES[15809]).find(c => c.id === activeTab)?.label}
+            ageGroup={(ORG_CATEGORIES[selectedOrgId] || ORG_CATEGORIES[15809]).find(c => c.id === activeTab)?.ageGroup}
             onClose={() => setSelectedPlayer(null)}
           />
         )}

@@ -89,7 +89,7 @@ const Broll = () => {
         if (!rankingsLoading) fetchLocalProfiles();
     }, [rankingsLoading]);
 
-    const formatRankings = (data, profileMap) => {
+    const formatRankings = (data, profileMap, ageGroup) => {
         if (!data) return [];
         return data.map(item => {
             const playerRecord = profileMap[item.Name?.trim().toLowerCase()];
@@ -97,6 +97,8 @@ const Broll = () => {
 
             return {
                 id: item.Participant?.Id || item.RankedinId,
+                rankingParticipantId: item.Participant?.Id || item.ParticipantPoints?.RankingParticipantId || null,
+                ageGroup: ageGroup || null,
                 name: item.Name,
                 rawRank: item.Standing,
                 rank: `Rank #${item.Standing}`,
@@ -109,8 +111,8 @@ const Broll = () => {
         });
     };
 
-    const mensRankings = React.useMemo(() => formatRankings(mensDataRaw, localProfileMap), [mensDataRaw, localProfileMap]);
-    const ladiesRankings = React.useMemo(() => formatRankings(ladiesDataRaw, localProfileMap), [ladiesDataRaw, localProfileMap]);
+    const mensRankings = React.useMemo(() => formatRankings(mensDataRaw, localProfileMap, 82), [mensDataRaw, localProfileMap]);
+    const ladiesRankings = React.useMemo(() => formatRankings(ladiesDataRaw, localProfileMap, 83), [ladiesDataRaw, localProfileMap]);
 
     const currentData = activeTab === 'men' ? mensRankings : ladiesRankings;
     const filteredData = React.useMemo(() => {
@@ -174,7 +176,7 @@ const Broll = () => {
 
         const handleCardClick = (player) => {
             if (player.hasLocalProfile && player.playerRecord) {
-                onPlayerClick(player.playerRecord);
+                onPlayerClick(player);
             }
         };
 
@@ -475,7 +477,7 @@ const Broll = () => {
                                                     className="w-[30%] md:w-48 flex flex-col items-center cursor-pointer group"
                                                     onClick={() => {
                                                         if (paginatedData[1].hasLocalProfile && paginatedData[1].playerRecord) {
-                                                            setSelectedPlayer(paginatedData[1].playerRecord);
+                                                            setSelectedPlayer(paginatedData[1]);
                                                         } else {
                                                             window.open(paginatedData[1].rankedinProfile, '_blank');
                                                         }
@@ -505,7 +507,7 @@ const Broll = () => {
                                                     className="w-[35%] md:w-56 flex flex-col items-center -mt-6 cursor-pointer group"
                                                     onClick={() => {
                                                         if (paginatedData[0].hasLocalProfile && paginatedData[0].playerRecord) {
-                                                            setSelectedPlayer(paginatedData[0].playerRecord);
+                                                            setSelectedPlayer(paginatedData[0]);
                                                         } else {
                                                             window.open(paginatedData[0].rankedinProfile, '_blank');
                                                         }
@@ -535,7 +537,7 @@ const Broll = () => {
                                                     className="w-[30%] md:w-48 flex flex-col items-center cursor-pointer group"
                                                     onClick={() => {
                                                         if (paginatedData[2].hasLocalProfile && paginatedData[2].playerRecord) {
-                                                            setSelectedPlayer(paginatedData[2].playerRecord);
+                                                            setSelectedPlayer(paginatedData[2]);
                                                         } else {
                                                             window.open(paginatedData[2].rankedinProfile, '_blank');
                                                         }
@@ -582,7 +584,7 @@ const Broll = () => {
                                                                             <div
                                                                                 onClick={() => {
                                                                                     if (player.hasLocalProfile && player.playerRecord) {
-                                                                                        setSelectedPlayer(player.playerRecord);
+                                                                                        setSelectedPlayer(player);
                                                                                     } else {
                                                                                         window.open(player.rankedinProfile, '_blank');
                                                                                     }
@@ -934,8 +936,14 @@ const Broll = () => {
                 {selectedPlayer && (
                     <RankingDetailsModal
                         player={selectedPlayer}
-                        playerRecord={selectedPlayer}
+                        playerRecord={
+                            selectedPlayer.playerRecord
+                            || (Array.isArray(selectedPlayer.rankings) ? selectedPlayer : null)
+                            || { name: selectedPlayer.name, id: selectedPlayer.id }
+                        }
                         selectedOrgId={16317}
+                        categoryLabel={activeTab === 'ladies' ? 'Women' : 'Men'}
+                        ageGroup={selectedPlayer.ageGroup || (activeTab === 'ladies' ? 83 : 82)}
                         onClose={() => setSelectedPlayer(null)}
                     />
                 )}

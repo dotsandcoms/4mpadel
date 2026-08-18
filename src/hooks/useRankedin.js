@@ -1085,6 +1085,38 @@ export const useRankedin = () => {
         }
     }, []);
 
+    /**
+     * Player ranking points breakdown from Rankedin.
+     * showAll=false is "counted for ranking" (best 8). showAll=true is every event.
+     * @param {string|number} rankingParticipantId
+     * @param {number} ageGroup
+     * @param {boolean} [showAll]
+     * @returns {Promise<Array<{ date: string, name: string, class: string, place: string, event_type: string, points: number }>>}
+     */
+    const getParticipantPointsDetails = useCallback(async (rankingParticipantId, ageGroup, showAll = false) => {
+        if (!rankingParticipantId || !ageGroup) return [];
+        const take = 100;
+        const rows = [];
+        for (let skip = 0; ; skip += take) {
+            const url = `${API_BASE}/ranking/getparticipantpointsdetailsasync?id=${rankingParticipantId}&agegroup=${ageGroup}&weekfromnow=0&showAll=${showAll ? 'true' : 'false'}&language=en&skip=${skip}&take=${take}`;
+            const data = await fetchWithCache(url, {}, 1000 * 60 * 10);
+            const page = data?.ParticipantWithPoints?.EventPoints?.Payload || [];
+            rows.push(...page);
+            if (page.length < take) break;
+        }
+        return rows.map((ep) => {
+            const eventType = ep.EventPoint?.EventType;
+            return {
+                date: ep.EventPoint?.Date || '',
+                name: ep.EventName || ep.EventPoint?.EventName?.split('|')[0]?.trim() || '',
+                class: ep.EventPoint?.EventName?.split('| Class:')[1]?.trim() || '',
+                place: ep.EventPoint?.Standing || '',
+                event_type: eventType === 3 ? 'team league' : 'tournament',
+                points: ep.EventPoint?.Points ? parseFloat(ep.EventPoint.Points) : 0,
+            };
+        });
+    }, []);
+
     return {
         loading,
         error,
@@ -1105,7 +1137,8 @@ export const useRankedin = () => {
         getTeamLeagueStandings,
         getTeamLeagueTeams,
         getTeamMatchResults,
-        getTeamTournamentResults
+        getTeamTournamentResults,
+        getParticipantPointsDetails,
     };
 };
 

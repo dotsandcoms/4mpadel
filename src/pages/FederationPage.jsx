@@ -115,6 +115,8 @@ const formatFederationRankings = (data, profileMap, options = {}) => {
         const profile = profileMap[key] || null;
         return {
             id: item.Participant?.Id || item.RankedinId || `${name}-${index}`,
+            rankingParticipantId: item.Participant?.Id || item.ParticipantPoints?.RankingParticipantId || null,
+            ageGroup: gender === 'women' ? 83 : 82,
             playerId: profile?.id || null,
             name,
             pos: item.Standing || item.Position || index + 1,
@@ -911,6 +913,7 @@ const FederationPage = () => {
                         }
                         selectedOrgId={Number(rankingsOrgId) || 15809}
                         categoryLabel={rankingsTabLabel}
+                        ageGroup={RANKING_TABS.find((t) => t.id === rankingsTab)?.ageGroup}
                         onClose={() => setSelectedRankingPlayer(null)}
                     />
                 )}

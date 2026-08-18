@@ -2,11 +2,47 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Share2, Trophy } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import { useRankedin } from '../hooks/useRankedin';
 
-const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, categoryLabel }) => {
+const AGE_GROUP_FROM_LABEL = (label) => {
+  const text = String(label || '').toUpperCase();
+  if (text.includes('OVER 35') || text.includes('MO35')) return 2;
+  if (text.includes('OVER 40') || text.includes('MO40')) return 3;
+  if (text.includes('OVER 45') || text.includes('MO45')) return 4;
+  if (text.includes('OVER 50') || text.includes('MO50')) return 5;
+  if (text.includes('OVER 55') || text.includes('MO55')) return 6;
+  if (text.includes('WOMEN') || text.includes('LADIES')) return 83;
+  if (text.includes('MIXED')) return 84;
+  return 82;
+};
+
+const isRankedinNumericId = (value) => /^\d{4,}$/.test(String(value ?? ''));
+
+const resolveRankingParticipantId = (player, playerRecord) => {
+  const localId = String(playerRecord?.id ?? '');
+  const candidates = [
+    player?.rankingParticipantId,
+    player?.Participant?.Id,
+    player?.id,
+  ];
+  for (const value of candidates) {
+    const id = String(value ?? '');
+    if (!isRankedinNumericId(id)) continue;
+    // Skip only when the candidate is clearly the local DB id (UUID / short int).
+    if (localId && id === localId && !isRankedinNumericId(localId)) continue;
+    return id;
+  }
+  return null;
+};
+
+const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, categoryLabel, ageGroup }) => {
+  const { getParticipantPointsDetails } = useRankedin();
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' or 'tournaments'
   const [showBest8, setShowBest8] = useState(true);
   const [calendarEvents, setCalendarEvents] = useState([]);
+  const [countedDetails, setCountedDetails] = useState(null);
+  const [allDetails, setAllDetails] = useState(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
 
   useEffect(() => {
     const fetchCalendar = async () => {
@@ -19,6 +55,80 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
     };
     fetchCalendar();
   }, []);
+
+  const rankingParticipantId = resolveRankingParticipantId(player, playerRecord);
+  const resolvedAgeGroup = ageGroup || player?.ageGroup || AGE_GROUP_FROM_LABEL(categoryLabel);
+
+  useEffect(() => {
+    if (!rankingParticipantId || !resolvedAgeGroup) return undefined;
+    let cancelled = false;
+    const load = async () => {
+      setDetailsLoading(true);
+      try {
+        const [counted, all] = await Promise.all([
+          getParticipantPointsDetails(rankingParticipantId, resolvedAgeGroup, false),
+          getParticipantPointsDetails(rankingParticipantId, resolvedAgeGroup, true),
+        ]);
+        if (!cancelled) {
+          setCountedDetails(counted);
+          setAllDetails(all);
+        }
+      } catch (err) {
+        console.error('Error fetching ranking points:', err);
+      } finally {
+        if (!cancelled) setDetailsLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [rankingParticipantId, resolvedAgeGroup, getParticipantPointsDetails]);
+
+  const uniqueWins = useMemo(() => {
+    if (!playerRecord?.rankings || !Array.isArray(playerRecord.rankings)) return {};
+    const winsMap = new Map();
+
+    playerRecord.rankings.forEach(ranking => {
+      if (ranking.details && Array.isArray(ranking.details)) {
+        ranking.details.forEach(tourney => {
+          if (String(tourney.place) === '1') {
+            const key = `${tourney.date}-${tourney.name}`;
+            if (!winsMap.has(key)) {
+              winsMap.set(key, tourney.name);
+            }
+          }
+        });
+      }
+    });
+
+    const counts = { Major: 0, 'Super Gold': 0, Gold: 0, Silver: 0, Bronze: 0, Other: 0 };
+
+    const normalize = (str) => (str || '').toLowerCase().trim();
+
+    winsMap.forEach((name) => {
+      const tourneyName = normalize(name);
+      const calEvent = calendarEvents.find(e => normalize(e.event_name) === tourneyName);
+
+      let statusStr = '';
+      if (calEvent && calEvent.sapa_status) {
+         statusStr = calEvent.sapa_status.toUpperCase();
+      } else {
+         statusStr = name.toUpperCase();
+      }
+
+      if (statusStr.includes('MAJOR')) counts.Major++;
+      else if (statusStr.includes('SUPER GOLD') || statusStr === 'S GOLD') counts['Super Gold']++;
+      else if (statusStr.includes('GOLD')) counts.Gold++;
+      else if (statusStr.includes('SILVER')) counts.Silver++;
+      else if (statusStr.includes('BRONZE')) counts.Bronze++;
+      else counts.Other++;
+    });
+
+    Object.keys(counts).forEach(k => {
+      if (counts[k] === 0) delete counts[k];
+    });
+
+    return counts;
+  }, [playerRecord, calendarEvents]);
 
   if (!playerRecord) return null;
 
@@ -82,56 +192,15 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
   // Fallback to live Rankings-list values when local rankings JSON is missing/corrupt
   const displayRank = rankingData?.rank || player.rawRank || player.rank?.replace?.(/[^\d]/g, '');
   const displayPoints = rankingData?.points || player.points;
-  const details = rankingData?.details || [];
+  const storedDetails = rankingData?.details || [];
+  const countedList = countedDetails !== null ? countedDetails : storedDetails;
+  const waitingForAll = !showBest8 && detailsLoading && allDetails === null;
+  const allList = allDetails !== null ? allDetails : storedDetails;
+  const details = showBest8 ? countedList : allList;
 
-  // Compute Trophy Wins across all rankings to get a holistic view of the player's wins
-  const uniqueWins = useMemo(() => {
-    if (!playerRecord?.rankings || !Array.isArray(playerRecord.rankings)) return {};
-    const winsMap = new Map();
-    
-    playerRecord.rankings.forEach(ranking => {
-      if (ranking.details && Array.isArray(ranking.details)) {
-        ranking.details.forEach(tourney => {
-          if (String(tourney.place) === '1') {
-            const key = `${tourney.date}-${tourney.name}`;
-            if (!winsMap.has(key)) {
-              winsMap.set(key, tourney.name);
-            }
-          }
-        });
-      }
-    });
-
-    const counts = { Major: 0, 'Super Gold': 0, Gold: 0, Silver: 0, Bronze: 0, Other: 0 };
-    
-    const normalize = (str) => (str || '').toLowerCase().trim();
-
-    winsMap.forEach((name) => {
-      const tourneyName = normalize(name);
-      const calEvent = calendarEvents.find(e => normalize(e.event_name) === tourneyName);
-      
-      let statusStr = '';
-      if (calEvent && calEvent.sapa_status) {
-         statusStr = calEvent.sapa_status.toUpperCase();
-      } else {
-         statusStr = name.toUpperCase();
-      }
-
-      if (statusStr.includes('MAJOR')) counts.Major++;
-      else if (statusStr.includes('SUPER GOLD') || statusStr === 'S GOLD') counts['Super Gold']++;
-      else if (statusStr.includes('GOLD')) counts.Gold++;
-      else if (statusStr.includes('SILVER')) counts.Silver++;
-      else if (statusStr.includes('BRONZE')) counts.Bronze++;
-      else counts.Other++;
-    });
-
-    // Remove empty counts
-    Object.keys(counts).forEach(k => {
-      if (counts[k] === 0) delete counts[k];
-    });
-
-    return counts;
-  }, [playerRecord, calendarEvents]);
+  const displayDetails = showBest8
+    ? [...countedList].sort((a, b) => Number(b.points) - Number(a.points))
+    : allList;
 
   const getTierColor = (tier) => {
     switch (tier) {
@@ -144,10 +213,6 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
       default: return 'text-padel-green';
     }
   };
-
-  // Sort details by points descending and slice for Best 8 if needed
-  const sortedDetails = [...details].sort((a, b) => Number(b.points) - Number(a.points));
-  const displayDetails = showBest8 ? sortedDetails.slice(0, 8) : sortedDetails;
 
   const handleShare = async () => {
     try {
@@ -288,7 +353,7 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
                   </div>
                   <div className="bg-[#151b29] rounded-2xl p-4 flex flex-col items-center justify-center text-center border border-white/5">
                     <span className="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-1">Tournaments</span>
-                    <span className="text-xl font-bold text-white">{details?.length || 0}</span>
+                    <span className="text-xl font-bold text-white">{waitingForAll ? '…' : (details?.length || 0)}</span>
                   </div>
                 </div>
 
@@ -310,14 +375,27 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
                       </button>
                     </div>
                   </div>
-                  {displayDetails && displayDetails.length > 0 ? (
+                  {waitingForAll || (detailsLoading && !displayDetails.length) ? (
+                    <div className="text-center py-6 text-gray-500 text-xs">Loading points breakdown…</div>
+                  ) : displayDetails && displayDetails.length > 0 ? (
                     <div className="bg-[#151b29] rounded-2xl border border-white/5 overflow-hidden">
-                      {displayDetails.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-center p-4 border-b border-white/5 last:border-0">
-                          <span className="text-sm font-medium text-gray-300 truncate pr-4">{item.name}</span>
+                      {displayDetails.map((item, idx) => {
+                        const isLeague = item.event_type === 'team league';
+                        const hasPoints = Number(item.points) > 0;
+                        return (
+                        <div key={`${item.date}-${item.name}-${idx}`} className={`flex justify-between items-center gap-3 p-4 border-b border-white/5 last:border-0 ${!hasPoints && !showBest8 ? 'opacity-70' : ''}`}>
+                          <div className="min-w-0 flex-1 pr-2">
+                            <span className="text-sm font-medium text-gray-300 truncate block">{item.name}</span>
+                            {!showBest8 && (
+                              <span className={`mt-1 inline-block text-[9px] font-black italic uppercase px-2 py-0.5 rounded ${isLeague ? 'bg-slate-600 text-white' : 'bg-[#7C3AED] text-white'}`}>
+                                {isLeague ? 'Team league' : 'Tournament'}
+                              </span>
+                            )}
+                          </div>
                           <span className="text-sm font-bold text-white shrink-0">{Number(item.points).toLocaleString()}</span>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-center py-6 text-gray-500 text-xs">No points breakdown available</div>
@@ -339,19 +417,19 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
                     </tr>
                   </thead>
                   <tbody>
-                    {details && details.length > 0 ? (
-                      details.map((item, idx) => (
-                        <tr key={idx} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                    {allList && allList.length > 0 ? (
+                      allList.map((item, idx) => (
+                        <tr key={`${item.date}-${item.name}-${idx}`} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                           <td className="py-4 px-4 text-xs font-medium text-gray-400 whitespace-nowrap">{item.date || '-'}</td>
                           <td className="py-4 px-4">
                             <div className="text-xs font-bold text-white leading-tight">
                               {item.name} {item.class ? `| Class: ${item.class}` : ''}
                             </div>
                           </td>
-                          <td className="py-4 px-4 text-xs font-medium text-gray-300 text-center">{item.place?.replace(/\D/g,'') || '-'}</td>
+                          <td className="py-4 px-4 text-xs font-medium text-gray-300 text-center">{String(item.place || '').replace(/\D/g,'') || '-'}</td>
                           <td className="py-4 px-4 text-center">
-                            <span className="inline-block bg-[#7C3AED] text-white text-[9px] font-black italic uppercase px-2 py-0.5 rounded shadow-sm">
-                              Tournament
+                            <span className={`inline-block text-white text-[9px] font-black italic uppercase px-2 py-0.5 rounded shadow-sm ${item.event_type === 'team league' ? 'bg-slate-600' : 'bg-[#7C3AED]'}`}>
+                              {item.event_type === 'team league' ? 'Team league' : 'Tournament'}
                             </span>
                           </td>
                           <td className="py-4 px-4 text-xs font-medium text-gray-300 text-right">{Number(item.points).toLocaleString(undefined, {minimumFractionDigits: 3})}</td>
