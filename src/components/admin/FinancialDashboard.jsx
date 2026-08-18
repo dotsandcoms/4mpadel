@@ -9,7 +9,8 @@ import {
     ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area 
 } from 'recharts';
 import { supabase } from '../../supabaseClient';
-import { isLicensePaymentRow } from '../../utils/paymentRegistrationMatch';
+import { isLicensePaymentRow, normalizePaymentMetadata } from '../../utils/paymentRegistrationMatch';
+import { fetchCommerceConfig, matchLicenseTypeByAmount } from '../../utils/commerce';
 
 // Fetch ALL successful payments — supabase caps un-ranged selects at 1000 rows,
 // which silently truncates revenue once payment volume grows.
@@ -75,7 +76,7 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
             setLoading(true);
             try {
                 // 1. Fetch relevant payments (paginated), refunds and events in parallel
-                const [payments, { data: refundRows, error: rfError }, { error: eError }] = await Promise.all([
+                const [payments, { data: refundRows, error: rfError }, { error: eError }, commerce] = await Promise.all([
                     fetchAllSuccessPayments(),
                     supabase
                         .from('payment_refunds')
@@ -83,7 +84,8 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
                         .neq('status', 'failed'),
                     supabase
                         .from('calendar')
-                        .select('id, event_name, start_date')
+                        .select('id, event_name, start_date'),
+                    fetchCommerceConfig().catch(() => null),
                 ]);
 
                 if (rfError) throw rfError;
@@ -118,14 +120,27 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
                     // License Breakdown — everything that isn't a true entry row,
                     // split full vs temp by explicit type, falling back to amount.
                     const licenseRows = filteredPayments.filter(p => !isEntryRow(p));
-                    const isTypedFull = (p) => ['full_license', 'membership'].includes(p.payment_type) || p.metadata?.license_type === 'full';
-                    const isTypedTemp = (p) => ['temporary_license', 'temp_license'].includes(p.payment_type) || p.metadata?.license_type === 'temporary';
+                    const isTypedFull = (p) => {
+                        const meta = normalizePaymentMetadata(p.metadata);
+                        const items = Array.isArray(meta.line_items) ? meta.line_items : [];
+                        return ['full_license', 'membership'].includes(p.payment_type)
+                            || meta.license_type === 'full'
+                            || items.some((item) => item?.type === 'full_license');
+                    };
+                    const isTypedTemp = (p) => {
+                        const meta = normalizePaymentMetadata(p.metadata);
+                        const items = Array.isArray(meta.line_items) ? meta.line_items : [];
+                        return ['temporary_license', 'temp_license'].includes(p.payment_type)
+                            || meta.license_type === 'temporary'
+                            || items.some((item) => item?.type === 'temp_license' || item?.type === 'temporary_license');
+                    };
+                    const amountLicenseType = (p) => matchLicenseTypeByAmount(Number(p.amount), commerce);
                     const fullLicRev = licenseRows.filter(p =>
-                        isTypedFull(p) || (!isTypedTemp(p) && Number(p.amount) === 450)
+                        isTypedFull(p) || (!isTypedTemp(p) && amountLicenseType(p) === 'full')
                     ).reduce((acc, curr) => acc + Number(curr.amount), 0);
 
                     const tempLicRev = licenseRows.filter(p =>
-                        isTypedTemp(p) || (!isTypedFull(p) && (Number(p.amount) === 120))
+                        isTypedTemp(p) || (!isTypedFull(p) && amountLicenseType(p) === 'temporary')
                     ).reduce((acc, curr) => acc + Number(curr.amount), 0);
 
                     // Refunds grouped by the event of the refunded (entry) payment.

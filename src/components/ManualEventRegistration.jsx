@@ -1913,7 +1913,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             const paySelf = !sel || sel.payForSelf !== false;
             const payPartner = weeklyEntryMode === 'partner' && !!(sel?.partnerName) && !!sel?.payForPartner;
             const entryBase = computeWeeklySubtotal(selectedWeeks, { paySelf, payPartner });
-            return eventEntryQuote(entryBase, commerce).total;
+            let t = eventEntryQuote(entryBase, commerce).total;
+            if (buyLicenseSelf) t += licenseFee(licenseSelfChoice);
+            for (const purchase of partnerLicensePurchases) {
+                t += licenseFee(purchase.choice);
+            }
+            return t;
         }
         let entryBase = 0;
         for (const d of selectedDivisions) {
@@ -1968,13 +1973,30 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 });
             }
             return { players, extras: (() => {
+                const extras = [];
+                if (buyLicenseSelf) {
+                    extras.push({
+                        label: licenseSelfChoice === 'full' ? 'Annual SAPA license' : 'Temporary SAPA license',
+                        amount: licenseFee(licenseSelfChoice),
+                    });
+                }
+                for (const purchase of partnerLicensePurchases) {
+                    extras.push({
+                        label: purchase.choice === 'full'
+                            ? `Partner annual license — ${purchase.partnerName}`
+                            : `Partner temporary license — ${purchase.partnerName}`,
+                        amount: licenseFee(purchase.choice),
+                    });
+                }
                 const entryBase = players.reduce((sum, player) => sum + player.total, 0);
                 const entryQuote = eventEntryQuote(entryBase, commerce);
-                if (entryQuote.fee <= 0) return [];
-                return [{
-                    label: `${commerce.fee_label} (${formatPercent(entryQuote.percent)}% on entries)`,
-                    amount: entryQuote.fee,
-                }];
+                if (entryQuote.fee > 0) {
+                    extras.push({
+                        label: `${commerce.fee_label} (${formatPercent(entryQuote.percent)}% on entries)`,
+                        amount: entryQuote.fee,
+                    });
+                }
+                return extras;
             })() };
         }
 
@@ -2051,6 +2073,34 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const reviewPaySummary = useMemo(() => {
         const selfName = displayProfile?.name || profile?.name || 'You';
 
+        const licenseLines = [];
+        const pushLicenseLine = (choice, label) => {
+            const quote = licenseQuote(choice === 'full' ? 'full' : 'temporary', commerce);
+            licenseLines.push({
+                label,
+                base: quote.base,
+                fee: quote.fee,
+                amount: quote.total,
+            });
+        };
+        if (licenseSalesOpen && (buyLicenseSelf || (!hasLicense && anySelectedRequiresLicense))) {
+            pushLicenseLine(
+                licenseSelfChoice,
+                licenseSelfChoice === 'full' ? 'Your SAPA annual license' : 'Your SAPA temporary license',
+            );
+        }
+        for (const purchase of partnerLicensePurchases) {
+            pushLicenseLine(
+                purchase.choice,
+                purchase.choice === 'full'
+                    ? `${purchase.partnerName} annual SAPA license`
+                    : `${purchase.partnerName} temporary SAPA license`,
+            );
+        }
+        const licensesBase = licenseLines.reduce((sum, line) => sum + line.base, 0);
+        const licensesFee = licenseLines.reduce((sum, line) => sum + line.fee, 0);
+        const licensesSubtotal = licenseLines.reduce((sum, line) => sum + line.amount, 0);
+
         if (isWeeklyEvent) {
             const openDiv = selectedDivisions[0];
             const sel = openDiv ? selected[openDiv.id] : null;
@@ -2084,11 +2134,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 entries,
                 entryFeesTotal: entryFeesBase,
                 entryManagementFee: entryQuote.fee,
-                licenseLines: [],
-                licensesBase: 0,
-                licensesFee: 0,
-                licensesSubtotal: 0,
-                totalPayable: entryQuote.total,
+                licenseLines,
+                licensesBase,
+                licensesFee,
+                licensesSubtotal,
+                totalPayable: entryQuote.total + licensesSubtotal,
             };
         }
 
@@ -2125,35 +2175,6 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
         const entryFeesBase = entries.reduce((sum, entry) => sum + entry.entryTotal, 0);
         const entryQuote = eventEntryQuote(entryFeesBase, commerce);
-
-        const licenseLines = [];
-        const pushLicenseLine = (choice, label) => {
-            const quote = licenseQuote(choice === 'full' ? 'full' : 'temporary', commerce);
-            licenseLines.push({
-                label,
-                base: quote.base,
-                fee: quote.fee,
-                amount: quote.total,
-            });
-        };
-        if (licenseSalesOpen && (buyLicenseSelf || (!hasLicense && anySelectedRequiresLicense))) {
-            pushLicenseLine(
-                licenseSelfChoice,
-                licenseSelfChoice === 'full' ? 'Your SAPA annual license' : 'Your SAPA temporary license',
-            );
-        }
-        for (const purchase of partnerLicensePurchases) {
-            pushLicenseLine(
-                purchase.choice,
-                purchase.choice === 'full'
-                    ? `${purchase.partnerName} annual SAPA license`
-                    : `${purchase.partnerName} temporary SAPA license`,
-            );
-        }
-
-        const licensesBase = licenseLines.reduce((sum, line) => sum + line.base, 0);
-        const licensesFee = licenseLines.reduce((sum, line) => sum + line.fee, 0);
-        const licensesSubtotal = licenseLines.reduce((sum, line) => sum + line.amount, 0);
 
         return {
             entries,
@@ -2319,9 +2340,17 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 tshirtSponsorName: (tshirtSponsorName || '').trim() || null,
                 tshirtLogoUrl: tshirtLogoUrl || null,
             });
-            // Reserve path must not treat covers as paid; Paystack path uses covers after charge.
             if (isReserve) return { ...built, covers: [] };
-            return built;
+            const covers = [...(built.covers || [])];
+            if (buyLicenseSelf) covers.push({ email: userEmail, type: 'license', license: licenseSelfChoice });
+            for (const purchase of partnerLicensePurchases) {
+                covers.push({
+                    email: purchase.partnerEmail,
+                    type: 'license',
+                    license: purchase.choice,
+                });
+            }
+            return { ...built, covers };
         }
 
         const rows = [];
