@@ -403,16 +403,32 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         setPayments(payRows);
         setDivisions(divRes.data || []);
 
+        // A refund can be linked to a registration, a payment, or both. In
+        // particular, withdrawn registrations may no longer be available as a
+        // registration-id match, so include refunds found through this event's
+        // payments as well. Otherwise the original receipt remains in the
+        // payment ledger while its refund silently drops out of the settlement.
         const regIds = regs.map((r) => r.id);
+        const paymentIds = payRows.map((p) => p.id);
+        const refundQueries = [];
         if (regIds.length > 0) {
-            const { data: refundRows } = await supabase
+            refundQueries.push(supabase
                 .from('payment_refunds')
                 .select('*')
-                .in('event_registration_id', regIds);
-            setRefunds(refundRows || []);
-        } else {
-            setRefunds([]);
+                .in('event_registration_id', regIds));
         }
+        if (paymentIds.length > 0) {
+            refundQueries.push(supabase
+                .from('payment_refunds')
+                .select('*')
+                .in('payment_id', paymentIds));
+        }
+        const refundResults = await Promise.all(refundQueries);
+        const refundById = new Map();
+        refundResults.forEach(({ data }) => {
+            (data || []).forEach((refund) => refundById.set(refund.id, refund));
+        });
+        setRefunds([...refundById.values()]);
 
         const emails = [...new Set(regs.map((r) => r.email).filter(Boolean))];
         if (emails.length > 0) {
@@ -2298,16 +2314,6 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         let noLicenses = 0;
 
         activeRegistrations.forEach((r) => {
-            // Gross Paystack entry fees: count whenever a successful Paystack entry payment exists,
-            // including registrations later refunded/withdrawn — refunds are subtracted separately.
-            if (hasPaystackEntryPaymentRecord(r, payments)) {
-                grossCollected4M += getRegistrationEntryFeePaid(
-                    findStrictPaystackEntryPayment(successPaymentsOnly(payments), r),
-                    r,
-                    0,
-                );
-            }
-
             if (!registrationCountsAsPaid(r, refundByReg, payments)) return;
 
             const license = formatLicenseForExport(r);
@@ -2325,11 +2331,28 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 paid4M++;
             } else {
                 paidClub++;
-                collectedManual += getRegistrationEntryFeePaid(
-                    findPaymentForRegistration(successPaymentsOnly(payments), r),
-                    r,
-                    divFee(r.division),
-                );
+            }
+        });
+
+        // Settlement must be driven from successful entry-payment records, not
+        // only registrations still marked paid. A refunded registration is no
+        // longer "paid", but its original collection remains part of gross
+        // event income and must be offset by its refund below.
+        let grossEntryFees = 0;
+        payments.forEach((p) => {
+            if (
+                p.status !== 'success'
+                || String(p.payment_type || '').toLowerCase() !== 'event_entry_fee'
+                || isLicensePaymentRow(p)
+                || isCompedEntryPayment(p)
+            ) return;
+            const amount = Math.max(0, Number(p.amount || 0));
+            if (amount <= 0) return;
+            grossEntryFees += amount;
+            if (String(p.payment_method || '').toLowerCase() === 'manual') {
+                collectedManual += amount;
+            } else {
+                grossCollected4M += amount;
             }
         });
 
@@ -2361,9 +2384,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             .filter((r) => isLicenseRefund(r, paymentById.get(r.payment_id)) && r.status !== 'failed')
             .reduce((sum, r) => sum + Number(r.amount || 0), 0);
 
-        const entryFeeBalance = Math.max(0, grossCollected4M - entryFeesRefunded);
-        // Platform fee is 5% of gross entry fees collected via 4M (before refunds), per settlement model.
-        const commission = grossCollected4M * PLATFORM_COMMISSION_RATE;
+        const entryFeeBalance = Math.max(0, grossEntryFees - entryFeesRefunded);
+        // The organiser settlement is based on total event income: Paystack and
+        // manual/EFT entry collections, before refunds. Refunds are deducted as
+        // their own line so gross cash movement remains auditable.
+        const commission = grossEntryFees * PLATFORM_COMMISSION_RATE;
         const interimPaid = (interimPayments || []).reduce((sum, p) => sum + Math.max(0, Number(p.amount || 0)), 0);
         const dueBeforeInterim = Math.max(0, entryFeeBalance - commission);
         const dueToOrg = Math.max(0, dueBeforeInterim - interimPaid);
@@ -2419,6 +2444,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             collected4M: grossCollected4M,
             entryFeesRefunded,
             licenseRefunds,
+            grossEntryFees,
             entryFeeBalance,
             licenseRevenue4M,
             commission,
@@ -2611,7 +2637,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             rows.push({
                 id: 'platform-fee',
                 date: null,
-                description: `Platform Fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}% of 4M Paystack gross)`,
+                description: `Platform Fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}% of gross entry income)`,
                 category: 'Platform / commission fee',
                 bucket: '4M retained',
                 type: 'fee',
@@ -2622,7 +2648,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 status: 'processed',
                 method: '—',
                 reference: '',
-                note: '5% of Paystack entry fees collected, before refunds',
+                note: '5% of all gross entry fees collected, before refunds',
             });
         }
 
@@ -2870,20 +2896,21 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 { section: 'Entries', label: 'Normal sign-ups', value: overviewStats.normalSignups },
 
                 { section: 'Billed vs collected (all channels)', label: 'Amount billed', value: dashboardStats.expected, money: true, note: 'Paid amounts + outstanding division fees' },
-                { section: 'Billed vs collected (all channels)', label: 'Collected (before refunds)', value: dashboardStats.collected, money: true, note: 'Paystack + manual currently marked paid' },
-                { section: 'Billed vs collected (all channels)', label: '  of which Paystack (gross, incl. later refunds)', value: overviewStats.collected4M, money: true },
-                { section: 'Billed vs collected (all channels)', label: '  of which Manual / club', value: overviewStats.collectedManual, money: true, note: 'Stays with the club — not in 4M payout' },
+                { section: 'Billed vs collected (all channels)', label: 'Gross entry fees collected', value: overviewStats.grossEntryFees, money: true, note: 'All successful Paystack and manual/EFT entry payments, including later refunds' },
+                { section: 'Billed vs collected (all channels)', label: '  of which Paystack', value: overviewStats.collected4M, money: true },
+                { section: 'Billed vs collected (all channels)', label: '  of which Manual / EFT', value: overviewStats.collectedManual, money: true },
+                { section: 'Billed vs collected (all channels)', label: 'Net entry fees collected', value: overviewStats.entryFeeBalance, money: true, note: 'Gross entry fees less entry refunds' },
                 { section: 'Billed vs collected (all channels)', label: 'Outstanding', value: dashboardStats.outstanding, money: true },
 
                 { section: 'Refunds', label: 'Entry fee refunds', value: overviewStats.entryFeesRefunded, money: true },
                 { section: 'Refunds', label: 'License refunds (stay with 4M)', value: overviewStats.licenseRefunds, money: true },
 
-                { section: 'Organiser payout (4M Paystack only)', label: 'Paystack entry fees (gross)', value: overviewStats.collected4M, money: true },
-                { section: 'Organiser payout (4M Paystack only)', label: 'Minus entry refunds', value: -overviewStats.entryFeesRefunded, money: true },
-                { section: 'Organiser payout (4M Paystack only)', label: 'Entry fee balance', value: overviewStats.entryFeeBalance, money: true, note: 'Gross Paystack − entry refunds' },
-                { section: 'Organiser payout (4M Paystack only)', label: `Minus platform fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}% of gross)`, value: -overviewStats.commission, money: true, note: 'Charged on gross Paystack entry fees before refunds' },
-                { section: 'Organiser payout (4M Paystack only)', label: 'Minus interim paid', value: -overviewStats.interimPaid, money: true },
-                { section: 'Organiser payout (4M Paystack only)', label: 'Net payout to organiser', value: overviewStats.dueToOrg, money: true },
+                { section: 'Organiser settlement (all entry channels)', label: 'Gross entry fees collected', value: overviewStats.grossEntryFees, money: true },
+                { section: 'Organiser settlement (all entry channels)', label: 'Minus entry refunds', value: -overviewStats.entryFeesRefunded, money: true },
+                { section: 'Organiser settlement (all entry channels)', label: 'Net entry fees', value: overviewStats.entryFeeBalance, money: true, note: 'Gross entry fees less refunds' },
+                { section: 'Organiser settlement (all entry channels)', label: `Minus platform fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}% of gross)`, value: -overviewStats.commission, money: true, note: 'Charged on all gross entry fees before refunds' },
+                { section: 'Organiser settlement (all entry channels)', label: 'Minus interim paid', value: -overviewStats.interimPaid, money: true },
+                { section: 'Organiser settlement (all entry channels)', label: 'Net due to organiser', value: overviewStats.dueToOrg, money: true },
 
                 { section: 'Retained by 4M', label: 'License revenue', value: overviewStats.licenseRevenue4M, money: true },
                 { section: 'Retained by 4M', label: 'Platform / commission fees', value: overviewStats.commission, money: true },
@@ -3130,17 +3157,17 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                 <h3 className="text-3xl md:text-4xl font-black text-padel-green drop-shadow-[0_0_15px_rgba(190,255,0,0.3)] whitespace-nowrap">
                                                     R {dashboardStats.collected.toLocaleString()}
                                                 </h3>
-                                                <span className="text-[9px] text-padel-green font-black uppercase tracking-widest opacity-70">Collected</span>
+                                                <span className="text-[9px] text-padel-green font-black uppercase tracking-widest opacity-70">Net entry income</span>
                                             </div>
                                             {dashboardStats.outstanding > 0 && (
                                                 <p className="text-[10px] text-red-400 font-bold uppercase mt-1">Outstanding R {dashboardStats.outstanding.toLocaleString()}</p>
                                             )}
                                             <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">
-                                                Paystack {fmtR(overviewStats.collected4M)} · Manual {fmtR(overviewStats.collectedManual)}
+                                                Gross: Paystack {fmtR(overviewStats.collected4M)} · Manual / EFT {fmtR(overviewStats.collectedManual)}
                                             </p>
                                             {overviewStats.entryFeesRefunded > 0 && (
                                                 <p className="text-[10px] text-sky-400 font-bold uppercase mt-1">
-                                                    Entry refunds {fmtR(overviewStats.entryFeesRefunded)} · 4M entry balance {fmtR(overviewStats.entryFeeBalance)}
+                                                    Less entry refunds {fmtR(overviewStats.entryFeesRefunded)}
                                                 </p>
                                             )}
                                         </div>
@@ -3244,9 +3271,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             <p className="text-[9px] text-gray-500 mt-1">Free / complimentary · R 0</p>
                                         </div>
                                         <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
-                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Collected by 4M (gross)</p>
-                                            <span className="text-xl font-black text-padel-green">{fmtR(overviewStats.collected4M)}</span>
-                                            <p className="text-[9px] text-gray-500 mt-1">Entry fees via Paystack before refunds</p>
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Gross entry income</p>
+                                            <span className="text-xl font-black text-padel-green">{fmtR(overviewStats.grossEntryFees)}</span>
+                                            <p className="text-[9px] text-gray-500 mt-1">Paystack and manual / EFT, before refunds</p>
                                         </div>
                                         {overviewStats.hasEarlyBirdPricing && (
                                             <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4 col-span-2 md:col-span-1">
@@ -3263,14 +3290,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
                                     <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-2xl p-5 space-y-3">
                                         <div className="flex items-center justify-between gap-4 text-sm">
-                                            <span className="text-gray-400">Funds collected for entry fees (Paystack)</span>
+                                            <span className="text-gray-400">Paystack entry fees collected (gross)</span>
                                             <span className="font-bold text-white">{fmtR(overviewStats.collected4M)}</span>
                                         </div>
                                         {overviewStats.collectedManual > 0 && (
                                             <div className="flex items-center justify-between gap-4 text-sm">
                                                 <span className="text-gray-400">
-                                                    Manual / club collections
-                                                    <span className="text-gray-600 font-normal"> · not in 4M payout</span>
+                                                    Manual / EFT entry collections
                                                 </span>
                                                 <span className="font-bold text-white">{fmtR(overviewStats.collectedManual)}</span>
                                             </div>
@@ -3289,11 +3315,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             <span className="font-bold text-red-400">−{fmtR(overviewStats.entryFeesRefunded)}</span>
                                         </div>
                                         <div className="flex items-center justify-between gap-4 text-sm border-t border-white/10 pt-3">
-                                            <span className="text-gray-300 font-semibold">Balance of entry fee funds</span>
+                                            <span className="text-gray-300 font-semibold">Net entry fee income</span>
                                             <span className="font-black text-white">{fmtR(overviewStats.entryFeeBalance)}</span>
                                         </div>
                                         <div className="flex items-center justify-between gap-4 text-sm">
-                                            <span className="text-red-400">Platform fees @ {Math.round(PLATFORM_COMMISSION_RATE * 100)}%</span>
+                                            <span className="text-red-400">Platform fees @ {Math.round(PLATFORM_COMMISSION_RATE * 100)}% of gross income</span>
                                             <span className="font-bold text-red-400">−{fmtR(overviewStats.commission)}</span>
                                         </div>
                                         {interimPayments.length > 0 && (
@@ -4531,12 +4557,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
                             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
                                 {[
-                                    { label: '4M Paystack collected', value: fmtR(overviewStats.collected4M), color: 'text-padel-green' },
+                                    { label: 'Gross entry income', value: fmtR(overviewStats.grossEntryFees), color: 'text-padel-green' },
                                     { label: 'Entry Fees Refunded', value: `−${fmtR(overviewStats.entryFeesRefunded)}`, color: 'text-red-400' },
                                     { label: 'Platform Fees', value: `−${fmtR(overviewStats.commission)}`, color: 'text-red-400' },
                                     { label: 'Interim Paid', value: `−${fmtR(overviewStats.interimPaid)}`, color: 'text-red-400' },
-                                    { label: 'Net Payout to Organiser', value: fmtR(overviewStats.dueToOrg), color: 'text-padel-green' },
-                                    { label: 'Manual / club', value: fmtR(overviewStats.collectedManual), color: 'text-white' },
+                                    { label: 'Net due to organiser', value: fmtR(overviewStats.dueToOrg), color: 'text-padel-green' },
+                                    { label: 'Manual / EFT', value: fmtR(overviewStats.collectedManual), color: 'text-white' },
                                 ].map((card) => (
                                     <div key={card.label} className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
                                         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">{card.label}</p>

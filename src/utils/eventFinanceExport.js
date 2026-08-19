@@ -89,8 +89,8 @@ export async function downloadEventFinanceWorkbook(payload) {
     wsSummary.addRow([]);
     wsSummary.addRow([
         'How to read this file: Summary totals must match the Line items sheet. '
-        + '4M Paystack entry fees settle to the organiser after refunds and 5% platform fee. '
-        + 'Manual/club collections stay with the club. License fees stay with 4M.',
+        + 'Organiser settlement is total gross entry income (Paystack plus manual/EFT), less entry refunds and the 5% platform fee. '
+        + 'License fees stay with 4M.',
     ]);
     wsSummary.mergeCells(`A${wsSummary.rowCount}:C${wsSummary.rowCount}`);
     wsSummary.getRow(wsSummary.rowCount).alignment = { wrapText: true };
