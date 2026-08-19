@@ -986,7 +986,7 @@ async function generateEmailBody(
             </tr>
             <tr>
               <td style="padding: 8px 0; color: #64748B;">Total amount billed:</td>
-              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.totalBilled || vars.grossEntryFees || 'R 0'}</td>
+              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.totalBilled || vars.grossEntryFees || vars.collected || 'R 0'}</td>
             </tr>
             ${vars.outstanding && vars.outstanding !== 'R 0' ? `
             <tr>
