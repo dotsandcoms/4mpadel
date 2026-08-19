@@ -2399,6 +2399,29 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
         const entryFeeBalance = Math.max(0, grossEntryFees - entryFeesRefunded);
         const totalAmountBilled = grossEntryFees + pendingAmount;
+
+        // Build the billed amount from the registration-level fee snapshots so
+        // the organiser can see exactly which entry-price tiers make up the
+        // total. Withdrawn entries count only when a successful payment exists;
+        // an unpaid withdrawal was never billed.
+        const billedTiers = new Map();
+        const successPays = successPaymentsOnly(payments);
+        registrations.forEach((r) => {
+            if (registrationIsCompedEntry(r, payments)) return;
+            const payment = findStrictPaystackEntryPayment(successPays, r)
+                || findPaymentForRegistration(successPays, r);
+            if (!payment && isWithdrawnRegistration(r)) return;
+            const amount = payment
+                ? getRegistrationEntryFeePaid(payment, r, divFee(r.division))
+                : divFee(r.division);
+            if (amount <= 0) return;
+            const rate = Math.round(Number(amount) * 100) / 100;
+            const current = billedTiers.get(rate) || { rate, count: 0, total: 0 };
+            current.count += 1;
+            current.total += rate;
+            billedTiers.set(rate, current);
+        });
+        const billedTierBreakdown = [...billedTiers.values()].sort((a, b) => a.rate - b.rate);
         // The organiser settlement is based on total event income: Paystack and
         // manual/EFT entry collections, before refunds. Refunds are deducted as
         // their own line so gross cash movement remains auditable.
@@ -2416,7 +2439,6 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         const configuredEbFee = (earlyBirdMeta?.early_bird_fee != null && earlyBirdMeta?.early_bird_fee !== '')
             ? Number(earlyBirdMeta.early_bird_fee)
             : null;
-        const successPays = successPaymentsOnly(payments);
         const paidFeeAmounts = [];
         activeRegistrations.forEach((r) => {
             const payment = findStrictPaystackEntryPayment(successPays, r);
@@ -2460,6 +2482,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             compedEntries,
             collected4M: grossCollected4M,
             totalAmountBilled,
+            billedTierBreakdown,
             entryFeesRefunded,
             licenseRefunds,
             grossEntryFees,
@@ -2907,6 +2930,17 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
                 })
                 : '';
+            const billedCompositionRows = overviewStats.billedTierBreakdown.map((tier, index) => {
+                const label = index === 0 && overviewStats.billedTierBreakdown.length > 1
+                    ? 'Early bird'
+                    : 'Regular';
+                return {
+                    section: 'Billed composition',
+                    label: `${label} (${tier.count} × ${fmtR(tier.rate)})`,
+                    value: tier.total,
+                    money: true,
+                };
+            });
 
             const summary = [
                 { section: 'Entries', label: 'Total entries', value: dashboardStats.totalEntries },
@@ -2924,6 +2958,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 { section: 'Billed vs collected (all channels)', label: '  of which Manual / EFT', value: overviewStats.collectedManual, money: true },
                 { section: 'Billed vs collected (all channels)', label: 'Final entry sales', value: overviewStats.entryFeeBalance, money: true, note: 'Gross entry collections less entry refunds' },
                 { section: 'Billed vs collected (all channels)', label: 'Outstanding', value: dashboardStats.outstanding, money: true },
+
+                ...billedCompositionRows,
 
                 { section: 'Refunds', label: 'Entry fee refunds', value: overviewStats.entryFeesRefunded, money: true },
                 { section: 'Refunds', label: 'License refunds (stay with 4M)', value: overviewStats.licenseRefunds, money: true },
@@ -2947,6 +2983,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 { section: 'Entries', label: 'Pending / unpaid', value: overviewStats.pendingCount, note: fmtR(overviewStats.pendingAmount) },
                 { section: 'Entries', label: 'Comped (free)', value: overviewStats.compedEntries },
                 { section: 'Entries', label: 'Withdrawn', value: overviewStats.withdrawnCount },
+
+                ...billedCompositionRows,
 
                 { section: 'Organiser settlement', label: 'Total amount billed', value: overviewStats.totalAmountBilled, money: true, note: 'Gross entry collections plus outstanding entry fees' },
                 { section: 'Organiser settlement', label: 'Minus entry refunds', value: -overviewStats.entryFeesRefunded, money: true },
@@ -3368,6 +3406,19 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             <span className="text-gray-300 font-semibold">Total amount billed</span>
                                             <span className="font-black text-white">{fmtR(overviewStats.totalAmountBilled)}</span>
                                         </div>
+                                        {overviewStats.billedTierBreakdown.length > 0 && (
+                                            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 space-y-1.5">
+                                                <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Billed composition</p>
+                                                {overviewStats.billedTierBreakdown.map((tier, index) => (
+                                                    <div key={tier.rate} className="flex items-center justify-between gap-4 text-xs">
+                                                        <span className="text-gray-400">
+                                                            {index === 0 && overviewStats.billedTierBreakdown.length > 1 ? 'Early bird' : 'Regular'} · {tier.count} × {fmtR(tier.rate)}
+                                                        </span>
+                                                        <span className="font-semibold text-white">{fmtR(tier.total)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                         <div className="flex items-center justify-between gap-4 text-sm">
                                             <span className="text-gray-400">Gross entry fees collected</span>
                                             <span className="font-bold text-white">{fmtR(overviewStats.grossEntryFees)}</span>
