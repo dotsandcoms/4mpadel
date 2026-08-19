@@ -2398,11 +2398,15 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             .reduce((sum, r) => sum + Number(r.amount || 0), 0);
 
         const entryFeeBalance = Math.max(0, grossEntryFees - entryFeesRefunded);
+        const totalAmountBilled = grossEntryFees + pendingAmount;
         // The organiser settlement is based on total event income: Paystack and
         // manual/EFT entry collections, before refunds. Refunds are deducted as
         // their own line so gross cash movement remains auditable.
         const commission = grossEntryFees * PLATFORM_COMMISSION_RATE;
         const interimPaid = (interimPayments || []).reduce((sum, p) => sum + Math.max(0, Number(p.amount || 0)), 0);
+        // Manual / EFT collections are paid to 4M alongside Paystack receipts,
+        // so they remain part of the organiser settlement rather than a direct
+        // payment to deduct from the balance due.
         const dueBeforeInterim = Math.max(0, entryFeeBalance - commission);
         const dueToOrg = Math.max(0, dueBeforeInterim - interimPaid);
 
@@ -2455,6 +2459,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             withdrawnCount,
             compedEntries,
             collected4M: grossCollected4M,
+            totalAmountBilled,
             entryFeesRefunded,
             licenseRefunds,
             grossEntryFees,
@@ -2913,20 +2918,21 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 { section: 'Entries', label: 'Early bird sign-ups', value: overviewStats.earlyBirdSignups },
                 { section: 'Entries', label: 'Normal sign-ups', value: overviewStats.normalSignups },
 
-                { section: 'Billed vs collected (all channels)', label: 'Amount billed', value: dashboardStats.expected, money: true, note: 'Paid amounts + outstanding division fees' },
+                { section: 'Billed vs collected (all channels)', label: 'Total amount billed', value: overviewStats.totalAmountBilled, money: true, note: 'Gross entry collections plus outstanding entry fees' },
                 { section: 'Billed vs collected (all channels)', label: 'Gross entry fees collected', value: overviewStats.grossEntryFees, money: true, note: 'All successful Paystack and manual/EFT entry payments, including later refunds' },
                 { section: 'Billed vs collected (all channels)', label: '  of which Paystack', value: overviewStats.collected4M, money: true },
                 { section: 'Billed vs collected (all channels)', label: '  of which Manual / EFT', value: overviewStats.collectedManual, money: true },
-                { section: 'Billed vs collected (all channels)', label: 'Net entry fees collected', value: overviewStats.entryFeeBalance, money: true, note: 'Gross entry fees less entry refunds' },
+                { section: 'Billed vs collected (all channels)', label: 'Final entry sales', value: overviewStats.entryFeeBalance, money: true, note: 'Gross entry collections less entry refunds' },
                 { section: 'Billed vs collected (all channels)', label: 'Outstanding', value: dashboardStats.outstanding, money: true },
 
                 { section: 'Refunds', label: 'Entry fee refunds', value: overviewStats.entryFeesRefunded, money: true },
                 { section: 'Refunds', label: 'License refunds (stay with 4M)', value: overviewStats.licenseRefunds, money: true },
 
-                { section: 'Organiser settlement (all entry channels)', label: 'Gross entry fees collected', value: overviewStats.grossEntryFees, money: true },
+                { section: 'Organiser settlement (all entry channels)', label: 'Total amount billed', value: overviewStats.totalAmountBilled, money: true },
                 { section: 'Organiser settlement (all entry channels)', label: 'Minus entry refunds', value: -overviewStats.entryFeesRefunded, money: true },
-                { section: 'Organiser settlement (all entry channels)', label: 'Net entry fees', value: overviewStats.entryFeeBalance, money: true, note: 'Gross entry fees less refunds' },
-                { section: 'Organiser settlement (all entry channels)', label: `Minus platform fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}% of gross)`, value: -overviewStats.commission, money: true, note: 'Charged on all gross entry fees before refunds' },
+                { section: 'Organiser settlement (all entry channels)', label: 'Minus outstanding entry fees', value: -overviewStats.pendingAmount, money: true },
+                { section: 'Organiser settlement (all entry channels)', label: 'Final entry sales', value: overviewStats.entryFeeBalance, money: true, note: 'Billed less refunds and outstanding entry fees' },
+                { section: 'Organiser settlement (all entry channels)', label: `Minus platform fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}% of gross collected)`, value: -overviewStats.commission, money: true, note: 'Charged on gross entry collections before refunds' },
                 { section: 'Organiser settlement (all entry channels)', label: 'Minus interim paid', value: -overviewStats.interimPaid, money: true },
                 { section: 'Organiser settlement (all entry channels)', label: 'Net due to organiser', value: overviewStats.dueToOrg, money: true },
 
@@ -2942,10 +2948,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 { section: 'Entries', label: 'Comped (free)', value: overviewStats.compedEntries },
                 { section: 'Entries', label: 'Withdrawn', value: overviewStats.withdrawnCount },
 
-                { section: 'Organiser settlement', label: 'Gross entry fees collected', value: overviewStats.grossEntryFees, money: true, note: 'Paystack plus manual / EFT, before refunds' },
+                { section: 'Organiser settlement', label: 'Total amount billed', value: overviewStats.totalAmountBilled, money: true, note: 'Gross entry collections plus outstanding entry fees' },
                 { section: 'Organiser settlement', label: 'Minus entry refunds', value: -overviewStats.entryFeesRefunded, money: true },
-                { section: 'Organiser settlement', label: 'Net entry fees', value: overviewStats.entryFeeBalance, money: true },
-                { section: 'Organiser settlement', label: `Minus platform fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}% of gross)`, value: -overviewStats.commission, money: true },
+                { section: 'Organiser settlement', label: 'Minus outstanding entry fees', value: -overviewStats.pendingAmount, money: true },
+                { section: 'Organiser settlement', label: 'Final entry sales', value: overviewStats.entryFeeBalance, money: true },
+                { section: 'Organiser settlement', label: `Minus platform fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}% of gross collected)`, value: -overviewStats.commission, money: true },
                 { section: 'Organiser settlement', label: 'Minus interim paid', value: -overviewStats.interimPaid, money: true },
                 { section: 'Organiser settlement', label: 'Net due to organiser', value: overviewStats.dueToOrg, money: true },
             ];
@@ -3158,14 +3165,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             Sync
                                         </button>
                                     )}
-                                    <button
-                                        onClick={exportFinanceExcel}
-                                        disabled={exportingFinance}
-                                        className="bg-white/5 text-white border border-white/10 px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-white/10 disabled:opacity-40"
-                                    >
-                                        {exportingFinance ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
-                                        Excel
-                                    </button>
+                                    <ExportReportMenu compact />
                                     <button onClick={onClose} className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5">
                                         <X size={20} />
                                     </button>
@@ -3224,21 +3224,21 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         <div className="flex justify-between items-start relative z-10">
                                             <p className="text-[10px] font-black uppercase text-padel-green/80 tracking-widest whitespace-nowrap">Total amount Billed</p>
                                             <p className="text-[10px] font-black text-white bg-black/40 px-2 py-0.5 rounded border border-white/5">
-                                                R {dashboardStats.expected.toLocaleString()}
+                                                {fmtR(overviewStats.totalAmountBilled)}
                                             </p>
                                         </div>
                                         <div className="flex flex-col mt-auto relative z-10">
                                             <div className="flex items-baseline gap-2">
                                                 <h3 className="text-3xl md:text-4xl font-black text-padel-green drop-shadow-[0_0_15px_rgba(190,255,0,0.3)] whitespace-nowrap">
-                                                    R {dashboardStats.collected.toLocaleString()}
+                                                    {fmtR(overviewStats.entryFeeBalance)}
                                                 </h3>
                                                 <span className="text-[9px] text-padel-green font-black uppercase tracking-widest opacity-70">Net entry income</span>
                                             </div>
-                                            {dashboardStats.outstanding > 0 && (
-                                                <p className="text-[10px] text-red-400 font-bold uppercase mt-1">Outstanding R {dashboardStats.outstanding.toLocaleString()}</p>
+                                            {overviewStats.pendingAmount > 0 && (
+                                                <p className="text-[10px] text-red-400 font-bold uppercase mt-1">Outstanding {fmtR(overviewStats.pendingAmount)}</p>
                                             )}
                                             <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">
-                                                Gross: Paystack {fmtR(overviewStats.collected4M)} · Manual / EFT {fmtR(overviewStats.collectedManual)}
+                                                Billed {fmtR(overviewStats.totalAmountBilled)} · Gross collected {fmtR(overviewStats.grossEntryFees)}
                                             </p>
                                             {overviewStats.entryFeesRefunded > 0 && (
                                                 <p className="text-[10px] text-sky-400 font-bold uppercase mt-1">
@@ -3346,9 +3346,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             <p className="text-[9px] text-gray-500 mt-1">Free / complimentary · R 0</p>
                                         </div>
                                         <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
-                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Gross entry income</p>
-                                            <span className="text-xl font-black text-padel-green">{fmtR(overviewStats.grossEntryFees)}</span>
-                                            <p className="text-[9px] text-gray-500 mt-1">Paystack and manual / EFT, before refunds</p>
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Total amount billed</p>
+                                            <span className="text-xl font-black text-padel-green">{fmtR(overviewStats.totalAmountBilled)}</span>
+                                            <p className="text-[9px] text-gray-500 mt-1">{fmtR(overviewStats.grossEntryFees)} collected · {fmtR(overviewStats.pendingAmount)} outstanding</p>
                                         </div>
                                         {overviewStats.hasEarlyBirdPricing && (
                                             <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4 col-span-2 md:col-span-1">
@@ -3365,17 +3365,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
                                     <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-2xl p-5 space-y-3">
                                         <div className="flex items-center justify-between gap-4 text-sm">
-                                            <span className="text-gray-400">Paystack entry fees collected (gross)</span>
-                                            <span className="font-bold text-white">{fmtR(overviewStats.collected4M)}</span>
+                                            <span className="text-gray-300 font-semibold">Total amount billed</span>
+                                            <span className="font-black text-white">{fmtR(overviewStats.totalAmountBilled)}</span>
                                         </div>
-                                        {overviewStats.collectedManual > 0 && (
-                                            <div className="flex items-center justify-between gap-4 text-sm">
-                                                <span className="text-gray-400">
-                                                    Manual / EFT entry collections
-                                                </span>
-                                                <span className="font-bold text-white">{fmtR(overviewStats.collectedManual)}</span>
-                                            </div>
-                                        )}
+                                        <div className="flex items-center justify-between gap-4 text-sm">
+                                            <span className="text-gray-400">Gross entry fees collected</span>
+                                            <span className="font-bold text-white">{fmtR(overviewStats.grossEntryFees)}</span>
+                                        </div>
                                         {overviewStats.compedEntries > 0 && (
                                             <div className="flex items-center justify-between gap-4 text-sm">
                                                 <span className="text-gray-400">
@@ -3389,10 +3385,20 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             <span className="text-gray-400">Funds refunded for entry fees</span>
                                             <span className="font-bold text-red-400">−{fmtR(overviewStats.entryFeesRefunded)}</span>
                                         </div>
+                                        <div className="flex items-center justify-between gap-4 text-sm">
+                                            <span className="text-gray-400">Outstanding entry fees</span>
+                                            <span className="font-bold text-red-400">−{fmtR(overviewStats.pendingAmount)}</span>
+                                        </div>
                                         <div className="flex items-center justify-between gap-4 text-sm border-t border-white/10 pt-3">
-                                            <span className="text-gray-300 font-semibold">Net entry fee income</span>
+                                            <span className="text-gray-300 font-semibold">Final entry sales</span>
                                             <span className="font-black text-white">{fmtR(overviewStats.entryFeeBalance)}</span>
                                         </div>
+                                        {overviewStats.collectedManual > 0 && (
+                                            <div className="flex items-center justify-between gap-4 text-sm">
+                                                <span className="text-gray-400">Of which manual / EFT collected by 4M</span>
+                                                <span className="font-bold text-white">{fmtR(overviewStats.collectedManual)}</span>
+                                            </div>
+                                        )}
                                         <div className="flex items-center justify-between gap-4 text-sm">
                                             <span className="text-red-400">Platform fees @ {Math.round(PLATFORM_COMMISSION_RATE * 100)}% of gross income</span>
                                             <span className="font-bold text-red-400">−{fmtR(overviewStats.commission)}</span>
@@ -3478,7 +3484,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         )}
                                         <div className="rounded-xl border border-padel-green/30 bg-padel-green/5 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-2">
                                             <div>
-                                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Amount due to organiser</p>
+                                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Balance due from 4M</p>
                                                 <span className="text-3xl font-black text-padel-green">{fmtR(overviewStats.dueToOrg)}</span>
                                                 <p className="text-[9px] text-gray-500 mt-1">
                                                     (Paystack collected − entry refunds) − {Math.round(PLATFORM_COMMISSION_RATE * 100)}% of Paystack gross
@@ -4622,14 +4628,16 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+                            <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 gap-3">
                                 {[
-                                    { label: 'Gross entry income', value: fmtR(overviewStats.grossEntryFees), color: 'text-padel-green' },
+                                    { label: 'Total billed', value: fmtR(overviewStats.totalAmountBilled), color: 'text-padel-green' },
                                     { label: 'Entry Fees Refunded', value: `−${fmtR(overviewStats.entryFeesRefunded)}`, color: 'text-red-400' },
+                                    { label: 'Outstanding', value: `−${fmtR(overviewStats.pendingAmount)}`, color: 'text-red-400' },
+                                    { label: 'Final entry sales', value: fmtR(overviewStats.entryFeeBalance), color: 'text-white' },
+                                    { label: 'Manual / EFT collected by 4M', value: fmtR(overviewStats.collectedManual), color: 'text-white' },
                                     { label: 'Platform Fees', value: `−${fmtR(overviewStats.commission)}`, color: 'text-red-400' },
                                     { label: 'Interim Paid', value: `−${fmtR(overviewStats.interimPaid)}`, color: 'text-red-400' },
-                                    { label: 'Net due to organiser', value: fmtR(overviewStats.dueToOrg), color: 'text-padel-green' },
-                                    { label: 'Manual / EFT', value: fmtR(overviewStats.collectedManual), color: 'text-white' },
+                                    { label: 'Balance due from 4M', value: fmtR(overviewStats.dueToOrg), color: 'text-padel-green' },
                                 ].map((card) => (
                                     <div key={card.label} className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
                                         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">{card.label}</p>

@@ -122,7 +122,7 @@ export async function downloadEventFinanceWorkbook(payload) {
         isOrganiserReport
             ? 'This report contains the event settlement summary and registration list. Registration payment-status cells are colour coded: green = paid, amber = pending, red = refunded, grey = withdrawn, blue = comped.'
             : 'How to read this file: Summary totals must match the Line items sheet. '
-                + 'Organiser settlement is total gross entry income (Paystack plus manual/EFT), less entry refunds and the 5% platform fee. '
+                + 'The balance due from 4M is final entry sales less the 5% platform fee and interim payments. '
                 + 'License fees stay with 4M.',
     ]);
     wsSummary.mergeCells(`A${wsSummary.rowCount}:C${wsSummary.rowCount}`);
