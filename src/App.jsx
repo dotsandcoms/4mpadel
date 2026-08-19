@@ -158,6 +158,8 @@ function AppContent() {
           <Route path="/contact" element={<Contact />} />
           <Route path="/results/:id" element={<TournamentDraw />} />
           <Route path="/draws/:id" element={<TournamentDraw />} />
+          <Route path="/draws-preview/:id" element={<TournamentDraw />} />
+          <Route path="/native-draws/:id" element={<TournamentDraw />} />
           <Route path="/profile" element={<PlayerProfile />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/claim-club" element={<ClaimClubInvite />} />
