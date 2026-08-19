@@ -985,19 +985,38 @@ async function generateEmailBody(
               <td align="right" style="font-weight: bold; color: #9AE900;">${vars.organiserEmail || '—'}</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #64748B;">Funds collected (entry fees):</td>
-              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.collected || 'R 0'}</td>
+              <td style="padding: 8px 0; color: #64748B;">Total amount billed:</td>
+              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.totalBilled || vars.grossEntryFees || 'R 0'}</td>
             </tr>
+            ${vars.outstanding && vars.outstanding !== 'R 0' ? `
             <tr>
-              <td style="padding: 8px 0; color: #64748B;">Funds refunded:</td>
+              <td style="padding: 8px 0; color: #64748B;">Less outstanding entry fees:</td>
+              <td align="right" style="font-weight: bold; color: #F59E0B;">−${vars.outstanding}</td>
+            </tr>` : ''}
+            <tr>
+              <td style="padding: 8px 0; color: #64748B;">Gross entry fees collected:</td>
+              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.grossEntryFees || vars.collected || 'R 0'}</td>
+            </tr>
+            ${vars.paystackCollected ? `
+            <tr>
+              <td style="padding: 4px 0 4px 16px; color: #64748B; font-size: 12px;">of which Paystack:</td>
+              <td align="right" style="font-weight: bold; color: #CBD5E1; font-size: 12px;">${vars.paystackCollected}</td>
+            </tr>` : ''}
+            ${vars.manualCollected && vars.manualCollected !== 'R 0' ? `
+            <tr>
+              <td style="padding: 4px 0 8px 16px; color: #64748B; font-size: 12px;">of which Manual / EFT:</td>
+              <td align="right" style="font-weight: bold; color: #CBD5E1; font-size: 12px;">${vars.manualCollected}</td>
+            </tr>` : ''}
+            <tr>
+              <td style="padding: 8px 0; color: #64748B;">Less entry fee refunds:</td>
               <td align="right" style="font-weight: bold; color: #F87171;">−${vars.refunded || 'R 0'}</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #64748B;">Entry fee balance:</td>
-              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.balance || 'R 0'}</td>
+              <td style="padding: 8px 0; color: #64748B;">Final entry sales:</td>
+              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.finalEntrySales || vars.balance || 'R 0'}</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #64748B;">Platform commission (5%):</td>
+              <td style="padding: 8px 0; color: #64748B;">Platform fees (5% of gross entry fees):</td>
               <td align="right" style="font-weight: bold; color: #F87171;">−${vars.commission || 'R 0'}</td>
             </tr>
             ${(() => {
