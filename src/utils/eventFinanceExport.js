@@ -3,6 +3,34 @@ import { saveAs } from 'file-saver';
 
 const MONEY_FMT = '"R"#,##0.00';
 
+const STATUS_STYLES = {
+    paid: { fill: 'FFE8F5E9', font: 'FF166534' },
+    success: { fill: 'FFE8F5E9', font: 'FF166534' },
+    processed: { fill: 'FFE8F5E9', font: 'FF166534' },
+    pending: { fill: 'FFFEF3C7', font: 'FF92400E' },
+    processing: { fill: 'FFFEF3C7', font: 'FF92400E' },
+    refunded: { fill: 'FFFEE2E2', font: 'FFB91C1C' },
+    withdrawn: { fill: 'FFF3F4F6', font: 'FF4B5563' },
+    cancelled: { fill: 'FFFEE2E2', font: 'FFB91C1C' },
+    failed: { fill: 'FFFEE2E2', font: 'FFB91C1C' },
+    comped: { fill: 'FFE0F2FE', font: 'FF0369A1' },
+};
+
+const styleStatus = (cell, status) => {
+    const style = STATUS_STYLES[String(status || '').toLowerCase()];
+    if (!style) return;
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: style.fill } };
+    cell.font = { name: 'Arial', bold: true, color: { argb: style.font } };
+};
+
+const styleStatusRow = (row, status) => {
+    const style = STATUS_STYLES[String(status || '').toLowerCase()];
+    if (!style) return;
+    row.eachCell({ includeEmpty: false }, (cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: style.fill } };
+    });
+};
+
 const slugify = (value) => String(value || 'event')
     .replace(/[^a-z0-9]+/gi, '-')
     .replace(/^-|-$/g, '')
@@ -64,6 +92,7 @@ const addMetric = (sheet, label, value, { money = false, note = '' } = {}) => {
  *   registrations: Array<object>,
  *   payments: Array<object>,
  *   refunds: Array<object>,
+ *   reportType?: 'full'|'organiser',
  * }} payload
  */
 export async function downloadEventFinanceWorkbook(payload) {
@@ -75,22 +104,26 @@ export async function downloadEventFinanceWorkbook(payload) {
         registrations = [],
         payments = [],
         refunds = [],
+        reportType = 'full',
     } = payload;
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = '4M Padel';
     workbook.created = new Date();
 
+    const isOrganiserReport = reportType === 'organiser';
     const wsSummary = workbook.addWorksheet('Summary');
-    wsSummary.addRow(['4M Padel — Event finance export']).font = { bold: true, size: 16 };
+    wsSummary.addRow([isOrganiserReport ? '4M Padel — Organiser Consolidated Event Report' : '4M Padel — Event Finance Export']).font = { bold: true, size: 16 };
     wsSummary.addRow(['Event', eventName || '—']);
     if (eventDate) wsSummary.addRow(['Event date', eventDate]);
     wsSummary.addRow(['Generated', new Date().toLocaleString('en-ZA')]);
     wsSummary.addRow([]);
     wsSummary.addRow([
-        'How to read this file: Summary totals must match the Line items sheet. '
-        + 'Organiser settlement is total gross entry income (Paystack plus manual/EFT), less entry refunds and the 5% platform fee. '
-        + 'License fees stay with 4M.',
+        isOrganiserReport
+            ? 'This report contains the event settlement summary and registration list. Registration payment-status cells are colour coded: green = paid, amber = pending, red = refunded, grey = withdrawn, blue = comped.'
+            : 'How to read this file: Summary totals must match the Line items sheet. '
+                + 'Organiser settlement is total gross entry income (Paystack plus manual/EFT), less entry refunds and the 5% platform fee. '
+                + 'License fees stay with 4M.',
     ]);
     wsSummary.mergeCells(`A${wsSummary.rowCount}:C${wsSummary.rowCount}`);
     wsSummary.getRow(wsSummary.rowCount).alignment = { wrapText: true };
@@ -111,6 +144,7 @@ export async function downloadEventFinanceWorkbook(payload) {
     autosize(wsSummary, 18, 70);
     wsSummary.getColumn(2).width = 22;
 
+    if (reportType === 'full') {
     const wsLines = workbook.addWorksheet('Line items');
     const lineHeaders = [
         'Date', 'Category', 'Bucket', 'Description', 'Player / Team', 'Email', 'Division',
@@ -134,9 +168,11 @@ export async function downloadEventFinanceWorkbook(payload) {
         ]);
         row.getCell(1).numFmt = 'dd mmm yyyy hh:mm';
         row.getCell(8).numFmt = MONEY_FMT;
+        styleStatusRow(row, item.status);
         if (Number(item.amount) < 0) {
             row.getCell(8).font = { color: { argb: 'FFDC2626' } };
         }
+        styleStatus(row.getCell(9), item.status);
     });
     wsLines.autoFilter = {
         from: { row: 1, column: 1 },
@@ -145,6 +181,7 @@ export async function downloadEventFinanceWorkbook(payload) {
     wsLines.views = [{ state: 'frozen', ySplit: 1 }];
     autosize(wsLines, 12, 42);
     wsLines.getColumn(8).width = 16;
+    }
 
     const wsRegs = workbook.addWorksheet('Registrations');
     const regHeaders = [
@@ -172,6 +209,8 @@ export async function downloadEventFinanceWorkbook(payload) {
         ]);
         row.getCell(10).numFmt = MONEY_FMT;
         row.getCell(13).numFmt = 'dd mmm yyyy hh:mm';
+        styleStatusRow(row, r.paymentStatus);
+        styleStatus(row.getCell(8), r.paymentStatus);
     });
     wsRegs.autoFilter = {
         from: { row: 1, column: 1 },
@@ -180,6 +219,7 @@ export async function downloadEventFinanceWorkbook(payload) {
     wsRegs.views = [{ state: 'frozen', ySplit: 1 }];
     autosize(wsRegs, 12, 36);
 
+    if (reportType === 'full') {
     const wsPay = workbook.addWorksheet('Payments ledger');
     const payHeaders = [
         'Date', 'Status', 'Payment Type', 'Method', 'Amount (ZAR)', 'Player / Email',
@@ -200,6 +240,8 @@ export async function downloadEventFinanceWorkbook(payload) {
         ]);
         row.getCell(1).numFmt = 'dd mmm yyyy hh:mm';
         row.getCell(5).numFmt = MONEY_FMT;
+        styleStatusRow(row, p.status);
+        styleStatus(row.getCell(2), p.status);
     });
     wsPay.autoFilter = {
         from: { row: 1, column: 1 },
@@ -227,7 +269,9 @@ export async function downloadEventFinanceWorkbook(payload) {
         ]);
         row.getCell(1).numFmt = 'dd mmm yyyy hh:mm';
         row.getCell(4).numFmt = MONEY_FMT;
+        styleStatusRow(row, rf.status);
         row.getCell(4).font = { color: { argb: 'FFDC2626' } };
+        styleStatus(row.getCell(2), rf.status);
     });
     wsRefunds.autoFilter = {
         from: { row: 1, column: 1 },
@@ -235,10 +279,20 @@ export async function downloadEventFinanceWorkbook(payload) {
     };
     wsRefunds.views = [{ state: 'frozen', ySplit: 1 }];
     autosize(wsRefunds, 12, 36);
+    }
+
+    workbook.eachSheet((sheet) => {
+        sheet.eachRow({ includeEmpty: false }, (row) => {
+            row.eachCell({ includeEmpty: false }, (cell) => {
+                cell.font = { name: 'Arial', ...(cell.font || {}) };
+            });
+        });
+    });
 
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     });
-    saveAs(blob, `${slugify(eventName)}-finance-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    const reportSuffix = isOrganiserReport ? 'organiser-consolidated' : 'full-event-report';
+    saveAs(blob, `${slugify(eventName)}-${reportSuffix}-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }

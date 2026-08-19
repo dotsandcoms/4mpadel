@@ -37,6 +37,7 @@ import EventActivityLog from './EventActivityLog';
 import { logEventActivity } from '../../utils/eventActivityLog';
 import { parseEventDate } from '../../utils/eventEntryFee';
 import { downloadEventFinanceWorkbook } from '../../utils/eventFinanceExport';
+import { useAdminPermissions } from '../../hooks/useAdminPermissions';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
@@ -224,6 +225,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const [payoutRequestAmount, setPayoutRequestAmount] = useState('');
     const [statementSearch, setStatementSearch] = useState('');
     const [exportingFinance, setExportingFinance] = useState(false);
+    const [exportMenuOpen, setExportMenuOpen] = useState(false);
+    const [adminEmail, setAdminEmail] = useState(null);
     const [syncingRankedin, setSyncingRankedin] = useState(false);
     const [interimPayments, setInterimPayments] = useState([]);
     const [interimAmount, setInterimAmount] = useState('');
@@ -238,6 +241,16 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         early_bird_fee: event?.early_bird_fee ?? null,
         early_bird_ends_at: event?.early_bird_ends_at ?? null,
     }));
+    const { permissions } = useAdminPermissions(adminEmail);
+    const isSuperAdmin = permissions?.role === 'super_admin';
+
+    useEffect(() => {
+        let active = true;
+        supabase.auth.getUser().then(({ data }) => {
+            if (active) setAdminEmail(data?.user?.email || null);
+        });
+        return () => { active = false; };
+    }, []);
 
     useEffect(() => {
         setLinkedRankedinId(extractRankedinId(event?.rankedin_id) || extractRankedinId(event?.rankedin_url) || '');
@@ -2876,7 +2889,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         }
     };
 
-    const exportFinanceExcel = async () => {
+    const exportFinanceExcel = async (reportType = 'full') => {
+        if (!isSuperAdmin) {
+            toast.error('Only Super Admins can export event reports.');
+            return;
+        }
+        setExportMenuOpen(false);
         setExportingFinance(true);
         try {
             const eventDate = event?.start_date
@@ -2914,6 +2932,22 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
                 { section: 'Retained by 4M', label: 'License revenue', value: overviewStats.licenseRevenue4M, money: true },
                 { section: 'Retained by 4M', label: 'Platform / commission fees', value: overviewStats.commission, money: true },
+            ];
+
+            const organiserSummary = [
+                { section: 'Entries', label: 'Total entries', value: dashboardStats.totalEntries },
+                { section: 'Entries', label: 'Unique players', value: dashboardStats.uniquePlayers },
+                { section: 'Entries', label: 'Paid', value: dashboardStats.paidCount },
+                { section: 'Entries', label: 'Pending / unpaid', value: overviewStats.pendingCount, note: fmtR(overviewStats.pendingAmount) },
+                { section: 'Entries', label: 'Comped (free)', value: overviewStats.compedEntries },
+                { section: 'Entries', label: 'Withdrawn', value: overviewStats.withdrawnCount },
+
+                { section: 'Organiser settlement', label: 'Gross entry fees collected', value: overviewStats.grossEntryFees, money: true, note: 'Paystack plus manual / EFT, before refunds' },
+                { section: 'Organiser settlement', label: 'Minus entry refunds', value: -overviewStats.entryFeesRefunded, money: true },
+                { section: 'Organiser settlement', label: 'Net entry fees', value: overviewStats.entryFeeBalance, money: true },
+                { section: 'Organiser settlement', label: `Minus platform fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}% of gross)`, value: -overviewStats.commission, money: true },
+                { section: 'Organiser settlement', label: 'Minus interim paid', value: -overviewStats.interimPaid, money: true },
+                { section: 'Organiser settlement', label: 'Net due to organiser', value: overviewStats.dueToOrg, money: true },
             ];
 
             const registrationRows = registrations.map((r) => {
@@ -2956,7 +2990,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             await downloadEventFinanceWorkbook({
                 eventName: event?.event_name || 'Event',
                 eventDate,
-                summary,
+                summary: reportType === 'organiser' ? organiserSummary : summary,
                 lineItems: incomeStatementRows,
                 registrations: registrationRows,
                 payments: (payments || []).map((p) => ({
@@ -2970,14 +3004,62 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                         cover: isLicenseRefund(rf, linked) ? 'license' : 'entry',
                     };
                 }),
+                reportType,
             });
-            toast.success('Finance Excel downloaded');
+            toast.success(reportType === 'organiser'
+                ? 'Organiser consolidated report downloaded'
+                : 'Full event report downloaded');
         } catch (err) {
             console.error('Finance Excel export failed:', err);
             toast.error(err.message || 'Failed to generate Excel export');
         } finally {
             setExportingFinance(false);
         }
+    };
+
+    const ExportReportMenu = ({ compact = false }) => {
+        if (!isSuperAdmin) return null;
+        const buttonClass = compact
+            ? 'bg-white/5 text-white border border-white/10 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-white/10 shrink-0 disabled:opacity-40'
+            : 'inline-flex items-center justify-center gap-2 bg-white/5 text-white border border-white/10 px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-white/10 disabled:opacity-40';
+        return (
+            <div className="relative">
+                <button
+                    type="button"
+                    onClick={() => setExportMenuOpen((open) => !open)}
+                    disabled={exportingFinance}
+                    className={buttonClass}
+                    aria-haspopup="menu"
+                    aria-expanded={exportMenuOpen}
+                >
+                    {exportingFinance ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
+                    Export Excel
+                    <ChevronDown size={15} className={exportMenuOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
+                </button>
+                {exportMenuOpen && (
+                    <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-xl border border-white/10 bg-[#151515] p-1.5 shadow-2xl">
+                        <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => exportFinanceExcel('full')}
+                            className="w-full rounded-lg px-3 py-2.5 text-left hover:bg-white/10 transition-colors"
+                        >
+                            <span className="block text-sm font-bold text-white">Full Event Report</span>
+                            <span className="block text-[10px] text-gray-400 mt-0.5">All finance sheets, payment ledger and refunds</span>
+                        </button>
+                        <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => exportFinanceExcel('organiser')}
+                            className="w-full rounded-lg px-3 py-2.5 text-left hover:bg-white/10 transition-colors"
+                        >
+                            <span className="block text-sm font-bold text-white">Organisers Consolidated Event Report</span>
+                            <span className="block text-[10px] text-gray-400 mt-0.5">Summary and registrations only</span>
+                        </button>
+                    </div>
+                )}
+            </div>
+        );
     };
 
     if (!isActive) return null;
@@ -3039,14 +3121,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                 )}
                                             </>
                                         )}
-                                        <button
-                                            onClick={exportFinanceExcel}
-                                            disabled={exportingFinance}
-                                            className="bg-white/5 text-white border border-white/10 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-white/10 shrink-0 disabled:opacity-40"
-                                        >
-                                            {exportingFinance ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
-                                            Export Excel
-                                        </button>
+                                        <ExportReportMenu compact />
                                     </div>
                                 </div>
                                 {event.start_date && (
@@ -4533,15 +4608,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
-                                    <button
-                                        type="button"
-                                        onClick={exportFinanceExcel}
-                                        disabled={exportingFinance}
-                                        className="inline-flex items-center justify-center gap-2 bg-white/5 text-white border border-white/10 px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-white/10 disabled:opacity-40"
-                                    >
-                                        {exportingFinance ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
-                                        Export Excel
-                                    </button>
+                                    <ExportReportMenu />
                                     <button
                                         type="button"
                                         onClick={openPayoutRequestModal}
