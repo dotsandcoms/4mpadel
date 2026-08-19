@@ -1051,11 +1051,6 @@ async function generateEmailBody(
               <td style="padding: 12px 0 8px; color: #9AE900; font-weight: 800; border-top: 1px solid rgba(255,255,255,0.08);">Amount requested:</td>
               <td align="right" style="padding: 12px 0 8px; font-weight: 900; color: #9AE900; font-size: 18px; border-top: 1px solid rgba(255,255,255,0.08);">${vars.amountRequested || vars.dueToOrganiser || 'R 0'}</td>
             </tr>
-            ${vars.licenseRevenue && vars.licenseRevenue !== 'R 0' ? `
-            <tr>
-              <td style="padding: 8px 0; color: #64748B;">License revenue (retained by 4M):</td>
-              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.licenseRevenue}</td>
-            </tr>` : ''}
             <tr>
               <td style="padding: 8px 0; color: #64748B;">Requested:</td>
               <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.requestedAt || '—'}</td>
