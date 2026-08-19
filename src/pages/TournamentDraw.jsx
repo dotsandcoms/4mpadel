@@ -8,6 +8,7 @@ import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
 import KnockoutBracket from '../components/KnockoutBracket';
 import { getEventImage } from '../utils/imageUtils';
+import NativeTournamentDraw from './NativeTournamentDraw';
 
 const TournamentDraw = () => {
     const { id: idOrSlug } = useParams();
@@ -256,6 +257,15 @@ const TournamentDraw = () => {
 
     const activeClass = classes.find(c => c.Id.toString() === selectedClassId.toString());
     const availableDraws = activeClass?.TournamentDraws || [];
+
+    const isNativePreview = location.pathname.startsWith('/draws-preview/');
+    const isNativePublic = location.pathname.startsWith('/native-draws/');
+    // A manual event can still have an established RankedIn draw. Keep that
+    // legacy route authoritative unless the user explicitly opens native draw
+    // preview/live routes, or the event has no RankedIn tournament at all.
+    if (dbEvent?.is_manual && (isNativePreview || isNativePublic || !resolvedId)) {
+        return <NativeTournamentDraw event={dbEvent} preview={isNativePreview} />;
+    }
 
     return (
         <>

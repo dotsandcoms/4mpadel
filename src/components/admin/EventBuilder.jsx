@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useClubs } from '../../hooks/useClubs';
+import { useAdminPermissions } from '../../hooks/useAdminPermissions';
 import { getDefaultBackgroundForStatus } from '../../utils/imageUtils';
 import { buildRankedinTournamentUrl, downloadRankedinSkipReport, extractRankedinId } from '../../utils/rankedinLink';
 import { loadGoogleMaps } from '../../utils/googleMaps';
@@ -467,6 +468,8 @@ const emptyDivision = (licenseRequired = false, scoringPoint = 'golden') => ({
     details: '',
     is_active: true,
     rankedin_class_id: null,
+    ranking_tier_id: '',
+    ranking_category: '',
 });
 
 const slugify = (value) =>
@@ -810,6 +813,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const [step, setStep] = useState(1);
     const [form, setForm] = useState(blankForm);
     const [divisions, setDivisions] = useState([emptyDivision()]);
+    const [rankingTiers, setRankingTiers] = useState([]);
+    const [adminEmail, setAdminEmail] = useState(null);
     const [removedDivisionIds, setRemovedDivisionIds] = useState([]);
     const [standardPrice, setStandardPrice] = useState('');
     const [bulkCloseDate, setBulkCloseDate] = useState('');
@@ -837,6 +842,25 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         integrations: false, operations: true, points: false, rules: false, contact: false,
         organiserBrand: false, sponsors: true, websiteDisplay: false,
     });
+
+    const { permissions } = useAdminPermissions(adminEmail);
+    const isSuperAdmin = permissions?.role === 'super_admin';
+
+    useEffect(() => {
+        let active = true;
+        supabase.auth.getUser().then(({ data }) => {
+            if (active) setAdminEmail(data?.user?.email || null);
+        });
+        return () => { active = false; };
+    }, []);
+
+    useEffect(() => {
+        supabase.from('ranking_tiers').select('id, code, name, max_points, display_order')
+            .eq('is_active', true).order('display_order')
+            .then(({ data, error }) => {
+                if (!error) setRankingTiers(data || []);
+            });
+    }, []);
     const [showPreview, setShowPreview] = useState(false);
     const [syncingRankedin, setSyncingRankedin] = useState(false);
 
@@ -1118,6 +1142,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         details: d.details || '',
         is_active: d.is_active !== false,
         rankedin_class_id: d.rankedin_class_id || null,
+        ranking_tier_id: d.ranking_tier_id || '',
+        ranking_category: d.ranking_category != null ? String(d.ranking_category) : '',
     });
 
     const loadExisting = async (ev, draftDivisions = null) => {
@@ -1963,6 +1989,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         is_active: d.is_active !== false,
         // Preserve existing RankedIn class link; never clear on ordinary saves
         ...(d.rankedin_class_id ? { rankedin_class_id: d.rankedin_class_id } : {}),
+        ranking_tier_id: d.ranking_tier_id || null,
+        ranking_category: d.ranking_category === '' || d.ranking_category == null ? null : Number(d.ranking_category),
     });
 
     const handleRankedinIdChange = (value) => {
@@ -3932,6 +3960,24 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                                         <label className={labelClass}>Entry limit / capacity</label>
                                                                         <input type="number" value={d.entry_limit} onChange={(e) => updateDivision(d._key, { entry_limit: e.target.value })} placeholder="Optional override" className={inputClass} />
                                                                     </div>
+                                                                    {isSuperAdmin && <>
+                                                                        <div>
+                                                                            <label className={labelClass}>Ranking tier</label>
+                                                                            <select value={d.ranking_tier_id} onChange={(e) => updateDivision(d._key, { ranking_tier_id: e.target.value })} className={inputClass}>
+                                                                                <option value="">No native points</option>
+                                                                                {rankingTiers.map((tier) => (
+                                                                                    <option key={tier.id} value={tier.id}>{tier.name} · max {tier.max_points.toLocaleString()} pts</option>
+                                                                                ))}
+                                                                            </select>
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className={labelClass}>Ranking category</label>
+                                                                            <select value={d.ranking_category} onChange={(e) => updateDivision(d._key, { ranking_category: e.target.value })} className={inputClass} disabled={!d.ranking_tier_id}>
+                                                                                <option value="">Select category</option>
+                                                                                {[1, 2, 3, 4].map((category) => <option key={category} value={category}>Category {category}</option>)}
+                                                                            </select>
+                                                                        </div>
+                                                                    </>}
                                                                     <div>
                                                                         <div className="flex items-center justify-between mb-2">
                                                                             <label className={labelClass} style={{ marginBottom: 0 }}>Entries close override</label>

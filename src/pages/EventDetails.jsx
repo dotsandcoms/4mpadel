@@ -2165,6 +2165,15 @@ const EventDetails = () => {
                 } finally {
                     setFetchingRankedinData(false);
                 }
+            } else if (event.is_manual) {
+                const { data: nativeDraws } = await supabase
+                    .from('draws')
+                    .select('status')
+                    .eq('event_id', event.id)
+                    .in('status', ['published', 'in_progress', 'completed']);
+                const hasNativeDraw = (nativeDraws || []).length > 0;
+                setHasDraw(hasNativeDraw);
+                setHasResults((nativeDraws || []).some((draw) => draw.status === 'completed'));
             } else if (event.slug) {
                 setHasDraw(false);
                 setHasResults(false);

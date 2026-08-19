@@ -38,6 +38,7 @@ import { logEventActivity } from '../../utils/eventActivityLog';
 import { parseEventDate } from '../../utils/eventEntryFee';
 import { downloadEventFinanceWorkbook } from '../../utils/eventFinanceExport';
 import { useAdminPermissions } from '../../hooks/useAdminPermissions';
+import NativeDrawManager from './NativeDrawManager';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
@@ -443,7 +444,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
         });
         setRefunds([...refundById.values()]);
 
-        const emails = [...new Set(regs.map((r) => r.email).filter(Boolean))];
+        const emails = [...new Set(regs.flatMap((r) => [r.email, r.partner_email]).filter(Boolean))];
         if (emails.length > 0) {
             const players = await fetchPlayersByEmails(
                 supabase,
@@ -3246,6 +3247,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
                                 { id: 'overview', label: 'Overview' },
                                 { id: 'players', label: 'Players' },
                                 { id: 'list', label: 'Registrations List' },
+                                ...(event?.is_manual ? [{ id: 'draws', label: 'Draws' }] : []),
                                 { id: 'statement', label: 'Income Statement' },
                                 { id: 'activity', label: 'Activity Log' },
                             ].map((tab) => (
@@ -4852,6 +4854,16 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
 
                     {activeTab === 'activity' && (
                         <EventActivityLog eventId={event?.id} eventName={event?.event_name || ''} />
+                    )}
+
+                    {activeTab === 'draws' && (
+                        <NativeDrawManager
+                            event={event}
+                            divisions={divisions}
+                            registrations={registrations}
+                            playersByEmail={playersByEmail}
+                            onSaved={load}
+                        />
                     )}
 
                     {(stats.activeCheckoutCount > 0 || stats.abandonedCheckoutCount > 0) && activeTab !== 'activity' && (
