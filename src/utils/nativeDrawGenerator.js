@@ -148,6 +148,8 @@ export const generateRoundRobinFixtures = (entries) => {
                 fixtures.push({
                     key: `group-r${round + 1}-m${i + 1}`,
                     stage: 'group',
+                    round_code: `group_r${round + 1}`,
+                    round_label: `Group stage · Round ${round + 1}`,
                     round_number: round + 1,
                     bracket_position: i + 1,
                     entry_one: entryOne,
