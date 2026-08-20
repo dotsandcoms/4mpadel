@@ -23,7 +23,7 @@ export const calculateGroupStandings = ({ entries = [], matches = [], matchSets 
     }]));
     const completed = matches.filter((match) => (
         match.group_id === groupId
-        && match.status === 'completed'
+        && ['completed', 'walkover', 'retired'].includes(match.status)
         && match.entry_one_id
         && match.entry_two_id
         && match.winner_entry_id
@@ -75,5 +75,7 @@ export const calculateGroupStandings = ({ entries = [], matches = [], matchSets 
 
 export const areGroupMatchesComplete = (matches = [], groupId) => {
     const groupMatches = matches.filter((match) => match.group_id === groupId);
-    return groupMatches.length > 0 && groupMatches.every((match) => match.status === 'completed');
+    return groupMatches.length > 0 && groupMatches.every((match) => (
+        ['completed', 'walkover', 'retired'].includes(match.status)
+    ));
 };

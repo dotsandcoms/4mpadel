@@ -84,6 +84,7 @@ const NativeTournamentDraw = ({ event, preview = false }) => {
         if (sets.length > 0) return sets.map((set) => `${set.entry_one_games}-${set.entry_two_games}`).join(', ');
         if (match.status === 'completed' && (!match.entry_one_id || !match.entry_two_id)) return 'Bye';
         if (match.result_type === 'walkover') return 'Walkover';
+        if (match.result_type === 'retirement') return 'Retirement';
         if (match.status === 'completed') return 'Completed';
         if (match.entry_one_id && match.entry_two_id) return 'Next · ready to play';
         return 'Awaiting opponent';
@@ -95,6 +96,7 @@ const NativeTournamentDraw = ({ event, preview = false }) => {
     const matchBadge = (match) => {
         if (match.status === 'completed' && (!match.entry_one_id || !match.entry_two_id)) return 'BYE';
         if (match.result_type === 'walkover') return 'WALKOVER';
+        if (match.result_type === 'retirement') return 'RETIRED';
         if (match.status === 'completed') return 'PLAYED';
         if (match.entry_one_id && match.entry_two_id) return 'NEXT';
         return 'TBD';
