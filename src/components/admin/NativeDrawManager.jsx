@@ -93,11 +93,13 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
     const [loadingSaved, setLoadingSaved] = useState(false);
     const [recordingMatchId, setRecordingMatchId] = useState(null);
     const [recordingWinnerId, setRecordingWinnerId] = useState('');
+    const [recordingResultType, setRecordingResultType] = useState('played');
     const [recordingSets, setRecordingSets] = useState([['', ''], ['', '']]);
     const [matchSets, setMatchSets] = useState([]);
     const [savedGroups, setSavedGroups] = useState([]);
     const [standings, setStandings] = useState([]);
     const [showDrawSetup, setShowDrawSetup] = useState(true);
+    const [showDrawConfiguration, setShowDrawConfiguration] = useState(true);
     const [drawFormat, setDrawFormat] = useState('knockout');
     const [groupCount, setGroupCount] = useState('4');
     const [advancersPerGroup, setAdvancersPerGroup] = useState('2');
@@ -398,7 +400,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             if (error) throw error;
             setSavedDraw({ ...savedDraw, status: 'published' });
             setShowDrawSetup(false);
-            toast.success(`${division.name} native draw is published at /native-draws/${event.slug}`);
+            toast.success(`${division.name} event draw is published at /native-draws/${event.slug}`);
         } catch (error) {
             console.error('Failed to publish native draw', error);
             toast.error(error.message || 'Could not publish the draw');
@@ -417,11 +419,11 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             toast.error('Select the winning team');
             return;
         }
-        if (recordingSets.some(([first, second]) => (first === '') !== (second === ''))) {
+        if (recordingResultType !== 'walkover' && recordingSets.some(([first, second]) => (first === '') !== (second === ''))) {
             toast.error('Enter both teams’ scores for a set, or leave that set blank');
             return;
         }
-        const scoredSets = recordingSets
+        const scoredSets = recordingResultType === 'walkover' ? [] : recordingSets
             .filter(([first, second]) => first !== '' || second !== '')
             .map(([first, second], index) => ({
                 match_id: match.id,
@@ -436,10 +438,13 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         setSaving(true);
         try {
             const winnerEntry = recordingWinnerId;
+            const matchStatus = recordingResultType === 'walkover'
+                ? 'walkover'
+                : recordingResultType === 'retirement' ? 'retired' : 'completed';
             const { error: resultError } = await supabase.from('draw_matches').update({
                 winner_entry_id: winnerEntry,
-                status: 'completed',
-                result_type: 'played',
+                status: matchStatus,
+                result_type: recordingResultType,
                 updated_at: new Date().toISOString(),
             }).eq('id', match.id).eq('status', 'pending');
             if (resultError) throw resultError;
@@ -450,7 +455,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             const nextSets = [...matchSets, ...scoredSets];
             if (match.stage === 'group' && match.group_id) {
                 const completedMatches = draft.matches.map((item) => item.id === match.id
-                    ? { ...item, winner_entry_id: winnerEntry, status: 'completed' }
+                    ? { ...item, winner_entry_id: winnerEntry, status: matchStatus, result_type: recordingResultType }
                     : item);
                 const nextStandings = calculateGroupStandings({
                     entries: draft.entries,
@@ -482,7 +487,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             setDraft((current) => ({
                 ...current,
                 matches: current.matches.map((item) => {
-                    if (item.id === match.id) return { ...item, winner_entry_id: winnerEntry, winner: current.entries.find((entry) => entry.id === winnerEntry), status: 'completed', result_type: 'played' };
+                    if (item.id === match.id) return { ...item, winner_entry_id: winnerEntry, winner: current.entries.find((entry) => entry.id === winnerEntry), status: matchStatus, result_type: recordingResultType };
                     if (item.id === match.winner_to_match_id) return { ...item, [match.winner_to_slot === 1 ? 'entry_one' : 'entry_two']: current.entries.find((entry) => entry.id === winnerEntry), [match.winner_to_slot === 1 ? 'entry_one_id' : 'entry_two_id']: winnerEntry };
                     return item;
                 }),
@@ -490,6 +495,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             toast.success(match.stage === 'group' ? 'Result saved and group standings updated' : 'Result saved and winner advanced');
             setRecordingMatchId(null);
             setRecordingWinnerId('');
+            setRecordingResultType('played');
             setRecordingSets([['', ''], ['', '']]);
         } catch (error) {
             console.error('Failed to record native draw result', error);
@@ -549,36 +555,33 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         .sort((a, b) => (a.position || 999) - (b.position || 999));
     const groupStageComplete = savedGroups.length > 0
         && savedGroups.every((group) => areGroupMatchesComplete(draft?.matches || [], group.id));
+    const settingsLocked = savedDraw?.status === 'published';
 
     return (
         <div className="p-6 space-y-6">
             <div className="rounded-2xl border border-padel-green/20 bg-padel-green/5 p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                    <div className="flex items-center gap-2 text-padel-green font-bold"><Brackets size={18} /> Native Draws</div>
-                    <p className="text-sm text-gray-400 mt-1">Create a private knockout draft from paid, active pair registrations. Pair seeds use the combined current player-ranking points.</p>
+                    <div className="flex items-center gap-2 text-padel-green font-bold"><Brackets size={18} /> Event draws</div>
+                    <p className="mt-1 max-w-3xl text-sm text-gray-400">Create, review and run an event draw from paid, active pair registrations. Pair seeds combine the players’ current ranking points.</p>
                 </div>
-                <span className="text-xs text-gray-500">Manual events only</span>
+                <span className="w-fit rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-xs font-bold text-gray-400">Manual events only</span>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-[1fr_auto]">
-                <select value={divisionId} onChange={(event) => { setDivisionId(event.target.value); setDraft(null); }} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none">
-                    <option value="" className="text-black">Select a division</option>
-                    {divisions.map((item) => <option className="text-black" key={item.id} value={item.id}>{item.name}</option>)}
-                </select>
-                <button type="button" onClick={previewDraft} disabled={!divisionId || loadingSaved || savedDraw?.status === 'published'} className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 px-4 py-3 font-bold text-white hover:bg-white/15 disabled:opacity-40">
-                    {loadingSaved ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />} {savedDraw ? 'Regenerate preview' : 'Preview draw'}
-                </button>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-                <label className="text-sm font-bold text-gray-300">Draw format<select value={drawFormat} onChange={(event) => { setDrawFormat(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none"><option value="knockout" className="text-black">Elimination / knockout</option><option value="group_only" className="text-black">Groups only</option><option value="group_knockout" className="text-black">Groups + elimination</option></select></label>
-                {drawFormat !== 'knockout' && <label className="text-sm font-bold text-gray-300">Number of groups<select value={groupCount} onChange={(event) => { setGroupCount(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none">{[2, 3, 4, 5, 6, 8].map((count) => <option key={count} value={count} className="text-black">{count} groups</option>)}</select></label>}
-                {drawFormat === 'group_knockout' && <label className="text-sm font-bold text-gray-300">Advance from each group<select value={advancersPerGroup} onChange={(event) => { setAdvancersPerGroup(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none"><option value="1" className="text-black">Top 1 team</option><option value="2" className="text-black">Top 2 teams</option></select></label>}
-            </div>
-
-            {divisionId && <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-gray-300 flex items-center gap-3">
-                <Users size={18} className="text-padel-green" />
-                <span><strong className="text-white">{teams.length}</strong> teams from {eligibleRegistrations.length} paid, active registration {eligibleRegistrations.length === 1 ? 'row' : 'rows'} ready for {division?.name}.</span>
-            </div>}
+            <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#101010]">
+                <div className="flex flex-col gap-3 border-b border-white/10 px-5 py-4 md:flex-row md:items-center md:justify-between"><button type="button" aria-expanded={showDrawConfiguration} onClick={() => setShowDrawConfiguration((open) => !open)} className="flex min-w-0 flex-1 items-center justify-between gap-4 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-padel-green"><span><h2 className="font-bold text-white">Draw configuration</h2><p className="mt-1 text-xs text-gray-400">{showDrawConfiguration ? 'Choose the division and competition format before generating the seeded preview.' : (division ? `${division.name} · ${drawFormat === 'knockout' ? 'Elimination' : drawFormat === 'group_only' ? 'Groups only' : 'Groups + elimination'}` : 'Expand to choose a division and format.')}</p></span>{showDrawConfiguration ? <ChevronUp className="shrink-0 text-padel-green" size={20} /> : <ChevronDown className="shrink-0 text-padel-green" size={20} />}</button>{settingsLocked && <span className="w-fit rounded-full border border-padel-green/40 bg-padel-green/10 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-padel-green">Published · settings locked</span>}</div>
+                {showDrawConfiguration && <div className="space-y-5 p-5">
+                    <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                        <label className="block text-sm font-bold text-gray-300">Division<select value={divisionId} onChange={(event) => { setDivisionId(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none focus-visible:border-padel-green focus-visible:ring-2 focus-visible:ring-padel-green/30"><option value="" className="text-black">Select a division</option>{divisions.map((item) => <option className="text-black" key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+                        {settingsLocked ? <p className="pb-3 text-sm text-gray-400">To change the format, create a new draft before publishing.</p> : <button type="button" onClick={previewDraft} disabled={!divisionId || loadingSaved} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-padel-green px-4 py-3 font-bold text-black transition-transform hover:brightness-110 active:scale-95 disabled:opacity-40">{loadingSaved ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}{savedDraw ? 'Regenerate preview' : 'Generate preview'}</button>}
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                        <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Draw format<select disabled={settingsLocked} value={drawFormat} onChange={(event) => { setDrawFormat(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50"><option value="knockout" className="text-black">Elimination / knockout</option><option value="group_only" className="text-black">Groups only</option><option value="group_knockout" className="text-black">Groups + elimination</option></select></label>
+                        {drawFormat !== 'knockout' && <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Number of groups<select disabled={settingsLocked} value={groupCount} onChange={(event) => { setGroupCount(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50">{[2, 3, 4, 5, 6, 8].map((count) => <option key={count} value={count} className="text-black">{count} groups</option>)}</select></label>}
+                        {drawFormat === 'group_knockout' && <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Advance from each group<select disabled={settingsLocked} value={advancersPerGroup} onChange={(event) => { setAdvancersPerGroup(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50"><option value="1" className="text-black">Top 1 team</option><option value="2" className="text-black">Top 2 teams</option></select></label>}
+                    </div>
+                    {divisionId && <div className="flex items-start gap-3 rounded-xl border border-padel-green/20 bg-padel-green/5 p-4 text-sm text-gray-300"><span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-padel-green/10 text-padel-green"><Users size={18} /></span><span><strong className="text-white">{teams.length} teams ready</strong><br /><span className="text-gray-400">Built from {eligibleRegistrations.length} paid, active registration {eligibleRegistrations.length === 1 ? 'row' : 'rows'} in {division?.name}.</span></span></div>}
+                </div>}
+            </section>
 
             {draft && <div className="rounded-2xl border border-white/10 bg-[#101010] overflow-hidden">
                 <button type="button" onClick={() => setShowDrawSetup((open) => !open)} className="flex w-full items-center justify-between gap-3 border-b border-white/10 px-5 py-4 text-left hover:bg-white/[0.03]">
@@ -631,7 +634,19 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                             <TeamLabel entry={match.entry_two} />
                         </div>
                     ))}
-                </div> : <div className="grid gap-4 p-5 md:grid-cols-2">{(draft.groups || []).map((group) => { const groupRows = standingsForGroup(group.id || group.key); return <div key={group.key || group.id} className="rounded-xl border border-white/10 bg-black/20 p-4"><p className="mb-3 font-bold text-padel-green">{group.name}</p>{groupRows.length > 0 ? <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="border-b border-white/10 text-gray-500"><tr><th className="pb-2">#</th><th className="pb-2">Team</th><th className="pb-2 text-center">P</th><th className="pb-2 text-center">W</th><th className="pb-2 text-center">+/-</th><th className="pb-2 text-right">Pts</th></tr></thead><tbody>{groupRows.map((row) => { const entry = draft.entries.find((item) => item.id === row.entry_id); return <tr key={row.entry_id} className={row.requires_manual_resolution ? 'text-amber-300' : 'text-gray-200'}><td className="py-2 font-black text-padel-green">{row.position}</td><td className="py-2 pr-2">{entry?.team_name || 'Team'}</td><td className="py-2 text-center">{row.played}</td><td className="py-2 text-center">{row.won}</td><td className="py-2 text-center">{row.games_for - row.games_against}</td><td className="py-2 text-right font-bold">{row.standings_points}</td></tr>; })}</tbody></table></div> : <div className="space-y-2 text-sm text-gray-200">{group.entries.map((entry) => <p key={entry.source_registration_id || entry.id}>#{entry.seed_number} · {entry.team_name}</p>)}</div>}<p className="mt-4 text-xs text-gray-500">{group.fixtures?.length || draft.matches.filter((match) => match.group_id === (group.id || group.key)).length} round-robin fixtures generated</p></div>; })}</div>}
+                </div> : <div className="grid gap-4 p-5 md:grid-cols-2">
+                    {(draft.groups || []).map((group) => {
+                        const groupRows = standingsForGroup(group.id || group.key);
+                        const hasResults = groupRows.some((row) => row.played > 0);
+                        const advancingCount = draft.format === 'group_knockout' ? Number(advancersPerGroup) : 1;
+                        const fixtureCount = group.fixtures?.length || draft.matches.filter((match) => match.group_id === (group.id || group.key)).length;
+                        return <div key={group.key || group.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
+                            <div className="mb-4 flex items-start justify-between gap-3"><div><p className="font-bold text-padel-green">{group.name}</p><p className="mt-1 text-xs text-gray-500">{hasResults ? (draft.format === 'group_knockout' ? `Top ${advancingCount} currently qualify` : 'Current group leader shown') : 'Results will update the live table'}</p></div>{hasResults && groupRows[0] && <span className="shrink-0 rounded-full border border-padel-green/40 bg-padel-green/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-padel-green">Leader: #{groupRows[0].position}</span>}</div>
+                            {groupRows.length > 0 ? <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="border-b border-white/10 text-gray-500"><tr><th className="pb-2">#</th><th className="pb-2">Team</th><th className="pb-2 text-center">P</th><th className="pb-2 text-center">W</th><th className="pb-2 text-center">+/-</th><th className="pb-2 text-right">Pts</th></tr></thead><tbody>{groupRows.map((row) => { const entry = draft.entries.find((item) => item.id === row.entry_id); const isLeader = hasResults && row.position === 1 && !row.requires_manual_resolution; const isQualifying = hasResults && row.position <= advancingCount && !row.requires_manual_resolution; return <tr key={row.entry_id} className={row.requires_manual_resolution ? 'bg-amber-300/5 text-amber-200' : isLeader ? 'bg-padel-green/10 text-white' : isQualifying ? 'bg-padel-green/[0.04] text-gray-100' : 'text-gray-300'}><td className="py-2.5 pl-2 font-black"><span className={`inline-flex min-w-6 justify-center rounded-full px-1.5 py-1 ${isLeader ? 'bg-padel-green text-black' : isQualifying ? 'bg-padel-green/15 text-padel-green' : 'text-gray-400'}`}>{row.position}</span></td><td className="py-2.5 pr-2"><div className="font-medium">{entry?.team_name || 'Team'}</div>{isLeader && <span className="mt-1 inline-block text-[10px] font-black uppercase tracking-wide text-padel-green">Leading group</span>}{isQualifying && !isLeader && <span className="mt-1 inline-block text-[10px] font-bold uppercase tracking-wide text-padel-green/80">Qualifying position</span>}{row.requires_manual_resolution && <span className="mt-1 inline-block text-[10px] font-bold uppercase tracking-wide text-amber-300">Tie to resolve</span>}</td><td className="py-2.5 text-center tabular-nums">{row.played}</td><td className="py-2.5 text-center tabular-nums">{row.won}</td><td className="py-2.5 text-center tabular-nums">{row.games_for - row.games_against}</td><td className="py-2.5 pr-2 text-right font-bold tabular-nums">{row.standings_points}</td></tr>; })}</tbody></table></div> : <div className="space-y-2 text-sm text-gray-200">{group.entries.map((entry) => <p key={entry.source_registration_id || entry.id}>#{entry.seed_number} · {entry.team_name}</p>)}</div>}
+                            <p className="mt-4 text-xs text-gray-500">{fixtureCount} round-robin fixtures generated</p>
+                        </div>;
+                    })}
+                </div>}
                 </>}
             </div>}
 
@@ -642,17 +657,32 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                     {draft.matches.filter((match) => match.status === 'pending' && match.entry_one && match.entry_two).map((match) => (
                         <div key={match.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
                             <p className="mb-3 text-xs font-black uppercase tracking-widest text-gray-500">{match.round_label} · Match {match.bracket_position}</p>
-                            {recordingMatchId === match.id ? <div className="space-y-3">
-                                {[match.entry_one, match.entry_two].map((entry) => <label key={entry.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-white/10 px-3 py-2 text-sm text-white"><input type="radio" name={`winner-${match.id}`} value={entry.id} checked={recordingWinnerId === entry.id} onChange={(event) => setRecordingWinnerId(event.target.value)} />{entry.team_name}</label>)}
-                                <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
-                                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-400">Set scores <span className="normal-case font-normal text-gray-500">(optional for now)</span></p>
-                                    <div className="space-y-2">
-                                        {recordingSets.map((set, index) => <div key={index} className="grid grid-cols-[3rem_1fr_1fr] items-center gap-2"><span className="text-xs font-bold text-gray-500">Set {index + 1}</span><input aria-label={`${match.entry_one.team_name} set ${index + 1} games`} inputMode="numeric" type="number" min="0" value={set[0]} onChange={(event) => setRecordingSets((sets) => sets.map((item, itemIndex) => itemIndex === index ? [event.target.value, item[1]] : item))} className="w-full rounded-md border border-white/10 bg-black/30 px-2 py-1.5 text-sm text-white outline-none focus:border-padel-green" placeholder={match.entry_one.team_name} /><input aria-label={`${match.entry_two.team_name} set ${index + 1} games`} inputMode="numeric" type="number" min="0" value={set[1]} onChange={(event) => setRecordingSets((sets) => sets.map((item, itemIndex) => itemIndex === index ? [item[0], event.target.value] : item))} className="w-full rounded-md border border-white/10 bg-black/30 px-2 py-1.5 text-sm text-white outline-none focus:border-padel-green" placeholder={match.entry_two.team_name} /></div>)}
+                            {recordingMatchId === match.id ? <div className="space-y-5">
+                                <div>
+                                    <div className="mb-2 flex items-center justify-between gap-3"><p className="text-xs font-black uppercase tracking-widest text-gray-400">1. Select winner</p>{recordingWinnerId && <span className="rounded-full bg-padel-green/15 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-padel-green">Winner selected</span>}</div>
+                                    <div className="grid gap-2 md:grid-cols-2">
+                                        {[match.entry_one, match.entry_two].map((entry) => {
+                                            const selected = recordingWinnerId === entry.id;
+                                            return <button key={entry.id} type="button" aria-pressed={selected} onClick={() => setRecordingWinnerId(entry.id)} className={`rounded-xl border p-4 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-padel-green ${selected ? 'border-padel-green bg-padel-green/10 text-white' : 'border-white/10 bg-black/20 text-gray-300 hover:border-white/30'}`}><span className={`mb-2 inline-flex rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide ${selected ? 'bg-padel-green text-black' : 'bg-white/10 text-gray-400'}`}>{selected ? 'Winner' : 'Select winner'}</span><span className="block text-sm font-semibold leading-5">{entry.team_name}</span></button>;
+                                        })}
                                     </div>
-                                    {recordingSets.length < 3 && <button type="button" onClick={() => setRecordingSets((sets) => [...sets, ['', '']])} className="mt-2 text-xs font-bold text-padel-green hover:underline">+ Add deciding set</button>}
                                 </div>
-                                <div className="flex gap-2"><button type="button" onClick={() => recordResult(match)} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-padel-green px-3 py-2 text-sm font-bold text-black disabled:opacity-50"><CheckCircle2 size={15} /> Confirm winner</button><button type="button" onClick={() => { setRecordingMatchId(null); setRecordingWinnerId(''); }} className="rounded-lg px-3 py-2 text-sm text-gray-400 hover:bg-white/5">Cancel</button></div>
-                            </div> : <div className="flex items-center justify-between gap-3"><span className="text-sm text-white">{match.entry_one.team_name} <span className="text-gray-500">vs</span> {match.entry_two.team_name}</span><button type="button" onClick={() => { setRecordingMatchId(match.id); setRecordingWinnerId(''); setRecordingSets([['', ''], ['', '']]); }} className="rounded-lg border border-padel-green/40 px-3 py-2 text-xs font-bold text-padel-green hover:bg-padel-green/10">Record result</button></div>}
+                                <div>
+                                    <p className="mb-2 text-xs font-black uppercase tracking-widest text-gray-400">2. Match outcome</p>
+                                    <div className="grid gap-2 sm:grid-cols-3">
+                                        {[['played', 'Played', 'Normal result'], ['walkover', 'Walkover', 'Opponent did not play'], ['retirement', 'Retirement', 'Match ended early']].map(([value, label, description]) => <button key={value} type="button" aria-pressed={recordingResultType === value} onClick={() => setRecordingResultType(value)} className={`rounded-xl border px-3 py-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-padel-green ${recordingResultType === value ? 'border-padel-green bg-padel-green/10 text-white' : 'border-white/10 bg-black/20 text-gray-300 hover:border-white/30'}`}><span className="block text-sm font-bold">{label}</span><span className="mt-1 block text-xs text-gray-500">{description}</span></button>)}
+                                    </div>
+                                </div>
+                                {recordingResultType !== 'walkover' && <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+                                    <div className="mb-4"><p className="text-xs font-black uppercase tracking-widest text-gray-400">3. Set scores <span className="normal-case font-normal tracking-normal text-gray-500">Optional</span></p><p className="mt-1 text-xs text-gray-500">Leave a set blank if it was not played.</p></div>
+                                    <div className="grid grid-cols-[3.25rem_minmax(0,1fr)_minmax(0,1fr)] items-end gap-2 border-b border-white/10 pb-2 text-xs font-semibold text-gray-500"><span></span><span className="truncate" title={match.entry_one.team_name}>{match.entry_one.team_name}</span><span className="truncate" title={match.entry_two.team_name}>{match.entry_two.team_name}</span></div>
+                                    <div className="mt-2 space-y-2">
+                                        {recordingSets.map((set, index) => <div key={index} className="grid grid-cols-[3.25rem_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2"><span className="text-xs font-bold text-gray-500">Set {index + 1}</span><input aria-label={`${match.entry_one.team_name} set ${index + 1} games`} inputMode="numeric" type="number" min="0" value={set[0]} onChange={(event) => setRecordingSets((sets) => sets.map((item, itemIndex) => itemIndex === index ? [event.target.value, item[1]] : item))} className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-base text-white outline-none focus-visible:border-padel-green focus-visible:ring-2 focus-visible:ring-padel-green/30 sm:text-sm" placeholder="–" /><input aria-label={`${match.entry_two.team_name} set ${index + 1} games`} inputMode="numeric" type="number" min="0" value={set[1]} onChange={(event) => setRecordingSets((sets) => sets.map((item, itemIndex) => itemIndex === index ? [item[0], event.target.value] : item))} className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-base text-white outline-none focus-visible:border-padel-green focus-visible:ring-2 focus-visible:ring-padel-green/30 sm:text-sm" placeholder="–" /></div>)}
+                                    </div>
+                                    {recordingSets.length < 3 && <button type="button" onClick={() => setRecordingSets((sets) => [...sets, ['', '']])} className="mt-3 text-xs font-bold text-padel-green hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-padel-green">+ Add deciding set</button>}
+                                </div>}
+                                <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-4"><button type="button" onClick={() => recordResult(match)} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-padel-green px-4 py-3 text-sm font-bold text-black transition-transform active:scale-95 disabled:opacity-50"><CheckCircle2 size={16} /> Confirm outcome</button><button type="button" onClick={() => { setRecordingMatchId(null); setRecordingWinnerId(''); setRecordingResultType('played'); }} className="rounded-xl px-4 py-3 text-sm text-gray-400 hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-padel-green">Cancel</button></div>
+                            </div> : <div className="flex items-center justify-between gap-3"><span className="text-sm text-white">{match.entry_one.team_name} <span className="text-gray-500">vs</span> {match.entry_two.team_name}</span><button type="button" onClick={() => { setRecordingMatchId(match.id); setRecordingWinnerId(''); setRecordingResultType('played'); setRecordingSets([['', ''], ['', '']]); }} className="rounded-lg border border-padel-green/40 px-3 py-2 text-xs font-bold text-padel-green hover:bg-padel-green/10">Record result</button></div>}
                         </div>
                     ))}
                 </div>
