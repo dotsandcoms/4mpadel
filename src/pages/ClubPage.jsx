@@ -22,6 +22,7 @@ import {
 } from '../utils/clubGroup';
 import VerifiedBadge from '../components/VerifiedBadge';
 import ClubReviews from '../components/clubs/ClubReviews';
+import ClubGooglePhotos from '../components/clubs/ClubGooglePhotos';
 import { getPlaceReviews } from '../utils/googleMaps';
 import {
     MapPin, ShieldCheck, Globe, Mail, Phone, MessageCircle,
@@ -342,6 +343,7 @@ const ClubPage = () => {
     const website = safeUrl(resolveClubWebsite(club));
     const mapUrl = useMemo(() => {
         if (!club) return null;
+        if (safeUrl(club.google_maps_url)) return safeUrl(club.google_maps_url);
         if (club.lat != null && club.lng != null) {
             return `https://www.google.com/maps?q=${club.lat},${club.lng}`;
         }
@@ -834,6 +836,7 @@ const ClubPage = () => {
                                 </div>
                             </>
                         )}
+                        {club.google_place_id && <ClubGooglePhotos placeId={club.google_place_id} />}
                     </AccordionRow>
 
                     {coaches.length > 0 && (

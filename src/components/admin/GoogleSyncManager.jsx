@@ -37,6 +37,7 @@ const valuesMatch = (a, b) => {
 const CLUB_SELECT_FIELDS = 'id, name, short_name, city, province, country, address, lat, lng, website_url, contact_phone, opening_hours, slug, logo_url, cover_image_url, gallery, google_place_id, google_maps_url, google_rating, google_ratings_total, google_synced_at';
 
 const mapsLinkForRow = (row) => {
+    if (row.clubs?.google_maps_url) return row.clubs.google_maps_url;
     if (row.google_place_id) {
         return `https://www.google.com/maps/place/?q=place_id:${row.google_place_id}`;
     }
@@ -128,10 +129,12 @@ const GoogleSyncManager = ({ onBack }) => {
     const [filter, setFilter] = useState('all');
     const [busyId, setBusyId] = useState(null);
     const [totalClubs, setTotalClubs] = useState(0);
+    const [syncing, setSyncing] = useState(false);
 
     const [searchRowId, setSearchRowId] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
+    const [manualMapsUrl, setManualMapsUrl] = useState('');
     const [searching, setSearching] = useState(false);
     const [candidate, setCandidate] = useState(null); // { placeId, name, address, fillFields, metaFields, details }
     const [candidateLoading, setCandidateLoading] = useState(false);
@@ -165,11 +168,30 @@ const GoogleSyncManager = ({ onBack }) => {
 
     useEffect(() => { load(); }, [load]);
 
+    const syncFromGoogle = async () => {
+        setSyncing(true);
+        try {
+            const { data, error } = await supabase.functions.invoke('sync-club-google', {
+                body: { limit: 50 },
+            });
+            if (error) throw error;
+            if (data?.error) throw new Error(data.error);
+            const failed = data?.errors?.length || 0;
+            toast.success(`Google sync checked ${data?.processed || 0} clubs and queued ${data?.queued || 0}${failed ? ` (${failed} failed)` : ''}.`);
+            await load();
+        } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Google sync failed');
+        } finally {
+            setSyncing(false);
+        }
+    };
+
     // "Applied" = the club actually has a Google link right now (ground truth on
-    // clubs.google_place_id), not just review_status — a club can end up linked
+    // clubs.google_place_id/google_maps_url), not just review_status — a club can end up linked
     // without its review row ever being marked applied (e.g. edited outside this
     // flow), and Delist needs to find those too.
-    const isRowApplied = (r) => Boolean(r.clubs?.google_place_id);
+    const isRowApplied = (r) => Boolean(r.clubs?.google_place_id || r.clubs?.google_maps_url);
 
     const stats = useMemo(() => {
         const applied = rows.filter(isRowApplied).length;
@@ -195,6 +217,7 @@ const GoogleSyncManager = ({ onBack }) => {
         setSearchRowId(null);
         setSearchQuery('');
         setSearchResults([]);
+        setManualMapsUrl('');
         setCandidate(null);
     };
 
@@ -221,15 +244,73 @@ const GoogleSyncManager = ({ onBack }) => {
         setSearchRowId(row.id);
         setSearchQuery(q);
         setSearchResults([]);
+        setManualMapsUrl(row.clubs?.google_maps_url || '');
         setCandidate(null);
         runSearch(q);
+    };
+
+    const saveManualMapsLink = async (row) => {
+        const value = manualMapsUrl.trim();
+        let parsed;
+        try {
+            parsed = new URL(value);
+        } catch {
+            toast.error('Paste a complete Google Maps URL.');
+            return;
+        }
+        const host = parsed.hostname.toLowerCase();
+        const isGoogleMaps = (host === 'maps.app.goo.gl')
+            || ((host === 'google.com' || host.endsWith('.google.com')) && parsed.pathname.includes('/maps'));
+        if (!isGoogleMaps) {
+            toast.error('That does not look like a Google Maps URL.');
+            return;
+        }
+
+        setApplyingManual(true);
+        try {
+            const syncedAt = new Date().toISOString();
+            const { error: clubError } = await supabase
+                .from('clubs')
+                .update({ google_maps_url: value, google_synced_at: syncedAt })
+                .eq('id', row.club_id);
+            if (clubError) throw clubError;
+
+            const { error: matchError } = await supabase
+                .from('club_google_matches')
+                .update({
+                    review_status: 'applied',
+                    meta_fields: { google_maps_url: value, google_synced_at: syncedAt },
+                    reviewed_at: syncedAt,
+                    conflict_note: 'Maps link saved manually because the listing is not returned by the Places API.',
+                })
+                .eq('id', row.id);
+            if (matchError) throw matchError;
+
+            toast.success(`Saved the Google Maps link for ${row.clubs?.name}.`);
+            closeFindMatch();
+            await load();
+        } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Failed to save Google Maps link');
+        } finally {
+            setApplyingManual(false);
+        }
     };
 
     const pickCandidate = async (row, place) => {
         setCandidateLoading(true);
         setCandidate({ placeId: place.place_id, name: place.name, address: place.formatted_address });
         try {
-            const details = await getPlaceDetails(place.place_id);
+            const [details, assignmentResult] = await Promise.all([
+                getPlaceDetails(place.place_id),
+                supabase
+                    .from('clubs')
+                    .select('id, name, short_name, slug')
+                    .eq('google_place_id', place.place_id)
+                    .neq('id', row.club_id)
+                    .maybeSingle(),
+            ]);
+            if (assignmentResult.error) throw assignmentResult.error;
             const fillFields = buildFillFields(row.clubs, details);
             const metaFields = buildMetaFields(details);
             setCandidate({
@@ -239,6 +320,7 @@ const GoogleSyncManager = ({ onBack }) => {
                 fillFields,
                 metaFields,
                 details,
+                assignedClub: assignmentResult.data || null,
             });
         } catch (err) {
             console.error(err);
@@ -249,11 +331,34 @@ const GoogleSyncManager = ({ onBack }) => {
         }
     };
 
-    const confirmManualMatch = async (row) => {
+    const confirmManualMatch = async (row, { moveExisting = false } = {}) => {
         if (!candidate?.fillFields || !candidate?.metaFields) return;
+        const selectedCandidate = candidate;
+        if (selectedCandidate.assignedClub && !moveExisting) {
+            toast.error(`This listing belongs to "${selectedCandidate.assignedClub.name}". Move it or merge the duplicate first.`);
+            return;
+        }
+        if (selectedCandidate.assignedClub && moveExisting && !window.confirm(
+            `Move this Google listing from "${selectedCandidate.assignedClub.name}" to "${row.clubs?.name}"? Google-synced fields on the other club will be cleared when they have not been edited.`,
+        )) return;
         setApplyingManual(true);
         try {
-            const payload = { ...candidate.fillFields, ...candidate.metaFields };
+            if (selectedCandidate.assignedClub && moveExisting) {
+                const otherRow = rows.find((item) => item.club_id === selectedCandidate.assignedClub.id);
+                if (otherRow) {
+                    await delistRow(otherRow);
+                } else {
+                    const clearPayload = {};
+                    META_KEYS.forEach((key) => { clearPayload[key] = null; });
+                    const { error: clearError } = await supabase
+                        .from('clubs')
+                        .update(clearPayload)
+                        .eq('id', selectedCandidate.assignedClub.id);
+                    if (clearError) throw clearError;
+                }
+            }
+
+            const payload = { ...selectedCandidate.fillFields, ...selectedCandidate.metaFields };
             const { data: updatedClubs, error: clubErr } = await supabase
                 .from('clubs')
                 .update(payload)
@@ -273,20 +378,20 @@ const GoogleSyncManager = ({ onBack }) => {
                 .update({
                     match_status: 'matched',
                     review_status: 'applied',
-                    google_place_id: candidate.placeId,
-                    google_name: candidate.name,
-                    google_address: candidate.address,
+                    google_place_id: selectedCandidate.placeId,
+                    google_name: selectedCandidate.name,
+                    google_address: selectedCandidate.address,
                     confidence: 1,
-                    fill_fields: candidate.fillFields,
-                    meta_fields: candidate.metaFields,
-                    business_status: candidate.details?.business_status || null,
+                    fill_fields: selectedCandidate.fillFields,
+                    meta_fields: selectedCandidate.metaFields,
+                    business_status: selectedCandidate.details?.business_status || null,
                     conflict_note: null,
                     reviewed_at: new Date().toISOString(),
                 })
                 .eq('id', row.id);
             if (matchErr) throw matchErr;
 
-            toast.success(`Applied — ${row.clubs?.name} matched to "${candidate.name}"`);
+            toast.success(`Applied — ${row.clubs?.name} matched to "${selectedCandidate.name}"`);
             closeFindMatch();
             await load();
         } catch (err) {
@@ -533,13 +638,25 @@ const GoogleSyncManager = ({ onBack }) => {
                 >
                     <ArrowLeft size={14} /> Back to Clubs
                 </button>
-                <button
-                    type="button"
-                    onClick={load}
-                    className="px-3 py-2 rounded-xl border border-white/10 text-gray-300 hover:bg-white/5 text-xs font-bold flex items-center gap-2"
-                >
-                    Refresh
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={syncFromGoogle}
+                        disabled={syncing}
+                        className="px-3 py-2 rounded-xl bg-padel-green text-black hover:bg-white text-xs font-black flex items-center gap-2 disabled:opacity-50"
+                    >
+                        {syncing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                        {syncing ? 'Syncing…' : 'Sync next 50'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={load}
+                        disabled={loading || syncing}
+                        className="px-3 py-2 rounded-xl border border-white/10 text-gray-300 hover:bg-white/5 text-xs font-bold flex items-center gap-2 disabled:opacity-50"
+                    >
+                        Refresh list
+                    </button>
+                </div>
             </div>
 
             <div>
@@ -550,7 +667,8 @@ const GoogleSyncManager = ({ onBack }) => {
                     Review club data pulled from the Google Places API. Only currently-empty fields are
                     ever filled — approving a row never overwrites data a club owner already entered.
                     Google's API doesn't always surface small or low-review listings, so uncertain and
-                    no-match rows can be resolved manually with "Find match".
+                    no-match rows can be resolved manually with "Find match". “Sync next 50” calls Google and
+                    rebuilds the review queue; “Refresh list” only reloads what is already saved.
                 </p>
             </div>
 
@@ -841,6 +959,33 @@ const GoogleSyncManager = ({ onBack }) => {
                                                 </div>
                                             )}
 
+                                            {!searching && searchResults.length === 0 && (
+                                                <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 space-y-2">
+                                                    <div>
+                                                        <p className="text-xs font-bold text-amber-300">Listing visible on Maps but missing from Places?</p>
+                                                        <p className="mt-1 text-[11px] text-gray-500">
+                                                            Google Maps and the Places API can return different listings. Paste the Maps link to keep a working directions link; ratings, reviews and Google photos will become available only if Google later exposes a Place ID through the API.
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex flex-col sm:flex-row gap-2">
+                                                        <input
+                                                            value={manualMapsUrl}
+                                                            onChange={(e) => setManualMapsUrl(e.target.value)}
+                                                            placeholder="https://www.google.com/maps/place/…"
+                                                            className="min-w-0 flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-gray-600 focus:outline-none focus:border-amber-500/50"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            disabled={applyingManual || !manualMapsUrl.trim()}
+                                                            onClick={() => saveManualMapsLink(row)}
+                                                            className="px-3 py-2 rounded-xl border border-amber-500/25 bg-amber-500/10 text-amber-300 text-xs font-bold disabled:opacity-40"
+                                                        >
+                                                            {applyingManual ? 'Saving…' : 'Save Maps link'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             {candidateLoading && (
                                                 <div className="flex items-center gap-2 text-xs text-gray-400">
                                                     <Loader2 size={12} className="animate-spin" /> Loading place details…
@@ -848,7 +993,11 @@ const GoogleSyncManager = ({ onBack }) => {
                                             )}
 
                                             {candidate?.fillFields && !candidateLoading && (
-                                                <div className="rounded-xl border border-padel-green/30 bg-padel-green/5 p-3 space-y-2">
+                                                <div className={`rounded-xl border p-3 space-y-2 ${
+                                                    candidate.assignedClub
+                                                        ? 'border-red-500/30 bg-red-500/5'
+                                                        : 'border-padel-green/30 bg-padel-green/5'
+                                                }`}>
                                                     <p className="text-xs text-white font-bold">
                                                         Confirm: {candidate.name}
                                                     </p>
@@ -858,15 +1007,47 @@ const GoogleSyncManager = ({ onBack }) => {
                                                             ? `Will fill: ${Object.keys(candidate.fillFields).map((k) => fieldLabels[k] || k).join(', ')}`
                                                             : 'No empty fields to fill — will still link this club to the Google listing.'}
                                                     </p>
+                                                    {candidate.assignedClub && (
+                                                        <div className="rounded-lg border border-red-500/20 bg-black/20 p-2.5">
+                                                            <p className="text-xs font-bold text-red-300">Already linked to {candidate.assignedClub.name}</p>
+                                                            <p className="mt-1 text-[11px] text-gray-500">
+                                                                If these are the same club, merge the duplicate records. If the other club has the wrong Google listing, move it here.
+                                                            </p>
+                                                        </div>
+                                                    )}
                                                     <div className="flex items-center gap-2 pt-1">
-                                                        <button
-                                                            type="button"
-                                                            disabled={applyingManual}
-                                                            onClick={() => confirmManualMatch(row)}
-                                                            className="px-3 py-2 rounded-xl bg-padel-green text-black text-xs font-black flex items-center gap-1.5 disabled:opacity-40"
-                                                        >
-                                                            {applyingManual ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Confirm &amp; apply
-                                                        </button>
+                                                        {candidate.assignedClub ? (
+                                                            <>
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={applyingManual}
+                                                                    onClick={() => {
+                                                                        setMergeSourceClub(row.clubs);
+                                                                        setMergeInitialQuery(candidate.assignedClub.name);
+                                                                    }}
+                                                                    className="px-3 py-2 rounded-xl bg-padel-green text-black text-xs font-black flex items-center gap-1.5 disabled:opacity-40"
+                                                                >
+                                                                    <GitMerge size={12} /> Merge duplicate
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={applyingManual}
+                                                                    onClick={() => confirmManualMatch(row, { moveExisting: true })}
+                                                                    className="px-3 py-2 rounded-xl border border-red-500/25 bg-red-500/10 text-red-300 text-xs font-bold flex items-center gap-1.5 disabled:opacity-40"
+                                                                >
+                                                                    {applyingManual ? <Loader2 size={12} className="animate-spin" /> : <Unlink size={12} />} Move listing here
+                                                                </button>
+                                                            </>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                disabled={applyingManual}
+                                                                onClick={() => confirmManualMatch(row)}
+                                                                className="px-3 py-2 rounded-xl bg-padel-green text-black text-xs font-black flex items-center gap-1.5 disabled:opacity-40"
+                                                            >
+                                                                {applyingManual ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Confirm &amp; apply
+                                                            </button>
+                                                        )}
                                                         <button
                                                             type="button"
                                                             disabled={applyingManual}
