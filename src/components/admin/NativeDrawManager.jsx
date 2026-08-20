@@ -3,6 +3,7 @@ import { Brackets, CheckCircle2, ChevronDown, ChevronUp, Eye, Loader2, RefreshCc
 import { toast } from 'sonner';
 import { supabase } from '../../supabaseClient';
 import { generateGroupStageDraft, generateKnockoutDraft, nextPowerOfTwo } from '../../utils/nativeDrawGenerator';
+import { areGroupMatchesComplete, calculateGroupStandings } from '../../utils/nativeDrawStandings';
 
 const isEligible = (registration) => (
     String(registration?.status || '').toLowerCase() !== 'withdrawn'
@@ -93,9 +94,13 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
     const [recordingMatchId, setRecordingMatchId] = useState(null);
     const [recordingWinnerId, setRecordingWinnerId] = useState('');
     const [recordingSets, setRecordingSets] = useState([['', ''], ['', '']]);
+    const [matchSets, setMatchSets] = useState([]);
+    const [savedGroups, setSavedGroups] = useState([]);
+    const [standings, setStandings] = useState([]);
     const [showDrawSetup, setShowDrawSetup] = useState(true);
     const [drawFormat, setDrawFormat] = useState('knockout');
     const [groupCount, setGroupCount] = useState('4');
+    const [advancersPerGroup, setAdvancersPerGroup] = useState('2');
     const [saving, setSaving] = useState(false);
 
     const division = divisions.find((item) => item.id === divisionId);
@@ -116,7 +121,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             try {
                 const { data: draw, error: drawError } = await supabase
                     .from('draws')
-                    .select('id, status, format, generated_at')
+                    .select('id, status, format, advancers_per_group, generated_at')
                     .eq('division_id', divisionId)
                     .eq('draw_kind', 'main')
                     .maybeSingle();
@@ -125,9 +130,11 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                     if (active) setSavedDraw(null);
                     return;
                 }
-                const [{ data: savedEntries, error: entriesError }, { data: savedMatches, error: matchesError }] = await Promise.all([
+                const [{ data: savedEntries, error: entriesError }, { data: savedMatches, error: matchesError }, { data: groups }, { data: savedStandings }] = await Promise.all([
                     supabase.from('draw_entries').select('*').eq('draw_id', draw.id).order('seed_number'),
                     supabase.from('draw_matches').select('*').eq('draw_id', draw.id).order('round_number').order('bracket_position'),
+                    supabase.from('draw_groups').select('*').eq('draw_id', draw.id).order('display_order'),
+                    supabase.from('draw_standings').select('*').eq('draw_id', draw.id).order('group_id').order('position'),
                 ]);
                 if (entriesError) throw entriesError;
                 if (matchesError) throw matchesError;
@@ -140,13 +147,22 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                     entry_two: entryById.get(match.entry_two_id) || null,
                     winner: entryById.get(match.winner_entry_id) || null,
                 }));
+                const matchIds = (savedMatches || []).map((match) => match.id);
+                const { data: savedSets } = matchIds.length
+                    ? await supabase.from('draw_match_sets').select('*').in('match_id', matchIds).order('set_number')
+                    : { data: [] };
                 setSavedDraw(draw);
+                setSavedGroups(groups || []);
+                setStandings(savedStandings || []);
+                setMatchSets(savedSets || []);
+                setAdvancersPerGroup(String(draw.advancers_per_group || 2));
                 setDraft({
                     format: draw.format || 'knockout',
                     draw_size: nextPowerOfTwo((savedEntries || []).length),
                     total_rounds: Math.max(...matches.map((match) => match.round_number), 0),
                     entries: savedEntries || [],
                     matches,
+                    groups: (groups || []).map((group) => ({ ...group, key: group.id, entries: (savedEntries || []).filter((entry) => entry.group_id === group.id) })),
                 });
             } catch (error) {
                 console.error('Failed to load native draw draft', error);
@@ -212,7 +228,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                 const { error: deleteGroupsError } = await supabase.from('draw_groups').delete().eq('draw_id', draw.id);
                 if (deleteGroupsError) throw deleteGroupsError;
                 const { error: updateError } = await supabase.from('draws').update({
-                    format: draft.format || 'knockout', group_count: draft.groups?.length || null, seeding_method: 'native_ranking', generated_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+                    format: draft.format || 'knockout', group_count: draft.groups?.length || null, advancers_per_group: draft.format === 'group_knockout' ? Number(advancersPerGroup) : null, seeding_method: 'native_ranking', generated_at: new Date().toISOString(), updated_at: new Date().toISOString(),
                 }).eq('id', draw.id);
                 if (updateError) throw updateError;
             } else {
@@ -226,9 +242,10 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                     status: 'draft',
                     seeding_method: 'native_ranking',
                     group_count: draft.groups?.length || null,
+                    advancers_per_group: draft.format === 'group_knockout' ? Number(advancersPerGroup) : null,
                         generated_at: new Date().toISOString(),
                     })
-                    .select('id, status, format, generated_at')
+                    .select('id, status, format, advancers_per_group, generated_at')
                     .single();
                 if (drawError) throw drawError;
                 draw = newDraw;
@@ -254,6 +271,16 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                 })))
                 .select('id, source_registration_id');
             if (entriesError) throw entriesError;
+
+            if (draft.groups?.length) {
+                const standingsRows = savedEntries.map((entry) => {
+                    const source = draft.entries.find((item) => item.source_registration_id === entry.source_registration_id);
+                    return source?.group_key ? { draw_id: draw.id, group_id: groupIdByKey.get(source.group_key), entry_id: entry.id } : null;
+                }).filter(Boolean);
+                const { error: standingsError } = await supabase.from('draw_standings').upsert(standingsRows, { onConflict: 'group_id,entry_id' });
+                if (standingsError) throw standingsError;
+                setStandings(standingsRows);
+            }
 
             const entryIdByRegistration = new Map(savedEntries.map((entry) => [entry.source_registration_id, entry.id]));
             const { data: savedMatches, error: matchesError } = await supabase
@@ -309,6 +336,24 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                         : null,
                 })),
             }));
+            else {
+                const matchIdByDraftKey = new Map(draft.matches.map((match, index) => [match.key, savedMatches[index]?.id]));
+                setDraft((current) => ({
+                    ...current,
+                    entries: current.entries.map((entry) => ({ ...entry, id: entryIdByRegistration.get(entry.source_registration_id) })),
+                    matches: current.matches.map((match) => ({
+                        ...match,
+                        id: matchIdByDraftKey.get(match.key),
+                        key: matchIdByDraftKey.get(match.key),
+                        group_id: match.group_key ? groupIdByKey.get(match.group_key) : null,
+                        entry_one_id: match.entry_one ? entryIdByRegistration.get(match.entry_one.source_registration_id) : null,
+                        entry_two_id: match.entry_two ? entryIdByRegistration.get(match.entry_two.source_registration_id) : null,
+                        entry_one: match.entry_one ? { ...match.entry_one, id: entryIdByRegistration.get(match.entry_one.source_registration_id) } : null,
+                        entry_two: match.entry_two ? { ...match.entry_two, id: entryIdByRegistration.get(match.entry_two.source_registration_id) } : null,
+                    })),
+                }));
+                setSavedGroups((savedGroups || []).map((group) => ({ ...group, key: group.id })));
+            }
 
             await supabase.from('draw_match_audit').insert({
                 match_id: savedMatches[0].id,
@@ -383,6 +428,25 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                 const { error: setsError } = await supabase.from('draw_match_sets').insert(scoredSets);
                 if (setsError) throw setsError;
             }
+            const nextSets = [...matchSets, ...scoredSets];
+            if (match.stage === 'group' && match.group_id) {
+                const completedMatches = draft.matches.map((item) => item.id === match.id
+                    ? { ...item, winner_entry_id: winnerEntry, status: 'completed' }
+                    : item);
+                const nextStandings = calculateGroupStandings({
+                    entries: draft.entries,
+                    matches: completedMatches,
+                    matchSets: nextSets,
+                    groupId: match.group_id,
+                });
+                const persistedRows = nextStandings.map(({ seed_number, ...row }) => ({ ...row, updated_at: new Date().toISOString() }));
+                const { error: standingsError } = await supabase
+                    .from('draw_standings')
+                    .upsert(persistedRows, { onConflict: 'group_id,entry_id' });
+                if (standingsError) throw standingsError;
+                setStandings((current) => [...current.filter((row) => row.group_id !== match.group_id), ...persistedRows]);
+                setMatchSets(nextSets);
+            }
             if (match.winner_to_match_id) {
                 const field = match.winner_to_slot === 1 ? 'entry_one_id' : 'entry_two_id';
                 const { error: advanceError } = await supabase.from('draw_matches').update({
@@ -404,7 +468,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                     return item;
                 }),
             }));
-            toast.success('Result saved and winner advanced');
+            toast.success(match.stage === 'group' ? 'Result saved and group standings updated' : 'Result saved and winner advanced');
             setRecordingMatchId(null);
             setRecordingWinnerId('');
             setRecordingSets([['', ''], ['', '']]);
@@ -415,6 +479,57 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             setSaving(false);
         }
     };
+
+    const createKnockoutFromGroups = async () => {
+        if (!savedDraw?.id || !draft || !groupStageComplete) return;
+        if (draft.matches.some((match) => match.stage === 'knockout')) {
+            toast.error('The elimination phase has already been created');
+            return;
+        }
+        const advancers = savedGroups.flatMap((group) => standingsForGroup(group.id)
+            .slice(0, Number(advancersPerGroup))
+            .map((row) => draft.entries.find((entry) => entry.id === row.entry_id))
+            .filter(Boolean));
+        if (advancers.length < 2) {
+            toast.error('At least two teams must advance to create an elimination phase');
+            return;
+        }
+        const knockout = generateKnockoutDraft(advancers, { seedingMethod: 'manual' });
+        setSaving(true);
+        try {
+            const { data: inserted, error } = await supabase.from('draw_matches').insert(knockout.matches.map((match) => ({
+                draw_id: savedDraw.id, stage: 'knockout', round_code: match.round_code, round_label: match.round_label,
+                round_number: match.round_number, bracket_position: match.bracket_position,
+                entry_one_id: match.entry_one?.id || null, entry_two_id: match.entry_two?.id || null,
+                winner_entry_id: match.winner?.id || null, status: match.status, result_type: match.result_type,
+            }))).select('id, round_number, bracket_position');
+            if (error) throw error;
+            const ids = new Map(inserted.map((match) => [`${match.round_number}:${match.bracket_position}`, match.id]));
+            const links = await Promise.all(knockout.matches.map((match) => {
+                const nextId = ids.get(`${match.round_number + 1}:${Math.ceil(match.bracket_position / 2)}`);
+                return nextId ? supabase.from('draw_matches').update({ winner_to_match_id: nextId, winner_to_slot: match.bracket_position % 2 === 1 ? 1 : 2 }).eq('id', ids.get(`${match.round_number}:${match.bracket_position}`)) : null;
+            }).filter(Boolean));
+            const linkError = links.find((result) => result.error)?.error;
+            if (linkError) throw linkError;
+            setDraft((current) => ({ ...current, matches: [...current.matches, ...knockout.matches.map((match) => ({
+                ...match, id: ids.get(`${match.round_number}:${match.bracket_position}`), key: ids.get(`${match.round_number}:${match.bracket_position}`),
+                winner_to_match_id: ids.get(`${match.round_number + 1}:${Math.ceil(match.bracket_position / 2)}`) || null,
+                winner_to_slot: ids.get(`${match.round_number + 1}:${Math.ceil(match.bracket_position / 2)}`) ? (match.bracket_position % 2 === 1 ? 1 : 2) : null,
+            }))] }));
+            toast.success('Elimination phase created from the final group standings');
+        } catch (error) {
+            console.error('Failed to create elimination phase', error);
+            toast.error(error.message || 'Could not create the elimination phase');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const standingsForGroup = (groupId) => standings
+        .filter((row) => row.group_id === groupId)
+        .sort((a, b) => (a.position || 999) - (b.position || 999));
+    const groupStageComplete = savedGroups.length > 0
+        && savedGroups.every((group) => areGroupMatchesComplete(draft?.matches || [], group.id));
 
     return (
         <div className="p-6 space-y-6">
@@ -438,6 +553,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             <div className="grid gap-3 md:grid-cols-2">
                 <label className="text-sm font-bold text-gray-300">Draw format<select value={drawFormat} onChange={(event) => { setDrawFormat(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none"><option value="knockout" className="text-black">Elimination / knockout</option><option value="group_only" className="text-black">Groups only</option><option value="group_knockout" className="text-black">Groups + elimination</option></select></label>
                 {drawFormat !== 'knockout' && <label className="text-sm font-bold text-gray-300">Number of groups<select value={groupCount} onChange={(event) => { setGroupCount(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none">{[2, 3, 4, 5, 6, 8].map((count) => <option key={count} value={count} className="text-black">{count} groups</option>)}</select></label>}
+                {drawFormat === 'group_knockout' && <label className="text-sm font-bold text-gray-300">Advance from each group<select value={advancersPerGroup} onChange={(event) => { setAdvancersPerGroup(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none"><option value="1" className="text-black">Top 1 team</option><option value="2" className="text-black">Top 2 teams</option></select></label>}
             </div>
 
             {divisionId && <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-gray-300 flex items-center gap-3">
@@ -496,12 +612,13 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                             <TeamLabel entry={match.entry_two} />
                         </div>
                     ))}
-                </div> : <div className="grid gap-4 p-5 md:grid-cols-2">{(draft.groups || []).map((group) => <div key={group.key} className="rounded-xl border border-white/10 bg-black/20 p-4"><p className="mb-3 font-bold text-padel-green">{group.name}</p><div className="space-y-2 text-sm text-gray-200">{group.entries.map((entry) => <p key={entry.source_registration_id}>#{entry.seed_number} · {entry.team_name}</p>)}</div><p className="mt-4 text-xs text-gray-500">{group.fixtures.length} round-robin fixtures generated</p></div>)}</div>}
+                </div> : <div className="grid gap-4 p-5 md:grid-cols-2">{(draft.groups || []).map((group) => { const groupRows = standingsForGroup(group.id || group.key); return <div key={group.key || group.id} className="rounded-xl border border-white/10 bg-black/20 p-4"><p className="mb-3 font-bold text-padel-green">{group.name}</p>{groupRows.length > 0 ? <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="border-b border-white/10 text-gray-500"><tr><th className="pb-2">#</th><th className="pb-2">Team</th><th className="pb-2 text-center">P</th><th className="pb-2 text-center">W</th><th className="pb-2 text-center">+/-</th><th className="pb-2 text-right">Pts</th></tr></thead><tbody>{groupRows.map((row) => { const entry = draft.entries.find((item) => item.id === row.entry_id); return <tr key={row.entry_id} className={row.requires_manual_resolution ? 'text-amber-300' : 'text-gray-200'}><td className="py-2 font-black text-padel-green">{row.position}</td><td className="py-2 pr-2">{entry?.team_name || 'Team'}</td><td className="py-2 text-center">{row.played}</td><td className="py-2 text-center">{row.won}</td><td className="py-2 text-center">{row.games_for - row.games_against}</td><td className="py-2 text-right font-bold">{row.standings_points}</td></tr>; })}</tbody></table></div> : <div className="space-y-2 text-sm text-gray-200">{group.entries.map((entry) => <p key={entry.source_registration_id || entry.id}>#{entry.seed_number} · {entry.team_name}</p>)}</div>}<p className="mt-4 text-xs text-gray-500">{group.fixtures?.length || draft.matches.filter((match) => match.group_id === (group.id || group.key)).length} round-robin fixtures generated</p></div>; })}</div>}
                 </>}
             </div>}
 
             {savedDraw?.status === 'published' && draft && <div className="rounded-2xl border border-white/10 bg-[#101010] p-5">
                 <div className="mb-4"><p className="font-bold text-white">Record results</p><p className="text-xs text-gray-400">Choose the winning team. The winner automatically moves into the next bracket slot.</p></div>
+                {draft.format === 'group_knockout' && !draft.matches.some((match) => match.stage === 'knockout') && <div className="mb-5 rounded-xl border border-padel-green/30 bg-padel-green/5 p-4"><p className="font-bold text-white">Elimination phase</p><p className="mt-1 text-xs text-gray-400">{groupStageComplete ? `All group matches are complete. The top ${advancersPerGroup} from each group will advance.` : 'Complete every group match before creating the elimination phase.'}</p>{groupStageComplete && <button type="button" onClick={createKnockoutFromGroups} disabled={saving} className="mt-3 rounded-lg bg-padel-green px-3 py-2 text-sm font-bold text-black disabled:opacity-50">Create elimination phase</button>}</div>}
                 <div className="space-y-3">
                     {draft.matches.filter((match) => match.status === 'pending' && match.entry_one && match.entry_two).map((match) => (
                         <div key={match.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
