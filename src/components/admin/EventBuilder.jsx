@@ -826,12 +826,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const [pendingDivisionPicks, setPendingDivisionPicks] = useState([]);
     const divisionMultiRef = useRef(null);
     const [openPanels, setOpenPanels] = useState({
-        identity: true, venue: false, display: false, rankedin: false,
+        identity: true, federation: true, venue: false, display: true, rankedin: false,
         regWindow: true, entryPayment: false, partnerCapacity: false, licenseDefaults: false,
         playerGifts: false,
         divTools: false, divisions: true,
-        operations: true, points: false, rules: false, contact: false,
-        sponsors: true, websiteDisplay: false,
+        integrations: false, operations: true, points: false, rules: false, contact: false,
+        organiserBrand: false, sponsors: true, websiteDisplay: false,
     });
     const [showPreview, setShowPreview] = useState(false);
     const [syncingRankedin, setSyncingRankedin] = useState(false);
@@ -894,7 +894,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             orgSelectedRef.current = false;
             return undefined;
         }
-        if (q.length < 2) {
+        if (q.length < 2 && !orgSearchOpen) {
             setOrgSuggestions([]);
             setSearchingOrgs(false);
             return undefined;
@@ -903,13 +903,14 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             setSearchingOrgs(true);
             try {
                 const safe = q.replace(/[%_,]/g, ' ').trim();
-                const { data, error } = await supabase
+                let query = supabase
                     .from('organisations')
                     .select('id, name, slug, logo_url, contact_email, contact_phone, website_url, status')
-                    .ilike('name', `%${safe}%`)
                     .eq('status', 'approved')
                     .order('name')
-                    .limit(10);
+                    .limit(q.length >= 2 ? 20 : 50);
+                if (q.length >= 2) query = query.ilike('name', `%${safe}%`);
+                const { data, error } = await query;
                 if (error) throw error;
                 setOrgSuggestions(data || []);
                 setOrgSearchOpen(true);
@@ -919,9 +920,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             } finally {
                 setSearchingOrgs(false);
             }
-        }, 300);
+        }, q.length >= 2 ? 250 : 0);
         return () => clearTimeout(timer);
-    }, [form.organiser_name, isOpen, organisation]);
+    }, [form.organiser_name, isOpen, organisation, orgSearchOpen]);
 
     useEffect(() => {
         const onDown = (e) => {
@@ -970,7 +971,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
 
     // Google Places autocomplete on the address field (step 1, when Date & Venue is open).
     useEffect(() => {
-        if (!isOpen || step !== 1 || !openPanels.venue) return;
+        if (!isOpen || step !== 1 || (!openPanels.venue && !openPanels.identity)) return;
         let cancelled = false;
         // Allow the collapsible panel to mount the input before attaching.
         const timer = setTimeout(() => {
@@ -1015,7 +1016,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             clearTimeout(timer);
             autocompleteRef.current = null;
         };
-    }, [isOpen, step, openPanels.venue]);
+    }, [isOpen, step, openPanels.venue, openPanels.identity]);
 
     useEffect(() => {
         if (!isOpen) {
@@ -2404,7 +2405,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                     initial={{ opacity: 0, scale: 0.97, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.97, y: 20 }}
-                    className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden"
+                    className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden"
                     onClick={(e) => e.stopPropagation()}
                 >
                     {/* Header */}
@@ -2490,6 +2491,215 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                     </div>
                                 )}
 
+                                {!form.is_weekly ? (
+                                    <>
+                                        {/* Simplified event information */}
+                                        <div className="space-y-2">
+                                            <PanelHeader id="identity" title="Event Info" />
+                                            {openPanels.identity && (
+                                                <div className="space-y-5 rounded-xl border border-white/10 bg-black/20 p-4">
+                                                    <div>
+                                                        <label className={labelClass}>Event Name *</label>
+                                                        <input name="event_name" value={form.event_name} onChange={handleInput} className={inputClass} required />
+                                                    </div>
+
+                                                    <div>
+                                                        <label className={labelClass}>Event Description / About</label>
+                                                        <RichTextEditor
+                                                            value={form.description}
+                                                            onChange={(html) => setField('description', html)}
+                                                            placeholder="Describe the event, format, highlights and important information..."
+                                                        />
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                                                        <div>
+                                                            <label className={labelClass}>Event Date *</label>
+                                                            <input type="date" name="start_date" value={form.start_date} onChange={handleInput} className={inputClass} />
+                                                        </div>
+                                                        <div>
+                                                            <label className={labelClass}>Start Time</label>
+                                                            <input type="time" name="start_time" value={form.start_time} onChange={handleInput} className={inputClass} />
+                                                        </div>
+                                                        <div>
+                                                            <label className={labelClass}>End Time</label>
+                                                            <input type="time" name="end_time" value={form.end_time} onChange={handleInput} className={inputClass} />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="relative">
+                                                        <label className={labelClass}>Venues / Clubs *</label>
+                                                        {selectedVenues.length > 0 && (
+                                                            <div className="mb-2 flex flex-wrap gap-2">
+                                                                {selectedVenues.map((name) => (
+                                                                    <span key={name} className="inline-flex items-center gap-1.5 rounded-full border border-padel-green/40 bg-padel-green/10 px-2.5 py-1 text-xs font-semibold text-padel-green">
+                                                                        {name}
+                                                                        <button type="button" onClick={() => removeVenue(name)} className="rounded-full p-0.5 text-padel-green/80 hover:bg-white/10 hover:text-white" aria-label={`Remove ${name}`}>
+                                                                            <X className="h-3 w-3" />
+                                                                        </button>
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        <input
+                                                            value={venueQuery}
+                                                            onChange={(e) => { setVenueQuery(e.target.value); setVenueOpen(true); }}
+                                                            onFocus={() => setVenueOpen(true)}
+                                                            onBlur={() => setTimeout(() => setVenueOpen(false), 150)}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') {
+                                                                    e.preventDefault();
+                                                                    if (venueQuery.trim()) addVenue(venueQuery);
+                                                                }
+                                                            }}
+                                                            placeholder="Select one or more venues or clubs..."
+                                                            autoComplete="off"
+                                                            className={inputClass}
+                                                        />
+                                                        {venueOpen && (filteredClubs.length > 0 || venueQuery.trim()) && (
+                                                            <div className={menuClass}>
+                                                                {filteredClubs.map((club) => (
+                                                                    <button key={club.id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => addVenue(club.name)} className={menuItemClass}>
+                                                                        {club.name}
+                                                                    </button>
+                                                                ))}
+                                                                {venueQuery.trim() && !selectedVenueKeys.has(venueQuery.trim().toLowerCase()) && (
+                                                                    <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => addVenue(venueQuery)} className={`${menuItemClass} border-t border-white/10 text-padel-green`}>
+                                                                        Add “{venueQuery.trim()}”
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div>
+                                                        <label className={labelClass}>Address</label>
+                                                        <input ref={addressInputRef} name="address" value={form.address} onChange={handleInput} placeholder="Start typing to search Google..." autoComplete="off" className={inputClass} />
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                                        <div>
+                                                            <label className={labelClass}>City</label>
+                                                            <input name="city" value={form.city} onChange={handleInput} placeholder="Enter city" className={inputClass} />
+                                                        </div>
+                                                        <div className="relative" ref={orgSearchRef}>
+                                                            <label className={labelClass}>Organiser</label>
+                                                            <input
+                                                                name="organiser_name"
+                                                                value={form.organiser_name}
+                                                                onChange={(e) => organisation
+                                                                    ? setForm((prev) => ({ ...prev, organiser_name: e.target.value }))
+                                                                    : handleOrganiserNameChange(e.target.value)}
+                                                                onFocus={() => { if (!organisation) setOrgSearchOpen(true); }}
+                                                                placeholder={organisation ? undefined : 'Select an organisation or type a custom name...'}
+                                                                autoComplete="off"
+                                                                className={inputClass}
+                                                                readOnly={!!organisation}
+                                                            />
+                                                            {!organisation && form.organisation_id && (
+                                                                <div className="mt-1.5 flex items-center justify-between gap-2">
+                                                                    <p className="text-[11px] font-bold text-padel-green">Linked to organisation page</p>
+                                                                    <button type="button" onClick={clearOrganisationLink} className="text-[10px] font-black uppercase tracking-wider text-gray-500 hover:text-red-400">Unlink</button>
+                                                                </div>
+                                                            )}
+                                                            {!organisation && !form.organisation_id && (
+                                                                <p className="mt-1 text-[11px] text-gray-500">Pick from the list to link their page, or type a custom organiser name.</p>
+                                                            )}
+                                                            {!organisation && orgSearchOpen && (
+                                                                <div className="absolute inset-x-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-xl border border-white/10 bg-[#0a0a0a] shadow-2xl">
+                                                                    {searchingOrgs && orgSuggestions.length === 0 ? (
+                                                                        <p className="px-4 py-3 text-xs text-gray-500">Searching...</p>
+                                                                    ) : orgSuggestions.length === 0 ? (
+                                                                        <p className="px-4 py-3 text-xs text-gray-500">No approved organisations found.</p>
+                                                                    ) : orgSuggestions.map((org) => (
+                                                                        <button key={org.id} type="button" onClick={() => selectOrganisation(org)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-white/5">
+                                                                            {org.logo_url ? <img src={org.logo_url} alt="" className="h-8 w-8 shrink-0 rounded-lg bg-white/5 object-cover outline outline-1 -outline-offset-1 outline-white/10" /> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-padel-green"><Shield size={14} /></span>}
+                                                                            <span className="min-w-0"><span className="block truncate text-sm font-bold text-white">{org.name}</span>{org.slug && <span className="block truncate text-[10px] text-gray-500">/{org.slug}</span>}</span>
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <PanelHeader id="federation" title="Federation Sanctioning" />
+                                            {openPanels.federation && (
+                                                <div className="grid grid-cols-1 gap-4 rounded-xl border border-white/10 bg-black/20 p-4 md:grid-cols-2">
+                                                    <div>
+                                                        <label className={labelClass}>SAPA Status</label>
+                                                        <SelectMenu value={form.sapa_status} onChange={handleSapaStatusChange} options={SAPA_STATUSES} />
+                                                    </div>
+                                                    <div className="md:col-span-2">
+                                                        <label className={labelClass}>Event Subtitle / Badge Text</label>
+                                                        <input name="organiser_badge_text" value={form.organiser_badge_text} onChange={handleInput} placeholder="e.g. SAPA GOLD 1000" className={inputClass} />
+                                                        <p className="mt-1 text-[11px] text-gray-500">Auto-filled from SAPA status — editable if needed.</p>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <PanelHeader id="display" title="Display" />
+                                            {openPanels.display && (
+                                                <div className="space-y-4 rounded-xl border border-white/10 bg-black/20 p-4">
+                                                    <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                                                        <div>
+                                                            <label className={labelClass}>Cover Photo</label>
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="relative shrink-0">
+                                                                    <img src={form.custom_image_url || getDefaultBackgroundForStatus(form.sapa_status)} alt="Event cover preview" className="h-28 w-20 rounded-lg object-cover outline outline-1 -outline-offset-1 outline-white/10" />
+                                                                    {!form.custom_image_url && <span className="absolute inset-x-1 bottom-1 rounded bg-black/70 px-1 py-0.5 text-center text-[8px] font-bold uppercase tracking-wider text-padel-green">Default</span>}
+                                                                </div>
+                                                                <label className="flex min-w-0 flex-1 cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-4 text-gray-300 hover:border-padel-green hover:text-padel-green">
+                                                                    {uploadingCover ? <Loader2 className="animate-spin" size={18} /> : <UploadCloud size={18} />}
+                                                                    <span className="text-xs font-bold">{uploadingCover ? 'Uploading...' : 'Upload Cover'}</span>
+                                                                    <span className="text-center text-[10px] text-gray-500">Event page hero / calendar card</span>
+                                                                    <input type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} disabled={uploadingCover} />
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <label className={labelClass}>Event Poster</label>
+                                                            <div className="flex items-center gap-3">
+                                                                {form.poster_image_url ? <img src={form.poster_image_url} alt="Event poster preview" className="h-28 w-20 shrink-0 rounded-lg object-cover outline outline-1 -outline-offset-1 outline-white/10" /> : <div className="flex h-28 w-20 shrink-0 items-center justify-center rounded-lg border border-dashed border-white/15 bg-black/30"><ImageIcon size={18} className="text-gray-600" /></div>}
+                                                                <label className="flex min-w-0 flex-1 cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-4 text-gray-300 hover:border-padel-green hover:text-padel-green">
+                                                                    {uploadingPoster ? <Loader2 className="animate-spin" size={18} /> : <UploadCloud size={18} />}
+                                                                    <span className="text-xs font-bold">{uploadingPoster ? 'Uploading...' : 'Upload Poster'}</span>
+                                                                    <span className="text-center text-[10px] text-gray-500">Opens in event details</span>
+                                                                    <input type="file" accept="image/*" className="hidden" onChange={handlePosterUpload} disabled={uploadingPoster} />
+                                                                </label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {organisation ? (
+                                                        <div className="rounded-xl border border-padel-green/20 bg-padel-green/5 px-4 py-3 text-xs font-semibold text-padel-green">
+                                                            {isAmendment ? 'Changes will be submitted for approval while the current event stays live.' : 'This event will go live after 4M Padel sanctioning.'}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                                            {[
+                                                                ['featured_event', 'Featured event'],
+                                                                ['show_in_recent_results', 'Show in recent results'],
+                                                                ['is_visible', 'Visible on website'],
+                                                            ].map(([key, label]) => (
+                                                                <label key={key} className="flex cursor-pointer items-center justify-between rounded-xl border border-white/10 bg-[#1a1a1a] px-4 py-3">
+                                                                    <span className="text-sm font-medium text-gray-200">{label}</span>
+                                                                    <input type="checkbox" name={key} checked={!!form[key]} onChange={handleInput} className="h-5 w-5 accent-padel-green" />
+                                                                </label>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
                                 {/* Event Identity */}
                                 <div className="space-y-2">
                                     <PanelHeader id="identity" title="Event Identity" />
@@ -2544,9 +2754,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                             handleOrganiserNameChange(e.target.value);
                                                         }
                                                     }}
-                                                    onFocus={() => {
-                                                        if (!organisation && orgSuggestions.length > 0) setOrgSearchOpen(true);
-                                                    }}
+                                                    onFocus={() => { if (!organisation) setOrgSearchOpen(true); }}
                                                     placeholder={organisation ? undefined : 'Select an organisation or type a custom name…'}
                                                     autoComplete="off"
                                                     className={inputClass}
@@ -2571,10 +2779,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                         Pick from the list to link their page, or type a custom organiser name.
                                                     </p>
                                                 )}
-                                                {!organisation && orgSearchOpen && (orgSuggestions.length > 0 || searchingOrgs) && (
+                                                {!organisation && orgSearchOpen && (
                                                     <div className="absolute z-30 left-0 right-0 mt-1 bg-[#0a0a0a] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
                                                         {searchingOrgs && orgSuggestions.length === 0 ? (
                                                             <p className="px-4 py-3 text-xs text-gray-500">Searching…</p>
+                                                        ) : orgSuggestions.length === 0 ? (
+                                                            <p className="px-4 py-3 text-xs text-gray-500">No approved organisations found.</p>
                                                         ) : (
                                                             orgSuggestions.map((org) => (
                                                                 <button
@@ -3018,6 +3228,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                         </div>
                                     )}
                                 </div>
+                                    </>
+                                )}
                             </div>
                         )}
 
@@ -3768,6 +3980,51 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                     Grouped tournament details — open a section to edit, leave the rest collapsed.
                                 </p>
 
+                                {/* Series tagging and results integration moved out of Basics. */}
+                                <div className="space-y-2">
+                                    <PanelHeader id="integrations" title="Series & Results Integration" />
+                                    {openPanels.integrations && (
+                                        <div className="grid grid-cols-1 gap-4 rounded-xl border border-white/10 bg-black/20 p-4 md:grid-cols-2">
+                                            <div>
+                                                <label className={labelClass}>Event Series / Tag</label>
+                                                <SelectMenu value={form.tournament_tag} onChange={(value) => setField('tournament_tag', value)} options={TOURNAMENT_TAGS} />
+                                            </div>
+                                            <div className="md:col-span-2 grid grid-cols-1 gap-4 md:grid-cols-2">
+                                                <div>
+                                                    <label className={labelClass}>RankedIn Tournament ID or URL</label>
+                                                    <input value={form.rankedin_id} onChange={(e) => handleRankedinIdChange(e.target.value)} placeholder="e.g. 70399 or a RankedIn tournament URL" className={inputClass} />
+                                                </div>
+                                                <div>
+                                                    <label className={labelClass}>RankedIn URL</label>
+                                                    <div className="flex items-center gap-2">
+                                                        <input
+                                                            value={form.rankedin_url}
+                                                            onChange={(e) => {
+                                                                const id = extractRankedinId(e.target.value);
+                                                                setForm((prev) => ({ ...prev, rankedin_url: e.target.value, rankedin_id: id || prev.rankedin_id }));
+                                                            }}
+                                                            placeholder="Auto-filled from ID"
+                                                            className={inputClass}
+                                                        />
+                                                        {form.rankedin_url && (
+                                                            <a href={form.rankedin_url} target="_blank" rel="noopener noreferrer" aria-label="Open tournament on RankedIn" className="shrink-0 rounded-xl border border-white/10 p-3 text-gray-300 hover:border-padel-green/40 hover:text-padel-green">
+                                                                <ExternalLink size={16} />
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="md:col-span-2 flex flex-wrap items-center gap-3">
+                                                <button type="button" onClick={handleSyncToRankedin} disabled={syncingRankedin} className="inline-flex items-center gap-2 rounded-xl bg-padel-green px-4 py-2.5 text-xs font-black uppercase tracking-wider text-black hover:brightness-110 disabled:opacity-40">
+                                                    {syncingRankedin ? <Loader2 size={14} className="animate-spin" /> : <RefreshCcw size={14} />}
+                                                    Sync to RankedIn
+                                                </button>
+                                                {!activeEvent?.id && <span className="text-[11px] text-amber-400/90">Save the event once before syncing.</span>}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
                                 {/* Tournament Operations */}
                                 <div className="space-y-2">
                                     <PanelHeader id="operations" title="Tournament Operations" />
@@ -4010,6 +4267,36 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                 <p className="text-xs text-gray-400">
                                     Marketing and presentation only — registration settings live in earlier steps.
                                 </p>
+
+                                <div className="space-y-2">
+                                    <PanelHeader id="organiserBrand" title="Organiser Branding" />
+                                    {openPanels.organiserBrand && (
+                                        <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                            <label className={labelClass}>Organisation Logo</label>
+                                            {(organisation || form.organisation_id) ? (
+                                                (organisation?.logo_url || form.organiser_logo_url) ? (
+                                                    <img src={organisation?.logo_url || form.organiser_logo_url} alt="Organisation logo" className="h-16 w-16 rounded-full bg-white object-cover outline outline-1 -outline-offset-1 outline-white/10" />
+                                                ) : (
+                                                    <p className="text-xs italic text-gray-500">This organisation has no logo yet — add one on its profile.</p>
+                                                )
+                                            ) : (
+                                                <div className="flex flex-wrap items-center gap-4">
+                                                    {form.organiser_logo_url && (
+                                                        <div className="relative">
+                                                            <img src={form.organiser_logo_url} alt="Organisation logo" className="h-16 w-16 rounded-full object-cover outline outline-1 -outline-offset-1 outline-white/10" />
+                                                            <button type="button" onClick={removeOrgLogo} className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white" aria-label="Remove organisation logo"><X size={12} /></button>
+                                                        </div>
+                                                    )}
+                                                    <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed border-white/20 bg-white/5 px-5 py-4 text-gray-300 hover:border-padel-green hover:text-padel-green">
+                                                        {uploadingOrgLogo ? <Loader2 className="animate-spin" size={20} /> : <UploadCloud size={20} />}
+                                                        <span className="text-xs font-bold">{uploadingOrgLogo ? 'Uploading...' : 'Upload Logo'}</span>
+                                                        <input type="file" accept="image/*" className="hidden" onChange={handleOrgLogoUpload} disabled={uploadingOrgLogo} />
+                                                    </label>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
 
                                 {/* Sponsors */}
                                 <div className="space-y-2">
