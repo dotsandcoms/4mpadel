@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
-    ArrowLeft, Building2, ExternalLink, Loader2, Plus, RefreshCw, Save, Search, Upload, X,
+    ArrowLeft, Building2, ExternalLink, Facebook, Instagram, Loader2, Plus, RefreshCw, Save, Search, Upload, UserPlus, Users, X,
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import {
@@ -57,6 +57,10 @@ const ClubGroupManager = ({ onBack }) => {
     const [venueIds, setVenueIds] = useState([]);
     const [venueSearch, setVenueSearch] = useState('');
     const [listSearch, setListSearch] = useState('');
+    const [memberSearch, setMemberSearch] = useState('');
+    const [memberResults, setMemberResults] = useState([]);
+    const [memberRole, setMemberRole] = useState('owner');
+    const [assigningMember, setAssigningMember] = useState(false);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -83,6 +87,32 @@ const ClubGroupManager = ({ onBack }) => {
     useEffect(() => {
         load();
     }, [load]);
+
+    useEffect(() => {
+        const query = memberSearch.trim().replace(/[,%()]/g, ' ');
+        if (query.length < 2) {
+            setMemberResults([]);
+            return undefined;
+        }
+
+        const timer = setTimeout(async () => {
+            const { data, error } = await supabase
+                .from('players')
+                .select('id, name, email, image_url')
+                .or(`name.ilike.%${query}%,email.ilike.%${query}%`)
+                .not('email', 'is', null)
+                .limit(8);
+
+            if (error) {
+                console.error(error);
+                setMemberResults([]);
+                return;
+            }
+            setMemberResults(data || []);
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [memberSearch]);
 
     const venueCounts = useMemo(() => {
         const counts = {};
@@ -116,6 +146,9 @@ const ClubGroupManager = ({ onBack }) => {
         setSlugManual(false);
         setVenueIds([]);
         setVenueSearch('');
+        setMemberSearch('');
+        setMemberResults([]);
+        setMemberRole('owner');
     };
 
     const openGroup = (group) => {
@@ -137,6 +170,9 @@ const ClubGroupManager = ({ onBack }) => {
         setSlugManual(true);
         setVenueIds(allClubs.filter((c) => c.group_id === group.id).map((c) => c.id));
         setVenueSearch('');
+        setMemberSearch('');
+        setMemberResults([]);
+        setMemberRole('owner');
     };
 
     const handleUpload = async (e, kind) => {
@@ -246,6 +282,59 @@ const ClubGroupManager = ({ onBack }) => {
         setVenueIds((prev) =>
             prev.includes(clubId) ? prev.filter((id) => id !== clubId) : [...prev, clubId],
         );
+    };
+
+    const assignMemberToAllVenues = async (player) => {
+        if (!player?.email) {
+            toast.error('This player does not have an email address');
+            return;
+        }
+        if (venueIds.length === 0) {
+            toast.error('Link at least one venue before assigning group access');
+            return;
+        }
+
+        setAssigningMember(true);
+        try {
+            const email = player.email.trim().toLowerCase();
+            let targetClubIds = venueIds;
+
+            // Assigning admin must never downgrade an existing owner membership.
+            if (memberRole === 'admin') {
+                const { data: existing, error: existingError } = await supabase
+                    .from('club_members')
+                    .select('club_id, role')
+                    .in('club_id', venueIds)
+                    .ilike('user_email', email);
+                if (existingError) throw existingError;
+                const ownerClubIds = new Set(
+                    (existing || []).filter((member) => member.role === 'owner').map((member) => member.club_id),
+                );
+                targetClubIds = venueIds.filter((clubId) => !ownerClubIds.has(clubId));
+            }
+
+            if (targetClubIds.length > 0) {
+                const rows = targetClubIds.map((clubId) => ({
+                    club_id: clubId,
+                    player_id: player.id,
+                    user_email: email,
+                    role: memberRole,
+                }));
+                const { error } = await supabase
+                    .from('club_members')
+                    .upsert(rows, { onConflict: 'club_id,user_email' });
+                if (error) throw error;
+            }
+
+            toast.success(`${player.name || email} is now ${memberRole} across ${venueIds.length} ${venueIds.length === 1 ? 'venue' : 'venues'}`);
+            setMemberSearch('');
+            setMemberResults([]);
+        } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Could not assign group access');
+        } finally {
+            setAssigningMember(false);
+        }
     };
 
     const clubPickerOptions = useMemo(() => {
@@ -399,6 +488,76 @@ const ClubGroupManager = ({ onBack }) => {
                     </div>
 
                     <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 md:p-5 space-y-4">
+                        <div className="flex items-start gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-padel-green/10 text-padel-green">
+                                <Users size={16} />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-black uppercase tracking-wider text-white">Group access</h3>
+                                <p className="mt-1 text-xs leading-relaxed text-gray-500">
+                                    Assign one person as owner or admin across all {venueIds.length} currently selected {venueIds.length === 1 ? 'venue' : 'venues'}.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-2 md:flex-row">
+                            <div className="relative flex-1">
+                                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                                <input
+                                    type="search"
+                                    value={memberSearch}
+                                    onChange={(e) => setMemberSearch(e.target.value)}
+                                    placeholder="Search a player by name or email…"
+                                    className={`${inputClass} pl-9`}
+                                />
+                            </div>
+                            <select
+                                value={memberRole}
+                                onChange={(e) => setMemberRole(e.target.value)}
+                                className={`${inputClass} md:w-40`}
+                                aria-label="Group club role"
+                            >
+                                <option value="owner">Owner</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+
+                        {memberSearch.trim().length >= 2 && (
+                            <div className="overflow-hidden rounded-xl border border-white/10 bg-black/30 divide-y divide-white/5">
+                                {memberResults.length === 0 ? (
+                                    <p className="px-3 py-3 text-xs text-gray-500">No matching player profiles found.</p>
+                                ) : (
+                                    memberResults.map((player) => (
+                                        <button
+                                            key={player.id}
+                                            type="button"
+                                            onClick={() => assignMemberToAllVenues(player)}
+                                            disabled={assigningMember || venueIds.length === 0}
+                                            className="flex w-full items-center gap-3 bg-transparent px-3 py-2.5 text-left transition-colors hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                            {player.image_url ? (
+                                                <img src={player.image_url} alt="" className="h-9 w-9 rounded-full border border-white/10 object-cover" />
+                                            ) : (
+                                                <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-gray-500">
+                                                    <Users size={14} />
+                                                </div>
+                                            )}
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate text-sm font-bold text-white">{player.name || player.email}</p>
+                                                <p className="truncate text-[11px] text-gray-500">{player.email}</p>
+                                            </div>
+                                            <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-padel-green">
+                                                {assigningMember ? <Loader2 size={12} className="animate-spin" /> : <UserPlus size={12} />}
+                                                Add to all
+                                            </span>
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 md:p-5 space-y-4">
                         <h3 className="text-sm font-black uppercase tracking-wider text-white">Profile</h3>
                         <div className="grid md:grid-cols-2 gap-3">
                             <label className={labelClass}>
@@ -484,12 +643,18 @@ const ClubGroupManager = ({ onBack }) => {
                             </label>
                             <label className={labelClass}>
                                 Brand colour
-                                <input
-                                    type="color"
-                                    value={form.brand_color || '#CC1414'}
-                                    onChange={(e) => updateField('brand_color', e.target.value)}
-                                    className="w-full h-11 bg-black/40 border border-white/10 rounded-xl px-1 cursor-pointer"
-                                />
+                                <div className="flex min-h-11 items-center gap-3">
+                                    <input
+                                        type="color"
+                                        value={form.brand_color || '#CC1414'}
+                                        onChange={(e) => updateField('brand_color', e.target.value)}
+                                        className="h-10 w-10 shrink-0 cursor-pointer overflow-hidden rounded-full border-2 border-white/15 bg-transparent p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-0 [&::-moz-color-swatch]:rounded-full [&::-moz-color-swatch]:border-0"
+                                        aria-label="Choose brand colour"
+                                    />
+                                    <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                                        {form.brand_color || '#CC1414'}
+                                    </span>
+                                </div>
                             </label>
                             <label className={labelClass}>
                                 Contact email
@@ -515,6 +680,41 @@ const ClubGroupManager = ({ onBack }) => {
                                     className={inputClass}
                                 />
                             </label>
+                        </div>
+
+                        <div className="border-t border-white/5 pt-4">
+                            <div className="mb-3 flex items-center gap-2">
+                                <Instagram size={14} className="text-padel-green" />
+                                <h4 className="text-xs font-black uppercase tracking-wider text-white">Social networks</h4>
+                            </div>
+                            <div className="grid gap-3 md:grid-cols-2">
+                                {[
+                                    ['instagram', 'Instagram', Instagram, 'https://instagram.com/...'],
+                                    ['facebook', 'Facebook', Facebook, 'https://facebook.com/...'],
+                                    ['tiktok', 'TikTok', ExternalLink, 'https://tiktok.com/@...'],
+                                    ['playtomic', 'Playtomic', ExternalLink, 'https://playtomic.com/...'],
+                                ].map(([key, label, SocialIcon, placeholder]) => (
+                                    <label key={key} className={labelClass}>
+                                        {label}
+                                        <div className="relative">
+                                            {React.createElement(SocialIcon, {
+                                                size: 14,
+                                                className: 'pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500',
+                                            })}
+                                            <input
+                                                type="url"
+                                                value={form.socials?.[key] || ''}
+                                                onChange={(e) => updateField('socials', {
+                                                    ...form.socials,
+                                                    [key]: e.target.value,
+                                                })}
+                                                placeholder={placeholder}
+                                                className={`${inputClass} pl-9`}
+                                            />
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
                         </div>
 
                         <div className="grid md:grid-cols-2 gap-3">
