@@ -1253,7 +1253,12 @@ const CalendarManager = () => {
                                             {event.start_date && <div className="text-[10px] text-gray-500 mt-0.5">{event.start_date}</div>}
                                         </td>
                                         <td className="py-3 px-4 align-top">
-                                            <div className="font-bold text-white line-clamp-2" title={event.event_name}>{event.event_name}</div>
+                                            <div className="flex items-start gap-2">
+                                                <div className="font-bold text-white line-clamp-2" title={event.event_name}>{event.event_name}</div>
+                                                {event.event_status === 'cancelled' && (
+                                                    <span className="shrink-0 rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-red-400">Cancelled</span>
+                                                )}
+                                            </div>
                                             {event.organiser_name && <div className="text-xs text-gray-500 mt-1">by {event.organiser_name}</div>}
                                         </td>
                                         <td className="py-3 px-4 align-top">

@@ -854,6 +854,28 @@ async function generateEmailBody(
       actionLabel = 'View Event Details';
       break;
 
+    case 'event_cancelled': {
+      subject = `Event cancelled: ${vars.eventName || 'Tournament'}`;
+      contentHtml = `
+        <h2 style="font-size: 24px; font-weight: 800; color: #EF4444; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Event Cancelled</h2>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 20px;">
+          Hi ${vars.playerName || 'Player'}, <strong style="color: #FFFFFF;">${vars.eventName || 'the event'}</strong> has been cancelled.
+          ${vars.division ? `Your entry in <strong style="color: #FFFFFF;">${vars.division}</strong> has been withdrawn automatically.` : ''}
+        </p>
+        ${vars.cancellationReason ? `<p style="font-size: 14px; line-height: 1.6; color: #CBD5E1; margin-bottom: 20px;"><strong style="color:#FFFFFF;">Reason:</strong> ${vars.cancellationReason}</p>` : ''}
+        <p style="font-size: 14px; line-height: 1.6; color: #94A3B8; margin-bottom: 24px;">
+          ${vars.refundStatus === 'needs_attention' || String(vars.refundStatus || '').startsWith('skipped:')
+            ? 'We could not confirm the refund automatically. The payment has been flagged for administrator review and support will follow up.'
+            : vars.refundAmount
+            ? `A refund of <strong style="color:#9AE900;">${vars.refundAmount}</strong> has been initiated to the original payment method. Refunds normally appear within 3–10 business days.`
+            : 'If no payment was collected for your entry, no refund is required.'}
+        </p>
+      `;
+      actionUrl = 'https://4mpadel.co.za/calendar';
+      actionLabel = 'View Event Calendar';
+      break;
+    }
+
     case 'entry_withdrawn': {
       const isPartnerRole = vars.recipientRole === 'partner';
       subject = isPartnerRole

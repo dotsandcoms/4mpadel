@@ -632,6 +632,7 @@ const EventDetails = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const [event, setEvent] = useState(null);
+    const isCancelled = event?.event_status === 'cancelled';
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setSubmitting] = useState(false);
     const [weather, setWeather] = useState(null);
@@ -1308,6 +1309,10 @@ const EventDetails = () => {
     useEffect(() => {
         let cancelled = false;
         const loadScheduleState = async () => {
+            if (isCancelled) {
+                if (!cancelled) setIsOnSchedule(false);
+                return;
+            }
             if (!manualUserEmail || !event?.id) {
                 if (!cancelled) setIsOnSchedule(false);
                 return;
@@ -1340,9 +1345,13 @@ const EventDetails = () => {
             window.removeEventListener(SCHEDULE_CHANGED_EVENT, onScheduleChanged);
             window.removeEventListener('4m:registrations-changed', onRegsChanged);
         };
-    }, [manualUserEmail, event?.id, hasEnteredEvent]);
+    }, [manualUserEmail, event?.id, hasEnteredEvent, isCancelled]);
 
     const handleToggleMySchedule = useCallback(async () => {
+        if (isCancelled) {
+            toast.error('Cancelled events cannot be added to My Schedule');
+            return;
+        }
         if (!manualUserEmail) {
             promptMembersOnly();
             return;
@@ -1370,7 +1379,7 @@ const EventDetails = () => {
         } finally {
             setScheduleBusy(false);
         }
-    }, [manualUserEmail, event?.id, isOnSchedule, scheduleBusy, promptMembersOnly, hasEnteredEvent]);
+    }, [manualUserEmail, event?.id, isOnSchedule, scheduleBusy, promptMembersOnly, hasEnteredEvent, isCancelled]);
 
     const loadManualRegistrationSummary = useCallback(async () => {
         if (!event?.is_manual || !manualUserEmail) {
@@ -3435,6 +3444,10 @@ const EventDetails = () => {
     }
 
     const handleRankedinRedirect = () => {
+        if (isCancelled) {
+            toast.error('This event has been cancelled');
+            return;
+        }
         const rId = event?.rankedin_id || extractRankedinId(event?.rankedin_url);
         if (event?.rankedin_url) {
             window.open(event.rankedin_url, '_blank');
@@ -3447,6 +3460,10 @@ const EventDetails = () => {
     };
 
     const openManualRegistration = () => {
+        if (isCancelled) {
+            toast.error('This event has been cancelled');
+            return;
+        }
         if (!manualUserEmail) {
             promptMembersOnly();
             return;
@@ -3764,7 +3781,7 @@ const EventDetails = () => {
 
     const activeRegistrationBlock = registrationBlock || manualAllRegistrationsBlock;
 
-    const isRegistrationAllowed = !isEventPassed && !isLive && !isRankedinRegistrationClosed;
+    const isRegistrationAllowed = !isCancelled && !isEventPassed && !isLive && !isRankedinRegistrationClosed;
     const needsRegistration = !isRegistered && isRegistrationAllowed;
     const needsPayment = event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))));
     const showReadyToCompete = false; // temporarily hidden: isRegistrationAllowed || needsPayment;
@@ -3836,6 +3853,15 @@ const EventDetails = () => {
                     </div>
                 )}
 
+                {isCancelled && (
+                    <div className="relative z-[110] bg-red-600 text-white text-center py-3 px-4">
+                        <p className="text-sm font-black uppercase tracking-widest">Event cancelled</p>
+                        <p className="mt-1 text-xs text-red-100">
+                            {event.cancellation_reason || 'This event is no longer taking place. Registered players have been withdrawn and eligible refunds are being processed.'}
+                        </p>
+                    </div>
+                )}
+
                 {/* Floating nav bar */}
                 <div className="absolute top-0 left-0 right-0 z-[100] pt-safe pt-24 md:pt-28 pointer-events-none">
                     <div className="max-w-5xl mx-auto px-5 w-full flex items-center justify-between gap-3">
@@ -3873,7 +3899,7 @@ const EventDetails = () => {
                             >
                                 <Share2 className="w-4 h-4" />
                             </button>
-                            <button
+                            {!isCancelled && <button
                                 type="button"
                                 onClick={handleToggleMySchedule}
                                 disabled={scheduleBusy}
@@ -3888,7 +3914,7 @@ const EventDetails = () => {
                                 {isOnSchedule
                                     ? <Check className="w-4 h-4" strokeWidth={3} />
                                     : <Plus className="w-4 h-4" strokeWidth={2.5} />}
-                            </button>
+                            </button>}
                         </div>
                     </div>
                 </div>
@@ -4117,7 +4143,7 @@ const EventDetails = () => {
                                 {(() => {
                                     // Only actionable CTAs — no disabled placeholders in the countdown row
                                     let countdownCta = null;
-                                    if (!isEventPassed) {
+                                    if (!isCancelled && !isEventPassed) {
                                         if (event.is_manual) {
                                             if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
                                                 countdownCta = { label: 'Manage Entry', onClick: openManageEntry };

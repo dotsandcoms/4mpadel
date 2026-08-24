@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import {
     X, Save, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Plus, Trash2, UploadCloud, Loader2,
     Info, Layers, FileText, ImageIcon, Check, Eye, Copy, Pencil, ClipboardList, Shield, AlertTriangle,
-    Bold, Italic, Underline, List, ListOrdered, Heading, UserPlus, RefreshCcw, ExternalLink, Repeat
+    Bold, Italic, Underline, List, ListOrdered, Heading, UserPlus, RefreshCcw, ExternalLink, Repeat, Ban
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useClubs } from '../../hooks/useClubs';
@@ -815,6 +815,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const [bulkCloseDate, setBulkCloseDate] = useState('');
     const [showPrizeBreakdown, setShowPrizeBreakdown] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+    const [cancelling, setCancelling] = useState(false);
+    const [cancellationReason, setCancellationReason] = useState('');
     /** Sibling calendar rows for the weekly series being edited (sorted by start_date). */
     const [seriesSiblings, setSeriesSiblings] = useState([]);
     const [uploadingCover, setUploadingCover] = useState(false);
@@ -1040,6 +1043,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             sponsors: true, websiteDisplay: false,
         });
         setShowPreview(false);
+        setShowCancelConfirm(false);
+        setCancelling(false);
+        setCancellationReason('');
         setVenueQuery('');
         setVenueOpen(false);
         if (editingEvent) {
@@ -2386,6 +2392,42 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             <ChevronDown size={16} className={`text-gray-400 transition-transform ${openPanels[id] ? 'rotate-180' : ''}`} />
         </button>
     );
+
+    const handleCancelEvent = async () => {
+        if (!activeEvent?.id || cancelling) return;
+        setCancelling(true);
+        try {
+            const { data, error } = await supabase.functions.invoke('paystack-refund', {
+                body: {
+                    action: 'cancel_event',
+                    event_id: activeEvent.id,
+                    cancellation_reason: cancellationReason.trim() || undefined,
+                },
+            });
+            if (error) throw error;
+            if (data?.error) throw new Error(data.error);
+
+            const cancelledAt = new Date().toISOString();
+            setWorkingEvent((prev) => ({
+                ...(prev || activeEvent),
+                event_status: 'cancelled',
+                cancelled_at: cancelledAt,
+                cancellation_reason: cancellationReason.trim() || null,
+                cancellation_refund_status: data?.refund_status || 'complete',
+            }));
+            setShowCancelConfirm(false);
+            const refundMessage = data?.refund_status === 'needs_attention'
+                ? 'Event cancelled. Some refunds need administrator attention.'
+                : `Event cancelled. ${data?.registrations_processed || 0} player entr${data?.registrations_processed === 1 ? 'y' : 'ies'} processed.`;
+            data?.refund_status === 'needs_attention' ? toast.warning(refundMessage) : toast.success(refundMessage);
+            onSaved?.({ eventId: activeEvent.id, cancelled: true });
+        } catch (err) {
+            console.error('Event cancellation failed:', err);
+            toast.error(err?.message || 'Could not cancel the event');
+        } finally {
+            setCancelling(false);
+        }
+    };
 
     if (!isOpen) return null;
 
@@ -4601,13 +4643,29 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
 
                     {/* Footer */}
                     <div className="flex items-center justify-between px-6 py-4 border-t border-white/10">
-                        <button
-                            onClick={back}
-                            disabled={step === 1}
-                            className="px-4 py-2 rounded-xl font-bold text-gray-300 hover:bg-white/5 disabled:opacity-30 flex items-center gap-2"
-                        >
-                            <ChevronLeft size={16} /> Back
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={back}
+                                disabled={step === 1}
+                                className="px-4 py-2 rounded-xl font-bold text-gray-300 hover:bg-white/5 disabled:opacity-30 flex items-center gap-2"
+                            >
+                                <ChevronLeft size={16} /> Back
+                            </button>
+                            {isEditing && activeEvent?.event_status !== 'cancelled' && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCancelConfirm(true)}
+                                    className="px-4 py-2 rounded-xl font-bold text-red-400 border border-red-500/30 hover:bg-red-500/10 flex items-center gap-2"
+                                >
+                                    <Ban size={16} /> Cancel event
+                                </button>
+                            )}
+                            {activeEvent?.event_status === 'cancelled' && (
+                                <span className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider text-red-300 bg-red-500/10 border border-red-500/30">
+                                    Event cancelled
+                                </span>
+                            )}
+                        </div>
                         <div className="flex items-center gap-2 flex-wrap justify-end">
                             {step < 6 && (
                                 <>
@@ -4660,6 +4718,42 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                         </div>
                     </div>
                 </motion.div>
+
+                {showCancelConfirm && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="fixed inset-0 z-[1300] bg-black/80 flex items-center justify-center p-4"
+                        onClick={() => !cancelling && setShowCancelConfirm(false)}
+                    >
+                        <div className="w-full max-w-lg rounded-2xl border border-red-500/30 bg-[#111] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-start gap-4">
+                                <div className="rounded-xl bg-red-500/10 p-3 text-red-400"><AlertTriangle size={24} /></div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-white">Cancel this event?</h3>
+                                    <p className="mt-2 text-sm leading-6 text-gray-400">
+                                        This will withdraw every active player entry, automatically refund all eligible payments, remove the event from every player’s schedule, and mark it as cancelled publicly.
+                                    </p>
+                                </div>
+                            </div>
+                            <label className="mt-5 block text-xs font-bold uppercase tracking-wider text-gray-400">Reason (optional)</label>
+                            <textarea
+                                value={cancellationReason}
+                                onChange={(e) => setCancellationReason(e.target.value)}
+                                rows={3}
+                                placeholder="Tell registered players why the event was cancelled…"
+                                className="mt-2 w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none focus:border-red-500/50"
+                            />
+                            <div className="mt-6 flex justify-end gap-3">
+                                <button type="button" disabled={cancelling} onClick={() => setShowCancelConfirm(false)} className="px-4 py-2 rounded-xl border border-white/10 text-gray-300 hover:bg-white/5 disabled:opacity-50">Keep event</button>
+                                <button type="button" disabled={cancelling} onClick={handleCancelEvent} className="px-4 py-2 rounded-xl bg-red-500 text-white font-bold flex items-center gap-2 hover:bg-red-400 disabled:opacity-50">
+                                    {cancelling ? <Loader2 size={16} className="animate-spin" /> : <Ban size={16} />}
+                                    {cancelling ? 'Cancelling and refunding…' : 'Cancel event and refund players'}
+                                </button>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
 
                 {showPreview && (
                     <motion.div
