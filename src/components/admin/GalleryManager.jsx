@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import { Edit2, Trash2, Plus, FileText, Eye, X, Save, Image as ImageIcon, UploadCloud, Loader2, ArrowLeft, RefreshCw, CheckCircle2, CheckCircle, Circle, Instagram } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { toast } from 'sonner';
+import SearchableSelect from './SearchableSelect';
 
 const GalleryManager = ({ permissions }) => {
     console.log('[GalleryManager] permissions:', permissions);
@@ -568,7 +569,7 @@ const GalleryManager = ({ permissions }) => {
                                 )}
                             </div>
                             {isUploading && (
-                                <motion.div
+                                <Motion.div
                                     className="absolute inset-0 bg-black/10 origin-left"
                                     initial={{ scaleX: 0 }}
                                     animate={{ scaleX: uploadProgress.current / uploadProgress.total }}
@@ -696,7 +697,7 @@ const GalleryManager = ({ permissions }) => {
             ) : (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {sortedDisplayedAlbums.map((album) => (
-                        <motion.div
+                        <Motion.div
                             key={album.id}
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -785,7 +786,7 @@ const GalleryManager = ({ permissions }) => {
                                     )}
                                 </div>
                             </div>
-                        </motion.div>
+                        </Motion.div>
                     ))}
                 </div>
             )}
@@ -793,13 +794,13 @@ const GalleryManager = ({ permissions }) => {
             {/* Modal for Create/Edit Album */}
             <AnimatePresence>
                 {isAlbumModalOpen && (
-                    <motion.div
+                    <Motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         className="fixed inset-0 z-[1100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
                     >
-                        <motion.div
+                        <Motion.div
                             initial={{ scale: 0.95, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.95, opacity: 0 }}
@@ -911,53 +912,58 @@ const GalleryManager = ({ permissions }) => {
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Parent Album (Optional)</label>
-                                        <select
-                                            name="parent_album_id"
+                                        <label htmlFor="gallery-parent-album" className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Parent Album (Optional)</label>
+                                        <SearchableSelect
+                                            id="gallery-parent-album"
                                             value={albumFormData.parent_album_id || ''}
-                                            onChange={handleAlbumInputChange}
-                                            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors appearance-none"
-                                        >
-                                            <option value="">-- Top Level Album --</option>
-                                            {albums.filter(a => !editingAlbum || a.id !== editingAlbum.id).map(a => (
-                                                <option key={a.id} value={a.id}>
-                                                    {a.title} {a.album_date ? `(${a.album_date.substring(0, 10)})` : ''}
-                                                </option>
-                                            ))}
-                                        </select>
+                                            onChange={(value) => setAlbumFormData((previous) => ({ ...previous, parent_album_id: value }))}
+                                            emptyLabel="-- Top Level Album --"
+                                            searchPlaceholder="Search albums…"
+                                            options={[
+                                                { value: '', label: '-- Top Level Album --' },
+                                                ...albums
+                                                    .filter((album) => !editingAlbum || album.id !== editingAlbum.id)
+                                                    .map((album) => ({
+                                                        value: album.id,
+                                                        label: `${album.title}${album.album_date ? ` (${album.album_date.substring(0, 10)})` : ''}`,
+                                                    })),
+                                            ]}
+                                        />
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Link to Event (Optional)</label>
-                                            <select
-                                                name="event_id"
+                                            <label htmlFor="gallery-linked-event" className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Link to Event (Optional)</label>
+                                            <SearchableSelect
+                                                id="gallery-linked-event"
                                                 value={albumFormData.event_id || ''}
-                                                onChange={handleAlbumInputChange}
-                                                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors appearance-none"
-                                            >
-                                                <option value="">-- No Event Linked --</option>
-                                                {events.map(event => (
-                                                    <option key={event.id} value={event.id}>
-                                                        {event.event_name} {event.start_date ? `(${event.start_date.substring(0, 10)})` : ''}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                                onChange={(value) => setAlbumFormData((previous) => ({ ...previous, event_id: value }))}
+                                                emptyLabel="-- No Event Linked --"
+                                                searchPlaceholder="Search events…"
+                                                options={[
+                                                    { value: '', label: '-- No Event Linked --' },
+                                                    ...events.map((event) => ({
+                                                        value: event.id,
+                                                        label: `${event.event_name}${event.start_date ? ` (${event.start_date.substring(0, 10)})` : ''}`,
+                                                    })),
+                                                ]}
+                                            />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Link to Organisation (Optional)</label>
-                                            <select
-                                                name="organisation_id"
+                                            <label htmlFor="gallery-linked-organisation" className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Link to Organisation (Optional)</label>
+                                            <SearchableSelect
+                                                id="gallery-linked-organisation"
                                                 value={albumFormData.organisation_id || ''}
-                                                onChange={handleAlbumInputChange}
-                                                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors appearance-none"
-                                            >
-                                                <option value="">-- No Organisation Linked --</option>
-                                                {organisations.map(org => (
-                                                    <option key={org.id} value={org.id}>
-                                                        {org.name}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                                onChange={(value) => setAlbumFormData((previous) => ({ ...previous, organisation_id: value }))}
+                                                emptyLabel="-- No Organisation Linked --"
+                                                searchPlaceholder="Search organisations…"
+                                                options={[
+                                                    { value: '', label: '-- No Organisation Linked --' },
+                                                    ...organisations.map((organisation) => ({
+                                                        value: organisation.id,
+                                                        label: organisation.name,
+                                                    })),
+                                                ]}
+                                            />
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
@@ -1023,8 +1029,8 @@ const GalleryManager = ({ permissions }) => {
                                     {editingAlbum ? 'Save Changes' : 'Create Album'}
                                 </button>
                             </div>
-                        </motion.div>
-                    </motion.div>
+                        </Motion.div>
+                    </Motion.div>
                 )}
             </AnimatePresence>
         </div>
