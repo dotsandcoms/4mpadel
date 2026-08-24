@@ -18,38 +18,17 @@ import {
 
 const DIVISION_GROUPS = [
     {
-        label: 'Men / Ladies / Mixed',
+        label: 'Men & Ladies',
         items: [
-            "Men's Elite", "Men's Open", "Men's Advanced", "Men's Intermediate",
-            "Ladies Elite", "Ladies Open", "Ladies Advanced", "Ladies Intermediate",
-            "Mixed", "Mixed Elite", "Mixed Open", "Mixed Advanced", "Mixed Intermediate",
-        ],
-    },
-    {
-        label: 'Open (Elite / Advanced)',
-        items: [
-            "Men's Open Elite", "Men's Open Advanced",
-            "Ladies Open Elite", "Ladies Open Advanced",
-        ],
-    },
-    {
-        label: 'Masters & Age Groups',
-        items: [
-            "Men's Masters", "Ladies Masters",
-            "Men's 35+", "Ladies 35+",
-            "Men's 40+", "Ladies 40+",
-            "Men's 45+", "Ladies 45+",
-            "Men's 50+", "Ladies 50+",
-            "Men's 55+", "Ladies 55+",
+            "Men's Open", "Men's Advanced", "Men's Intermediate",
+            "Ladies Open", "Ladies Advanced", "Ladies Intermediate",
         ],
     },
     {
         label: 'Juniors',
         items: [
-            "Juniors",
-            "Juniors U12", "Juniors U14", "Juniors U16", "Juniors U18",
-            "Juniors U19", "Juniors U19 Boys", "Juniors U19 Girls",
-            "Juniors U21", "Juniors U21 Boys", "Juniors U21 Girls",
+            "Boys U12", "Boys U14", "Boys U16", "Boys U18", "Boys U19", "Boys U21",
+            "Girls U12", "Girls U14", "Girls U16", "Girls U18", "Girls U19", "Girls U21",
         ],
     },
 ];
