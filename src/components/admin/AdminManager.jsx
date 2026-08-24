@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion as Motion } from 'framer-motion';
 import { supabase } from '../../supabaseClient';
+import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
 import { Shield, Plus, Trash2, Edit2, X, Check, Search, Filter, AlertCircle, Key } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -29,17 +30,49 @@ const AdminManager = () => {
     const [eventSelectorSearch, setEventSelectorSearch] = useState('');
     const [allAlbums, setAllAlbums] = useState([]);
     const [albumSelectorSearch, setAlbumSelectorSearch] = useState('');
+    const [inheritedAccess, setInheritedAccess] = useState({ loading: false, organisations: [], clubs: [], federations: [] });
 
     const ALL_MODULES = [
+        { id: 'federations', label: 'Federations' },
+        { id: 'organisations', label: 'Organisations' },
+        { id: 'clubs', label: 'Clubs' },
         { id: 'players', label: 'Players' },
         { id: 'coaches', label: 'Coaches' },
-        { id: 'blog', label: 'Blog' },
         { id: 'calendar', label: 'Calendar' },
         { id: 'event-mgmt', label: 'Event Management' },
         { id: 'gallery', label: 'Gallery' },
+        { id: 'email-broadcast', label: 'Email Broadcast' },
         { id: 'finance', label: 'Finance' },
+        { id: 'blog', label: 'Blog' },
         { id: 'settings', label: 'Settings' }
     ];
+
+    const fetchInheritedAccess = async (email) => {
+        const normalizedEmail = email?.trim().toLowerCase();
+        if (!normalizedEmail) return;
+
+        setInheritedAccess({ loading: true, organisations: [], clubs: [], federations: [] });
+        try {
+            const [organisationResult, clubResult, federationResult] = await Promise.all([
+                supabase.from('organisation_members').select('role, organisations(id, name, status)').ilike('user_email', normalizedEmail),
+                supabase.from('club_members').select('role, clubs(id, name, status)').ilike('user_email', normalizedEmail),
+                supabase.from('federation_members').select('role, federations(id, name)').ilike('user_email', normalizedEmail)
+            ]);
+
+            const firstError = organisationResult.error || clubResult.error || federationResult.error;
+            if (firstError) throw firstError;
+
+            setInheritedAccess({
+                loading: false,
+                organisations: (organisationResult.data || []).filter(item => item.organisations),
+                clubs: (clubResult.data || []).filter(item => item.clubs),
+                federations: (federationResult.data || []).filter(item => item.federations)
+            });
+        } catch (err) {
+            console.error('Error fetching inherited access:', err);
+            setInheritedAccess({ loading: false, organisations: [], clubs: [], federations: [] });
+        }
+    };
 
     useEffect(() => {
         fetchAdmins();
@@ -123,7 +156,18 @@ const AdminManager = () => {
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
-            setAdmins(data || []);
+
+            const adminRows = data || [];
+            const players = await fetchPlayersByEmails(
+                supabase,
+                adminRows.map((admin) => admin.email),
+                'id, name, email',
+            );
+            const playersByEmail = buildPlayersByEmailMap(players);
+            setAdmins(adminRows.map((admin) => ({
+                ...admin,
+                player_name: playersByEmail.get(admin.email?.toLowerCase().trim())?.name || '',
+            })));
         } catch (err) {
             console.error('Error fetching admins:', err);
             toast.error(`Failed to load: ${err.message || 'Unknown error'}`);
@@ -221,9 +265,11 @@ const AdminManager = () => {
         return pass;
     };
 
-    const filteredAdmins = admins.filter(admin =>
-        admin.email.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredAdmins = admins.filter((admin) => {
+        const query = searchTerm.toLowerCase().trim();
+        return admin.email.toLowerCase().includes(query)
+            || admin.player_name?.toLowerCase().includes(query);
+    });
 
     return (
         <div className="space-y-8">
@@ -238,6 +284,7 @@ const AdminManager = () => {
                         setPlayerSearchTerm('');
                         setPlayerSearchResults([]);
                         setEventSelectorSearch('');
+                        setInheritedAccess({ loading: false, organisations: [], clubs: [], federations: [] });
                         setFormData({ email: '', role: 'custom', allowed_tabs: [], module_permissions: {}, selectedPlayer: null });
                         setIsModalOpen(true);
                     }}
@@ -254,7 +301,7 @@ const AdminManager = () => {
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
                         <input
                             type="text"
-                            placeholder="Search by email..."
+                            placeholder="Search by name or email…"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full bg-black/40 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-white focus:outline-none focus:border-padel-green transition-all"
@@ -266,7 +313,7 @@ const AdminManager = () => {
                     <table className="w-full text-left border-collapse">
                         <thead className="sticky top-0 z-10">
                             <tr className="bg-[#111827] text-left">
-                                <th className="px-6 py-4 text-gray-400 font-bold uppercase text-xs tracking-wider sticky top-0 bg-[#111827]">Admin Email</th>
+                                <th className="px-6 py-4 text-gray-400 font-bold uppercase text-xs tracking-wider sticky top-0 bg-[#111827]">Admin</th>
                                 <th className="px-6 py-4 text-gray-400 font-bold uppercase text-xs tracking-wider sticky top-0 bg-[#111827]">Role</th>
                                 <th className="px-6 py-4 text-gray-400 font-bold uppercase text-xs tracking-wider sticky top-0 bg-[#111827]">Allowed Modules</th>
                                 <th className="px-6 py-4 text-gray-400 font-bold uppercase text-xs tracking-wider text-right sticky top-0 bg-[#111827]">Actions</th>
@@ -289,7 +336,14 @@ const AdminManager = () => {
                                                 <div className="w-8 h-8 rounded-full bg-padel-green/10 flex items-center justify-center">
                                                     <Shield size={16} className="text-padel-green" />
                                                 </div>
-                                                <span className="text-white font-medium">{admin.email}</span>
+                                                <div className="min-w-0">
+                                                    {admin.player_name && (
+                                                        <span className="block truncate text-white font-semibold">{admin.player_name}</span>
+                                                    )}
+                                                    <span className={`block truncate ${admin.player_name ? 'text-xs text-gray-400 mt-0.5' : 'text-white font-medium'}`}>
+                                                        {admin.email}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
@@ -329,15 +383,18 @@ const AdminManager = () => {
                                                             module_permissions: admin.module_permissions || {},
                                                             selectedPlayer: null
                                                         });
+                                                        fetchInheritedAccess(admin.email);
                                                         setIsModalOpen(true);
                                                     }}
                                                     className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-all"
+                                                    aria-label={`Edit permissions for ${admin.email}`}
                                                 >
                                                     <Edit2 size={18} />
                                                 </button>
                                                 <button
                                                     onClick={() => handleDelete(admin.email)}
                                                     className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+                                                    aria-label={`Remove permissions for ${admin.email}`}
                                                 >
                                                     <Trash2 size={18} />
                                                 </button>
@@ -360,7 +417,7 @@ const AdminManager = () => {
                             <h2 className="text-xl font-bold text-white">
                                 {editingAdmin ? 'Edit Permissions' : 'Add New Admin'}
                             </h2>
-                            <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white p-2">
+                            <button type="button" onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white p-2" aria-label="Close permissions dialog">
                                 <X size={20} />
                             </button>
                         </div>
@@ -453,16 +510,58 @@ const AdminManager = () => {
                                         </select>
                                     </div>
 
+                                    {editingAdmin && (
+                                        <section className="rounded-2xl border border-padel-green/20 bg-padel-green/5 p-4" aria-labelledby="inherited-access-title">
+                                            <div className="flex items-start gap-3">
+                                                <Shield size={18} className="mt-0.5 shrink-0 text-padel-green" aria-hidden="true" />
+                                                <div className="min-w-0">
+                                                    <h3 id="inherited-access-title" className="text-sm font-bold text-white">Access inherited from ownership</h3>
+                                                    <p className="mt-1 text-xs leading-relaxed text-gray-400">
+                                                        Organisation, federation and club roles grant access automatically. Manage those roles in their member settings; updating the additional modules below will not remove them.
+                                                    </p>
+                                                    {inheritedAccess.loading ? (
+                                                        <p className="mt-3 text-xs text-gray-500" role="status">Checking ownership roles…</p>
+                                                    ) : (
+                                                        <div className="mt-3 flex flex-wrap gap-2">
+                                                            {inheritedAccess.organisations.map(({ role, organisations }) => (
+                                                                <span key={`org-${organisations.id}`} className="rounded-lg border border-padel-green/20 bg-black/30 px-3 py-1.5 text-xs text-gray-300">
+                                                                    Organisation: {organisations.name} ({role})
+                                                                </span>
+                                                            ))}
+                                                            {inheritedAccess.clubs.map(({ role, clubs }) => (
+                                                                <span key={`club-${clubs.id}`} className="rounded-lg border border-padel-green/20 bg-black/30 px-3 py-1.5 text-xs text-gray-300">
+                                                                    Club: {clubs.name} ({role})
+                                                                </span>
+                                                            ))}
+                                                            {inheritedAccess.federations.map(({ role, federations }) => (
+                                                                <span key={`fed-${federations.id}`} className="rounded-lg border border-padel-green/20 bg-black/30 px-3 py-1.5 text-xs text-gray-300">
+                                                                    Federation: {federations.name} ({role})
+                                                                </span>
+                                                            ))}
+                                                            {inheritedAccess.organisations.length === 0 && inheritedAccess.clubs.length === 0 && inheritedAccess.federations.length === 0 && (
+                                                                <span className="text-xs text-gray-500">No ownership roles found.</span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </section>
+                                    )}
+
                                     {formData.role === 'custom' && (
                                         <div className="space-y-6">
                                             <div>
-                                                <label className="block text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Allowed Modules</label>
+                                                <div className="mb-3">
+                                                    <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Additional modules</h3>
+                                                    <p className="mt-1 text-xs text-gray-500">Grant access beyond organisation, federation or club ownership.</p>
+                                                </div>
                                                 <div className="grid grid-cols-2 gap-3">
                                                     {ALL_MODULES.map(module => (
                                                         <button
                                                             key={module.id}
                                                             type="button"
                                                             onClick={() => toggleTab(module.id)}
+                                                            aria-pressed={formData.allowed_tabs.includes(module.id)}
                                                             className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${formData.allowed_tabs.includes(module.id)
                                                                     ? 'bg-padel-green/10 border-padel-green text-padel-green'
                                                                     : 'bg-black/30 border-white/5 text-gray-400 hover:border-white/20'
@@ -477,7 +576,7 @@ const AdminManager = () => {
 
                                             {/* Finance Sub-permissions */}
                                             {formData.allowed_tabs.includes('finance') && (
-                                                <motion.div
+                                                <Motion.div
                                                     initial={{ opacity: 0, height: 0 }}
                                                     animate={{ opacity: 1, height: 'auto' }}
                                                     className="bg-black/20 rounded-2xl p-4 border border-white/5 space-y-3"
@@ -528,12 +627,12 @@ const AdminManager = () => {
                                                             })}
                                                         </div>
                                                     </div>
-                                                </motion.div>
+                                                </Motion.div>
                                             )}
 
                                             {/* Event Management Sub-permissions */}
                                             {formData.allowed_tabs.includes('event-mgmt') && (
-                                                <motion.div
+                                                <Motion.div
                                                     initial={{ opacity: 0, height: 0 }}
                                                     animate={{ opacity: 1, height: 'auto' }}
                                                     className="bg-black/20 rounded-2xl p-4 border border-white/5 space-y-3"
@@ -631,12 +730,12 @@ const AdminManager = () => {
                                                             </div>
                                                         </div>
                                                     </div>
-                                                </motion.div>
+                                                </Motion.div>
                                             )}
 
                                             {/* Gallery Sub-permissions */}
                                             {formData.allowed_tabs.includes('gallery') && (
-                                                <motion.div
+                                                <Motion.div
                                                     initial={{ opacity: 0, height: 0 }}
                                                     animate={{ opacity: 1, height: 'auto' }}
                                                     className="bg-black/20 rounded-2xl p-4 border border-white/5 space-y-3"
@@ -735,7 +834,7 @@ const AdminManager = () => {
                                                             </div>
                                                         </div>
                                                     </div>
-                                                </motion.div>
+                                                </Motion.div>
                                             )}
                                         </div>
                                     )}

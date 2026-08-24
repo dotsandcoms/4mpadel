@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign, Image as ImageIcon, UserPlus, X, Shield, ExternalLink, Home, User, ChevronLeft, ChevronRight, Mail, Building, Landmark, MapPin } from 'lucide-react';
 import logo from '../../assets/logo_4m_lowercase.png';
 
@@ -28,6 +28,8 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDe
 
         // Auto-show Event Manager if they have specific event permissions
         if (item.id === 'event-mgmt' && permissions.module_permissions?.['event-mgmt']?.allowedEvents?.length > 0) return true;
+        if (item.id === 'organisations' && permissions.orgs?.length > 0) return true;
+        if (item.id === 'clubs' && permissions.hasDirectClubMembership) return true;
 
         return permissions.allowed_tabs && permissions.allowed_tabs.includes(item.id);
     });
@@ -37,7 +39,7 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDe
             {/* Mobile Overlay */}
             <AnimatePresence>
                 {isOpen && (
-                    <motion.div
+                    <Motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
@@ -53,14 +55,14 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDe
                     <div className="flex items-center gap-2 overflow-hidden">
                         <img src={logo} alt="4M Padel" className="h-10 w-auto shrink-0" />
                         {!isDesktopCollapsed && (
-                            <motion.span 
-                                initial={{ opacity: 0, width: 0 }} 
-                                animate={{ opacity: 1, width: 'auto' }} 
-                                exit={{ opacity: 0, width: 0 }} 
+                            <Motion.span
+                                initial={{ opacity: 0, width: 0 }}
+                                animate={{ opacity: 1, width: 'auto' }}
+                                exit={{ opacity: 0, width: 0 }}
                                 className="text-xl font-bold text-white whitespace-nowrap"
                             >
                                 South Africa
-                            </motion.span>
+                            </Motion.span>
                         )}
                     </div>
                     
@@ -96,7 +98,7 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDe
                                     }`}
                             >
                                 {isActive && (
-                                    <motion.div
+                                    <Motion.div
                                         layoutId="activeTab"
                                         className="absolute inset-0 bg-padel-green rounded-xl"
                                         initial={false}

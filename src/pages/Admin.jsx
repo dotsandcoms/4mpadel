@@ -57,8 +57,12 @@ const Admin = () => {
     const [clubBadgeCount, setClubBadgeCount] = useState(0);
 
     useEffect(() => {
+        const hasOrganisationMembership = Boolean(permissions?.orgs?.length || permissions?.org?.id);
         const canSeeOrgOversight = permissions?.role === 'super_admin'
-            || (permissions?.role === 'custom' && (permissions?.allowed_tabs || []).includes('organisations'));
+            || permissions?.module_permissions?.organisations?.platformOversight === true
+            || (permissions?.role === 'custom'
+                && !hasOrganisationMembership
+                && (permissions?.allowed_tabs || []).includes('organisations'));
         if (!canSeeOrgOversight) return;
 
         const fetchOrgBadgeCount = async () => {

@@ -270,9 +270,17 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
 
 
     // Derived flags
-    // Oversight view: super admins OR custom 4M admins granted the Organisations tab
+    // Opening the Organisations module is not the same as platform oversight.
+    // Organisation members must stay scoped to their own host dashboard, even
+    // when they also have an explicit sidebar permission row.
+    const hasOrganisationMembership = Boolean(permissions?.orgs?.length || permissions?.org?.id);
+    const hasExplicitPlatformOversight = permissions?.module_permissions?.organisations?.platformOversight === true;
+    const isStandalonePlatformAdmin = permissions?.role === 'custom'
+        && !hasOrganisationMembership
+        && (permissions?.allowed_tabs || []).includes('organisations');
     const canAccessPlatformOversight = permissions?.role === 'super_admin'
-        || (permissions?.role !== 'org_owner' && (permissions?.allowed_tabs || []).includes('organisations'));
+        || hasExplicitPlatformOversight
+        || isStandalonePlatformAdmin;
     // Linked membership org (host membership), including for super admins
     const membershipOrg = permissions?.org;
     // Platform admins can temporarily open any approved org's host dashboard
@@ -299,14 +307,15 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
     }, [initialView, membershipOrg?.id, impersonatedOrg?.id, canAccessPlatformOversight]);
 
     const handlePortalModeChange = (mode) => {
-        setPortalMode(mode);
+        const nextMode = mode === 'platform' && !canAccessPlatformOversight ? 'host' : mode;
+        setPortalMode(nextMode);
         setManagingEvent(null);
-        if (mode === 'platform') setImpersonatedOrg(null);
-        onViewChange?.(mode);
+        if (nextMode === 'platform') setImpersonatedOrg(null);
+        onViewChange?.(nextMode);
         try {
             const params = new URLSearchParams(window.location.search);
             params.set('tab', 'organisations');
-            if (mode === 'host') params.set('view', 'host');
+            if (nextMode === 'host') params.set('view', 'host');
             else {
                 params.delete('view');
                 params.delete('org');
@@ -514,11 +523,21 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
         if (!currentOrg) return;
         setLoading(true);
         try {
-            const { data: events, error } = await supabase
+            const { data: clubLinks, error: clubLinksError } = await supabase
+                .from('club_organisations')
+                .select('club_id')
+                .eq('organisation_id', currentOrg.id);
+            if (clubLinksError) throw clubLinksError;
+
+            const clubIds = (clubLinks || []).map((link) => link.club_id).filter(Boolean);
+            let eventsQuery = supabase
                 .from('calendar')
                 .select('*')
-                .eq('organisation_id', currentOrg.id)
                 .order('start_date', { ascending: true });
+            eventsQuery = clubIds.length > 0
+                ? eventsQuery.or(`organisation_id.eq.${currentOrg.id},club_id.in.(${clubIds.join(',')})`)
+                : eventsQuery.eq('organisation_id', currentOrg.id);
+            const { data: events, error } = await eventsQuery;
 
             if (error) throw error;
             const evList = events || [];
@@ -1096,10 +1115,18 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
     };
 
     // Fired when the EventBuilder saves an org event
-    const handleBuilderSaved = ({ isNew, isAmendment, eventName, stayOpen } = {}) => {
+    const handleBuilderSaved = async ({ eventId, isNew, isAmendment, eventName, stayOpen } = {}) => {
         // Keep the builder open when the user is save-and-continuing.
         if (!stayOpen) setBuilderEvent(null);
-        fetchHostData();
+        await fetchHostData();
+        if (managingEvent?.id && String(managingEvent.id) === String(eventId)) {
+            const { data: refreshedEvent } = await supabase
+                .from('calendar')
+                .select('*')
+                .eq('id', eventId)
+                .maybeSingle();
+            if (refreshedEvent) setManagingEvent(refreshedEvent);
+        }
         if (!currentOrg) return;
         if (isNew) {
             // Notify org + 4M admin that a sanction request is in
@@ -1787,6 +1814,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                     isOpen
                     event={managingEvent}
                     onBack={() => setManagingEvent(null)}
+                    onEditEvent={handleStartEditEvent}
                     backLabel="← Back to Organisation Dashboard"
                 />
             )}
@@ -2151,7 +2179,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                                                                 title="Propose changes to this sanctioned event. Changes only go live once 4M Padel approves them."
                                                                                 className="text-[10px] font-black text-gray-400 hover:text-padel-green uppercase tracking-widest flex items-center gap-1.5 cursor-pointer bg-transparent border-0"
                                                                             >
-                                                                                <Edit size={12} /> Request Changes
+                                                                                <Edit size={12} /> Edit Event Details
                                                                             </button>
                                                                         )}
                                                                     </div>
