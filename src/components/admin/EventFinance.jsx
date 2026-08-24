@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Calendar, Users, CheckCircle, XCircle, Search, Download,
     RefreshCcw, Loader2, AlertCircle, UserPlus, Link2, ExternalLink, Trophy, DollarSign,
-    MessageCircle, Check, Trash2, ChevronDown
+    MessageCircle, Check, Trash2, ChevronDown, Mail
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useRankedin } from '../../hooks/useRankedin';
@@ -28,6 +28,20 @@ import { resolveRegistrationLicenseCategory } from '../../utils/registrationLice
 import ManualEventRegistrations from './ManualEventRegistrations';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
+
+const registrationCloseState = (value) => {
+    if (!value) return { value: '—', label: 'Not set', tone: 'text-gray-600' };
+    const closesAt = new Date(value);
+    if (Number.isNaN(closesAt.getTime())) return { value: '—', label: 'Not set', tone: 'text-gray-600' };
+
+    const millisecondsLeft = closesAt.getTime() - Date.now();
+    if (millisecondsLeft <= 0) return { value: 'Closed', label: '', tone: 'text-red-400' };
+
+    const days = Math.floor(millisecondsLeft / 86400000);
+    if (days === 0) return { value: 'Today', label: '', tone: 'text-amber-300' };
+    if (days === 1) return { value: '1', label: 'Day', tone: 'text-padel-green' };
+    return { value: String(days), label: 'Days', tone: 'text-padel-green' };
+};
 
 const isPaystackEntryPayment = (participant, allPayments, refundByRegMap = null) => {
     const reg = participant?._reg || {
@@ -152,7 +166,15 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         }
 
         if (!eventSearch) return sorted;
-        return sorted.filter(e => e.event_name.toLowerCase().includes(eventSearch.toLowerCase()));
+        const query = eventSearch.toLowerCase();
+        return sorted.filter((event) => [
+            event.event_name,
+            event.organisations?.name,
+            event.organiser_name,
+            event.clubs?.name,
+            event.clubs?.short_name,
+            event.venue,
+        ].some((value) => String(value || '').toLowerCase().includes(query)));
     }, [events, eventSearch, allowedEvents, isEventManagementModule]);
 
     // Split the managed list into upcoming and completed (past) events so the
@@ -324,7 +346,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             try {
                 const { data: eData } = await supabase
                     .from('calendar')
-                    .select('id, event_name, start_date, end_date, rankedin_id, rankedin_url, entry_fee, category_fees, early_bird_fee, early_bird_ends_at, finance_managed, is_manual, allow_payments, slug, organiser_interim_payments, organiser_name, organiser_email')
+                    .select('id, event_name, start_date, end_date, registration_closes_at, rankedin_id, rankedin_url, entry_fee, category_fees, early_bird_fee, early_bird_ends_at, finance_managed, is_manual, allow_payments, slug, venue, organisation_id, club_id, organiser_interim_payments, organiser_name, organiser_email, organisations:organisation_id(id, name, slug), clubs:club_id(id, name, short_name, slug)')
                     .order('start_date', { ascending: false });
 
                 const pData = await fetchAllRows(() => supabase
@@ -1398,9 +1420,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         return matchesSearch && matchesProfile && matchesLicense && matchesPayment && matchesDivision && matchesWhatsApp;
     });
 
-    // Number of columns in the event list table (extra Actions column when
-    // running inside the Event Manager module).
-    const eventListColCount = isEventManagementModule ? 6 : 5;
+    const eventListColCount = 9;
 
     // Single source of truth for an event list row, reused by the upcoming list
     // and the completed (past) collapsible section.
@@ -1410,6 +1430,9 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const isUpcoming = eventDate >= today;
+        const closeState = registrationCloseState(e.registration_closes_at);
+        const organisationName = e.organisations?.name || e.organiser_name || '—';
+        const clubName = e.clubs?.short_name || e.clubs?.name || e.venue || '—';
 
         return (
             <tr
@@ -1436,6 +1459,48 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             {e.event_name}
                         </p>
                         {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-padel-green animate-pulse" />}
+                    </div>
+                </td>
+                <td className="px-4 py-4 max-w-[180px]">
+                    {e.organisations?.slug ? (
+                        <a
+                            href={`/organisations/${e.organisations.slug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(event) => event.stopPropagation()}
+                            className="inline-flex max-w-full items-center gap-1.5 text-[11px] font-bold text-padel-green hover:text-white"
+                            title={organisationName}
+                        >
+                            <span className="truncate">{organisationName}</span>
+                            <ExternalLink size={11} className="shrink-0" />
+                        </a>
+                    ) : (
+                        <span className="block truncate text-[11px] font-bold text-gray-400" title={organisationName}>{organisationName}</span>
+                    )}
+                </td>
+                <td className="px-4 py-4 max-w-[180px]">
+                    {e.clubs?.slug ? (
+                        <a
+                            href={`/clubs/${e.clubs.slug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(event) => event.stopPropagation()}
+                            className="inline-flex max-w-full items-center gap-1.5 text-[11px] font-bold text-padel-green hover:text-white"
+                            title={clubName}
+                        >
+                            <span className="truncate">{clubName}</span>
+                            <ExternalLink size={11} className="shrink-0" />
+                        </a>
+                    ) : (
+                        <span className="block truncate text-[11px] font-bold text-gray-400" title={clubName}>{clubName}</span>
+                    )}
+                </td>
+                <td className="px-4 py-4 text-center whitespace-nowrap">
+                    <div className="flex flex-col items-center">
+                        <span className={`text-lg font-black leading-none ${closeState.tone}`}>{closeState.value}</span>
+                        {closeState.label && (
+                            <span className="mt-1 text-[8px] font-black uppercase tracking-widest text-gray-500">{closeState.label}</span>
+                        )}
                     </div>
                 </td>
                 <td className="px-6 py-4">
@@ -1475,17 +1540,58 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">No Players</span>
                     )}
                 </td>
-                {isEventManagementModule && (
-                    <td className="px-4 py-4 text-right whitespace-nowrap">
+                <td className="px-4 py-4 text-right whitespace-nowrap">
+                    <div className="flex items-center justify-end gap-1.5">
+                        {(e.slug || e.id) && (
+                            <a
+                                href={`/calendar/${e.slug || e.id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(event) => event.stopPropagation()}
+                                title="View event page"
+                                aria-label={`View ${e.event_name} event page`}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-padel-green/25 bg-padel-green/5 text-padel-green transition-[color,background-color,transform] hover:bg-padel-green hover:text-black active:scale-[0.96]"
+                            >
+                                <Calendar size={16} strokeWidth={1.8} />
+                            </a>
+                        )}
+                        {e.organiser_email && (
+                            <a
+                                href={`mailto:${e.organiser_email}?subject=${encodeURIComponent(e.event_name)}`}
+                                onClick={(event) => event.stopPropagation()}
+                                title="Email organiser"
+                                aria-label={`Email the organiser of ${e.event_name}`}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-padel-green/25 bg-padel-green/5 text-padel-green transition-[color,background-color,transform] hover:bg-padel-green hover:text-black active:scale-[0.96]"
+                            >
+                                <Mail size={16} strokeWidth={1.8} />
+                            </a>
+                        )}
                         <button
+                            type="button"
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                setSelectedEventId(e.id);
+                                setViewMode('dashboard');
+                            }}
+                            title="Manage registrations"
+                            aria-label={`Manage registrations for ${e.event_name}`}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-padel-green/25 bg-padel-green/5 text-padel-green transition-[color,background-color,transform] hover:bg-padel-green hover:text-black active:scale-[0.96]"
+                        >
+                            <UserPlus size={16} strokeWidth={1.8} />
+                        </button>
+                        {isEventManagementModule && (
+                        <button
+                            type="button"
                             onClick={(ev) => { ev.stopPropagation(); handleRemoveFromManager(e); }}
                             title="Remove from Event Manager"
-                            className="p-2 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                            aria-label={`Remove ${e.event_name} from Event Manager`}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/5 text-gray-600 transition-[color,background-color,transform] hover:bg-red-500/10 hover:text-red-400 active:scale-[0.96] opacity-0 group-hover:opacity-100 focus:opacity-100"
                         >
-                            <Trash2 size={15} />
+                            <Trash2 size={15} strokeWidth={1.8} />
                         </button>
-                    </td>
-                )}
+                        )}
+                    </div>
+                </td>
             </tr>
         );
     };
@@ -1531,16 +1637,19 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
 
                 {/* High-Density Event List */}
                 <div className="bg-black/20 rounded-2xl border border-white/5 overflow-hidden">
-                    <div className="max-h-[320px] overflow-y-auto no-scrollbar">
-                        <table className="w-full text-left border-collapse">
+                    <div className="max-h-[360px] overflow-auto no-scrollbar">
+                        <table className="w-full min-w-[1380px] text-left border-collapse">
                             <thead className="sticky top-0 bg-[#1a1a1a] text-[10px] font-black uppercase text-gray-500 border-b border-white/5 z-10">
                                 <tr>
                                     <th className="px-6 py-3">Event Date</th>
                                     <th className="px-6 py-3">Tournament Name</th>
+                                    <th className="px-4 py-3">Organisation</th>
+                                    <th className="px-4 py-3">Host Club</th>
+                                    <th className="px-4 py-3 text-center">Registration Closes In</th>
                                     <th className="px-6 py-3">Entries</th>
                                     <th className="px-6 py-3">Finances (Collected/Billed)</th>
                                     <th className="px-6 py-3">License Status</th>
-                                    {isEventManagementModule && <th className="px-4 py-3 text-right">Actions</th>}
+                                    <th className="px-4 py-3 text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
@@ -1574,7 +1683,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         </button>
                         {(showCompleted || eventSearch) && (
                             <div className="max-h-[320px] overflow-y-auto no-scrollbar border-t border-white/5">
-                                <table className="w-full text-left border-collapse">
+                                <table className="w-full min-w-[1380px] text-left border-collapse">
                                     <tbody className="divide-y divide-white/5">
                                         {pastEvents.map(renderEventRow)}
                                     </tbody>
