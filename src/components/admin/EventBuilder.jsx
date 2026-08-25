@@ -605,8 +605,8 @@ const blankForm = {
     address: '',
     start_date: '',
     end_date: '',
-    start_time: '',
-    end_time: '',
+    start_time: '17:00',
+    end_time: '22:00',
     sapa_status: 'None',
     tournament_tag: 'None',
     description: '',
@@ -814,6 +814,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const [standardPrice, setStandardPrice] = useState('');
     const [bulkCloseDate, setBulkCloseDate] = useState('');
     const [showPrizeBreakdown, setShowPrizeBreakdown] = useState(false);
+    const [showEventDescription, setShowEventDescription] = useState(false);
     const [saving, setSaving] = useState(false);
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
     const [cancelling, setCancelling] = useState(false);
@@ -870,12 +871,19 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         });
     }, [clubs, venueQuery, selectedVenueKeys]);
 
-    const addVenue = (name) => {
-        const trimmed = String(name || '').trim();
+    const addVenue = (clubOrName) => {
+        const selectedClub = typeof clubOrName === 'object' && clubOrName !== null ? clubOrName : null;
+        const trimmed = String(selectedClub?.name || clubOrName || '').trim();
         if (!trimmed) return;
         setForm((prev) => {
             const next = normalizeVenues([...(prev.venues || []), trimmed]);
-            return { ...prev, venues: next, venue: next.join(' / ') };
+            return {
+                ...prev,
+                venues: next,
+                venue: next.join(' / '),
+                address: prev.address || selectedClub?.address || '',
+                city: prev.city || selectedClub?.city || '',
+            };
         });
         setVenueQuery('');
         setVenueOpen(false);
@@ -1034,6 +1042,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         setStandardPrice('');
         setBulkCloseDate('');
         setExpandedDivisionKey(null);
+        setShowEventDescription(false);
         setOpenPanels({
             identity: true, venue: false, display: false,
             regWindow: true, entryPayment: false, partnerCapacity: false, licenseDefaults: false,
@@ -2501,25 +2510,6 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                     <div className="flex-1 overflow-y-auto px-6 py-6 custom-scrollbar">
                         {step === 1 && (
                             <div className="space-y-4">
-                                {!isEditing && (
-                                    <label className="flex items-center justify-between bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
-                                        <div className="pr-3">
-                                            <span className="text-sm font-medium text-gray-200 flex items-center gap-2">
-                                                <Repeat size={14} className="text-padel-green" /> Weekly occurrence
-                                            </span>
-                                            <span className="text-[11px] text-gray-500 block mt-0.5">
-                                                Create a series of weekly social nights (non-SAPA, book &amp; pay on 4M)
-                                            </span>
-                                        </div>
-                                        <input
-                                            type="checkbox"
-                                            checked={!!form.is_weekly}
-                                            onChange={(e) => setWeeklyMode(e.target.checked)}
-                                            className="accent-padel-green w-5 h-5"
-                                        />
-                                    </label>
-                                )}
-
                                 {isEditing && form.is_weekly && (
                                     <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3">
                                         <p className="text-xs font-bold text-sky-300 flex items-center gap-2">
@@ -2545,13 +2535,18 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                         <input name="event_name" value={form.event_name} onChange={handleInput} className={inputClass} required />
                                                     </div>
 
-                                                    <div>
-                                                        <label className={labelClass}>Event Description / About</label>
-                                                        <RichTextEditor
-                                                            value={form.description}
-                                                            onChange={(html) => setField('description', html)}
-                                                            placeholder="Describe the event, format, highlights and important information..."
-                                                        />
+                                                    <div className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.02]">
+                                                        <button type="button" onClick={() => setShowEventDescription((open) => !open)} aria-expanded={showEventDescription} className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left text-sm font-bold text-gray-200 hover:bg-white/[0.03]">
+                                                            <span>Event description / about</span>
+                                                            <ChevronDown size={16} className={`shrink-0 text-padel-green transition-transform ${showEventDescription ? 'rotate-180' : ''}`} />
+                                                        </button>
+                                                        {showEventDescription && <div className="border-t border-white/10 p-4">
+                                                            <RichTextEditor
+                                                                value={form.description}
+                                                                onChange={(html) => setField('description', html)}
+                                                                placeholder="Describe the event, format, highlights and important information..."
+                                                            />
+                                                        </div>}
                                                     </div>
 
                                                     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -2601,7 +2596,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                         {venueOpen && (filteredClubs.length > 0 || venueQuery.trim()) && (
                                                             <div className={menuClass}>
                                                                 {filteredClubs.map((club) => (
-                                                                    <button key={club.id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => addVenue(club.name)} className={menuItemClass}>
+                                                                    <button key={club.id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => addVenue(club)} className={menuItemClass}>
                                                                         {club.name}
                                                                     </button>
                                                                 ))}
@@ -3027,7 +3022,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                                 key={c.id}
                                                                 type="button"
                                                                 onMouseDown={(e) => e.preventDefault()}
-                                                                onClick={() => addVenue(c.name)}
+                                                                onClick={() => addVenue(c)}
                                                                 className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-padel-green hover:text-black transition-colors"
                                                             >
                                                                 {c.name}

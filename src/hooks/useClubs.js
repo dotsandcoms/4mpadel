@@ -3,7 +3,8 @@ import { supabase } from '../supabaseClient';
 
 /**
  * Club list for AuthModal / player profile / event builder.
- * Selects only id + name so the extended clubs schema stays compatible.
+ * Includes basic location fields so event setup can prefill an address after
+ * an organiser selects a host club.
  */
 export function useClubs() {
     const [clubs, setClubs] = useState([]);
@@ -15,7 +16,7 @@ export function useClubs() {
             try {
                 const { data, error } = await supabase
                     .from('clubs')
-                    .select('id, name')
+                    .select('id, name, address, city')
                     .not('status', 'in', '(pending,rejected,in_review)')
                     .order('name');
                 if (error) {
