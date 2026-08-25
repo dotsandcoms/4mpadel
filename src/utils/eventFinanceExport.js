@@ -186,8 +186,9 @@ export async function downloadEventFinanceWorkbook(payload) {
     const wsRegs = workbook.addWorksheet('Registrations');
     const regHeaders = [
         'Name', 'Email', 'Phone', 'Division', 'Partner', 'Partner Email',
-        'License', 'Payment Status', 'Payment Channel', 'Entry Amount (ZAR)',
-        'Comped', 'Registration Status', 'Registered At', 'Payment Note',
+        'T-shirt Size', 'T-shirt Sponsor', 'T-shirt Logo', 'License',
+        'Payment Status', 'Payment Channel', 'Entry Amount (ZAR)', 'Comped',
+        'Registration Status', 'Registered At', 'Payment Note',
     ];
     styleHeader(wsRegs.addRow(regHeaders));
     registrations.forEach((r) => {
@@ -198,6 +199,9 @@ export async function downloadEventFinanceWorkbook(payload) {
             r.division || '',
             r.partner || '',
             r.partnerEmail || '',
+            r.tshirtSize || '',
+            r.tshirtSponsorName || '',
+            r.tshirtLogoUrl ? { text: 'View logo', hyperlink: r.tshirtLogoUrl, tooltip: 'Open uploaded T-shirt logo' } : '',
             r.license || '',
             r.paymentStatus || '',
             r.channel || '',
@@ -207,10 +211,13 @@ export async function downloadEventFinanceWorkbook(payload) {
             r.registeredAt ? new Date(r.registeredAt) : '',
             r.note || '',
         ]);
-        row.getCell(10).numFmt = MONEY_FMT;
-        row.getCell(13).numFmt = 'dd mmm yyyy hh:mm';
+        row.getCell(13).numFmt = MONEY_FMT;
+        row.getCell(16).numFmt = 'dd mmm yyyy hh:mm';
         styleStatusRow(row, r.paymentStatus);
-        styleStatus(row.getCell(8), r.paymentStatus);
+        styleStatus(row.getCell(11), r.paymentStatus);
+        if (r.tshirtLogoUrl) {
+            row.getCell(9).font = { name: 'Arial', color: { argb: 'FF2563EB' }, underline: true };
+        }
     });
     wsRegs.autoFilter = {
         from: { row: 1, column: 1 },
@@ -218,6 +225,7 @@ export async function downloadEventFinanceWorkbook(payload) {
     };
     wsRegs.views = [{ state: 'frozen', ySplit: 1 }];
     autosize(wsRegs, 12, 36);
+    wsRegs.getColumn(9).width = 15;
 
     if (reportType === 'full') {
     const wsPay = workbook.addWorksheet('Payments ledger');

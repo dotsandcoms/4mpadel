@@ -1443,7 +1443,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 }}
                 className={`group cursor-pointer transition-all hover:bg-white/5`}
             >
-                <td className="px-4 py-4 whitespace-nowrap">
+                <td className="px-3 py-4 whitespace-nowrap">
                     <div className="flex flex-col">
                         <p className={`text-[11px] font-bold text-white group-hover:text-padel-green`}>
                             {eventDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -1453,15 +1453,15 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         </span>
                     </div>
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-3 py-4">
                     <div className="flex items-center gap-3">
-                        <p className={`font-black uppercase tracking-tight text-sm ${isSelected ? 'text-white' : 'text-gray-300'}`}>
+                        <p className={`text-[12px] font-black uppercase leading-5 tracking-tight ${isSelected ? 'text-white' : 'text-gray-300'}`}>
                             {e.event_name}
                         </p>
                         {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-padel-green animate-pulse" />}
                     </div>
                 </td>
-                <td className="px-4 py-4 max-w-[180px]">
+                <td className="w-[170px] px-3 py-4">
                     {e.organisations?.slug ? (
                         <a
                             href={`/organisations/${e.organisations.slug}`}
@@ -1478,7 +1478,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         <span className="block truncate text-[11px] font-bold text-gray-400" title={organisationName}>{organisationName}</span>
                     )}
                 </td>
-                <td className="px-4 py-4 max-w-[180px]">
+                <td className="w-[140px] px-3 py-4">
                     {e.clubs?.slug ? (
                         <a
                             href={`/clubs/${e.clubs.slug}`}
@@ -1495,7 +1495,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         <span className="block truncate text-[11px] font-bold text-gray-400" title={clubName}>{clubName}</span>
                     )}
                 </td>
-                <td className="px-4 py-4 text-center whitespace-nowrap">
+                <td className="px-3 py-4 text-center whitespace-nowrap">
                     <div className="flex flex-col items-center">
                         <span className={`text-lg font-black leading-none ${closeState.tone}`}>{closeState.value}</span>
                         {closeState.label && (
@@ -1503,13 +1503,13 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         )}
                     </div>
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-3 py-4 text-center whitespace-nowrap">
                     <div className="flex flex-col">
-                        <span className="text-white font-black text-[11px]">{e.stats?.entries || 0}</span>
+                        <span className="text-lg font-black leading-none text-white">{e.stats?.entries || 0}</span>
                         <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{e.stats?.paidCount || 0} Paid</span>
                     </div>
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-3 py-4">
                     <div className="flex flex-col">
                         <span className="text-padel-green font-bold text-[11px]">R{e.stats?.collected?.toLocaleString() || 0} / R{e.stats?.billed?.toLocaleString() || 0}</span>
                         {(e.stats?.outstanding > 0) && (
@@ -1517,7 +1517,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         )}
                     </div>
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-3 py-4">
                     {e.stats?.uniquePlayersCount > 0 ? (
                         <div className="flex items-center gap-4">
                             <div className="flex flex-col items-center min-w-[32px]">
@@ -1540,7 +1540,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">No Players</span>
                     )}
                 </td>
-                <td className="px-4 py-4 text-right whitespace-nowrap">
+                <td className="px-3 py-4 text-right whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1.5">
                         {(e.slug || e.id) && (
                             <a
@@ -1638,18 +1638,29 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 {/* High-Density Event List */}
                 <div className="bg-black/20 rounded-2xl border border-white/5 overflow-hidden">
                     <div className="max-h-[360px] overflow-auto no-scrollbar">
-                        <table className="w-full min-w-[1380px] text-left border-collapse">
+                        <table className="w-full min-w-[1180px] table-fixed text-left border-collapse">
+                            <colgroup>
+                                <col className="w-[120px]" />
+                                <col className="w-[220px]" />
+                                <col className="w-[150px]" />
+                                <col className="w-[120px]" />
+                                <col className="w-[120px]" />
+                                <col className="w-[84px]" />
+                                <col className="w-[170px]" />
+                                <col className="w-[145px]" />
+                                <col className="w-[130px]" />
+                            </colgroup>
                             <thead className="sticky top-0 bg-[#1a1a1a] text-[10px] font-black uppercase text-gray-500 border-b border-white/5 z-10">
                                 <tr>
-                                    <th className="px-6 py-3">Event Date</th>
-                                    <th className="px-6 py-3">Tournament Name</th>
-                                    <th className="px-4 py-3">Organisation</th>
-                                    <th className="px-4 py-3">Host Club</th>
-                                    <th className="px-4 py-3 text-center">Registration Closes In</th>
-                                    <th className="px-6 py-3">Entries</th>
-                                    <th className="px-6 py-3">Finances (Collected/Billed)</th>
-                                    <th className="px-6 py-3">License Status</th>
-                                    <th className="px-4 py-3 text-right">Actions</th>
+                                    <th className="px-3 py-3">Event Date</th>
+                                    <th className="px-4 py-3">Tournament Name</th>
+                                    <th className="px-3 py-3">Organisation</th>
+                                    <th className="px-3 py-3">Host Club</th>
+                                    <th className="px-3 py-3 text-center">Registration Closes In</th>
+                                    <th className="px-3 py-3 text-center">Entries</th>
+                                    <th className="px-3 py-3">Finances (Collected/Billed)</th>
+                                    <th className="px-3 py-3">License Status</th>
+                                    <th className="px-3 py-3 text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
@@ -1683,7 +1694,18 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         </button>
                         {(showCompleted || eventSearch) && (
                             <div className="max-h-[320px] overflow-y-auto no-scrollbar border-t border-white/5">
-                                <table className="w-full min-w-[1380px] text-left border-collapse">
+                                <table className="w-full min-w-[1180px] table-fixed text-left border-collapse">
+                                    <colgroup>
+                                        <col className="w-[120px]" />
+                                        <col className="w-[220px]" />
+                                        <col className="w-[150px]" />
+                                        <col className="w-[120px]" />
+                                        <col className="w-[120px]" />
+                                        <col className="w-[84px]" />
+                                        <col className="w-[170px]" />
+                                        <col className="w-[145px]" />
+                                        <col className="w-[130px]" />
+                                    </colgroup>
                                     <tbody className="divide-y divide-white/5">
                                         {pastEvents.map(renderEventRow)}
                                     </tbody>
