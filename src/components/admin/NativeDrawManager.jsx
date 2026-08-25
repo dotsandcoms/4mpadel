@@ -103,6 +103,11 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
     const [drawFormat, setDrawFormat] = useState('knockout');
     const [groupCount, setGroupCount] = useState('4');
     const [advancersPerGroup, setAdvancersPerGroup] = useState('2');
+    const [plateMode, setPlateMode] = useState('none');
+    const [silverPlate, setSilverPlate] = useState(null);
+    const [bronzePlate, setBronzePlate] = useState(null);
+    const [activeDrawKind, setActiveDrawKind] = useState('main');
+    const [availableDraws, setAvailableDraws] = useState([]);
     const [saving, setSaving] = useState(false);
 
     const division = divisions.find((item) => item.id === divisionId);
@@ -116,20 +121,24 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         let active = true;
         if (!divisionId) {
             setSavedDraw(null);
+            setSilverPlate(null);
+            setBronzePlate(null);
+            setAvailableDraws([]);
             return () => { active = false; };
         }
         const loadSavedDraft = async () => {
             setLoadingSaved(true);
             try {
-                const { data: draw, error: drawError } = await supabase
+                const { data: divisionDraws, error: drawError } = await supabase
                     .from('draws')
-                    .select('id, status, format, advancers_per_group, generated_at')
+                    .select('id, draw_kind, status, format, advancers_per_group, generated_at, scoring_rules')
                     .eq('division_id', divisionId)
-                    .eq('draw_kind', 'main')
-                    .maybeSingle();
+                    .order('created_at');
                 if (drawError) throw drawError;
+                const draw = (divisionDraws || []).find((item) => item.draw_kind === activeDrawKind);
+                if (active) setAvailableDraws(divisionDraws || []);
                 if (!draw) {
-                    if (active) setSavedDraw(null);
+                    if (active) { setSavedDraw(null); setSilverPlate(null); setBronzePlate(null); setDraft(null); }
                     return;
                 }
                 const [{ data: savedEntries, error: entriesError }, { data: savedMatches, error: matchesError }, { data: groups }, { data: savedStandings }] = await Promise.all([
@@ -159,6 +168,9 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                 setMatchSets(savedSets || []);
                 setDrawFormat(draw.format || 'knockout');
                 setAdvancersPerGroup(String(draw.advancers_per_group || 2));
+                setPlateMode(draw.scoring_rules?.plate_mode || 'none');
+                setSilverPlate((divisionDraws || []).find((item) => item.draw_kind === 'silver') || null);
+                setBronzePlate((divisionDraws || []).find((item) => item.draw_kind === 'bronze') || null);
                 setDraft({
                     format: draw.format || 'knockout',
                     draw_size: nextPowerOfTwo((savedEntries || []).length),
@@ -176,7 +188,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         };
         loadSavedDraft();
         return () => { active = false; };
-    }, [divisionId]);
+    }, [divisionId, activeDrawKind]);
 
     const previewDraft = () => {
         if (!divisionId) {
@@ -214,6 +226,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         if (!draft || !division) return;
         setSaving(true);
         try {
+            const scoringRules = { sets_to_win: 2, golden_point: true, match_tiebreak: false, plate_mode: plateMode };
             const { data: existing, error: existingError } = await supabase
                 .from('draws')
                 .select('id, status')
@@ -235,7 +248,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                 const { error: deleteGroupsError } = await supabase.from('draw_groups').delete().eq('draw_id', draw.id);
                 if (deleteGroupsError) throw deleteGroupsError;
                 const { error: updateError } = await supabase.from('draws').update({
-                    format: draft.format || 'knockout', group_count: draft.groups?.length || null, advancers_per_group: draft.format === 'group_knockout' ? Number(advancersPerGroup) : null, seeding_method: 'native_ranking', generated_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+                    format: draft.format || 'knockout', group_count: draft.groups?.length || null, advancers_per_group: draft.format === 'group_knockout' ? Number(advancersPerGroup) : null, seeding_method: 'native_ranking', scoring_rules: scoringRules, generated_at: new Date().toISOString(), updated_at: new Date().toISOString(),
                 }).eq('id', draw.id);
                 if (updateError) throw updateError;
             } else {
@@ -248,6 +261,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                     format: draft.format || 'knockout',
                     status: 'draft',
                     seeding_method: 'native_ranking',
+                    scoring_rules: scoringRules,
                     group_count: draft.groups?.length || null,
                     advancers_per_group: draft.format === 'group_knockout' ? Number(advancersPerGroup) : null,
                         generated_at: new Date().toISOString(),
@@ -438,11 +452,13 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         setSaving(true);
         try {
             const winnerEntry = recordingWinnerId;
+            const loserEntry = match.entry_one.id === winnerEntry ? match.entry_two.id : match.entry_one.id;
             const matchStatus = recordingResultType === 'walkover'
                 ? 'walkover'
                 : recordingResultType === 'retirement' ? 'retired' : 'completed';
             const { error: resultError } = await supabase.from('draw_matches').update({
                 winner_entry_id: winnerEntry,
+                loser_entry_id: loserEntry,
                 status: matchStatus,
                 result_type: recordingResultType,
                 updated_at: new Date().toISOString(),
@@ -487,7 +503,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             setDraft((current) => ({
                 ...current,
                 matches: current.matches.map((item) => {
-                    if (item.id === match.id) return { ...item, winner_entry_id: winnerEntry, winner: current.entries.find((entry) => entry.id === winnerEntry), status: matchStatus, result_type: recordingResultType };
+                    if (item.id === match.id) return { ...item, winner_entry_id: winnerEntry, loser_entry_id: loserEntry, winner: current.entries.find((entry) => entry.id === winnerEntry), status: matchStatus, result_type: recordingResultType };
                     if (item.id === match.winner_to_match_id) return { ...item, [match.winner_to_slot === 1 ? 'entry_one' : 'entry_two']: current.entries.find((entry) => entry.id === winnerEntry), [match.winner_to_slot === 1 ? 'entry_one_id' : 'entry_two_id']: winnerEntry };
                     return item;
                 }),
@@ -550,12 +566,303 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         }
     };
 
+    const createSilverPlate = async () => {
+        if (!savedDraw?.id || !draft || !['double', 'triple'].includes(plateMode)) return;
+        if (silverPlate) {
+            toast.error('The Silver plate has already been created for this division.');
+            return;
+        }
+        const knockoutMatches = draft.matches.filter((match) => match.stage === 'knockout');
+        const openingRound = Math.min(...knockoutMatches.map((match) => match.round_number));
+        const openingMatches = knockoutMatches.filter((match) => match.round_number === openingRound);
+        const resolvedStatuses = ['completed', 'walkover', 'retired'];
+        if (!openingMatches.length || openingMatches.some((match) => !match.winner_entry_id || !resolvedStatuses.includes(match.status))) {
+            toast.error('Complete every opening-round main-draw match before creating the Silver plate.');
+            return;
+        }
+        const loserIds = [...new Set(openingMatches
+            .filter((match) => match.entry_one_id && match.entry_two_id)
+            .map((match) => match.loser_entry_id || (match.winner_entry_id === match.entry_one_id ? match.entry_two_id : match.entry_one_id)))];
+        const plateEntries = loserIds.map((id) => draft.entries.find((entry) => entry.id === id)).filter(Boolean);
+        if (plateEntries.length < 2) {
+            toast.error('At least two opening-round losers are needed to create a Silver plate.');
+            return;
+        }
+        const plateDraft = generateKnockoutDraft(plateEntries, { seedingMethod: 'manual' });
+        setSaving(true);
+        try {
+            const { data: existing, error: existingError } = await supabase
+                .from('draws')
+                .select('id, status')
+                .eq('division_id', division.id)
+                .eq('draw_kind', 'silver')
+                .maybeSingle();
+            if (existingError) throw existingError;
+            if (existing) {
+                setSilverPlate(existing);
+                toast.error('The Silver plate has already been created for this division.');
+                return;
+            }
+            const { data: silverDraw, error: drawError } = await supabase.from('draws').insert({
+                event_id: event.id,
+                division_id: division.id,
+                draw_kind: 'silver',
+                format: 'knockout',
+                status: 'published',
+                seeding_method: 'manual',
+                scoring_rules: { ...(savedDraw.scoring_rules || {}), plate_mode: plateMode },
+                generated_at: new Date().toISOString(),
+                published_at: new Date().toISOString(),
+            }).select('id, status').single();
+            if (drawError) throw drawError;
+
+            const { data: savedEntries, error: entriesError } = await supabase.from('draw_entries').insert(plateDraft.entries.map((entry, index) => ({
+                draw_id: silverDraw.id,
+                source_registration_id: entry.source_registration_id,
+                player_one_id: entry.player_one_id,
+                player_two_id: entry.player_two_id,
+                team_name: entry.team_name,
+                player_one_name: entry.player_one_name,
+                player_two_name: entry.player_two_name,
+                seed_number: index + 1,
+                seeding_value: entry.seeding_value,
+                snapshot: entry.snapshot || {},
+            }))).select('id, source_registration_id');
+            if (entriesError) throw entriesError;
+            const entryIdByRegistration = new Map(savedEntries.map((entry) => [entry.source_registration_id, entry.id]));
+            const { data: savedMatches, error: matchesError } = await supabase.from('draw_matches').insert(plateDraft.matches.map((match) => {
+                const entryOneId = match.entry_one ? entryIdByRegistration.get(match.entry_one.source_registration_id) : null;
+                const entryTwoId = match.entry_two ? entryIdByRegistration.get(match.entry_two.source_registration_id) : null;
+                const winnerId = match.winner ? entryIdByRegistration.get(match.winner.source_registration_id) : null;
+                const validWinnerId = winnerId && (winnerId === entryOneId || winnerId === entryTwoId) ? winnerId : null;
+                return {
+                    draw_id: silverDraw.id,
+                    stage: 'knockout',
+                    round_code: match.round_code,
+                    round_label: match.round_label,
+                    round_number: match.round_number,
+                    bracket_position: match.bracket_position,
+                    entry_one_id: entryOneId,
+                    entry_two_id: entryTwoId,
+                    winner_entry_id: validWinnerId,
+                    status: validWinnerId ? match.status : 'pending',
+                    result_type: validWinnerId ? match.result_type : null,
+                };
+            })).select('id, round_number, bracket_position');
+            if (matchesError) throw matchesError;
+            const matchIdByPosition = new Map(savedMatches.map((match) => [`${match.round_number}:${match.bracket_position}`, match.id]));
+            const links = plateDraft.matches.map((match) => {
+                const nextId = matchIdByPosition.get(`${match.round_number + 1}:${Math.ceil(match.bracket_position / 2)}`);
+                return nextId ? supabase.from('draw_matches').update({
+                    winner_to_match_id: nextId,
+                    winner_to_slot: match.bracket_position % 2 === 1 ? 1 : 2,
+                }).eq('id', matchIdByPosition.get(`${match.round_number}:${match.bracket_position}`)) : null;
+            }).filter(Boolean);
+            const linkResults = await Promise.all(links);
+            const linkError = linkResults.find((result) => result.error)?.error;
+            if (linkError) throw linkError;
+            await supabase.from('draw_match_audit').insert({
+                match_id: savedMatches[0].id,
+                action: 'created',
+                after_state: { draw_kind: 'silver', source: 'main_opening_round_losers', entry_count: plateEntries.length },
+            });
+            setSilverPlate(silverDraw);
+            setAvailableDraws((current) => [
+                ...current.filter((item) => item.draw_kind !== 'silver'),
+                { ...silverDraw, draw_kind: 'silver', format: 'knockout', scoring_rules: { ...(savedDraw.scoring_rules || {}), plate_mode: plateMode }, generated_at: new Date().toISOString() },
+            ]);
+            toast.success(`Silver plate created with ${plateEntries.length} teams.`);
+            onSaved?.();
+        } catch (error) {
+            console.error('Failed to create Silver plate', error);
+            toast.error(error.message || 'Could not create the Silver plate');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const createBronzePlate = async () => {
+        if (!savedDraw?.id || !draft || activeDrawKind !== 'silver' || plateMode !== 'triple') return;
+        if (bronzePlate) {
+            toast.error('The Bronze plate has already been created for this division.');
+            return;
+        }
+        const knockoutMatches = draft.matches.filter((match) => match.stage === 'knockout');
+        const openingRound = Math.min(...knockoutMatches.map((match) => match.round_number));
+        const openingMatches = knockoutMatches.filter((match) => match.round_number === openingRound);
+        const resolvedStatuses = ['completed', 'walkover', 'retired'];
+        if (!openingMatches.length || openingMatches.some((match) => !match.winner_entry_id || !resolvedStatuses.includes(match.status))) {
+            toast.error('Complete every opening-round Silver plate match before creating the Bronze plate.');
+            return;
+        }
+        const loserIds = [...new Set(openingMatches
+            .filter((match) => match.entry_one_id && match.entry_two_id)
+            .map((match) => match.loser_entry_id || (match.winner_entry_id === match.entry_one_id ? match.entry_two_id : match.entry_one_id)))];
+        const plateEntries = loserIds.map((id) => draft.entries.find((entry) => entry.id === id)).filter(Boolean);
+        if (plateEntries.length < 2) {
+            toast.error('At least two opening-round losers are needed to create a Bronze plate.');
+            return;
+        }
+        const plateDraft = generateKnockoutDraft(plateEntries, { seedingMethod: 'manual' });
+        setSaving(true);
+        try {
+            const { data: existing, error: existingError } = await supabase
+                .from('draws')
+                .select('id, status')
+                .eq('division_id', division.id)
+                .eq('draw_kind', 'bronze')
+                .maybeSingle();
+            if (existingError) throw existingError;
+            if (existing) {
+                setBronzePlate(existing);
+                toast.error('The Bronze plate has already been created for this division.');
+                return;
+            }
+            const { data: bronzeDraw, error: drawError } = await supabase.from('draws').insert({
+                event_id: event.id,
+                division_id: division.id,
+                draw_kind: 'bronze',
+                format: 'knockout',
+                status: 'published',
+                seeding_method: 'manual',
+                scoring_rules: { ...(savedDraw.scoring_rules || {}), plate_mode: 'triple' },
+                generated_at: new Date().toISOString(),
+                published_at: new Date().toISOString(),
+            }).select('id, status').single();
+            if (drawError) throw drawError;
+            const { data: savedEntries, error: entriesError } = await supabase.from('draw_entries').insert(plateDraft.entries.map((entry, index) => ({
+                draw_id: bronzeDraw.id,
+                source_registration_id: entry.source_registration_id,
+                player_one_id: entry.player_one_id,
+                player_two_id: entry.player_two_id,
+                team_name: entry.team_name,
+                player_one_name: entry.player_one_name,
+                player_two_name: entry.player_two_name,
+                seed_number: index + 1,
+                seeding_value: entry.seeding_value,
+                snapshot: entry.snapshot || {},
+            }))).select('id, source_registration_id');
+            if (entriesError) throw entriesError;
+            const entryIdByRegistration = new Map(savedEntries.map((entry) => [entry.source_registration_id, entry.id]));
+            const { data: savedMatches, error: matchesError } = await supabase.from('draw_matches').insert(plateDraft.matches.map((match) => {
+                const entryOneId = match.entry_one ? entryIdByRegistration.get(match.entry_one.source_registration_id) : null;
+                const entryTwoId = match.entry_two ? entryIdByRegistration.get(match.entry_two.source_registration_id) : null;
+                const winnerId = match.winner ? entryIdByRegistration.get(match.winner.source_registration_id) : null;
+                const validWinnerId = winnerId && (winnerId === entryOneId || winnerId === entryTwoId) ? winnerId : null;
+                return {
+                    draw_id: bronzeDraw.id,
+                    stage: 'knockout',
+                    round_code: match.round_code,
+                    round_label: match.round_label,
+                    round_number: match.round_number,
+                    bracket_position: match.bracket_position,
+                    entry_one_id: entryOneId,
+                    entry_two_id: entryTwoId,
+                    winner_entry_id: validWinnerId,
+                    status: validWinnerId ? match.status : 'pending',
+                    result_type: validWinnerId ? match.result_type : null,
+                };
+            })).select('id, round_number, bracket_position');
+            if (matchesError) throw matchesError;
+            const matchIdByPosition = new Map(savedMatches.map((match) => [`${match.round_number}:${match.bracket_position}`, match.id]));
+            const links = plateDraft.matches.map((match) => {
+                const nextId = matchIdByPosition.get(`${match.round_number + 1}:${Math.ceil(match.bracket_position / 2)}`);
+                return nextId ? supabase.from('draw_matches').update({
+                    winner_to_match_id: nextId,
+                    winner_to_slot: match.bracket_position % 2 === 1 ? 1 : 2,
+                }).eq('id', matchIdByPosition.get(`${match.round_number}:${match.bracket_position}`)) : null;
+            }).filter(Boolean);
+            const linkResults = await Promise.all(links);
+            const linkError = linkResults.find((result) => result.error)?.error;
+            if (linkError) throw linkError;
+            await supabase.from('draw_match_audit').insert({
+                match_id: savedMatches[0].id,
+                action: 'created',
+                after_state: { draw_kind: 'bronze', source: 'silver_opening_round_losers', entry_count: plateEntries.length },
+            });
+            setBronzePlate(bronzeDraw);
+            setAvailableDraws((current) => [
+                ...current.filter((item) => item.draw_kind !== 'bronze'),
+                { ...bronzeDraw, draw_kind: 'bronze', format: 'knockout', scoring_rules: { ...(savedDraw.scoring_rules || {}), plate_mode: 'triple' }, generated_at: new Date().toISOString() },
+            ]);
+            toast.success(`Bronze plate created with ${plateEntries.length} teams.`);
+            onSaved?.();
+        } catch (error) {
+            console.error('Failed to create Bronze plate', error);
+            toast.error(error.message || 'Could not create the Bronze plate');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const enableSilverPlate = async () => {
+        if (!savedDraw?.id) return;
+        setSaving(true);
+        try {
+            const scoringRules = { ...(savedDraw.scoring_rules || {}), plate_mode: 'double' };
+            const { error } = await supabase.from('draws').update({
+                scoring_rules: scoringRules,
+                updated_at: new Date().toISOString(),
+            }).eq('id', savedDraw.id);
+            if (error) throw error;
+            setSavedDraw((current) => ({ ...current, scoring_rules: scoringRules }));
+            setPlateMode('double');
+            toast.success('Silver plate enabled. Complete the opening round to create it.');
+        } catch (error) {
+            console.error('Failed to enable Silver plate', error);
+            toast.error(error.message || 'Could not enable the Silver plate');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const completeDraw = async () => {
+        if (!savedDraw?.id || !draft) return;
+        const playableMatches = draft.matches.filter((match) => match.entry_one_id && match.entry_two_id);
+        const resolvedStatuses = ['completed', 'walkover', 'retired'];
+        if (!playableMatches.length || playableMatches.some((match) => !resolvedStatuses.includes(match.status))) {
+            toast.error('Enter every playable result before completing this draw.');
+            return;
+        }
+        setSaving(true);
+        try {
+            const completedAt = new Date().toISOString();
+            const { error } = await supabase.from('draws').update({
+                status: 'completed',
+                completed_at: completedAt,
+                updated_at: completedAt,
+            }).eq('id', savedDraw.id).eq('status', 'published');
+            if (error) throw error;
+            setSavedDraw((current) => ({ ...current, status: 'completed', completed_at: completedAt }));
+            setAvailableDraws((current) => current.map((item) => item.id === savedDraw.id
+                ? { ...item, status: 'completed', completed_at: completedAt }
+                : item));
+            toast.success(`${activeDrawKind === 'main' ? 'Main draw' : activeDrawKind === 'silver' ? 'Silver plate' : 'Bronze plate'} marked complete.`);
+            onSaved?.();
+        } catch (error) {
+            console.error('Failed to complete draw', error);
+            toast.error(error.message || 'Could not complete this draw');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const standingsForGroup = (groupId) => standings
         .filter((row) => row.group_id === groupId)
         .sort((a, b) => (a.position || 999) - (b.position || 999));
     const groupStageComplete = savedGroups.length > 0
         && savedGroups.every((group) => areGroupMatchesComplete(draft?.matches || [], group.id));
     const settingsLocked = savedDraw?.status === 'published';
+    const mainKnockoutMatches = (draft?.matches || []).filter((match) => match.stage === 'knockout');
+    const mainOpeningRound = mainKnockoutMatches.length ? Math.min(...mainKnockoutMatches.map((match) => match.round_number)) : null;
+    const mainOpeningMatches = mainKnockoutMatches.filter((match) => match.round_number === mainOpeningRound);
+    const silverPlateReady = mainOpeningMatches.length > 0 && mainOpeningMatches.every((match) => (
+        match.winner_entry_id && ['completed', 'walkover', 'retired'].includes(match.status)
+    ));
+    const playableMatches = (draft?.matches || []).filter((match) => match.entry_one_id && match.entry_two_id);
+    const drawReadyToComplete = playableMatches.length > 0 && playableMatches.every((match) => (
+        ['completed', 'walkover', 'retired'].includes(match.status)
+    ));
 
     return (
         <div className="p-6 space-y-6">
@@ -571,13 +878,15 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                 <div className="flex flex-col gap-3 border-b border-white/10 px-5 py-4 md:flex-row md:items-center md:justify-between"><button type="button" aria-expanded={showDrawConfiguration} onClick={() => setShowDrawConfiguration((open) => !open)} className="flex min-w-0 flex-1 items-center justify-between gap-4 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-padel-green"><span><h2 className="font-bold text-white">Draw configuration</h2><p className="mt-1 text-xs text-gray-400">{showDrawConfiguration ? 'Choose the division and competition format before generating the seeded preview.' : (division ? `${division.name} · ${drawFormat === 'knockout' ? 'Elimination' : drawFormat === 'group_only' ? 'Groups only' : 'Groups + elimination'}` : 'Expand to choose a division and format.')}</p></span>{showDrawConfiguration ? <ChevronUp className="shrink-0 text-padel-green" size={20} /> : <ChevronDown className="shrink-0 text-padel-green" size={20} />}</button>{settingsLocked && <span className="w-fit rounded-full border border-padel-green/40 bg-padel-green/10 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-padel-green">Published · settings locked</span>}</div>
                 {showDrawConfiguration && <div className="space-y-5 p-5">
                     <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-                        <label className="block text-sm font-bold text-gray-300">Division<select value={divisionId} onChange={(event) => { setDivisionId(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none focus-visible:border-padel-green focus-visible:ring-2 focus-visible:ring-padel-green/30"><option value="" className="text-black">Select a division</option>{divisions.map((item) => <option className="text-black" key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+                        <label className="block text-sm font-bold text-gray-300">Division<select value={divisionId} onChange={(event) => { setDivisionId(event.target.value); setActiveDrawKind('main'); setDraft(null); }} className="mt-2 block w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none focus-visible:border-padel-green focus-visible:ring-2 focus-visible:ring-padel-green/30"><option value="" className="text-black">Select a division</option>{divisions.map((item) => <option className="text-black" key={item.id} value={item.id}>{item.name}</option>)}</select></label>
                         {settingsLocked ? <p className="pb-3 text-sm text-gray-400">To change the format, create a new draft before publishing.</p> : <button type="button" onClick={previewDraft} disabled={!divisionId || loadingSaved} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-padel-green px-4 py-3 font-bold text-black transition-transform hover:brightness-110 active:scale-95 disabled:opacity-40">{loadingSaved ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}{savedDraw ? 'Regenerate preview' : 'Generate preview'}</button>}
                     </div>
+                    {availableDraws.length > 1 && <label className="block rounded-xl border border-amber-300/30 bg-amber-300/5 p-3 text-sm font-bold text-gray-200">Manage draw<select value={activeDrawKind} onChange={(event) => setActiveDrawKind(event.target.value)} className="mt-2 block w-full rounded-lg border border-amber-300/20 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-amber-300 focus-visible:ring-2 focus-visible:ring-amber-300/30">{availableDraws.map((item) => <option className="text-black" key={item.id} value={item.draw_kind}>{item.draw_kind === 'main' ? 'Main draw' : item.draw_kind === 'silver' ? 'Silver plate' : `${item.draw_kind} plate`}</option>)}</select><span className="mt-2 block text-xs font-normal leading-4 text-gray-400">Select the draw whose teams and results you want to manage.</span></label>}
                     <div className="grid gap-3 md:grid-cols-2">
                         <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Draw format<select disabled={settingsLocked} value={drawFormat} onChange={(event) => { setDrawFormat(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50"><option value="knockout" className="text-black">Elimination / knockout</option><option value="group_only" className="text-black">Groups only</option><option value="group_knockout" className="text-black">Groups + elimination</option></select></label>
                         {drawFormat !== 'knockout' && <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Number of groups<select disabled={settingsLocked} value={groupCount} onChange={(event) => { setGroupCount(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50">{[2, 3, 4, 5, 6, 8].map((count) => <option key={count} value={count} className="text-black">{count} groups</option>)}</select></label>}
                         {drawFormat === 'group_knockout' && <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Advance from each group<select disabled={settingsLocked} value={advancersPerGroup} onChange={(event) => { setAdvancersPerGroup(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50"><option value="1" className="text-black">Top 1 team</option><option value="2" className="text-black">Top 2 teams</option></select></label>}
+                        {drawFormat === 'knockout' && <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Back draw<select disabled={settingsLocked} value={plateMode} onChange={(event) => { setPlateMode(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50"><option value="none" className="text-black">No plate</option><option value="double" className="text-black">Double plate · Main + Silver</option><option value="triple" className="text-black">Triple plate · Main + Silver + Bronze</option></select><span className="mt-2 block text-xs font-normal leading-4 text-gray-500">Opening-round main-draw losers enter Silver. With a triple plate, opening-round Silver losers then enter Bronze.</span></label>}
                     </div>
                     {divisionId && <div className="flex items-start gap-3 rounded-xl border border-padel-green/20 bg-padel-green/5 p-4 text-sm text-gray-300"><span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-padel-green/10 text-padel-green"><Users size={18} /></span><span><strong className="text-white">{teams.length} teams ready</strong><br /><span className="text-gray-400">Built from {eligibleRegistrations.length} paid, active registration {eligibleRegistrations.length === 1 ? 'row' : 'rows'} in {division?.name}.</span></span></div>}
                 </div>}
@@ -652,6 +961,8 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
 
             {savedDraw?.status === 'published' && draft && <div className="rounded-2xl border border-white/10 bg-[#101010] p-5">
                 <div className="mb-4"><p className="font-bold text-white">Record results</p><p className="text-xs text-gray-400">Choose the winning team. The winner automatically moves into the next bracket slot.</p></div>
+                {activeDrawKind === 'main' && draft.format === 'knockout' && <div className="mb-5 rounded-xl border border-amber-300/30 bg-amber-300/5 p-4"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><p className="font-bold text-white">Silver plate</p><p className="mt-1 text-xs text-gray-400">{!['double', 'triple'].includes(plateMode) ? 'This existing draw was published without a back draw. Enable a Silver plate to create one from its opening-round losers.' : silverPlate ? `The Silver plate is published${plateMode === 'triple' ? '; its opening-round losers can progress into Bronze.' : ''}` : silverPlateReady ? 'All opening-round main-draw matches are complete. Create the Silver plate from their losing teams.' : 'Complete every opening-round main-draw match to unlock the Silver plate.'}</p></div>{!['double', 'triple'].includes(plateMode) ? <button type="button" onClick={enableSilverPlate} disabled={saving} className="shrink-0 rounded-lg border border-amber-300/40 px-3 py-2 text-sm font-bold text-amber-200 hover:bg-amber-300/10 disabled:opacity-50">Enable Silver plate</button> : silverPlate ? <a href={`/native-draws/${event.slug}`} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center justify-center rounded-lg border border-amber-300/40 px-3 py-2 text-sm font-bold text-amber-200 hover:bg-amber-300/10">View Silver plate</a> : silverPlateReady && <button type="button" onClick={createSilverPlate} disabled={saving} className="shrink-0 rounded-lg bg-amber-300 px-3 py-2 text-sm font-bold text-black disabled:opacity-50">Create Silver plate</button>}</div></div>}
+                {activeDrawKind === 'silver' && draft.format === 'knockout' && plateMode === 'triple' && <div className="mb-5 rounded-xl border border-orange-400/30 bg-orange-400/5 p-4"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><p className="font-bold text-white">Bronze plate</p><p className="mt-1 text-xs text-gray-400">{bronzePlate ? 'The Bronze plate is published and can now be managed separately.' : silverPlateReady ? 'All opening-round Silver plate matches are complete. Create the Bronze plate from their losing teams.' : 'Complete every opening-round Silver plate match to unlock the Bronze plate.'}</p></div>{bronzePlate ? <a href={`/native-draws/${event.slug}`} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center justify-center rounded-lg border border-orange-400/40 px-3 py-2 text-sm font-bold text-orange-200 hover:bg-orange-400/10">View Bronze plate</a> : silverPlateReady && <button type="button" onClick={createBronzePlate} disabled={saving} className="shrink-0 rounded-lg bg-orange-400 px-3 py-2 text-sm font-bold text-black disabled:opacity-50">Create Bronze plate</button>}</div></div>}
                 {draft.format === 'group_knockout' && !draft.matches.some((match) => match.stage === 'knockout') && <div className="mb-5 rounded-xl border border-padel-green/30 bg-padel-green/5 p-4"><p className="font-bold text-white">Elimination phase</p><p className="mt-1 text-xs text-gray-400">{groupStageComplete ? `All group matches are complete. The top ${advancersPerGroup} from each group will advance.` : 'Complete every group match before creating the elimination phase.'}</p>{groupStageComplete && <button type="button" onClick={createKnockoutFromGroups} disabled={saving} className="mt-3 rounded-lg bg-padel-green px-3 py-2 text-sm font-bold text-black disabled:opacity-50">Create elimination phase</button>}</div>}
                 <div className="space-y-3">
                     {draft.matches.filter((match) => match.status === 'pending' && match.entry_one && match.entry_two).map((match) => (
@@ -686,7 +997,10 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                         </div>
                     ))}
                 </div>
+                <div className="mt-5 flex flex-col gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-bold text-white">Complete this draw</p><p className="mt-1 text-xs text-gray-400">{drawReadyToComplete ? 'All playable matches have a recorded outcome. Lock this draw before reviewing ranking points.' : 'Complete every playable match before finalising this draw.'}</p></div><button type="button" onClick={completeDraw} disabled={saving || !drawReadyToComplete} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-padel-green/40 px-4 py-3 text-sm font-black text-padel-green hover:bg-padel-green/10 disabled:cursor-not-allowed disabled:opacity-40"><CheckCircle2 size={16} /> Mark complete</button></div>
             </div>}
+
+            {savedDraw?.status === 'completed' && draft && <div className="rounded-2xl border border-padel-green/30 bg-padel-green/5 p-5"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-padel-green/15 text-padel-green"><CheckCircle2 size={20} /></span><div><p className="font-bold text-white">{activeDrawKind === 'main' ? 'Main draw' : activeDrawKind === 'silver' ? 'Silver plate' : 'Bronze plate'} complete</p><p className="mt-1 text-sm text-gray-400">Results are locked for this draw. Ranking-points review will use these final placements before anything is awarded.</p></div></div></div>}
         </div>
     );
 };
