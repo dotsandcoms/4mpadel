@@ -1443,7 +1443,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 }}
                 className={`group cursor-pointer transition-all hover:bg-white/5`}
             >
-                <td className="px-3 py-4 whitespace-nowrap">
+                <td className="px-3 py-2.5 whitespace-nowrap">
                     <div className="flex flex-col">
                         <p className={`text-[11px] font-bold text-white group-hover:text-padel-green`}>
                             {eventDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -1453,7 +1453,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         </span>
                     </div>
                 </td>
-                <td className="px-3 py-4">
+                <td className="px-3 py-2.5">
                     <div className="flex items-center gap-3">
                         <p className={`text-[12px] font-black uppercase leading-5 tracking-tight ${isSelected ? 'text-white' : 'text-gray-300'}`}>
                             {e.event_name}
@@ -1461,7 +1461,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-padel-green animate-pulse" />}
                     </div>
                 </td>
-                <td className="w-[170px] px-3 py-4">
+                <td className="px-2.5 py-2.5">
                     {e.organisations?.slug ? (
                         <a
                             href={`/organisations/${e.organisations.slug}`}
@@ -1478,7 +1478,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         <span className="block truncate text-[11px] font-bold text-gray-400" title={organisationName}>{organisationName}</span>
                     )}
                 </td>
-                <td className="w-[140px] px-3 py-4">
+                <td className="px-2.5 py-2.5">
                     {e.clubs?.slug ? (
                         <a
                             href={`/clubs/${e.clubs.slug}`}
@@ -1495,7 +1495,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         <span className="block truncate text-[11px] font-bold text-gray-400" title={clubName}>{clubName}</span>
                     )}
                 </td>
-                <td className="px-3 py-4 text-center whitespace-nowrap">
+                <td className="px-2.5 py-2.5 text-center whitespace-nowrap">
                     <div className="flex flex-col items-center">
                         <span className={`text-lg font-black leading-none ${closeState.tone}`}>{closeState.value}</span>
                         {closeState.label && (
@@ -1503,13 +1503,13 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         )}
                     </div>
                 </td>
-                <td className="px-3 py-4 text-center whitespace-nowrap">
+                <td className="px-2.5 py-2.5 text-center whitespace-nowrap">
                     <div className="flex flex-col">
                         <span className="text-lg font-black leading-none text-white">{e.stats?.entries || 0}</span>
                         <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{e.stats?.paidCount || 0} Paid</span>
                     </div>
                 </td>
-                <td className="px-3 py-4">
+                <td className="px-2.5 py-2.5">
                     <div className="flex flex-col">
                         <span className="text-padel-green font-bold text-[11px]">R{e.stats?.collected?.toLocaleString() || 0} / R{e.stats?.billed?.toLocaleString() || 0}</span>
                         {(e.stats?.outstanding > 0) && (
@@ -1517,20 +1517,20 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         )}
                     </div>
                 </td>
-                <td className="px-3 py-4">
+                <td className="px-2.5 py-2.5">
                     {e.stats?.uniquePlayersCount > 0 ? (
-                        <div className="flex items-center gap-4">
-                            <div className="flex flex-col items-center min-w-[32px]">
+                        <div className="flex items-center gap-3">
+                            <div className="flex flex-col items-center min-w-[28px]">
                                 <span className="text-[#BFFF00] font-black text-sm">{e.stats.licenses?.full || 0}</span>
                                 <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Full</span>
                                 <div className="w-full h-0.5 bg-[#BFFF00] rounded-full mt-0.5" />
                             </div>
-                            <div className="flex flex-col items-center min-w-[32px]">
+                            <div className="flex flex-col items-center min-w-[28px]">
                                 <span className="text-[#0ea5e9] font-black text-sm">{e.stats.licenses?.temp || 0}</span>
                                 <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Temp</span>
                                 <div className="w-full h-0.5 bg-[#0ea5e9] rounded-full mt-0.5" />
                             </div>
-                            <div className="flex flex-col items-center min-w-[32px]">
+                            <div className="flex flex-col items-center min-w-[28px]">
                                 <span className="text-[#ff6b6b] font-black text-sm">{e.stats.licenses?.none || 0}</span>
                                 <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">None</span>
                                 <div className="w-full h-0.5 bg-[#ff6b6b]/30 rounded-full mt-0.5" />
@@ -1540,19 +1540,17 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">No Players</span>
                     )}
                 </td>
-                <td className="px-3 py-4 text-right whitespace-nowrap">
-                    <div className="flex items-center justify-end gap-1.5">
+                <td className="px-2 py-2.5 text-right whitespace-nowrap">
+                    <div className="flex items-center justify-end gap-1">
                         {(e.slug || e.id) && (
                             <a
-                                href={`/calendar/${e.slug || e.id}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                                href={`/admin?tab=calendar&editEvent=${encodeURIComponent(e.id)}`}
                                 onClick={(event) => event.stopPropagation()}
-                                title="View event page"
-                                aria-label={`View ${e.event_name} event page`}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-padel-green/25 bg-padel-green/5 text-padel-green transition-[color,background-color,transform] hover:bg-padel-green hover:text-black active:scale-[0.96]"
+                                title="Edit event in Calendar Manager"
+                                aria-label={`Edit ${e.event_name} in Calendar Manager`}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-padel-green/25 bg-padel-green/5 text-padel-green transition-[color,background-color,transform] hover:bg-padel-green hover:text-black active:scale-[0.96]"
                             >
-                                <Calendar size={16} strokeWidth={1.8} />
+                                <Calendar size={15} strokeWidth={1.8} />
                             </a>
                         )}
                         {e.organiser_email && (
@@ -1561,9 +1559,9 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                 onClick={(event) => event.stopPropagation()}
                                 title="Email organiser"
                                 aria-label={`Email the organiser of ${e.event_name}`}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-padel-green/25 bg-padel-green/5 text-padel-green transition-[color,background-color,transform] hover:bg-padel-green hover:text-black active:scale-[0.96]"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-padel-green/25 bg-padel-green/5 text-padel-green transition-[color,background-color,transform] hover:bg-padel-green hover:text-black active:scale-[0.96]"
                             >
-                                <Mail size={16} strokeWidth={1.8} />
+                                <Mail size={15} strokeWidth={1.8} />
                             </a>
                         )}
                         <button
@@ -1575,9 +1573,9 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             }}
                             title="Manage registrations"
                             aria-label={`Manage registrations for ${e.event_name}`}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-padel-green/25 bg-padel-green/5 text-padel-green transition-[color,background-color,transform] hover:bg-padel-green hover:text-black active:scale-[0.96]"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-padel-green/25 bg-padel-green/5 text-padel-green transition-[color,background-color,transform] hover:bg-padel-green hover:text-black active:scale-[0.96]"
                         >
-                            <UserPlus size={16} strokeWidth={1.8} />
+                            <UserPlus size={15} strokeWidth={1.8} />
                         </button>
                         {isEventManagementModule && (
                         <button
@@ -1585,7 +1583,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             onClick={(ev) => { ev.stopPropagation(); handleRemoveFromManager(e); }}
                             title="Remove from Event Manager"
                             aria-label={`Remove ${e.event_name} from Event Manager`}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/5 text-gray-600 transition-[color,background-color,transform] hover:bg-red-500/10 hover:text-red-400 active:scale-[0.96] opacity-0 group-hover:opacity-100 focus:opacity-100"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/5 text-gray-600 transition-[color,background-color,transform] hover:bg-red-500/10 hover:text-red-400 active:scale-[0.96] opacity-0 group-hover:opacity-100 focus:opacity-100"
                         >
                             <Trash2 size={15} strokeWidth={1.8} />
                         </button>
@@ -1638,17 +1636,17 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 {/* High-Density Event List */}
                 <div className="bg-black/20 rounded-2xl border border-white/5 overflow-hidden">
                     <div className="max-h-[360px] overflow-auto no-scrollbar">
-                        <table className="w-full min-w-[1180px] table-fixed text-left border-collapse">
+                        <table className="w-full min-w-[1096px] table-fixed text-left border-collapse">
                             <colgroup>
-                                <col className="w-[120px]" />
-                                <col className="w-[220px]" />
-                                <col className="w-[150px]" />
-                                <col className="w-[120px]" />
-                                <col className="w-[120px]" />
-                                <col className="w-[84px]" />
-                                <col className="w-[170px]" />
-                                <col className="w-[145px]" />
-                                <col className="w-[130px]" />
+                                <col className="w-[110px]" />
+                                <col className="w-[175px]" />
+                                <col className="w-[125px]" />
+                                <col className="w-[100px]" />
+                                <col className="w-[100px]" />
+                                <col className="w-[68px]" />
+                                <col className="w-[140px]" />
+                                <col className="w-[134px]" />
+                                <col className="w-[144px]" />
                             </colgroup>
                             <thead className="sticky top-0 bg-[#1a1a1a] text-[10px] font-black uppercase text-gray-500 border-b border-white/5 z-10">
                                 <tr>
@@ -1694,17 +1692,17 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         </button>
                         {(showCompleted || eventSearch) && (
                             <div className="max-h-[320px] overflow-y-auto no-scrollbar border-t border-white/5">
-                                <table className="w-full min-w-[1180px] table-fixed text-left border-collapse">
+                                <table className="w-full min-w-[1096px] table-fixed text-left border-collapse">
                                     <colgroup>
-                                        <col className="w-[120px]" />
-                                        <col className="w-[220px]" />
-                                        <col className="w-[150px]" />
-                                        <col className="w-[120px]" />
-                                        <col className="w-[120px]" />
-                                        <col className="w-[84px]" />
-                                        <col className="w-[170px]" />
-                                        <col className="w-[145px]" />
-                                        <col className="w-[130px]" />
+                                        <col className="w-[110px]" />
+                                        <col className="w-[175px]" />
+                                        <col className="w-[125px]" />
+                                        <col className="w-[100px]" />
+                                        <col className="w-[100px]" />
+                                        <col className="w-[68px]" />
+                                        <col className="w-[140px]" />
+                                        <col className="w-[134px]" />
+                                        <col className="w-[144px]" />
                                     </colgroup>
                                     <tbody className="divide-y divide-white/5">
                                         {pastEvents.map(renderEventRow)}

@@ -101,6 +101,7 @@ const CalendarManager = () => {
     const [orgSearchQuery, setOrgSearchQuery] = useState('');
     const orgSearchRef = useRef(null);
     const orgSelectedRef = useRef(false);
+    const handledEditEventRef = useRef(false);
 
     const openBuilder = (event = null) => {
         setBuilderEvent(event);
@@ -153,6 +154,26 @@ const CalendarManager = () => {
     useEffect(() => {
         fetchEvents();
     }, []);
+
+    // Event Finance links here when the calendar icon is clicked. Open the
+    // appropriate editable form, then clear the one-time deep-link parameter.
+    useEffect(() => {
+        if (handledEditEventRef.current || events.length === 0) return;
+        const editEventId = new URLSearchParams(window.location.search).get('editEvent');
+        if (!editEventId) return;
+
+        const event = events.find((item) => String(item.id) === editEventId);
+        if (!event) return;
+
+        handledEditEventRef.current = true;
+        if (event.is_manual) openBuilder(event);
+        else handleEdit(event);
+
+        const params = new URLSearchParams(window.location.search);
+        params.delete('editEvent');
+        const query = params.toString();
+        window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+    }, [events]);
 
     // Type-ahead organisation search for the legacy edit modal
     useEffect(() => {
