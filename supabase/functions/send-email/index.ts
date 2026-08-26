@@ -1255,6 +1255,9 @@ serve(async (req: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  let queueRowId: string | null = null;
+  let supabaseAdmin: ReturnType<typeof createClient> | null = null;
+
   try {
     const resendApiKey = Deno.env.get('RESEND_API_KEY');
     if (!resendApiKey) {
@@ -1271,7 +1274,7 @@ serve(async (req: Request) => {
     }
 
     // Initialize Supabase Admin Client
-    const supabaseAdmin = createClient(
+    supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
@@ -1353,6 +1356,27 @@ serve(async (req: Request) => {
       }
     }
 
+    // The queue is an internal audit trail. It is written here rather than by
+    // the browser because email_queue is intentionally protected by RLS.
+    const queuedRecipients = [...(Array.isArray(to) ? to : to ? [to] : []), ...(Array.isArray(bcc) ? bcc : bcc ? [bcc] : [])]
+      .filter(Boolean)
+      .join(', ');
+    const { data: queueRow, error: queueError } = await supabaseAdmin
+      .from('email_queue')
+      .insert({
+        recipient_email: queuedRecipients,
+        subject,
+        body_html: `Template: ${template} (queued for delivery)`,
+        status: 'pending',
+      })
+      .select('id')
+      .maybeSingle();
+    if (queueError) {
+      console.error('Email queue audit insert failed:', queueError.message);
+    } else {
+      queueRowId = (queueRow as { id?: string } | null)?.id ?? null;
+    }
+
     console.info(`Dispatching Resend email template [${template}] to TO: ${finalTo?.join(', ') || 'none'} | BCC: ${finalBcc?.length || 0} recipients`);
 
     const payload: any = {
@@ -1384,6 +1408,16 @@ serve(async (req: Request) => {
 
     const responseData = await response.json();
 
+    if (queueRowId) {
+      const { error: queueUpdateError } = await supabaseAdmin
+        .from('email_queue')
+        .update({ status: 'sent', processed_at: new Date().toISOString() })
+        .eq('id', queueRowId);
+      if (queueUpdateError) {
+        console.error('Email queue sent-status update failed:', queueUpdateError.message);
+      }
+    }
+
     return new Response(
       JSON.stringify({ success: true, messageId: responseData.id }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
@@ -1391,6 +1425,18 @@ serve(async (req: Request) => {
 
   } catch (error: any) {
     console.error('Edge Function Error:', error.message);
+    if (queueRowId && supabaseAdmin) {
+      const { error: queueUpdateError } = await supabaseAdmin
+        .from('email_queue')
+        .update({
+          status: 'failed',
+          error_message: error.message,
+        })
+        .eq('id', queueRowId);
+      if (queueUpdateError) {
+        console.error('Email queue failed-status update failed:', queueUpdateError.message);
+      }
+    }
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }

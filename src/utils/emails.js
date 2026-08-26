@@ -1,8 +1,9 @@
 import { supabase } from '../supabaseClient';
 
 /**
- * Dispatches a transaction email notification via the secure Supabase Edge Function,
- * writing a row to public.email_queue first for database logging and tracking.
+ * Dispatches a transaction email notification via the secure Supabase Edge Function.
+ * The function writes its own email_queue audit row using server authority; the
+ * browser must never write to that protected table directly.
  * 
  * @param {string} to - Recipient email address
  * @param {string} template - Template identifier (welcome, event_entry, org_applied, etc.)
@@ -14,140 +15,19 @@ export const sendEmail = async (to, template, variables = {}) => {
         return { success: false, error: 'Missing recipient' };
     }
 
-    const subject = getSubjectForTemplate(template, variables);
-
-    // 1. Create a tracking audit row in the email_queue
-    let queueRowId = null;
     try {
-        const { data: queueRow, error: queueError } = await supabase
-            .from('email_queue')
-            .insert({
-                recipient_email: to,
-                subject: subject,
-                body_html: `Template: ${template} (Waiting for server processing)`,
-                status: 'pending'
-            })
-            .select('id')
-            .single();
-
-        if (!queueError && queueRow) {
-            queueRowId = queueRow.id;
-        }
-    } catch (dbErr) {
-        console.error('Failed to log email trigger to public.email_queue:', dbErr);
-    }
-
-    try {
-        // 2. Safely invoke our secure Supabase Edge Function
+        // Safely invoke our secure Supabase Edge Function. It owns all audit
+        // writes, so RLS remains closed to browser clients.
         const { data, error } = await supabase.functions.invoke('send-email', {
             body: { to, template, variables }
         });
 
         if (error) throw error;
 
-        // 3. Mark the email as successfully sent
-        if (queueRowId) {
-            await supabase
-                .from('email_queue')
-                .update({
-                    status: 'sent',
-                    processed_at: new Date().toISOString()
-                })
-                .eq('id', queueRowId);
-        }
-
         return { success: true, messageId: data?.messageId };
 
     } catch (err) {
         console.error(`Email dispatch via Edge Function failed for [${template}]:`, err.message);
-
-        // 4. Mark the queue row as failed with details
-        if (queueRowId) {
-            await supabase
-                .from('email_queue')
-                .update({
-                    status: 'failed',
-                    error_message: err.message
-                })
-                .eq('id', queueRowId);
-        }
-
         return { success: false, error: err.message };
-    }
-};
-
-/**
- * Matches templates to their exact localized subject lines for the database log.
- */
-const getSubjectForTemplate = (template, vars) => {
-    switch (template) {
-        case 'welcome': 
-            return `Welcome to 4M Padel South Africa! 🎾`;
-        case 'event_entry': 
-            return `Registration Confirmed: ${vars.eventName || 'Tournament'}! 🏆`;
-        case 'org_applied': 
-            return `Organisation Application Received - 4M Padel 🏢`;
-        case 'admin_org_applied': 
-            return `⚠️ Action Required: New Organisation Pending Review!`;
-        case 'org_approved': 
-            return `Congratulations! Your Organisation is Approved! 🎉`;
-        case 'org_rejected': 
-            return `Update on your Organisation Application`;
-        case 'club_applied':
-            return `Club Application Received - 4M Padel 🏟️`;
-        case 'admin_club_applied':
-            return `⚠️ Action Required: New Club Pending Review!`;
-        case 'club_approved':
-            return `Congratulations! Your Club is Approved! 🎉`;
-        case 'club_rejected':
-            return `Update on your Club Application`;
-        case 'club_member_added':
-            return `You've been added to ${vars.clubName || 'a club'} on 4M Padel`;
-        case 'club_claim_applied':
-            return `Club claim received: ${vars.clubName || 'Club'} — pending review`;
-        case 'admin_club_claim_applied':
-            return `⚠️ Action Required: Club claim pending — ${vars.clubName || 'Club'}`;
-        case 'club_claim_approved':
-            return `Club claim approved: ${vars.clubName || 'Club'} 🎉`;
-        case 'club_claim_rejected':
-            return `Update on your club claim: ${vars.clubName || 'Club'}`;
-        case 'club_claim_invite':
-            return `You've been invited to claim a club: ${vars.clubName || 'a club'} on 4M Padel`;
-        case 'event_pending_sanction': 
-            return `🏆 Sanction Requested: ${vars.eventName || 'New Event'}`;
-        case 'event_sanctioned': 
-            return `Tournament Sanctioned & Live: ${vars.eventName}! 🏆`;
-        case 'event_rejected': 
-            return `Sanction Update: ${vars.eventName}`;
-        case 'draws_ready': 
-            return `Draws Published: ${vars.eventName}! 🎾`;
-        case 'registration_pending_payment':
-            return `Complete payment: ${vars.eventName || 'Tournament'} — registration not confirmed`;
-        case 'event_registration':
-            return vars.paid
-                ? `Registration Confirmed: ${vars.eventName || 'Tournament'}! ✅`
-                : `You're Registered: ${vars.eventName || 'Tournament'}! 🎾`;
-        case 'payment_confirmation':
-            return `Payment Confirmed: ${vars.eventName || 'Tournament'} ✅`;
-        case 'partner_entry_paid':
-            return vars.pendingPayment
-                ? `You're entered: ${vars.eventName || 'Tournament'} 🎾`
-                : `Entry paid: ${vars.eventName || 'Tournament'} ✅`;
-        case 'entry_withdrawn':
-            return vars.recipientRole === 'partner'
-                ? `${vars.withdrawnPlayerName || 'Your partner'} withdrew from ${vars.eventName || 'Tournament'}`
-                : `Withdrawal confirmed: ${vars.eventName || 'Tournament'}`;
-        case 'entry_refunded':
-            return `Refund Initiated: ${vars.eventName || 'Tournament'} ✅`;
-        case 'organiser_payout_request':
-            return `Payout requested: ${vars.eventName || 'Tournament'} — ${vars.amountRequested || vars.dueToOrganiser || ''}`;
-        case 'partner_invite':
-            return `${vars.inviterName || 'Your partner'} registered you for ${vars.eventName || 'a tournament'}! 🎾`;
-        case 'partner_assigned':
-            return `You've been paired up: ${vars.eventName || 'Tournament'} 🎾`;
-        case 'profile_invite':
-            return `${vars.inviterName || 'A 4M Padel player'} invited you to join 4M Padel 🎾`;
-        default: 
-            return vars.subject || 'Notification from 4M Padel';
     }
 };
