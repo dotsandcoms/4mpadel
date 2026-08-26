@@ -354,6 +354,7 @@ const FeaturedCarousel = ({ events }) => {
 };
 
 const CalendarEventItem = ({ event, index, onSchedule, isOnSchedule, scheduleBusy }) => {
+    const isCancelled = event.event_status === 'cancelled';
     let tierColor = 'border-white/10';
     let bgGradient = 'bg-white/5';
 
@@ -385,7 +386,7 @@ const CalendarEventItem = ({ event, index, onSchedule, isOnSchedule, scheduleBus
     const handleScheduleClick = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (scheduleBusy || !onSchedule) return;
+        if (isCancelled || scheduleBusy || !onSchedule) return;
         onSchedule(event);
     };
 
@@ -404,7 +405,7 @@ const CalendarEventItem = ({ event, index, onSchedule, isOnSchedule, scheduleBus
                 <div className={`absolute inset-0 ${bgGradient} opacity-10 group-hover:opacity-30 transition-opacity`}></div>
 
                 {/* Add / remove from My Schedule */}
-                <button
+                {!isCancelled && <button
                     type="button"
                     onClick={handleScheduleClick}
                     disabled={scheduleBusy}
@@ -417,7 +418,13 @@ const CalendarEventItem = ({ event, index, onSchedule, isOnSchedule, scheduleBus
                     } ${scheduleBusy ? 'opacity-50 cursor-wait' : ''}`}
                 >
                     {isOnSchedule ? <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" strokeWidth={3} /> : <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" strokeWidth={2.5} />}
-                </button>
+                </button>}
+
+                {isCancelled && (
+                    <span className="absolute top-2 right-2 z-20 rounded-full border border-red-500/40 bg-red-500/15 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-red-300">
+                        Cancelled
+                    </span>
+                )}
 
                 <div className="flex flex-row items-center gap-3 sm:gap-5 relative z-10 w-full min-w-0">
 
@@ -791,7 +798,7 @@ const Calendar = () => {
             const matchesDrawerStatus = statusFilters.length === 0 || statusFilters.includes(status);
 
             const matchesCity = cityFilter === 'All' || city === cityFilter;
-            const matchesSchedule = !scheduleOnly || scheduledEventIds.has(Number(event.id));
+            const matchesSchedule = !scheduleOnly || (event.event_status !== 'cancelled' && scheduledEventIds.has(Number(event.id)));
 
 
             let matchesTiming = true;
@@ -824,6 +831,7 @@ const Calendar = () => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         return events.filter((event) => {
+            if (event.event_status === 'cancelled') return false;
             if (!scheduledEventIds.has(Number(event.id))) return false;
             const endDate = new Date(event.end_date || event.start_date);
             return !isNaN(endDate.getTime()) && endDate >= today;
@@ -1286,7 +1294,7 @@ const Calendar = () => {
                                             event={event}
                                             index={index}
                                             onSchedule={handleToggleSchedule}
-                                            isOnSchedule={scheduledEventIds.has(Number(event.id))}
+                                            isOnSchedule={event.event_status !== 'cancelled' && scheduledEventIds.has(Number(event.id))}
                                             scheduleBusy={scheduleBusyId === Number(event.id)}
                                         />
                                     ))}

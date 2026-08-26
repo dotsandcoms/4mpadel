@@ -36,6 +36,7 @@ type Action =
     | 'withdraw_all'
     | 'remove_partner'
     | 'admin_remove'
+    | 'cancel_event'
     | 'switch_division'
     | 'retry_failed';
 
@@ -44,7 +45,8 @@ type RefundReason =
     | 'partner_withdraw'
     | 'owner_removed_partner'
     | 'admin_removal'
-    | 'admin_cash_refund';
+    | 'admin_cash_refund'
+    | 'event_cancelled';
 
 async function sendEmailViaEdge(payload: {
     to: string;
@@ -943,6 +945,7 @@ serve(async (req: Request) => {
             target_division_id,
             top_up_reference,
             payment_refund_id,
+            cancellation_reason,
         } = await req.json() as {
             registration_id?: string;
             action?: Action;
@@ -952,6 +955,7 @@ serve(async (req: Request) => {
             target_division_id?: string;
             top_up_reference?: string;
             payment_refund_id?: string;
+            cancellation_reason?: string;
         };
         if (!action) return json(400, { error: 'Missing action' });
 
@@ -1003,7 +1007,21 @@ serve(async (req: Request) => {
         let targets: RegistrationRow[] = [];
         let eventId: string | number | undefined;
 
-        if (action === 'withdraw_all') {
+        if (action === 'cancel_event') {
+            if (!event_id) return json(400, { error: 'event_id required for cancel_event' });
+            eventId = event_id;
+            if (!isAdmin) {
+                const canManage = await resolveCanManageEvent(supabaseAdmin, callerEmail, eventId);
+                if (!canManage) return json(403, { error: 'You do not have permission to cancel this event' });
+                isAdmin = true;
+            }
+            const { data } = await supabaseAdmin
+                .from('event_registrations')
+                .select('*')
+                .eq('event_id', event_id)
+                .neq('status', 'withdrawn');
+            targets = (data || []) as RegistrationRow[];
+        } else if (action === 'withdraw_all') {
             if (!event_id) return json(400, { error: 'event_id required for withdraw_all' });
             eventId = event_id;
             const { data } = await supabaseAdmin
@@ -1075,7 +1093,7 @@ serve(async (req: Request) => {
             });
         }
 
-        if (targets.length === 0) {
+        if (targets.length === 0 && action !== 'cancel_event') {
             return json(200, { processed: false, reason: 'no_active_registrations', refunds: [] });
         }
 
@@ -1145,7 +1163,8 @@ serve(async (req: Request) => {
 
             // Determine reason.
             let reason: RefundReason;
-            if (action === 'admin_remove') reason = 'admin_removal';
+            if (action === 'cancel_event') reason = 'event_cancelled';
+            else if (action === 'admin_remove') reason = 'admin_removal';
             else if (action === 'remove_partner') reason = 'owner_removed_partner';
             else {
                 // withdraw / withdraw_all: owner vs partner perspective
@@ -1200,7 +1219,7 @@ serve(async (req: Request) => {
             // Emails.
             const div = (divisions || []).find((d) => d.id === reg.division_id || d.name === reg.division);
             const entryFee = Number(div?.entry_fee || 0);
-            if (summary.refunded_rands > 0) {
+            if (summary.refunded_rands > 0 && action !== 'cancel_event') {
                 await sendEmailViaEdge({
                     to: reg.email,
                     template: 'entry_refunded',
@@ -1217,7 +1236,7 @@ serve(async (req: Request) => {
             }
             await sendEmailViaEdge({
                 to: reg.email,
-                template: 'entry_withdrawn',
+                template: action === 'cancel_event' ? 'event_cancelled' : 'entry_withdrawn',
                 variables: {
                     eventId,
                     eventName: event?.event_name || 'Tournament',
@@ -1229,7 +1248,9 @@ serve(async (req: Request) => {
                     playerName: reg.full_name,
                     partnerName: reg.partner_name || '',
                     refundAmount: summary.refunded_rands > 0 ? fmtR(summary.refunded_rands) : undefined,
+                    refundStatus: summary.status,
                     entryFee,
+                    cancellationReason: cancellation_reason || '',
                 },
             });
 
@@ -1243,6 +1264,40 @@ serve(async (req: Request) => {
         }
 
         const totalRefunded = roundRands(results.reduce((s, r) => s + r.refunded_rands, 0));
+        if (action === 'cancel_event') {
+            const needsAttention = results.some((r) => r.status === 'needs_attention' || r.status.startsWith('skipped:'));
+            const processing = results.some((r) => r.status === 'processing');
+            const refundStatus = needsAttention ? 'needs_attention' : (processing ? 'processing' : 'complete');
+            const now = new Date().toISOString();
+
+            const { error: cancelError } = await supabaseAdmin
+                .from('calendar')
+                .update({
+                    event_status: 'cancelled',
+                    cancelled_at: now,
+                    cancelled_by: callerEmail,
+                    cancellation_reason: String(cancellation_reason || '').trim() || null,
+                    cancellation_refund_status: refundStatus,
+                    featured_event: false,
+                    featured_result: false,
+                    is_spotlight: false,
+                    allow_payments: false,
+                })
+                .eq('id', eventId);
+            if (cancelError) return json(500, { error: `Refunds processed but event status update failed: ${cancelError.message}` });
+
+            await supabaseAdmin.from('player_schedule_events').delete().eq('event_id', eventId);
+
+            return json(200, {
+                processed: true,
+                cancelled: true,
+                refund_status: refundStatus,
+                registrations_processed: results.length,
+                total_refunded_rands: totalRefunded,
+                refunds: results,
+            });
+        }
+
         return json(200, { processed: true, total_refunded_rands: totalRefunded, refunds: results });
     } catch (error) {
         console.error('paystack-refund error:', error);

@@ -1,67 +1,72 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { useNavigate, Link } from 'react-router-dom';
-import { Users, Calendar, Trophy, Star, Activity, UserPlus, MapPin, ExternalLink, Home, Plus, FileText, Settings, ArrowRight, Building } from 'lucide-react';
+import { motion as Motion, MotionConfig } from 'framer-motion';
+import { Users, Calendar, Star, Activity, UserPlus, MapPin, Plus, FileText, Settings, ArrowRight, Building2 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 import { supabase } from '../../supabaseClient';
 
-const StatCard = ({ title, value, subtext, icon: Icon, delay, loading, onClick, color = 'padel-green' }) => (
-    <motion.div
+const StatCard = ({ title, value, subtext, icon: StatIcon, delay, loading, onClick, actionLabel }) => (
+    <Motion.button
+        type="button"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay, duration: 0.4, ease: "easeOut" }}
-
         onClick={onClick}
-        className="relative group cursor-pointer"
+        className="relative group text-left rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-padel-green focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+        aria-label={`${title}: ${loading ? 'loading' : value}. ${subtext}`}
     >
         <div className="absolute -inset-0.5 bg-gradient-to-r from-padel-green/20 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition duration-500 blur"></div>
         <div className="relative bg-[#1a1a1a]/40 backdrop-blur-xl p-6 rounded-2xl border border-white/10 overflow-hidden hover:border-padel-green/50 transition-all hover:bg-[#1a1a1a]/60 h-full">
             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-20 group-hover:scale-110 transition-all duration-500">
-                <Icon size={64} className="text-padel-green" />
+                {React.createElement(StatIcon, { size: 64, className: 'text-padel-green', 'aria-hidden': true })}
             </div>
             
-            <div className="flex flex-col justify-between h-full">
+            <div className="flex min-h-[190px] flex-col justify-between h-full">
                 <div>
                     <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-3">{title}</p>
                     <h3 className="text-4xl font-bold text-white mb-2 font-display tabular-nums tracking-tight">
                         {loading ? <span className="animate-pulse opacity-50">---</span> : value}
                     </h3>
                 </div>
-                <div className="flex items-center gap-2 mt-4">
-
-                    <span className="flex h-2 w-2 rounded-full bg-padel-green animate-pulse"></span>
+                <div className="flex flex-wrap items-center gap-2 mt-4">
+                    <span className="flex h-2 w-2 rounded-full bg-padel-green" aria-hidden="true"></span>
                     <p className="text-padel-green/70 text-[10px] font-bold uppercase tracking-widest group-hover:text-padel-green transition-colors">
                         {subtext}
                     </p>
+                    {actionLabel && (
+                        <span className="ml-auto rounded-full border border-padel-green/60 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-padel-green">
+                            {actionLabel}
+                        </span>
+                    )}
                 </div>
             </div>
         </div>
-    </motion.div>
+    </Motion.button>
 );
 
-const QuickAction = ({ icon: Icon, label, onClick, delay }) => (
-    <motion.button
+const QuickAction = ({ icon: ActionIcon, label, onClick, delay }) => (
+    <Motion.button
+        type="button"
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay, duration: 0.3 }}
 
         onClick={onClick}
-        className="flex items-center gap-2 md:gap-3 bg-white/5 hover:bg-padel-green hover:text-black border border-white/10 p-3 md:p-4 rounded-2xl transition-all duration-300 group overflow-hidden"
+        className="flex items-center gap-2 md:gap-3 bg-white/5 hover:bg-padel-green hover:text-black border border-white/10 p-3 md:p-4 rounded-2xl transition-colors duration-300 group overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-padel-green focus-visible:ring-offset-2 focus-visible:ring-offset-black active:scale-[0.96] motion-reduce:transition-none"
     >
         <div className="p-1.5 md:p-2 bg-white/5 rounded-xl group-hover:bg-black/10 transition-colors flex-shrink-0">
-            <Icon size={18} />
+            {React.createElement(ActionIcon, { size: 18, 'aria-hidden': true })}
         </div>
         <span className="font-bold text-[11px] md:text-sm tracking-wide truncate">{label}</span>
-    </motion.button>
+    </Motion.button>
 );
 
 
 
 const DashboardHome = ({ onTabChange }) => {
-    const navigate = useNavigate();
     const [stats, setStats] = useState({
         totalPlayers: 0,
+        totalClubs: 0,
         totalOrganisations: 0,
         approvedOrganisations: 0,
         totalCoaches: 0,
@@ -77,9 +82,11 @@ const DashboardHome = ({ onTabChange }) => {
 
     useEffect(() => {
         fetchDashboardData();
+        // Dashboard data is intentionally loaded once when this view mounts.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const buildRegistrationTrend = (playersWithDates) => {
+    const buildRegistrationTrend = (playersWithDates, totalPlayers) => {
         const now = new Date();
         const buckets = [];
 
@@ -88,7 +95,7 @@ const DashboardHome = ({ onTabChange }) => {
             buckets.push({
                 key: `${d.getFullYear()}-${d.getMonth()}`,
                 name: d.toLocaleString('default', { month: 'short' }),
-                players: 0,
+                registrations: 0,
             });
         }
 
@@ -97,10 +104,14 @@ const DashboardHome = ({ onTabChange }) => {
             const d = new Date(player.created_at);
             const key = `${d.getFullYear()}-${d.getMonth()}`;
             const bucket = buckets.find((b) => b.key === key);
-            if (bucket) bucket.players += 1;
+            if (bucket) bucket.registrations += 1;
         }
 
-        return buckets.map(({ name, players }) => ({ name, players }));
+        let cumulative = Math.max(0, (totalPlayers || 0) - (playersWithDates || []).length);
+        return buckets.map(({ name, registrations }) => {
+            cumulative += registrations;
+            return { name, players: cumulative, registrations };
+        });
     };
 
     const fetchDashboardData = async () => {
@@ -123,7 +134,13 @@ const DashboardHome = ({ onTabChange }) => {
                 .gte('created_at', trendStart.toISOString());
 
             if (trendError) console.error('Error fetching player trend:', trendError);
-            setChartData(buildRegistrationTrend(trendPlayers));
+            setChartData(buildRegistrationTrend(trendPlayers, playerCount));
+
+            const { count: clubCount, error: clubError } = await supabase
+                .from('clubs')
+                .select('*', { count: 'exact', head: true });
+
+            if (clubError) console.error('Error fetching clubs:', clubError);
 
             // 1.5. Fetch Organisation Stats
             const { count: totalOrgCount, error: orgError } = await supabase
@@ -147,6 +164,9 @@ const DashboardHome = ({ onTabChange }) => {
                 .from('coach_applications')
                 .select('*', { count: 'exact', head: true })
                 .eq('status', 'approved');
+
+            if (coachError) console.error('Error fetching coaches:', coachError);
+            if (approvedCoachError) console.error('Error fetching approved coaches:', approvedCoachError);
 
             // 2. Fetch Event Stats from 'calendar' table
             const { data: allEvents, error: calendarError } = await supabase
@@ -186,9 +206,12 @@ const DashboardHome = ({ onTabChange }) => {
 
             if (playerError) console.error('Error fetching players:', playerError);
             if (calendarError) console.error('Error fetching events:', calendarError);
+            if (recentError) console.error('Error fetching recent players:', recentError);
+            if (nextEventsError) console.error('Error fetching upcoming events:', nextEventsError);
 
             setStats({
                 totalPlayers: playerCount || 0,
+                totalClubs: clubCount || 0,
                 totalOrganisations: totalOrgCount || 0,
                 approvedOrganisations: approvedOrgCount || 0,
                 totalCoaches: totalCoachCount || 0,
@@ -209,17 +232,18 @@ const DashboardHome = ({ onTabChange }) => {
     };
 
     return (
+        <MotionConfig reducedMotion="user">
         <div className="space-y-8 pb-12">
             {/* Header */}
             <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <motion.div
+                <Motion.div
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.4 }}
                 >
                     <h2 className="text-3xl lg:text-4xl font-bold text-white mb-2">4M Padel Overview</h2>
                     <p className="text-gray-400">Live metrics across tournaments and players</p>
-                </motion.div>
+                </Motion.div>
             </div>
 
 
@@ -235,7 +259,7 @@ const DashboardHome = ({ onTabChange }) => {
 
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-5">
                 <StatCard
                     title="Total Players"
                     value={stats.totalPlayers}
@@ -244,13 +268,23 @@ const DashboardHome = ({ onTabChange }) => {
                     delay={0.1}
                     loading={loading}
                     onClick={() => onTabChange?.('players')}
+                    actionLabel="Directory"
+                />
+                <StatCard
+                    title="Total Clubs"
+                    value={stats.totalClubs}
+                    subtext="Club Directory"
+                    icon={Building2}
+                    delay={0.15}
+                    loading={loading}
+                    onClick={() => onTabChange?.('clubs')}
                 />
                 <StatCard
                     title="Organisations"
                     value={stats.totalOrganisations}
                     subtext={`${stats.approvedOrganisations} Approved`}
-                    icon={Building}
-                    delay={0.15}
+                    icon={Building2}
+                    delay={0.2}
                     loading={loading}
                     onClick={() => onTabChange?.('organisations')}
                 />
@@ -259,7 +293,7 @@ const DashboardHome = ({ onTabChange }) => {
                     value={stats.totalCoaches}
                     subtext={`${stats.approvedCoaches} Approved`}
                     icon={UserPlus}
-                    delay={0.2}
+                    delay={0.25}
                     loading={loading}
                     onClick={() => onTabChange?.('coaches')}
                 />
@@ -277,14 +311,14 @@ const DashboardHome = ({ onTabChange }) => {
                     value={stats.featuredEvents}
                     subtext="Homepage Highlights"
                     icon={Star}
-                    delay={0.4}
+                    delay={0.35}
                     loading={loading}
                     onClick={() => onTabChange?.('calendar')}
                 />
             </div>
 
             {/* Growth Chart Section */}
-            <motion.div
+            <Motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5, duration: 0.6 }}
@@ -294,9 +328,9 @@ const DashboardHome = ({ onTabChange }) => {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4 px-2">
                     <div>
                         <h3 className="text-xl md:text-2xl font-bold text-white uppercase tracking-tight flex items-center gap-3">
-                            <Activity className="text-padel-green w-5 h-5 md:w-6 md:h-6" /> Growth Overview
+                            <Activity className="text-padel-green w-5 h-5 md:w-6 md:h-6" /> Total Registered Players
                         </h3>
-                        <p className="text-gray-500 text-[10px] md:text-xs font-bold tracking-widest uppercase mt-1">New player sign-ups · last 7 months</p>
+                        <p className="text-gray-500 text-[10px] md:text-xs font-bold tracking-widest uppercase mt-1">Total registered players · last 7 months</p>
                     </div>
                 </div>
 
@@ -336,7 +370,12 @@ const DashboardHome = ({ onTabChange }) => {
                                     fontWeight: 'bold'
                                 }}
                                 itemStyle={{ color: '#CCFF00' }}
-                                formatter={(value) => [`${value} new`, 'Sign-ups']}
+                                formatter={(value, name, item) => [
+                                    value.toLocaleString('en-ZA'),
+                                    item?.payload?.registrations
+                                        ? `Registered players (+${item.payload.registrations})`
+                                        : 'Registered players'
+                                ]}
                                 labelFormatter={(label) => label}
                             />
                             <Area 
@@ -347,11 +386,12 @@ const DashboardHome = ({ onTabChange }) => {
                                 fillOpacity={1} 
                                 fill="url(#colorPlayers)" 
                                 animationDuration={2000}
+                                activeDot={{ r: 6, fill: '#CCFF00', stroke: '#0a0a0a', strokeWidth: 3 }}
                             />
                         </AreaChart>
                     </ResponsiveContainer>
                 </div>
-            </motion.div>
+            </Motion.div>
 
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mt-12 min-h-[600px]">
@@ -362,8 +402,8 @@ const DashboardHome = ({ onTabChange }) => {
                         <h3 className="text-xl md:text-2xl font-bold text-white uppercase tracking-tight flex items-center gap-3">
                             <Calendar className="text-padel-green w-5 h-5 md:w-6 md:h-6" /> Schedule
                         </h3>
-                        <button onClick={() => onTabChange?.('calendar')} className="text-padel-green text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 hover:translate-x-1 transition-transform">
-                            All <ArrowRight size={12} />
+                        <button type="button" onClick={() => onTabChange?.('calendar')} className="text-padel-green text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 hover:translate-x-1 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-padel-green rounded-md motion-reduce:transition-none">
+                            View calendar <ArrowRight size={12} />
                         </button>
                     </div>
 
@@ -384,14 +424,15 @@ const DashboardHome = ({ onTabChange }) => {
                         ) : (
                             <div className="grid gap-4">
                                 {upcomingCalendar.map((event, index) => (
-                                    <motion.div
+                                    <Motion.button
+                                        type="button"
                                         key={event.id}
                                         initial={{ opacity: 0, x: -10 }}
                                         whileInView={{ opacity: 1, x: 0 }}
                                         viewport={{ once: true }}
                                         transition={{ delay: 0.7 + (index * 0.1) }}
                                         onClick={() => onTabChange?.('calendar')}
-                                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-black/40 hover:bg-white/5 border border-white/5 hover:border-padel-green/30 transition-all group cursor-pointer"
+                                        className="flex w-full flex-col text-left sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-black/40 hover:bg-white/5 border border-white/5 hover:border-padel-green/30 transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-padel-green"
                                     >
                                         <div className="flex items-center gap-6">
                                             <div className="flex w-16 h-16 rounded-2xl bg-[#0a0a0a] border border-white/10 flex-col items-center justify-center flex-shrink-0 group-hover:border-padel-green/50 transition-colors">
@@ -423,7 +464,7 @@ const DashboardHome = ({ onTabChange }) => {
                                         <div className="hidden sm:block opacity-0 group-hover:opacity-100 transition-opacity">
                                             <ArrowRight className="text-padel-green" />
                                         </div>
-                                    </motion.div>
+                                    </Motion.button>
                                 ))}
                             </div>
                         )}
@@ -457,11 +498,12 @@ const DashboardHome = ({ onTabChange }) => {
                                 <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">No new players yet</p>
                             </div>
                         ) : (
-                            recentPlayers.map((player, index) => (
-                                <div
+                            recentPlayers.map((player) => (
+                                <button
+                                    type="button"
                                     key={player.id}
                                     onClick={() => onTabChange?.('players')}
-                                    className="flex items-center justify-between p-4 border-b border-white/5 hover:bg-white/5 transition-all cursor-pointer group"
+                                    className="flex w-full items-center justify-between p-4 border-b border-white/5 hover:bg-white/5 transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-padel-green"
                                 >
 
                                     <span className="text-white font-bold text-sm tracking-tight group-hover:text-padel-green transition-colors">{player.name}</span>
@@ -475,7 +517,7 @@ const DashboardHome = ({ onTabChange }) => {
                                     }`}>
                                         {!player.paid_registration ? 'Unpaid' : (player.license_type === 'full' ? 'Full' : 'Temp')}
                                     </span>
-                                </div>
+                                </button>
                             ))
 
                         )}
@@ -491,6 +533,7 @@ const DashboardHome = ({ onTabChange }) => {
                 </div>
             </div>
         </div>
+        </MotionConfig>
     );
 };
 

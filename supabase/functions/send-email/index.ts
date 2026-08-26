@@ -854,6 +854,28 @@ async function generateEmailBody(
       actionLabel = 'View Event Details';
       break;
 
+    case 'event_cancelled': {
+      subject = `Event cancelled: ${vars.eventName || 'Tournament'}`;
+      contentHtml = `
+        <h2 style="font-size: 24px; font-weight: 800; color: #EF4444; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Event Cancelled</h2>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 20px;">
+          Hi ${vars.playerName || 'Player'}, <strong style="color: #FFFFFF;">${vars.eventName || 'the event'}</strong> has been cancelled.
+          ${vars.division ? `Your entry in <strong style="color: #FFFFFF;">${vars.division}</strong> has been withdrawn automatically.` : ''}
+        </p>
+        ${vars.cancellationReason ? `<p style="font-size: 14px; line-height: 1.6; color: #CBD5E1; margin-bottom: 20px;"><strong style="color:#FFFFFF;">Reason:</strong> ${vars.cancellationReason}</p>` : ''}
+        <p style="font-size: 14px; line-height: 1.6; color: #94A3B8; margin-bottom: 24px;">
+          ${vars.refundStatus === 'needs_attention' || String(vars.refundStatus || '').startsWith('skipped:')
+            ? 'We could not confirm the refund automatically. The payment has been flagged for administrator review and support will follow up.'
+            : vars.refundAmount
+            ? `A refund of <strong style="color:#9AE900;">${vars.refundAmount}</strong> has been initiated to the original payment method. Refunds normally appear within 3–10 business days.`
+            : 'If no payment was collected for your entry, no refund is required.'}
+        </p>
+      `;
+      actionUrl = 'https://4mpadel.co.za/calendar';
+      actionLabel = 'View Event Calendar';
+      break;
+    }
+
     case 'entry_withdrawn': {
       const isPartnerRole = vars.recipientRole === 'partner';
       subject = isPartnerRole
@@ -985,19 +1007,38 @@ async function generateEmailBody(
               <td align="right" style="font-weight: bold; color: #9AE900;">${vars.organiserEmail || '—'}</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #64748B;">Funds collected (entry fees):</td>
-              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.collected || 'R 0'}</td>
+              <td style="padding: 8px 0; color: #64748B;">Total amount billed:</td>
+              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.totalBilled || vars.grossEntryFees || vars.collected || 'R 0'}</td>
             </tr>
+            ${vars.outstanding && vars.outstanding !== 'R 0' ? `
             <tr>
-              <td style="padding: 8px 0; color: #64748B;">Funds refunded:</td>
+              <td style="padding: 8px 0; color: #64748B;">Less outstanding entry fees:</td>
+              <td align="right" style="font-weight: bold; color: #F59E0B;">−${vars.outstanding}</td>
+            </tr>` : ''}
+            <tr>
+              <td style="padding: 8px 0; color: #64748B;">Gross entry fees collected:</td>
+              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.grossEntryFees || vars.collected || 'R 0'}</td>
+            </tr>
+            ${vars.paystackCollected ? `
+            <tr>
+              <td style="padding: 4px 0 4px 16px; color: #64748B; font-size: 12px;">of which Paystack:</td>
+              <td align="right" style="font-weight: bold; color: #CBD5E1; font-size: 12px;">${vars.paystackCollected}</td>
+            </tr>` : ''}
+            ${vars.manualCollected && vars.manualCollected !== 'R 0' ? `
+            <tr>
+              <td style="padding: 4px 0 8px 16px; color: #64748B; font-size: 12px;">of which Manual / EFT:</td>
+              <td align="right" style="font-weight: bold; color: #CBD5E1; font-size: 12px;">${vars.manualCollected}</td>
+            </tr>` : ''}
+            <tr>
+              <td style="padding: 8px 0; color: #64748B;">Less entry fee refunds:</td>
               <td align="right" style="font-weight: bold; color: #F87171;">−${vars.refunded || 'R 0'}</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #64748B;">Entry fee balance:</td>
-              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.balance || 'R 0'}</td>
+              <td style="padding: 8px 0; color: #64748B;">Final entry sales:</td>
+              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.finalEntrySales || vars.balance || 'R 0'}</td>
             </tr>
             <tr>
-              <td style="padding: 8px 0; color: #64748B;">Platform commission (5%):</td>
+              <td style="padding: 8px 0; color: #64748B;">Platform fees (5% of gross entry fees):</td>
               <td align="right" style="font-weight: bold; color: #F87171;">−${vars.commission || 'R 0'}</td>
             </tr>
             ${(() => {
@@ -1032,11 +1073,6 @@ async function generateEmailBody(
               <td style="padding: 12px 0 8px; color: #9AE900; font-weight: 800; border-top: 1px solid rgba(255,255,255,0.08);">Amount requested:</td>
               <td align="right" style="padding: 12px 0 8px; font-weight: 900; color: #9AE900; font-size: 18px; border-top: 1px solid rgba(255,255,255,0.08);">${vars.amountRequested || vars.dueToOrganiser || 'R 0'}</td>
             </tr>
-            ${vars.licenseRevenue && vars.licenseRevenue !== 'R 0' ? `
-            <tr>
-              <td style="padding: 8px 0; color: #64748B;">License revenue (retained by 4M):</td>
-              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.licenseRevenue}</td>
-            </tr>` : ''}
             <tr>
               <td style="padding: 8px 0; color: #64748B;">Requested:</td>
               <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.requestedAt || '—'}</td>

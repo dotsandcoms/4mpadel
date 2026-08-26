@@ -46,6 +46,7 @@ import {
     weeklySpotsRemaining,
 } from '../utils/weeklyRegistration';
 import TournamentProgressBar from '../components/TournamentProgressBar';
+import VideoModal from '../components/VideoModal';
 
 const formatPlayerName = (fullName) => {
     if (!fullName) return '';
@@ -400,70 +401,6 @@ const extractRankedinId = (url) => {
     return match ? match[1] : null;
 };
 
-const getYoutubeEmbedUrl = (url) => {
-    if (!url) return null;
-    let videoId = '';
-
-    if (url.includes('youtube.com/watch?v=')) {
-        videoId = url.split('v=')[1].split('&')[0];
-    } else if (url.includes('youtu.be/')) {
-        videoId = url.split('youtu.be/')[1].split('?')[0];
-    } else if (url.includes('youtube.com/embed/')) {
-        videoId = url.split('embed/')[1].split('?')[0];
-    }
-
-    if (!videoId && /^[a-zA-Z0-9_-]{11}$/.test(url)) {
-        videoId = url;
-    }
-
-    return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1` : null;
-};
-
-const VideoModal = ({ isOpen, onClose, videoUrl, title }) => {
-    if (!isOpen) return null;
-
-    const embedUrl = getYoutubeEmbedUrl(videoUrl);
-
-    return (
-        <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 md:p-8">
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                onClick={onClose}
-                className="absolute inset-0 bg-black/90 backdrop-blur-sm shadow-2xl"
-            />
-            <motion.div
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                className="relative w-full max-w-5xl aspect-video bg-black rounded-3xl overflow-hidden border border-white/10 shadow-2xl z-10"
-            >
-                <div className="absolute top-4 right-4 z-20">
-                    <button
-                        onClick={onClose}
-                        className="p-2 bg-black/40 hover:bg-black/60 text-white rounded-full backdrop-blur-md transition-colors border border-white/10"
-                    >
-                        <X className="w-6 h-6" />
-                    </button>
-                </div>
-
-                {embedUrl ? (
-                    <iframe
-                        src={embedUrl}
-                        title={title || "YouTube video player"}
-                        className="w-full h-full border-0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                        allowFullScreen
-                    />
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center text-white p-8 text-center">
-                        <p>Video not found or invalid URL</p>
-                    </div>
-                )}
-            </motion.div>
-        </div>
-    );
-};
-
 const parsePrizeBreakdown = (raw) => {
     if (!raw) return [];
     let data = raw;
@@ -681,13 +618,21 @@ const EventDetails = () => {
         if (!url) return null;
         const match = url.match(/[&?]list=([^&]+)/);
         const playlistId = match ? match[1] : null;
-        return playlistId ? `https://www.youtube.com/embed/videoseries?list=${playlistId}` : null;
+        if (!playlistId) return null;
+
+        const params = new URLSearchParams({ list: playlistId, rel: '0', playsinline: '1' });
+        if (typeof window !== 'undefined' && window.location?.origin) {
+            params.set('origin', window.location.origin);
+        }
+
+        return `https://www.youtube-nocookie.com/embed/videoseries?${params.toString()}`;
     };
 
     const { slug } = useParams(); // changed from id to slug
     const navigate = useNavigate();
     const location = useLocation();
     const [event, setEvent] = useState(null);
+    const isCancelled = event?.event_status === 'cancelled';
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setSubmitting] = useState(false);
     const [weather, setWeather] = useState(null);
@@ -1364,6 +1309,10 @@ const EventDetails = () => {
     useEffect(() => {
         let cancelled = false;
         const loadScheduleState = async () => {
+            if (isCancelled) {
+                if (!cancelled) setIsOnSchedule(false);
+                return;
+            }
             if (!manualUserEmail || !event?.id) {
                 if (!cancelled) setIsOnSchedule(false);
                 return;
@@ -1396,9 +1345,13 @@ const EventDetails = () => {
             window.removeEventListener(SCHEDULE_CHANGED_EVENT, onScheduleChanged);
             window.removeEventListener('4m:registrations-changed', onRegsChanged);
         };
-    }, [manualUserEmail, event?.id, hasEnteredEvent]);
+    }, [manualUserEmail, event?.id, hasEnteredEvent, isCancelled]);
 
     const handleToggleMySchedule = useCallback(async () => {
+        if (isCancelled) {
+            toast.error('Cancelled events cannot be added to My Schedule');
+            return;
+        }
         if (!manualUserEmail) {
             promptMembersOnly();
             return;
@@ -1426,7 +1379,7 @@ const EventDetails = () => {
         } finally {
             setScheduleBusy(false);
         }
-    }, [manualUserEmail, event?.id, isOnSchedule, scheduleBusy, promptMembersOnly, hasEnteredEvent]);
+    }, [manualUserEmail, event?.id, isOnSchedule, scheduleBusy, promptMembersOnly, hasEnteredEvent, isCancelled]);
 
     const loadManualRegistrationSummary = useCallback(async () => {
         if (!event?.is_manual || !manualUserEmail) {
@@ -3500,6 +3453,10 @@ const EventDetails = () => {
     }
 
     const handleRankedinRedirect = () => {
+        if (isCancelled) {
+            toast.error('This event has been cancelled');
+            return;
+        }
         const rId = event?.rankedin_id || extractRankedinId(event?.rankedin_url);
         if (event?.rankedin_url) {
             window.open(event.rankedin_url, '_blank');
@@ -3512,6 +3469,10 @@ const EventDetails = () => {
     };
 
     const openManualRegistration = () => {
+        if (isCancelled) {
+            toast.error('This event has been cancelled');
+            return;
+        }
         if (!manualUserEmail) {
             promptMembersOnly();
             return;
@@ -3829,7 +3790,7 @@ const EventDetails = () => {
 
     const activeRegistrationBlock = registrationBlock || manualAllRegistrationsBlock;
 
-    const isRegistrationAllowed = !isEventPassed && !isLive && !isRankedinRegistrationClosed;
+    const isRegistrationAllowed = !isCancelled && !isEventPassed && !isLive && !isRankedinRegistrationClosed;
     const needsRegistration = !isRegistered && isRegistrationAllowed;
     const needsPayment = event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))));
     const showReadyToCompete = false; // temporarily hidden: isRegistrationAllowed || needsPayment;
@@ -3901,6 +3862,15 @@ const EventDetails = () => {
                     </div>
                 )}
 
+                {isCancelled && (
+                    <div className="relative z-[110] bg-red-600 text-white text-center py-3 px-4">
+                        <p className="text-sm font-black uppercase tracking-widest">Event cancelled</p>
+                        <p className="mt-1 text-xs text-red-100">
+                            {event.cancellation_reason || 'This event is no longer taking place. Registered players have been withdrawn and eligible refunds are being processed.'}
+                        </p>
+                    </div>
+                )}
+
                 {/* Floating nav bar */}
                 <div className="absolute top-0 left-0 right-0 z-[100] pt-safe pt-24 md:pt-28 pointer-events-none">
                     <div className="max-w-5xl mx-auto px-5 w-full flex items-center justify-between gap-3">
@@ -3938,7 +3908,7 @@ const EventDetails = () => {
                             >
                                 <Share2 className="w-4 h-4" />
                             </button>
-                            <button
+                            {!isCancelled && <button
                                 type="button"
                                 onClick={handleToggleMySchedule}
                                 disabled={scheduleBusy}
@@ -3953,7 +3923,7 @@ const EventDetails = () => {
                                 {isOnSchedule
                                     ? <Check className="w-4 h-4" strokeWidth={3} />
                                     : <Plus className="w-4 h-4" strokeWidth={2.5} />}
-                            </button>
+                            </button>}
                         </div>
                     </div>
                 </div>
@@ -4182,7 +4152,7 @@ const EventDetails = () => {
                                 {(() => {
                                     // Only actionable CTAs — no disabled placeholders in the countdown row
                                     let countdownCta = null;
-                                    if (!isEventPassed) {
+                                    if (!isCancelled && !isEventPassed) {
                                         if (event.is_manual) {
                                             if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
                                                 countdownCta = { label: 'Manage Entry', onClick: openManageEntry };
@@ -5436,7 +5406,8 @@ const EventDetails = () => {
                                                                 src={getPlaylistEmbedUrl(event.youtube_playlist_url)}
                                                                 title="YouTube playlist player"
                                                                 className="w-full h-full border-0"
-                                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                                referrerPolicy="strict-origin-when-cross-origin"
                                                                 allowFullScreen
                                                             />
                                                         </div>

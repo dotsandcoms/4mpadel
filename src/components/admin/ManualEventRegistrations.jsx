@@ -168,7 +168,7 @@ const TeamPlayerRows = ({ players, children }) => (
     </div>
 );
 
-const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'modal', backLabel = '← Back to Events List' }) => {
+const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event, variant = 'modal', backLabel = '← Back to Events List' }) => {
     const isInline = variant === 'inline';
     const isActive = isInline || isOpen;
     const [registrations, setRegistrations] = useState([]);
@@ -2871,9 +2871,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 eventId: event?.id,
                 organiserName: event?.organiser_name || 'Organiser',
                 organiserEmail: event?.organiser_email || '',
-                collected: fmtR(overviewStats.collected4M),
+                totalBilled: fmtR(overviewStats.totalAmountBilled),
+                outstanding: fmtR(overviewStats.pendingAmount),
+                grossEntryFees: fmtR(overviewStats.grossEntryFees),
+                paystackCollected: fmtR(overviewStats.collected4M),
+                manualCollected: fmtR(overviewStats.collectedManual),
                 refunded: fmtR(overviewStats.entryFeesRefunded),
-                balance: fmtR(overviewStats.entryFeeBalance),
+                finalEntrySales: fmtR(overviewStats.entryFeeBalance),
                 commission: fmtR(overviewStats.commission),
                 interimPaid: fmtR(overviewStats.interimPaid),
                 interimPaidAmount: overviewStats.interimPaid,
@@ -2919,8 +2923,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     };
 
     const exportFinanceExcel = async (reportType = 'full') => {
-        if (!isSuperAdmin) {
-            toast.error('Only Super Admins can export event reports.');
+        const normalizedReportType = reportType === 'organiser' ? 'organiser' : 'full';
+        if (normalizedReportType === 'full' && !isSuperAdmin) {
+            toast.error('Only Super Admins can export the full event report.');
             return;
         }
         setExportMenuOpen(false);
@@ -3022,6 +3027,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                     division: r.division,
                     partner: r.partner_name || '',
                     partnerEmail: r.partner_email || '',
+                    tshirtSize: r.tshirt_size || '',
+                    tshirtSponsorName: r.tshirt_sponsor_name || '',
+                    tshirtLogoUrl: r.tshirt_logo_url || '',
                     license: formatLicenseForExport(r),
                     paymentStatus: formatPaymentStatusForExport(r),
                     channel,
@@ -3036,23 +3044,27 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             await downloadEventFinanceWorkbook({
                 eventName: event?.event_name || 'Event',
                 eventDate,
-                summary: reportType === 'organiser' ? organiserSummary : summary,
+                summary: normalizedReportType === 'organiser' ? organiserSummary : summary,
                 lineItems: incomeStatementRows,
                 registrations: registrationRows,
-                payments: (payments || []).map((p) => ({
-                    ...p,
-                    metadata: normalizePaymentMetadata(p.metadata),
-                })),
-                refunds: refunds.map((rf) => {
-                    const linked = (payments || []).find((p) => p.id === rf.payment_id);
-                    return {
-                        ...rf,
-                        cover: isLicenseRefund(rf, linked) ? 'license' : 'entry',
-                    };
-                }),
-                reportType,
+                payments: normalizedReportType === 'full'
+                    ? (payments || []).map((p) => ({
+                        ...p,
+                        metadata: normalizePaymentMetadata(p.metadata),
+                    }))
+                    : [],
+                refunds: normalizedReportType === 'full'
+                    ? refunds.map((rf) => {
+                        const linked = (payments || []).find((p) => p.id === rf.payment_id);
+                        return {
+                            ...rf,
+                            cover: isLicenseRefund(rf, linked) ? 'license' : 'entry',
+                        };
+                    })
+                    : [],
+                reportType: normalizedReportType,
             });
-            toast.success(reportType === 'organiser'
+            toast.success(normalizedReportType === 'organiser'
                 ? 'Organiser consolidated report downloaded'
                 : 'Full event report downloaded');
         } catch (err) {
@@ -3064,7 +3076,6 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     };
 
     const ExportReportMenu = ({ compact = false }) => {
-        if (!isSuperAdmin) return null;
         const buttonClass = compact
             ? 'bg-white/5 text-white border border-white/10 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-white/10 shrink-0 disabled:opacity-40'
             : 'inline-flex items-center justify-center gap-2 bg-white/5 text-white border border-white/10 px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-white/10 disabled:opacity-40';
@@ -3084,15 +3095,17 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 </button>
                 {exportMenuOpen && (
                     <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-xl border border-white/10 bg-[#151515] p-1.5 shadow-2xl">
-                        <button
-                            type="button"
-                            role="menuitem"
-                            onClick={() => exportFinanceExcel('full')}
-                            className="w-full rounded-lg px-3 py-2.5 text-left hover:bg-white/10 transition-colors"
-                        >
-                            <span className="block text-sm font-bold text-white">Full Event Report</span>
-                            <span className="block text-[10px] text-gray-400 mt-0.5">All finance sheets, payment ledger and refunds</span>
-                        </button>
+                        {isSuperAdmin && (
+                            <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => exportFinanceExcel('full')}
+                                className="w-full rounded-lg px-3 py-2.5 text-left hover:bg-white/10 transition-colors"
+                            >
+                                <span className="block text-sm font-bold text-white">Full Event Report</span>
+                                <span className="block text-[10px] text-gray-400 mt-0.5">All finance sheets, payment ledger and refunds</span>
+                            </button>
+                        )}
                         <button
                             type="button"
                             role="menuitem"
@@ -3136,6 +3149,15 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
+                                        {onEditEvent && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onEditEvent(event)}
+                                                className="bg-white/5 text-white border border-white/10 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:border-padel-green/40 hover:text-padel-green shrink-0 transition-colors"
+                                            >
+                                                <Pencil size={16} /> Edit event details
+                                            </button>
+                                        )}
                                         <button
                                             type="button"
                                             onClick={openAddPlayerModal}
@@ -3186,6 +3208,15 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                     <p className="text-xs text-gray-400 truncate max-w-[60vw]">{event.event_name}</p>
                                 </div>
                                 <div className="flex items-center gap-2">
+                                    {onEditEvent && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onEditEvent(event)}
+                                            className="bg-white/5 text-white border border-white/10 px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:border-padel-green/40 hover:text-padel-green transition-colors"
+                                        >
+                                            <Pencil size={16} /> Edit details
+                                        </button>
+                                    )}
                                     <button
                                         type="button"
                                         onClick={openAddPlayerModal}

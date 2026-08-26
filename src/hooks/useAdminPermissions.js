@@ -27,10 +27,14 @@ export async function canAccessHiddenEvents(email) {
  */
 async function resolveOrgMembership(userEmail) {
     // 1. New model: organisation_members
-    const { data: memberships } = await supabase
+    const { data: memberships, error: membershipError } = await supabase
         .from('organisation_members')
         .select('role, organisation_id, organisations(*)')
         .ilike('user_email', userEmail);
+
+    if (membershipError) {
+        console.warn('Could not resolve organisation membership:', membershipError.message);
+    }
 
     const activeOrgs = (memberships || [])
         .filter(m => m.organisations && m.organisations.status === 'approved')
@@ -87,7 +91,7 @@ async function resolveFederationMembership(userEmail) {
 
 /**
  * Resolve club membership + clubs linked via organisations the user admins.
- * @returns {{ clubs: object[], clubRole: string|null }|null}
+ * @returns {{ clubs: object[], clubRole: string|null, hasDirectClubMembership: boolean }|null}
  */
 async function resolveClubAccess(userEmail, orgMembership) {
     const clubMap = new Map();
@@ -97,7 +101,10 @@ async function resolveClubAccess(userEmail, orgMembership) {
         .select('role, club_id, clubs(*)')
         .ilike('user_email', userEmail);
 
-    (memberships || []).forEach((m) => {
+    const directClubMemberships = (memberships || []).filter((membership) =>
+        membership.clubs && isManageableClubStatus(membership.clubs.status));
+
+    directClubMemberships.forEach((m) => {
         if (m.clubs && isManageableClubStatus(m.clubs.status)) {
             clubMap.set(m.clubs.id, { ...m.clubs, member_role: m.role });
         }
@@ -123,14 +130,16 @@ async function resolveClubAccess(userEmail, orgMembership) {
 
     const clubs = [...clubMap.values()];
     if (clubs.length === 0) return null;
-    return { clubs, clubRole: clubs[0].member_role || 'admin' };
+    return {
+        clubs,
+        clubRole: clubs[0].member_role || 'admin',
+        hasDirectClubMembership: directClubMemberships.length > 0,
+    };
 }
 
 export const useAdminPermissions = (userEmail) => {
     const [permissions, setPermissions] = useState(null);
     const [loading, setLoading] = useState(true);
-
-    const SUPER_ADMINS = SUPER_ADMIN_EMAILS;
 
     useEffect(() => {
         const fetchPermissions = async () => {
@@ -142,7 +151,7 @@ export const useAdminPermissions = (userEmail) => {
             try {
                 // Super admins get full platform access — also attach any linked org
                 // so they can manage events for organisations they belong to.
-                if (SUPER_ADMINS.includes(userEmail.toLowerCase())) {
+                if (SUPER_ADMIN_EMAILS.includes(userEmail.toLowerCase())) {
                     const orgMembership = await resolveOrgMembership(userEmail);
                     const fedMembership = await resolveFederationMembership(userEmail);
                     const clubAccess = await resolveClubAccess(userEmail, orgMembership);
@@ -163,6 +172,7 @@ export const useAdminPermissions = (userEmail) => {
                         ...(clubAccess ? {
                             clubs: clubAccess.clubs,
                             clubRole: clubAccess.clubRole,
+                            hasDirectClubMembership: clubAccess.hasDirectClubMembership,
                         } : {}),
                     });
                     setLoading(false);
@@ -187,7 +197,7 @@ export const useAdminPermissions = (userEmail) => {
                             if (['owner', 'admin'].includes(fedMembership.federationRole)) {
                                 tabs.push('organisations');
                             }
-                            if (clubAccess) tabs.push('clubs');
+                            if (clubAccess?.hasDirectClubMembership) tabs.push('clubs');
                             setPermissions({
                                 role: 'federation_admin',
                                 federation: fedMembership.federation,
@@ -195,11 +205,15 @@ export const useAdminPermissions = (userEmail) => {
                                 federationRole: fedMembership.federationRole,
                                 allowed_tabs: tabs,
                                 module_permissions: {},
-                                ...(clubAccess ? { clubs: clubAccess.clubs, clubRole: clubAccess.clubRole } : {}),
+                                ...(clubAccess ? {
+                                    clubs: clubAccess.clubs,
+                                    clubRole: clubAccess.clubRole,
+                                    hasDirectClubMembership: clubAccess.hasDirectClubMembership,
+                                } : {}),
                             });
                         } else if (orgMembership) {
                             const tabs = ['organisations'];
-                            if (clubAccess) tabs.push('clubs');
+                            if (clubAccess?.hasDirectClubMembership) tabs.push('clubs');
                             setPermissions({
                                 role: 'org_owner',
                                 org: orgMembership.org,
@@ -207,13 +221,18 @@ export const useAdminPermissions = (userEmail) => {
                                 orgRole: orgMembership.orgRole,
                                 allowed_tabs: tabs,
                                 module_permissions: {},
-                                ...(clubAccess ? { clubs: clubAccess.clubs, clubRole: clubAccess.clubRole } : {}),
+                                ...(clubAccess ? {
+                                    clubs: clubAccess.clubs,
+                                    clubRole: clubAccess.clubRole,
+                                    hasDirectClubMembership: clubAccess.hasDirectClubMembership,
+                                } : {}),
                             });
                         } else if (clubAccess) {
                             setPermissions({
                                 role: 'club_admin',
                                 clubs: clubAccess.clubs,
                                 clubRole: clubAccess.clubRole,
+                                hasDirectClubMembership: clubAccess.hasDirectClubMembership,
                                 allowed_tabs: ['clubs'],
                                 module_permissions: {},
                             });
@@ -232,7 +251,10 @@ export const useAdminPermissions = (userEmail) => {
                     if (fedMembership && !allowed.includes('federations')) {
                         allowed.push('federations');
                     }
-                    if (clubAccess && !allowed.includes('clubs')) {
+                    if (orgMembership && !allowed.includes('organisations')) {
+                        allowed.push('organisations');
+                    }
+                    if (clubAccess?.hasDirectClubMembership && !allowed.includes('clubs')) {
                         allowed.push('clubs');
                     }
                     setPermissions({
@@ -252,6 +274,7 @@ export const useAdminPermissions = (userEmail) => {
                         ...(clubAccess ? {
                             clubs: clubAccess.clubs,
                             clubRole: clubAccess.clubRole,
+                            hasDirectClubMembership: clubAccess.hasDirectClubMembership,
                         } : {}),
                     });
                 }
@@ -272,7 +295,8 @@ export const useAdminPermissions = (userEmail) => {
         
         if (tabId === 'event-mgmt' && permissions.module_permissions?.['event-mgmt']?.allowedEvents?.length > 0) return true;
         if (tabId === 'gallery' && permissions.module_permissions?.gallery?.allowedAlbums?.length > 0) return true;
-        if (tabId === 'clubs' && permissions.clubs?.length > 0) return true;
+        if (tabId === 'clubs' && permissions.hasDirectClubMembership) return true;
+        if (tabId === 'organisations' && permissions.orgs?.length > 0) return true;
 
         return permissions.allowed_tabs && permissions.allowed_tabs.includes(tabId);
     };

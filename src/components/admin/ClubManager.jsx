@@ -1305,7 +1305,13 @@ const ClubManager = ({ permissions }) => {
             }
         } catch (err) {
             console.error(err);
-            toast.error(err.message || 'Save failed');
+            if (err.code === '23505' && String(err.message || '').includes('clubs_slug')) {
+                toast.error('That page URL is already used by another club. Please choose a different slug.');
+            } else if (err.code === '23505' && String(err.message || '').includes('google_place')) {
+                toast.error('That Google listing is already linked to another club. Resolve it in Google Sync first.');
+            } else {
+                toast.error(err.message || 'Save failed');
+            }
         } finally {
             setSaving(false);
         }

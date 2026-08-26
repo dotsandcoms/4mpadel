@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Calendar, Users, CheckCircle, XCircle, Search, Download,
     RefreshCcw, Loader2, AlertCircle, UserPlus, Link2, ExternalLink, Trophy, DollarSign,
-    MessageCircle, Check, Trash2, ChevronDown
+    MessageCircle, Check, Trash2, ChevronDown, Mail
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useRankedin } from '../../hooks/useRankedin';
@@ -26,8 +26,23 @@ import {
 } from '../../utils/paymentRegistrationMatch';
 import { resolveRegistrationLicenseCategory } from '../../utils/registrationLicense';
 import ManualEventRegistrations from './ManualEventRegistrations';
+import EventBuilder from './EventBuilder';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
+
+const registrationCloseState = (value) => {
+    if (!value) return { value: '—', label: 'Not set', tone: 'text-gray-600' };
+    const closesAt = new Date(value);
+    if (Number.isNaN(closesAt.getTime())) return { value: '—', label: 'Not set', tone: 'text-gray-600' };
+
+    const millisecondsLeft = closesAt.getTime() - Date.now();
+    if (millisecondsLeft <= 0) return { value: 'Closed', label: '', tone: 'text-red-400' };
+
+    const days = Math.floor(millisecondsLeft / 86400000);
+    if (days === 0) return { value: 'Today', label: '', tone: 'text-amber-300' };
+    if (days === 1) return { value: '1', label: 'Day', tone: 'text-padel-green' };
+    return { value: String(days), label: 'Days', tone: 'text-padel-green' };
+};
 
 const isPaystackEntryPayment = (participant, allPayments, refundByRegMap = null) => {
     const reg = participant?._reg || {
@@ -88,6 +103,8 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
     const [searchQuery, setSearchQuery] = useState('');
     const [eventSearch, setEventSearch] = useState('');
     const [showCompleted, setShowCompleted] = useState(false);
+    const [isEventBuilderOpen, setIsEventBuilderOpen] = useState(false);
+    const [editingCalendarEvent, setEditingCalendarEvent] = useState(null);
     const [isEventSearchOpen, setIsEventSearchOpen] = useState(false);
     const [markingPaid, setMarkingPaid] = useState(null);
     const [matchingProfile, setMatchingProfile] = useState(null); // Participant being matched
@@ -152,7 +169,15 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         }
 
         if (!eventSearch) return sorted;
-        return sorted.filter(e => e.event_name.toLowerCase().includes(eventSearch.toLowerCase()));
+        const query = eventSearch.toLowerCase();
+        return sorted.filter((event) => [
+            event.event_name,
+            event.organisations?.name,
+            event.organiser_name,
+            event.clubs?.name,
+            event.clubs?.short_name,
+            event.venue,
+        ].some((value) => String(value || '').toLowerCase().includes(query)));
     }, [events, eventSearch, allowedEvents, isEventManagementModule]);
 
     // Split the managed list into upcoming and completed (past) events so the
@@ -318,13 +343,12 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         };
     }, [localParticipants, selectedEvent, eventPayments, refundByReg, totalRefunded]);
 
-    useEffect(() => {
-        const fetchInitialData = async () => {
+    const fetchInitialData = useCallback(async () => {
             setLoading(prev => ({ ...prev, events: true }));
             try {
                 const { data: eData } = await supabase
                     .from('calendar')
-                    .select('id, event_name, start_date, end_date, rankedin_id, rankedin_url, entry_fee, category_fees, early_bird_fee, early_bird_ends_at, finance_managed, is_manual, allow_payments, slug, organiser_interim_payments, organiser_name, organiser_email')
+                    .select('id, event_name, start_date, end_date, registration_closes_at, rankedin_id, rankedin_url, entry_fee, category_fees, early_bird_fee, early_bird_ends_at, finance_managed, is_manual, allow_payments, slug, venue, organisation_id, club_id, organiser_interim_payments, organiser_name, organiser_email, organisations:organisation_id(id, name, slug), clubs:club_id(id, name, short_name, slug)')
                     .order('start_date', { ascending: false });
 
                 const pData = await fetchAllRows(() => supabase
@@ -514,9 +538,11 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             } finally {
                 setLoading(prev => ({ ...prev, events: false }));
             }
-        };
-        fetchInitialData();
     }, []);
+
+    useEffect(() => {
+        fetchInitialData();
+    }, [fetchInitialData]);
 
     // 2. Fetch Local Participants for Selected Event
     const fetchParticipants = useCallback(async (eventId) => {
@@ -1398,9 +1424,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         return matchesSearch && matchesProfile && matchesLicense && matchesPayment && matchesDivision && matchesWhatsApp;
     });
 
-    // Number of columns in the event list table (extra Actions column when
-    // running inside the Event Manager module).
-    const eventListColCount = isEventManagementModule ? 6 : 5;
+    const eventListColCount = 9;
 
     // Single source of truth for an event list row, reused by the upcoming list
     // and the completed (past) collapsible section.
@@ -1410,6 +1434,9 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const isUpcoming = eventDate >= today;
+        const closeState = registrationCloseState(e.registration_closes_at);
+        const organisationName = e.organisations?.name || e.organiser_name || '—';
+        const clubName = e.clubs?.short_name || e.clubs?.name || e.venue || '—';
 
         return (
             <tr
@@ -1420,7 +1447,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 }}
                 className={`group cursor-pointer transition-all hover:bg-white/5`}
             >
-                <td className="px-4 py-4 whitespace-nowrap">
+                <td className="px-3 py-2.5 whitespace-nowrap">
                     <div className="flex flex-col">
                         <p className={`text-[11px] font-bold text-white group-hover:text-padel-green`}>
                             {eventDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -1430,21 +1457,63 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         </span>
                     </div>
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-3 py-2.5">
                     <div className="flex items-center gap-3">
-                        <p className={`font-black uppercase tracking-tight text-sm ${isSelected ? 'text-white' : 'text-gray-300'}`}>
+                        <p className={`text-[12px] font-black uppercase leading-5 tracking-tight ${isSelected ? 'text-white' : 'text-gray-300'}`}>
                             {e.event_name}
                         </p>
                         {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-padel-green animate-pulse" />}
                     </div>
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-2.5 py-2.5">
+                    {e.organisations?.slug ? (
+                        <a
+                            href={`/organisations/${e.organisations.slug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(event) => event.stopPropagation()}
+                            className="inline-flex max-w-full items-center gap-1.5 text-[11px] font-bold text-padel-green hover:text-white"
+                            title={organisationName}
+                        >
+                            <span className="truncate">{organisationName}</span>
+                            <ExternalLink size={11} className="shrink-0" />
+                        </a>
+                    ) : (
+                        <span className="block truncate text-[11px] font-bold text-gray-400" title={organisationName}>{organisationName}</span>
+                    )}
+                </td>
+                <td className="px-2.5 py-2.5">
+                    {e.clubs?.slug ? (
+                        <a
+                            href={`/clubs/${e.clubs.slug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(event) => event.stopPropagation()}
+                            className="inline-flex max-w-full items-center gap-1.5 text-[11px] font-bold text-padel-green hover:text-white"
+                            title={clubName}
+                        >
+                            <span className="truncate">{clubName}</span>
+                            <ExternalLink size={11} className="shrink-0" />
+                        </a>
+                    ) : (
+                        <span className="block truncate text-[11px] font-bold text-gray-400" title={clubName}>{clubName}</span>
+                    )}
+                </td>
+                <td className="px-2.5 py-2.5 text-center whitespace-nowrap">
+                    <div className="flex flex-col items-center">
+                        <span className={`text-lg font-black leading-none ${closeState.tone}`}>{closeState.value}</span>
+                        {closeState.label && (
+                            <span className="mt-1 text-[8px] font-black uppercase tracking-widest text-gray-500">{closeState.label}</span>
+                        )}
+                    </div>
+                </td>
+                <td className="px-2.5 py-2.5 text-center whitespace-nowrap">
                     <div className="flex flex-col">
-                        <span className="text-white font-black text-[11px]">{e.stats?.entries || 0}</span>
+                        <span className="text-lg font-black leading-none text-white">{e.stats?.entries || 0}</span>
                         <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{e.stats?.paidCount || 0} Paid</span>
                     </div>
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-2.5 py-2.5">
                     <div className="flex flex-col">
                         <span className="text-padel-green font-bold text-[11px]">R{e.stats?.collected?.toLocaleString() || 0} / R{e.stats?.billed?.toLocaleString() || 0}</span>
                         {(e.stats?.outstanding > 0) && (
@@ -1452,20 +1521,20 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         )}
                     </div>
                 </td>
-                <td className="px-6 py-4">
+                <td className="px-2.5 py-2.5">
                     {e.stats?.uniquePlayersCount > 0 ? (
-                        <div className="flex items-center gap-4">
-                            <div className="flex flex-col items-center min-w-[32px]">
+                        <div className="flex items-center gap-3">
+                            <div className="flex flex-col items-center min-w-[28px]">
                                 <span className="text-[#BFFF00] font-black text-sm">{e.stats.licenses?.full || 0}</span>
                                 <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Full</span>
                                 <div className="w-full h-0.5 bg-[#BFFF00] rounded-full mt-0.5" />
                             </div>
-                            <div className="flex flex-col items-center min-w-[32px]">
+                            <div className="flex flex-col items-center min-w-[28px]">
                                 <span className="text-[#0ea5e9] font-black text-sm">{e.stats.licenses?.temp || 0}</span>
                                 <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Temp</span>
                                 <div className="w-full h-0.5 bg-[#0ea5e9] rounded-full mt-0.5" />
                             </div>
-                            <div className="flex flex-col items-center min-w-[32px]">
+                            <div className="flex flex-col items-center min-w-[28px]">
                                 <span className="text-[#ff6b6b] font-black text-sm">{e.stats.licenses?.none || 0}</span>
                                 <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">None</span>
                                 <div className="w-full h-0.5 bg-[#ff6b6b]/30 rounded-full mt-0.5" />
@@ -1475,17 +1544,60 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">No Players</span>
                     )}
                 </td>
-                {isEventManagementModule && (
-                    <td className="px-4 py-4 text-right whitespace-nowrap">
+                <td className="px-2 py-2.5 text-right whitespace-nowrap">
+                    <div className="flex items-center justify-end gap-1">
+                        {e.id && (
+                            <button
+                                type="button"
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    setEditingCalendarEvent(e);
+                                    setIsEventBuilderOpen(true);
+                                }}
+                                title="Edit event in Calendar Manager"
+                                aria-label={`Edit ${e.event_name} in Calendar Manager`}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-padel-green/25 bg-padel-green/5 text-padel-green transition-[color,background-color,transform] hover:bg-padel-green hover:text-black active:scale-[0.96]"
+                            >
+                                <Calendar size={15} strokeWidth={1.8} />
+                            </button>
+                        )}
+                        {e.organiser_email && (
+                            <a
+                                href={`mailto:${e.organiser_email}?subject=${encodeURIComponent(e.event_name)}`}
+                                onClick={(event) => event.stopPropagation()}
+                                title="Email organiser"
+                                aria-label={`Email the organiser of ${e.event_name}`}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-padel-green/25 bg-padel-green/5 text-padel-green transition-[color,background-color,transform] hover:bg-padel-green hover:text-black active:scale-[0.96]"
+                            >
+                                <Mail size={15} strokeWidth={1.8} />
+                            </a>
+                        )}
                         <button
+                            type="button"
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                setSelectedEventId(e.id);
+                                setViewMode('dashboard');
+                            }}
+                            title="Manage registrations"
+                            aria-label={`Manage registrations for ${e.event_name}`}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-padel-green/25 bg-padel-green/5 text-padel-green transition-[color,background-color,transform] hover:bg-padel-green hover:text-black active:scale-[0.96]"
+                        >
+                            <UserPlus size={15} strokeWidth={1.8} />
+                        </button>
+                        {isEventManagementModule && (
+                        <button
+                            type="button"
                             onClick={(ev) => { ev.stopPropagation(); handleRemoveFromManager(e); }}
                             title="Remove from Event Manager"
-                            className="p-2 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                            aria-label={`Remove ${e.event_name} from Event Manager`}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/5 text-gray-600 transition-[color,background-color,transform] hover:bg-red-500/10 hover:text-red-400 active:scale-[0.96] opacity-0 group-hover:opacity-100 focus:opacity-100"
                         >
-                            <Trash2 size={15} />
+                            <Trash2 size={15} strokeWidth={1.8} />
                         </button>
-                    </td>
-                )}
+                        )}
+                    </div>
+                </td>
             </tr>
         );
     };
@@ -1531,16 +1643,30 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
 
                 {/* High-Density Event List */}
                 <div className="bg-black/20 rounded-2xl border border-white/5 overflow-hidden">
-                    <div className="max-h-[320px] overflow-y-auto no-scrollbar">
-                        <table className="w-full text-left border-collapse">
+                    <div className="max-h-[360px] overflow-auto no-scrollbar">
+                        <table className="w-full min-w-[1096px] table-fixed text-left border-collapse">
+                            <colgroup>
+                                <col className="w-[110px]" />
+                                <col className="w-[175px]" />
+                                <col className="w-[125px]" />
+                                <col className="w-[100px]" />
+                                <col className="w-[100px]" />
+                                <col className="w-[68px]" />
+                                <col className="w-[140px]" />
+                                <col className="w-[134px]" />
+                                <col className="w-[144px]" />
+                            </colgroup>
                             <thead className="sticky top-0 bg-[#1a1a1a] text-[10px] font-black uppercase text-gray-500 border-b border-white/5 z-10">
                                 <tr>
-                                    <th className="px-6 py-3">Event Date</th>
-                                    <th className="px-6 py-3">Tournament Name</th>
-                                    <th className="px-6 py-3">Entries</th>
-                                    <th className="px-6 py-3">Finances (Collected/Billed)</th>
-                                    <th className="px-6 py-3">License Status</th>
-                                    {isEventManagementModule && <th className="px-4 py-3 text-right">Actions</th>}
+                                    <th className="px-3 py-3">Event Date</th>
+                                    <th className="px-4 py-3">Tournament Name</th>
+                                    <th className="px-3 py-3">Organisation</th>
+                                    <th className="px-3 py-3">Host Club</th>
+                                    <th className="px-3 py-3 text-center">Registration Closes In</th>
+                                    <th className="px-3 py-3 text-center">Entries</th>
+                                    <th className="px-3 py-3">Finances (Collected/Billed)</th>
+                                    <th className="px-3 py-3">License Status</th>
+                                    <th className="px-3 py-3 text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
@@ -1574,7 +1700,18 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         </button>
                         {(showCompleted || eventSearch) && (
                             <div className="max-h-[320px] overflow-y-auto no-scrollbar border-t border-white/5">
-                                <table className="w-full text-left border-collapse">
+                                <table className="w-full min-w-[1096px] table-fixed text-left border-collapse">
+                                    <colgroup>
+                                        <col className="w-[110px]" />
+                                        <col className="w-[175px]" />
+                                        <col className="w-[125px]" />
+                                        <col className="w-[100px]" />
+                                        <col className="w-[100px]" />
+                                        <col className="w-[68px]" />
+                                        <col className="w-[140px]" />
+                                        <col className="w-[134px]" />
+                                        <col className="w-[144px]" />
+                                    </colgroup>
                                     <tbody className="divide-y divide-white/5">
                                         {pastEvents.map(renderEventRow)}
                                     </tbody>
@@ -2357,6 +2494,15 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         </div>
                     )}
             </AnimatePresence>
+            <EventBuilder
+                isOpen={isEventBuilderOpen}
+                editingEvent={editingCalendarEvent}
+                onClose={() => {
+                    setIsEventBuilderOpen(false);
+                    setEditingCalendarEvent(null);
+                }}
+                onSaved={fetchInitialData}
+            />
         </div>
     );
 };

@@ -4,7 +4,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
 import { Calendar, ChevronLeft, ChevronRight, ChevronDown, Play, PlayCircle, Trophy, GitBranch, Users, X, MapPin, Shield, ArrowRight, BarChart2, Search, User, HelpCircle } from 'lucide-react';
-import VideoModal, { getYoutubeEmbedUrl } from './VideoModal';
+import VideoModal from './VideoModal';
+import { getYoutubeEmbedUrl } from '../utils/youtube';
 import { getEventImage, getDefaultEventBackground } from '../utils/imageUtils';
 import CommunityCtaBanner from './CommunityCtaBanner';
 import {

@@ -175,6 +175,7 @@ export async function getPlaceDetails(placeId) {
 }
 
 const PLACE_REVIEW_FIELDS = ['name', 'rating', 'user_ratings_total', 'reviews', 'url'];
+const PLACE_PHOTO_FIELDS = ['name', 'photos', 'url'];
 
 /**
  * Live-fetches rating + reviews for a place. Deliberately not persisted anywhere —
@@ -191,6 +192,30 @@ export async function getPlaceReviews(placeId) {
                 resolve(result);
             } else {
                 reject(new Error(`Google Place reviews failed: ${status}`));
+            }
+        });
+    });
+}
+
+/**
+ * Fetches Google-hosted club photos for immediate display. The returned URLs
+ * are intentionally never written to our database: Google photo references
+ * expire and Places content must be requested live.
+ */
+export async function getPlacePhotos(placeId, { maxPhotos = 8, maxWidth = 1200 } = {}) {
+    const { google, service } = await getPlacesService();
+    return new Promise((resolve, reject) => {
+        service.getDetails({ placeId, fields: PLACE_PHOTO_FIELDS }, (result, status) => {
+            if (status === google.maps.places.PlacesServiceStatus.OK && result) {
+                resolve({
+                    googleMapsUrl: result.url || null,
+                    photos: (result.photos || []).slice(0, maxPhotos).map((photo) => ({
+                        url: photo.getUrl({ maxWidth }),
+                        attributions: photo.html_attributions || [],
+                    })),
+                });
+            } else {
+                reject(new Error(`Google Place photos failed: ${status}`));
             }
         });
     });
