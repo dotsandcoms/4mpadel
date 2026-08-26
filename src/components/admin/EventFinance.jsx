@@ -394,7 +394,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
 
                     if (!statsByEvent[p.event_id]) {
                         statsByEvent[p.event_id] = { 
-                            entries: 0, billed: 0, collected: 0, paidCount: 0,
+                            entries: 0, billed: 0, collected: 0, paidCount: 0, compedCount: 0,
                             uniqueProfiles: new Set(),
                             licenses: { full: 0, temp: 0, none: 0 }
                         };
@@ -426,7 +426,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 if (manualEventIds.length > 0) {
                     const { data: manualRegs } = await supabase
                         .from('event_registrations')
-                        .select('event_id, email, division, payment_status, partner_email, partner_payment_status, division_id, tournament_divisions(entry_fee)')
+                        .select('id, event_id, email, division, payment_status, partner_email, partner_payment_status, division_id, tournament_divisions(entry_fee)')
                         .in('event_id', manualEventIds)
                         .neq('status', 'withdrawn');
 
@@ -459,7 +459,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         const eid = r.event_id;
                         if (!statsByEvent[eid]) {
                             statsByEvent[eid] = {
-                                entries: 0, billed: 0, collected: 0, paidCount: 0,
+                                entries: 0, billed: 0, collected: 0, paidCount: 0, compedCount: 0,
                                 uniqueProfiles: new Set(),
                                 licenses: { full: 0, temp: 0, none: 0 },
                                 _manualCollected: 0, _manualBilled: 0,
@@ -469,8 +469,13 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         const fee = Number(r.tournament_divisions?.entry_fee || 0);
                         // Count registrant row
                         es.entries++;
-                        es._manualBilled = (es._manualBilled || 0) + fee;
-                        if (registrationCountsAsPaid(r)) {
+                        const isComped = registrationIsCompedEntry(r, paymentsByEvent[eid] || []);
+                        if (isComped) {
+                            es.compedCount = (es.compedCount || 0) + 1;
+                        } else {
+                            es._manualBilled = (es._manualBilled || 0) + fee;
+                        }
+                        if (!isComped && registrationCountsAsPaid(r)) {
                             es.paidCount++;
                             es._manualCollected = (es._manualCollected || 0) + fee;
                         }
@@ -497,7 +502,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
 
                 const eventsWithStats = (eData || []).map(event => {
                     const stats = statsByEvent[event.id] || { 
-                        entries: 0, billed: 0, collected: 0, paidCount: 0,
+                        entries: 0, billed: 0, collected: 0, paidCount: 0, compedCount: 0,
                         uniqueProfiles: new Set(),
                         licenses: { full: 0, temp: 0, none: 0 }
                     };
@@ -526,6 +531,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             collected: exactCollected,
                             outstanding: exactBilled - exactCollected,
                             paidCount: stats.paidCount,
+                            compedCount: stats.compedCount || 0,
                             uniquePlayersCount: stats.uniqueProfiles.size,
                             licenses: stats.licenses
                         }
@@ -1510,7 +1516,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 <td className="px-2.5 py-2.5 text-center whitespace-nowrap">
                     <div className="flex flex-col">
                         <span className="text-lg font-black leading-none text-white">{e.stats?.entries || 0}</span>
-                        <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{e.stats?.paidCount || 0} Paid</span>
+                        <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{e.stats?.paidCount || 0} Paid{e.stats?.compedCount ? ` · ${e.stats.compedCount} Comped` : ''}</span>
                     </div>
                 </td>
                 <td className="px-2.5 py-2.5">
