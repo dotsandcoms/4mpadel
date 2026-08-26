@@ -26,6 +26,7 @@ import {
 } from '../../utils/paymentRegistrationMatch';
 import { resolveRegistrationLicenseCategory } from '../../utils/registrationLicense';
 import ManualEventRegistrations from './ManualEventRegistrations';
+import EventBuilder from './EventBuilder';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
@@ -102,6 +103,8 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
     const [searchQuery, setSearchQuery] = useState('');
     const [eventSearch, setEventSearch] = useState('');
     const [showCompleted, setShowCompleted] = useState(false);
+    const [isEventBuilderOpen, setIsEventBuilderOpen] = useState(false);
+    const [editingCalendarEvent, setEditingCalendarEvent] = useState(null);
     const [isEventSearchOpen, setIsEventSearchOpen] = useState(false);
     const [markingPaid, setMarkingPaid] = useState(null);
     const [matchingProfile, setMatchingProfile] = useState(null); // Participant being matched
@@ -340,8 +343,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         };
     }, [localParticipants, selectedEvent, eventPayments, refundByReg, totalRefunded]);
 
-    useEffect(() => {
-        const fetchInitialData = async () => {
+    const fetchInitialData = useCallback(async () => {
             setLoading(prev => ({ ...prev, events: true }));
             try {
                 const { data: eData } = await supabase
@@ -536,9 +538,11 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             } finally {
                 setLoading(prev => ({ ...prev, events: false }));
             }
-        };
-        fetchInitialData();
     }, []);
+
+    useEffect(() => {
+        fetchInitialData();
+    }, [fetchInitialData]);
 
     // 2. Fetch Local Participants for Selected Event
     const fetchParticipants = useCallback(async (eventId) => {
@@ -1542,16 +1546,20 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 </td>
                 <td className="px-2 py-2.5 text-right whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1">
-                        {(e.slug || e.id) && (
-                            <a
-                                href={`/admin?tab=calendar&editEvent=${encodeURIComponent(e.id)}`}
-                                onClick={(event) => event.stopPropagation()}
+                        {e.id && (
+                            <button
+                                type="button"
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    setEditingCalendarEvent(e);
+                                    setIsEventBuilderOpen(true);
+                                }}
                                 title="Edit event in Calendar Manager"
                                 aria-label={`Edit ${e.event_name} in Calendar Manager`}
                                 className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-padel-green/25 bg-padel-green/5 text-padel-green transition-[color,background-color,transform] hover:bg-padel-green hover:text-black active:scale-[0.96]"
                             >
                                 <Calendar size={15} strokeWidth={1.8} />
-                            </a>
+                            </button>
                         )}
                         {e.organiser_email && (
                             <a
@@ -2486,6 +2494,15 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         </div>
                     )}
             </AnimatePresence>
+            <EventBuilder
+                isOpen={isEventBuilderOpen}
+                editingEvent={editingCalendarEvent}
+                onClose={() => {
+                    setIsEventBuilderOpen(false);
+                    setEditingCalendarEvent(null);
+                }}
+                onSaved={fetchInitialData}
+            />
         </div>
     );
 };
