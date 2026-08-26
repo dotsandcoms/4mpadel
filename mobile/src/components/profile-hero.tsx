@@ -134,14 +134,14 @@ export function ProfileHero({ player, stats, onEditPhoto, playId = 0 }: HeroProp
             hitSlop={8}
             className="absolute items-center justify-center rounded-full bg-padel"
             style={{
-              width: 22,
-              height: 22,
+              width: 28,
+              height: 28,
               bottom: 0,
               right: 0,
               borderWidth: 1,
               borderColor: '#000',
             }}>
-            <SymbolView name="pencil" size={10} tintColor="#000" />
+            <SymbolView name="pencil" size={12} tintColor="#000" />
           </Pressable>
         </View>
 
@@ -152,7 +152,7 @@ export function ProfileHero({ player, stats, onEditPhoto, playId = 0 }: HeroProp
               style={{ borderColor: license.border, backgroundColor: license.bg }}>
               {license.pulse ? <PulseDot color={brand.padel} size={5} /> : null}
               <Text
-                className="text-[7px] font-black uppercase tracking-wider"
+                className="text-[9px] font-black uppercase tracking-wider"
                 style={{
                   color: license.color,
                   marginLeft: license.pulse ? 5 : 0,
@@ -189,7 +189,6 @@ export function ProfileStatsCard({
   playId?: number;
 }) {
   const ratioTarget = Math.min(100, Math.max(0, stats.winRatio));
-  const played = useCountTo(stats.played, 0, playId);
   const wins = useCountTo(stats.wins, 0, playId);
   const losses = useCountTo(stats.losses, 0, playId);
   const ratio = useCountTo(ratioTarget, 1, playId);
@@ -207,12 +206,14 @@ export function ProfileStatsCard({
   return (
     <MotionBorder>
       <View className="p-3.5">
+      <Text className="mb-2.5 text-[10px] font-black uppercase tracking-[0.18em] text-faint">
+        Performance
+      </Text>
       <View className="flex-row" style={{ gap: 6 }}>
-        <MiniStat label="Total Match" value={String(played.shown)} />
-        <MiniStat label="Won" value={String(wins.shown)} labelColor={brand.padel} />
-        <MiniStat label="Lost" value={String(losses.shown)} labelColor="#F87171" />
+        <MiniStat label="Wins" value={String(wins.shown)} labelColor={brand.padel} />
+        <MiniStat label="Losses" value={String(losses.shown)} labelColor="#F87171" />
         <View className="min-h-[52px] flex-1 items-center justify-center rounded-xl border border-white/5 bg-white/[0.02] px-1 py-1">
-          <Text className="mb-1 w-full text-center text-[7px] font-black uppercase tracking-widest text-faint">
+          <Text className="mb-1.5 w-full text-center text-[9px] font-black uppercase tracking-widest text-faint">
             Last 5
           </Text>
           {stats.lastFive.length ? (
@@ -243,7 +244,7 @@ export function ProfileStatsCard({
               })}
             </View>
           ) : (
-            <Text className="text-[7px] font-bold uppercase tracking-widest text-faint">
+            <Text className="text-[9px] font-bold uppercase tracking-widest text-faint">
               None
             </Text>
           )}
@@ -252,11 +253,11 @@ export function ProfileStatsCard({
 
       <View className="mt-3">
         <View className="mb-1.5 flex-row items-center justify-between">
-          <Text className="text-[8px] font-black uppercase tracking-widest text-muted">
-            Win Ratio
+          <Text className="text-[10px] font-black uppercase tracking-widest text-muted">
+            Win rate
           </Text>
           <Text
-            className="text-[8px] font-extrabold text-padel"
+            className="text-[10px] font-extrabold text-padel"
             style={{ fontVariant: ['tabular-nums'] }}>
             {ratio.shown.toFixed(1)}%
           </Text>
@@ -376,7 +377,7 @@ function MiniStat({
   return (
     <View className="min-h-[52px] flex-1 items-center justify-center rounded-xl border border-white/5 bg-white/[0.02] p-1">
       <Text
-        className="w-full text-center text-[7px] font-black uppercase tracking-widest"
+        className="w-full text-center text-[9px] font-black uppercase tracking-widest"
         style={{ color: labelColor ?? brand.faint }}>
         {label}
       </Text>

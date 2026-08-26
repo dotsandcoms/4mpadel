@@ -25,6 +25,7 @@ type Props = {
   error?: string;
   searchable?: boolean;
   valid?: boolean;
+  compact?: boolean;
   badge?: string;
   emptyLabel?: string;
   onChange: (value: string) => void;
@@ -48,6 +49,7 @@ export function SelectField({
   error,
   searchable,
   valid,
+  compact = false,
   badge,
   emptyLabel = 'No matches.',
   onChange,
@@ -99,7 +101,9 @@ export function SelectField({
 
   return (
     <View className="mb-3">
-      <Text className="mb-1.5 text-[14px] font-semibold" style={{ color: brand.label }}>
+      <Text
+        className={`mb-1.5 ${compact ? 'text-[11px] font-bold uppercase tracking-wider' : 'text-[14px] font-semibold'}`}
+        style={{ color: brand.label }}>
         {label}
       </Text>
       <Pressable
@@ -124,8 +128,12 @@ export function SelectField({
           </View>
         ) : null}
         <Text
-          className="flex-1 text-[16px]"
-          style={{ color: selected ? brand.premium : brand.placeholder }}
+          className="flex-1"
+          style={{
+            color: selected ? brand.premium : brand.placeholder,
+            fontSize: compact ? 13 : 16,
+            fontWeight: compact ? '600' : '400',
+          }}
           numberOfLines={1}>
           {selected?.label ?? placeholder}
         </Text>
@@ -140,7 +148,9 @@ export function SelectField({
         <SymbolView name="chevron.down" size={13} tintColor={brand.placeholder} />
       </Pressable>
       {error ? (
-        <Text className="mt-2 px-1 text-[13px] leading-5 text-danger">{error}</Text>
+        <Text className={`mt-2 px-1 leading-5 text-danger ${compact ? 'text-[11px]' : 'text-[13px]'}`}>
+          {error}
+        </Text>
       ) : null}
 
       {searchable ? (

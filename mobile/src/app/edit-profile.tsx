@@ -279,15 +279,16 @@ export default function EditProfileScreen() {
                 )}
               </View>
               <View className="ml-3 min-w-0 flex-1">
-                <Text numberOfLines={1} className="text-[16px] font-extrabold uppercase text-premium">
+                <Text numberOfLines={1} className="text-[14px] font-extrabold uppercase text-premium">
                   {name}
                 </Text>
-                <Text className="mt-0.5 text-[13px] text-muted">Player profile details</Text>
+                <Text className="mt-0.5 text-[11px] font-semibold text-muted">Player profile details</Text>
               </View>
             </View>
 
             <SectionLabel first>Contact</SectionLabel>
             <LiquidField
+              compact
               label="Mobile number"
               icon="phone.fill"
               value={form.contactNumber}
@@ -300,6 +301,7 @@ export default function EditProfileScreen() {
               textContentType="telephoneNumber"
             />
             <SelectField
+              compact
               label="Region"
               value={form.region}
               error={errors.region}
@@ -309,6 +311,7 @@ export default function EditProfileScreen() {
               onChange={(value) => patch('region', value)}
             />
             <SelectField
+              compact
               label="Category"
               value={form.category}
               error={errors.category}
@@ -317,6 +320,7 @@ export default function EditProfileScreen() {
               onChange={(value) => patch('category', value)}
             />
             <SelectField
+              compact
               label="Home club"
               value={form.clubId}
               error={errors.clubId}
@@ -328,6 +332,7 @@ export default function EditProfileScreen() {
             />
             {form.clubId === 'Other' ? (
               <LiquidField
+                compact
                 label="Club name"
                 value={form.customClub}
                 error={errors.customClub}
@@ -338,6 +343,7 @@ export default function EditProfileScreen() {
               />
             ) : null}
             <LiquidField
+              compact
               label="About your game"
               value={form.bio}
               error={errors.bio}
@@ -349,6 +355,7 @@ export default function EditProfileScreen() {
               autoCorrect
             />
             <LiquidField
+              compact
               label="Instagram (optional)"
               value={form.instagramLink}
               valid={filled(form.instagramLink)}
@@ -357,6 +364,7 @@ export default function EditProfileScreen() {
               keyboardType="url"
             />
             <SelectField
+              compact
               label="Racket brand"
               value={form.racketBrand}
               error={errors.racketBrand}
@@ -366,6 +374,7 @@ export default function EditProfileScreen() {
             />
             {form.racketBrand === 'Other' ? (
               <LiquidField
+                compact
                 label="Racket brand"
                 value={form.customRacketBrand}
                 error={errors.customRacketBrand}

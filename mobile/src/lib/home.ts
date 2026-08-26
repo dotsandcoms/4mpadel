@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { siteUrl } from '@/lib/site';
 
 const CALENDAR_FIELDS =
-  'id, event_name, start_date, end_date, city, venue, sapa_status, slug, registered_players, featured_event, is_spotlight, is_manual, featured_live, live_youtube_url, registration_opens_at, registration_closes_at, rankedin_url, organiser_name, organiser_badge_text, points, entry_fee, category_fees, allow_payments';
+  'id, event_name, start_date, end_date, city, venue, sapa_status, slug, registered_players, featured_event, is_spotlight, is_manual, is_league, featured_live, live_youtube_url, registration_opens_at, registration_closes_at, rankedin_url, organiser_name, organiser_badge_text, points, entry_fee, category_fees, allow_payments, image_url, custom_image_url, poster_image_url';
 
 const RANKEDIN_PROFILE =
   'https://api.rankedin.com/v1/player/playerprofileinfoasync';
@@ -21,6 +21,7 @@ export type CalendarEvent = {
   featured_event: boolean | null;
   is_spotlight: boolean | null;
   is_manual: boolean | null;
+  is_league?: boolean | null;
   featured_live: boolean | null;
   live_youtube_url: string | null;
   registration_opens_at: string | null;
@@ -32,6 +33,9 @@ export type CalendarEvent = {
   entry_fee?: number | string | null;
   category_fees?: Record<string, unknown> | null;
   allow_payments?: boolean | null;
+  image_url?: string | null;
+  custom_image_url?: string | null;
+  poster_image_url?: string | null;
   fromSchedule?: boolean;
   isRegistered?: boolean;
   isPaid?: boolean;
@@ -146,20 +150,24 @@ export async function fetchPendingActions(email?: string | null): Promise<Pendin
   return [...profileGaps(player), ...payments];
 }
 
+export async function fetchCalendarEvents(): Promise<CalendarEvent[]> {
+  const from = new Date();
+  from.setDate(from.getDate() - 90);
+  const { data, error } = await supabase
+    .from('calendar')
+    .select(CALENDAR_FIELDS)
+    .or('sanction_status.eq.approved,sanction_status.is.null')
+    .neq('is_visible', false)
+    .gte('start_date', isoDate(from))
+    .order('start_date', { ascending: true })
+    .limit(180);
+  if (error) throw error;
+  return await enrichManualCounts((data ?? []) as CalendarEvent[]);
+}
+
 export async function fetchSearchEvents(): Promise<CalendarEvent[]> {
   try {
-    const from = new Date();
-    from.setDate(from.getDate() - 45);
-    const { data, error } = await supabase
-      .from('calendar')
-      .select(CALENDAR_FIELDS)
-      .or('sanction_status.eq.approved,sanction_status.is.null')
-      .neq('is_visible', false)
-      .gte('start_date', isoDate(from))
-      .order('start_date', { ascending: true })
-      .limit(120);
-    if (error || !data) return [];
-    return await enrichManualCounts(data as CalendarEvent[]);
+    return await fetchCalendarEvents();
   } catch {
     return [];
   }

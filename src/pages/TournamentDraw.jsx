@@ -260,10 +260,10 @@ const TournamentDraw = () => {
 
     const isNativePreview = location.pathname.startsWith('/draws-preview/');
     const isNativePublic = location.pathname.startsWith('/native-draws/');
-    // A manual event can still have an established RankedIn draw. Keep that
-    // legacy route authoritative unless the user explicitly opens native draw
-    // preview/live routes, or the event has no RankedIn tournament at all.
-    if (dbEvent?.is_manual && (isNativePreview || isNativePublic || !resolvedId)) {
+    // The native routes are an explicit choice, regardless of whether the
+    // event also has an imported RankedIn draw. The legacy routes remain
+    // available at /draws and /results.
+    if (dbEvent && (isNativePreview || isNativePublic || (dbEvent.is_manual && !resolvedId))) {
         return <NativeTournamentDraw event={dbEvent} preview={isNativePreview} />;
     }
 

@@ -1,6 +1,6 @@
 import { FlashList } from '@shopify/flash-list';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useMemo, useRef, type ReactNode, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -36,10 +36,10 @@ import { sapaLabel, sapaTone } from '@/theme/sapa';
 import { brand, motion } from '@/theme/tokens';
 
 export const PROFILE_SECTIONS = [
-  { id: 'events', label: 'My Events', active: '#A855F7', text: '#fff' },
-  { id: 'matches', label: 'My Matches', active: '#F97316', text: '#fff' },
-  { id: 'rankings', label: 'My Rankings', active: '#EAB308', text: '#0a0a0a' },
-  { id: 'payments', label: 'Payments', active: '#3B82F6', text: '#fff' },
+  { id: 'events', label: 'Events' },
+  { id: 'matches', label: 'Matches' },
+  { id: 'rankings', label: 'Rankings' },
+  { id: 'payments', label: 'Payments' },
 ] as const;
 
 export type ProfileSection = (typeof PROFILE_SECTIONS)[number]['id'];
@@ -55,28 +55,63 @@ const ease = Easing.bezier(
 
 const RIPPLE = { color: 'rgba(204,255,0,0.16)' };
 
-type MonthGroup<T> = { label: string; items: T[] };
+type MonthGroup<T> = {
+  key: string;
+  label: string;
+  items: T[];
+  collapsible?: boolean;
+};
 
 function monthLabel(date: Date) {
   return new Intl.DateTimeFormat('en-GB', { month: 'long' }).format(date).toUpperCase();
 }
 
-function groupByMonth<T>(items: T[], dateOf: (item: T) => Date | null): MonthGroup<T>[] {
-  const buckets = new Map<string, { label: string; sort: number; items: T[] }>();
+function groupByMonth<T>(
+  items: T[],
+  dateOf: (item: T) => Date | null,
+  order: 'asc' | 'desc' = 'desc'
+): MonthGroup<T>[] {
+  const buckets = new Map<
+    string,
+    { key: string; label: string; sort: number; items: { item: T; time: number }[] }
+  >();
   const undated: T[] = [];
   for (const item of items) {
     const date = dateOf(item);
-    if (!date || date.getTime() === 0) {
+    if (!date) {
+      undated.push(item);
+      continue;
+    }
+    const time = date.getTime();
+    if (!time || !Number.isFinite(time)) {
       undated.push(item);
       continue;
     }
     const key = `${date.getFullYear()}-${date.getMonth()}`;
     const current = buckets.get(key);
-    if (current) current.items.push(item);
-    else buckets.set(key, { label: monthLabel(date), sort: date.getFullYear() * 100 + date.getMonth(), items: [item] });
+    if (current) current.items.push({ item, time });
+    else {
+      buckets.set(key, {
+        key,
+        label: monthLabel(date),
+        sort: date.getFullYear() * 100 + date.getMonth(),
+        items: [{ item, time }],
+      });
+    }
   }
-  const groups = [...buckets.values()].sort((a, b) => a.sort - b.sort);
-  if (undated.length) groups.push({ label: 'UNSCHEDULED', sort: 0, items: undated });
+  const direction = order === 'asc' ? 1 : -1;
+  const groups: MonthGroup<T>[] = [...buckets.values()]
+    .sort((a, b) => direction * (a.sort - b.sort))
+    .map(({ key, label, items: datedItems }) => ({
+      key,
+      label,
+      items: datedItems
+        .sort((a, b) => direction * (a.time - b.time))
+        .map(({ item }) => item),
+    }));
+  if (undated.length) {
+    groups.push({ key: 'undated', label: 'UNSCHEDULED', items: undated, collapsible: false });
+  }
   return groups;
 }
 
@@ -175,8 +210,10 @@ function matchSubtitle(match: PlayerMatch) {
 
 function matchStatus(match: PlayerMatch) {
   const hasResult = Boolean(match.Score?.Score?.length);
-  if (!hasResult) return 'Upcoming';
-  return isMatchWinner(match) ? 'Victory' : 'Defeat';
+  if (!hasResult && !match.Info?.IsPlayed) return 'Upcoming';
+  const winner = isMatchWinner(match);
+  if (winner === undefined) return 'Completed';
+  return winner ? 'Victory' : 'Defeat';
 }
 
 function parseLooseDate(value?: string | null) {
@@ -198,7 +235,10 @@ function railParts(date: Date | null) {
 type AgendaRowModel = {
   id: string;
   kind: 'month' | 'row';
+  groupKey?: string;
+  collapsible?: boolean;
   month?: string;
+  count?: number;
   day?: string;
   weekday?: string;
   title?: string;
@@ -218,13 +258,23 @@ function flattenGroups<T>(
 ): AgendaRowModel[] {
   const rows: AgendaRowModel[] = [];
   groups.forEach((group) => {
-    rows.push({ id: `month-${group.label}`, kind: 'month', month: group.label });
+    const collapsible = group.collapsible !== false;
+    rows.push({
+      id: `month-${group.key}`,
+      kind: 'month',
+      groupKey: group.key,
+      month: group.label,
+      count: group.items.length,
+      collapsible,
+    });
     group.items.forEach((item, index) => {
       const next = toRow(item, index);
       const parts = railParts(next.date);
       rows.push({
         id: next.id,
         kind: 'row',
+        groupKey: group.key,
+        collapsible,
         day: parts.day,
         weekday: parts.weekday,
         title: next.title,
@@ -271,10 +321,10 @@ export function SectionSwitcher({
               accessibilityLabel={label}
               android_ripple={RIPPLE}
               className="min-h-11 justify-center rounded-xl px-3"
-              style={selected ? { backgroundColor: item.active } : undefined}>
+              style={selected ? { backgroundColor: brand.padel } : undefined}>
               <Text
                 className="text-[9px] font-black uppercase tracking-widest"
-                style={{ color: selected ? item.text : 'rgba(255,255,255,0.7)' }}>
+                style={{ color: selected ? brand.page : 'rgba(255,255,255,0.7)' }}>
                 {item.label}
                 {count != null ? ` (${count})` : ''}
               </Text>
@@ -291,8 +341,8 @@ export function SegmentedControl({
   onChange,
   upcomingCount,
   completedCount,
-  active = '#A855F7',
-  activeText = '#fff',
+  active = brand.padel,
+  activeText = brand.page,
 }: {
   value: AgendaFilter;
   onChange: (next: AgendaFilter) => void;
@@ -321,7 +371,7 @@ export function SegmentedControl({
             accessibilityState={{ selected }}
             accessibilityLabel={item.label}
             android_ripple={RIPPLE}
-            className="min-h-9 justify-center rounded-lg px-3"
+            className="min-h-11 justify-center rounded-lg px-3"
             style={selected ? { backgroundColor: active } : undefined}>
             <Text
               className="text-[9px] font-black uppercase tracking-wider"
@@ -360,13 +410,54 @@ function FilterMenu({
   );
 }
 
-function AgendaMonth({ label }: { label: string }) {
+function AgendaMonth({
+  label,
+  count,
+  expanded,
+  collapsible,
+  onToggle,
+}: {
+  label: string;
+  count?: number;
+  expanded: boolean;
+  collapsible: boolean;
+  onToggle: () => void;
+}) {
+  if (!collapsible) {
+    return (
+      <Text
+        accessibilityRole="header"
+        className="px-5 pb-2 pt-5 text-[11px] font-extrabold tracking-[0.18em] text-faint">
+        {label}
+      </Text>
+    );
+  }
+
   return (
-    <Text
-      accessibilityRole="header"
-      className="px-5 pb-2 pt-5 text-[11px] font-extrabold tracking-[0.18em] text-faint">
-      {label}
-    </Text>
+    <PressableScale
+      onPress={onToggle}
+      accessibilityRole="button"
+      accessibilityLabel={`${label} month`}
+      accessibilityHint={expanded ? 'Collapses this month' : 'Expands this month'}
+      accessibilityState={{ expanded }}
+      android_ripple={RIPPLE}
+      hitSlop={4}>
+      <View className="min-h-11 flex-row items-center justify-between px-5 pt-3">
+        <View className="flex-row items-center">
+          <Text className="text-[11px] font-extrabold tracking-[0.18em] text-faint">
+            {label}
+          </Text>
+          {count != null ? (
+            <Text className="ml-2 text-[10px] font-bold text-faint">{count}</Text>
+          ) : null}
+        </View>
+        <SymbolView
+          name={expanded ? 'chevron.down' : 'chevron.right'}
+          size={13}
+          tintColor={brand.faint}
+        />
+      </View>
+    </PressableScale>
   );
 }
 
@@ -422,7 +513,7 @@ function AgendaRow({
               {tags.map((tag) => (
                 <Text
                   key={tag.label}
-                  className="rounded px-1.5 py-0.5 text-[7.5px] font-black uppercase tracking-wider"
+                  className="rounded px-1.5 py-0.5 text-[8.5px] font-black uppercase tracking-wider"
                   style={{
                     color: tag.color,
                     borderWidth: 1,
@@ -438,19 +529,22 @@ function AgendaRow({
             {title}
           </Text>
           {subtitle ? (
-            <View className="mt-0.5 flex-row items-center">
-              {pin ? <MapPin size={9} color="#6B7280" /> : null}
+            <View className="mt-1 flex-row items-center">
+              {pin ? <MapPin size={10} color={brand.muted} /> : null}
               <Text
                 numberOfLines={1}
-                className={`text-[8px] font-bold uppercase tracking-wider text-faint ${pin ? 'ml-1' : ''}`}>
+                className={`text-[9px] font-bold uppercase tracking-wider text-muted ${pin ? 'ml-1.5' : ''}`}>
                 {subtitle}
               </Text>
             </View>
           ) : null}
           {status ? (
-            <Text numberOfLines={1} className="mt-0.5 text-[11px] text-white/45">
-              {status}
-            </Text>
+            <View className="mt-1 flex-row items-center">
+              <View className="h-1.5 w-1.5 rounded-full bg-white/30" />
+              <Text numberOfLines={1} className="ml-1.5 text-[10.5px] font-semibold text-premium">
+                {status}
+              </Text>
+            </View>
           ) : null}
         </View>
         {actionLabel && onAction ? (
@@ -458,10 +552,10 @@ function AgendaRow({
             onPress={onAction}
             accessibilityRole="button"
             accessibilityLabel={actionLabel}
-            className="min-h-8 justify-center rounded-full px-2.5"
+            className="min-h-11 justify-center rounded-full px-3"
             style={{ backgroundColor: fill }}>
             <Text
-              className="text-[8.5px] font-black uppercase tracking-wide"
+              className="text-[9px] font-black uppercase tracking-wide"
               style={{ color: contrastOnFill(fill) }}>
               {actionLabel} →
             </Text>
@@ -506,6 +600,17 @@ function PageEnter({ active, children }: { active: boolean; children: ReactNode 
   return <Animated.View style={style}>{children}</Animated.View>;
 }
 
+function defaultExpandedGroups(data: AgendaRowModel[], currentMonthKey: string) {
+  const defaults = new Set<string>();
+  for (const item of data) {
+    if (item.kind !== 'month' || !item.groupKey) continue;
+    if (item.collapsible === false || item.groupKey === currentMonthKey) {
+      defaults.add(item.groupKey);
+    }
+  }
+  return defaults;
+}
+
 function AgendaList({
   data,
   extraData,
@@ -525,14 +630,51 @@ function AgendaList({
   onRefresh: () => void;
   bottomPad: number;
 }) {
+  const current = new Date();
+  const currentMonthKey = `${current.getFullYear()}-${current.getMonth()}`;
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() =>
+    defaultExpandedGroups(data, currentMonthKey)
+  );
+
+  useEffect(() => {
+    setExpandedGroups(defaultExpandedGroups(data, currentMonthKey));
+  }, [currentMonthKey, data]);
+
+  const visibleData = useMemo(
+    () =>
+      data.filter(
+        (item) =>
+          item.kind === 'month' ||
+          !item.groupKey ||
+          item.collapsible === false ||
+          expandedGroups.has(item.groupKey)
+      ),
+    [data, expandedGroups]
+  );
+
+  function toggleGroup(groupKey: string) {
+    setExpandedGroups((currentGroups) => {
+      const next = new Set(currentGroups);
+      if (next.has(groupKey)) next.delete(groupKey);
+      else next.add(groupKey);
+      return next;
+    });
+  }
+
   return (
     <FlashList
-      data={data}
+      data={visibleData}
       extraData={extraData}
       keyExtractor={(item) => item.id}
       renderItem={({ item }) =>
         item.kind === 'month' ? (
-          <AgendaMonth label={item.month || ''} />
+          <AgendaMonth
+            label={item.month || ''}
+            count={item.count}
+            expanded={Boolean(item.groupKey && expandedGroups.has(item.groupKey))}
+            collapsible={item.collapsible !== false}
+            onToggle={() => item.groupKey && toggleGroup(item.groupKey)}
+          />
         ) : (
           <AgendaRow
             day={item.day}
@@ -629,7 +771,11 @@ export function ProfileSectionPager({
   const eventRows = useMemo(
     () =>
       flattenGroups(
-        groupByMonth(visibleEvents, (event) => parseDay(event.start_date)),
+        groupByMonth(
+          visibleEvents,
+          (event) => parseDay(event.start_date),
+          past ? 'desc' : 'asc'
+        ),
         (event) => {
           const pending = pendingEventIds.has(event.id);
           const action = eventActionLabel(event, past);
@@ -654,7 +800,11 @@ export function ProfileSectionPager({
   const matchRows = useMemo(
     () =>
       flattenGroups(
-        groupByMonth(matches, (match) => parseLooseDate(match.Info?.EventStartDate || match.Info?.Date)),
+        groupByMonth(
+          matches,
+          (match) => parseLooseDate(match.Info?.EventStartDate || match.Info?.Date),
+          matchView === 'upcoming' ? 'asc' : 'desc'
+        ),
         (match, index) => ({
           id: `match-${matchKey(match, index)}`,
           date: parseLooseDate(match.Info?.EventStartDate || match.Info?.Date),
@@ -663,7 +813,7 @@ export function ProfileSectionPager({
           status: matchStatus(match),
         })
       ),
-    [matches]
+    [matches, matchView]
   );
 
   const rankingRows = useMemo(() => {
@@ -683,7 +833,7 @@ export function ProfileSectionPager({
       );
     }
     return flattenGroups(
-      [{ label: 'RANKINGS', items: rankings }],
+      [{ key: 'rankings', label: 'RANKINGS', items: rankings, collapsible: false }],
       (row, index) => ({
         id: `rank-org-${row.org}-${index}`,
         date: null,
@@ -753,7 +903,6 @@ export function ProfileSectionPager({
                   onChange={onEventView}
                   upcomingCount={upcomingEvents.length}
                   completedCount={completedEvents.length}
-                  active="#A855F7"
                 />
               </View>
             }
@@ -790,7 +939,6 @@ export function ProfileSectionPager({
                   onChange={onMatchView}
                   upcomingCount={upcomingMatches.length}
                   completedCount={completedMatches.length}
-                  active="#F97316"
                 />
               </View>
             }
@@ -839,12 +987,12 @@ export function ProfileSectionPager({
                           android_ripple={RIPPLE}
                           className="min-h-11 justify-center rounded-xl px-3"
                           style={{
-                            backgroundColor: active ? '#EAB308' : 'rgba(255,255,255,0.02)',
+                            backgroundColor: active ? brand.padel : 'rgba(255,255,255,0.02)',
                             borderWidth: 1,
-                            borderColor: active ? '#EAB308' : 'rgba(255,255,255,0.1)',
+                            borderColor: active ? brand.padel : 'rgba(255,255,255,0.1)',
                           }}>
                           <Text
-                            className="text-[8px] font-black uppercase tracking-widest"
+                            className="text-[9px] font-black uppercase tracking-widest"
                             style={{ color: active ? '#000' : 'rgba(255,255,255,0.7)' }}>
                             {row.org || 'SAPA'} ({row.age_group || 'Open'})
                           </Text>

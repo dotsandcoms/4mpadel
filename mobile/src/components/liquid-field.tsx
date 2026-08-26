@@ -24,6 +24,7 @@ type Props = {
   hint?: string;
   invalid?: boolean;
   valid?: boolean;
+  compact?: boolean;
   labelAccessory?: ReactNode;
 } & React.ComponentProps<typeof TextInput>;
 
@@ -47,6 +48,7 @@ export const LiquidField = forwardRef<TextInput, Props>(function LiquidField(
     hint,
     invalid,
     valid,
+    compact = false,
     labelAccessory,
     onFocus,
     onBlur,
@@ -150,7 +152,7 @@ export const LiquidField = forwardRef<TextInput, Props>(function LiquidField(
           className="justify-center pr-3">
           <Text
             nativeID={labelId}
-            className="text-[14px] font-semibold"
+            className={`${compact ? 'text-[11px] font-bold uppercase tracking-wider' : 'text-[14px] font-semibold'}`}
             style={{ color: brand.label }}>
             {label}
           </Text>
@@ -204,9 +206,11 @@ export const LiquidField = forwardRef<TextInput, Props>(function LiquidField(
           cursorColor={brand.padel}
           selectionColor="rgba(204,255,0,0.35)"
           keyboardAppearance="dark"
-          className="flex-1 text-[16px]"
+          className="flex-1"
           style={{
             color: brand.premium,
+            fontSize: compact ? 13 : 16,
+            fontWeight: compact ? '600' : '400',
             marginLeft: icon ? 10 : 0,
             minHeight: multiline ? 96 : 52,
             height: multiline ? undefined : 52,
@@ -248,12 +252,12 @@ export const LiquidField = forwardRef<TextInput, Props>(function LiquidField(
           nativeID={invalid ? errorId : undefined}
           accessibilityLiveRegion="polite"
           accessibilityElementsHidden={!invalid}
-          className="px-1 text-[13px] leading-5 text-danger">
+          className={`px-1 leading-5 text-danger ${compact ? 'text-[11px]' : 'text-[13px]'}`}>
           {heldError}
         </Text>
       </Animated.View>
       {!invalid && hint ? (
-        <Text nativeID={hintId} className="mt-2 px-1 text-[13px] leading-5" style={{ color: brand.label }}>
+        <Text nativeID={hintId} className={`mt-2 px-1 leading-5 ${compact ? 'text-[11px]' : 'text-[13px]'}`} style={{ color: brand.label }}>
           {hint}
         </Text>
       ) : null}

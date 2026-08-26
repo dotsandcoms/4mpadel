@@ -3,7 +3,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
-  Linking,
+  Alert,
   Pressable,
   ScrollView,
   Text,
@@ -42,7 +42,6 @@ import {
   galleryOf,
   rankingsOf,
   setPreferredRanking,
-  sponsorsOf,
   updateGallery,
   type PlayerRow,
   type ProfileBundle,
@@ -58,18 +57,6 @@ const EMPTY_PROFILE: ProfileBundle = {
   stats: { matchCount: 0, played: 0, wins: 0, losses: 0, lastFive: [], winRatio: 0 },
   tempLicense: null,
 };
-
-function instagramUrl(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  return `https://instagram.com/${trimmed.replace(/^@/, '')}`;
-}
-
-function instagramHandle(value: string) {
-  if (value.startsWith('@')) return value;
-  return `@${value.split('/').pop()?.replace('@', '') || value}`;
-}
 
 /** Profile tab. Edit lives on `/edit-profile`, pushed as a native stack page. */
 export default function ProfileScreen() {
@@ -140,7 +127,6 @@ export default function ProfileScreen() {
   const player = bundle.player;
   const rankings = rankingsOf(player);
   const gallery = galleryOf(player);
-  const sponsors = sponsorsOf(player);
   const pendingEvents = (home?.pending ?? []).filter((row) => row.kind === 'payment');
   const upcomingEvents = home?.upcomingSchedule ?? [];
   const pastEvents = home?.pastSchedule ?? [];
@@ -209,6 +195,21 @@ export default function ProfileScreen() {
     }
   }
 
+  function confirmGalleryRemoval(index: number) {
+    Alert.alert(
+      'Remove photo?',
+      'This photo will be removed from your player gallery.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove photo',
+          style: 'destructive',
+          onPress: () => void removeGalleryImage(index),
+        },
+      ]
+    );
+  }
+
   return (
     <View className="flex-1 bg-page">
       <View className="bg-page" style={{ paddingTop: insets.top }}>
@@ -248,7 +249,7 @@ export default function ProfileScreen() {
       {!loading && !player ? (
         <View className="px-5 pt-2">
           <EmptyBlock
-            title="No Profile Found"
+            title="Profile unavailable"
             body="We couldn't link your account to a player profile."
           />
         </View>
@@ -340,11 +341,8 @@ export default function ProfileScreen() {
                     <GalleryBlock
                       gallery={gallery}
                       onOpen={setLightbox}
-                      onRemove={removeGalleryImage}
+                      onRemove={confirmGalleryRemoval}
                     />
-                    <View className="mt-4">
-                      <MyProfilePanel player={player} sponsors={sponsors} onEdit={openProfileEdit} />
-                    </View>
                   </>
                 }
               />
@@ -390,13 +388,13 @@ function CareerBlock({
   onShowDetails: (row: RankingRow) => void;
 }) {
   return (
-    <Pressable
-      onPress={onToggle}
-      accessibilityRole="button"
-      accessibilityState={{ expanded: open }}
-      accessibilityLabel="Career Overview"
-      className="mt-4 rounded-3xl border border-white/10 bg-[#0a0a0a]/70 p-5">
-      <View className="flex-row items-center justify-between">
+    <View className="mt-4 rounded-3xl border border-white/10 bg-[#0a0a0a]/70 p-5">
+      <Pressable
+        onPress={onToggle}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel="Career overview"
+        className="min-h-11 flex-row items-center justify-between">
         <View className="flex-row items-center">
           <View className="h-9 w-9 items-center justify-center rounded-xl border border-padel/20 bg-padel/10">
             <SymbolView name="trophy.fill" size={16} tintColor={brand.padel} />
@@ -408,13 +406,13 @@ function CareerBlock({
         <View style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}>
           <SymbolView name="chevron.down" size={16} tintColor={brand.padel} />
         </View>
-      </View>
+      </Pressable>
       {open ? (
         <View className="mt-4">
           {player.skill_rating ? (
             <View className="mb-4 flex-row items-center rounded-2xl border border-padel/20 bg-padel/10 p-4">
               <View className="h-14 min-w-[4.5rem] items-center justify-center rounded-xl bg-padel px-3">
-                <Text className="text-[8px] font-black uppercase text-page">Skill</Text>
+                <Text className="text-[9px] font-black uppercase text-page">Skill</Text>
                 <Text className="text-xl font-black text-page">{player.skill_rating}</Text>
               </View>
               <View className="ml-4 flex-1">
@@ -442,50 +440,51 @@ function CareerBlock({
                   : index === 0;
                 const broll = (row.org || '').toLowerCase().includes('broll');
                 return (
-                  <Pressable
+                  <View
                     key={`${rankingKey(row)}-${index}`}
-                    onPress={() => onChoose(row)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${row.org || 'SAPA ranking'}, ${row.age_group || 'Open'}`}
                     className="relative mb-2 rounded-xl border p-3"
                     style={{
                       backgroundColor: preferred ? 'rgba(204,255,0,0.1)' : 'rgba(0,0,0,0.2)',
                       borderColor: preferred ? 'rgba(204,255,0,0.3)' : 'rgba(255,255,255,0.05)',
                     }}>
-                    <View className="flex-row justify-between">
+                    <Pressable
+                      onPress={() => onChoose(row)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${row.org || 'SAPA ranking'}, ${row.age_group || 'Open'}. Set as primary.`}
+                      className="min-h-11 flex-row justify-between">
                       <View className="min-w-0 flex-1">
                         <Text
-                          className="text-[8px] font-black uppercase tracking-widest"
+                          className="text-[9px] font-black uppercase tracking-widest"
                           style={{ color: broll ? '#EF4444' : brand.padel }}>
                           {row.org || 'SAPA RANKING'}
                         </Text>
                         <Text className="text-xs font-bold uppercase text-premium">
                           {row.age_group || row.division || 'Open'}
                         </Text>
-                        <Text className="text-[8px] font-bold uppercase text-faint">
+                        <Text className="text-[9px] font-bold uppercase text-faint">
                           {row.match_type}
                         </Text>
                       </View>
                       <View className="items-end">
                         <Text className="text-sm font-black text-premium">#{row.rank}</Text>
-                        <Text className="text-[8px] font-black uppercase tracking-widest text-faint">
+                        <Text className="text-[9px] font-black uppercase tracking-widest text-faint">
                           {row.points} PTS
                         </Text>
                       </View>
-                    </View>
+                    </Pressable>
                     <Pressable
                       onPress={() => onShowDetails(row)}
                       accessibilityRole="button"
                       accessibilityLabel="Show ranking details"
                       className="mt-2 min-h-11 justify-center self-end">
-                      <Text className="text-[8px] font-black uppercase tracking-widest text-padel">
-                        Show Details →
+                      <Text className="text-[9px] font-black uppercase tracking-widest text-padel">
+                        View details
                       </Text>
                     </Pressable>
-                  </Pressable>
+                  </View>
                 );
               })}
-              <Text className="mt-2 text-center text-[8px] font-bold uppercase tracking-widest text-white/40">
+              <Text className="mt-2 text-center text-[9px] font-bold uppercase tracking-widest text-faint">
                 Tap a ranking to set as primary
               </Text>
             </View>
@@ -532,7 +531,7 @@ function CareerBlock({
           </View>
         </View>
       ) : null}
-    </Pressable>
+    </View>
   );
 }
 
@@ -553,7 +552,7 @@ function GalleryBlock({
           Player Gallery
         </Text>
         <View className="ml-2 rounded-full border border-white/10 bg-white/5 px-2 py-0.5">
-          <Text className="text-[8px] font-bold text-white/50">{gallery.length} / 5</Text>
+          <Text className="text-[9px] font-bold text-white/50">{gallery.length} / 5</Text>
         </View>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ gap: 12 }}>
@@ -573,10 +572,10 @@ function GalleryBlock({
               onPress={() => onRemove(index)}
               accessibilityRole="button"
               accessibilityLabel={`Remove gallery photo ${index + 1}`}
-              hitSlop={6}
+              hitSlop={10}
               className="absolute items-center justify-center rounded-full bg-red-500/80"
-              style={{ top: 4, right: 4, width: 18, height: 18 }}>
-              <SymbolView name="xmark" size={8} tintColor="#fff" />
+              style={{ top: 4, right: 4, width: 24, height: 24 }}>
+              <SymbolView name="xmark" size={10} tintColor="#fff" />
             </Pressable>
           </View>
         ))}
@@ -593,94 +592,3 @@ function GalleryBlock({
     </View>
   );
 }
-
-function MyProfilePanel({
-  player,
-  sponsors,
-  onEdit,
-}: {
-  player: PlayerRow;
-  sponsors: string[];
-  onEdit: () => void;
-}) {
-  return (
-    <View>
-      <View className="mb-3 flex-row items-center justify-between">
-        <Text className="text-[10px] font-black uppercase tracking-[0.2em] text-faint">
-          Player Profile Details
-        </Text>
-        <Pressable
-          onPress={onEdit}
-          accessibilityRole="button"
-          accessibilityLabel="Edit profile"
-          className="min-h-11 flex-row items-center rounded-xl border border-padel/30 bg-padel/10 px-3">
-          <SymbolView name="pencil" size={10} tintColor={brand.padel} />
-          <Text className="ml-1 text-[8.5px] font-black uppercase tracking-wider text-padel">Edit</Text>
-        </Pressable>
-      </View>
-      <View className="flex-row flex-wrap" style={{ gap: 12 }}>
-        <InfoTile label="Contact" value={player.contact_number || 'Not Set'} />
-        <InfoTile label="Age" value={player.age ? `${player.age} Years` : 'Not Set'} />
-        <InfoTile label="Home Club" value={player.home_club || 'Not Set'} />
-        <InfoTile label="Racket" value={player.racket_brand || 'Not Set'} />
-        <InfoTile label="Region" value={player.region || 'Not Set'} />
-        <InfoTile label="Division" value={player.category || 'Not Set'} />
-      </View>
-      <View className="mt-3 rounded-3xl border border-white/10 bg-[#0a0a0a]/70 p-4">
-        <Text className="mb-2 text-[7.5px] font-black uppercase tracking-[0.2em] text-padel">
-          Player Biography
-        </Text>
-        <Text className="text-[10px] font-medium leading-5 text-gray-300">
-          {player.bio || 'No biography added yet. Update your profile to tell us about your padel journey!'}
-        </Text>
-      </View>
-      {player.instagram_link ? (
-        <Pressable
-          onPress={() => {
-            const url = instagramUrl(player.instagram_link || '');
-            if (url) Linking.openURL(url);
-          }}
-          accessibilityRole="link"
-          accessibilityLabel="Instagram handle"
-          className="mt-3 flex-row items-center justify-between rounded-2xl border border-white/10 bg-[#0a0a0a]/70 p-3.5">
-          <Text className="text-[10px] font-bold text-gray-300">Instagram Handle</Text>
-          <Text className="text-[9.5px] font-extrabold uppercase tracking-wider text-padel">
-            {instagramHandle(player.instagram_link)}
-          </Text>
-        </Pressable>
-      ) : null}
-      <View className="mt-3 rounded-3xl border border-white/10 bg-[#0a0a0a]/70 p-4">
-        <Text className="mb-3 text-[7.5px] font-black uppercase tracking-[0.2em] text-padel">
-          Sponsors & Partners
-        </Text>
-        {sponsors.length ? (
-          <View className="flex-row flex-wrap" style={{ gap: 6 }}>
-            {sponsors.map((sponsor) => (
-              <Text
-                key={sponsor}
-                className="rounded-lg border border-padel/25 bg-padel/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-padel">
-                {sponsor}
-              </Text>
-            ))}
-          </View>
-        ) : (
-          <Text className="text-[9.5px] font-bold uppercase tracking-wider text-faint">
-            No active sponsors listed
-          </Text>
-        )}
-      </View>
-    </View>
-  );
-}
-
-function InfoTile({ label, value }: { label: string; value: string }) {
-  return (
-    <View className="min-h-[75px] w-[47%] justify-between rounded-2xl border border-white/10 bg-[#0a0a0a]/70 p-3.5">
-      <Text className="text-[7.5px] font-black uppercase tracking-widest text-padel">{label}</Text>
-      <Text numberOfLines={2} className="mt-1 text-[11px] font-black text-premium">
-        {value}
-      </Text>
-    </View>
-  );
-}
-
