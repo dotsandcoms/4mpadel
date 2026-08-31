@@ -1121,7 +1121,6 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             setSeriesSiblings([]);
             return;
         }
-        setWorkingEvent(editingEvent);
         setSeriesSiblings([]);
         setStep(1);
         licenseDefaultTouchedRef.current = false;
@@ -1149,14 +1148,18 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             regCloseTouchedRef.current = true;
             regOpenTouchedRef.current = true;
             pointsTouchedRef.current = true;
-            // If the org has a pending amendment draft, resume editing THAT
-            // draft rather than the live event data.
-            const draft = (organisation && editingEvent.sanction_status === 'approved'
-                && ['pending', 'rejected'].includes(editingEvent.pending_changes_status)
+            // Every entry point edits the same richest source. When an
+            // amendment draft exists it is layered over the live calendar row,
+            // whether the builder was opened from Event Manager or Calendar.
+            const draft = (['pending', 'rejected'].includes(editingEvent.pending_changes_status)
                 && editingEvent.pending_changes?.payload)
                 ? editingEvent.pending_changes : null;
-            loadExisting(draft ? { ...editingEvent, ...draft.payload } : editingEvent, draft?.divisions || null);
+            const resolvedEvent = draft ? { ...editingEvent, ...draft.payload } : editingEvent;
+            setWorkingEvent(resolvedEvent);
+            setRemovedDivisionIds(draft?.removed_division_ids || []);
+            loadExisting(resolvedEvent, draft?.divisions || null);
         } else {
+            setWorkingEvent(null);
             regCloseTouchedRef.current = false;
             regOpenTouchedRef.current = false;
             pointsTouchedRef.current = false;
@@ -1322,8 +1325,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         } else if (organisation?.logo_url) {
             setForm((prev) => ({ ...prev, organiser_logo_url: organisation.logo_url }));
         }
-        if (draftDivisions && draftDivisions.length > 0) {
-            setDivisions(draftDivisions.map((d, i) => mapDivisionRow(d, d.id || `draft_${i}`)));
+        if (Array.isArray(draftDivisions)) {
+            setDivisions(draftDivisions.length > 0
+                ? draftDivisions.map((d, i) => mapDivisionRow(d, d.id || `draft_${i}`))
+                : [emptyDivision(!!ev.license_required_default)]);
             if (ev.entry_fee != null && ev.entry_fee !== '') setStandardPrice(String(ev.entry_fee));
             return;
         }
@@ -2463,6 +2468,18 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         try {
             const payload = buildPayload(mode);
             let eventId = activeEvent?.id;
+            const applyingPendingAmendment = !organisation
+                && !!activeEvent?.pending_changes?.payload
+                && ['pending', 'rejected'].includes(activeEvent.pending_changes_status);
+
+            // A platform-admin Calendar save applies the same amendment source
+            // it displayed, then clears the now-consumed draft metadata.
+            if (applyingPendingAmendment) {
+                payload.pending_changes = null;
+                payload.pending_changes_status = null;
+                payload.pending_changes_notes = null;
+                payload.pending_changes_submitted_at = null;
+            }
 
             if (isAmendment && !form.is_weekly) {
                 // Store draft amendment only — live event data stays untouched

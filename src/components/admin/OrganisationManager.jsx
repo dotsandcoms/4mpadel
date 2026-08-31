@@ -1292,7 +1292,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                     <p className="text-gray-400 text-sm mt-1">
                         {isHostView
                             ? (isImpersonatingOrg
-                                ? `Managing ${currentOrg?.name} — create events, review entries, and update host settings`
+                                ? `Managing ${currentOrg?.name} — create events, review entries, and update club settings`
                                 : 'Host Dashboard - Create tournaments, configure entry seeds, and inspect entries')
                             : 'Sanction host clubs, approve events, and review platform telemetry'}
                     </p>
@@ -1860,7 +1860,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                 className={`pb-4 text-sm font-extrabold uppercase tracking-wider relative transition-colors cursor-pointer ${activeSection === 'org-settings' ? 'text-padel-green' : 'text-gray-400 hover:text-white'
                                     }`}
                             >
-                                Host Club Settings
+                                Club Settings
                                 {activeSection === 'org-settings' && (
                                     <motion.div layoutId="hostTabUnderline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-padel-green" />
                                 )}
@@ -2013,7 +2013,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                         </div>
                     )}
 
-                    {/* 3. Host Club Settings Panel */}
+                    {/* 3. Club Settings Panel */}
                     {activeSection === 'org-settings' && (
                         <div className="w-full bg-white/[0.02] border border-white/10 backdrop-blur-md rounded-2xl p-6 md:p-8 text-left shadow-xl relative overflow-hidden">
                             <div className="absolute top-0 right-0 w-32 h-32 bg-padel-green/5 blur-3xl rounded-full pointer-events-none" />
