@@ -523,21 +523,11 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
         if (!currentOrg) return;
         setLoading(true);
         try {
-            const { data: clubLinks, error: clubLinksError } = await supabase
-                .from('club_organisations')
-                .select('club_id')
-                .eq('organisation_id', currentOrg.id);
-            if (clubLinksError) throw clubLinksError;
-
-            const clubIds = (clubLinks || []).map((link) => link.club_id).filter(Boolean);
-            let eventsQuery = supabase
+            const { data: events, error } = await supabase
                 .from('calendar')
                 .select('*')
+                .eq('organisation_id', currentOrg.id)
                 .order('start_date', { ascending: true });
-            eventsQuery = clubIds.length > 0
-                ? eventsQuery.or(`organisation_id.eq.${currentOrg.id},club_id.in.(${clubIds.join(',')})`)
-                : eventsQuery.eq('organisation_id', currentOrg.id);
-            const { data: events, error } = await eventsQuery;
 
             if (error) throw error;
             const evList = events || [];
