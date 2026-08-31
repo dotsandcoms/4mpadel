@@ -1185,6 +1185,7 @@ const EventDetails = () => {
     const [accessCode, setAccessCode] = useState('');
     const [accessError, setAccessError] = useState('');
     const [unlockingAccess, setUnlockingAccess] = useState(false);
+    const [accessViewport, setAccessViewport] = useState(null);
     const [manualRegStatus, setManualRegStatus] = useState({
         hasPendingPayment: false,
         hasRegistrations: false,
@@ -1266,6 +1267,34 @@ const EventDetails = () => {
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [accessDialogOpen, unlockingAccess]);
+
+    useEffect(() => {
+        if (!accessDialogOpen) {
+            setAccessViewport(null);
+            return undefined;
+        }
+
+        const visualViewport = window.visualViewport;
+        const syncVisibleViewport = () => {
+            setAccessViewport({
+                height: Math.round(visualViewport?.height || window.innerHeight),
+                top: Math.round(visualViewport?.offsetTop || 0),
+            });
+        };
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        syncVisibleViewport();
+        visualViewport?.addEventListener('resize', syncVisibleViewport);
+        visualViewport?.addEventListener('scroll', syncVisibleViewport);
+        window.addEventListener('resize', syncVisibleViewport);
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            visualViewport?.removeEventListener('resize', syncVisibleViewport);
+            visualViewport?.removeEventListener('scroll', syncVisibleViewport);
+            window.removeEventListener('resize', syncVisibleViewport);
+        };
+    }, [accessDialogOpen]);
 
     const refreshParticipants = useCallback(() => {
         setParticipantsRefreshKey((k) => k + 1);
@@ -5606,7 +5635,13 @@ const EventDetails = () => {
             {/* Private event access */}
             <AnimatePresence>
                 {accessDialogOpen && (
-                    <div className="fixed inset-0 z-[1200] flex items-end justify-center p-0 sm:items-center sm:p-6">
+                    <div
+                        className="fixed inset-x-0 z-[1200] flex items-end justify-center overflow-hidden p-0 sm:items-center sm:p-6"
+                        style={{
+                            top: accessViewport?.top ?? 0,
+                            height: accessViewport?.height ? `${accessViewport.height}px` : '100dvh',
+                        }}
+                    >
                         <motion.button
                             type="button"
                             aria-label="Close access code dialog"
@@ -5623,13 +5658,13 @@ const EventDetails = () => {
                             initial={{ opacity: 0, y: 32, scale: 0.98 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 24, scale: 0.98 }}
-                            className="relative w-full max-w-md rounded-t-3xl border border-white/10 bg-[#111] p-6 shadow-2xl sm:rounded-3xl"
+                            className="relative max-h-[calc(100%_-_0.75rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-3xl border border-white/10 bg-[#111] p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl sm:max-h-full sm:rounded-3xl"
                         >
                             <button
                                 type="button"
                                 onClick={() => setAccessDialogOpen(false)}
                                 aria-label="Close"
-                                className="absolute right-4 top-4 rounded-full p-2 text-gray-400 transition hover:bg-white/10 hover:text-white"
+                                className="absolute right-4 top-4 flex min-h-11 min-w-11 items-center justify-center rounded-full text-gray-400 transition hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-400"
                             >
                                 <X className="h-5 w-5" />
                             </button>
@@ -5646,12 +5681,19 @@ const EventDetails = () => {
                                         type="password"
                                         autoFocus
                                         autoComplete="one-time-code"
+                                        inputMode="text"
+                                        aria-invalid={!!accessError}
+                                        aria-describedby={accessError ? 'event-access-error' : undefined}
                                         value={accessCode}
                                         onChange={(e) => { setAccessCode(e.target.value); setAccessError(''); }}
+                                        onFocus={(e) => {
+                                            const input = e.currentTarget;
+                                            window.setTimeout(() => input.scrollIntoView({ block: 'center', behavior: 'smooth' }), 150);
+                                        }}
                                         className={`min-h-12 w-full rounded-xl border bg-black/40 px-4 text-base font-bold tracking-wider text-white outline-none transition focus:ring-2 focus:ring-orange-500/25 ${accessError ? 'border-red-500' : 'border-white/15 focus:border-orange-500'}`}
                                         placeholder="Enter code"
                                     />
-                                    {accessError && <p role="alert" className="mt-2 text-sm font-semibold text-red-400">{accessError}</p>}
+                                    {accessError && <p id="event-access-error" role="alert" className="mt-2 text-sm font-semibold text-red-400">{accessError}</p>}
                                 </div>
                                 <button
                                     type="submit"
