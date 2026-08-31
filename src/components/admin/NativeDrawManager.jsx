@@ -124,6 +124,10 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
     const [rankingTier, setRankingTier] = useState(null);
     const [rankingPointsTable, setRankingPointsTable] = useState([]);
     const [rankingPointsLoading, setRankingPointsLoading] = useState(false);
+    const [rankingAwards, setRankingAwards] = useState([]);
+    const [rankingAwardsLoading, setRankingAwardsLoading] = useState(false);
+    const [placementOverrides, setPlacementOverrides] = useState({});
+    const [awardConfirmed, setAwardConfirmed] = useState(false);
     const [editingMatchId, setEditingMatchId] = useState(null);
     const [matchOperations, setMatchOperations] = useState({});
     const [announcements, setAnnouncements] = useState([]);
@@ -213,8 +217,53 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         if (activeDrawKind !== 'main' || savedDraw?.status !== 'completed' || !hasKnockoutStage) return [];
         const pointsByRound = new Map(rankingPointsTable.map((item) => [item.round_code, item]));
         return deriveKnockoutPlacementProposals({ entries: draft.entries, matches: draft.matches, tierCode: rankingTier?.code })
-            .map((proposal) => ({ ...proposal, pointsRule: proposal.roundCode ? pointsByRound.get(proposal.roundCode) || null : null }));
-    }, [activeDrawKind, savedDraw?.status, draft, hasKnockoutStage, rankingPointsTable, rankingTier?.code]);
+            .map((proposal) => {
+                const selectedRoundCode = placementOverrides[proposal.entry_id] || proposal.roundCode || '';
+                return { ...proposal, selectedRoundCode, pointsRule: selectedRoundCode ? pointsByRound.get(selectedRoundCode) || null : null };
+            });
+    }, [activeDrawKind, savedDraw?.status, draft, hasKnockoutStage, rankingPointsTable, rankingTier?.code, placementOverrides]);
+
+    const rankingAwardsByPlayerId = useMemo(() => new Map(rankingAwards.map((award) => [String(award.player_id), award])), [rankingAwards]);
+    const unpricedRankingReview = useMemo(() => rankingReview.filter((proposal) => !proposal.pointsRule || !proposal.selectedRoundCode), [rankingReview]);
+    const missingPlayerProfiles = useMemo(() => rankingReview.flatMap((proposal) => [
+        proposal.entry.player_one_name && !proposal.entry.player_one_id ? proposal.entry.player_one_name : null,
+        proposal.entry.player_two_name && !proposal.entry.player_two_id ? proposal.entry.player_two_name : null,
+    ].filter(Boolean)), [rankingReview]);
+    const awardablePlayerRows = useMemo(() => rankingReview.flatMap((proposal) => {
+        if (!proposal.pointsRule || !proposal.selectedRoundCode) return [];
+        return [
+            { id: proposal.entry.player_one_id, name: proposal.entry.player_one_name },
+            { id: proposal.entry.player_two_id, name: proposal.entry.player_two_name },
+        ].filter((player) => player.id).map((player) => ({ ...player, proposal }));
+    }), [rankingReview]);
+    const pendingAwardablePlayerRows = useMemo(() => awardablePlayerRows.filter((player) => !rankingAwardsByPlayerId.has(String(player.id))), [awardablePlayerRows, rankingAwardsByPlayerId]);
+
+    useEffect(() => {
+        let active = true;
+        const loadRankingAwards = async () => {
+            if (!event?.id || !divisionId) {
+                if (active) setRankingAwards([]);
+                return;
+            }
+            setRankingAwardsLoading(true);
+            try {
+                const { data, error } = await supabase
+                    .from('player_ranking_points')
+                    .select('id, player_id, round_code, points, date_awarded, config_snapshot, created_at')
+                    .eq('event_id', event.id)
+                    .eq('division_id', divisionId);
+                if (error) throw error;
+                if (active) setRankingAwards(data || []);
+            } catch (error) {
+                console.error('Failed to load native ranking awards', error);
+                if (active) setRankingAwards([]);
+            } finally {
+                if (active) setRankingAwardsLoading(false);
+            }
+        };
+        loadRankingAwards();
+        return () => { active = false; };
+    }, [event?.id, divisionId, drawReloadKey]);
 
     useEffect(() => {
         let active = true;
@@ -782,7 +831,11 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                     matchSets: nextSets,
                     groupId: match.group_id,
                 });
-                const persistedRows = nextStandings.map(({ seed_number, ...row }) => ({ ...row, updated_at: new Date().toISOString() }));
+                const persistedRows = nextStandings.map((standing) => {
+                    const row = { ...standing };
+                    delete row.seed_number;
+                    return { ...row, updated_at: new Date().toISOString() };
+                });
                 const { error: standingsError } = await supabase
                     .from('draw_standings')
                     .upsert(persistedRows, { onConflict: 'group_id,entry_id' });
@@ -1154,6 +1207,82 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         }
     };
 
+    const awardRankingPoints = async () => {
+        if (!savedDraw?.id || !division?.ranking_tier_id || !division?.ranking_category || !rankingTier) {
+            toast.error('This division needs a valid ranking tier and category before points can be awarded.');
+            return;
+        }
+        if (!rankingReview.length) {
+            toast.error('No completed final placements are available to award.');
+            return;
+        }
+        if (unpricedRankingReview.length) {
+            toast.error('Choose an official placement for every team marked for review before awarding points.');
+            return;
+        }
+        if (missingPlayerProfiles.length) {
+            toast.error(`Cannot award points until these player profiles are linked: ${missingPlayerProfiles.join(', ')}.`);
+            return;
+        }
+        if (!pendingAwardablePlayerRows.length) {
+            toast.message('Every eligible player in this division already has a points award.');
+            return;
+        }
+        if (!awardConfirmed) {
+            toast.error('Confirm that the final placements have been checked before awarding points.');
+            return;
+        }
+
+        const awardedAt = new Date().toISOString();
+        const eventDate = String(event?.start_date || '').slice(0, 10) || null;
+        const payload = pendingAwardablePlayerRows.map(({ id, name, proposal }) => ({
+            player_id: id,
+            event_id: event.id,
+            division_id: divisionId,
+            points_table_id: proposal.pointsRule.id,
+            round_code: proposal.selectedRoundCode,
+            points: proposal.pointsRule.points,
+            event_date: eventDate,
+            date_awarded: awardedAt.slice(0, 10),
+            config_snapshot: {
+                source: 'native_draw',
+                draw_id: savedDraw.id,
+                draw_kind: 'main',
+                entry_id: proposal.entry_id,
+                team_name: proposal.entry.team_name,
+                player_name: name,
+                final_placement: proposal.placement,
+                ranking_tier: { id: rankingTier.id, code: rankingTier.code, name: rankingTier.name },
+                ranking_category: Number(division.ranking_category),
+                points_rule: {
+                    id: proposal.pointsRule.id,
+                    round_code: proposal.pointsRule.round_code,
+                    round_label: proposal.pointsRule.round_label,
+                    points: proposal.pointsRule.points,
+                },
+                awarded_at: awardedAt,
+            },
+        }));
+
+        setSaving(true);
+        try {
+            const { data, error } = await supabase
+                .from('player_ranking_points')
+                .insert(payload)
+                .select('id, player_id, round_code, points, date_awarded, config_snapshot, created_at');
+            if (error) throw error;
+            setRankingAwards((current) => [...current, ...(data || [])]);
+            setAwardConfirmed(false);
+            toast.success(`${payload.length} ${payload.length === 1 ? 'player award has' : 'player awards have'} been recorded.`);
+            onSaved?.();
+        } catch (error) {
+            console.error('Failed to award native ranking points', error);
+            toast.error(error.message || 'Could not award ranking points. No existing awards were changed.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const standingsForGroup = (groupId) => standings
         .filter((row) => row.group_id === groupId)
         .sort((a, b) => (a.position || 999) - (b.position || 999));
@@ -1327,16 +1456,25 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             </div>}
 
             {savedDraw?.status === 'completed' && draft && <>
-                {activeDrawKind === 'main' && hasKnockoutStage && <div className="rounded-2xl border border-sky-400/30 bg-sky-400/5 p-5">
-                    <div className="flex items-start gap-3">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-400/15 text-sky-300"><Award size={20} /></span>
-                        <div className="min-w-0 flex-1">
-                            <p className="font-bold text-white">Ranking-points review</p>
-                            <p className="mt-1 text-sm text-gray-400">These are proposed final placements only. No player points can be changed from this screen yet.</p>
+                {activeDrawKind === 'main' && hasKnockoutStage && <section className="rounded-2xl border border-sky-400/30 bg-sky-400/5 p-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex items-start gap-3">
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-400/15 text-sky-300"><Award size={20} /></span>
+                            <div className="min-w-0"><p className="font-bold text-white">Ranking-points approval</p><p className="mt-1 text-sm text-gray-400">Check the final placements, then record the official award for every eligible player. Rankedin-synchronised profile data is not changed.</p></div>
                         </div>
+                        {rankingAwards.length > 0 && <span className="w-fit rounded-full border border-padel-green/30 bg-padel-green/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-padel-green">{rankingAwards.length} awarded</span>}
                     </div>
-                    {rankingPointsLoading ? <div className="mt-4 flex items-center gap-2 text-sm text-gray-400"><Loader2 size={15} className="animate-spin" /> Loading points configuration…</div> : !division?.ranking_tier_id || !division?.ranking_category ? <div className="mt-4 rounded-xl border border-amber-300/30 bg-amber-300/5 px-4 py-3 text-sm text-amber-100">Set this division’s ranking tier and category in Event Builder before its final placements can be priced.</div> : !rankingTier || rankingPointsTable.length === 0 ? <div className="mt-4 rounded-xl border border-amber-300/30 bg-amber-300/5 px-4 py-3 text-sm text-amber-100">The selected ranking configuration could not be found. No points will be proposed.</div> : rankingReview.length === 0 ? <div className="mt-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-gray-400">No complete knockout placements are available to review.</div> : <div className="mt-4 overflow-x-auto rounded-xl border border-white/10 bg-black/20"><table className="w-full min-w-[620px] text-left text-sm"><thead className="border-b border-white/10 text-[10px] font-black uppercase tracking-widest text-gray-500"><tr><th className="px-4 py-3">Team</th><th className="px-4 py-3">Final placement</th><th className="px-4 py-3">Players</th><th className="px-4 py-3 text-right">Proposed points each</th></tr></thead><tbody className="divide-y divide-white/10">{rankingReview.map((proposal) => <tr key={proposal.entry_id}><td className="px-4 py-3 font-semibold text-white">{proposal.entry.team_name}</td><td className="px-4 py-3"><span className="rounded-full bg-white/10 px-2 py-1 text-xs font-bold text-gray-200">{proposal.placement}</span>{proposal.note && <p className="mt-1 max-w-xs text-xs text-amber-200">{proposal.note}</p>}</td><td className="px-4 py-3 text-xs text-gray-400">{[proposal.entry.player_one_name, proposal.entry.player_two_name].filter(Boolean).join(' · ')}</td><td className="px-4 py-3 text-right font-black text-padel-green">{proposal.requiresManualPlacement ? 'Review needed' : proposal.pointsRule ? proposal.pointsRule.points.toLocaleString('en-ZA') : 'Not configured'}</td></tr>)}</tbody></table></div>}
-                </div>}
+                    {rankingPointsLoading || rankingAwardsLoading ? <div className="mt-4 flex items-center gap-2 text-sm text-gray-400"><Loader2 size={15} className="animate-spin" /> Loading points configuration…</div> : !division?.ranking_tier_id || !division?.ranking_category ? <div className="mt-4 rounded-xl border border-amber-300/30 bg-amber-300/5 px-4 py-3 text-sm text-amber-100">Set this division’s ranking tier and category in Event Builder before its final placements can be priced.</div> : !rankingTier || rankingPointsTable.length === 0 ? <div className="mt-4 rounded-xl border border-amber-300/30 bg-amber-300/5 px-4 py-3 text-sm text-amber-100">The selected ranking configuration could not be found. No points can be awarded.</div> : rankingReview.length === 0 ? <div className="mt-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-gray-400">No complete knockout placements are available to review.</div> : <>
+                        <div className="mt-4 overflow-x-auto rounded-xl border border-white/10 bg-black/20"><table className="w-full min-w-[760px] text-left text-sm"><thead className="border-b border-white/10 text-[10px] font-black uppercase tracking-widest text-gray-500"><tr><th className="px-4 py-3">Team</th><th className="px-4 py-3">Final placement</th><th className="px-4 py-3">Players</th><th className="px-4 py-3 text-right">Points each</th><th className="px-4 py-3 text-right">Award status</th></tr></thead><tbody className="divide-y divide-white/10">{rankingReview.map((proposal) => {
+                            const playerIds = [proposal.entry.player_one_id, proposal.entry.player_two_id].filter(Boolean);
+                            const awardedCount = playerIds.filter((id) => rankingAwardsByPlayerId.has(String(id))).length;
+                            return <tr key={proposal.entry_id}><td className="px-4 py-3 font-semibold text-white">{proposal.entry.team_name}</td><td className="px-4 py-3"><span className="rounded-full bg-white/10 px-2 py-1 text-xs font-bold text-gray-200">{proposal.placement}</span>{proposal.requiresManualPlacement ? <label className="mt-2 block max-w-xs text-xs font-semibold text-amber-100">Confirm official placement<select value={proposal.selectedRoundCode} onChange={(item) => { setPlacementOverrides((current) => ({ ...current, [proposal.entry_id]: item.target.value })); setAwardConfirmed(false); }} className="mt-1 block w-full rounded-lg border border-amber-300/30 bg-black/30 px-2.5 py-2 text-xs text-white outline-none focus-visible:border-amber-200"><option value="">Choose placement…</option>{rankingPointsTable.map((rule) => <option key={rule.id} value={rule.round_code}>{rule.round_label} · {rule.points.toLocaleString('en-ZA')} pts</option>)}</select></label> : proposal.note && <p className="mt-1 max-w-xs text-xs text-amber-200">{proposal.note}</p>}</td><td className="px-4 py-3 text-xs text-gray-400">{[proposal.entry.player_one_name, proposal.entry.player_two_name].filter(Boolean).join(' · ')}</td><td className="px-4 py-3 text-right font-black text-padel-green">{proposal.pointsRule ? proposal.pointsRule.points.toLocaleString('en-ZA') : 'Review needed'}</td><td className="px-4 py-3 text-right text-xs font-bold">{awardedCount === playerIds.length && playerIds.length > 0 ? <span className="text-padel-green">Awarded</span> : awardedCount > 0 ? <span className="text-amber-200">{awardedCount}/{playerIds.length} recorded</span> : <span className="text-gray-500">Pending</span>}</td></tr>;
+                        })}</tbody></table></div>
+                        {missingPlayerProfiles.length > 0 && <p className="mt-3 rounded-xl border border-red-300/30 bg-red-400/5 px-4 py-3 text-xs leading-5 text-red-100">Points cannot be awarded until these draw players have linked 4M profiles: <strong>{missingPlayerProfiles.join(' · ')}</strong>.</p>}
+                        {unpricedRankingReview.length > 0 && <p className="mt-3 rounded-xl border border-amber-300/30 bg-amber-300/5 px-4 py-3 text-xs leading-5 text-amber-100">{unpricedRankingReview.length} {unpricedRankingReview.length === 1 ? 'team needs' : 'teams need'} an official placement selected before points can be awarded.</p>}
+                        <div className="mt-4 flex flex-col gap-4 rounded-xl border border-padel-green/25 bg-padel-green/[0.04] p-4 lg:flex-row lg:items-center lg:justify-between"><div><p className="font-bold text-white">Award verified points</p><p className="mt-1 text-xs leading-5 text-gray-400">This records {pendingAwardablePlayerRows.length} missing {pendingAwardablePlayerRows.length === 1 ? 'player award' : 'player awards'} in the audit ledger. Existing awards are never overwritten.</p></div><div className="flex flex-col gap-3 sm:flex-row sm:items-center"><label className="flex items-center gap-2 text-xs font-bold text-padel-green"><input type="checkbox" checked={awardConfirmed} onChange={(item) => setAwardConfirmed(item.target.checked)} disabled={pendingAwardablePlayerRows.length === 0} className="h-4 w-4 accent-[#b6ff00]" /> I have checked the final placements</label><button type="button" onClick={awardRankingPoints} disabled={saving || !awardConfirmed || pendingAwardablePlayerRows.length === 0 || unpricedRankingReview.length > 0 || missingPlayerProfiles.length > 0} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-padel-green px-4 py-3 text-sm font-black text-black transition-transform hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"><Award size={16} />{pendingAwardablePlayerRows.length === 0 ? 'Points awarded' : `Award ${pendingAwardablePlayerRows.length} players`}</button></div></div>
+                    </>}
+                </section>}
                 <div className="rounded-2xl border border-padel-green/30 bg-padel-green/5 p-5"><div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-padel-green/15 text-padel-green"><CheckCircle2 size={20} /></span><div><p className="font-bold text-white">{activeDrawKind === 'main' ? 'Main draw' : activeDrawKind === 'silver' ? 'Silver plate' : 'Bronze plate'} complete</p><p className="mt-1 text-sm text-gray-400">Results are locked for this draw. Review the final placements before any ranking points are awarded.</p></div></div></div>
             </>}
         </div>

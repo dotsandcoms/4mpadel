@@ -871,7 +871,6 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const [orgSearchOpen, setOrgSearchOpen] = useState(false);
     const [searchingOrgs, setSearchingOrgs] = useState(false);
     const orgSearchRef = useRef(null);
-    const orgSelectedRef = useRef(false);
 
     const addressInputRef = useRef(null);
     const autocompleteRef = useRef(null);
@@ -923,17 +922,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
 
     // Admin calendar: type-ahead search for organisations to link the event
     useEffect(() => {
-        if (!isOpen || organisation) return undefined;
+        if (!isOpen || organisation || form.organisation_id || !orgSearchOpen) return undefined;
+        let cancelled = false;
         const q = (form.organiser_name || '').trim();
-        if (orgSelectedRef.current) {
-            orgSelectedRef.current = false;
-            return undefined;
-        }
-        if (q.length < 2 && !orgSearchOpen) {
-            setOrgSuggestions([]);
-            setSearchingOrgs(false);
-            return undefined;
-        }
         const timer = setTimeout(async () => {
             setSearchingOrgs(true);
             try {
@@ -947,17 +938,22 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 if (q.length >= 2) query = query.ilike('name', `%${safe}%`);
                 const { data, error } = await query;
                 if (error) throw error;
+                if (cancelled) return;
                 setOrgSuggestions(data || []);
                 setOrgSearchOpen(true);
             } catch (err) {
+                if (cancelled) return;
                 console.warn('Organisation search failed:', err);
                 setOrgSuggestions([]);
             } finally {
-                setSearchingOrgs(false);
+                if (!cancelled) setSearchingOrgs(false);
             }
         }, q.length >= 2 ? 250 : 0);
-        return () => clearTimeout(timer);
-    }, [form.organiser_name, isOpen, organisation, orgSearchOpen]);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [form.organiser_name, form.organisation_id, isOpen, organisation, orgSearchOpen]);
 
     useEffect(() => {
         const onDown = (e) => {
@@ -970,7 +966,6 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     }, []);
 
     const selectOrganisation = (org) => {
-        orgSelectedRef.current = true;
         setOrgSuggestions([]);
         setOrgSearchOpen(false);
         setForm((prev) => ({
@@ -985,7 +980,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     };
 
     const handleOrganiserNameChange = (value) => {
-        orgSelectedRef.current = false;
+        setOrgSearchOpen(true);
         setForm((prev) => ({
             ...prev,
             organiser_name: value,
@@ -994,7 +989,6 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     };
 
     const clearOrganisationLink = () => {
-        orgSelectedRef.current = false;
         setForm((prev) => ({
             ...prev,
             organisation_id: null,
@@ -2558,9 +2552,49 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                             <PanelHeader id="identity" title="Event Info" />
                                             {openPanels.identity && (
                                                 <div className="space-y-5 rounded-xl border border-white/10 bg-black/20 p-4">
-                                                    <div>
-                                                        <label className={labelClass}>Event Name *</label>
-                                                        <input name="event_name" value={form.event_name} onChange={handleInput} className={inputClass} required />
+                                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                                        <div>
+                                                            <label className={labelClass}>Event Name *</label>
+                                                            <input name="event_name" value={form.event_name} onChange={handleInput} className={inputClass} required />
+                                                        </div>
+                                                        <div className="relative" ref={orgSearchRef}>
+                                                            <label className={labelClass}>Organiser</label>
+                                                            <input
+                                                                name="organiser_name"
+                                                                value={form.organiser_name}
+                                                                onChange={(e) => organisation
+                                                                    ? setForm((prev) => ({ ...prev, organiser_name: e.target.value }))
+                                                                    : handleOrganiserNameChange(e.target.value)}
+                                                                onFocus={() => { if (!organisation && !form.organisation_id) setOrgSearchOpen(true); }}
+                                                                placeholder={organisation ? undefined : 'Select an organisation or type a custom name...'}
+                                                                autoComplete="off"
+                                                                className={inputClass}
+                                                                readOnly={!!organisation}
+                                                            />
+                                                            {!organisation && form.organisation_id && (
+                                                                <div className="mt-1.5 flex items-center justify-between gap-2">
+                                                                    <p className="text-[11px] font-bold text-padel-green">Linked to organisation page</p>
+                                                                    <button type="button" onClick={clearOrganisationLink} className="text-[10px] font-black uppercase tracking-wider text-gray-500 hover:text-red-400">Unlink</button>
+                                                                </div>
+                                                            )}
+                                                            {!organisation && !form.organisation_id && (
+                                                                <p className="mt-1 text-[11px] text-gray-500">Pick from the list to link their page, or type a custom organiser name.</p>
+                                                            )}
+                                                            {!organisation && !form.organisation_id && orgSearchOpen && (
+                                                                <div className="absolute inset-x-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-xl border border-white/10 bg-[#0a0a0a] shadow-2xl">
+                                                                    {searchingOrgs && orgSuggestions.length === 0 ? (
+                                                                        <p className="px-4 py-3 text-xs text-gray-500">Searching...</p>
+                                                                    ) : orgSuggestions.length === 0 ? (
+                                                                        <p className="px-4 py-3 text-xs text-gray-500">No approved organisations found.</p>
+                                                                    ) : orgSuggestions.map((org) => (
+                                                                        <button key={org.id} type="button" onClick={() => selectOrganisation(org)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-white/5">
+                                                                            {org.logo_url ? <img src={org.logo_url} alt="" className="h-8 w-8 shrink-0 rounded-lg bg-white/5 object-cover outline outline-1 -outline-offset-1 outline-white/10" /> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-padel-green"><Shield size={14} /></span>}
+                                                                            <span className="min-w-0"><span className="block truncate text-sm font-bold text-white">{org.name}</span>{org.slug && <span className="block truncate text-[10px] text-gray-500">/{org.slug}</span>}</span>
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
 
                                                     <div className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.02]">
@@ -2577,10 +2611,14 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                         </div>}
                                                     </div>
 
-                                                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                                                         <div>
-                                                            <label className={labelClass}>Event Date *</label>
+                                                            <label className={labelClass}>Event Start Date *</label>
                                                             <input type="date" name="start_date" value={form.start_date} onChange={handleInput} className={inputClass} />
+                                                        </div>
+                                                        <div>
+                                                            <label className={labelClass}>Event End Date *</label>
+                                                            <input type="date" name="end_date" value={form.end_date} onChange={handleInput} className={inputClass} />
                                                         </div>
                                                         <div>
                                                             <label className={labelClass}>Start Time</label>
@@ -2642,49 +2680,31 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                         <input ref={addressInputRef} name="address" value={form.address} onChange={handleInput} placeholder="Start typing to search Google..." autoComplete="off" className={inputClass} />
                                                     </div>
 
-                                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                                        <div>
-                                                            <label className={labelClass}>City</label>
-                                                            <input name="city" value={form.city} onChange={handleInput} placeholder="Enter city" className={inputClass} />
-                                                        </div>
-                                                        <div className="relative" ref={orgSearchRef}>
-                                                            <label className={labelClass}>Organiser</label>
-                                                            <input
-                                                                name="organiser_name"
-                                                                value={form.organiser_name}
-                                                                onChange={(e) => organisation
-                                                                    ? setForm((prev) => ({ ...prev, organiser_name: e.target.value }))
-                                                                    : handleOrganiserNameChange(e.target.value)}
-                                                                onFocus={() => { if (!organisation) setOrgSearchOpen(true); }}
-                                                                placeholder={organisation ? undefined : 'Select an organisation or type a custom name...'}
-                                                                autoComplete="off"
-                                                                className={inputClass}
-                                                                readOnly={!!organisation}
-                                                            />
-                                                            {!organisation && form.organisation_id && (
-                                                                <div className="mt-1.5 flex items-center justify-between gap-2">
-                                                                    <p className="text-[11px] font-bold text-padel-green">Linked to organisation page</p>
-                                                                    <button type="button" onClick={clearOrganisationLink} className="text-[10px] font-black uppercase tracking-wider text-gray-500 hover:text-red-400">Unlink</button>
-                                                                </div>
-                                                            )}
-                                                            {!organisation && !form.organisation_id && (
-                                                                <p className="mt-1 text-[11px] text-gray-500">Pick from the list to link their page, or type a custom organiser name.</p>
-                                                            )}
-                                                            {!organisation && orgSearchOpen && (
-                                                                <div className="absolute inset-x-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-xl border border-white/10 bg-[#0a0a0a] shadow-2xl">
-                                                                    {searchingOrgs && orgSuggestions.length === 0 ? (
-                                                                        <p className="px-4 py-3 text-xs text-gray-500">Searching...</p>
-                                                                    ) : orgSuggestions.length === 0 ? (
-                                                                        <p className="px-4 py-3 text-xs text-gray-500">No approved organisations found.</p>
-                                                                    ) : orgSuggestions.map((org) => (
-                                                                        <button key={org.id} type="button" onClick={() => selectOrganisation(org)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-white/5">
-                                                                            {org.logo_url ? <img src={org.logo_url} alt="" className="h-8 w-8 shrink-0 rounded-lg bg-white/5 object-cover outline outline-1 -outline-offset-1 outline-white/10" /> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-padel-green"><Shield size={14} /></span>}
-                                                                            <span className="min-w-0"><span className="block truncate text-sm font-bold text-white">{org.name}</span>{org.slug && <span className="block truncate text-[10px] text-gray-500">/{org.slug}</span>}</span>
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            )}
-                                                        </div>
+                                                    <div>
+                                                        <label className={labelClass}>City</label>
+                                                        <input name="city" value={form.city} onChange={handleInput} placeholder="Enter city" className={inputClass} />
+                                                    </div>
+
+                                                    <div className="space-y-3 border-t border-white/10 pt-5">
+                                                        <p className={labelClass}>Display Options</p>
+                                                        {organisation ? (
+                                                            <div className="rounded-xl border border-padel-green/20 bg-padel-green/5 px-4 py-3 text-xs font-semibold text-padel-green">
+                                                                {isAmendment ? 'Changes will be submitted for approval while the current event stays live.' : 'This event will go live after 4M Padel sanctioning.'}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                                                {[
+                                                                    ['featured_event', 'Featured event'],
+                                                                    ['show_in_recent_results', 'Show in recent results'],
+                                                                    ['is_visible', 'Visible on website'],
+                                                                ].map(([key, label]) => (
+                                                                    <label key={key} className="flex cursor-pointer items-center justify-between rounded-xl border border-white/10 bg-[#1a1a1a] px-4 py-3">
+                                                                        <span className="text-sm font-medium text-gray-200">{label}</span>
+                                                                        <input type="checkbox" name={key} checked={!!form[key]} onChange={handleInput} className="h-5 w-5 accent-padel-green" />
+                                                                    </label>
+                                                                ))}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             )}
@@ -2707,61 +2727,6 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                             )}
                                         </div>
 
-                                        <div className="space-y-2">
-                                            <PanelHeader id="display" title="Display" />
-                                            {openPanels.display && (
-                                                <div className="space-y-4 rounded-xl border border-white/10 bg-black/20 p-4">
-                                                    <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                                                        <div>
-                                                            <label className={labelClass}>Cover Photo</label>
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="relative shrink-0">
-                                                                    <img src={form.custom_image_url || getDefaultBackgroundForStatus(form.sapa_status)} alt="Event cover preview" className="h-28 w-20 rounded-lg object-cover outline outline-1 -outline-offset-1 outline-white/10" />
-                                                                    {!form.custom_image_url && <span className="absolute inset-x-1 bottom-1 rounded bg-black/70 px-1 py-0.5 text-center text-[8px] font-bold uppercase tracking-wider text-padel-green">Default</span>}
-                                                                </div>
-                                                                <label className="flex min-w-0 flex-1 cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-4 text-gray-300 hover:border-padel-green hover:text-padel-green">
-                                                                    {uploadingCover ? <Loader2 className="animate-spin" size={18} /> : <UploadCloud size={18} />}
-                                                                    <span className="text-xs font-bold">{uploadingCover ? 'Uploading...' : 'Upload Cover'}</span>
-                                                                    <span className="text-center text-[10px] text-gray-500">Event page hero / calendar card</span>
-                                                                    <input type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} disabled={uploadingCover} />
-                                                                </label>
-                                                            </div>
-                                                        </div>
-                                                        <div>
-                                                            <label className={labelClass}>Event Poster</label>
-                                                            <div className="flex items-center gap-3">
-                                                                {form.poster_image_url ? <img src={form.poster_image_url} alt="Event poster preview" className="h-28 w-20 shrink-0 rounded-lg object-cover outline outline-1 -outline-offset-1 outline-white/10" /> : <div className="flex h-28 w-20 shrink-0 items-center justify-center rounded-lg border border-dashed border-white/15 bg-black/30"><ImageIcon size={18} className="text-gray-600" /></div>}
-                                                                <label className="flex min-w-0 flex-1 cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-4 text-gray-300 hover:border-padel-green hover:text-padel-green">
-                                                                    {uploadingPoster ? <Loader2 className="animate-spin" size={18} /> : <UploadCloud size={18} />}
-                                                                    <span className="text-xs font-bold">{uploadingPoster ? 'Uploading...' : 'Upload Poster'}</span>
-                                                                    <span className="text-center text-[10px] text-gray-500">Opens in event details</span>
-                                                                    <input type="file" accept="image/*" className="hidden" onChange={handlePosterUpload} disabled={uploadingPoster} />
-                                                                </label>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {organisation ? (
-                                                        <div className="rounded-xl border border-padel-green/20 bg-padel-green/5 px-4 py-3 text-xs font-semibold text-padel-green">
-                                                            {isAmendment ? 'Changes will be submitted for approval while the current event stays live.' : 'This event will go live after 4M Padel sanctioning.'}
-                                                        </div>
-                                                    ) : (
-                                                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                                            {[
-                                                                ['featured_event', 'Featured event'],
-                                                                ['show_in_recent_results', 'Show in recent results'],
-                                                                ['is_visible', 'Visible on website'],
-                                                            ].map(([key, label]) => (
-                                                                <label key={key} className="flex cursor-pointer items-center justify-between rounded-xl border border-white/10 bg-[#1a1a1a] px-4 py-3">
-                                                                    <span className="text-sm font-medium text-gray-200">{label}</span>
-                                                                    <input type="checkbox" name={key} checked={!!form[key]} onChange={handleInput} className="h-5 w-5 accent-padel-green" />
-                                                                </label>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
                                     </>
                                 ) : (
                                     <>
@@ -2819,7 +2784,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                             handleOrganiserNameChange(e.target.value);
                                                         }
                                                     }}
-                                                    onFocus={() => { if (!organisation) setOrgSearchOpen(true); }}
+                                                    onFocus={() => { if (!organisation && !form.organisation_id) setOrgSearchOpen(true); }}
                                                     placeholder={organisation ? undefined : 'Select an organisation or type a custom name…'}
                                                     autoComplete="off"
                                                     className={inputClass}
@@ -2844,7 +2809,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                         Pick from the list to link their page, or type a custom organiser name.
                                                     </p>
                                                 )}
-                                                {!organisation && orgSearchOpen && (
+                                                {!organisation && !form.organisation_id && orgSearchOpen && (
                                                     <div className="absolute z-30 left-0 right-0 mt-1 bg-[#0a0a0a] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
                                                         {searchingOrgs && orgSuggestions.length === 0 ? (
                                                             <p className="px-4 py-3 text-xs text-gray-500">Searching…</p>
@@ -3165,90 +3130,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                 </div>
                                 )}
 
-                                {/* Public Display */}
+                                {/* Event description */}
                                 <div className="space-y-2">
-                                    <PanelHeader id="display" title="Public Display" />
+                                    <PanelHeader id="display" title="Event Description" />
                                     {openPanels.display && (
                                         <div className="grid grid-cols-1 gap-4 p-4 rounded-xl border border-white/10 bg-black/20">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className={labelClass}>Cover Photo</label>
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="relative shrink-0">
-                                                            <img
-                                                                src={form.custom_image_url || getDefaultBackgroundForStatus(form.sapa_status)}
-                                                                alt="Cover"
-                                                                className="w-20 h-28 object-cover rounded-lg border border-white/10"
-                                                            />
-                                                            {!form.custom_image_url && (
-                                                                <span className="absolute bottom-1 left-1 right-1 text-center text-[8px] font-bold uppercase tracking-wider bg-black/70 text-padel-green rounded px-1 py-0.5">
-                                                                    Default
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <div className="flex flex-col gap-2 min-w-0">
-                                                            <label className="cursor-pointer bg-white/5 border border-dashed border-white/20 rounded-xl px-4 py-4 flex flex-col items-center gap-1.5 text-gray-300 hover:border-padel-green hover:text-padel-green transition-colors">
-                                                                {uploadingCover ? <Loader2 className="animate-spin" size={18} /> : <UploadCloud size={18} />}
-                                                                <span className="text-xs font-bold">
-                                                                    {uploadingCover ? 'Uploading...' : (form.custom_image_url ? 'Replace Cover' : 'Upload Cover')}
-                                                                </span>
-                                                                <span className="text-[10px] text-gray-500 text-center">
-                                                                    Event page hero / calendar card
-                                                                </span>
-                                                                <input type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} disabled={uploadingCover} />
-                                                            </label>
-                                                            {form.custom_image_url && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setField('custom_image_url', '')}
-                                                                    className="text-[11px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 transition-colors text-left"
-                                                                >
-                                                                    Use tier default
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <label className={labelClass}>Event Poster</label>
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="relative shrink-0">
-                                                            {form.poster_image_url ? (
-                                                                <img
-                                                                    src={form.poster_image_url}
-                                                                    alt="Poster"
-                                                                    className="w-20 h-28 object-cover rounded-lg border border-white/10"
-                                                                />
-                                                            ) : (
-                                                                <div className="w-20 h-28 rounded-lg border border-dashed border-white/15 bg-black/30 flex items-center justify-center">
-                                                                    <ImageIcon size={18} className="text-gray-600" />
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                        <div className="flex flex-col gap-2 min-w-0">
-                                                            <label className="cursor-pointer bg-white/5 border border-dashed border-white/20 rounded-xl px-4 py-4 flex flex-col items-center gap-1.5 text-gray-300 hover:border-padel-green hover:text-padel-green transition-colors">
-                                                                {uploadingPoster ? <Loader2 className="animate-spin" size={18} /> : <UploadCloud size={18} />}
-                                                                <span className="text-xs font-bold">
-                                                                    {uploadingPoster ? 'Uploading...' : (form.poster_image_url ? 'Replace Poster' : 'Upload Poster')}
-                                                                </span>
-                                                                <span className="text-[10px] text-gray-500 text-center">
-                                                                    Sponsors strip — opens in a modal
-                                                                </span>
-                                                                <input type="file" accept="image/*" className="hidden" onChange={handlePosterUpload} disabled={uploadingPoster} />
-                                                            </label>
-                                                            {form.poster_image_url && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setField('poster_image_url', '')}
-                                                                    className="text-[11px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300 transition-colors text-left"
-                                                                >
-                                                                    Remove poster
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
                                             <div>
                                                 <label className={labelClass}>Event Description / About</label>
                                                 <RichTextEditor value={form.description} onChange={(html) => setField('description', html)} placeholder="Describe the event..." />
@@ -4350,6 +4236,55 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                 <p className="text-xs text-gray-400">
                                     Marketing and presentation only — registration settings live in earlier steps.
                                 </p>
+
+                                <div className="space-y-2">
+                                    <PanelHeader id="display" title="Event Media" />
+                                    {openPanels.display && (
+                                        <div className="grid grid-cols-1 gap-5 rounded-xl border border-white/10 bg-black/20 p-4 md:grid-cols-2">
+                                            <div>
+                                                <label className={labelClass}>Cover Photo</label>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="relative shrink-0">
+                                                        <img src={form.custom_image_url || getDefaultBackgroundForStatus(form.sapa_status)} alt="Event cover preview" className="h-28 w-20 rounded-lg object-cover outline outline-1 -outline-offset-1 outline-white/10" />
+                                                        {!form.custom_image_url && <span className="absolute inset-x-1 bottom-1 rounded bg-black/70 px-1 py-0.5 text-center text-[8px] font-bold uppercase tracking-wider text-padel-green">Default</span>}
+                                                    </div>
+                                                    <div className="flex min-w-0 flex-1 flex-col gap-2">
+                                                        <label className="flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-4 text-gray-300 hover:border-padel-green hover:text-padel-green">
+                                                            {uploadingCover ? <Loader2 className="animate-spin" size={18} /> : <UploadCloud size={18} />}
+                                                            <span className="text-xs font-bold">{uploadingCover ? 'Uploading...' : (form.custom_image_url ? 'Replace Cover' : 'Upload Cover')}</span>
+                                                            <span className="text-center text-[10px] text-gray-500">Event page hero / calendar card</span>
+                                                            <input type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} disabled={uploadingCover} />
+                                                        </label>
+                                                        {form.custom_image_url && (
+                                                            <button type="button" onClick={() => setField('custom_image_url', '')} className="text-left text-[11px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300">
+                                                                Use tier default
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className={labelClass}>Event Poster</label>
+                                                <div className="flex items-center gap-3">
+                                                    {form.poster_image_url ? <img src={form.poster_image_url} alt="Event poster preview" className="h-28 w-20 shrink-0 rounded-lg object-cover outline outline-1 -outline-offset-1 outline-white/10" /> : <div className="flex h-28 w-20 shrink-0 items-center justify-center rounded-lg border border-dashed border-white/15 bg-black/30"><ImageIcon size={18} className="text-gray-600" /></div>}
+                                                    <div className="flex min-w-0 flex-1 flex-col gap-2">
+                                                        <label className="flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-4 text-gray-300 hover:border-padel-green hover:text-padel-green">
+                                                            {uploadingPoster ? <Loader2 className="animate-spin" size={18} /> : <UploadCloud size={18} />}
+                                                            <span className="text-xs font-bold">{uploadingPoster ? 'Uploading...' : (form.poster_image_url ? 'Replace Poster' : 'Upload Poster')}</span>
+                                                            <span className="text-center text-[10px] text-gray-500">Opens in event details</span>
+                                                            <input type="file" accept="image/*" className="hidden" onChange={handlePosterUpload} disabled={uploadingPoster} />
+                                                        </label>
+                                                        {form.poster_image_url && (
+                                                            <button type="button" onClick={() => setField('poster_image_url', '')} className="text-left text-[11px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300">
+                                                                Remove poster
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
 
                                 <div className="space-y-2">
                                     <PanelHeader id="organiserBrand" title="Organiser Branding" />
