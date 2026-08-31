@@ -252,7 +252,23 @@ const CalendarManager = () => {
                 .order('id', { ascending: true }); // Fallback
 
             if (error) throw error;
-            setEvents(data || []);
+            const calendarEvents = data || [];
+            let creatorByEventId = new Map();
+            if (calendarEvents.length > 0) {
+                const { data: creatorRows, error: creatorError } = await supabase
+                    .from('event_creation_audit')
+                    .select('event_id, creator_name, creator_email, created_at')
+                    .in('event_id', calendarEvents.map((event) => event.id));
+                if (creatorError) {
+                    console.warn('Event creator attribution unavailable:', creatorError.message);
+                } else {
+                    creatorByEventId = new Map((creatorRows || []).map((row) => [String(row.event_id), row]));
+                }
+            }
+            setEvents(calendarEvents.map((event) => ({
+                ...event,
+                _creationAudit: creatorByEventId.get(String(event.id)) || null,
+            })));
         } catch (error) {
             console.error('Error fetching events:', error);
             toast.error('Failed to load events');
@@ -1259,6 +1275,7 @@ const CalendarManager = () => {
                                 <th className="py-3 px-4 font-semibold text-xs uppercase w-48 sticky top-0 bg-[#111827]">Dates</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[200px] sticky top-0 bg-[#111827]">Event Name</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Source</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[180px] sticky top-0 bg-[#111827]">Created By</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Location</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Status</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="League">L</th>
@@ -1273,9 +1290,9 @@ const CalendarManager = () => {
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan="7" className="text-center py-12 text-gray-500">Loading events...</td></tr>
+                                <tr><td colSpan="14" className="text-center py-12 text-gray-500">Loading events...</td></tr>
                             ) : filteredEvents.length === 0 ? (
-                                <tr><td colSpan="7" className="text-center py-12 text-gray-500">No events found.</td></tr>
+                                <tr><td colSpan="14" className="text-center py-12 text-gray-500">No events found.</td></tr>
                             ) : (
                                 paginatedEvents.map(event => (
                                     <tr key={event.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
@@ -1316,6 +1333,23 @@ const CalendarManager = () => {
                                                         <span className="text-[9px] text-amber-500/80 font-medium">No org mapped</span>
                                                     )}
                                                 </div>
+                                            )}
+                                        </td>
+                                        <td className="py-3 px-4 align-top">
+                                            {event._creationAudit ? (
+                                                <div className="min-w-0">
+                                                    <p className="max-w-[180px] truncate text-xs font-bold text-white" title={event._creationAudit.creator_name || event._creationAudit.creator_email || 'Unknown'}>
+                                                        {event._creationAudit.creator_name || event._creationAudit.creator_email || 'Unknown'}
+                                                    </p>
+                                                    {event._creationAudit.creator_email && event._creationAudit.creator_email !== event._creationAudit.creator_name && (
+                                                        <p className="mt-0.5 max-w-[180px] truncate text-[10px] text-gray-500" title={event._creationAudit.creator_email}>{event._creationAudit.creator_email}</p>
+                                                    )}
+                                                    <p className="mt-1 text-[9px] text-gray-600">
+                                                        {new Date(event._creationAudit.created_at).toLocaleString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <span className="text-[10px] text-gray-600">Not recorded</span>
                                             )}
                                         </td>
                                         <td className="py-3 px-4 align-top">
