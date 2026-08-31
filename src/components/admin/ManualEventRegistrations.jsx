@@ -41,6 +41,7 @@ import { useAdminPermissions } from '../../hooks/useAdminPermissions';
 import NativeDrawManager from './NativeDrawManager';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
+const normEmail = (value) => String(value || '').trim().toLowerCase();
 
 const successPaymentsOnly = (payments) => (payments || []).filter((p) => p.status === 'success');
 
@@ -1259,10 +1260,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
             if (registrationInDivision(moveTarget, d)) return false;
             if (d.is_active === false) return false;
             return playersToMove.every((reg) => {
-                const email = (reg.email || '').toLowerCase();
+                const email = normEmail(reg.email);
                 const activeConflict = registrations.some((r) =>
                     r.id !== reg.id
-                    && (r.email || '').toLowerCase() === email
+                    && normEmail(r.email) === email
                     && registrationInDivision(r, d)
                     && String(r.status || '').toLowerCase() !== 'withdrawn');
                 return !activeConflict;
@@ -1285,17 +1286,19 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
     };
 
     const releaseDivisionSlotConflicts = async (reg, targetDiv) => {
-        const email = (reg.email || '').toLowerCase();
+        const email = normEmail(reg.email);
         const { data: rows, error: fetchErr } = await supabase
             .from('event_registrations')
-            .select('id, status, full_name, division, division_id')
+            .select('id, status, full_name, email, division, division_id, partner_email')
             .eq('event_id', event.id)
-            .ilike('email', email)
             .neq('id', reg.id);
 
         if (fetchErr) throw fetchErr;
 
-        const conflicts = (rows || []).filter((r) => registrationInDivision(r, targetDiv));
+        const conflicts = (rows || []).filter((r) =>
+            registrationInDivision(r, targetDiv)
+            && (normEmail(r.email) === email || normEmail(r.partner_email) === email)
+        );
         for (const row of conflicts) {
             if (String(row.status || '').toLowerCase() === 'withdrawn') {
                 await archiveConflictSlot(row.id);

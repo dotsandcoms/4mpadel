@@ -526,14 +526,16 @@ async function handleSwitchDivision(
     if (divisionClosed(targetDiv, event || {})) return json(400, { error: 'Target division entries have closed' });
 
     // Eligibility: must not already be registered in the target division.
-    const { data: existingInTarget } = await supabaseAdmin
+    const { data: targetRegistrations } = await supabaseAdmin
         .from('event_registrations')
-        .select('id')
+        .select('id, email, partner_email, status')
         .eq('event_id', eventId)
-        .ilike('email', reg.email)
         .eq('division', targetDiv.name)
-        .neq('status', 'withdrawn')
-        .maybeSingle();
+        .neq('status', 'withdrawn');
+    const existingInTarget = (targetRegistrations || []).find((row) =>
+        normEmail(row.email) === normEmail(reg.email)
+        || normEmail(row.partner_email) === normEmail(reg.email)
+    );
     if (existingInTarget) return json(400, { error: 'You are already entered in that division' });
 
     const oldFee = Number(currentDiv?.entry_fee || 0);
@@ -547,15 +549,19 @@ async function handleSwitchDivision(
     // and mark paid entries pending when the new division costs more. This
     // avoids charging one team member's card for another player's difference.
     if (moveTeam) {
-        if (!reg.partner_email) return json(400, { error: 'This registration does not have a team mate to move' });
-        const { data: partnerReg } = await supabaseAdmin
+        const { data: sourceRows } = await supabaseAdmin
             .from('event_registrations')
             .select('*')
             .eq('event_id', eventId)
             .eq('division', reg.division)
-            .ilike('email', reg.partner_email)
-            .neq('status', 'withdrawn')
-            .maybeSingle();
+            .neq('status', 'withdrawn');
+        const partnerReg = (sourceRows || []).find((row) =>
+            row.id !== reg.id
+            && (
+                (reg.partner_email && normEmail(row.email) === normEmail(reg.partner_email))
+                || normEmail(row.partner_email) === normEmail(reg.email)
+            )
+        );
         if (!partnerReg) return json(404, { error: 'Team mate registration not found' });
         const pairIsLinked = normEmail(partnerReg.partner_email) === normEmail(reg.email)
             || normEmail(partnerReg.registered_by) === normEmail(reg.email)
@@ -564,14 +570,16 @@ async function handleSwitchDivision(
 
         const moving = [reg as RegistrationRow, partnerReg as RegistrationRow];
         for (const player of moving) {
-            const { data: conflict } = await supabaseAdmin
+            const { data: targetRows } = await supabaseAdmin
                 .from('event_registrations')
-                .select('id')
+                .select('id, email, partner_email')
                 .eq('event_id', eventId)
-                .ilike('email', player.email)
                 .eq('division', targetDiv.name)
-                .neq('status', 'withdrawn')
-                .maybeSingle();
+                .neq('status', 'withdrawn');
+            const conflict = (targetRows || []).find((row) =>
+                normEmail(row.email) === normEmail(player.email)
+                || normEmail(row.partner_email) === normEmail(player.email)
+            );
             if (conflict) return json(400, { error: `${player.full_name || player.email} is already entered in that division` });
         }
 

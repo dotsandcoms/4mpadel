@@ -807,14 +807,22 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 || divisions.find((d) => d.name === reg.division);
             const fee = resolveDivisionEntryFee(div, event);
             const isPaid = reg.payment_status === 'paid' || fee === 0;
-            const hasPartner = !!(reg.partner_name?.trim() || reg.partner_email?.trim());
-            const partnerReg = hasPartner && reg.partner_email
+            const reversePartnerReg = divisionRegs.find((r) =>
+                r.id !== reg.id
+                && r.status !== 'withdrawn'
+                && (r.division_id === reg.division_id || r.division === reg.division)
+                && normEmail(r.partner_email) === normEmail(reg.email)
+            ) || null;
+            const resolvedPartnerEmail = reg.partner_email?.trim() || reversePartnerReg?.email?.trim() || null;
+            const resolvedPartnerName = reg.partner_name?.trim() || reversePartnerReg?.full_name?.trim() || null;
+            const hasPartner = !!(resolvedPartnerName || resolvedPartnerEmail);
+            const partnerReg = resolvedPartnerEmail
                 ? divisionRegs.find((r) =>
-                    r.division_id === reg.division_id
-                    && normEmail(r.email) === normEmail(reg.partner_email)
-                    && r.status !== 'withdrawn',
-                )
-                : null;
+                    r.status !== 'withdrawn'
+                    && (r.division_id === reg.division_id || r.division === reg.division)
+                    && normEmail(r.email) === normEmail(resolvedPartnerEmail)
+                ) || reversePartnerReg
+                : reversePartnerReg;
             const partnerPaid = hasPartner && (
                 resolvePartnerPaid(reg, partnerReg)
             );
@@ -836,8 +844,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 id: reg.id,
                 division: reg.division,
                 divisionId: reg.division_id,
-                partnerName: reg.partner_name?.trim() || null,
-                partnerEmail: reg.partner_email?.trim() || null,
+                partnerName: resolvedPartnerName,
+                partnerEmail: resolvedPartnerEmail,
                 hasPartner,
                 partnerPaid,
                 wasAddedByPartner,
@@ -853,7 +861,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 statusClassName: isPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
                 partnerStatusClassName: partnerPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
                 canAddPartner,
-                isBookingOwner: !wasAddedByPartner,
+                isBookingOwner: !reversePartnerReg && !wasAddedByPartner,
                 canWithdraw: reg.status !== 'withdrawn' && !regClosed,
             };
         }),
@@ -3196,11 +3204,17 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     }, [withdrawTarget, divisions, event, registeredDivisionIds, isWeeklyEvent]);
 
     const switchPartnerRegistration = useMemo(() => {
-        if (!withdrawTarget?.partner_email) return null;
-        return divisionRegs.find((r) =>
+        if (!withdrawTarget) return null;
+        const directPartner = withdrawTarget.partner_email && divisionRegs.find((r) =>
             r.status !== 'withdrawn'
             && r.division === withdrawTarget.division
             && normEmail(r.email) === normEmail(withdrawTarget.partner_email)
+        );
+        if (directPartner) return directPartner;
+        return divisionRegs.find((r) =>
+            r.status !== 'withdrawn'
+            && r.division === withdrawTarget.division
+            && normEmail(r.partner_email) === normEmail(withdrawTarget.email)
         ) || null;
     }, [withdrawTarget, divisionRegs]);
 
