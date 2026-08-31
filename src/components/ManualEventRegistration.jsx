@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import {
     X, Check, CreditCard, Loader2, Users, Calendar as CalendarIcon, Trophy,
     AlertCircle, ChevronRight, ChevronDown, ChevronUp, ArrowRight, Award, MapPin, User,
-    Search, ChevronLeft, Info, Layout, Upload, Image as ImageIcon, ExternalLink
+    Search, ChevronLeft, Info, Layout, Upload, Image as ImageIcon, ExternalLink, ArrowRightLeft
 } from 'lucide-react';
 import PaystackPop from '@paystack/inline-js';
 import { supabase } from '../supabaseClient';
@@ -412,6 +412,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const [removePartnerTarget, setRemovePartnerTarget] = useState(null);
     const [removingPartner, setRemovingPartner] = useState(false);
     const [switchMode, setSwitchMode] = useState(false);
+    const [switchWholeTeam, setSwitchWholeTeam] = useState(false);
     const [switchTargetDivId, setSwitchTargetDivId] = useState('');
     const [switching, setSwitching] = useState(false);
 
@@ -1057,6 +1058,20 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     }
                     setWithdrawAll(false);
                     setSwitchMode(false);
+                    setSwitchTargetDivId('');
+                    setWithdrawTarget(reg);
+                },
+                openSwitch: (regId) => {
+                    const reg = myRegs.find((r) => r.id === regId);
+                    if (!reg || isWeeklyEvent) return;
+                    const div = divisions.find((d) => d.id === reg.division_id || d.name === reg.division);
+                    if (isClosed(div, event)) {
+                        toast.error('Registration has closed — division changes are no longer available.');
+                        return;
+                    }
+                    setWithdrawAll(false);
+                    setSwitchMode(true);
+                    setSwitchWholeTeam(false);
                     setSwitchTargetDivId('');
                     setWithdrawTarget(reg);
                 },
@@ -3180,9 +3195,19 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         });
     }, [withdrawTarget, divisions, event, registeredDivisionIds, isWeeklyEvent]);
 
+    const switchPartnerRegistration = useMemo(() => {
+        if (!withdrawTarget?.partner_email) return null;
+        return divisionRegs.find((r) =>
+            r.status !== 'withdrawn'
+            && r.division === withdrawTarget.division
+            && normEmail(r.email) === normEmail(withdrawTarget.partner_email)
+        ) || null;
+    }, [withdrawTarget, divisionRegs]);
+
     const finishSwitch = () => {
         setSwitching(false);
         setSwitchMode(false);
+        setSwitchWholeTeam(false);
         setSwitchTargetDivId('');
         setWithdrawTarget(null);
         loadMyRegs();
@@ -3202,7 +3227,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
         setSwitching(true);
         try {
-            if (delta > 0) {
+            if (delta > 0 && reg.payment_status === 'paid' && !switchWholeTeam) {
                 if (!isPaystackConfigured()) { toast.error('Payments not configured'); setSwitching(false); return; }
                 const reference = `SWITCH-${String(reg.id).slice(0, 8)}-${Date.now()}`;
                 const metadata = {
@@ -3247,6 +3272,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 registration_id: reg.id,
                                 target_division_id: targetDiv.id,
                                 top_up_reference: paidRef,
+                                move_team: false,
                             });
                             toast.success(`Switched to ${targetDiv.name}`);
                             finishSwitch();
@@ -3266,9 +3292,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     action: 'switch_division',
                     registration_id: reg.id,
                     target_division_id: targetDiv.id,
+                    move_team: switchWholeTeam,
                 });
                 const refunded = Number(res?.refunded_rands || 0);
-                toast.success(refunded > 0
+                toast.success(switchWholeTeam
+                    ? `Team switched to ${targetDiv.name}`
+                    : refunded > 0
                     ? `Switched to ${targetDiv.name} — R ${refunded.toLocaleString('en-ZA')} difference refunded`
                     : `Switched to ${targetDiv.name}`);
                 finishSwitch();
@@ -5297,6 +5326,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                             onAddPartner={() => openAddPartnerWizard(reg)}
                                             onPay={needsPay && !hasPendingPayment ? openPayWizard : undefined}
                                             onWithdraw={reg && entry.canWithdraw ? () => { setWithdrawAll(false); setSwitchMode(false); setSwitchTargetDivId(''); setWithdrawTarget(reg); } : undefined}
+                                            onSwitch={reg && entry.canWithdraw && !isWeeklyEvent ? () => { setWithdrawAll(false); setSwitchMode(true); setSwitchWholeTeam(false); setSwitchTargetDivId(''); setWithdrawTarget(reg); } : undefined}
                                             onRemovePartner={reg && entry.canWithdraw ? () => setRemovePartnerTarget(reg) : undefined}
                                             withdrawLabel={entry.wasAddedByPartner && !entry.isPaid ? 'Decline' : 'Withdraw'}
                                         />
@@ -5492,17 +5522,24 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             onClick={(e) => e.stopPropagation()}
                         >
                             <div className="px-6 py-5 border-b border-gray-50 flex items-start gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
-                                    <AlertCircle className="w-5 h-5 text-red-600" />
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${switchMode ? 'bg-violet-50' : 'bg-red-50'}`}>
+                                    {switchMode
+                                        ? <ArrowRightLeft className="w-5 h-5 text-violet-700" />
+                                        : <AlertCircle className="w-5 h-5 text-red-600" />}
                                 </div>
                                 <div className="min-w-0">
                                     <h3 className="text-base font-semibold text-slate-900">
-                                        {isWeeklyEvent
+                                        {switchMode
+                                            ? `Switch from ${withdrawTarget.division}`
+                                            : isWeeklyEvent
                                             ? 'Withdraw from this event?'
                                             : `Withdraw from ${withdrawTarget.division}?`}
                                     </h3>
                                     <p className="text-xs text-slate-600 mt-1 font-normal leading-snug">
                                         {(() => {
+                                            if (switchMode) {
+                                                return 'Choose a new division, then decide whether to move only your entry or your whole team.';
+                                            }
                                             const selfEm = normEmail(userEmail);
                                             const addedBy = normEmail(withdrawTarget.registered_by);
                                             const wasAdded = addedBy && addedBy !== selfEm;
@@ -5531,7 +5568,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 </button>
                             </div>
 
-                            {(() => {
+                            {!switchMode && (() => {
                                 const wdDiv = divisions.find((d) => d.id === withdrawTarget.division_id || d.name === withdrawTarget.division);
                                 const wdFee = isWeeklyEvent
                                     ? Number(event?.entry_fee ?? resolveDivisionEntryFee(wdDiv, event) ?? 0)
@@ -5567,16 +5604,18 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 </label>
                             )}
 
-                            {withdrawTarget.payment_status === 'paid' && switchEligibleDivisions.length > 0 && !withdrawAll && (
+                            {!isWeeklyEvent && switchEligibleDivisions.length > 0 && !withdrawAll && (
                                 <div className="mx-6 mt-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => { setSwitchMode((v) => !v); setSwitchTargetDivId(''); }}
-                                        disabled={switching || withdrawing}
-                                        className="text-xs font-semibold text-emerald-700 hover:underline disabled:opacity-50"
-                                    >
-                                        {switchMode ? '← Keep my refund instead' : 'Switch to another division instead (keep your payment) →'}
-                                    </button>
+                                    {!switchMode && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setSwitchMode(true); setSwitchWholeTeam(false); setSwitchTargetDivId(''); }}
+                                            disabled={switching || withdrawing}
+                                            className="text-xs font-semibold text-violet-700 hover:underline disabled:opacity-50"
+                                        >
+                                            Switch to another division instead →
+                                        </button>
+                                    )}
                                     {switchMode && (() => {
                                         const cur = divisions.find((d) => d.id === withdrawTarget.division_id || d.name === withdrawTarget.division);
                                         const oldFee = resolveDivisionEntryFee(cur, event);
@@ -5585,6 +5624,24 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                         const delta = tgt ? Math.round((newFee - oldFee) * 100) / 100 : 0;
                                         return (
                                             <div className="mt-2 space-y-2">
+                                                {switchPartnerRegistration && (
+                                                    <div className="grid grid-cols-2 gap-2" role="group" aria-label="Who should move divisions">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSwitchWholeTeam(false)}
+                                                            className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${!switchWholeTeam ? 'border-violet-500 bg-violet-50 text-violet-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                                                        >
+                                                            Just me
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setSwitchWholeTeam(true)}
+                                                            className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${switchWholeTeam ? 'border-violet-500 bg-violet-50 text-violet-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                                                        >
+                                                            Whole team
+                                                        </button>
+                                                    </div>
+                                                )}
                                                 <select
                                                     value={switchTargetDivId}
                                                     onChange={(e) => setSwitchTargetDivId(e.target.value)}
@@ -5600,7 +5657,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                 </select>
                                                 {tgt && (
                                                     <p className="text-xs text-slate-600 px-1 leading-snug">
-                                                        {delta > 0
+                                                        {switchWholeTeam && delta > 0
+                                                            ? `The team will move to ${tgt.name}. Paid entries will be marked payment pending where the higher fee is owed.`
+                                                            : withdrawTarget.payment_status !== 'paid'
+                                                                ? `Your entry will remain payment pending at the ${fmtRWhole(newFee)} entry fee.`
+                                                            : delta > 0
                                                             ? `You'll pay an extra ${fmtRWhole(delta)} to switch to ${tgt.name}.`
                                                             : delta < 0
                                                                 ? `${fmtRWhole(Math.abs(delta))} difference will be refunded to your original payment method.`
@@ -5616,7 +5677,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             <div className="px-6 py-5 flex gap-3">
                                 <button
                                     type="button"
-                                    onClick={() => { setWithdrawTarget(null); setSwitchMode(false); setSwitchTargetDivId(''); }}
+                                    onClick={() => { setWithdrawTarget(null); setSwitchMode(false); setSwitchWholeTeam(false); setSwitchTargetDivId(''); }}
                                     disabled={withdrawing || switching}
                                     className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-slate-700 hover:bg-gray-50 disabled:opacity-50"
                                 >

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, User, UserPlus } from 'lucide-react';
+import { ArrowRightLeft, Check, User, UserPlus } from 'lucide-react';
 
 const PaymentBadge = ({ paid, label }) => (
     <span
@@ -49,6 +49,7 @@ const PersonCell = ({ role, name, avatarUrl, paid, label }) => (
  * @param {() => void} [props.onAddPartner]
  * @param {() => void} [props.onPay]
  * @param {() => void} [props.onWithdraw]
+ * @param {() => void} [props.onSwitch]
  * @param {() => void} [props.onRemovePartner]
  * @param {string} [props.withdrawLabel]
  * @param {boolean} [props.showActions]
@@ -65,6 +66,7 @@ const ManualRegistrationEntryCard = ({
     onAddPartner,
     onPay,
     onWithdraw,
+    onSwitch,
     onRemovePartner,
     withdrawLabel = 'Withdraw',
     showActions = false,
@@ -106,14 +108,28 @@ const ManualRegistrationEntryCard = ({
             <div className={`flex gap-3 ${entry.hasPartner || entry.canAddPartner ? '' : 'flex-col'}`}>
                 <div className={entry.hasPartner || entry.canAddPartner ? 'flex-1 min-w-0' : 'w-full'}>
                     <PersonCell role="Player" name={playerName} avatarUrl={playerAvatar} paid={playerPaid} label={playerLabel} />
-                    {showActions && onWithdraw && entry.canWithdraw && (
-                        <button
-                            type="button"
-                            onClick={onWithdraw}
-                            className="mt-2 text-xs font-semibold px-4 py-1.5 rounded-lg border border-red-200 text-red-600 bg-white hover:bg-red-50 transition-colors"
-                        >
-                            {withdrawLabel}
-                        </button>
+                    {showActions && entry.canWithdraw && (onSwitch || onWithdraw) && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                            {onSwitch && (
+                                <button
+                                    type="button"
+                                    onClick={onSwitch}
+                                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-violet-200 text-violet-700 bg-white hover:bg-violet-50 transition-colors"
+                                >
+                                    <ArrowRightLeft size={13} />
+                                    Switch division
+                                </button>
+                            )}
+                            {onWithdraw && (
+                                <button
+                                    type="button"
+                                    onClick={onWithdraw}
+                                    className="text-xs font-semibold px-4 py-1.5 rounded-lg border border-red-200 text-red-600 bg-white hover:bg-red-50 transition-colors"
+                                >
+                                    {withdrawLabel}
+                                </button>
+                            )}
+                        </div>
                     )}
                 </div>
 

@@ -3851,6 +3851,9 @@ const EventDetails = () => {
                             onWithdraw={entry.canWithdraw
                                 ? () => manualRegActionsRef.current?.openWithdraw?.(entry.id)
                                 : undefined}
+                            onSwitch={!event?.is_weekly && entry.canWithdraw
+                                ? () => manualRegActionsRef.current?.openSwitch?.(entry.id)
+                                : undefined}
                             onRemovePartner={entry.canWithdraw
                                 ? () => manualRegActionsRef.current?.openRemovePartner?.(entry.id)
                                 : undefined}

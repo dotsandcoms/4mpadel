@@ -489,12 +489,13 @@ async function handleSwitchDivision(
         registrationId?: string;
         targetDivisionId?: string;
         topUpReference?: string;
+        moveTeam?: boolean;
         callerEmail: string;
         isAdmin: boolean;
         json: (status: number, body: unknown) => Response;
     },
 ): Promise<Response> {
-    const { registrationId, targetDivisionId, topUpReference, callerEmail, isAdmin, json } = opts;
+    const { registrationId, targetDivisionId, topUpReference, moveTeam = false, callerEmail, isAdmin, json } = opts;
     if (!registrationId || !targetDivisionId) {
         return json(400, { error: 'registration_id and target_division_id are required' });
     }
@@ -542,11 +543,132 @@ async function handleSwitchDivision(
     const { data: payments } = await supabaseAdmin.from('payments').select('*').eq('event_id', eventId);
     const successPayments = (payments || []).filter((p) => p.status === 'success') as PaymentRow[];
 
+    // Whole-team moves mirror Event Manager: preserve the pair, move both rows,
+    // and mark paid entries pending when the new division costs more. This
+    // avoids charging one team member's card for another player's difference.
+    if (moveTeam) {
+        if (!reg.partner_email) return json(400, { error: 'This registration does not have a team mate to move' });
+        const { data: partnerReg } = await supabaseAdmin
+            .from('event_registrations')
+            .select('*')
+            .eq('event_id', eventId)
+            .eq('division', reg.division)
+            .ilike('email', reg.partner_email)
+            .neq('status', 'withdrawn')
+            .maybeSingle();
+        if (!partnerReg) return json(404, { error: 'Team mate registration not found' });
+        const pairIsLinked = normEmail(partnerReg.partner_email) === normEmail(reg.email)
+            || normEmail(partnerReg.registered_by) === normEmail(reg.email)
+            || normEmail(reg.registered_by) === normEmail(partnerReg.email);
+        if (!pairIsLinked) return json(400, { error: 'The selected registrations are not a linked team' });
+
+        const moving = [reg as RegistrationRow, partnerReg as RegistrationRow];
+        for (const player of moving) {
+            const { data: conflict } = await supabaseAdmin
+                .from('event_registrations')
+                .select('id')
+                .eq('event_id', eventId)
+                .ilike('email', player.email)
+                .eq('division', targetDiv.name)
+                .neq('status', 'withdrawn')
+                .maybeSingle();
+            if (conflict) return json(400, { error: `${player.full_name || player.email} is already entered in that division` });
+        }
+
+        for (const player of moving) {
+            const { error: parkError } = await supabaseAdmin
+                .from('event_registrations')
+                .update({ division: `__moving__/${player.id}`, division_id: null })
+                .eq('id', player.id);
+            if (parkError) throw parkError;
+        }
+
+        for (const player of moving) {
+            const teamMate = moving.find((candidate) => candidate.id !== player.id)!;
+            const owesMore = newFee > oldFee && player.payment_status === 'paid';
+            const newStatus = owesMore ? 'pending' : player.payment_status;
+            const teamMateOwesMore = newFee > oldFee && teamMate.payment_status === 'paid';
+            const teamMateNewStatus = teamMateOwesMore ? 'pending' : teamMate.payment_status;
+            const { error: moveError } = await supabaseAdmin
+                .from('event_registrations')
+                .update({
+                    division_id: targetDiv.id,
+                    division: targetDiv.name,
+                    registered_by: player.email,
+                    payment_status: newStatus,
+                    partner_name: teamMate.full_name,
+                    partner_email: teamMate.email,
+                    partner_payment_status: teamMateNewStatus,
+                })
+                .eq('id', player.id);
+            if (moveError) throw moveError;
+
+            await supabaseAdmin.rpc('reassign_tournament_participant_division', {
+                p_event_id: eventId,
+                p_email: player.email,
+                p_full_name: player.full_name || '',
+                p_from_class: reg.division,
+                p_to_class: targetDiv.name,
+                p_is_paid: newStatus === 'paid',
+            });
+
+            for (const payment of successPayments) {
+                const meta = parseMeta(payment.metadata);
+                const covers = Array.isArray(meta.covers) ? meta.covers as Record<string, unknown>[] : [];
+                let changed = false;
+                const nextCovers = covers.map((cover) => {
+                    if (cover.type === 'entry' && normEmail(cover.email) === normEmail(player.email) && String(cover.division || '') === String(reg.division)) {
+                        changed = true;
+                        return { ...cover, division: targetDiv.name };
+                    }
+                    return cover;
+                });
+                if (!changed) continue;
+                const fees = { ...((meta.division_entry_fees as Record<string, number>) || {}), [targetDiv.name]: newFee };
+                await supabaseAdmin.from('payments').update({ metadata: { ...meta, covers: nextCovers, division_entry_fees: fees } }).eq('id', payment.id);
+                break;
+            }
+
+            let feeNote = 'There was no change to your entry fee.';
+            if (owesMore) feeNote = `Your new division has a higher entry fee of ${fmtR(newFee)}. Your entry is now marked pending — please complete payment to confirm your spot.`;
+            else if (newFee < oldFee) feeNote = 'Your new division has a lower entry fee; any difference will be handled by the organiser.';
+            try {
+                await sendEmailViaEdge({
+                    to: player.email,
+                    template: 'division_changed',
+                    variables: {
+                        eventId,
+                        playerName: player.full_name || 'Player',
+                        eventName: event?.event_name || 'Tournament',
+                        fromDivision: reg.division,
+                        toDivision: targetDiv.name,
+                        division: targetDiv.name,
+                        partnerName: teamMate.full_name || 'Team mate',
+                        eventDates: event?.event_dates || '',
+                        paid: newStatus === 'paid',
+                        amount: fmtR(newFee),
+                        amountDue: newStatus === 'paid' ? 'R 0.00' : fmtR(newFee),
+                        feeNote,
+                        eventUrl: `https://4mpadel.co.za/calendar/${event?.slug || eventId}`,
+                    },
+                });
+            } catch (_e) { /* email best-effort */ }
+        }
+
+        return json(200, {
+            switched: true,
+            moved_count: moving.length,
+            from_division: reg.division,
+            to_division: targetDiv.name,
+            delta,
+        });
+    }
+
     let refundedRands = 0;
     let chargedRands = 0;
 
     // ---- Higher fee: verify the top-up payment before moving ----
-    if (delta > 0) {
+    if (delta > 0 && reg.payment_status === 'paid') {
         if (!topUpReference) return json(402, { error: 'top_up_required', delta, message: 'A top-up payment is required for this division.' });
         const { data: topPay } = await supabaseAdmin.from('payments').select('*').eq('reference', topUpReference).maybeSingle();
         if (!topPay || Number(topPay.event_id) !== Number(eventId)) return json(404, { error: 'Top-up payment not found' });
@@ -565,7 +687,7 @@ async function handleSwitchDivision(
     }
 
     // ---- Lower fee: refund the difference from the original covering payment ----
-    if (delta < 0) {
+    if (delta < 0 && reg.payment_status === 'paid') {
         const refundAmount = roundRands(Math.abs(delta));
         const regEmail = normEmail(reg.email);
         const oldName = String(reg.division || '');
@@ -622,6 +744,8 @@ async function handleSwitchDivision(
         feeNote = `An additional <strong style="color:#FFFFFF;">${fmtR(chargedRands)}</strong> was charged for the higher entry fee of your new division.`;
     } else if (refundedRands > 0) {
         feeNote = `The <strong style="color:#FFFFFF;">${fmtR(refundedRands)}</strong> entry-fee difference is being refunded to you.`;
+    } else if (reg.payment_status !== 'paid' && delta !== 0) {
+        feeNote = `Your registration remains payment pending at the new division fee of <strong style="color:#FFFFFF;">${fmtR(newFee)}</strong>.`;
     }
     try {
         await sendEmailViaEdge({
@@ -638,7 +762,7 @@ async function handleSwitchDivision(
                 // so the new entry starts without a partner.
                 partnerName: 'TBD',
                 eventDates: event?.event_dates || '',
-                paid: true,
+                paid: reg.payment_status === 'paid',
                 amount: fmtR(newFee),
                 feeNote,
                 eventUrl,
@@ -944,6 +1068,7 @@ serve(async (req: Request) => {
             no_refund,
             target_division_id,
             top_up_reference,
+            move_team,
             payment_refund_id,
             cancellation_reason,
         } = await req.json() as {
@@ -954,6 +1079,7 @@ serve(async (req: Request) => {
             no_refund?: boolean;
             target_division_id?: string;
             top_up_reference?: string;
+            move_team?: boolean;
             payment_refund_id?: string;
             cancellation_reason?: string;
         };
@@ -1087,6 +1213,7 @@ serve(async (req: Request) => {
                 registrationId: registration_id,
                 targetDivisionId: target_division_id,
                 topUpReference: top_up_reference,
+                moveTeam: move_team,
                 callerEmail,
                 isAdmin,
                 json,
