@@ -173,6 +173,11 @@ const OrgProfileEditor = ({ org, onSaved, onDeleted, adminMode = false, canDelet
             contact_phone: org.contact_phone || '',
             whatsapp_number: org.whatsapp_number || '',
             website_url: org.website_url || '',
+            payment_bank_name: org.payment_bank_name || '',
+            payment_account_name: org.payment_account_name || '',
+            payment_account_number: org.payment_account_number || '',
+            payment_branch_code: org.payment_branch_code || '',
+            payment_reference_note: org.payment_reference_note || '',
             socials: {
                 instagram: org.socials?.instagram || '',
                 facebook: org.socials?.facebook || '',
@@ -375,6 +380,11 @@ const OrgProfileEditor = ({ org, onSaved, onDeleted, adminMode = false, canDelet
                 contact_phone: form.contact_phone.trim() || null,
                 whatsapp_number: form.whatsapp_number.trim() || null,
                 website_url: websiteUrl,
+                payment_bank_name: form.payment_bank_name.trim() || null,
+                payment_account_name: form.payment_account_name.trim() || null,
+                payment_account_number: form.payment_account_number.trim() || null,
+                payment_branch_code: form.payment_branch_code.trim() || null,
+                payment_reference_note: form.payment_reference_note.trim() || null,
                 socials: Object.fromEntries(Object.entries(form.socials).map(([k, v]) => [k, v.trim()])),
                 contacts: form.contacts
                     .filter((c) => c.role || c.name || c.email || c.phone || c.whatsapp)
@@ -708,6 +718,17 @@ const OrgProfileEditor = ({ org, onSaved, onDeleted, adminMode = false, canDelet
                                 placeholder="www.yourorg.co.za"
                                 className={`${inputClass} !pl-[5.25rem]`}
                             />
+                        </div>
+                    </div>
+                    <div className="md:col-span-2 mt-2 rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <p className="text-xs font-bold text-white">Default EFT details</p>
+                        <p className="mt-1 text-[11px] leading-relaxed text-gray-500">These details can be copied into new events that collect entry fees by EFT.</p>
+                        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <div><label className={labelClass}>Bank name</label><input value={form.payment_bank_name} onChange={(e) => setField('payment_bank_name', e.target.value)} className={inputClass} /></div>
+                            <div><label className={labelClass}>Account name</label><input value={form.payment_account_name} onChange={(e) => setField('payment_account_name', e.target.value)} className={inputClass} /></div>
+                            <div><label className={labelClass}>Account number</label><input value={form.payment_account_number} onChange={(e) => setField('payment_account_number', e.target.value)} inputMode="numeric" className={inputClass} /></div>
+                            <div><label className={labelClass}>Branch code</label><input value={form.payment_branch_code} onChange={(e) => setField('payment_branch_code', e.target.value)} inputMode="numeric" className={inputClass} /></div>
+                            <div className="md:col-span-2"><label className={labelClass}>Reference instructions</label><input value={form.payment_reference_note} onChange={(e) => setField('payment_reference_note', e.target.value)} placeholder="e.g. Use player surname and event name" className={inputClass} /></div>
                         </div>
                     </div>
                 </div>

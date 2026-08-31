@@ -243,22 +243,18 @@ const FederationPage = () => {
                 const orgList = orgs || [];
                 if (!cancelled) setOrganisers(orgList);
 
-                const orgIds = orgList.map((o) => o.id);
-                if (orgIds.length > 0) {
-                    const today = new Date().toISOString().substring(0, 10);
-                    const { data: evs } = await supabase
-                        .from('calendar')
-                        .select('id, slug, event_name, venue, city, start_date, end_date, sapa_status, image_url, custom_image_url, poster_image_url, organisation_id')
-                        .in('organisation_id', orgIds)
-                        .or('sanction_status.eq.approved,sanction_status.is.null')
-                        .neq('is_visible', false)
-                        .gte('start_date', today)
-                        .order('start_date', { ascending: true })
-                        .limit(12);
-                    if (!cancelled) setEvents(evs || []);
-                } else if (!cancelled) {
-                    setEvents([]);
-                }
+                const today = new Date().toISOString().substring(0, 10);
+                const { data: evs } = await supabase
+                    .from('calendar')
+                    .select('id, slug, event_name, venue, city, start_date, end_date, sapa_status, image_url, custom_image_url, poster_image_url, organisation_id, federation_id, federation_sanction_status')
+                    .eq('federation_id', fed.id)
+                    .eq('federation_sanction_status', 'approved')
+                    .or('sanction_status.eq.approved,sanction_status.is.null')
+                    .neq('is_visible', false)
+                    .gte('start_date', today)
+                    .order('start_date', { ascending: true })
+                    .limit(12);
+                if (!cancelled) setEvents(evs || []);
 
                 const [{ data: clubRows }, { data: coachRows }] = await Promise.all([
                     supabase

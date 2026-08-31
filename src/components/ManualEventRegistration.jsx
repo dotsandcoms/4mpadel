@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import {
     X, Check, CreditCard, Loader2, Users, Calendar as CalendarIcon, Trophy,
     AlertCircle, ChevronRight, ChevronDown, ChevronUp, ArrowRight, Award, MapPin, User,
-    Search, ChevronLeft, Info, Layout, Upload, Image as ImageIcon
+    Search, ChevronLeft, Info, Layout, Upload, Image as ImageIcon, ExternalLink
 } from 'lucide-react';
 import PaystackPop from '@paystack/inline-js';
 import { supabase } from '../supabaseClient';
@@ -391,10 +391,13 @@ const ProgressBar = ({ step, theme, steps = STEPS }) => (
     </div>
 );
 
-const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null, fourMPlayers = {}, onStatusChange, onParticipantsChange, registrationActionsRef, highlightClassName = '' }) => {
+const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null, fourMPlayers = {}, onStatusChange, onParticipantsChange, registrationActionsRef, highlightClassName = '', accessGrantId = null, onAccessRequired = null }) => {
     const navigate = useNavigate();
     const { promptMembersOnly } = useMembersOnly();
     const { config: commerce } = useCommerceConfig();
+    const eventPaymentMethod = event?.payment_method || (event?.allow_payments === false ? 'free' : 'platform');
+    const usesManualEntryPayment = eventPaymentMethod === 'eft' || eventPaymentMethod === 'external';
+    const manualPaymentLabel = eventPaymentMethod === 'eft' ? 'EFT' : 'external payment';
     const [divisions, setDivisions] = useState([]);
     const [divisionRegs, setDivisionRegs] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -1080,6 +1083,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     });
                 },
                 openRegistration: () => {
+                    if (event?.registration_access === 'code' && !accessGrantId) {
+                        onAccessRequired?.();
+                        return;
+                    }
                     // Deferred via ref so this effect does not depend on openWizard
                     // (defined below) and hit a TDZ ReferenceError on render.
                     openWizardRef.current?.();
@@ -1107,6 +1114,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         loadDivisions,
         divisions,
         event,
+        accessGrantId,
+        onAccessRequired,
         promptMembersOnly,
         userEmail,
     ]);
@@ -1141,6 +1150,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const openWizard = () => {
         if (!userEmail) {
             promptMembersOnly();
+            return;
+        }
+        if (event?.registration_access === 'code' && !accessGrantId) {
+            onAccessRequired?.();
             return;
         }
         // Check already-registered before the generic canStartRegistration gate so
@@ -2340,6 +2353,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 tshirtSponsorName: (tshirtSponsorName || '').trim() || null,
                 tshirtLogoUrl: tshirtLogoUrl || null,
             });
+            built.rows = (built.rows || []).map((row) => ({
+                ...row,
+                payment_method: eventPaymentMethod,
+                ...(accessGrantId ? { access_grant_id: accessGrantId } : {}),
+            }));
             if (isReserve) return { ...built, covers: [] };
             const covers = [...(built.covers || [])];
             if (buyLicenseSelf) covers.push({ email: userEmail, type: 'license', license: licenseSelfChoice });
@@ -2378,6 +2396,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 partner_name: sel?.partnerName || existingSelfReg?.partner_name || null,
                 partner_email: sel?.partnerEmail || existingSelfReg?.partner_email || null,
                 payment_status: selfAlreadyPaid ? 'paid' : fee === 0 ? 'paid' : 'pending',
+                payment_method: fee === 0 ? 'free' : eventPaymentMethod,
                 partner_payment_status: (sel?.partnerName || existingSelfReg?.partner_name)
                     ? (isPartnerDivisionPaid(d.id) ? 'paid' : 'pending')
                     : null,
@@ -2438,6 +2457,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         partner_name: selfName,
                         partner_email: userEmail,
                         payment_status: 'pending',
+                        payment_method: eventPaymentMethod,
                         status: 'registered',
                         registered_by: userEmail,
                         tshirt_size: partnerTshirtSizes[partnerEmailKey] || null,
@@ -2456,7 +2476,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 license: purchase.choice,
             });
         }
-        return { rows, covers, soloLinks };
+        return {
+            rows: rows.map((row) => ({
+                ...row,
+                ...(accessGrantId ? { access_grant_id: accessGrantId } : {}),
+            })),
+            covers,
+            soloLinks,
+        };
     };
 
     const buildManualPaymentPayload = useCallback(() => {
@@ -2563,9 +2590,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
         if (!rows.length) return [];
 
+        const securedRows = rows.map((row) => ({
+            ...row,
+            ...(accessGrantId ? { access_grant_id: accessGrantId } : {}),
+        }));
+
         const { data, error } = await supabase
             .from('event_registrations')
-            .upsert(rows, { onConflict: 'event_id,email,division' })
+            .upsert(securedRows, { onConflict: 'event_id,email,division' })
             .select('*');
         if (error) throw error;
         return data || [];
@@ -2583,7 +2615,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             eventDates: event.event_dates || '',
             venue: [event.venue, event.city].filter(Boolean).join(', '),
             paid,
-            amountDue: paid ? 'R 0.00' : fmtR(total),
+            amountDue: paid ? 'R 0.00' : fmtR(usesManualEntryPayment ? reviewPaySummary.entryFeesTotal : total),
+            paymentMethod: eventPaymentMethod,
+            externalPaymentUrl: event.external_payment_url || null,
             eventUrl,
         });
         for (const d of selectedDivisions) {
@@ -2598,6 +2632,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     division: d.name,
                     eventUrl,
                     pendingPayment: !paid,
+                    paymentMethod: eventPaymentMethod,
+                    externalPaymentUrl: event.external_payment_url || null,
                 });
             } else {
                 const partnerRow = savedRows.find((r) => r.email === sel.partnerEmail && r.division === d.name);
@@ -2610,6 +2646,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     division: d.name,
                     eventDates: event.event_dates || '',
                     amountDue: fmtRWhole(resolveDivisionEntryFee(d, event)),
+                    paymentMethod: eventPaymentMethod,
+                    externalPaymentUrl: event.external_payment_url || null,
                     payUrl,
                 });
             }
@@ -2755,6 +2793,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (
             wizardStep !== 4
             || total <= 0
+            || usesManualEntryPayment
             || !userEmail
             || !isPaystackConfigured()
             || (allowWeeklyReserve && weeklyCheckoutIntent === 'reserve')
@@ -2815,6 +2854,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         total,
         userEmail,
         event.id,
+        usesManualEntryPayment,
         profile?.id,
         profile?.name,
         displayProfile?.name,
@@ -2888,6 +2928,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const handleRegister = async () => {
         if (!userEmail) { toast.error('Please log in to register'); return; }
+        if (event?.registration_access === 'code' && !accessGrantId) {
+            setShowWizard(false);
+            onAccessRequired?.();
+            return;
+        }
         if (isWeeklyEvent) {
             if (selectedWeeks.length === 0) { toast.error('Select at least one week'); return; }
             // Re-check capacity before charging / writing (counts may have changed).
@@ -2956,6 +3001,45 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
             const { rows, covers, soloLinks } = buildRegistrationRows();
             const isReserve = isWeeklyEvent && allowWeeklyReserve && weeklyCheckoutIntent === 'reserve';
+
+            if (event.is_quick_event && Number(event.max_players) > 0) {
+                const activeEmails = new Set(
+                    divisionRegs
+                        .filter((reg) => reg.status !== 'withdrawn')
+                        .map((reg) => normEmail(reg.email))
+                        .filter(Boolean),
+                );
+                const newEmails = new Set(
+                    rows
+                        .map((row) => normEmail(row.email))
+                        .filter((email) => email && !activeEmails.has(email)),
+                );
+                if (activeEmails.size + newEmails.size > Number(event.max_players)) {
+                    toast.error(`This event only has space for ${event.max_players} players.`);
+                    return;
+                }
+            }
+
+            if (usesManualEntryPayment && reviewPaySummary.entryFeesTotal > 0 && !isReserve) {
+                if (buyLicenseSelf || partnerLicensePurchases.length > 0) {
+                    toast.error('Purchase the required SAPA licence through your profile before registering for an EFT or external-payment event.');
+                    return;
+                }
+                const weeksToSchedule = snapshotSelectedWeeksForSchedule();
+                // Entry-fee cover rows are deliberately omitted: the organiser must
+                // verify the off-platform payment before changing payment_status.
+                const savedRows = await persistRegistrations(rows, soloLinks, []);
+                await sendRegistrationEmails(savedRows, false);
+                setConfirmedPaidTotal(null);
+                setWizardStep(5);
+                loadMyRegs();
+                loadDivisionRegs();
+                await addRegisteredWeeksToSchedule(weeksToSchedule);
+                await loadRegisteredWeekIds();
+                onParticipantsChange?.();
+                toast.success(`Registration received — ${manualPaymentLabel} payment is pending.`);
+                return;
+            }
 
             if (total > 0 && !isReserve) {
                 if (!isPaystackConfigured()) {
@@ -4379,10 +4463,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 return (
                     <WizardStepWrap>
                         <WizardStepTitle
-                            title="Review & Pay"
+                            title={usesManualEntryPayment ? 'Review & payment instructions' : 'Review & Pay'}
                             subtitle={isWeeklyEvent
                                 ? 'Review the weeks you selected. Each week is a separate booking.'
-                                : 'Please review your entries and fees below. Registration is only confirmed once payment is completed successfully.'}
+                                : usesManualEntryPayment
+                                    ? `Submit your registration, then complete ${manualPaymentLabel}. Your entry remains pending until the organiser confirms payment.`
+                                    : 'Please review your entries and fees below. Registration is only confirmed once payment is completed successfully.'}
                         />
 
                         {!isWeeklyEvent && (
@@ -4454,7 +4540,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     <span className="text-xs font-semibold text-slate-900">Total entry fees</span>
                                     <span className="text-sm font-bold text-slate-900 tabular-nums">{fmtR(reviewPaySummary.entryFeesTotal)}</span>
                                 </div>
-                                {reviewPaySummary.entryManagementFee > 0 && (
+                                {!usesManualEntryPayment && reviewPaySummary.entryManagementFee > 0 && (
                                     <div className="flex justify-between items-start gap-3 pt-2">
                                         <span className="text-xs text-slate-600 font-normal">
                                             {commerce.fee_label} ({formatPercent(commerce.event_fee_percent)}% of {fmtR(reviewPaySummary.entryFeesTotal)})
@@ -4464,6 +4550,38 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 )}
                             </CardBody>
                         </Card>
+
+                        {eventPaymentMethod === 'eft' && (
+                            <Card>
+                                <CardHeader title="EFT payment details" subtitle="Use these details after submitting your registration." soft />
+                                <CardBody className="space-y-2 text-xs">
+                                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                        <p className="text-slate-700"><span className="text-slate-500">Bank:</span> <strong className="text-slate-900">{event.payment_bank_name || 'Contact organiser'}</strong></p>
+                                        <p className="text-slate-700"><span className="text-slate-500">Account:</span> <strong className="text-slate-900">{event.payment_account_name || '—'}</strong></p>
+                                        <p className="text-slate-700"><span className="text-slate-500">Account number:</span> <strong className="text-slate-900">{event.payment_account_number || '—'}</strong></p>
+                                        <p className="text-slate-700"><span className="text-slate-500">Branch code:</span> <strong className="text-slate-900">{event.payment_branch_code || '—'}</strong></p>
+                                    </div>
+                                    {event.payment_reference_note && <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-900"><strong>Reference:</strong> {event.payment_reference_note}</p>}
+                                </CardBody>
+                            </Card>
+                        )}
+
+                        {eventPaymentMethod === 'external' && (
+                            <Card>
+                                <CardHeader title="External payment" subtitle="Submit your registration, then pay using the organiser’s payment page." soft />
+                                <CardBody>
+                                    <a href={event.external_payment_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800">
+                                        Open payment page <ExternalLink size={16} />
+                                    </a>
+                                </CardBody>
+                            </Card>
+                        )}
+
+                        {usesManualEntryPayment && reviewPaySummary.licenseLines.length > 0 && (
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900">
+                                SAPA licence purchases cannot be included in an organiser’s {manualPaymentLabel}. Purchase the required licence from your profile before completing this registration.
+                            </div>
+                        )}
 
                         {allowWeeklyReserve && total > 0 && (
                             <Card>
@@ -4493,7 +4611,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             </Card>
                         )}
 
-                        {reviewPaySummary.licenseLines.length > 0 && (
+                        {!usesManualEntryPayment && reviewPaySummary.licenseLines.length > 0 && (
                             <Card>
                                 <CardHeader title="Licenses" soft />
                                 <CardBody className="space-y-0">
@@ -4552,7 +4670,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                         ? 'Amount due later'
                                         : 'Total payable'}
                                 </span>
-                                <span className="text-xl font-bold text-slate-900 tabular-nums">{fmtR(reviewPaySummary.totalPayable)}</span>
+                                <span className="text-xl font-bold text-slate-900 tabular-nums">{fmtR(usesManualEntryPayment ? reviewPaySummary.entryFeesTotal : reviewPaySummary.totalPayable)}</span>
                             </CardBody>
                         </Card>
 
@@ -4888,14 +5006,16 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 return (
                     <WizardStepWrap>
                         <div className="flex flex-col items-center text-center pt-2 pb-1">
-                            <div className="w-16 h-16 rounded-full bg-emerald-500 flex items-center justify-center mb-4">
-                                <Check size={32} className="text-white" strokeWidth={2.5} />
+                            <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${usesManualEntryPayment ? 'bg-amber-500' : 'bg-emerald-500'}`}>
+                                {usesManualEntryPayment ? <AlertCircle size={32} className="text-white" strokeWidth={2.5} /> : <Check size={32} className="text-white" strokeWidth={2.5} />}
                             </div>
                             <h2 className="text-lg font-bold text-slate-900 tracking-normal">
-                                {wizardMode === 'addPartner' ? 'Partner Added!' : 'Registration Confirmed!'}
+                                {usesManualEntryPayment ? 'Registration received — payment pending' : wizardMode === 'addPartner' ? 'Partner Added!' : 'Registration Confirmed!'}
                             </h2>
                             <p className="text-xs text-slate-600 mt-1.5 font-normal leading-snug max-w-sm">
-                                {wizardMode === 'addPartner'
+                                {usesManualEntryPayment
+                                    ? `Complete ${manualPaymentLabel}. The organiser will confirm your entry after verifying payment.`
+                                    : wizardMode === 'addPartner'
                                     ? (hasPaid
                                         ? 'Your partner has been linked and payment was successful.'
                                         : confirmEntries.some((e) => e.showPartnerReminder)
@@ -4906,6 +5026,24 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                         : 'Your registration was successful. We can\'t wait to see you on court!')}
                             </p>
                         </div>
+
+                        {eventPaymentMethod === 'eft' && (
+                            <Card>
+                                <CardHeader title="Pay by EFT" soft />
+                                <CardBody className="space-y-2 text-xs text-slate-700">
+                                    <p><span className="text-slate-500">Bank:</span> <strong className="text-slate-900">{event.payment_bank_name || 'Contact organiser'}</strong></p>
+                                    <p><span className="text-slate-500">Account:</span> <strong className="text-slate-900">{event.payment_account_name || '—'}</strong></p>
+                                    <p><span className="text-slate-500">Account number:</span> <strong className="text-slate-900">{event.payment_account_number || '—'}</strong></p>
+                                    <p><span className="text-slate-500">Branch code:</span> <strong className="text-slate-900">{event.payment_branch_code || '—'}</strong></p>
+                                    {event.payment_reference_note && <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-900"><strong>Reference:</strong> {event.payment_reference_note}</p>}
+                                </CardBody>
+                            </Card>
+                        )}
+                        {eventPaymentMethod === 'external' && event.external_payment_url && (
+                            <a href={event.external_payment_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800">
+                                Complete payment <ExternalLink size={16} />
+                            </a>
+                        )}
 
                         <Card allowOverflow>
                             <CardHeader title="Your entries" soft />
@@ -5040,6 +5178,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (wizardStep === 4) {
             if (processing) return 'Processing...';
             if (checkoutPreparing && total > 0 && weeklyCheckoutIntent !== 'reserve') return 'Preparing payment...';
+            if (usesManualEntryPayment && reviewPaySummary.entryFeesTotal > 0) return 'Register — payment pending';
             if (wizardMode === 'addPartner') {
                 return total > 0 ? 'Pay & Add Partner' : 'Add Partner';
             }
@@ -5048,7 +5187,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             }
             return total > 0 ? 'Pay & Complete Registration' : 'Complete Registration';
         }
-        if (wizardStep === 3) return isWeeklyEvent ? 'Continue to Review' : 'Continue to Payment';
+        if (wizardStep === 3) return isWeeklyEvent ? 'Continue to Review' : (usesManualEntryPayment ? 'Continue to payment instructions' : 'Continue to Payment');
         if (wizardStep === 2) return isWeeklyEvent ? 'Continue to Entry' : 'Continue to Review & Pay';
         return isWeeklyEvent ? 'Continue to Dates' : 'Continue to Division';
     };
@@ -5296,7 +5435,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             {/* Wizard footer */}
                             <div className="sticky bottom-0 bg-white border-t border-gray-100 px-4 py-3">
                                 <div className="max-w-xl mx-auto flex flex-col gap-3">
-                                    {wizardStep === 4 && total > 0 && isInAppBrowser() && (
+                                    {wizardStep === 4 && total > 0 && !usesManualEntryPayment && isInAppBrowser() && (
                                         <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-amber-800 text-[11px] leading-snug">
                                             <span className="font-bold block mb-1">Apple Pay unavailable in this browser</span>
                                             Open this page in <span className="font-bold">Safari</span> (tap the menu and choose &quot;Open in Browser&quot;) to use Apple Pay.

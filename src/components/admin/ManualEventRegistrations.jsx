@@ -106,9 +106,12 @@ const ACTIVE_CHECKOUT_WINDOW_MS = 60 * 60 * 1000;
 const PAYMENT_METHOD_LABELS = {
     paystack: 'Paystack',
     manual: 'Manual',
+    eft: 'EFT',
+    external: 'External payment',
     cash: 'Cash',
     system: 'System',
 };
+const OFF_PLATFORM_PAYMENT_METHODS = new Set(['manual', 'eft', 'external', 'cash']);
 
 const labelPaymentMethod = (method) => {
     if (!method) return '';
@@ -2363,7 +2366,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
             const amount = Math.max(0, Number(p.amount || 0));
             if (amount <= 0) return;
             grossEntryFees += amount;
-            if (String(p.payment_method || '').toLowerCase() === 'manual') {
+            if (OFF_PLATFORM_PAYMENT_METHODS.has(String(p.payment_method || '').toLowerCase())) {
                 collectedManual += amount;
             } else {
                 grossCollected4M += amount;
@@ -2372,7 +2375,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
 
         payments.forEach((p) => {
             if (p.status !== 'success') return;
-            if (String(p.payment_method || '').toLowerCase() === 'manual') return;
+            if (OFF_PLATFORM_PAYMENT_METHODS.has(String(p.payment_method || '').toLowerCase())) return;
             if (isLicensePaymentRow(p)) {
                 licenseRevenue4M += Number(p.amount || 0);
             }
@@ -3261,6 +3264,18 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
                             ))}
                         </div>
                     </div>
+
+                    {['eft', 'external'].includes(event?.payment_method) && (
+                        <div className={`${isInline ? 'mt-4 rounded-2xl' : ''} mx-6 flex items-start gap-3 border border-amber-500/30 bg-amber-500/10 px-4 py-3`} role="status">
+                            <Info size={18} className="mt-0.5 shrink-0 text-amber-300" />
+                            <div>
+                                <p className="text-sm font-bold text-amber-100">Manual payment confirmation required</p>
+                                <p className="mt-1 text-xs leading-relaxed text-amber-100/80">
+                                    This event uses {event.payment_method === 'eft' ? 'EFT' : 'an external payment link'}. New registrations remain pending until an event admin verifies payment and marks each player as paid in Event Manager.
+                                </p>
+                            </div>
+                        </div>
+                    )}
 
                     <div className={`flex-1 overflow-y-auto custom-scrollbar ${isInline ? 'mt-6' : ''}`}>
                         {activeTab === 'overview' && (
@@ -4321,7 +4336,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
                                     onChange={(e) => setMarkPaidMethod(e.target.value)}
                                     className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 mb-3"
                                 >
-                                    <option value="manual">Manual / EFT</option>
+                                    <option value="eft">EFT</option>
+                                    <option value="external">External payment provider</option>
+                                    <option value="manual">Other manual payment</option>
                                     <option value="cash">Cash</option>
                                     <option value="paystack">Paystack (offline fix)</option>
                                     <option value="comp">Comp (free entry)</option>

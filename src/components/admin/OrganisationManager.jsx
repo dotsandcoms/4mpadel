@@ -13,6 +13,7 @@ import {
 import RichTextEditor from './RichTextEditor';
 import OrgMembersManager from './OrgMembersManager';
 import EventBuilder from './EventBuilder';
+import QuickEventBuilder from './QuickEventBuilder';
 import OrgProfileEditor from './OrgProfileEditor';
 import CreateOrganisationModal from './CreateOrganisationModal';
 import OrgAuditLog from './OrgAuditLog';
@@ -160,6 +161,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
 
     // New EventBuilder modal (replaces the legacy inline wizard for org hosts)
     const [builderOpen, setBuilderOpen] = useState(false);
+    const [quickBuilderOpen, setQuickBuilderOpen] = useState(false);
     const [builderEvent, setBuilderEvent] = useState(null);
 
     // Super Admin oversight states
@@ -1006,10 +1008,13 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
         'prize_money_total', 'prize_money_breakdown', 'balls', 'courts', 'tournament_director',
         'referees', 'sanctioning_details', 'rules_regs', 'withdrawal_substitution',
         'cut_off_times', 'draw_released', 'contact_details', 'organiser_phone',
-        'organiser_email', 'organiser_website', 'custom_image_url', 'poster_image_url', 'sponsor_logos',
+        'organiser_email', 'organiser_website', 'custom_image_url', 'poster_image_url', 'poster_document_url', 'organiser_kit_url', 'media_gallery_urls', 'sponsor_logos',
         'registration_closes_at', 'registration_opens_at', 'early_bird_ends_at', 'early_bird_fee', 'rankings_updated_at', 'event_dates', 'golden_point', 'scoring_point', 'is_league',
         'max_teams_capacity', 'partner_requirement', 'back_draw_options', 'event_co_admins',
-        'allow_payments', 'allow_temporary_license', 'license_required_default', 'collect_tshirt_size', 'entry_fee_notes',
+        'allow_payments', 'finance_managed', 'payment_method', 'payment_bank_name', 'payment_account_name',
+        'payment_account_number', 'payment_branch_code', 'payment_reference_note', 'external_payment_url',
+        'allow_temporary_license', 'license_required_default', 'collect_tshirt_size', 'player_gift_type', 'player_gift_types', 'entry_fee_notes',
+        'federation_id', 'sanction_requested', 'default_match_format',
         'indoor_outdoor', 'courts_count'
     ];
 
@@ -1022,6 +1027,9 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
             const safePayload = Object.fromEntries(
                 Object.entries(draft.payload).filter(([k]) => AMENDMENT_ALLOWED_KEYS.includes(k))
             );
+            if (Object.prototype.hasOwnProperty.call(safePayload, 'sanction_requested')) {
+                safePayload.federation_sanction_status = safePayload.sanction_requested ? 'pending' : 'not_requested';
+            }
             const { error } = await supabase
                 .from('calendar')
                 .update({
@@ -1101,7 +1109,8 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
     // Host Organiser - open the new EventBuilder (replaces legacy wizard)
     const handleStartEditEvent = (ev) => {
         setBuilderEvent(ev);
-        setBuilderOpen(true);
+        if (ev?.is_quick_event) setQuickBuilderOpen(true);
+        else setBuilderOpen(true);
     };
 
     // Fired when the EventBuilder saves an org event
@@ -1341,6 +1350,15 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                             className="bg-padel-green text-black font-black uppercase tracking-widest text-xs px-5 py-3 rounded-xl hover:bg-white transition-all flex items-center gap-2 cursor-pointer shadow-lg hover:shadow-padel-green/10"
                         >
                             Create Organisation <Plus size={14} />
+                        </button>
+                    )}
+                    {isHostView && !managingEvent && (
+                        <button
+                            type="button"
+                            onClick={() => { setBuilderEvent(null); setQuickBuilderOpen(true); }}
+                            className="bg-amber-500/10 text-amber-300 border border-amber-500/30 font-black uppercase tracking-widest text-xs px-5 py-3 rounded-xl hover:bg-amber-500 hover:text-black transition-colors flex items-center gap-2 cursor-pointer"
+                        >
+                            Quick Event <Trophy size={14} />
                         </button>
                     )}
                     {isHostView && !managingEvent && (
@@ -2887,6 +2905,13 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                 onClose={() => { setBuilderOpen(false); setBuilderEvent(null); }}
                 onSaved={handleBuilderSaved}
                 editingEvent={builderEvent}
+                organisation={isHostView ? currentOrg : null}
+            />
+            <QuickEventBuilder
+                isOpen={quickBuilderOpen}
+                onClose={() => { setQuickBuilderOpen(false); setBuilderEvent(null); }}
+                onSaved={handleBuilderSaved}
+                editingEvent={builderEvent?.is_quick_event ? builderEvent : null}
                 organisation={isHostView ? currentOrg : null}
             />
 

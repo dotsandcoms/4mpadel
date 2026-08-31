@@ -10,6 +10,12 @@ const SITE_URL = 'https://4mpadel.co.za';
 const EMAIL_LOGO_URL = `${SITE_URL}/images/4m-padel-event-management-logo.png`;
 const EMAIL_CLUBS_LOGO_URL = `${SITE_URL}/images/4m-padel-clubs-logo.png`;
 const fmtR = (n: number) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
+const escapeEmailHtml = (value: unknown) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;');
 
 const CLUB_EMAIL_TEMPLATES = new Set([
   'club_applied',
@@ -275,6 +281,31 @@ async function generateEmailBody(
     }
   }
 
+  const paymentMethod = String(vars.paymentMethod || eventInfo?.payment_method || (eventInfo?.allow_payments === false ? 'free' : 'platform'));
+  const usesManualEntryPayment = paymentMethod === 'eft' || paymentMethod === 'external';
+  const manualPaymentName = paymentMethod === 'eft' ? 'EFT' : 'the organiser’s external payment page';
+  const externalPaymentUrl = String(vars.externalPaymentUrl || eventInfo?.external_payment_url || '');
+  const eftDetailsHtml = paymentMethod === 'eft' ? `
+    <div style="background-color: rgba(245,158,11,0.08); border-left: 4px solid #F59E0B; border-radius: 12px; padding: 20px; margin: 20px 0;">
+      <h3 style="font-size: 12px; font-weight: 900; text-transform: uppercase; color: #FCD34D; margin: 0 0 12px; letter-spacing: 1px;">EFT payment details</h3>
+      <p style="font-size: 13.5px; line-height: 1.7; color: #E2E8F0; margin: 0;">
+        <strong style="color:#FFFFFF;">Bank:</strong> ${escapeEmailHtml(eventInfo?.payment_bank_name || 'Contact the organiser')}<br/>
+        <strong style="color:#FFFFFF;">Account:</strong> ${escapeEmailHtml(eventInfo?.payment_account_name || '—')}<br/>
+        <strong style="color:#FFFFFF;">Account number:</strong> ${escapeEmailHtml(eventInfo?.payment_account_number || '—')}<br/>
+        <strong style="color:#FFFFFF;">Branch code:</strong> ${escapeEmailHtml(eventInfo?.payment_branch_code || '—')}
+        ${eventInfo?.payment_reference_note ? `<br/><strong style="color:#FFFFFF;">Reference:</strong> ${escapeEmailHtml(eventInfo.payment_reference_note)}` : ''}
+      </p>
+    </div>
+  ` : '';
+  const manualPaymentNoticeHtml = usesManualEntryPayment ? `
+    <div style="background-color: rgba(245,158,11,0.08); border-left: 4px solid #F59E0B; border-radius: 12px; padding: 20px; margin: 20px 0;">
+      <p style="font-size: 13.5px; line-height: 1.6; color: #FCD34D; margin: 0; font-weight: 600;">
+        Your registration is recorded as <strong>payment pending</strong>. Complete payment via ${manualPaymentName}. The event organiser must verify it and mark your entry as paid in Event Manager before it is confirmed.
+      </p>
+    </div>
+    ${eftDetailsHtml}
+  ` : '';
+
   // For confirmation emails, the partner shown on the card can be missing or a
   // placeholder ("TBD") when the registrant joined via a partner invite — in that
   // case the pairing lives on their event_registrations row, not in the payment
@@ -345,19 +376,24 @@ async function generateEmailBody(
       break;
 
     case 'event_entry':
-      subject = `Registration Confirmed: ${vars.eventName || 'Tournament'}! 🏆`;
+      subject = usesManualEntryPayment
+        ? `Registration received — payment pending: ${vars.eventName || 'Tournament'}`
+        : `Registration Confirmed: ${vars.eventName || 'Tournament'}! 🏆`;
       contentHtml = `
-        <h2 style="font-size: 24px; font-weight: 800; color: #FFFFFF; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Your Spot is Reserved!</h2>
+        <h2 style="font-size: 24px; font-weight: 800; color: #FFFFFF; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">${usesManualEntryPayment ? 'Registration Received' : 'Your Spot is Reserved!'}</h2>
         <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
-          Hi ${vars.playerName || 'Player'}, your registration and payment for <strong style="color: #FFFFFF;">${vars.eventName || 'Tournament'}</strong> has been confirmed!
+          Hi ${vars.playerName || 'Player'}, ${usesManualEntryPayment
+            ? `we recorded your registration for <strong style="color: #FFFFFF;">${vars.eventName || 'Tournament'}</strong>.`
+            : `your registration and payment for <strong style="color: #FFFFFF;">${vars.eventName || 'Tournament'}</strong> has been confirmed!`}
         </p>
+        ${manualPaymentNoticeHtml}
         ${eventCardHtml}
         <p style="font-size: 13.5px; line-height: 1.6; color: #64748B; margin-top: 24px; margin-bottom: 0;">
           Organisers will publish draws and schedules shortly. You will receive an immediate notification as soon as the bracket is live.
         </p>
       `;
-      actionUrl = vars.eventUrl || `https://4mpadel.co.za/calendar`;
-      actionLabel = 'View Event Details';
+      actionUrl = paymentMethod === 'external' && externalPaymentUrl ? externalPaymentUrl : (vars.eventUrl || `https://4mpadel.co.za/calendar`);
+      actionLabel = paymentMethod === 'external' && externalPaymentUrl ? 'Complete Payment' : 'View Event Details';
       break;
 
     case 'org_applied':
@@ -728,6 +764,7 @@ async function generateEmailBody(
               : ` ${vars.inviterName || 'Your partner'} must complete their payment first. You will then receive a separate email with a link to pay your entry fee${vars.amountDue && vars.amountDue !== 'R 0.00' ? ` of <strong style="color:#FFFFFF;">${vars.amountDue}</strong>` : ''}.`}
           </p>
         </div>
+        ${manualPaymentNoticeHtml}
         ${eventCardHtml}
       ` : `
         <h2 style="font-size: 24px; font-weight: 800; color: #F59E0B; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Registration Not Yet Confirmed</h2>
@@ -740,30 +777,40 @@ async function generateEmailBody(
             Your registration is <strong>not confirmed</strong> until payment of <strong style="color:#FFFFFF;">${vars.amountDue || 'your entry fee'}</strong> is complete. If you leave before paying, you will not be entered in the tournament.
           </p>
         </div>
+        ${manualPaymentNoticeHtml}
         ${eventCardHtml}
       `;
-      actionUrl = vars.payUrl || vars.eventUrl || 'https://4mpadel.co.za/calendar';
-      actionLabel = vars.recipientRole === 'partner' && !vars.userPaysForPartner
+      actionUrl = paymentMethod === 'external' && externalPaymentUrl ? externalPaymentUrl : (vars.payUrl || vars.eventUrl || 'https://4mpadel.co.za/calendar');
+      actionLabel = paymentMethod === 'external' && externalPaymentUrl
+        ? 'Complete Payment'
+        : vars.recipientRole === 'partner' && !vars.userPaysForPartner
         ? 'View Event Details'
         : (vars.recipientRole === 'partner' ? 'View Event Details' : 'Complete Payment');
       break;
 
     case 'event_registration':
-      subject = vars.paid
+      subject = usesManualEntryPayment && !vars.paid
+        ? `Registration received — payment pending: ${vars.eventName || 'Tournament'}`
+        : vars.paid
         ? `Registration Confirmed: ${vars.eventName || 'Tournament'}! ✅`
         : `You're Registered: ${vars.eventName || 'Tournament'}! 🎾`;
       contentHtml = `
-        <h2 style="font-size: 24px; font-weight: 800; color: ${vars.paid ? '#9AE900' : '#FFFFFF'}; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">${vars.paid ? 'Registration Confirmed!' : 'Registration Received!'}</h2>
+        <h2 style="font-size: 24px; font-weight: 800; color: ${vars.paid ? '#9AE900' : '#FFFFFF'}; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">${vars.paid ? 'Registration Confirmed!' : 'Registration Received'}</h2>
         <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
           Hi ${vars.playerName || 'Player'}, ${vars.paid
             ? `your registration for <strong style="color: #FFFFFF;">${vars.eventName}</strong> is now fully confirmed.`
             : `we have recorded your registration for <strong style="color: #FFFFFF;">${vars.eventName}</strong>.`}
           ${!vars.paid && vars.amountDue && vars.amountDue !== 'R 0.00' ? `<br/>There is an outstanding entry fee balance of <strong style="color:#F59E0B;">${vars.amountDue}</strong>. Your registration is not confirmed until payment is complete.` : ''}
         </p>
+        ${!vars.paid ? manualPaymentNoticeHtml : ''}
         ${eventCardHtml}
       `;
-      actionUrl = vars.payUrl || vars.eventUrl || 'https://4mpadel.co.za/calendar';
-      actionLabel = !vars.paid && vars.amountDue && vars.amountDue !== 'R 0.00' ? 'Pay Entry Fee' : 'View Event Details';
+      actionUrl = paymentMethod === 'external' && externalPaymentUrl
+        ? externalPaymentUrl
+        : (vars.payUrl || vars.eventUrl || 'https://4mpadel.co.za/calendar');
+      actionLabel = paymentMethod === 'external' && externalPaymentUrl
+        ? 'Complete Payment'
+        : (!vars.paid && vars.amountDue && vars.amountDue !== 'R 0.00' && paymentMethod === 'platform' ? 'Pay Entry Fee' : 'View Event Details');
       break;
 
     case 'division_changed':
@@ -845,9 +892,12 @@ async function generateEmailBody(
         <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
           Hi ${vars.playerName || 'Player'}, <strong style="color: #FFFFFF;">${vars.payerName || 'Your partner'}</strong> has registered you for <strong style="color: #FFFFFF;">${vars.eventName}</strong>
           ${vars.pendingPayment
-            ? ' and will cover your entry fee. We will confirm your slot as soon as their transaction completes.'
+            ? usesManualEntryPayment
+              ? ` and will cover your entry fee via ${manualPaymentName}. The organiser will confirm the team after verifying payment.`
+              : ' and will cover your entry fee. We will confirm your slot as soon as their transaction completes.'
             : ' and has paid your entry fee. Your spot in the division is fully secured.'}
         </p>
+        ${vars.pendingPayment ? manualPaymentNoticeHtml : ''}
         ${eventCardHtml}
       `;
       actionUrl = vars.eventUrl || 'https://4mpadel.co.za/calendar';
@@ -1092,12 +1142,15 @@ async function generateEmailBody(
           Hi ${vars.playerName || 'Player'}, <strong style="color: #FFFFFF;">${vars.inviterName || 'Your partner'}</strong> has registered you as their partner for <strong style="color: #FFFFFF;">${vars.eventName}</strong> in the <strong style="color: #FFFFFF;">${vars.division || 'Open'}</strong> division.
         </p>
         <p style="font-size: 14px; line-height: 1.6; color: #E2E8F0; margin-bottom: 24px;">
-          To secure your team's spot in the draw, please complete your entry fee payment using the link below.
+          ${usesManualEntryPayment
+            ? `To secure your team's spot in the draw, complete your entry fee via ${manualPaymentName}. The organiser will confirm your entry after verifying payment.`
+            : `To secure your team's spot in the draw, please complete your entry fee payment using the link below.`}
         </p>
+        ${manualPaymentNoticeHtml}
         ${eventCardHtml}
       `;
-      actionUrl = vars.payUrl || 'https://4mpadel.co.za/calendar';
-      actionLabel = 'Pay My Entry Fee';
+      actionUrl = paymentMethod === 'external' && externalPaymentUrl ? externalPaymentUrl : (vars.payUrl || 'https://4mpadel.co.za/calendar');
+      actionLabel = paymentMethod === 'external' && externalPaymentUrl ? 'Complete Payment' : (paymentMethod === 'platform' ? 'Pay My Entry Fee' : 'View Event Details');
       break;
 
     case 'profile_invite': {
@@ -1133,15 +1186,16 @@ async function generateEmailBody(
           Hi ${vars.playerName || 'Player'}, this is a friendly reminder that we have not received payment for your registration in <strong style="color: #FFFFFF;">${vars.eventName || 'Tournament'}</strong>.
         </p>
         <p style="font-size: 14px; line-height: 1.6; color: #E2E8F0; margin-bottom: 16px;">
-          Registration closes in about <strong style="color: #9AE900;">${vars.daysLeft || 'a few'} day${vars.daysLeft === 1 ? '' : 's'}</strong>${vars.registrationClosesAt ? ` (${vars.registrationClosesAt})` : ''}. Please pay now to keep your spot in the draw.
+          Registration closes in about <strong style="color: #9AE900;">${vars.daysLeft || 'a few'} day${vars.daysLeft === 1 ? '' : 's'}</strong>${vars.registrationClosesAt ? ` (${vars.registrationClosesAt})` : ''}. ${usesManualEntryPayment ? `Complete ${manualPaymentName} so the organiser can verify your entry.` : 'Please pay now to keep your spot in the draw.'}
         </p>
         <p style="font-size: 14px; line-height: 1.6; color: #E2E8F0; margin-bottom: 24px;">
-          Please secure your spot in the bracket by clicking the button below to pay your entry fee.
+          ${usesManualEntryPayment ? 'Your entry remains pending until the organiser marks the payment as received.' : 'Please secure your spot in the bracket by selecting the button below to pay your entry fee.'}
         </p>
+        ${manualPaymentNoticeHtml}
         ${eventCardHtml}
       `;
-      actionUrl = vars.payUrl || 'https://4mpadel.co.za/calendar';
-      actionLabel = 'Pay Entry Fee';
+      actionUrl = paymentMethod === 'external' && externalPaymentUrl ? externalPaymentUrl : (vars.payUrl || 'https://4mpadel.co.za/calendar');
+      actionLabel = paymentMethod === 'external' && externalPaymentUrl ? 'Complete Payment' : (paymentMethod === 'platform' ? 'Pay Entry Fee' : 'View Event Details');
       break;
 
     case 'payment_reminder_deadline':
@@ -1153,13 +1207,14 @@ async function generateEmailBody(
         </p>
         <div style="background-color: rgba(239, 68, 68, 0.08); border-left: 4px solid #EF4444; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
           <p style="font-size: 13.5px; line-height: 1.6; color: #FCA5A5; margin: 0; font-weight: 600;">
-            ⚠️ Unpaid registrations will not be seeded or included in the final tournament draw brackets. To avoid being removed, please complete your payment immediately.
+            ⚠️ Unpaid registrations will not be seeded or included in the final tournament draw brackets. ${usesManualEntryPayment ? `Complete ${manualPaymentName}; the organiser must then verify and mark your payment as received.` : 'To avoid being removed, please complete your payment immediately.'}
           </p>
         </div>
+        ${manualPaymentNoticeHtml}
         ${eventCardHtml}
       `;
-      actionUrl = vars.payUrl || 'https://4mpadel.co.za/calendar';
-      actionLabel = 'Pay Entry Fee Now';
+      actionUrl = paymentMethod === 'external' && externalPaymentUrl ? externalPaymentUrl : (vars.payUrl || 'https://4mpadel.co.za/calendar');
+      actionLabel = paymentMethod === 'external' && externalPaymentUrl ? 'Complete Payment' : (paymentMethod === 'platform' ? 'Pay Entry Fee Now' : 'View Event Details');
       break;
 
     default:

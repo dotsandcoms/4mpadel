@@ -287,29 +287,21 @@ const FederationManager = ({ permissions }) => {
             setUnassignedOrgs(unassigned || []);
             setPendingOrgs(pendingO || []);
 
-            const orgIds = (linked || []).map((o) => o.id);
-            if (orgIds.length === 0) {
-                setPendingEvents([]);
-                setPendingAmendments([]);
-                if ((pendingO || []).length > 0) {
-                    setSectionOpen((prev) => ({ ...prev, sanctioning: true }));
-                }
-                return;
-            }
-
             const [{ data: events }, { data: amendments }] = await Promise.all([
                 supabase
                     .from('calendar')
-                    .select('id, event_name, start_date, organisation_id, sanction_status, slug')
-                    .in('organisation_id', orgIds)
-                    .eq('sanction_status', 'pending')
+                    .select('id, event_name, start_date, organisation_id, sanction_status, federation_sanction_status, federation_id, slug')
+                    .eq('federation_id', federationId)
+                    .eq('federation_sanction_status', 'pending')
                     .order('start_date', { ascending: true }),
-                supabase
-                    .from('calendar')
-                    .select('id, event_name, start_date, organisation_id, pending_changes_status, pending_changes_notes, pending_changes, slug')
-                    .in('organisation_id', orgIds)
-                    .eq('pending_changes_status', 'pending')
-                    .order('start_date', { ascending: true }),
+                (linked || []).length > 0
+                    ? supabase
+                        .from('calendar')
+                        .select('id, event_name, start_date, organisation_id, pending_changes_status, pending_changes_notes, pending_changes, slug')
+                        .in('organisation_id', (linked || []).map((o) => o.id))
+                        .eq('pending_changes_status', 'pending')
+                        .order('start_date', { ascending: true })
+                    : Promise.resolve({ data: [] }),
             ]);
             setPendingEvents(events || []);
             setPendingAmendments(amendments || []);
@@ -559,7 +551,11 @@ const FederationManager = ({ permissions }) => {
         try {
             const { error } = await supabase
                 .from('calendar')
-                .update({ sanction_status: 'approved', is_visible: true })
+                .update({
+                    federation_sanction_status: 'approved',
+                    sanction_status: 'approved',
+                    is_visible: true,
+                })
                 .eq('id', event.id);
             if (error) throw error;
             toast.success(`Sanctioned ${event.event_name}`);
@@ -574,7 +570,11 @@ const FederationManager = ({ permissions }) => {
         try {
             const { error } = await supabase
                 .from('calendar')
-                .update({ sanction_status: 'rejected', rejection_notes: notes })
+                .update({
+                    federation_sanction_status: 'rejected',
+                    sanction_status: 'rejected',
+                    rejection_notes: notes,
+                })
                 .eq('id', event.id);
             if (error) throw error;
             toast.success('Event rejected');

@@ -5,6 +5,7 @@ import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, Calenda
 import { supabase } from '../../supabaseClient';
 import { useRankedin } from '../../hooks/useRankedin';
 import EventBuilder from './EventBuilder';
+import QuickEventBuilder from './QuickEventBuilder';
 import { getDefaultBackgroundForStatus } from '../../utils/imageUtils';
 import { promoteFinishedTiersToRecentResults } from '../../utils/recentResults';
 import {
@@ -94,6 +95,7 @@ const CalendarManager = () => {
     const [editingEvent, setEditingEvent] = useState(null);
     const [isSyncing, setIsSyncing] = useState(false);
     const [isBuilderOpen, setIsBuilderOpen] = useState(false);
+    const [isQuickBuilderOpen, setIsQuickBuilderOpen] = useState(false);
     const [builderEvent, setBuilderEvent] = useState(null);
     const [orgSuggestions, setOrgSuggestions] = useState([]);
     const [orgSearchOpen, setOrgSearchOpen] = useState(false);
@@ -105,7 +107,8 @@ const CalendarManager = () => {
 
     const openBuilder = (event = null) => {
         setBuilderEvent(event);
-        setIsBuilderOpen(true);
+        if (event?.is_quick_event) setIsQuickBuilderOpen(true);
+        else setIsBuilderOpen(true);
     };
 
     // Form State
@@ -1126,6 +1129,13 @@ const CalendarManager = () => {
                     >
                         <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
                         {isSyncing ? 'Syncing...' : 'Sync Event List'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => { setBuilderEvent(null); setIsQuickBuilderOpen(true); }}
+                        className="bg-amber-500/10 text-amber-300 border border-amber-500/30 px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-amber-500 hover:text-black transition-colors"
+                    >
+                        <Trophy size={18} /> Quick Event
                     </button>
                     <button
                         onClick={() => openBuilder(null)}
@@ -2153,6 +2163,12 @@ const CalendarManager = () => {
                 isOpen={isBuilderOpen}
                 editingEvent={builderEvent}
                 onClose={() => { setIsBuilderOpen(false); setBuilderEvent(null); }}
+                onSaved={fetchEvents}
+            />
+            <QuickEventBuilder
+                isOpen={isQuickBuilderOpen}
+                editingEvent={builderEvent?.is_quick_event ? builderEvent : null}
+                onClose={() => { setIsQuickBuilderOpen(false); setBuilderEvent(null); }}
                 onSaved={fetchEvents}
             />
         </div>

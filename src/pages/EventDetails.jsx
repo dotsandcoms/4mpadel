@@ -5,7 +5,7 @@ import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { fetchAllRows } from '../utils/fetchAllRows';
 import { useRankedin } from '../hooks/useRankedin';
-import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, ChevronUp, FileText, User, Users, UserPlus, Trophy, AlertCircle, Heart, ChevronRight, Gift, Award, Layout, Circle, Check, Clock, Crown, Coins, Grid2x2, Plus } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, ChevronUp, FileText, User, Users, UserPlus, Trophy, AlertCircle, Heart, ChevronRight, Gift, Award, Layout, Circle, Check, Clock, Crown, Coins, Grid2x2, Plus, LockKeyhole } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import PaystackPop from '@paystack/inline-js';
 import { toPaystackAmount, formatCurrency } from '../constants/fees';
@@ -53,6 +53,12 @@ const formatPlayerName = (fullName) => {
     const parts = fullName.trim().split(/\s+/);
     if (parts.length === 1) return parts[0];
     return `${parts[0]} ${parts[1].charAt(0)}`;
+};
+
+const formatEventTime = (value) => {
+    if (!value) return '';
+    const match = String(value).match(/^(\d{1,2}):(\d{2})/);
+    return match ? `${match[1].padStart(2, '0')}:${match[2]}` : String(value);
 };
 
 const divisionsMatch = (a, b) => {
@@ -1174,6 +1180,11 @@ const EventDetails = () => {
     // NOTE: never call supabase.auth.getSession() inside onAuthStateChange — that deadlocks the
     // auth lock and causes AbortErrors elsewhere. Use the session passed to the callback instead.
     const [manualUserEmail, setManualUserEmail] = useState('');
+    const [accessGrantId, setAccessGrantId] = useState(null);
+    const [accessDialogOpen, setAccessDialogOpen] = useState(false);
+    const [accessCode, setAccessCode] = useState('');
+    const [accessError, setAccessError] = useState('');
+    const [unlockingAccess, setUnlockingAccess] = useState(false);
     const [manualRegStatus, setManualRegStatus] = useState({
         hasPendingPayment: false,
         hasRegistrations: false,
@@ -1184,6 +1195,24 @@ const EventDetails = () => {
         registrationFullyClosed: false,
         canStartRegistration: false,
     });
+    const handleManualRegStatusChange = useCallback((nextStatus) => {
+        setManualRegStatus((previous) => {
+            const previousEntries = previous.entries || [];
+            const nextEntries = nextStatus.entries || [];
+            const entriesUnchanged = previousEntries === nextEntries
+                || JSON.stringify(previousEntries) === JSON.stringify(nextEntries);
+            const statusUnchanged = [
+                'hasPendingPayment',
+                'hasRegistrations',
+                'allRegistrationsPaid',
+                'hasAnyRegistration',
+                'canAddDivision',
+                'registrationFullyClosed',
+                'canStartRegistration',
+            ].every((key) => previous[key] === nextStatus[key]);
+            return entriesUnchanged && statusUnchanged ? previous : nextStatus;
+        });
+    }, []);
     const manualRegActionsRef = React.useRef({});
     const [participantsRefreshKey, setParticipantsRefreshKey] = useState(0);
     const [isOnSchedule, setIsOnSchedule] = useState(false);
@@ -1200,6 +1229,44 @@ const EventDetails = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [isCalendarMenuOpen]);
 
+    useEffect(() => {
+        let cancelled = false;
+        const validateSavedGrant = async () => {
+            if (!event?.id || event.registration_access !== 'code' || !manualUserEmail) {
+                setAccessGrantId(null);
+                return;
+            }
+            const key = `event-access-grant:${event.id}`;
+            const savedGrant = sessionStorage.getItem(key);
+            if (!savedGrant) {
+                setAccessGrantId(null);
+                return;
+            }
+            const { data, error } = await supabase.rpc('event_access_grant_valid', {
+                p_event_id: event.id,
+                p_grant_id: savedGrant,
+            });
+            if (cancelled) return;
+            if (!error && data === true) {
+                setAccessGrantId(savedGrant);
+            } else {
+                sessionStorage.removeItem(key);
+                setAccessGrantId(null);
+            }
+        };
+        validateSavedGrant();
+        return () => { cancelled = true; };
+    }, [event?.id, event?.registration_access, manualUserEmail]);
+
+    useEffect(() => {
+        if (!accessDialogOpen) return undefined;
+        const handleKeyDown = (event) => {
+            if (event.key === 'Escape' && !unlockingAccess) setAccessDialogOpen(false);
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [accessDialogOpen, unlockingAccess]);
+
     const refreshParticipants = useCallback(() => {
         setParticipantsRefreshKey((k) => k + 1);
         try {
@@ -1210,6 +1277,15 @@ const EventDetails = () => {
             window.dispatchEvent(new CustomEvent('4m:registrations-changed'));
         } catch (_) { /* ignore */ }
     }, [manualUserEmail]);
+
+    const requestRegistrationAccess = useCallback(() => {
+        if (!manualUserEmail) {
+            promptMembersOnly();
+            return;
+        }
+        setAccessError('');
+        setAccessDialogOpen(true);
+    }, [manualUserEmail, promptMembersOnly]);
 
     /**
      * Open the public 4M player profile modal for a Players-tab entry.
@@ -3468,6 +3544,32 @@ const EventDetails = () => {
         }
     };
 
+    const unlockRegistrationAccess = async (e) => {
+        e?.preventDefault();
+        if (!accessCode.trim() || unlockingAccess) return;
+        setUnlockingAccess(true);
+        setAccessError('');
+        const { data, error } = await supabase.rpc('unlock_event_registration', {
+            p_event_id: event.id,
+            p_code: accessCode,
+        });
+        setUnlockingAccess(false);
+        if (error || !data) {
+            const message = error?.message?.includes('Too many')
+                ? 'Too many attempts. Please wait 15 minutes and try again.'
+                : 'That access code is not correct.';
+            setAccessError(message);
+            return;
+        }
+        const grantId = String(data);
+        sessionStorage.setItem(`event-access-grant:${event.id}`, grantId);
+        setAccessGrantId(grantId);
+        setAccessCode('');
+        setAccessDialogOpen(false);
+        toast.success('Event unlocked');
+        window.setTimeout(() => manualRegActionsRef.current?.openRegistration?.(), 50);
+    };
+
     const openManualRegistration = () => {
         if (isCancelled) {
             toast.error('This event has been cancelled');
@@ -3475,6 +3577,10 @@ const EventDetails = () => {
         }
         if (!manualUserEmail) {
             promptMembersOnly();
+            return;
+        }
+        if (event.registration_access === 'code' && !accessGrantId) {
+            requestRegistrationAccess();
             return;
         }
         if (registrationClosed || manualRegStatus.registrationFullyClosed) {
@@ -4123,7 +4229,18 @@ const EventDetails = () => {
                                             }
                                             return { label: 'Entries', value: count, icon: Users };
                                         })(),
-                                        ...(!event.is_weekly ? [
+                                        ...(event.is_quick_event ? [
+                                            {
+                                                label: 'Time',
+                                                value: [formatEventTime(event.start_time), formatEventTime(event.end_time)].filter(Boolean).join('–') || 'TBC',
+                                                icon: Clock,
+                                            },
+                                            {
+                                                label: 'Court Type',
+                                                value: event.indoor_outdoor || event.courts || 'TBC',
+                                                icon: Layout,
+                                            },
+                                        ] : !event.is_weekly ? [
                                             { label: 'Points', value: event.points || '1000', icon: Trophy },
                                             { label: 'Divisions', value: event.is_manual ? playerDivisions.length : (playerDivisions.length > 0 ? playerDivisions.length : (tournamentClasses.length || event.allowed_divisions?.length || 0)), icon: Grid2x2 },
                                         ] : []),
@@ -4258,16 +4375,46 @@ const EventDetails = () => {
                                     )}
                                     {event.is_manual && !registrationNotYetOpen && (
                                         <div id="manual-registration">
+                                            {event.registration_access === 'code' && (
+                                                <div className={`mb-4 rounded-2xl border p-4 sm:p-5 ${accessGrantId ? 'border-emerald-200 bg-emerald-50' : 'border-orange-200 bg-orange-50'}`}>
+                                                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                                        <div className="flex items-start gap-3">
+                                                            <div className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${accessGrantId ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                                                                {accessGrantId ? <Check className="h-5 w-5" /> : <LockKeyhole className="h-5 w-5" />}
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-bold text-slate-950">{accessGrantId ? 'Registration unlocked' : 'Access code required'}</p>
+                                                                <p className="mt-1 text-sm leading-5 text-slate-600">
+                                                                    {accessGrantId
+                                                                        ? 'Your access is active for this session. You can now register for the event.'
+                                                                        : 'This is a private event. Enter the code supplied by the organiser to register.'}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        {!accessGrantId && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={requestRegistrationAccess}
+                                                                className="min-h-11 shrink-0 rounded-xl bg-orange-500 px-5 py-3 text-sm font-black text-white transition hover:bg-orange-600"
+                                                            >
+                                                                Unlock registration
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
                                             <ManualEventRegistration
                                                 event={event}
                                                 userEmail={manualUserEmail}
                                                 theme={theme}
                                                 initialPlayer={loggedInPlayer}
                                                 fourMPlayers={fourMPlayers}
-                                                onStatusChange={setManualRegStatus}
+                                                onStatusChange={handleManualRegStatusChange}
                                                 onParticipantsChange={refreshParticipants}
                                                 registrationActionsRef={manualRegActionsRef}
                                                 highlightClassName={registrationHighlightClass}
+                                                accessGrantId={accessGrantId}
+                                                onAccessRequired={requestRegistrationAccess}
                                             />
                                         </div>
                                     )}
@@ -4337,7 +4484,8 @@ const EventDetails = () => {
                                                                 valueColor: theme.accentText,
                                                             }] : []),
                                                             ...(event.back_draw_options ? [{ label: 'Back Draw', value: event.back_draw_options, icon: Award }] : []),
-                                                            ...(event.max_teams_capacity ? [{ label: 'Team Capacity', value: `${event.max_teams_capacity} teams`, icon: User }] : []),
+                                                            ...(event.is_quick_event && event.max_players ? [{ label: 'Maximum Players', value: `${event.max_players} players`, icon: Users }] : []),
+                                                            ...(!event.is_quick_event && event.max_teams_capacity ? [{ label: 'Team Capacity', value: `${event.max_teams_capacity} teams`, icon: User }] : []),
                                                             ...( (() => {
                                                                 const scoring = event.scoring_point
                                                                     || (event.golden_point === false ? 'advantage' : (event.golden_point === true ? 'golden' : null));
@@ -4351,6 +4499,7 @@ const EventDetails = () => {
                                                                 return [{ label: 'Scoring', value: labels[scoring] || String(scoring), icon: Award }];
                                                             })() ),
                                                             ...(event.is_league ? [{ label: 'Format', value: 'League', icon: Trophy }] : []),
+                                                            ...(event.is_quick_event && event.default_match_format ? [{ label: 'Format', value: event.default_match_format, icon: Trophy }] : []),
                                                             { label: 'Status', value: computedStatus, icon: Clock }
                                                         ].map((item, idx) => (
                                                             <div key={idx} className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors">
@@ -5450,6 +5599,70 @@ const EventDetails = () => {
                 )}
 
             </div>
+
+            {/* Private event access */}
+            <AnimatePresence>
+                {accessDialogOpen && (
+                    <div className="fixed inset-0 z-[1200] flex items-end justify-center p-0 sm:items-center sm:p-6">
+                        <motion.button
+                            type="button"
+                            aria-label="Close access code dialog"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setAccessDialogOpen(false)}
+                            className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+                        />
+                        <motion.div
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="event-access-title"
+                            initial={{ opacity: 0, y: 32, scale: 0.98 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 24, scale: 0.98 }}
+                            className="relative w-full max-w-md rounded-t-3xl border border-white/10 bg-[#111] p-6 shadow-2xl sm:rounded-3xl"
+                        >
+                            <button
+                                type="button"
+                                onClick={() => setAccessDialogOpen(false)}
+                                aria-label="Close"
+                                className="absolute right-4 top-4 rounded-full p-2 text-gray-400 transition hover:bg-white/10 hover:text-white"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500/15 text-orange-400">
+                                <LockKeyhole className="h-6 w-6" />
+                            </div>
+                            <h2 id="event-access-title" className="pr-10 text-xl font-black text-white">Unlock this event</h2>
+                            <p className="mt-2 text-sm leading-6 text-gray-400">Enter the access code supplied by the organiser. Your code is checked securely and is not stored in this browser.</p>
+                            <form onSubmit={unlockRegistrationAccess} className="mt-6 space-y-4">
+                                <div>
+                                    <label htmlFor="event-access-code" className="mb-2 block text-xs font-bold uppercase tracking-wider text-gray-300">Access code</label>
+                                    <input
+                                        id="event-access-code"
+                                        type="password"
+                                        autoFocus
+                                        autoComplete="one-time-code"
+                                        value={accessCode}
+                                        onChange={(e) => { setAccessCode(e.target.value); setAccessError(''); }}
+                                        className={`min-h-12 w-full rounded-xl border bg-black/40 px-4 text-base font-bold tracking-wider text-white outline-none transition focus:ring-2 focus:ring-orange-500/25 ${accessError ? 'border-red-500' : 'border-white/15 focus:border-orange-500'}`}
+                                        placeholder="Enter code"
+                                    />
+                                    {accessError && <p role="alert" className="mt-2 text-sm font-semibold text-red-400">{accessError}</p>}
+                                </div>
+                                <button
+                                    type="submit"
+                                    disabled={!accessCode.trim() || unlockingAccess}
+                                    className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 py-3 text-sm font-black text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {unlockingAccess ? <Loader className="h-4 w-4 animate-spin" /> : <LockKeyhole className="h-4 w-4" />}
+                                    {unlockingAccess ? 'Checking code…' : 'Unlock & register'}
+                                </button>
+                            </form>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             {/* Registration Modal */}
             <AnimatePresence>

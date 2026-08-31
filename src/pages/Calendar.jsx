@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar as CalendarIcon, MapPin, Filter, Search, ChevronRight, X, ChevronDown, Award, ArrowRight, Users, ChevronLeft, LayoutGrid, List, Loader, AlertCircle, Trophy, Layers, User, PlayCircle, Video, Shield, Check, Star, Globe, Plus, Bookmark } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Filter, Search, ChevronRight, X, ChevronDown, Award, ArrowRight, Users, ChevronLeft, LayoutGrid, List, Loader, AlertCircle, Trophy, Layers, User, PlayCircle, Video, Shield, Check, Star, Globe, Plus, Bookmark, LockKeyhole } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { getEventImage } from '../utils/imageUtils';
@@ -460,6 +460,12 @@ const CalendarEventItem = ({ event, index, onSchedule, isOnSchedule, scheduleBus
                             {event.is_league && (
                                 <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border border-blue-500/40 text-blue-500 bg-transparent">
                                     League
+                                </span>
+                            )}
+                            {event.registration_access === 'code' && (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-orange-400/40 bg-orange-400/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-orange-300">
+                                    <LockKeyhole className="h-2.5 w-2.5" />
+                                    Code required
                                 </span>
                             )}
                         </div>

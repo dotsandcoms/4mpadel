@@ -39,6 +39,19 @@ const STANDARD_DIVISIONS = DIVISION_GROUPS.flatMap((g) => g.items);
 const FORMATS = ['TBC','Knockout', 'Groups', 'Groups + Knockout', 'Round Robin', 'Americano', 'Mexicano'];
 const SAPA_STATUSES = ['None', 'Bronze', 'Silver', 'Gold', 'Super Gold', 'Major'];
 const SAPA_WINNER_POINTS = { None: '', Bronze: '300', Silver: '500', Gold: '1000', 'Super Gold': '1500', Major: '2600' };
+const SAPA_LICENSE_TIERS = new Set(['Gold', 'Super Gold', 'Major']);
+const PAYMENT_METHODS = [
+    { value: 'platform', label: 'Collect through 4M Event Manager' },
+    { value: 'eft', label: 'EFT / direct bank deposit' },
+    { value: 'external', label: 'External payment link' },
+    { value: 'free', label: 'No entry-fee payment required' },
+];
+const PLAYER_GIFTS = [
+    { value: 'tshirt', label: 'Match T-shirt' },
+    { value: 'cap', label: 'Cap' },
+    { value: 'padel_bag', label: 'Padel bag' },
+    { value: 'snack_drink', label: 'Snack & drink pack' },
+];
 const SCORING_POINTS = [
     { value: 'golden', label: 'Golden Point' },
     { value: 'silver', label: 'Silver Point' },
@@ -107,9 +120,9 @@ const TOURNAMENT_TAGS = ['None', 'Broll', 'SAPA', 'Club', 'Social', 'Internal', 
 const STEPS = [
     { id: 1, label: 'Basics', icon: Info },
     { id: 2, label: 'Registration', icon: ClipboardList },
-    { id: 3, label: 'Divisions', icon: Layers },
-    { id: 4, label: 'Tournament Info', icon: FileText },
-    { id: 5, label: 'Sponsors & Media', icon: ImageIcon },
+    { id: 3, label: 'Federation', icon: Shield },
+    { id: 4, label: 'Divisions', icon: Layers },
+    { id: 5, label: 'Media & Branding', icon: ImageIcon },
     { id: 6, label: 'Review & Publish', icon: Eye },
 ];
 
@@ -567,6 +580,23 @@ const uploadToGallery = async (file, prefix) => {
     return publicUrl;
 };
 
+const uploadEventAsset = async (file, prefix, maxBytes = 10 * 1024 * 1024) => {
+    if (!file) throw new Error('Choose a file to upload');
+    if (file.size > maxBytes) throw new Error(`File must be smaller than ${Math.round(maxBytes / (1024 * 1024))} MB`);
+    const safeName = String(file.name || 'asset')
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    const filePath = `${prefix}/${Date.now()}_${Math.random().toString(36).slice(2)}_${safeName}`;
+    const { error } = await supabase.storage.from('gallery').upload(filePath, file, {
+        contentType: file.type || undefined,
+        upsert: false,
+    });
+    if (error) throw error;
+    const { data: { publicUrl } } = supabase.storage.from('gallery').getPublicUrl(filePath);
+    return publicUrl;
+};
+
 /** Unique trimmed venue names, order preserved. */
 const normalizeVenues = (list) => {
     const seen = new Set();
@@ -634,9 +664,25 @@ const blankForm = {
     organiser_phone: '',
     organiser_email: '',
     organiser_website: '',
+    payment_method: 'platform',
+    payment_bank_name: '',
+    payment_account_name: '',
+    payment_account_number: '',
+    payment_branch_code: '',
+    payment_reference_note: '',
+    external_payment_url: '',
+    player_gift_type: 'none',
+    player_gift_types: [],
+    federation_id: null,
+    sanction_requested: false,
+    federation_sanction_status: 'not_requested',
+    default_match_format: 'Knockout',
     // media
     custom_image_url: '', // cover / hero
     poster_image_url: '', // event poster (sponsors strip / modal)
+    poster_document_url: '',
+    organiser_kit_url: '',
+    media_gallery_urls: [],
     sponsor_logos: [],
     // settings
     registration_opens_at: '',
@@ -814,6 +860,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const [form, setForm] = useState(blankForm);
     const [divisions, setDivisions] = useState([emptyDivision()]);
     const [rankingTiers, setRankingTiers] = useState([]);
+    const [federations, setFederations] = useState([]);
     const [adminEmail, setAdminEmail] = useState(null);
     const [removedDivisionIds, setRemovedDivisionIds] = useState([]);
     const [standardPrice, setStandardPrice] = useState('');
@@ -830,6 +877,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const [uploadingPoster, setUploadingPoster] = useState(false);
     const [uploadingOrgLogo, setUploadingOrgLogo] = useState(false);
     const [uploadingSponsor, setUploadingSponsor] = useState(false);
+    const [uploadingKit, setUploadingKit] = useState(false);
+    const [uploadingGallery, setUploadingGallery] = useState(false);
     const [expandedDivisionKey, setExpandedDivisionKey] = useState(null);
     const [divisionMultiOpen, setDivisionMultiOpen] = useState(false);
     const [pendingDivisionPicks, setPendingDivisionPicks] = useState([]);
@@ -841,6 +890,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         divTools: false, divisions: true,
         integrations: false, operations: true, points: false, rules: false, contact: false,
         organiserBrand: false, sponsors: true, websiteDisplay: false,
+        eventAssets: false,
     });
 
     const { permissions } = useAdminPermissions(adminEmail);
@@ -861,6 +911,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 if (!error) setRankingTiers(data || []);
             });
     }, []);
+    useEffect(() => {
+        supabase.from('federations').select('id, name, short_name, slug').order('name')
+            .then(({ data, error }) => {
+                if (!error) setFederations(data || []);
+            });
+    }, []);
     const [showPreview, setShowPreview] = useState(false);
     const [syncingRankedin, setSyncingRankedin] = useState(false);
 
@@ -879,8 +935,14 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const regCloseTouchedRef = useRef(false);
     const regOpenTouchedRef = useRef(false);
     const pointsTouchedRef = useRef(false);
+    const licenseDefaultTouchedRef = useRef(false);
 
     const selectedVenues = useMemo(() => normalizeVenues(form.venues), [form.venues]);
+    const selectedFederation = useMemo(
+        () => federations.find((f) => String(f.id) === String(form.federation_id)) || null,
+        [federations, form.federation_id],
+    );
+    const selectedFederationIsSapa = /\bsapa\b/i.test(`${selectedFederation?.short_name || ''} ${selectedFederation?.name || ''}`);
     const selectedVenueKeys = useMemo(
         () => new Set(selectedVenues.map((v) => v.toLowerCase())),
         [selectedVenues],
@@ -931,7 +993,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 const safe = q.replace(/[%_,]/g, ' ').trim();
                 let query = supabase
                     .from('organisations')
-                    .select('id, name, slug, logo_url, contact_email, contact_phone, website_url, status')
+                    .select('id, name, slug, logo_url, contact_email, contact_phone, website_url, status, federation_id, payment_bank_name, payment_account_name, payment_account_number, payment_branch_code, payment_reference_note')
                     .eq('status', 'approved')
                     .order('name')
                     .limit(q.length >= 2 ? 20 : 50);
@@ -976,6 +1038,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             organiser_email: org.contact_email || prev.organiser_email,
             organiser_phone: org.contact_phone || prev.organiser_phone,
             organiser_website: org.website_url || prev.organiser_website,
+            federation_id: org.federation_id || prev.federation_id,
+            payment_bank_name: org.payment_bank_name || prev.payment_bank_name,
+            payment_account_name: org.payment_account_name || prev.payment_account_name,
+            payment_account_number: org.payment_account_number || prev.payment_account_number,
+            payment_branch_code: org.payment_branch_code || prev.payment_branch_code,
+            payment_reference_note: org.payment_reference_note || prev.payment_reference_note,
         }));
     };
 
@@ -1056,6 +1124,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         setWorkingEvent(editingEvent);
         setSeriesSiblings([]);
         setStep(1);
+        licenseDefaultTouchedRef.current = false;
         setRemovedDivisionIds([]);
         setStandardPrice('');
         setBulkCloseDate('');
@@ -1068,6 +1137,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             divTools: false, divisions: true,
             operations: true, points: false, rules: false, contact: false,
             sponsors: true, websiteDisplay: false,
+            eventAssets: false,
         });
         setShowPreview(false);
         setShowCancelConfirm(false);
@@ -1101,6 +1171,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 organiser_email: organisation.contact_email || '',
                 organiser_phone: organisation.contact_phone || '',
                 organiser_website: organisation.website_url || '',
+                federation_id: organisation.federation_id || null,
+                payment_bank_name: organisation.payment_bank_name || '',
+                payment_account_name: organisation.payment_account_name || '',
+                payment_account_number: organisation.payment_account_number || '',
+                payment_branch_code: organisation.payment_branch_code || '',
+                payment_reference_note: organisation.payment_reference_note || '',
             } : base);
             setDivisions([emptyDivision(base.license_required_default)]);
             setShowPrizeBreakdown(false);
@@ -1142,6 +1218,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
 
     const loadExisting = async (ev, draftDivisions = null) => {
         const prizeBreakdown = parsePrizeBreakdownField(ev.prize_money_breakdown);
+        const playerGiftTypes = Array.isArray(ev.player_gift_types)
+            ? ev.player_gift_types.filter((gift) => PLAYER_GIFTS.some((option) => option.value === gift))
+            : (ev.player_gift_type && ev.player_gift_type !== 'none'
+                ? [ev.player_gift_type]
+                : (ev.collect_tshirt_size ? ['tshirt'] : []));
         setShowPrizeBreakdown(prizeBreakdown.length > 0);
         const rawCourt = ev.indoor_outdoor
             || (['Indoor', 'Outdoor', 'Mixed', 'Covered', 'Indoor & Outdoor'].includes(ev.courts) ? ev.courts : '')
@@ -1170,6 +1251,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             prize_money_total: ev.prize_money_total != null ? String(ev.prize_money_total) : '',
             prize_money_breakdown: prizeBreakdown,
             sponsor_logos: Array.isArray(ev.sponsor_logos) ? ev.sponsor_logos : [],
+            media_gallery_urls: Array.isArray(ev.media_gallery_urls) ? ev.media_gallery_urls : [],
+            payment_method: ev.payment_method || (ev.allow_payments === false ? 'free' : 'platform'),
+            player_gift_type: playerGiftTypes[0] || 'none',
+            player_gift_types: playerGiftTypes,
+            sanction_requested: !!ev.sanction_requested,
+            federation_sanction_status: ev.federation_sanction_status || (ev.sanction_requested ? 'pending' : 'not_requested'),
             is_visible: ev.is_visible !== false,
             allow_payments: ev.allow_payments ?? true,
             finance_managed: ev.finance_managed ?? true,
@@ -1339,6 +1426,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (name === 'registration_closes_at') regCloseTouchedRef.current = true;
         if (name === 'registration_opens_at') regOpenTouchedRef.current = true;
         if (name === 'points') pointsTouchedRef.current = true;
+        if (name === 'license_required_default') licenseDefaultTouchedRef.current = true;
         setForm((prev) => {
             const next = { ...prev, [name]: val };
             if (name === 'event_name' && !isEditing) next.slug = slugify(value);
@@ -1365,11 +1453,34 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             if (name === 'show_in_recent_results') {
                 next.featured_result = !!val;
             }
+            if (name === 'payment_method') {
+                next.allow_payments = val !== 'free';
+                next.finance_managed = val === 'platform';
+            }
             return next;
         });
     };
 
+    const togglePlayerGift = (giftType) => {
+        setForm((prev) => {
+            const selected = Array.isArray(prev.player_gift_types) ? prev.player_gift_types : [];
+            const nextSelected = selected.includes(giftType)
+                ? selected.filter((gift) => gift !== giftType)
+                : [...selected, giftType];
+            return {
+                ...prev,
+                player_gift_types: nextSelected,
+                // Keep the original scalar populated for older consumers.
+                player_gift_type: nextSelected[0] || 'none',
+                collect_tshirt_size: nextSelected.includes('tshirt'),
+            };
+        });
+    };
+
     const handleSapaStatusChange = (v) => {
+        const shouldApplyLicense = SAPA_LICENSE_TIERS.has(v)
+            && !SAPA_LICENSE_TIERS.has(form.sapa_status)
+            && !licenseDefaultTouchedRef.current;
         setForm((prev) => {
             const next = { ...prev, sapa_status: v };
             if (!isEditing || !prev.points) {
@@ -1379,8 +1490,45 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             }
             // Always pre-populate the public badge text from the selected SAPA tier.
             next.organiser_badge_text = sapaBadgeText(v);
+            const wasAutomaticTier = SAPA_LICENSE_TIERS.has(prev.sapa_status);
+            const isAutomaticTier = SAPA_LICENSE_TIERS.has(v);
+            if (isAutomaticTier && !wasAutomaticTier && !licenseDefaultTouchedRef.current) {
+                next.license_required_default = true;
+            } else if (!isAutomaticTier && wasAutomaticTier && !licenseDefaultTouchedRef.current) {
+                next.license_required_default = false;
+            }
             return next;
         });
+        if (shouldApplyLicense) {
+            setDivisions((prev) => prev.map((division) => ({ ...division, license_required: true })));
+        }
+    };
+
+    const handleSanctionRequestedChange = (requested) => {
+        setForm((prev) => ({
+            ...prev,
+            sanction_requested: requested,
+            federation_sanction_status: requested ? 'pending' : 'not_requested',
+            federation_id: requested ? (prev.federation_id || organisation?.federation_id || null) : null,
+            ...(!requested ? {
+                sapa_status: 'None',
+                organiser_badge_text: '',
+            } : {}),
+        }));
+    };
+
+    const handleFederationChange = (federationId) => {
+        const selectedFederation = federations.find((f) => String(f.id) === String(federationId));
+        const isSapa = /\bsapa\b/i.test(`${selectedFederation?.short_name || ''} ${selectedFederation?.name || ''}`);
+        setForm((prev) => ({
+            ...prev,
+            federation_id: federationId || null,
+            ...(!isSapa ? {
+                sapa_status: 'None',
+                organiser_badge_text: '',
+                license_required_default: false,
+            } : {}),
+        }));
     };
 
     const handleCourtTypeChange = (v) => {
@@ -1392,6 +1540,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
 
     const addDivision = () => {
         const d = emptyDivision(form.license_required_default, form.scoring_point || 'golden');
+        d.format = form.default_match_format || 'Knockout';
         if (standardPrice !== '') d.entry_fee = standardPrice;
         setDivisions((prev) => [...prev, d]);
         setExpandedDivisionKey(d._key);
@@ -1584,13 +1733,54 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!file) return;
         try {
             setUploadingPoster(true);
-            const url = await uploadToGallery(file, 'posters');
-            setField('poster_image_url', url);
+            if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+                const url = await uploadEventAsset(file, 'event-posters');
+                setForm((prev) => ({ ...prev, poster_document_url: url, poster_image_url: '' }));
+            } else {
+                const url = await uploadToGallery(file, 'posters');
+                setForm((prev) => ({ ...prev, poster_image_url: url, poster_document_url: '' }));
+            }
             toast.success('Event poster uploaded');
         } catch (err) {
-            toast.error('Failed to upload event poster');
+            toast.error(err.message || 'Failed to upload event poster');
         } finally {
             setUploadingPoster(false);
+            e.target.value = '';
+        }
+    };
+
+    const handleOrganiserKitUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            setUploadingKit(true);
+            const url = await uploadEventAsset(file, 'event-kits');
+            setField('organiser_kit_url', url);
+            toast.success('Event organiser document uploaded');
+        } catch (err) {
+            toast.error(err.message || 'Failed to upload event organiser document');
+        } finally {
+            setUploadingKit(false);
+            e.target.value = '';
+        }
+    };
+
+    const handleGalleryUpload = async (e) => {
+        const files = Array.from(e.target.files || []);
+        if (!files.length) return;
+        try {
+            setUploadingGallery(true);
+            const urls = [];
+            for (const file of files) urls.push(await uploadToGallery(file, 'event-media'));
+            setForm((prev) => ({
+                ...prev,
+                media_gallery_urls: [...(prev.media_gallery_urls || []), ...urls],
+            }));
+            toast.success(`${urls.length} event image${urls.length === 1 ? '' : 's'} uploaded`);
+        } catch (err) {
+            toast.error(err.message || 'Failed to upload event images');
+        } finally {
+            setUploadingGallery(false);
             e.target.value = '';
         }
     };
@@ -1662,6 +1852,14 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                     return false;
                 }
             }
+        } else {
+            if (!form.end_date) { toast.error('End date is required'); return false; }
+            if (!normalizeVenues(form.venues).length) { toast.error('Add at least one venue'); return false; }
+            if (!form.city.trim()) { toast.error('City is required'); return false; }
+            if (!form.indoor_outdoor) { toast.error('Court type is required'); return false; }
+            if (!form.balls.trim()) { toast.error('Match balls are required'); return false; }
+            if (!form.tournament_director.trim()) { toast.error('Tournament director is required'); return false; }
+            if (!form.contact_details.trim()) { toast.error('Contact person is required'); return false; }
         }
         return true;
     };
@@ -1788,8 +1986,25 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!form.registration_opens_at) errors.push('Registration opens date is required');
         if (!form.registration_closes_at) errors.push('Registration closes date is required');
         if (!form.partner_requirement) errors.push('Partner requirement is required');
+        if (!form.contact_details?.trim()) errors.push('Contact person is required');
         if (!form.organiser_phone?.trim() && !form.organiser_email?.trim()) {
             errors.push('Contact phone or email is required');
+        }
+        if (form.payment_method === 'eft') {
+            if (!form.payment_bank_name?.trim()) errors.push('Bank name is required for EFT payments');
+            if (!form.payment_account_name?.trim()) errors.push('Account name is required for EFT payments');
+            if (!form.payment_account_number?.trim()) errors.push('Account number is required for EFT payments');
+            warnings.push('EFT registrations stay pending until an event admin confirms payment');
+        }
+        if (form.payment_method === 'external') {
+            if (!/^https?:\/\//i.test(form.external_payment_url || '')) errors.push('Enter a complete external payment URL beginning with http:// or https://');
+            warnings.push('External-payment registrations stay pending until an event admin confirms payment');
+        }
+        if (!form.is_weekly && form.sanction_requested) {
+            if (!form.federation_id) errors.push('Select a federation for sanctioning');
+            if (selectedFederationIsSapa && (!form.sapa_status || form.sapa_status === 'None')) {
+                errors.push('Select the SAPA event tier');
+            }
         }
         if (!form.is_weekly) {
             const named = divisions.filter((d) => d.name.trim());
@@ -1833,11 +2048,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
 
     const next = () => {
         if (step === 1 && !validateBasics()) return;
-        if (step === 3 && !form.is_weekly && !validateDivisionsNamed()) return;
-        if (step === 3 && !form.is_weekly && showPrizeBreakdown) syncPrizeBreakdownToDivisions();
+        if (step === 4 && !form.is_weekly && !validateDivisionsNamed()) return;
+        if (step === 4 && !form.is_weekly && showPrizeBreakdown) syncPrizeBreakdownToDivisions();
         setStep((s) => {
             let n = Math.min(6, s + 1);
-            // Weekly: skip Divisions (3) and Tournament Info (4)
+            // Weekly events do not use federation sanctioning or tournament divisions.
             if (form.is_weekly && (n === 3 || n === 4)) n = 5;
             return n;
         });
@@ -1900,10 +2115,33 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 .filter(Boolean),
             allow_temporary_license: isWeekly ? false : !!form.allow_temporary_license,
             license_required_default: isWeekly ? false : !!form.license_required_default,
-            collect_tshirt_size: !!form.collect_tshirt_size,
+            player_gift_types: Array.isArray(form.player_gift_types) ? form.player_gift_types : [],
+            player_gift_type: form.player_gift_types?.[0] || 'none',
+            collect_tshirt_size: !!form.player_gift_types?.includes('tshirt'),
             entry_fee_notes: form.entry_fee_notes || null,
+            payment_method: form.payment_method || (form.allow_payments ? 'platform' : 'free'),
+            allow_payments: (form.payment_method || 'platform') !== 'free',
+            finance_managed: (form.payment_method || 'platform') === 'platform',
+            payment_bank_name: form.payment_method === 'eft' ? (form.payment_bank_name?.trim() || null) : null,
+            payment_account_name: form.payment_method === 'eft' ? (form.payment_account_name?.trim() || null) : null,
+            payment_account_number: form.payment_method === 'eft' ? (form.payment_account_number?.trim() || null) : null,
+            payment_branch_code: form.payment_method === 'eft' ? (form.payment_branch_code?.trim() || null) : null,
+            payment_reference_note: form.payment_method === 'eft' ? (form.payment_reference_note?.trim() || null) : null,
+            external_payment_url: form.payment_method === 'external' ? (form.external_payment_url?.trim() || null) : null,
+            federation_id: isWeekly || !form.sanction_requested ? null : (form.federation_id || null),
+            sanction_requested: !isWeekly && !!form.sanction_requested,
+            federation_sanction_status: !isWeekly && form.sanction_requested
+                ? (form.federation_sanction_status === 'approved'
+                    ? 'approved'
+                    : mode === 'publish'
+                        ? 'pending'
+                        : (activeEvent?.federation_sanction_status || 'not_requested'))
+                : 'not_requested',
             custom_image_url: form.custom_image_url || null,
             poster_image_url: form.poster_image_url || null,
+            poster_document_url: form.poster_document_url || null,
+            organiser_kit_url: form.organiser_kit_url || null,
+            media_gallery_urls: Array.isArray(form.media_gallery_urls) ? form.media_gallery_urls : [],
             scoring_point: form.scoring_point || 'golden',
             // Keep legacy boolean in sync for older UI / EventDetails fallback
             golden_point: (form.scoring_point || 'golden') === 'golden',
@@ -1948,9 +2186,15 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 if (isWeekly) {
                     payload.is_visible = !!form.is_visible;
                     if (mode === 'publish') payload.sanction_status = 'approved';
+                } else if (payload.sanction_requested && payload.federation_sanction_status !== 'approved') {
+                    payload.is_visible = false;
+                    payload.sanction_status = 'pending';
                 } else {
                     payload.is_visible = mode === 'publish';
                 }
+            } else if (!isWeekly && payload.sanction_requested && payload.federation_sanction_status !== 'approved') {
+                payload.is_visible = false;
+                payload.sanction_status = 'pending';
             } else if (mode === 'publish' && !isWeekly) {
                 payload.is_visible = true;
             }
@@ -2685,6 +2929,56 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                         <input name="city" value={form.city} onChange={handleInput} placeholder="Enter city" className={inputClass} />
                                                     </div>
 
+                                                    <div className="grid grid-cols-1 gap-4 border-t border-white/10 pt-5 md:grid-cols-3">
+                                                        <div>
+                                                            <label className={labelClass}>Court type *</label>
+                                                            <SelectMenu
+                                                                value={form.indoor_outdoor || form.courts}
+                                                                onChange={handleCourtTypeChange}
+                                                                options={['Indoor', 'Outdoor', 'Panoramic', 'Mixed']}
+                                                                placeholder="Select court type"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className={labelClass}>Number of courts</label>
+                                                            <input type="number" min="0" name="courts_count" value={form.courts_count} onChange={handleInput} className={inputClass} />
+                                                        </div>
+                                                        <div>
+                                                            <label className={labelClass}>Match balls *</label>
+                                                            <input name="balls" value={form.balls} onChange={handleInput} placeholder="Ball make and model" className={inputClass} />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                                        <div>
+                                                            <label className={labelClass}>Tournament director *</label>
+                                                            <input name="tournament_director" value={form.tournament_director} onChange={handleInput} className={inputClass} />
+                                                        </div>
+                                                        <div>
+                                                            <label className={labelClass}>Tournament referee</label>
+                                                            <input name="referees" value={form.referees} onChange={handleInput} placeholder="Optional" className={inputClass} />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 gap-4 border-t border-white/10 pt-5 md:grid-cols-2">
+                                                        <div>
+                                                            <label className={labelClass}>Contact person *</label>
+                                                            <input name="contact_details" value={form.contact_details} onChange={handleInput} className={inputClass} />
+                                                        </div>
+                                                        <div>
+                                                            <label className={labelClass}>WhatsApp / phone</label>
+                                                            <input type="tel" name="organiser_phone" value={form.organiser_phone} onChange={handleInput} className={inputClass} />
+                                                        </div>
+                                                        <div className="md:col-span-2">
+                                                            <label className={labelClass}>Contact email</label>
+                                                            <input type="email" name="organiser_email" value={form.organiser_email} onChange={handleInput} className={inputClass} />
+                                                        </div>
+                                                        <div className="md:col-span-2">
+                                                            <label className={labelClass}>Event co-admins</label>
+                                                            <CoAdminsPicker value={form.event_co_admins} onChange={(value) => setField('event_co_admins', value)} />
+                                                        </div>
+                                                    </div>
+
                                                     <div className="space-y-3 border-t border-white/10 pt-5">
                                                         <p className={labelClass}>Display Options</p>
                                                         {organisation ? (
@@ -2705,23 +2999,6 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                                 ))}
                                                             </div>
                                                         )}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <PanelHeader id="federation" title="Federation Sanctioning" />
-                                            {openPanels.federation && (
-                                                <div className="grid grid-cols-1 gap-4 rounded-xl border border-white/10 bg-black/20 p-4 md:grid-cols-2">
-                                                    <div>
-                                                        <label className={labelClass}>SAPA Status</label>
-                                                        <SelectMenu value={form.sapa_status} onChange={handleSapaStatusChange} options={SAPA_STATUSES} />
-                                                    </div>
-                                                    <div className="md:col-span-2">
-                                                        <label className={labelClass}>Event Subtitle / Badge Text</label>
-                                                        <input name="organiser_badge_text" value={form.organiser_badge_text} onChange={handleInput} placeholder="e.g. SAPA GOLD 1000" className={inputClass} />
-                                                        <p className="mt-1 text-[11px] text-gray-500">Auto-filled from SAPA status — editable if needed.</p>
                                                     </div>
                                                 </div>
                                             )}
@@ -3367,18 +3644,44 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                     <PanelHeader id="entryPayment" title="Entry & Payment Settings" />
                                     {openPanels.entryPayment && (
                                         <div className="space-y-4 p-4 rounded-xl border border-white/10 bg-black/20">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                <label className="flex items-center justify-between bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
-                                                    <span className="text-sm font-medium text-gray-200">Allow payments</span>
-                                                    <input type="checkbox" name="allow_payments" checked={!!form.allow_payments} onChange={handleInput} className="accent-padel-green w-5 h-5" />
-                                                </label>
-                                                {!organisation && (
-                                                    <label className="flex items-center justify-between bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
-                                                        <span className="text-sm font-medium text-gray-200">Payment / finance manager</span>
-                                                        <input type="checkbox" name="finance_managed" checked={!!form.finance_managed} onChange={handleInput} className="accent-padel-green w-5 h-5" />
-                                                    </label>
-                                                )}
-                                            </div>
+                                            <fieldset className="space-y-2">
+                                                <legend className={labelClass}>How players pay entry fees</legend>
+                                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                                    {PAYMENT_METHODS.map((method) => (
+                                                        <label key={method.value} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 ${form.payment_method === method.value ? 'border-padel-green/50 bg-padel-green/5' : 'border-white/10 bg-[#1a1a1a]'}`}>
+                                                            <input type="radio" name="payment_method" value={method.value} checked={form.payment_method === method.value} onChange={handleInput} className="mt-1 accent-padel-green" />
+                                                            <span>
+                                                                <span className="block text-sm font-medium text-gray-200">{method.label}</span>
+                                                                {method.value === 'platform' && <span className="mt-0.5 block text-[11px] text-padel-green">Recommended · payments reconcile automatically</span>}
+                                                            </span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </fieldset>
+                                            {form.payment_method === 'eft' && (
+                                                <div className="space-y-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+                                                    <div className="flex items-start gap-2 text-xs leading-relaxed text-amber-100">
+                                                        <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-300" />
+                                                        <p>Players will be registered as pending payment. Event admins must verify the EFT and mark each player as paid in Event Manager.</p>
+                                                    </div>
+                                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                                        <div><label className={labelClass}>Bank name *</label><input name="payment_bank_name" value={form.payment_bank_name} onChange={handleInput} className={inputClass} /></div>
+                                                        <div><label className={labelClass}>Account name *</label><input name="payment_account_name" value={form.payment_account_name} onChange={handleInput} className={inputClass} /></div>
+                                                        <div><label className={labelClass}>Account number *</label><input name="payment_account_number" value={form.payment_account_number} onChange={handleInput} inputMode="numeric" className={inputClass} /></div>
+                                                        <div><label className={labelClass}>Branch code</label><input name="payment_branch_code" value={form.payment_branch_code} onChange={handleInput} inputMode="numeric" className={inputClass} /></div>
+                                                        <div className="md:col-span-2"><label className={labelClass}>Payment reference instructions</label><input name="payment_reference_note" value={form.payment_reference_note} onChange={handleInput} placeholder="e.g. Use player surname and event name" className={inputClass} /></div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {form.payment_method === 'external' && (
+                                                <div className="space-y-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+                                                    <div className="flex items-start gap-2 text-xs leading-relaxed text-amber-100">
+                                                        <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-300" />
+                                                        <p>Players will be registered as pending payment. Event admins must check the external provider and mark each player as paid in Event Manager.</p>
+                                                    </div>
+                                                    <div><label className={labelClass}>External payment URL *</label><input type="url" name="external_payment_url" value={form.external_payment_url} onChange={handleInput} placeholder="https://…" className={inputClass} /></div>
+                                                </div>
+                                            )}
                                             <div className="flex flex-wrap items-end gap-3">
                                                 <div className="flex-1 min-w-[160px]">
                                                     <label className={labelClass}>
@@ -3569,22 +3872,31 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                     <PanelHeader id="playerGifts" title="Player Gifts" />
                                     {openPanels.playerGifts && (
                                         <div className="space-y-3 p-4 rounded-xl border border-white/10 bg-black/20">
-                                            <label className="flex items-center justify-between bg-[#1a1a1a] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
-                                                <div className="pr-3">
-                                                    <span className="text-sm font-medium text-gray-200 block">Collect T-shirt size</span>
-                                                    <span className="text-[11px] text-gray-500">
-                                                        Ask players for Men / Ladies / Juniors size, optional sponsor name, and logo during registration
-                                                    </span>
+                                            <div>
+                                                <span className={labelClass}>Player gifts</span>
+                                                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                    {PLAYER_GIFTS.map((gift) => {
+                                                        const selected = (form.player_gift_types || []).includes(gift.value);
+                                                        return (
+                                                            <label key={gift.value} className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 ${selected ? 'border-padel-green/50 bg-padel-green/5 text-white' : 'border-white/10 bg-[#1a1a1a] text-gray-300'}`}>
+                                                                <input type="checkbox" checked={selected} onChange={() => togglePlayerGift(gift.value)} className="h-4 w-4 accent-padel-green" />
+                                                                <span className="text-sm font-medium">{gift.label}</span>
+                                                            </label>
+                                                        );
+                                                    })}
                                                 </div>
-                                                <input type="checkbox" name="collect_tshirt_size" checked={!!form.collect_tshirt_size} onChange={handleInput} className="accent-padel-green w-5 h-5 shrink-0" />
-                                            </label>
+                                                {(form.player_gift_types || []).length === 0 && <p className="mt-2 text-xs font-medium text-gray-400">No player gifts selected.</p>}
+                                                <p className="mt-1 text-[11px] text-gray-500">
+                                                    Select any combination. Match T-shirt automatically enables shirt-size collection during registration.
+                                                </p>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
                             </div>
                         )}
 
-                        {step === 3 && (
+                        {step === 4 && (
                             <div className="space-y-4">
                                 <p className="text-xs text-gray-400">
                                     1) Multi-select the divisions you want. 2) Edit fees, format and close dates on each card below.
@@ -3943,11 +4255,74 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                             </div>
                         )}
 
-                        {step === 4 && !form.is_weekly && (
+                        {step === 3 && !form.is_weekly && (
                             <div className="space-y-4">
                                 <p className="text-xs text-gray-400">
-                                    Grouped tournament details — open a section to edit, leave the rest collapsed.
+                                    Choose whether to submit the event for federation sanctioning, then confirm the inherited event rules.
                                 </p>
+
+                                <div className="space-y-2">
+                                    <PanelHeader id="federation" title="Federation Sanctioning" />
+                                    {openPanels.federation && (
+                                        <div className="space-y-4 rounded-xl border border-white/10 bg-black/20 p-4">
+                                            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-[#1a1a1a] px-4 py-3">
+                                                <input type="checkbox" checked={!!form.sanction_requested} onChange={(e) => handleSanctionRequestedChange(e.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-padel-green" />
+                                                <span>
+                                                    <span className="block text-sm font-medium text-gray-200">Submit this event to a federation for sanctioning</span>
+                                                    <span className="mt-1 block text-[11px] leading-relaxed text-gray-500">Federation approval controls the sanctioned badge, ranking tier and inherited event rules.</span>
+                                                </span>
+                                            </label>
+                                            {form.sanction_requested && (
+                                                <>
+                                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                                        <div>
+                                                            <label className={labelClass}>Federation *</label>
+                                                            <SelectMenu
+                                                                value={form.federation_id || ''}
+                                                                onChange={handleFederationChange}
+                                                                options={federations.map((f) => ({ value: f.id, label: f.short_name ? `${f.short_name} — ${f.name}` : f.name }))}
+                                                                placeholder="Select federation"
+                                                            />
+                                                        </div>
+                                                        {selectedFederationIsSapa && (
+                                                            <div>
+                                                                <label className={labelClass}>SAPA tier *</label>
+                                                                <SelectMenu value={form.sapa_status} onChange={handleSapaStatusChange} options={SAPA_STATUSES.filter((tier) => tier !== 'None')} />
+                                                            </div>
+                                                        )}
+                                                        <div>
+                                                            <label className={labelClass}>Default match format</label>
+                                                            <SelectMenu value={form.default_match_format || 'Knockout'} onChange={(value) => setField('default_match_format', value)} options={FORMATS} />
+                                                        </div>
+                                                        <div>
+                                                            <label className={labelClass}>Deciding point</label>
+                                                            <SelectMenu value={form.scoring_point || 'golden'} onChange={(value) => setField('scoring_point', value)} options={SCORING_POINTS} />
+                                                        </div>
+                                                        <div className="md:col-span-2">
+                                                            <label className={labelClass}>Event badge text</label>
+                                                            <input name="organiser_badge_text" value={form.organiser_badge_text} onChange={handleInput} placeholder="e.g. SAPA GOLD 1000" className={inputClass} />
+                                                        </div>
+                                                    </div>
+                                                    {selectedFederationIsSapa && form.sapa_status !== 'None' && (
+                                                        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-padel-green/30 bg-padel-green/5 px-4 py-3">
+                                                            <div>
+                                                                <p className="text-xs font-bold uppercase tracking-wide text-padel-green">Live event badge preview</p>
+                                                                <p className="mt-1 text-sm font-bold text-white">{form.organiser_badge_text || sapaBadgeText(form.sapa_status)}</p>
+                                                            </div>
+                                                            <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wide ${sapaBadgeClass(form.sapa_status)}`}>{form.sapa_status}</span>
+                                                        </div>
+                                                    )}
+                                                    {selectedFederationIsSapa && SAPA_LICENSE_TIERS.has(form.sapa_status) && (
+                                                        <div className="flex items-start gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-xs leading-relaxed text-sky-100">
+                                                            <Shield size={16} className="mt-0.5 shrink-0 text-sky-300" />
+                                                            <p>SAPA licence required is preselected for divisions in Gold, Super Gold and Major events. You can still override individual divisions.</p>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
 
                                 {/* Series tagging and results integration moved out of Basics. */}
                                 <div className="space-y-2">
@@ -3994,28 +4369,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                     )}
                                 </div>
 
-                                {/* Tournament Operations */}
+                                {/* Draw dates remain connected to the existing native/RankedIn draw workflows. */}
                                 <div className="space-y-2">
-                                    <PanelHeader id="operations" title="Tournament Operations" />
+                                    <PanelHeader id="operations" title="Draw & Ranking Dates" />
                                     {openPanels.operations && (
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl border border-white/10 bg-black/20">
-                                            <div>
-                                                <label className={labelClass}>Match balls</label>
-                                                <input name="balls" value={form.balls} onChange={handleInput} className={inputClass} />
-                                            </div>
-                                            <div>
-                                                <label className={labelClass}>Court type</label>
-                                                <SelectMenu
-                                                    value={form.indoor_outdoor || form.courts}
-                                                    onChange={handleCourtTypeChange}
-                                                    options={['Indoor', 'Outdoor', 'Mixed']}
-                                                    placeholder="Indoor / Outdoor / Mixed"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className={labelClass}>Number of courts</label>
-                                                <input type="number" name="courts_count" value={form.courts_count} onChange={handleInput} min="0" className={inputClass} />
-                                            </div>
                                             <div>
                                                 <div className="flex items-center justify-between mb-2">
                                                     <label className={labelClass} style={{ marginBottom: 0 }}>Draw release date/time</label>
@@ -4080,14 +4438,6 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                         Not set — hidden from tournament progress
                                                     </div>
                                                 )}
-                                            </div>
-                                            <div>
-                                                <label className={labelClass}>Tournament director</label>
-                                                <input name="tournament_director" value={form.tournament_director} onChange={handleInput} className={inputClass} />
-                                            </div>
-                                            <div>
-                                                <label className={labelClass}>Referees</label>
-                                                <input name="referees" value={form.referees} onChange={handleInput} placeholder="Optional" className={inputClass} />
                                             </div>
                                         </div>
                                     )}
@@ -4201,33 +4551,6 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                     )}
                                 </div>
 
-                                {/* Contact */}
-                                <div className="space-y-2">
-                                    <PanelHeader id="contact" title="Contact" />
-                                    {openPanels.contact && (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl border border-white/10 bg-black/20">
-                                            <div>
-                                                <label className={labelClass}>Contact person</label>
-                                                <input name="contact_details" value={form.contact_details} onChange={handleInput} className={inputClass} />
-                                            </div>
-                                            <div>
-                                                <label className={labelClass}>WhatsApp / phone</label>
-                                                <input name="organiser_phone" value={form.organiser_phone} onChange={handleInput} className={inputClass} />
-                                            </div>
-                                            <div className="md:col-span-2">
-                                                <label className={labelClass}>Contact email</label>
-                                                <input name="organiser_email" value={form.organiser_email} onChange={handleInput} className={inputClass} />
-                                            </div>
-                                            <div className="md:col-span-2">
-                                                <label className={labelClass}>Event Co-Admins</label>
-                                                <CoAdminsPicker
-                                                    value={form.event_co_admins}
-                                                    onChange={(v) => setField('event_co_admins', v)}
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
                             </div>
                         )}
 
@@ -4266,16 +4589,16 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                             <div>
                                                 <label className={labelClass}>Event Poster</label>
                                                 <div className="flex items-center gap-3">
-                                                    {form.poster_image_url ? <img src={form.poster_image_url} alt="Event poster preview" className="h-28 w-20 shrink-0 rounded-lg object-cover outline outline-1 -outline-offset-1 outline-white/10" /> : <div className="flex h-28 w-20 shrink-0 items-center justify-center rounded-lg border border-dashed border-white/15 bg-black/30"><ImageIcon size={18} className="text-gray-600" /></div>}
+                                                    {form.poster_image_url ? <img src={form.poster_image_url} alt="Event poster preview" className="h-28 w-20 shrink-0 rounded-lg object-cover outline outline-1 -outline-offset-1 outline-white/10" /> : <div className="flex h-28 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-white/15 bg-black/30"><FileText size={18} className={form.poster_document_url ? 'text-padel-green' : 'text-gray-600'} />{form.poster_document_url && <span className="text-[9px] font-bold text-padel-green">PDF</span>}</div>}
                                                     <div className="flex min-w-0 flex-1 flex-col gap-2">
                                                         <label className="flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-4 text-gray-300 hover:border-padel-green hover:text-padel-green">
                                                             {uploadingPoster ? <Loader2 className="animate-spin" size={18} /> : <UploadCloud size={18} />}
-                                                            <span className="text-xs font-bold">{uploadingPoster ? 'Uploading...' : (form.poster_image_url ? 'Replace Poster' : 'Upload Poster')}</span>
-                                                            <span className="text-center text-[10px] text-gray-500">Opens in event details</span>
-                                                            <input type="file" accept="image/*" className="hidden" onChange={handlePosterUpload} disabled={uploadingPoster} />
+                                                            <span className="text-xs font-bold">{uploadingPoster ? 'Uploading...' : ((form.poster_image_url || form.poster_document_url) ? 'Replace Poster' : 'Upload Poster')}</span>
+                                                            <span className="text-center text-[10px] text-gray-500">JPG, PNG or PDF · recommended 1080 × 1350</span>
+                                                            <input type="file" accept="image/jpeg,image/png,application/pdf" className="hidden" onChange={handlePosterUpload} disabled={uploadingPoster} />
                                                         </label>
-                                                        {form.poster_image_url && (
-                                                            <button type="button" onClick={() => setField('poster_image_url', '')} className="text-left text-[11px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300">
+                                                        {(form.poster_image_url || form.poster_document_url) && (
+                                                            <button type="button" onClick={() => setForm((prev) => ({ ...prev, poster_image_url: '', poster_document_url: '' }))} className="text-left text-[11px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300">
                                                                 Remove poster
                                                             </button>
                                                         )}
@@ -4404,6 +4727,43 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                             onChange={(e) => handleSponsorUpload(e, { asMain: false })}
                                                             disabled={uploadingSponsor}
                                                         />
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="space-y-2">
+                                    <PanelHeader id="eventAssets" title="Optional Event Assets" />
+                                    {openPanels.eventAssets && (
+                                        <div className="space-y-5 rounded-xl border border-white/10 bg-black/20 p-4">
+                                            <div>
+                                                <label className={labelClass}>Event organiser kit / document</label>
+                                                <div className="flex flex-wrap items-center gap-3">
+                                                    <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-3 text-sm font-bold text-gray-300 hover:border-padel-green hover:text-padel-green">
+                                                        {uploadingKit ? <Loader2 className="animate-spin" size={17} /> : <UploadCloud size={17} />}
+                                                        {uploadingKit ? 'Uploading…' : (form.organiser_kit_url ? 'Replace document' : 'Upload PDF or DOCX')}
+                                                        <input type="file" accept="application/pdf,.doc,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" onChange={handleOrganiserKitUpload} disabled={uploadingKit} />
+                                                    </label>
+                                                    {form.organiser_kit_url && <a href={form.organiser_kit_url} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-padel-green hover:text-white">Open document</a>}
+                                                    {form.organiser_kit_url && <button type="button" onClick={() => setField('organiser_kit_url', '')} className="text-xs font-bold text-red-400 hover:text-red-300">Remove</button>}
+                                                </div>
+                                                <p className="mt-1 text-[11px] text-gray-500">Maximum 10 MB.</p>
+                                            </div>
+                                            <div>
+                                                <label className={labelClass}>Media / gallery images</label>
+                                                <div className="flex flex-wrap gap-3">
+                                                    {(form.media_gallery_urls || []).map((url, index) => (
+                                                        <div key={`${url}-${index}`} className="relative group">
+                                                            <img src={url} alt={`Event gallery ${index + 1}`} className="h-20 w-20 rounded-lg object-cover outline outline-1 -outline-offset-1 outline-white/10" />
+                                                            <button type="button" onClick={() => setField('media_gallery_urls', form.media_gallery_urls.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Remove event gallery image ${index + 1}`} className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"><X size={12} /></button>
+                                                        </div>
+                                                    ))}
+                                                    <label className="flex h-20 w-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-white/20 bg-white/5 text-gray-300 hover:border-padel-green hover:text-padel-green">
+                                                        {uploadingGallery ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
+                                                        <span className="text-[9px] font-bold">Add images</span>
+                                                        <input type="file" accept="image/jpeg,image/png" multiple className="hidden" onChange={handleGalleryUpload} disabled={uploadingGallery} />
                                                     </label>
                                                 </div>
                                             </div>
@@ -4591,9 +4951,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                 <div className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
                                     <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">Settings Summary</p>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                                        <p className="text-gray-300"><span className="text-gray-500">Payments enabled:</span> {form.allow_payments ? 'Yes' : 'No'}</p>
+                                        <p className="text-gray-300"><span className="text-gray-500">Entry payment method:</span> {PAYMENT_METHODS.find((method) => method.value === form.payment_method)?.label || '—'}</p>
                                         <p className="text-gray-300"><span className="text-gray-500">Partner requirement:</span> {form.is_weekly ? 'Optional (player chooses)' : (form.partner_requirement || '—')}</p>
                                         <p className="text-gray-300"><span className="text-gray-500">Maximum teams / entries:</span> {form.max_teams_capacity || 'Unlimited'}</p>
+                                        <p className="text-gray-300"><span className="text-gray-500">Player gifts:</span> {(form.player_gift_types || []).length ? form.player_gift_types.map((value) => PLAYER_GIFTS.find((gift) => gift.value === value)?.label || value).join(', ') : 'None'}</p>
                                         {!form.is_weekly && (
                                             <>
                                                 <p className="text-gray-300"><span className="text-gray-500">Plate / back draw:</span> {form.back_draw_options || '—'}</p>
@@ -4603,6 +4964,36 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                         {!organisation && (
                                         <p className="text-gray-300"><span className="text-gray-500">Visible on public calendar:</span> {form.is_visible ? 'Yes' : 'No (link-only)'}</p>
                                         )}
+                                    </div>
+                                </div>
+
+                                {form.sanction_requested && (
+                                    <div className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
+                                        <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">Federation sanctioning</p>
+                                        <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                                            <p className="text-gray-300"><span className="text-gray-500">Federation:</span> {selectedFederation?.short_name || selectedFederation?.name || '—'}</p>
+                                            <p className="text-gray-300"><span className="text-gray-500">Tier:</span> {selectedFederationIsSapa ? form.sapa_status : 'Federation assigned'}</p>
+                                            <p className="text-gray-300"><span className="text-gray-500">Status:</span> Pending federation approval</p>
+                                            <p className="text-gray-300"><span className="text-gray-500">Badge:</span> {form.organiser_badge_text || '—'}</p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {['eft', 'external'].includes(form.payment_method) && (
+                                    <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+                                        <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-300" />
+                                        <div>
+                                            <p className="text-sm font-bold text-amber-100">Manual payment confirmation required</p>
+                                            <p className="mt-1 text-xs leading-relaxed text-amber-100/80">New registrations will be marked as pending payment. Event admins are responsible for checking the {form.payment_method === 'eft' ? 'bank account' : 'external provider'} and marking players as paid in Event Manager.</p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                                    <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">Event link</p>
+                                    <div className="mt-2 flex items-center gap-2">
+                                        <code className="min-w-0 flex-1 truncate rounded-lg bg-black/30 px-3 py-2 text-xs text-gray-300">{`${window.location.origin}/calendar/${form.slug || slugify(form.event_name) || 'event'}`}</code>
+                                        <button type="button" onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/calendar/${form.slug || slugify(form.event_name) || 'event'}`).then(() => toast.success('Event link copied'))} aria-label="Copy event link" className="rounded-lg border border-white/10 p-2.5 text-gray-300 hover:border-padel-green/40 hover:text-padel-green"><Copy size={16} /></button>
                                     </div>
                                 </div>
 
@@ -4653,7 +5044,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                         className="px-4 py-2 rounded-xl font-bold text-gray-200 border border-white/15 hover:bg-white/5 flex items-center gap-2 transition-colors disabled:opacity-50"
                                     >
                                         {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                                        {saving ? 'Saving...' : 'Save'}
+                                        {saving ? 'Saving...' : 'Save draft'}
                                     </button>
                                     <button type="button" onClick={next} className="bg-padel-green text-black px-5 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white transition-colors">
                                         Next <ChevronRight size={16} />
@@ -4670,7 +5061,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                         className="px-4 py-2 rounded-xl font-bold text-gray-200 border border-white/15 hover:bg-white/5 flex items-center gap-2 transition-colors disabled:opacity-50"
                                     >
                                         {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                                        {saving ? 'Saving...' : 'Save'}
+                                        {saving ? 'Saving...' : 'Save draft'}
                                     </button>
                                     <button
                                         type="button"
@@ -4683,11 +5074,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                         type="button"
                                         onClick={() => handleSave('publish', { stayOpen: true })}
                                         disabled={saving || reviewIssues.errors.length > 0}
-                                        title={reviewIssues.errors.length > 0 ? 'Fix blocking issues before publishing' : 'Publish and keep editing'}
+                                        title={reviewIssues.errors.length > 0 ? 'Fix blocking issues before publishing' : (form.sanction_requested ? 'Submit for federation approval' : 'Publish and keep editing')}
                                         className="bg-padel-green text-black px-5 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white transition-colors disabled:opacity-50"
                                     >
                                         {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                                        {saving ? 'Saving...' : isEditing ? 'Update Event' : 'Publish Event'}
+                                        {saving ? 'Saving...' : form.sanction_requested ? 'Submit for approval' : isEditing ? 'Update event' : 'Publish event'}
                                     </button>
                                 </>
                             )}
