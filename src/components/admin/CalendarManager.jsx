@@ -1268,24 +1268,40 @@ const CalendarManager = () => {
 
             {/* Events Table Container */}
             <div className="bg-[#1a1a1a]/30 rounded-2xl border border-white/10 overflow-hidden">
-                <div className="overflow-x-auto max-h-[60vh] overflow-y-auto custom-scrollbar">
-                    <table className="w-full text-left border-collapse">
+                <div className="overflow-x-auto xl:overflow-x-hidden max-h-[60vh] overflow-y-auto custom-scrollbar">
+                    <table className="w-full min-w-[1100px] xl:min-w-0 table-fixed text-left border-collapse">
+                        <colgroup>
+                            <col className="w-[8%]" />
+                            <col className="w-[17%]" />
+                            <col className="w-[12%]" />
+                            <col className="w-[13%]" />
+                            <col className="w-[13%]" />
+                            <col className="w-[9%]" />
+                            <col className="w-[2.2%]" />
+                            <col className="w-[2.2%]" />
+                            <col className="w-[2.2%]" />
+                            <col className="w-[2.2%]" />
+                            <col className="w-[2.2%]" />
+                            <col className="w-[2.2%]" />
+                            <col className="w-[2.2%]" />
+                            <col className="w-[12.6%]" />
+                        </colgroup>
                         <thead className="sticky top-0 z-10">
                             <tr className="bg-[#111827] text-gray-400 border-b border-white/10">
-                                <th className="py-3 px-4 font-semibold text-xs uppercase w-48 sticky top-0 bg-[#111827]">Dates</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[200px] sticky top-0 bg-[#111827]">Event Name</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Source</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[180px] sticky top-0 bg-[#111827]">Created By</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Location</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Status</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="League">L</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Homepage Featured">★</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Spotlight Event">🌟</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Finance Management">💼</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Price Set">💳</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Recent Results Featured">🏆</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Visible on Website">👁️</th>
-                                <th className="py-3 px-4 text-right font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Actions</th>
+                                <th className="py-3 px-3 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Dates</th>
+                                <th className="py-3 px-3 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Event Name</th>
+                                <th className="py-3 px-3 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Source</th>
+                                <th className="py-3 px-3 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Created By</th>
+                                <th className="py-3 px-3 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Location</th>
+                                <th className="py-3 px-3 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Status</th>
+                                <th className="py-3 px-1 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="League">L</th>
+                                <th className="py-3 px-1 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Homepage Featured">★</th>
+                                <th className="py-3 px-1 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Spotlight Event">🌟</th>
+                                <th className="py-3 px-1 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Finance Management">💼</th>
+                                <th className="py-3 px-1 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Price Set">💳</th>
+                                <th className="py-3 px-1 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Recent Results Featured">🏆</th>
+                                <th className="py-3 px-1 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Visible on Website">👁️</th>
+                                <th className="py-3 px-2 text-right font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1296,11 +1312,11 @@ const CalendarManager = () => {
                             ) : (
                                 paginatedEvents.map(event => (
                                     <tr key={event.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                                        <td className="py-3 px-4 align-top">
+                                        <td className="py-3 px-3 align-top overflow-hidden">
                                             <div className="font-bold text-padel-green text-sm">{event.event_dates}</div>
                                             {event.start_date && <div className="text-[10px] text-gray-500 mt-0.5">{event.start_date}</div>}
                                         </td>
-                                        <td className="py-3 px-4 align-top">
+                                        <td className="py-3 px-3 align-top overflow-hidden">
                                             <div className="flex items-start gap-2">
                                                 <div className="font-bold text-white line-clamp-2" title={event.event_name}>{event.event_name}</div>
                                                 {event.event_status === 'cancelled' && (
@@ -1309,7 +1325,7 @@ const CalendarManager = () => {
                                             </div>
                                             {event.organiser_name && <div className="text-xs text-gray-500 mt-1">by {event.organiser_name}</div>}
                                         </td>
-                                        <td className="py-3 px-4 align-top">
+                                        <td className="py-3 px-3 align-top overflow-hidden">
                                             {event.rankedin_id ? (
                                                 <div className="flex flex-col gap-1">
                                                     <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold uppercase w-fit">RankedIn</span>
@@ -1335,7 +1351,7 @@ const CalendarManager = () => {
                                                 </div>
                                             )}
                                         </td>
-                                        <td className="py-3 px-4 align-top">
+                                        <td className="py-3 px-3 align-top overflow-hidden">
                                             {event._creationAudit ? (
                                                 <div className="min-w-0">
                                                     <p className="max-w-[180px] truncate text-xs font-bold text-white" title={event._creationAudit.creator_name || event._creationAudit.creator_email || 'Unknown'}>
@@ -1352,11 +1368,11 @@ const CalendarManager = () => {
                                                 <span className="text-[10px] text-gray-600">Not recorded</span>
                                             )}
                                         </td>
-                                        <td className="py-3 px-4 align-top">
+                                        <td className="py-3 px-3 align-top overflow-hidden">
                                             <div className="font-medium text-gray-300 text-sm truncate max-w-[150px]">{event.city}</div>
                                             <div className="text-[10px] text-gray-500 uppercase tracking-wider truncate max-w-[150px] mt-0.5">{event.venue}</div>
                                         </td>
-                                        <td className="py-3 px-4 align-middle">
+                                        <td className="py-3 px-3 align-middle overflow-hidden">
                                             <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap inline-block
                                                 ${event.sapa_status === 'Major' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
                                                     event.sapa_status === 'Gold' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
@@ -1367,28 +1383,28 @@ const CalendarManager = () => {
                                                 {event.sapa_status || 'Event'}
                                             </span>
                                         </td>
-                                        <td className="py-3 px-4 align-middle text-center">
+                                        <td className="py-3 px-1 align-middle text-center">
                                             {event.is_league ? (
                                                 <span className="inline-flex w-5 h-5 items-center justify-center bg-blue-500/20 text-blue-400 rounded-sm text-xs font-bold" title="League Event">L</span>
                                             ) : (
                                                 <span className="text-gray-600">—</span>
                                             )}
                                         </td>
-                                        <td className="py-3 px-4 align-middle text-center">
+                                        <td className="py-3 px-1 align-middle text-center">
                                             {event.featured_event ? (
                                                 <Star className="w-4 h-4 text-yellow-400 fill-yellow-400 mx-auto" title="Featured Event" />
                                             ) : (
                                                 <Star className="w-4 h-4 text-gray-600 mx-auto" />
                                             )}
                                         </td>
-                                        <td className="py-3 px-4 align-middle text-center">
+                                        <td className="py-3 px-1 align-middle text-center">
                                             {event.is_spotlight ? (
                                                 <Star className="w-4 h-4 text-cyan-400 fill-cyan-400 mx-auto" title="Spotlight Event" />
                                             ) : (
                                                 <span className="text-gray-700">-</span>
                                             )}
                                         </td>
-                                        <td className="py-3 px-4 align-middle text-center">
+                                        <td className="py-3 px-1 align-middle text-center">
                                             <button
                                                 onClick={() => toggleFinanceManaged(event)}
                                                 className={`p-1 rounded-md transition-colors ${event.finance_managed ? 'text-padel-green bg-padel-green/10' : 'text-gray-600 hover:text-gray-400'}`}
@@ -1397,21 +1413,21 @@ const CalendarManager = () => {
                                                 <Briefcase className="w-4 h-4 mx-auto" />
                                             </button>
                                         </td>
-                                        <td className="py-3 px-4 align-middle text-center">
+                                        <td className="py-3 px-1 align-middle text-center">
                                             {(event.entry_fee != null && event.entry_fee !== '') || (event.category_fees && Object.keys(event.category_fees).length > 0) ? (
                                                 <CreditCard className="w-4 h-4 text-emerald-400 mx-auto" title={`Price Set${event.entry_fee ? `: R${event.entry_fee}` : ' (Category Overrides)'}`} />
                                             ) : (
                                                 <CreditCard className="w-4 h-4 text-gray-600 mx-auto opacity-30" title="Price Not Set" />
                                             )}
                                         </td>
-                                        <td className="py-3 px-4 align-middle text-center">
+                                        <td className="py-3 px-1 align-middle text-center">
                                             {event.featured_result ? (
                                                 <Trophy className="w-4 h-4 text-padel-green fill-padel-green/20 mx-auto" title="Featured Result" />
                                             ) : (
                                                 <Trophy className="w-4 h-4 text-gray-600 mx-auto" />
                                             )}
                                         </td>
-                                        <td className="py-3 px-4 align-middle text-center">
+                                        <td className="py-3 px-1 align-middle text-center">
                                             <button
                                                 onClick={() => toggleVisibility(event)}
                                                 className={`p-1 rounded-md transition-colors ${event.is_visible !== false ? 'text-padel-green bg-padel-green/10' : 'text-gray-600 hover:text-gray-400'}`}
@@ -1430,8 +1446,8 @@ const CalendarManager = () => {
                                                 )}
                                             </button>
                                         </td>
-                                        <td className="py-3 px-4 align-middle text-right">
-                                            <div className="flex justify-end gap-2 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                                        <td className="py-3 px-2 align-middle text-right">
+                                            <div className="flex justify-end gap-1 opacity-100">
                                                 <button
                                                     type="button"
                                                     onClick={() => copyEventLink(event)}
