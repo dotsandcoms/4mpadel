@@ -105,6 +105,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
     const [showCompleted, setShowCompleted] = useState(false);
     const [isEventBuilderOpen, setIsEventBuilderOpen] = useState(false);
     const [editingCalendarEvent, setEditingCalendarEvent] = useState(null);
+    const [loadingEventEditorId, setLoadingEventEditorId] = useState(null);
     const [isEventSearchOpen, setIsEventSearchOpen] = useState(false);
     const [markingPaid, setMarkingPaid] = useState(null);
     const [matchingProfile, setMatchingProfile] = useState(null); // Participant being matched
@@ -124,6 +125,30 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         events.find(e => e.id === selectedEventId), 
         [events, selectedEventId]
     );
+
+    // The finance list intentionally uses a compact event projection for speed.
+    // Always hydrate the complete calendar row before opening EventBuilder so this
+    // entry point has the exact same editable source as Calendar Manager.
+    const openEventEditor = useCallback(async (eventId) => {
+        if (!eventId || loadingEventEditorId) return;
+        setLoadingEventEditorId(eventId);
+        try {
+            const { data, error } = await supabase
+                .from('calendar')
+                .select('*, organisations:organisation_id(id, name, logo_url), clubs:club_id(id, name, short_name, slug)')
+                .eq('id', eventId)
+                .single();
+
+            if (error) throw error;
+            setEditingCalendarEvent(data);
+            setIsEventBuilderOpen(true);
+        } catch (error) {
+            console.error('Failed to load complete event for editing:', error);
+            toast.error('Could not load all event details. Please try again.');
+        } finally {
+            setLoadingEventEditorId(null);
+        }
+    }, [loadingEventEditorId]);
 
     const getResolvedLicenseType = useCallback((p, eventId) => {
         if (!p?.players) return 'none';
@@ -1557,14 +1582,16 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                 type="button"
                                 onClick={(event) => {
                                     event.stopPropagation();
-                                    setEditingCalendarEvent(e);
-                                    setIsEventBuilderOpen(true);
+                                    openEventEditor(e.id);
                                 }}
+                                disabled={loadingEventEditorId !== null}
                                 title="Edit event in Calendar Manager"
                                 aria-label={`Edit ${e.event_name} in Calendar Manager`}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-padel-green/25 bg-padel-green/5 text-padel-green transition-[color,background-color,transform] hover:bg-padel-green hover:text-black active:scale-[0.96]"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-padel-green/25 bg-padel-green/5 text-padel-green transition-[color,background-color,transform] hover:bg-padel-green hover:text-black active:scale-[0.96] disabled:cursor-wait disabled:opacity-50"
                             >
-                                <Calendar size={15} strokeWidth={1.8} />
+                                {loadingEventEditorId === e.id
+                                    ? <Loader2 size={15} className="animate-spin" />
+                                    : <Calendar size={15} strokeWidth={1.8} />}
                             </button>
                         )}
                         {e.organiser_email && (
