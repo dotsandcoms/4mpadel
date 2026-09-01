@@ -604,15 +604,8 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
             if (orgsError) throw orgsError;
             setAllOrgs(orgs || []);
 
-            // 2. Fetch all events pending sanctioning
-            const { data: events, error: eventsError } = await supabase
-                .from('calendar')
-                .select('*, organisations(name, contact_email, federation_id, federations(short_name, name))')
-                .eq('sanction_status', 'pending')
-                .order('id', { ascending: false });
-
-            if (eventsError) throw eventsError;
-            setPendingEvents(events || []);
+            // Organisation events are self-managed and no longer enter a platform queue.
+            setPendingEvents([]);
 
             // 2.5 Fetch all approved events
             const { data: approvedEvs, error: approvedEvsError } = await supabase
@@ -624,15 +617,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
             if (approvedEvsError) throw approvedEvsError;
             setApprovedEvents(approvedEvs || []);
 
-            // 2.6 Pending amendment requests on approved org events
-            const { data: amendments, error: amendmentsError } = await supabase
-                .from('calendar')
-                .select('*, organisations(name, contact_email)')
-                .eq('pending_changes_status', 'pending')
-                .order('pending_changes_submitted_at', { ascending: true });
-
-            if (amendmentsError) throw amendmentsError;
-            setPendingAmendments(amendments || []);
+            setPendingAmendments([]);
 
             // Fetch live participant counts (paginated — not limited to first 1000 rows)
             const allCounts = await fetchAllParticipantCounts();
@@ -1294,7 +1279,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                             ? (isImpersonatingOrg
                                 ? `Managing ${currentOrg?.name} — create events, review entries, and update club settings`
                                 : 'Host Dashboard - Create tournaments, configure entry seeds, and inspect entries')
-                            : 'Sanction host clubs, approve events, and review platform telemetry'}
+                            : 'Approve organisations and review platform activity'}
                     </p>
                 </div>
 
@@ -1563,8 +1548,8 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                         )}
                     </CollapsibleSection>
 
-                    {/* Pending Tournament Sanctioning Requests */}
-                    <CollapsibleSection
+                    {/* Legacy queues stay hidden; organisation events now save directly. */}
+                    {pendingEvents.length > 0 && <CollapsibleSection
                         open={sectionOpen.pendingEvents}
                         onToggle={() => toggleSection('pendingEvents')}
                         title="Pending Tournament Requests"
@@ -1654,7 +1639,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                             </div>
                             </>
                         )}
-                    </CollapsibleSection>
+                    </CollapsibleSection>}
 
                     {/* Pending Amendment Requests on approved events */}
                     {pendingAmendments.length > 0 && (
@@ -1797,8 +1782,8 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                         )}
                     </CollapsibleSection>
 
-                    {/* Immutable activity trail (DB-trigger driven) */}
-                    <CollapsibleSection
+                    {/* Immutable activity trail — visible only to true super admins. */}
+                    {permissions?.role === 'super_admin' && <CollapsibleSection
                         open={sectionOpen.auditLog}
                         onToggle={() => toggleSection('auditLog')}
                         title="Activity Log"
@@ -1807,7 +1792,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                         badge="Immutable"
                     >
                         <OrgAuditLog embedded />
-                    </CollapsibleSection>
+                    </CollapsibleSection>}
                 </div>
             )}
 
@@ -2158,38 +2143,13 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                                                                 View Event &rarr;
                                                                             </a>
                                                                         )}
-                                                                        {ev.sanction_status !== 'approved' ? (
-                                                                            <button
-                                                                                onClick={() => handleStartEditEvent(ev)}
-                                                                                className="text-[10px] font-black text-padel-green hover:text-white uppercase tracking-widest flex items-center gap-1.5 cursor-pointer bg-transparent border-0"
-                                                                            >
-                                                                                <Edit size={12} /> Edit Details
-                                                                            </button>
-                                                                        ) : ev.pending_changes_status === 'pending' ? (
-                                                                            <button
-                                                                                onClick={() => handleStartEditEvent(ev)}
-                                                                                title="Your amendment is awaiting 4M Padel approval. Click to revise your draft."
-                                                                                className="text-[10px] font-black text-amber-400 hover:text-amber-300 uppercase tracking-widest flex items-center gap-1.5 cursor-pointer bg-transparent border-0 animate-pulse"
-                                                                            >
-                                                                                <Edit3 size={12} /> Amendment Pending
-                                                                            </button>
-                                                                        ) : ev.pending_changes_status === 'rejected' ? (
-                                                                            <button
-                                                                                onClick={() => handleStartEditEvent(ev)}
-                                                                                title={`Amendment declined: ${ev.pending_changes_notes || 'see email for feedback'}. Click to revise and resubmit.`}
-                                                                                className="text-[10px] font-black text-red-400 hover:text-red-300 uppercase tracking-widest flex items-center gap-1.5 cursor-pointer bg-transparent border-0"
-                                                                            >
-                                                                                <AlertCircle size={12} /> Amendment Declined — Revise
-                                                                            </button>
-                                                                        ) : (
-                                                                            <button
-                                                                                onClick={() => handleStartEditEvent(ev)}
-                                                                                title="Propose changes to this sanctioned event. Changes only go live once 4M Padel approves them."
-                                                                                className="text-[10px] font-black text-gray-400 hover:text-padel-green uppercase tracking-widest flex items-center gap-1.5 cursor-pointer bg-transparent border-0"
-                                                                            >
-                                                                                <Edit size={12} /> Edit Event Details
-                                                                            </button>
-                                                                        )}
+                                                                        <button
+                                                                            onClick={() => handleStartEditEvent(ev)}
+                                                                            title="Edit this event. Saved changes go live immediately and are recorded in the audit trail."
+                                                                            className="text-[10px] font-black text-gray-400 hover:text-padel-green uppercase tracking-widest flex items-center gap-1.5 cursor-pointer bg-transparent border-0"
+                                                                        >
+                                                                            <Edit size={12} /> Edit Event Details
+                                                                        </button>
                                                                     </div>
                                                                 </div>
                                                             </div>

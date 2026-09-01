@@ -852,9 +852,6 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     // when the parent still has editingEvent=null, so Save can keep the modal open).
     const [workingEvent, setWorkingEvent] = useState(null);
     const activeEvent = workingEvent;
-    // Org editing an already-sanctioned event → changes become a draft
-    // amendment that a 4M admin must approve (event stays live meanwhile).
-    const isAmendment = !!(organisation && activeEvent && activeEvent.sanction_status === 'approved');
     const isEditing = !!activeEvent?.id;
     const [step, setStep] = useState(1);
     const [form, setForm] = useState(blankForm);
@@ -2171,19 +2168,13 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
 
         if (organisation) {
             payload.organisation_id = organisation.id;
+            // Organisation owners/admins publish and maintain their own events.
+            // Federation sanctioning remains a separate workflow.
+            payload.sanction_status = 'approved';
             if (!isEditing) {
-                if (isWeekly && mode === 'publish') {
-                    // Weekly: respect visibility toggle (default hidden for private links)
-                    payload.is_visible = !!form.is_visible;
-                    payload.sanction_status = 'approved';
-                    payload.featured_event = false;
-                    payload.show_in_recent_results = false;
-                } else {
-                    // Org-created events: stay hidden until 4M sanctions (DB trigger too).
-                    payload.is_visible = false;
-                    payload.featured_event = false;
-                    payload.show_in_recent_results = false;
-                }
+                payload.is_visible = mode === 'publish' ? !!form.is_visible : false;
+                payload.featured_event = false;
+                payload.show_in_recent_results = false;
             }
         } else {
             payload.organisation_id = form.organisation_id || null;
@@ -2468,8 +2459,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         try {
             const payload = buildPayload(mode);
             let eventId = activeEvent?.id;
-            const applyingPendingAmendment = !organisation
-                && !!activeEvent?.pending_changes?.payload
+            const applyingPendingAmendment = !!activeEvent?.pending_changes?.payload
                 && ['pending', 'rejected'].includes(activeEvent.pending_changes_status);
 
             // A platform-admin Calendar save applies the same amendment source
@@ -2479,42 +2469,6 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 payload.pending_changes_status = null;
                 payload.pending_changes_notes = null;
                 payload.pending_changes_submitted_at = null;
-            }
-
-            if (isAmendment && !form.is_weekly) {
-                // Store draft amendment only — live event data stays untouched
-                // until a 4M admin approves. Divisions draft included.
-                // Weekly series skip this path — edits apply live across the series.
-                const divisionsDraft = divisions
-                    .filter((d) => d.name.trim())
-                    .map((d, i) => ({
-                        id: d.id || null,
-                        ...divisionRecord(d, i),
-                    }));
-
-                const { error } = await supabase
-                    .from('calendar')
-                    .update({
-                        pending_changes: {
-                            payload,
-                            divisions: divisionsDraft,
-                            removed_division_ids: removedDivisionIds,
-                        },
-                        pending_changes_status: 'pending',
-                        pending_changes_notes: null,
-                        pending_changes_submitted_at: new Date().toISOString(),
-                    })
-                    .eq('id', activeEvent.id);
-                if (error) throw error;
-
-                toast.success(
-                    stayOpen
-                        ? 'Amendment saved — awaiting 4M Padel approval. You can keep editing.'
-                        : 'Amendment submitted — awaiting 4M Padel approval. Your event stays live with its current details.',
-                );
-                onSaved?.({ eventId, isNew: false, isAmendment: true, eventName: payload.event_name, stayOpen, mode });
-                if (!stayOpen) onClose?.();
-                return;
             }
 
             if (activeEvent?.id) {
@@ -2651,15 +2605,17 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 event_name: payload.event_name,
                 slug: payload.slug,
                 sanction_status: prev?.sanction_status || activeEvent?.sanction_status
-                    || (form.is_weekly ? 'approved' : (organisation ? 'pending' : undefined)),
+                    || (organisation ? 'approved' : undefined),
             }));
             await reloadDivisionsForEvent(eventId);
 
             toast.success(
                 organisation
                     ? (wasNew
-                        ? (stayOpen ? 'Event saved — pending 4M Padel sanctioning. You can keep editing.' : 'Event submitted for 4M Padel sanctioning')
-                        : (stayOpen ? 'Event saved — you can keep editing.' : 'Event updated — pending 4M Padel sanctioning'))
+                        ? (mode === 'draft'
+                            ? (stayOpen ? 'Draft saved — you can keep editing.' : 'Event draft created')
+                            : (stayOpen ? 'Event published — you can keep editing.' : 'Event published'))
+                        : (stayOpen ? 'Event saved — you can keep editing.' : 'Event updated'))
                     : (mode === 'draft'
                         ? (stayOpen ? 'Draft saved — you can keep editing.' : (wasNew ? 'Draft created' : 'Draft saved'))
                         : (stayOpen ? 'Event saved — you can keep editing.' : (wasNew ? 'Manual event created' : 'Manual event updated')))
@@ -3000,7 +2956,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                         <p className={labelClass}>Display Options</p>
                                                         {organisation ? (
                                                             <div className="rounded-xl border border-padel-green/20 bg-padel-green/5 px-4 py-3 text-xs font-semibold text-padel-green">
-                                                                {isAmendment ? 'Changes will be submitted for approval while the current event stays live.' : 'This event will go live after 4M Padel sanctioning.'}
+                                                                Changes save directly to your event. Every update is recorded in the super-admin audit trail.
                                                             </div>
                                                         ) : (
                                                             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -3444,9 +3400,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                         <div className="space-y-3 p-4 rounded-xl border border-white/10 bg-black/20">
                                             {organisation && !form.is_weekly ? (
                                                 <div className="bg-padel-green/5 border border-padel-green/20 rounded-xl px-4 py-3 text-xs text-padel-green font-semibold">
-                                                    {isAmendment
-                                                        ? 'This event is already sanctioned. Your changes will be submitted as an amendment for 4M Padel approval — the event stays live with its current details until approved.'
-                                                        : 'This event will be submitted to 4M Padel for sanctioning. It goes live on the calendar once approved.'}
+                                                    You control this event directly. Publishing makes your changes live immediately; federation sanctioning, when requested, is tracked separately.
                                                 </div>
                                             ) : (
                                                 <div className="space-y-3">
@@ -5016,9 +4970,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
 
                                 {organisation && (
                                     <div className="bg-padel-green/5 border border-padel-green/20 rounded-xl px-4 py-3 text-xs text-padel-green font-semibold">
-                                        {isAmendment
-                                            ? 'Save and Publish both submit an amendment for 4M Padel approval. You stay on this page so you can keep editing.'
-                                            : 'Save and Publish both submit this event for 4M Padel sanctioning. You stay on this page so you can keep editing.'}
+                                        Your organisation can save and publish directly. All changes are retained in the immutable super-admin audit trail.
                                     </div>
                                 )}
                             </div>

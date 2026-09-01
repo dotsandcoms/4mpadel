@@ -35,6 +35,7 @@ import CoachRegistration from './pages/CoachRegistration';
 import Gallery from './pages/Gallery';
 import AlbumDetails from './pages/AlbumDetails';
 import Contact from './pages/Contact';
+import NotFound from './pages/NotFound';
 import ResetPassword from './pages/ResetPassword';
 import ClaimClubInvite from './pages/ClaimClubInvite';
 import SiteFooter from './components/SiteFooter';
@@ -166,6 +167,7 @@ function AppContent() {
           <Route path="/academy/coaches" element={<ApprovedCoaches />} />
           <Route path="/academy/videos" element={<CoachingVideos />} />
           <Route path="/academy/register" element={<CoachRegistration />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </div>
       {!isAdminRoute && <SiteFooter />}

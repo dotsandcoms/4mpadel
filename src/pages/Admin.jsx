@@ -52,7 +52,7 @@ const Admin = () => {
     const { permissions, loading: permissionsLoading, hasPermission } = useAdminPermissions(targetEmail);
     const { notifications } = useAdminFeedNotifications();
 
-    // Pending organisation applications + event sanction requests (badge on Organisations tab)
+    // Pending organisation applications (events are managed directly by their organisations)
     const [orgBadgeCount, setOrgBadgeCount] = useState(0);
     const [clubBadgeCount, setClubBadgeCount] = useState(0);
 
@@ -67,12 +67,11 @@ const Admin = () => {
 
         const fetchOrgBadgeCount = async () => {
             try {
-                const [{ count: pendingOrgs }, { count: pendingEvents }, { count: pendingAmendments }] = await Promise.all([
-                    supabase.from('organisations').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-                    supabase.from('calendar').select('*', { count: 'exact', head: true }).eq('sanction_status', 'pending'),
-                    supabase.from('calendar').select('*', { count: 'exact', head: true }).eq('pending_changes_status', 'pending')
-                ]);
-                setOrgBadgeCount((pendingOrgs || 0) + (pendingEvents || 0) + (pendingAmendments || 0));
+                const { count: pendingOrgs } = await supabase
+                    .from('organisations')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('status', 'pending');
+                setOrgBadgeCount(pendingOrgs || 0);
             } catch (err) {
                 console.error('Failed to fetch org badge counts:', err);
             }
