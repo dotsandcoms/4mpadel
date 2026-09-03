@@ -172,7 +172,7 @@ export const generateKnockoutDraft = (entries, {
 /** Assigns teams to groups in a seeded snake: A/B/C then C/B/A, repeatedly. */
 export const allocateSnakeGroups = (entries, groupCount, { seedingMethod = 'manual', seededPercentage = 100, random = Math.random } = {}) => {
     const count = Number(groupCount);
-    if (!Number.isInteger(count) || count < 2) throw new Error('At least two groups are required');
+    if (!Number.isInteger(count) || count < 1) throw new Error('At least one group is required');
     const ordered = entrySort(entries, seedingMethod, random, seededPercentage).map((entry, index) => ({
         ...entry,
         seed_number: index + 1,
