@@ -31,7 +31,8 @@ const supabase = createClient(
 
 const rankingList = (orgId, orgName, type, ages) => ages.map((age) => {
     const ageLabel = rankedInAgeGroupLabel(age, type);
-    const match = /women|girls/i.test(ageLabel) ? 'Women-Doubles'
+    const match = /mixed/i.test(ageLabel) ? 'Mixed-Doubles'
+        : /women|girls/i.test(ageLabel) ? 'Women-Doubles'
         : /men|boys/i.test(ageLabel) ? 'Men-Doubles'
             : 'Doubles';
     return { orgId, orgName, type, age, ageLabel, match };
@@ -43,6 +44,7 @@ const rankingList = (orgId, orgName, type, ages) => ages.map((age) => {
 const LISTS = [
     ...rankingList(15809, 'SAPA ranking', 3, [82, 66, 67, 68, 69, 2, 3, 4, 5, 6, 7, 8]),
     ...rankingList(15809, 'SAPA ranking', 4, [83, 71, 72, 73, 74, 75, 14, 15, 16, 17, 18, 19, 20, 21]),
+    ...rankingList(15809, 'SAPA ranking', 5, [84]),
     ...rankingList(16317, 'Broll Pro Tour', 3, [82, 68, 2, 3, 4, 5]),
     ...rankingList(16317, 'Broll Pro Tour', 4, [83, 75, 14, 15, 16, 17, 18, 19]),
     ...rankingList(16482, 'SA Grand Tour', 3, [82, 68, 69, 2, 3]),

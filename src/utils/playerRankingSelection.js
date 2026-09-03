@@ -116,10 +116,28 @@ export const rankingSourceOrganisation = (source) => (
         : null
 );
 
+export const rankingSourceCategory = (source) => {
+    if (!String(source || '').startsWith('category:')) return null;
+    const [organisation, ageGroup, matchType] = String(source)
+        .slice('category:'.length)
+        .split('|')
+        .map((part) => part.trim());
+    return organisation && ageGroup
+        ? { organisation, ageGroup, matchType: matchType || null }
+        : null;
+};
+
 export const resolvePlayerRanking = (player, source = 'active') => {
     const rankings = Array.isArray(player?.rankings) ? player.rankings : [];
     const organisation = rankingSourceOrganisation(source);
-    const ranking = organisation
+    const category = rankingSourceCategory(source);
+    const ranking = category
+        ? rankings.find((row) => (
+            normalise(row?.org) === normalise(category.organisation)
+            && normalise(row?.age_group) === normalise(category.ageGroup)
+            && (!category.matchType || normalise(row?.match_type) === normalise(category.matchType))
+        ))
+        : organisation
         ? findOrganisationMainRanking(rankings, organisation, player)
         : findPreferredRanking(rankings, player?.preferred_ranking)
             || findActiveLabelRanking(rankings, player?.active_ranking_label);
@@ -142,7 +160,7 @@ export const resolvePlayerRanking = (player, source = 'active') => {
         rank: player?.rank_label == null ? null : String(player.rank_label),
         key: player?.preferred_ranking || null,
         label: player?.active_ranking_label || 'Player profile points',
-        organisation: organisation || null,
+        organisation: category?.organisation || organisation || null,
         age_group: null,
         match_type: null,
         fallback: true,
@@ -154,3 +172,24 @@ export const listRankingOrganisations = (players) => [...new Set(
         Array.isArray(player?.rankings) ? player.rankings.map((ranking) => ranking?.org) : []
     )).filter(Boolean),
 )].sort((a, b) => a.localeCompare(b));
+
+export const listRankingCategories = (players) => {
+    const categories = new Map();
+    (players || []).forEach((player) => {
+        (Array.isArray(player?.rankings) ? player.rankings : []).forEach((ranking) => {
+            if (!ranking?.org || !ranking?.age_group) return;
+            const key = rankingRowKey(ranking);
+            categories.set(key, {
+                source: `category:${key}`,
+                organisation: ranking.org,
+                age_group: ranking.age_group,
+                match_type: ranking.match_type || null,
+            });
+        });
+    });
+    return [...categories.values()].sort((a, b) => (
+        a.organisation.localeCompare(b.organisation)
+        || a.age_group.localeCompare(b.age_group)
+        || String(a.match_type || '').localeCompare(String(b.match_type || ''))
+    ));
+};

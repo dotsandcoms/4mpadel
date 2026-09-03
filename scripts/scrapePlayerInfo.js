@@ -284,7 +284,8 @@ async function scrapePlayer(browser, player) {
                     r.RankingType ?? r.Type,
                     detailsPayload,
                 );
-                let matchType = ageGroupLabel.startsWith('Women') ? 'Women-Doubles'
+                let matchType = ageGroupLabel.startsWith('Mixed') ? 'Mixed-Doubles'
+                    : ageGroupLabel.startsWith('Women') ? 'Women-Doubles'
                     : ageGroupLabel.startsWith('Men') ? 'Men-Doubles'
                         : 'Doubles';
                 if (r.RankingName?.toLowerCase().includes('singles')) {
