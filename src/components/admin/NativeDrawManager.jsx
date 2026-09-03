@@ -5,6 +5,7 @@ import { supabase } from '../../supabaseClient';
 import { generateGroupStageDraft, generateKnockoutDraft, nextPowerOfTwo } from '../../utils/nativeDrawGenerator';
 import { areGroupMatchesComplete, calculateGroupStandings } from '../../utils/nativeDrawStandings';
 import { deriveKnockoutPlacementProposals } from '../../utils/nativeDrawPlacements';
+import { buildEventPlayDays, scheduleMatchesAcrossPlayDays } from '../../utils/nativeDrawScheduler';
 import { listRankingCategories, listRankingOrganisations, resolvePlayerRanking } from '../../utils/playerRankingSelection';
 import { extractRankedinId } from '../../utils/rankedinLink';
 import { useRankedin } from '../../hooks/useRankedin';
@@ -24,6 +25,13 @@ const toLocalDateTimeInput = (value) => {
     const offset = date.getTimezoneOffset() * 60_000;
     return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 };
+
+const formatPlayDay = (value) => new Date(`${value}T00:00:00Z`).toLocaleDateString('en-ZA', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+});
 
 // A pair can be represented by reciprocal registration rows: A names B as a
 // partner and B names A. Draw generation must treat those as one team.
@@ -147,12 +155,10 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
     const [showPublicControls, setShowPublicControls] = useState(true);
     const [showAutoSchedule, setShowAutoSchedule] = useState(false);
     const [autoScheduling, setAutoScheduling] = useState(false);
-    const [scheduleDefaults, setScheduleDefaults] = useState(() => ({
-        date: String(event?.start_date || '').slice(0, 10),
-        startTime: String(event?.start_time || '17:00').slice(0, 5),
-        matchMinutes: '60',
-        breakMinutes: '10',
-    }));
+    const [playDays, setPlayDays] = useState(() => buildEventPlayDays(event));
+    const [selectedPlayDate, setSelectedPlayDate] = useState(() => String(event?.start_date || '').slice(0, 10));
+    const [playDaysLoading, setPlayDaysLoading] = useState(false);
+    const [playDaysSaving, setPlayDaysSaving] = useState(false);
 
     const division = divisions.find((item) => item.id === divisionId);
 
@@ -174,11 +180,11 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         }
     };
     const availableCourts = useMemo(() => {
-        const courtCount = Number(event?.courts_count);
+        const courtCount = Math.max(Number(event?.courts_count) || 0, ...playDays.filter((day) => day.is_active).map((day) => Number(day.courts_count) || 0));
         return Number.isInteger(courtCount) && courtCount > 0
             ? Array.from({ length: courtCount }, (_, index) => `Court ${index + 1}`)
             : [];
-    }, [event?.courts_count]);
+    }, [event?.courts_count, playDays]);
     const eligibleRegistrations = useMemo(() => registrations.filter((registration) => (
         registration.division_id === divisionId && isEligible(registration)
     )), [registrations, divisionId]);
@@ -239,12 +245,24 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
     }, [division?.rankedin_class_id, getTournamentParticipants, hasLinkedRankedinClass, linkedRankedinTournamentId, rankingSource]);
 
     useEffect(() => {
-        setScheduleDefaults((current) => ({
-            ...current,
-            date: current.date || String(event?.start_date || '').slice(0, 10),
-            startTime: current.startTime || String(event?.start_time || '17:00').slice(0, 5),
-        }));
-    }, [event?.start_date, event?.start_time]);
+        let active = true;
+        const defaults = buildEventPlayDays(event);
+        setPlayDaysLoading(true);
+        supabase.from('event_play_days').select('id, play_date, start_time, end_time, courts_count, match_duration_minutes, minimum_break_minutes, is_active').eq('event_id', event.id).order('play_date')
+            .then(({ data, error }) => {
+                if (!active) return;
+                if (error) {
+                    console.error('Failed to load event play days', error);
+                    setPlayDays(defaults);
+                } else {
+                    const savedByDate = new Map((data || []).map((day) => [day.play_date, day]));
+                    setPlayDays(defaults.map((day) => ({ ...day, ...(savedByDate.get(day.play_date) || {}) })));
+                }
+                setSelectedPlayDate((current) => defaults.some((day) => day.play_date === current) ? current : defaults[0]?.play_date || '');
+            })
+            .finally(() => { if (active) setPlayDaysLoading(false); });
+        return () => { active = false; };
+    }, [event]);
 
     useEffect(() => {
         let active = true;
@@ -716,9 +734,14 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         }
         setSaving(true);
         try {
+            const scheduledDay = values.scheduled_start ? playDays.find((day) => day.play_date === values.scheduled_start.slice(0, 10)) : null;
+            const scheduledEnd = scheduledStart && scheduledDay
+                ? new Date(scheduledStart.getTime() + Number(scheduledDay.match_duration_minutes) * 60_000)
+                : null;
             const updates = {
                 court_name: String(values.court_name || '').trim() || null,
                 scheduled_start: scheduledStart ? scheduledStart.toISOString() : null,
+                scheduled_end: scheduledEnd ? scheduledEnd.toISOString() : null,
                 updated_at: new Date().toISOString(),
             };
             const { error } = await supabase.from('draw_matches').update(updates).eq('id', match.id);
@@ -734,27 +757,59 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         }
     };
 
+    const updatePlayDay = (date, updates) => {
+        setPlayDays((current) => current.map((day) => day.play_date === date ? { ...day, ...updates } : day));
+    };
+
+    const savePlayDaySettings = async () => {
+        if (playDays.length === 0) {
+            toast.error('Set the event start and end dates before configuring play days.');
+            return;
+        }
+        const invalid = playDays.find((day) => (
+            !day.play_date || !day.start_time || !day.end_time || day.end_time <= day.start_time
+            || Number(day.courts_count) < 1 || Number(day.match_duration_minutes) < 1 || Number(day.minimum_break_minutes) < 0
+        ));
+        if (invalid) {
+            toast.error(`Check the times and court settings for ${invalid.play_date}.`);
+            return;
+        }
+        if (!playDays.some((day) => day.is_active)) {
+            toast.error('Select at least one play day.');
+            return;
+        }
+        setPlayDaysSaving(true);
+        try {
+            const rows = playDays.map((day) => ({
+                event_id: event.id,
+                play_date: day.play_date,
+                start_time: day.start_time,
+                end_time: day.end_time,
+                courts_count: Number(day.courts_count),
+                match_duration_minutes: Number(day.match_duration_minutes),
+                minimum_break_minutes: Number(day.minimum_break_minutes),
+                is_active: day.is_active,
+                updated_at: new Date().toISOString(),
+            }));
+            const { data, error } = await supabase.from('event_play_days').upsert(rows, { onConflict: 'event_id,play_date' }).select('id, play_date, start_time, end_time, courts_count, match_duration_minutes, minimum_break_minutes, is_active');
+            if (error) throw error;
+            const savedByDate = new Map((data || []).map((day) => [day.play_date, day]));
+            setPlayDays((current) => current.map((day) => ({ ...day, ...(savedByDate.get(day.play_date) || {}) })));
+            toast.success('Event play days and court availability saved.');
+        } catch (error) {
+            console.error('Failed to save event play days', error);
+            toast.error(error.message || 'Could not save play days. Apply the event play-days migration first.');
+        } finally {
+            setPlayDaysSaving(false);
+        }
+    };
+
     const autoScheduleReadyMatches = async () => {
-        if (!savedDraw?.id || availableCourts.length === 0) {
-            toast.error('Set the event’s number of courts before auto-scheduling matches.');
+        if (!savedDraw?.id) return;
+        if (!playDays.some((day) => day.is_active)) {
+            toast.error('Select at least one play day before auto-scheduling matches.');
             return;
         }
-        if (!scheduleDefaults.date || !scheduleDefaults.startTime) {
-            toast.error('Choose a schedule date and start time.');
-            return;
-        }
-        const matchMinutes = Number(scheduleDefaults.matchMinutes);
-        const breakMinutes = Number(scheduleDefaults.breakMinutes);
-        if (!Number.isFinite(matchMinutes) || matchMinutes < 1 || !Number.isFinite(breakMinutes) || breakMinutes < 0) {
-            toast.error('Enter a valid match duration and break.');
-            return;
-        }
-        const baseStart = new Date(`${scheduleDefaults.date}T${scheduleDefaults.startTime}:00`);
-        if (Number.isNaN(baseStart.getTime())) {
-            toast.error('Choose a valid schedule date and start time.');
-            return;
-        }
-        const slotDuration = (matchMinutes + breakMinutes) * 60_000;
         const candidates = (draft?.matches || [])
             .filter((match) => ['pending', 'scheduled'].includes(match.status) && match.entry_one && match.entry_two && (!match.court_name || !match.scheduled_start))
             .sort((a, b) => (a.round_number || 0) - (b.round_number || 0) || (a.bracket_position || 0) - (b.bracket_position || 0));
@@ -763,30 +818,20 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             return;
         }
 
-        const nextAvailable = new Map(availableCourts.map((court) => [court, baseStart.getTime()]));
-        (draft?.matches || []).filter((match) => match.court_name && match.scheduled_start).forEach((match) => {
-            const start = new Date(match.scheduled_start).getTime();
-            if (nextAvailable.has(match.court_name) && Number.isFinite(start)) {
-                nextAvailable.set(match.court_name, Math.max(nextAvailable.get(match.court_name), start + slotDuration));
-            }
-        });
-
-        const updates = candidates.map((match) => {
-            const court = match.court_name || availableCourts.reduce((earliest, candidate) => (
-                nextAvailable.get(candidate) < nextAvailable.get(earliest) ? candidate : earliest
-            ), availableCourts[0]);
-            const start = match.scheduled_start ? new Date(match.scheduled_start) : new Date(nextAvailable.get(court));
-            nextAvailable.set(court, start.getTime() + slotDuration);
-            return {
-                id: match.id,
-                court_name: match.court_name || court,
-                scheduled_start: match.scheduled_start || start.toISOString(),
-                updated_at: new Date().toISOString(),
-            };
-        });
-
         setAutoScheduling(true);
         try {
+            const { data: eventMatches, error: eventMatchesError } = await supabase
+                .from('draw_matches')
+                .select('id, court_name, scheduled_start, scheduled_end, entry_one_id, entry_two_id, draws!inner(event_id)')
+                .eq('draws.event_id', event.id)
+                .not('scheduled_start', 'is', null);
+            if (eventMatchesError) throw eventMatchesError;
+            const candidateIds = new Set(candidates.map((match) => match.id));
+            const updates = scheduleMatchesAcrossPlayDays({
+                matches: candidates,
+                playDays,
+                existingMatches: (eventMatches || []).filter((match) => !candidateIds.has(match.id)),
+            }).map((update) => ({ ...update, updated_at: new Date().toISOString() }));
             const results = await Promise.all(updates.map(({ id, ...values }) => supabase.from('draw_matches').update(values).eq('id', id)));
             const failure = results.find(({ error }) => error)?.error;
             if (failure) throw failure;
@@ -1431,6 +1476,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
     const groupStageComplete = savedGroups.length > 0
         && savedGroups.every((group) => areGroupMatchesComplete(draft?.matches || [], group.id));
     const settingsLocked = savedDraw?.status === 'published';
+    const selectedPlayDay = playDays.find((day) => day.play_date === selectedPlayDate) || playDays[0] || null;
     const seedReviewEntries = [...(draft?.entries || [])]
         .sort((a, b) => Number(a.seed_number || 999) - Number(b.seed_number || 999));
     const mainKnockoutMatches = (draft?.matches || []).filter((match) => match.stage === 'knockout');
@@ -1472,6 +1518,34 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                         {drawFormat !== 'group_only' && <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Placement playoff<select disabled={settingsLocked} value={playoffMode} onChange={(event) => { setPlayoffMode(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50"><option value="none" className="text-black">No placement playoff</option><option value="top4" className="text-black">Top 4 · 3rd place playoff</option></select><span className="mt-2 block text-xs font-normal leading-4 text-gray-500">Top 4 sends the two semifinal losers into a playoff for third and fourth place.</span></label>}
                     </div>
                     {divisionId && <div className="flex items-start gap-3 rounded-xl border border-padel-green/20 bg-padel-green/5 p-4 text-sm text-gray-300"><span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-padel-green/10 text-padel-green"><Users size={18} /></span><span><strong className="text-white">{teams.length} teams ready</strong><br /><span className="text-gray-400">Built from {eligibleRegistrations.length} paid, active registration {eligibleRegistrations.length === 1 ? 'row' : 'rows'} in {division?.name}.</span></span></div>}
+                </div>}
+            </section>
+
+            <section className="overflow-hidden rounded-2xl border border-sky-300/20 bg-[#101010]">
+                <div className="flex flex-col gap-3 border-b border-white/10 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-300/10 text-sky-200"><CalendarClock size={19} /></span>
+                        <div><h2 className="font-bold text-white">Play days &amp; court availability</h2><p className="mt-1 text-xs leading-5 text-gray-400">Built from the event dates, hours and court count. These shared windows prevent draw automation from scheduling outside the event or double-booking a court.</p></div>
+                    </div>
+                    <button type="button" onClick={savePlayDaySettings} disabled={playDaysLoading || playDaysSaving || playDays.length === 0} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-sky-300 px-4 py-2.5 text-sm font-black text-black transition-transform hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40">{playDaysSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}{playDaysSaving ? 'Saving…' : 'Save play days'}</button>
+                </div>
+                {playDaysLoading ? <div className="flex items-center gap-2 p-5 text-sm text-gray-400"><Loader2 size={16} className="animate-spin" /> Loading event availability…</div> : playDays.length === 0 ? <p className="p-5 text-sm text-amber-200">Add an event start date before configuring its playing schedule.</p> : <div className="space-y-5 p-5">
+                    <div className="flex flex-wrap gap-2" role="tablist" aria-label="Event play days">
+                        {playDays.map((day) => {
+                            const selected = day.play_date === selectedPlayDay?.play_date;
+                            return <div key={day.play_date} className={`flex overflow-hidden rounded-xl border transition-colors ${selected ? 'border-sky-300/70 bg-sky-300/10' : 'border-white/10 bg-black/20'}`}><button type="button" role="tab" aria-selected={selected} onClick={() => setSelectedPlayDate(day.play_date)} className={`px-3 py-2 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-sky-300 ${day.is_active ? 'text-white' : 'text-gray-500'}`}><span className="block text-xs font-black uppercase tracking-wide">{formatPlayDay(day.play_date)}</span><span className="mt-0.5 block text-[10px] tabular-nums text-gray-400">{day.start_time.slice(0, 5)}–{day.end_time.slice(0, 5)}</span></button><label className="flex cursor-pointer items-center border-l border-white/10 px-2.5" title={day.is_active ? 'Included in auto-scheduling' : 'Excluded from auto-scheduling'}><span className="sr-only">Use {formatPlayDay(day.play_date)}</span><input type="checkbox" checked={day.is_active} onChange={(item) => updatePlayDay(day.play_date, { is_active: item.target.checked })} className="h-4 w-4 accent-sky-300" /></label></div>;
+                        })}
+                    </div>
+                    {selectedPlayDay && <div role="tabpanel" className="rounded-xl border border-white/10 bg-black/20 p-4">
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><div><p className="text-sm font-bold text-white">{formatPlayDay(selectedPlayDay.play_date)}</p><p className="mt-1 text-xs text-gray-500">Configure this day independently. Untick the day above to exclude it from automation.</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${selectedPlayDay.is_active ? 'bg-sky-300/15 text-sky-200' : 'bg-white/5 text-gray-500'}`}>{selectedPlayDay.is_active ? 'Active play day' : 'Not scheduled'}</span></div>
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                            <label className="block text-xs font-bold text-gray-300">Start time<input type="time" value={selectedPlayDay.start_time.slice(0, 5)} onChange={(item) => updatePlayDay(selectedPlayDay.play_date, { start_time: item.target.value })} className="mt-1.5 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-sm tabular-nums text-white outline-none focus-visible:border-sky-300 focus-visible:ring-2 focus-visible:ring-sky-300/30" /></label>
+                            <label className="block text-xs font-bold text-gray-300">End time<input type="time" value={selectedPlayDay.end_time.slice(0, 5)} onChange={(item) => updatePlayDay(selectedPlayDay.play_date, { end_time: item.target.value })} className="mt-1.5 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-sm tabular-nums text-white outline-none focus-visible:border-sky-300 focus-visible:ring-2 focus-visible:ring-sky-300/30" /></label>
+                            <label className="block text-xs font-bold text-gray-300">Courts available<input type="number" inputMode="numeric" min="1" max="99" value={selectedPlayDay.courts_count} onChange={(item) => updatePlayDay(selectedPlayDay.play_date, { courts_count: item.target.value })} className="mt-1.5 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-sm tabular-nums text-white outline-none focus-visible:border-sky-300 focus-visible:ring-2 focus-visible:ring-sky-300/30" /></label>
+                            <label className="block text-xs font-bold text-gray-300">Match minutes<input type="number" inputMode="numeric" min="1" value={selectedPlayDay.match_duration_minutes} onChange={(item) => updatePlayDay(selectedPlayDay.play_date, { match_duration_minutes: item.target.value })} className="mt-1.5 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-sm tabular-nums text-white outline-none focus-visible:border-sky-300 focus-visible:ring-2 focus-visible:ring-sky-300/30" /></label>
+                            <label className="block text-xs font-bold text-gray-300">Minimum rest<input type="number" inputMode="numeric" min="0" value={selectedPlayDay.minimum_break_minutes} onChange={(item) => updatePlayDay(selectedPlayDay.play_date, { minimum_break_minutes: item.target.value })} className="mt-1.5 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-sm tabular-nums text-white outline-none focus-visible:border-sky-300 focus-visible:ring-2 focus-visible:ring-sky-300/30" /></label>
+                        </div>
+                    </div>}
                 </div>}
             </section>
 
@@ -1542,7 +1616,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                 <div className="mb-5 rounded-xl border border-sky-300/25 bg-sky-300/5 p-4"><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-300/10 text-sky-200"><CalendarClock size={18} /></span><div><p className="font-bold text-white">Run the live draw</p><p className="mt-1 text-xs leading-5 text-gray-400">Use <strong className="text-gray-200">Match setup</strong> to set a court and start time. Then select <strong className="text-pink-200">Mark live</strong> when the players take the court. These updates appear on the public draw automatically.</p></div></div></div>
                 <div className="mb-5 overflow-hidden rounded-xl border border-sky-300/25 bg-sky-300/[0.04]">
                     <button type="button" onClick={() => setShowAutoSchedule((current) => !current)} aria-expanded={showAutoSchedule} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-sky-300/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-padel-green"><span className="flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-300/10 text-sky-200"><CalendarClock size={16} /></span><span><span className="block text-sm font-bold text-white">Auto-schedule ready matches</span><span className="mt-0.5 block text-xs text-gray-400">Fill only missing courts or times; existing assignments are never overwritten.</span></span></span>{showAutoSchedule ? <ChevronUp size={18} className="text-sky-200" /> : <ChevronDown size={18} className="text-sky-200" />}</button>
-                    {showAutoSchedule && <div className="border-t border-sky-300/15 p-4"><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><label className="block text-xs font-bold text-gray-300">Schedule date<input type="date" value={scheduleDefaults.date} onChange={(item) => setScheduleDefaults((current) => ({ ...current, date: item.target.value }))} className="mt-1.5 block w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none focus-visible:border-sky-300 focus-visible:ring-2 focus-visible:ring-sky-300/30" /></label><label className="block text-xs font-bold text-gray-300">First match<input type="time" value={scheduleDefaults.startTime} onChange={(item) => setScheduleDefaults((current) => ({ ...current, startTime: item.target.value }))} className="mt-1.5 block w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none focus-visible:border-sky-300 focus-visible:ring-2 focus-visible:ring-sky-300/30" /></label><label className="block text-xs font-bold text-gray-300">Match duration (minutes)<input inputMode="numeric" min="1" type="number" value={scheduleDefaults.matchMinutes} onChange={(item) => setScheduleDefaults((current) => ({ ...current, matchMinutes: item.target.value }))} className="mt-1.5 block w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none focus-visible:border-sky-300 focus-visible:ring-2 focus-visible:ring-sky-300/30" /></label><label className="block text-xs font-bold text-gray-300">Break (minutes)<input inputMode="numeric" min="0" type="number" value={scheduleDefaults.breakMinutes} onChange={(item) => setScheduleDefaults((current) => ({ ...current, breakMinutes: item.target.value }))} className="mt-1.5 block w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none focus-visible:border-sky-300 focus-visible:ring-2 focus-visible:ring-sky-300/30" /></label></div><div className="mt-4 flex flex-col gap-3 rounded-lg border border-white/10 bg-black/20 p-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-xs leading-5 text-gray-400">{availableCourts.length > 0 ? `${availableCourts.join(' · ')} will be filled in sequence.` : 'Set the event’s Number of courts to use auto-scheduling.'}</p><button type="button" onClick={autoScheduleReadyMatches} disabled={autoScheduling || availableCourts.length === 0} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-sky-300 px-3 py-2.5 text-xs font-black text-black transition-transform hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"><CalendarClock size={14} />{autoScheduling ? 'Scheduling…' : 'Auto-schedule missing details'}</button></div></div>}
+                    {showAutoSchedule && <div className="border-t border-sky-300/15 p-4"><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{playDays.filter((day) => day.is_active).map((day) => <div key={day.play_date} className="rounded-lg border border-white/10 bg-black/20 px-3 py-2.5"><p className="text-xs font-black uppercase tracking-wide text-sky-200">{formatPlayDay(day.play_date)}</p><p className="mt-1 text-xs tabular-nums text-gray-400">{day.start_time.slice(0, 5)}–{day.end_time.slice(0, 5)} · {day.courts_count} {Number(day.courts_count) === 1 ? 'court' : 'courts'}</p><p className="mt-1 text-[10px] text-gray-500">{day.match_duration_minutes} min matches · {day.minimum_break_minutes} min rest</p></div>)}</div><div className="mt-4 flex flex-col gap-3 rounded-lg border border-white/10 bg-black/20 p-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-xs leading-5 text-gray-400">Matches are placed into the earliest valid court slot across the active days. Existing event bookings are preserved, and a team’s minimum rest is respected.</p><button type="button" onClick={autoScheduleReadyMatches} disabled={autoScheduling || !playDays.some((day) => day.is_active)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-sky-300 px-3 py-2.5 text-xs font-black text-black transition-transform hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"><CalendarClock size={14} />{autoScheduling ? 'Scheduling…' : 'Auto-schedule missing details'}</button></div></div>}
                 </div>
                 <div className="mb-5 overflow-hidden rounded-xl border border-pink-300/25 bg-pink-400/[0.04]">
                     <button type="button" onClick={() => setShowPublicControls((current) => !current)} aria-expanded={showPublicControls} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-pink-400/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-padel-green"><span className="flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-pink-400/10 text-pink-200"><Megaphone size={16} /></span><span><span className="block text-sm font-bold text-white">Public tournament centre</span><span className="mt-0.5 block text-xs text-gray-400">Pin an announcement and select the matches spectators should not miss.</span></span></span>{showPublicControls ? <ChevronUp size={18} className="text-pink-200" /> : <ChevronDown size={18} className="text-pink-200" />}</button>
