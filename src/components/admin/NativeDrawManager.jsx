@@ -154,6 +154,16 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
     const [announcementForm, setAnnouncementForm] = useState({ title: '', message: '', scope: 'division', isPinned: false });
     const [showPublicControls, setShowPublicControls] = useState(true);
     const [showAutoSchedule, setShowAutoSchedule] = useState(false);
+    const [showBulkMatchSetup, setShowBulkMatchSetup] = useState(false);
+    const [bulkUpdating, setBulkUpdating] = useState(false);
+    const [bulkMatchSetup, setBulkMatchSetup] = useState({
+        scope: 'all',
+        court_name: '',
+        scheduled_start: '',
+        interval_minutes: '30',
+        overwrite_courts: false,
+        overwrite_times: false,
+    });
     const [autoScheduling, setAutoScheduling] = useState(false);
     const [playDays, setPlayDays] = useState(() => buildEventPlayDays(event));
     const [selectedPlayDate, setSelectedPlayDate] = useState(() => String(event?.start_date || '').slice(0, 10));
@@ -842,6 +852,72 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             toast.error(error.message || 'Could not auto-schedule matches.');
         } finally {
             setAutoScheduling(false);
+        }
+    };
+
+    const bulkMatchCandidates = (draft?.matches || [])
+        .filter((match) => ['pending', 'scheduled', 'in_progress'].includes(match.status) && match.entry_one && match.entry_two)
+        .filter((match) => {
+            if (bulkMatchSetup.scope === 'group') return match.stage === 'group';
+            if (bulkMatchSetup.scope === 'elimination') return ['knockout', 'placement'].includes(match.stage);
+            if (bulkMatchSetup.scope === 'missing') return !match.court_name || !match.scheduled_start;
+            return true;
+        })
+        .sort((a, b) => (a.round_number || 0) - (b.round_number || 0) || (a.bracket_position || 0) - (b.bracket_position || 0));
+
+    const bulkMatchTargets = bulkMatchCandidates.filter((match) => (
+        (bulkMatchSetup.court_name && (bulkMatchSetup.overwrite_courts || !match.court_name))
+        || (bulkMatchSetup.scheduled_start && (bulkMatchSetup.overwrite_times || !match.scheduled_start))
+    ));
+
+    const applyBulkMatchSetup = async () => {
+        const courtName = String(bulkMatchSetup.court_name || '').trim();
+        const firstStart = bulkMatchSetup.scheduled_start ? new Date(bulkMatchSetup.scheduled_start) : null;
+        const intervalMinutes = Number(bulkMatchSetup.interval_minutes);
+        if (!courtName && !bulkMatchSetup.scheduled_start) {
+            toast.error('Choose a court or enter the first scheduled start time.');
+            return;
+        }
+        if (bulkMatchSetup.scheduled_start && Number.isNaN(firstStart.getTime())) {
+            toast.error('Enter a valid first scheduled start time.');
+            return;
+        }
+        if (bulkMatchSetup.scheduled_start && (!Number.isFinite(intervalMinutes) || intervalMinutes < 1)) {
+            toast.error('The interval between matches must be at least one minute.');
+            return;
+        }
+        if (bulkMatchTargets.length === 0) {
+            toast.message('No matches in this scope need the selected changes.');
+            return;
+        }
+
+        setBulkUpdating(true);
+        try {
+            let scheduledIndex = 0;
+            const updates = bulkMatchTargets.map((match) => {
+                const values = { updated_at: new Date().toISOString() };
+                if (courtName && (bulkMatchSetup.overwrite_courts || !match.court_name)) values.court_name = courtName;
+                if (firstStart && (bulkMatchSetup.overwrite_times || !match.scheduled_start)) {
+                    const scheduledStart = new Date(firstStart.getTime() + scheduledIndex * intervalMinutes * 60_000);
+                    scheduledIndex += 1;
+                    const localDate = toLocalDateTimeInput(scheduledStart).slice(0, 10);
+                    const scheduledDay = playDays.find((day) => day.play_date === localDate);
+                    const durationMinutes = Number(scheduledDay?.match_duration_minutes) || intervalMinutes;
+                    values.scheduled_start = scheduledStart.toISOString();
+                    values.scheduled_end = new Date(scheduledStart.getTime() + durationMinutes * 60_000).toISOString();
+                }
+                return { id: match.id, values };
+            });
+            const results = await Promise.all(updates.map(({ id, values }) => supabase.from('draw_matches').update(values).eq('id', id)));
+            const failure = results.find(({ error }) => error)?.error;
+            if (failure) throw failure;
+            updates.forEach(({ id, values }) => updateLocalMatch(id, values));
+            toast.success(`${updates.length} ${updates.length === 1 ? 'match' : 'matches'} updated in ${division?.name || 'this division'}.`);
+        } catch (error) {
+            console.error('Failed to bulk update native match setup', error);
+            toast.error(error.message || 'Could not bulk update the match setup.');
+        } finally {
+            setBulkUpdating(false);
         }
     };
 
@@ -1614,6 +1690,44 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             {savedDraw?.status === 'published' && draft && <div className="rounded-2xl border border-white/10 bg-[#101010] p-5">
                 <div className="mb-4"><p className="font-bold text-white">Record results</p><p className="text-xs text-gray-400">Choose the winning team. The winner automatically moves into the next bracket slot.</p></div>
                 <div className="mb-5 rounded-xl border border-sky-300/25 bg-sky-300/5 p-4"><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-300/10 text-sky-200"><CalendarClock size={18} /></span><div><p className="font-bold text-white">Run the live draw</p><p className="mt-1 text-xs leading-5 text-gray-400">Use <strong className="text-gray-200">Match setup</strong> to set a court and start time. Then select <strong className="text-pink-200">Mark live</strong> when the players take the court. These updates appear on the public draw automatically.</p></div></div></div>
+                <div className="mb-5 overflow-hidden rounded-xl border border-sky-300/25 bg-sky-300/[0.04]">
+                    <button type="button" onClick={() => setShowBulkMatchSetup((current) => !current)} aria-expanded={showBulkMatchSetup} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-sky-300/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-padel-green">
+                        <span className="flex items-center gap-2">
+                            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-300/10 text-sky-200"><Save size={16} /></span>
+                            <span><span className="block text-sm font-bold text-white">Bulk match setup</span><span className="mt-0.5 block text-xs text-gray-400">Assign a court or sequential times across {division?.name || 'the selected division'}.</span></span>
+                        </span>
+                        {showBulkMatchSetup ? <ChevronUp size={18} className="text-sky-200" /> : <ChevronDown size={18} className="text-sky-200" />}
+                    </button>
+                    {showBulkMatchSetup && <div className="border-t border-sky-300/15 p-4">
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                            <label className="block text-xs font-bold text-gray-300">Matches to update
+                                <select value={bulkMatchSetup.scope} onChange={(event) => setBulkMatchSetup((current) => ({ ...current, scope: event.target.value }))} className="mt-1.5 block w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none focus-visible:border-sky-300 focus-visible:ring-2 focus-visible:ring-sky-300/30">
+                                    <option value="all">All playable matches</option>
+                                    {(draft.matches || []).some((match) => match.stage === 'group') && <option value="group">Group stage only</option>}
+                                    {(draft.matches || []).some((match) => ['knockout', 'placement'].includes(match.stage)) && <option value="elimination">Elimination stage only</option>}
+                                    <option value="missing">Missing setup only</option>
+                                </select>
+                            </label>
+                            <label className="block text-xs font-bold text-gray-300">Court
+                                {availableCourts.length > 0 ? <select value={bulkMatchSetup.court_name} onChange={(event) => setBulkMatchSetup((current) => ({ ...current, court_name: event.target.value }))} className="mt-1.5 block w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none focus-visible:border-sky-300 focus-visible:ring-2 focus-visible:ring-sky-300/30"><option value="">Do not change courts</option>{availableCourts.map((court) => <option key={court} value={court}>{court}</option>)}</select> : <input value={bulkMatchSetup.court_name} onChange={(event) => setBulkMatchSetup((current) => ({ ...current, court_name: event.target.value }))} placeholder="e.g. Court 3" className="mt-1.5 block w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none placeholder:text-gray-600 focus-visible:border-sky-300 focus-visible:ring-2 focus-visible:ring-sky-300/30" />}
+                            </label>
+                            <label className="block text-xs font-bold text-gray-300">First start <span className="font-normal text-gray-500">optional</span>
+                                <input type="datetime-local" value={bulkMatchSetup.scheduled_start} onChange={(event) => setBulkMatchSetup((current) => ({ ...current, scheduled_start: event.target.value }))} className="mt-1.5 block w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none focus-visible:border-sky-300 focus-visible:ring-2 focus-visible:ring-sky-300/30" />
+                            </label>
+                            <label className="block text-xs font-bold text-gray-300">Minutes between starts
+                                <input type="number" min="1" step="5" value={bulkMatchSetup.interval_minutes} onChange={(event) => setBulkMatchSetup((current) => ({ ...current, interval_minutes: event.target.value }))} disabled={!bulkMatchSetup.scheduled_start} className="mt-1.5 block w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none focus-visible:border-sky-300 focus-visible:ring-2 focus-visible:ring-sky-300/30 disabled:cursor-not-allowed disabled:opacity-40" />
+                            </label>
+                        </div>
+                        <div className="mt-4 flex flex-col gap-3 rounded-lg border border-white/10 bg-black/20 p-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-5">
+                                <label className="flex items-center gap-2 text-xs font-bold text-gray-300"><input type="checkbox" checked={bulkMatchSetup.overwrite_courts} onChange={(event) => setBulkMatchSetup((current) => ({ ...current, overwrite_courts: event.target.checked }))} className="h-4 w-4 accent-sky-300" /> Replace existing court assignments</label>
+                                <label className="flex items-center gap-2 text-xs font-bold text-gray-300"><input type="checkbox" checked={bulkMatchSetup.overwrite_times} onChange={(event) => setBulkMatchSetup((current) => ({ ...current, overwrite_times: event.target.checked }))} className="h-4 w-4 accent-sky-300" /> Replace existing start times</label>
+                            </div>
+                            <button type="button" onClick={applyBulkMatchSetup} disabled={bulkUpdating || bulkMatchTargets.length === 0} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-sky-300 px-3 py-2.5 text-xs font-black text-black transition-transform hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"><Save size={14} />{bulkUpdating ? 'Updating…' : `Update ${bulkMatchTargets.length} ${bulkMatchTargets.length === 1 ? 'match' : 'matches'}`}</button>
+                        </div>
+                        <p className="mt-3 text-xs leading-5 text-gray-500">Existing values stay unchanged unless you allow replacement. Times are applied in round and match order using the interval above.</p>
+                    </div>}
+                </div>
                 <div className="mb-5 overflow-hidden rounded-xl border border-sky-300/25 bg-sky-300/[0.04]">
                     <button type="button" onClick={() => setShowAutoSchedule((current) => !current)} aria-expanded={showAutoSchedule} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-sky-300/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-padel-green"><span className="flex items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-300/10 text-sky-200"><CalendarClock size={16} /></span><span><span className="block text-sm font-bold text-white">Auto-schedule ready matches</span><span className="mt-0.5 block text-xs text-gray-400">Fill only missing courts or times; existing assignments are never overwritten.</span></span></span>{showAutoSchedule ? <ChevronUp size={18} className="text-sky-200" /> : <ChevronDown size={18} className="text-sky-200" />}</button>
                     {showAutoSchedule && <div className="border-t border-sky-300/15 p-4"><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{playDays.filter((day) => day.is_active).map((day) => <div key={day.play_date} className="rounded-lg border border-white/10 bg-black/20 px-3 py-2.5"><p className="text-xs font-black uppercase tracking-wide text-sky-200">{formatPlayDay(day.play_date)}</p><p className="mt-1 text-xs tabular-nums text-gray-400">{day.start_time.slice(0, 5)}–{day.end_time.slice(0, 5)} · {day.courts_count} {Number(day.courts_count) === 1 ? 'court' : 'courts'}</p><p className="mt-1 text-[10px] text-gray-500">{day.match_duration_minutes} min matches · {day.minimum_break_minutes} min rest</p></div>)}</div><div className="mt-4 flex flex-col gap-3 rounded-lg border border-white/10 bg-black/20 p-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-xs leading-5 text-gray-400">Matches are placed into the earliest valid court slot across the active days. Existing event bookings are preserved, and a team’s minimum rest is respected.</p><button type="button" onClick={autoScheduleReadyMatches} disabled={autoScheduling || !playDays.some((day) => day.is_active)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-sky-300 px-3 py-2.5 text-xs font-black text-black transition-transform hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"><CalendarClock size={14} />{autoScheduling ? 'Scheduling…' : 'Auto-schedule missing details'}</button></div></div>}
