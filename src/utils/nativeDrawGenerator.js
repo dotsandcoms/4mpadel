@@ -204,9 +204,17 @@ export const generateRoundRobinFixtures = (entries) => {
 
     for (let round = 0; round < rotation.length - 1; round += 1) {
         for (let i = 0; i < half; i += 1) {
-            const entryOne = rotation[i];
-            const entryTwo = rotation[rotation.length - 1 - i];
-            if (entryOne && entryTwo) {
+            const leftEntry = rotation[i];
+            const rightEntry = rotation[rotation.length - 1 - i];
+            if (leftEntry && rightEntry) {
+                // RankedIn presents the lower seed on the left for every
+                // round-robin row. Normalising the display sides also keeps a
+                // manually matched legacy draw stable across regeneration.
+                const leftSeed = Number(leftEntry.seed_number || Infinity);
+                const rightSeed = Number(rightEntry.seed_number || Infinity);
+                const [entryOne, entryTwo] = leftSeed <= rightSeed
+                    ? [leftEntry, rightEntry]
+                    : [rightEntry, leftEntry];
                 fixtures.push({
                     key: `group-r${round + 1}-m${i + 1}`,
                     stage: 'group',
