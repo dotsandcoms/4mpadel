@@ -455,16 +455,27 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         }
     };
 
-    const moveSeed = (fromIndex, direction) => {
+    const moveSeedTo = (fromIndex, toIndex) => {
         if (!draft) return;
-        const toIndex = fromIndex + direction;
-        if (toIndex < 0 || toIndex >= draft.entries.length) return;
-        const reordered = [...draft.entries];
-        [reordered[fromIndex], reordered[toIndex]] = [reordered[toIndex], reordered[fromIndex]];
-        setDraft(generateKnockoutDraft(
-            reordered.map((entry, index) => ({ ...entry, seed_number: index + 1 })),
-            { seedingMethod: 'manual', seededPercentage: Number(seedingTemplate), placementPlayoff: playoffMode },
-        ));
+        const ordered = [...draft.entries].sort((a, b) => Number(a.seed_number || 999) - Number(b.seed_number || 999));
+        if (toIndex < 0 || toIndex >= ordered.length || fromIndex === toIndex) return;
+        const [moved] = ordered.splice(fromIndex, 1);
+        ordered.splice(toIndex, 0, moved);
+        const reordered = ordered.map((entry, index) => ({ ...entry, seed_number: index + 1 }));
+        if (draft.format === 'knockout') {
+            setDraft({ ...generateKnockoutDraft(reordered, {
+                seedingMethod: 'manual',
+                seededPercentage: Number(seedingTemplate),
+                placementPlayoff: playoffMode,
+            }), format: 'knockout' });
+            return;
+        }
+        setDraft(generateGroupStageDraft(reordered, {
+            format: draft.format,
+            groupCount: draft.groups?.length || Number(groupCount),
+            seedingMethod: 'manual',
+            seededPercentage: Number(seedingTemplate),
+        }));
     };
 
     const saveDraft = async () => {
@@ -1420,6 +1431,8 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
     const groupStageComplete = savedGroups.length > 0
         && savedGroups.every((group) => areGroupMatchesComplete(draft?.matches || [], group.id));
     const settingsLocked = savedDraw?.status === 'published';
+    const seedReviewEntries = [...(draft?.entries || [])]
+        .sort((a, b) => Number(a.seed_number || 999) - Number(b.seed_number || 999));
     const mainKnockoutMatches = (draft?.matches || []).filter((match) => match.stage === 'knockout');
     const mainOpeningRound = mainKnockoutMatches.length ? Math.min(...mainKnockoutMatches.map((match) => match.round_number)) : null;
     const mainOpeningMatches = mainKnockoutMatches.filter((match) => match.round_number === mainOpeningRound);
@@ -1482,29 +1495,32 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                         {savedDraw?.status === 'published' && <a href={`/native-draws/${event.slug}`} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 px-4 py-3 text-sm font-black text-white hover:bg-white/10"><Eye size={16} /> Open public draw</a>}
                     </div>
                 </div>
-                {(draft.format || 'knockout') === 'knockout' && <div className="border-b border-white/10 p-5">
+                <div className="border-b border-white/10 p-5">
                     <div className="mb-3 flex items-center justify-between gap-3">
                         <div>
                             <p className="font-bold text-white">Seed review</p>
-                            <p className="text-xs text-gray-400">Use the arrows to correct a seed before saving. The bracket updates immediately; no change is made to the event until you save.</p>
+                            <p className="text-xs text-gray-400">Choose a seed position or use the arrows to match the intended draw. {draft.format === 'knockout' ? 'Bracket placement' : 'Group allocation and fixtures'} update immediately; no change is saved until you update the draft.</p>
                         </div>
                     </div>
                     <div className="max-h-72 divide-y divide-white/5 overflow-y-auto rounded-xl border border-white/5 bg-black/20">
-                        {draft.entries.map((entry, index) => (
+                        {seedReviewEntries.map((entry, index) => {
+                            const assignedGroup = draft.format === 'knockout' ? null : draft.groups?.find((group) => group.entries?.some((groupEntry) => groupEntry.source_registration_id === entry.source_registration_id));
+                            return (
                             <div key={entry.source_registration_id} className="flex items-center gap-3 px-3 py-2.5">
-                                <span className="w-7 text-sm font-black text-padel-green">#{entry.seed_number}</span>
+                                <label className="flex shrink-0 items-center gap-1 text-xs font-black text-padel-green"><span className="sr-only">Seed position for {entry.team_name}</span>#<select value={index + 1} onChange={(event) => moveSeedTo(index, Number(event.target.value) - 1)} disabled={settingsLocked} className="rounded-md border border-padel-green/30 bg-[#151515] px-1.5 py-1 text-sm font-black text-padel-green outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50">{seedReviewEntries.map((_, position) => <option key={position + 1} value={position + 1} className="text-black">{position + 1}</option>)}</select></label>
                                 <div className="min-w-0 flex-1">
                                     <div className="truncate text-sm font-semibold text-white">{entry.team_name}</div>
-                                    <div className="text-[10px] uppercase tracking-wide text-gray-500">Pair seeding total: {Number(entry.seeding_value || 0).toLocaleString('en-ZA')} · {entry.snapshot?.seeding_label || 'Profile points'}</div>
+                                    <div className="text-[10px] uppercase tracking-wide text-gray-500">Pair seeding total: {Number(entry.seeding_value || 0).toLocaleString('en-ZA')} · {entry.snapshot?.seeding_label || 'Profile points'}{assignedGroup ? ` · ${assignedGroup.name}` : ''}</div>
                                 </div>
                                 <div className="flex gap-1">
-                                    <button type="button" aria-label={`Move ${entry.team_name} up`} onClick={() => moveSeed(index, -1)} disabled={index === 0} className="rounded-md p-1.5 text-gray-300 hover:bg-white/10 disabled:opacity-25"><ChevronUp size={15} /></button>
-                                    <button type="button" aria-label={`Move ${entry.team_name} down`} onClick={() => moveSeed(index, 1)} disabled={index === draft.entries.length - 1} className="rounded-md p-1.5 text-gray-300 hover:bg-white/10 disabled:opacity-25"><ChevronDown size={15} /></button>
+                                    <button type="button" aria-label={`Move ${entry.team_name} up`} onClick={() => moveSeedTo(index, index - 1)} disabled={settingsLocked || index === 0} className="rounded-md p-1.5 text-gray-300 hover:bg-white/10 disabled:opacity-25"><ChevronUp size={15} /></button>
+                                    <button type="button" aria-label={`Move ${entry.team_name} down`} onClick={() => moveSeedTo(index, index + 1)} disabled={settingsLocked || index === seedReviewEntries.length - 1} className="rounded-md p-1.5 text-gray-300 hover:bg-white/10 disabled:opacity-25"><ChevronDown size={15} /></button>
                                 </div>
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
-                </div>}
+                </div>
                 {(draft.format || 'knockout') === 'knockout' ? <DrawBracketPreview matches={draft.matches} title={`${activeDrawKind === 'main' ? 'Main draw' : activeDrawKind === 'silver' ? 'Silver plate' : 'Bronze plate'} bracket preview`} /> : <div className="grid gap-4 p-5 md:grid-cols-2">
                     {(draft.groups || []).map((group) => {
                         const groupRows = standingsForGroup(group.id || group.key);
