@@ -8,12 +8,15 @@
  *   node scripts/repairAllPlayerRankings.js
  *   node scripts/repairAllPlayerRankings.js --only-bad
  *   node scripts/repairAllPlayerRankings.js --limit 50
+ *   node scripts/repairAllPlayerRankings.js --rankedin-id R000357228
+ *   node scripts/repairAllPlayerRankings.js --rankedin-id R000357228 --dry-run
  */
 import { createClient } from '@supabase/supabase-js';
 import WebSocket from 'ws';
 import * as dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { findPreferredRanking, rankingRowKey } from '../src/utils/playerRankingSelection.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
@@ -31,11 +34,18 @@ const LISTS = [
     { orgId: 15809, orgName: 'SAPA ranking', type: 4, age: 83, ageLabel: 'Women-Main', match: 'Women-Doubles' },
     { orgId: 15809, orgName: 'SAPA ranking', type: 3, age: 3, ageLabel: 'Men Over 40', match: 'Men-Doubles' },
     { orgId: 15809, orgName: 'SAPA ranking', type: 3, age: 2, ageLabel: 'Men Over 35', match: 'Men-Doubles' },
+    { orgId: 15809, orgName: 'SAPA ranking', type: 3, age: 4, ageLabel: 'Men Over 45', match: 'Men-Doubles' },
+    { orgId: 15809, orgName: 'SAPA ranking', type: 3, age: 5, ageLabel: 'Men Over 50', match: 'Men-Doubles' },
+    { orgId: 15809, orgName: 'SAPA ranking', type: 3, age: 6, ageLabel: 'Men Over 55', match: 'Men-Doubles' },
     { orgId: 16317, orgName: 'Broll Pro Tour', type: 3, age: 82, ageLabel: 'Men-Main', match: 'Men-Doubles' },
     { orgId: 16317, orgName: 'Broll Pro Tour', type: 4, age: 83, ageLabel: 'Women-Main', match: 'Women-Doubles' },
     { orgId: 16482, orgName: 'SA Grand Tour', type: 3, age: 82, ageLabel: 'Men-Main', match: 'Men-Doubles' },
     { orgId: 16482, orgName: 'SA Grand Tour', type: 4, age: 83, ageLabel: 'Women-Main', match: 'Women-Doubles' },
     { orgId: 16482, orgName: 'SA Grand Tour', type: 3, age: 3, ageLabel: 'Men Over 40', match: 'Men-Doubles' },
+    { orgId: 16482, orgName: 'SA Grand Tour', type: 3, age: 2, ageLabel: 'Men Over 35', match: 'Men-Doubles' },
+    { orgId: 16482, orgName: 'SA Grand Tour', type: 3, age: 4, ageLabel: 'Men Over 45', match: 'Men-Doubles' },
+    { orgId: 16482, orgName: 'SA Grand Tour', type: 3, age: 5, ageLabel: 'Men Over 50', match: 'Men-Doubles' },
+    { orgId: 16482, orgName: 'SA Grand Tour', type: 3, age: 6, ageLabel: 'Men Over 55', match: 'Men-Doubles' },
 ];
 
 const isBadRankings = (rankings) => {
@@ -92,6 +102,9 @@ async function run() {
     const onlyBad = process.argv.includes('--only-bad');
     const limitArg = process.argv.indexOf('--limit');
     const limit = limitArg >= 0 ? Number(process.argv[limitArg + 1]) : Infinity;
+    const rankedInIdArg = process.argv.indexOf('--rankedin-id');
+    const onlyRankedInId = rankedInIdArg >= 0 ? String(process.argv[rankedInIdArg + 1] || '').trim() : '';
+    const dryRun = process.argv.includes('--dry-run');
     const skipDetails = process.argv.includes('--skip-details');
 
     console.log('Downloading Rankedin category lists…');
@@ -142,6 +155,7 @@ async function run() {
 
     let targets = players.filter((p) => p.rankedin_id || p.name);
     if (onlyBad) targets = targets.filter((p) => isBadRankings(p.rankings) || Number(p.skill_rating) === 26.94);
+    if (onlyRankedInId) targets = targets.filter((p) => String(p.rankedin_id || '') === onlyRankedInId);
     targets = targets.slice(0, limit);
     console.log(`Repairing ${targets.length} players…`);
 
@@ -174,9 +188,9 @@ async function run() {
 
             const rankings = keepUncoveredRows(player.rankings);
             for (const m of unique) {
-                // Fetch tournament breakdown for Main lists (what Rankings modal shows);
-                // skip for secondary age bands to keep the repair fast.
-                const wantDetails = !skipDetails && /main/i.test(m.list.ageLabel);
+                // Preserve the points breakdown shown on profiles for both
+                // Main and age-band rankings (Over 35/40/45/50/55).
+                const wantDetails = !skipDetails;
                 const details = wantDetails && m.rpId ? await fetchDetails(m.rpId, m.list.age) : [];
                 if (wantDetails) await sleep(40);
                 rankings.push({
@@ -194,22 +208,30 @@ async function run() {
             const mainLabel = woman ? 'Women-Main' : 'Men-Main';
             const main = rankings.find((r) => r.org === 'SAPA ranking' && r.age_group === mainLabel)
                 || rankings.find((r) => r.org === 'SAPA ranking' && /main/i.test(r.age_group));
+            const preferred = findPreferredRanking(rankings, player.preferred_ranking);
+            const selected = preferred || main || rankings.find((ranking) => unique.some((match) => (
+                match.list.orgName === ranking.org && match.list.ageLabel === ranking.age_group
+            )));
 
             const patch = {
                 rankings,
-                // Fall back to the freshest matched list row, never a preserved
-                // uncovered-org row, so points/rank_label reflect the covered orgs.
-                points: main ? Number(main.points) : Number(unique[0]?.points) || 0,
-                rank_label: main?.rank || unique[0]?.rank || null,
+                points: selected ? Number(selected.points) || 0 : Number(unique[0]?.points) || 0,
+                rank_label: selected?.rank || unique[0]?.rank || null,
             };
-            if (main) {
-                patch.preferred_ranking = `SAPA ranking|${main.age_group}|Doubles`;
-                patch.active_ranking_label = `SAPA ranking - ${main.age_group}`;
+            if (selected) {
+                // An explicit player preference is user-owned. The repair job
+                // refreshes its values but must never reset it to SAPA Main.
+                if (!player.preferred_ranking) patch.preferred_ranking = rankingRowKey(selected);
+                patch.active_ranking_label = `${selected.org} - ${selected.age_group}`;
             }
             if (Number(player.skill_rating) === 26.94) patch.skill_rating = null;
 
-            const { error } = await supabase.from('players').update(patch).eq('id', player.id);
-            if (error) throw error;
+            if (dryRun) {
+                console.log(`DRY RUN ${player.name}:`, JSON.stringify(patch, null, 2));
+            } else {
+                const { error } = await supabase.from('players').update(patch).eq('id', player.id);
+                if (error) throw error;
+            }
             ok++;
             if (ok <= 30 || ok % 25 === 0) {
                 console.log(`✓ ${player.name}: ${patch.points} pts · ${rankings.length} rows`);

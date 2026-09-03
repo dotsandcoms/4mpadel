@@ -129,7 +129,7 @@ const NativeTournamentDraw = ({ event, preview = false }) => {
     const entryById = useMemo(() => new Map(entries.map((entry) => [entry.id, entry])), [entries]);
     const rounds = useMemo(() => {
         const byRound = new Map();
-        matches.filter((match) => match.stage !== 'group').forEach((match) => {
+        matches.filter((match) => match.stage === 'knockout').forEach((match) => {
             const round = byRound.get(match.round_number) || { number: match.round_number, label: match.round_label, matches: [] };
             round.matches.push(match);
             byRound.set(match.round_number, round);
@@ -138,7 +138,8 @@ const NativeTournamentDraw = ({ event, preview = false }) => {
             .sort((a, b) => a.number - b.number)
             .map((round) => ({ ...round, label: knockoutRoundLabel(round.matches.length, round.label) }));
     }, [matches]);
-    const roundLabelForMatch = (match) => rounds.find((round) => round.number === match.round_number)?.label || match.round_label;
+    const placementMatches = useMemo(() => matches.filter((match) => match.stage === 'placement'), [matches]);
+    const roundLabelForMatch = (match) => match.stage === 'placement' ? match.round_label : rounds.find((round) => round.number === match.round_number)?.label || match.round_label;
     const groupMatchesById = useMemo(() => groups.reduce((result, group) => ({
         ...result,
         [group.id]: matches.filter((match) => match.group_id === group.id).sort((a, b) => (
@@ -556,6 +557,10 @@ const NativeTournamentDraw = ({ event, preview = false }) => {
                         </section>)}
                     </div>
                     </div>
+                    </section>}
+                    {placementMatches.length > 0 && <section className="mt-6 overflow-hidden rounded-2xl border border-amber-300/25 bg-gradient-to-r from-amber-300/[0.06] to-[#08101f]">
+                        <header className="flex flex-col gap-2 border-b border-white/10 px-5 py-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-amber-200">Top 4 playoff</p><h2 className="mt-1 text-xl font-black text-white">Third place on the line</h2></div><p className="text-xs text-gray-400">The semifinal losers meet to decide third and fourth.</p></header>
+                        <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-3">{placementMatches.map(renderRoundMatchCard)}</div>
                     </section>}
                 </>}
             </div>

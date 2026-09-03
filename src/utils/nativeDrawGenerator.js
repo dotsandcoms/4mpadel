@@ -26,15 +26,17 @@ export const seededSlotOrder = (drawSize) => {
     let order = [1, 2];
     while (order.length < drawSize) {
         const nextSize = order.length * 2;
-        order = order.flatMap((seed) => [seed, nextSize + 1 - seed]);
+        order = order.flatMap((seed, index) => index % 2 === 0
+            ? [seed, nextSize + 1 - seed]
+            : [nextSize + 1 - seed, seed]);
     }
     return order;
 };
 
-const entrySort = (entries, seedingMethod, random) => {
+const entrySort = (entries, seedingMethod, random, seededPercentage = 100) => {
     const active = entries.filter((entry) => entry.status !== 'withdrawn');
     if (seedingMethod === 'random') return shuffled(active, random);
-    return [...active].sort((a, b) => {
+    const ranked = [...active].sort((a, b) => {
         const aSeed = Number.isFinite(Number(a.seed_number)) ? Number(a.seed_number) : Infinity;
         const bSeed = Number.isFinite(Number(b.seed_number)) ? Number(b.seed_number) : Infinity;
         if (aSeed !== bSeed) return aSeed - bSeed;
@@ -43,6 +45,24 @@ const entrySort = (entries, seedingMethod, random) => {
         if (aValue !== bValue) return bValue - aValue;
         return String(a.team_name || '').localeCompare(String(b.team_name || ''));
     });
+    if (seedingMethod === 'manual') return ranked;
+
+    const percentage = Math.min(100, Math.max(0, Number(seededPercentage) || 0));
+    const protectedCount = percentage === 100
+        ? ranked.length
+        : Math.floor(ranked.length * (percentage / 100));
+    return [
+        ...ranked.slice(0, protectedCount),
+        ...shuffled(ranked.slice(protectedCount), random),
+    ];
+};
+
+const knockoutRoundLabel = (roundNumber, totalRounds) => {
+    const roundsRemaining = totalRounds - roundNumber;
+    if (roundsRemaining === 0) return 'Final';
+    if (roundsRemaining === 1) return 'Semifinals';
+    if (roundsRemaining === 2) return 'Quarterfinals';
+    return `Round of ${2 ** (roundsRemaining + 1)}`;
 };
 
 /**
@@ -50,8 +70,13 @@ const entrySort = (entries, seedingMethod, random) => {
  * seeds land in their correct bracket positions and receive any necessary
  * first-round byes before lower seeds do.
  */
-export const generateKnockoutDraft = (entries, { seedingMethod = 'manual', random = Math.random } = {}) => {
-    const orderedEntries = entrySort(entries, seedingMethod, random).map((entry, index) => ({
+export const generateKnockoutDraft = (entries, {
+    seedingMethod = 'manual',
+    seededPercentage = 100,
+    placementPlayoff = 'none',
+    random = Math.random,
+} = {}) => {
+    const orderedEntries = entrySort(entries, seedingMethod, random, seededPercentage).map((entry, index) => ({
         ...entry,
         seed_number: index + 1,
     }));
@@ -95,23 +120,60 @@ export const generateKnockoutDraft = (entries, { seedingMethod = 'manual', rando
     }
 
     const totalRounds = roundNumber - 1;
+    const knockoutMatches = matches.map((match) => ({
+        ...match,
+        round_code: `r${totalRounds - match.round_number + 1}`,
+        round_label: knockoutRoundLabel(match.round_number, totalRounds),
+    }));
+
+    const placementMatches = [];
+    if (placementPlayoff === 'top4' && totalRounds >= 2) {
+        const semifinalRound = totalRounds - 1;
+        const semifinalMatches = knockoutMatches
+            .filter((match) => match.round_number === semifinalRound)
+            .sort((a, b) => a.bracket_position - b.bracket_position);
+        if (semifinalMatches.length === 2) {
+            const placementKey = 'placement-3-4';
+            semifinalMatches.forEach((match, index) => {
+                match.loser_to_match_key = placementKey;
+                match.loser_to_slot = index + 1;
+            });
+            placementMatches.push({
+                key: placementKey,
+                stage: 'placement',
+                round_code: '3_4',
+                round_label: '3rd place playoff',
+                round_number: totalRounds,
+                bracket_position: 2,
+                entry_one: null,
+                entry_two: null,
+                status: 'pending',
+                result_type: null,
+                winner: null,
+                source_slots: semifinalMatches.map((match) => ({
+                    type: 'loser',
+                    entry: null,
+                    source_match_key: match.key,
+                })),
+            });
+        }
+    }
+
     return {
         draw_size: drawSize,
         total_rounds: totalRounds,
         entries: orderedEntries,
-        matches: matches.map((match) => ({
-            ...match,
-            round_code: `r${totalRounds - match.round_number + 1}`,
-            round_label: match.round_number === totalRounds ? 'Final' : `Round ${match.round_number}`,
-        })),
+        seeded_percentage: Math.min(100, Math.max(0, Number(seededPercentage) || 0)),
+        placement_playoff: placementPlayoff,
+        matches: [...knockoutMatches, ...placementMatches],
     };
 };
 
 /** Assigns teams to groups in a seeded snake: A/B/C then C/B/A, repeatedly. */
-export const allocateSnakeGroups = (entries, groupCount, { seedingMethod = 'manual', random = Math.random } = {}) => {
+export const allocateSnakeGroups = (entries, groupCount, { seedingMethod = 'manual', seededPercentage = 100, random = Math.random } = {}) => {
     const count = Number(groupCount);
     if (!Number.isInteger(count) || count < 2) throw new Error('At least two groups are required');
-    const ordered = entrySort(entries, seedingMethod, random).map((entry, index) => ({
+    const ordered = entrySort(entries, seedingMethod, random, seededPercentage).map((entry, index) => ({
         ...entry,
         seed_number: index + 1,
     }));
@@ -172,6 +234,7 @@ export const generateGroupStageDraft = (entries, options) => {
     }));
     return {
         format: options.format || 'group_only',
+        seeded_percentage: Math.min(100, Math.max(0, Number(options.seededPercentage) || 0)),
         groups: populatedGroups,
         entries: populatedGroups.flatMap((group) => group.entries),
         matches: populatedGroups.flatMap((group) => group.fixtures),

@@ -11,7 +11,7 @@ import rankingsHero from '../assets/rankings-hero.png';
 const ORG_LABELS = {
   15809: 'SAPA',
   16317: 'Broll Pro Tour',
-  11706: 'SA Grand Tour'
+  16482: 'SA Grand Tour'
 };
 
 const ORG_CATEGORIES = {
@@ -23,7 +23,7 @@ const ORG_CATEGORIES = {
     { id: 'men', label: 'Men', rankingType: 3, ageGroup: 82 },
     { id: 'ladies', label: 'Women', rankingType: 4, ageGroup: 83 }
   ],
-  11706: [ // SA Grand Tour
+  16482: [ // SA Grand Tour
     { id: 'mo35', label: 'Men Over 35', rankingType: 3, ageGroup: 2 },
     { id: 'mo40', label: 'Men Over 40', rankingType: 3, ageGroup: 3 },
     { id: 'mo45', label: 'Men Over 45', rankingType: 3, ageGroup: 4 },

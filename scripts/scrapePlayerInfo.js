@@ -6,6 +6,7 @@ import path from 'path';
 import fs from 'fs';
 
 import { fileURLToPath } from 'url';
+import { rankedInAgeGroupLabel } from '../src/utils/playerRankingSelection.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
@@ -278,24 +279,18 @@ async function scrapePlayer(browser, player) {
                     console.error(`  × Failed to fetch details for ${r.RankingName}:`, err.message);
                 }
 
-                let matchType = 'Doubles';
+                const ageGroupLabel = rankedInAgeGroupLabel(
+                    r.AgeGroup,
+                    r.RankingType ?? r.Type,
+                    detailsPayload,
+                );
+                let matchType = ageGroupLabel.startsWith('Women') ? 'Women-Doubles'
+                    : ageGroupLabel.startsWith('Men') ? 'Men-Doubles'
+                        : 'Doubles';
                 if (r.RankingName?.toLowerCase().includes('singles')) {
                     matchType = 'Singles';
                 } else if (r.RankingName?.toLowerCase().includes('mixed')) {
                     matchType = 'Mixed';
-                }
-
-                let ageGroupLabel = 'Open';
-                if (r.AgeGroup === 3) {
-                    ageGroupLabel = 'Men Over 40';
-                } else if (r.AgeGroup === 4) {
-                    ageGroupLabel = 'Women Over 40';
-                } else if (r.AgeGroup === 82) {
-                    ageGroupLabel = 'Men-Main';
-                } else if (r.AgeGroup === 83) {
-                    ageGroupLabel = 'Women-Main';
-                } else if (r.AgeGroup === 84) {
-                    ageGroupLabel = 'Mixed-Main';
                 }
 
                 rankings.push({

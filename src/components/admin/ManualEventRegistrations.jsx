@@ -453,7 +453,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
             const players = await fetchPlayersByEmails(
                 supabase,
                 emails,
-                'id, name, email, license_type, paid_registration, image_url, points, temporary_licenses(event_id, event_date)',
+                'id, name, email, license_type, paid_registration, image_url, rankedin_id, points, rank_label, rankings, preferred_ranking, active_ranking_label, category, gender, temporary_licenses(event_id, event_date)',
             );
             setPlayersByEmail(buildPlayersByEmail(players));
         } else {

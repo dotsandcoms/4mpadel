@@ -52,11 +52,22 @@ export const deriveKnockoutPlacementProposals = ({ entries = [], matches = [], t
         if (loserId) addProposal(loserId, roundDetails(roundsFromFinal + 1, tierCode));
     });
 
+    // A Top 4 playoff resolves the otherwise shared semifinal placement. It
+    // keeps the semifinal points code unless a tournament points table chooses
+    // to distinguish third and fourth later.
+    matches.filter((match) => match.stage === 'placement' && match.round_code === '3_4' && resolvedStatuses.has(match.status))
+        .forEach((match) => {
+            const winnerId = match.winner_entry_id || match.winner?.id || null;
+            const loserId = match.loser_entry_id || null;
+            if (winnerId) proposalByEntryId.set(winnerId, { entry_id: winnerId, roundCode: 'semifinal', placement: '3rd' });
+            if (loserId) proposalByEntryId.set(loserId, { entry_id: loserId, roundCode: 'semifinal', placement: '4th' });
+        });
+
     return entries
         .filter((entry) => proposalByEntryId.has(entry.id))
         .map((entry) => ({ ...proposalByEntryId.get(entry.id), entry }))
         .sort((a, b) => {
-            const order = (item) => ({ '1st': 1, '2nd': 2, '3rd–4th': 3, '5th–8th': 4, R16: 5, R32: 6, '9th–16th': 7 }[item.placement] || 99);
+            const order = (item) => ({ '1st': 1, '2nd': 2, '3rd': 3, '4th': 4, '3rd–4th': 3, '5th–8th': 5, R16: 6, R32: 7, '9th–16th': 8 }[item.placement] || 99);
             return order(a) - order(b) || String(a.entry?.team_name || '').localeCompare(String(b.entry?.team_name || ''));
         });
 };
