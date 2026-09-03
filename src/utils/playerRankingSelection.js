@@ -98,16 +98,14 @@ const findOrganisationMainRanking = (rankings, organisation, player) => {
     const rows = (rankings || []).filter((ranking) => normalise(ranking?.org) === normalise(organisation));
     if (rows.length === 0) return null;
 
-    const preferred = findPreferredRanking(rows, player?.preferred_ranking);
-    if (preferred) return preferred;
-
     const genderText = normalise(`${player?.category || ''} ${player?.gender || ''}`);
-    const wantsWomen = /women|woman|ladies|lady|female/.test(genderText)
-        || rows.some((ranking) => normalise(ranking?.age_group) === 'women-main');
+    const explicitlyWomen = /women|woman|ladies|lady|female/.test(genderText);
+    const explicitlyMen = /men|man|male/.test(genderText) && !explicitlyWomen;
+    const hasWomenMain = rows.some((ranking) => normalise(ranking?.age_group) === 'women-main');
+    const hasMenMain = rows.some((ranking) => normalise(ranking?.age_group) === 'men-main');
+    const wantsWomen = explicitlyWomen || (!explicitlyMen && hasWomenMain && !hasMenMain);
     const wantedMain = wantsWomen ? 'women-main' : 'men-main';
-    return rows.find((ranking) => normalise(ranking?.age_group) === wantedMain)
-        || rows.find((ranking) => /main/.test(normalise(ranking?.age_group)))
-        || rows[0];
+    return rows.find((ranking) => normalise(ranking?.age_group) === wantedMain) || null;
 };
 
 export const rankingSourceOrganisation = (source) => (
@@ -152,6 +150,29 @@ export const resolvePlayerRanking = (player, source = 'active') => {
             age_group: ranking.age_group || null,
             match_type: ranking.match_type || null,
             fallback: false,
+            missing: false,
+        };
+    }
+
+    // A draw-level organisation/category choice is strict. Substituting the
+    // player's active/profile points would mix ranking systems and incorrectly
+    // seed somebody who has no record in the selected list.
+    if (category || organisation) {
+        const requestedLabel = category
+            ? `${category.organisation} - ${category.ageGroup}`
+            : `${organisation} - gendered Main`;
+        return {
+            points: 0,
+            rank: null,
+            key: category
+                ? [category.organisation, category.ageGroup, category.matchType].filter(Boolean).join('|')
+                : null,
+            label: `${requestedLabel} (no ranking record)`,
+            organisation: category?.organisation || organisation,
+            age_group: category?.ageGroup || null,
+            match_type: category?.matchType || null,
+            fallback: false,
+            missing: true,
         };
     }
 
@@ -164,6 +185,7 @@ export const resolvePlayerRanking = (player, source = 'active') => {
         age_group: null,
         match_type: null,
         fallback: true,
+        missing: false,
     };
 };
 
