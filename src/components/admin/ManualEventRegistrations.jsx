@@ -755,6 +755,57 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
         };
     }, [addPlayerOpen, addPlayerSearch]);
 
+    const createRegistrationWithReleasedSlot = async (payload) => {
+        const normalizedEmail = (payload.email || '').trim().toLowerCase();
+        const { data: divisionRows, error: lookupError } = await supabase
+            .from('event_registrations')
+            .select('id, email, status')
+            .eq('event_id', payload.event_id)
+            .eq('division', payload.division);
+        if (lookupError) throw lookupError;
+
+        const matchingRows = (divisionRows || []).filter(
+            (row) => (row.email || '').trim().toLowerCase() === normalizedEmail,
+        );
+
+        const activeMatch = (matchingRows || []).find((row) => row.status !== 'withdrawn');
+        if (activeMatch) {
+            throw new Error('This player is already entered in the selected division');
+        }
+
+        const withdrawnMatches = matchingRows.filter((row) => row.status === 'withdrawn');
+
+        for (const row of withdrawnMatches) {
+            const { error: archiveError } = await supabase
+                .from('event_registrations')
+                .update({
+                    division: `__archived__/${row.id}`,
+                    division_id: null,
+                })
+                .eq('id', row.id);
+            if (archiveError) throw archiveError;
+        }
+
+        const freshValues = {
+            ...payload,
+            email: normalizedEmail,
+            payment_status: 'pending',
+            payment_method: null,
+            status: 'registered',
+        };
+
+        const { data, error } = await supabase
+            .from('event_registrations')
+            .insert(freshValues)
+            .select('id, pay_token')
+            .single();
+        if (error?.code === '23505') {
+            throw new Error('This player is already entered in the selected division');
+        }
+        if (error) throw error;
+        return { data, replacedWithdrawn: withdrawnMatches.length > 0 };
+    };
+
     const confirmAddPlayer = async () => {
         if (!addPlayerSelected?.email) {
             toast.error('Select a 4M player');
@@ -783,22 +834,17 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
             const adminEmail = user?.email || null;
             const fee = Number(div?.entry_fee || 0);
 
-            const { data: inserted, error: insErr } = await supabase
-                .from('event_registrations')
-                .insert({
-                    event_id: event.id,
-                    email,
-                    full_name: addPlayerSelected.name,
-                    division: addPlayerDivision,
-                    division_id: div?.id || null,
-                    payment_status: 'pending',
-                    payment_method: null,
-                    status: 'registered',
-                    registered_by: adminEmail || email,
-                })
-                .select('id')
-                .maybeSingle();
-            if (insErr) throw insErr;
+            const { data: inserted, replacedWithdrawn } = await createRegistrationWithReleasedSlot({
+                event_id: event.id,
+                email,
+                full_name: addPlayerSelected.name,
+                division: addPlayerDivision,
+                division_id: div?.id || null,
+                registered_by: adminEmail || email,
+                partner_name: null,
+                partner_email: null,
+                partner_payment_status: null,
+            });
             if (!inserted?.id) throw new Error('Registration was not created');
 
             const eventUrl = `https://4mpadel.co.za/calendar/${event.slug || event.id}`;
@@ -839,6 +885,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
                     note: note || null,
                     payment_status: 'pending',
                     added_by: adminEmail,
+                    replaced_withdrawn_registration: replacedWithdrawn,
                 },
             });
 
@@ -1105,24 +1152,17 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
             const div = divisions.find((d) => d.name === soloReg.division);
             const fee = divFee(soloReg.division);
 
-            const { data: inserted, error: insErr } = await supabase
-                .from('event_registrations')
-                .insert({
-                    event_id: event.id,
-                    email: profile.email,
-                    full_name: profile.name,
-                    division: soloReg.division,
-                    division_id: div?.id || null,
-                    payment_status: 'pending',
-                    status: 'registered',
-                    registered_by: soloReg.email, // the solo player is the inviter
-                    partner_name: soloReg.full_name,
-                    partner_email: soloReg.email,
-                    partner_payment_status: 'paid', // their partner (the solo player) is paid
-                })
-                .select('id, pay_token')
-                .maybeSingle();
-            if (insErr) throw insErr;
+            const { data: inserted } = await createRegistrationWithReleasedSlot({
+                event_id: event.id,
+                email: profile.email,
+                full_name: profile.name,
+                division: soloReg.division,
+                division_id: div?.id || null,
+                registered_by: soloReg.email, // the solo player is the inviter
+                partner_name: soloReg.full_name,
+                partner_email: soloReg.email,
+                partner_payment_status: soloReg.payment_status === 'paid' ? 'paid' : 'pending',
+            });
 
             const { error: updErr } = await supabase
                 .from('event_registrations')
@@ -3251,7 +3291,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
                         <div className="flex gap-6 overflow-x-auto no-scrollbar border-b border-white/10">
                             {[
                                 { id: 'overview', label: 'Overview' },
-                                { id: 'players', label: 'Players' },
+                                { id: 'players', label: 'Teams' },
                                 { id: 'list', label: 'Registrations List' },
                                 ...(event?.is_manual ? [{ id: 'draws', label: 'Draws' }] : []),
                                 { id: 'statement', label: 'Income Statement' },
