@@ -299,6 +299,11 @@ async function scrapePlayer(browser, player) {
                     age_group: ageGroupLabel,
                     points: r.Points?.toString() || '0',
                     match_type: matchType,
+                    ranking_id: r.RankingId,
+                    ranking_participant_id: r.RankingParticipantId,
+                    ranking_type: r.RankingType ?? r.Type ?? null,
+                    age_group_id: r.AgeGroup,
+                    synced_at: new Date().toISOString(),
                     details: detailsPayload
                 });
             }

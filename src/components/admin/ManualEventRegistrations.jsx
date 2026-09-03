@@ -39,6 +39,7 @@ import { parseEventDate } from '../../utils/eventEntryFee';
 import { downloadEventFinanceWorkbook } from '../../utils/eventFinanceExport';
 import { useAdminPermissions } from '../../hooks/useAdminPermissions';
 import NativeDrawManager from './NativeDrawManager';
+import { resolvePlayerRanking } from '../../utils/playerRankingSelection';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 const normEmail = (value) => String(value || '').trim().toLowerCase();
@@ -1904,8 +1905,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
         return getPlayerProfile(reg)?.image_url || null;
     }, [getPlayerProfile]);
 
-    const getPlayerPoints = useCallback((reg) => {
-        return Number(getPlayerProfile(reg)?.points || 0);
+    const getPlayerPoints = useCallback((reg, source = 'active') => {
+        return resolvePlayerRanking(getPlayerProfile(reg), source).points;
     }, [getPlayerProfile]);
 
     const getPlayerPhone = useCallback((reg) => {
@@ -2258,9 +2259,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
         const result = {};
         divisions.forEach((cls) => {
             const teams = teamsByDivision[cls.name] || [];
+            const rankingSource = cls.seeding_ranking_source || 'active';
             const enriched = teams.map((team) => {
-                const totalPoints = team.players.reduce((sum, reg) => sum + getPlayerPoints(reg), 0);
-                return { ...team, totalPoints };
+                const playerPoints = team.players.map((reg) => getPlayerPoints(reg, rankingSource));
+                const totalPoints = playerPoints.reduce((sum, points) => sum + points, 0);
+                return { ...team, totalPoints, playerPoints, rankingSource };
             });
             const ranked = [...enriched].filter((t) => t.totalPoints > 0).sort((a, b) => b.totalPoints - a.totalPoints);
             const seedMap = {};
@@ -3757,7 +3760,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
                                                                             <div className="flex items-center justify-center gap-3">
                                                                                 {team.players.map((p, pi) => {
                                                                                     const img = getPlayerImage(p);
-                                                                                    const pts = getPlayerPoints(p);
+                                                                                    const pts = team.playerPoints?.[pi] ?? getPlayerPoints(p, team.rankingSource);
                                                                                     const firstName = (p.full_name || '').split(' ')[0];
                                                                                     return (
                                                                                         <React.Fragment key={p.id}>
@@ -4923,6 +4926,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
                             registrations={registrations}
                             playersByEmail={playersByEmail}
                             onSaved={load}
+                            onDivisionRankingSourceChange={(changedDivisionId, source) => {
+                                setDivisions((current) => current.map((item) => (
+                                    item.id === changedDivisionId
+                                        ? { ...item, seeding_ranking_source: source }
+                                        : item
+                                )));
+                            }}
                         />
                     )}
 

@@ -2,12 +2,40 @@ const normalise = (value) => String(value || '').trim().toLowerCase();
 
 const rankingKeyParts = (value) => String(value || '').split('|').map((part) => part.trim());
 
-const AGE_BANDS = new Map([
+const MEN_AGE_BANDS = new Map([
     [2, 35],
     [3, 40],
     [4, 45],
     [5, 50],
     [6, 55],
+    [7, 60],
+    [8, 65],
+]);
+
+const WOMEN_AGE_BANDS = new Map([
+    [14, 35],
+    [15, 40],
+    [16, 45],
+    [17, 50],
+    [18, 55],
+    [19, 60],
+    [20, 65],
+    [21, 70],
+]);
+
+const BOYS_JUNIORS = new Map([
+    [66, 14],
+    [67, 16],
+    [68, 18],
+    [69, 20],
+]);
+
+const GIRLS_JUNIORS = new Map([
+    [71, 12],
+    [72, 14],
+    [73, 16],
+    [74, 18],
+    [75, 20],
 ]);
 
 /** Translate RankedIn API IDs into the division labels shown on profiles. */
@@ -17,12 +45,18 @@ export const rankedInAgeGroupLabel = (ageGroup, rankingType, details = []) => {
     if (age === 83) return 'Women-Main';
     if (age === 84) return 'Mixed-Main';
 
-    const threshold = AGE_BANDS.get(age);
-    if (threshold) {
-        const detailText = (details || []).map((detail) => detail?.class).filter(Boolean).join(' ');
-        const isWomen = Number(rankingType) === 4 || /women|ladies|female/i.test(detailText);
-        return `${isWomen ? 'Women' : 'Men'} Over ${threshold}`;
-    }
+    const womenThreshold = WOMEN_AGE_BANDS.get(age);
+    if (womenThreshold) return `Women Over ${womenThreshold}`;
+    const menThreshold = MEN_AGE_BANDS.get(age);
+    if (menThreshold) return `Men Over ${menThreshold}`;
+
+    const boysAge = BOYS_JUNIORS.get(age);
+    if (boysAge) return `Boys Under ${boysAge}`;
+    const girlsAge = GIRLS_JUNIORS.get(age);
+    if (girlsAge) return `Girls Under ${girlsAge}`;
+
+    const detailText = (details || []).map((detail) => detail?.class).filter(Boolean).join(' ');
+    if (Number(rankingType) === 4 || /women|ladies|female|girls/i.test(detailText)) return 'Women Open';
 
     return 'Open';
 };

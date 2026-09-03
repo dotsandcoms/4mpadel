@@ -102,7 +102,7 @@ const registrationToEntry = (registration, index, playersByEmail, rankingSource,
     };
 };
 
-const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, onSaved }) => {
+const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, onSaved, onDivisionRankingSourceChange }) => {
     const { getTournamentParticipants } = useRankedin();
     const [divisionId, setDivisionId] = useState('');
     const [draft, setDraft] = useState(null);
@@ -155,6 +155,24 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
     }));
 
     const division = divisions.find((item) => item.id === divisionId);
+
+    const selectRankingSource = async (source) => {
+        const previousSource = rankingSource;
+        setRankingSource(source);
+        setDraft(null);
+        if (!division?.id || source === previousSource) return;
+
+        onDivisionRankingSourceChange?.(division.id, source);
+        const { error } = await supabase
+            .from('tournament_divisions')
+            .update({ seeding_ranking_source: source })
+            .eq('id', division.id);
+        if (error) {
+            setRankingSource(previousSource);
+            onDivisionRankingSourceChange?.(division.id, previousSource);
+            toast.error('Could not save the division ranking source. Apply the latest database migration, then try again.');
+        }
+    };
     const availableCourts = useMemo(() => {
         const courtCount = Number(event?.courts_count);
         return Number.isInteger(courtCount) && courtCount > 0
@@ -179,7 +197,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
 
     useEffect(() => {
         let active = true;
-        if (!hasLinkedRankedinClass) {
+        if (!hasLinkedRankedinClass || rankingSource !== 'rankedin_class') {
             setRankedInClassSeedings(new Map());
             return () => { active = false; };
         }
@@ -212,7 +230,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                 if (active) setRankedInClassSeedingsLoading(false);
             });
         return () => { active = false; };
-    }, [division?.rankedin_class_id, getTournamentParticipants, hasLinkedRankedinClass, linkedRankedinTournamentId]);
+    }, [division?.rankedin_class_id, getTournamentParticipants, hasLinkedRankedinClass, linkedRankedinTournamentId, rankingSource]);
 
     useEffect(() => {
         setScheduleDefaults((current) => ({
@@ -1397,13 +1415,13 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                 <div className="flex flex-col gap-3 border-b border-white/10 px-5 py-4 md:flex-row md:items-center md:justify-between"><button type="button" aria-expanded={showDrawConfiguration} onClick={() => setShowDrawConfiguration((open) => !open)} className="flex min-w-0 flex-1 items-center justify-between gap-4 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-padel-green"><span><h2 className="font-bold text-white">Draw configuration</h2><p className="mt-1 text-xs text-gray-400">{showDrawConfiguration ? 'Choose the division and competition format before generating the seeded preview.' : (division ? `${division.name} · ${drawFormat === 'knockout' ? 'Elimination' : drawFormat === 'group_only' ? 'Groups only' : 'Groups + elimination'}` : 'Expand to choose a division and format.')}</p></span>{showDrawConfiguration ? <ChevronUp className="shrink-0 text-padel-green" size={20} /> : <ChevronDown className="shrink-0 text-padel-green" size={20} />}</button>{settingsLocked && <span className="w-fit rounded-full border border-padel-green/40 bg-padel-green/10 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-padel-green">Published · settings locked</span>}</div>
                 {showDrawConfiguration && <div className="space-y-5 p-5">
                     <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-                        <label className="block text-sm font-bold text-gray-300">Division<select value={divisionId} onChange={(event) => { setDivisionId(event.target.value); setActiveDrawKind('main'); setRankingSource('active'); setDraft(null); }} className="mt-2 block w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none focus-visible:border-padel-green focus-visible:ring-2 focus-visible:ring-padel-green/30"><option value="" className="text-black">Select a division</option>{divisions.map((item) => <option className="text-black" key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+                        <label className="block text-sm font-bold text-gray-300">Division<select value={divisionId} onChange={(event) => { const nextId = event.target.value; const nextDivision = divisions.find((item) => item.id === nextId); const savedSource = nextDivision?.seeding_ranking_source || 'active'; setDivisionId(nextId); setActiveDrawKind('main'); setRankingSource(savedSource === 'rankedin_class' ? 'active' : savedSource); setDraft(null); }} className="mt-2 block w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none focus-visible:border-padel-green focus-visible:ring-2 focus-visible:ring-padel-green/30"><option value="" className="text-black">Select a division</option>{divisions.map((item) => <option className="text-black" key={item.id} value={item.id}>{item.name}</option>)}</select></label>
                         {settingsLocked ? <p className="pb-3 text-sm text-gray-400">To change the format, create a new draft before publishing.</p> : <button type="button" onClick={previewDraft} disabled={!divisionId || loadingSaved || (rankingSource === 'rankedin_class' && rankedInClassSeedingsLoading)} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-padel-green px-4 py-3 font-bold text-black transition-transform hover:brightness-110 active:scale-95 disabled:opacity-40">{loadingSaved || (rankingSource === 'rankedin_class' && rankedInClassSeedingsLoading) ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}{savedDraw ? 'Regenerate preview' : 'Generate preview'}</button>}
                     </div>
                     {availableDraws.length > 1 && <label className="block rounded-xl border border-amber-300/30 bg-amber-300/5 p-3 text-sm font-bold text-gray-200">Manage draw<select value={activeDrawKind} onChange={(event) => setActiveDrawKind(event.target.value)} className="mt-2 block w-full rounded-lg border border-amber-300/20 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-amber-300 focus-visible:ring-2 focus-visible:ring-amber-300/30">{availableDraws.map((item) => <option className="text-black" key={item.id} value={item.draw_kind}>{item.draw_kind === 'main' ? 'Main draw' : item.draw_kind === 'silver' ? 'Silver plate' : `${item.draw_kind} plate`}</option>)}</select><span className="mt-2 block text-xs font-normal leading-4 text-gray-400">Select the draw whose teams and results you want to manage.</span></label>}
                     <div className="grid gap-3 md:grid-cols-2">
                         <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Draw format<select disabled={settingsLocked} value={drawFormat} onChange={(event) => { setDrawFormat(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50"><option value="knockout" className="text-black">Elimination / knockout</option><option value="group_only" className="text-black">Groups only</option><option value="group_knockout" className="text-black">Groups + elimination</option></select></label>
-                        <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Ranking source<select disabled={settingsLocked || rankedInClassSeedingsLoading} value={rankingSource} onChange={(event) => { setRankingSource(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50"><option value="active" className="text-black">Each player’s active ranking</option>{hasLinkedRankedinClass && <option value="rankedin_class" className="text-black">Linked RankedIn class snapshot</option>}{rankingOrganisations.map((organisation) => <option key={organisation} value={`organisation:${organisation}`} className="text-black">{organisation} · Main divisions</option>)}</select><span className="mt-2 block text-xs font-normal leading-4 text-gray-500">{rankedInClassSeedingsLoading ? 'Loading linked class rankings…' : 'Mixed pairs automatically use the matching Men-Main and Women-Main lists. The exact values are frozen when the draft is saved.'}</span>{rankingSource === 'rankedin_class' && linkedSeedFallbackCount > 0 && <span className="mt-2 block text-xs font-semibold leading-4 text-amber-200">{linkedSeedFallbackCount} {linkedSeedFallbackCount === 1 ? 'team was' : 'teams were'} not matched to the linked class and will use active profile points.</span>}</label>
+                        <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Ranking source<select disabled={settingsLocked || rankedInClassSeedingsLoading} value={rankingSource} onChange={(event) => selectRankingSource(event.target.value)} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50"><option value="active" className="text-black">Each player’s active ranking</option>{rankingSource === 'rankedin_class' && <option value="rankedin_class" className="text-black">Legacy imported RankedIn snapshot</option>}{rankingOrganisations.map((organisation) => <option key={organisation} value={`organisation:${organisation}`} className="text-black">{organisation} · Main divisions</option>)}</select><span className="mt-2 block text-xs font-normal leading-4 text-gray-500">{rankedInClassSeedingsLoading ? 'Loading the legacy imported snapshot…' : 'New draws use ranking records stored in our database. The selected series is shared by player lists, event cards and draws; exact values are frozen when the draw is saved.'}</span>{rankingSource === 'rankedin_class' && linkedSeedFallbackCount > 0 && <span className="mt-2 block text-xs font-semibold leading-4 text-amber-200">{linkedSeedFallbackCount} {linkedSeedFallbackCount === 1 ? 'team was' : 'teams were'} not matched to the linked class and will use active profile points.</span>}</label>
                         <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Seeding template<select disabled={settingsLocked} value={seedingTemplate} onChange={(event) => { setSeedingTemplate(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50"><option value="0" className="text-black">0% seeded · random draw</option><option value="25" className="text-black">25% seeded</option><option value="50" className="text-black">50% seeded</option><option value="100" className="text-black">100% seeded</option></select><span className="mt-2 block text-xs font-normal leading-4 text-gray-500">Protected teams follow native ranking order; remaining teams are shuffled when the preview is generated.</span></label>
                         {drawFormat !== 'knockout' && <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Number of groups<select disabled={settingsLocked} value={groupCount} onChange={(event) => { setGroupCount(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50">{[2, 3, 4, 5, 6, 8].map((count) => <option key={count} value={count} className="text-black">{count} groups</option>)}</select></label>}
                         {drawFormat === 'group_knockout' && <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Advance from each group<select disabled={settingsLocked} value={advancersPerGroup} onChange={(event) => { setAdvancersPerGroup(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50"><option value="1" className="text-black">Top 1 team</option><option value="2" className="text-black">Top 2 teams</option></select></label>}

@@ -16,7 +16,7 @@ import WebSocket from 'ws';
 import * as dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { findPreferredRanking, rankingRowKey } from '../src/utils/playerRankingSelection.js';
+import { findPreferredRanking, rankedInAgeGroupLabel, rankingRowKey } from '../src/utils/playerRankingSelection.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
@@ -29,23 +29,24 @@ const supabase = createClient(
     { realtime: { transport: WebSocket } }
 );
 
+const rankingList = (orgId, orgName, type, ages) => ages.map((age) => {
+    const ageLabel = rankedInAgeGroupLabel(age, type);
+    const match = /women|girls/i.test(ageLabel) ? 'Women-Doubles'
+        : /men|boys/i.test(ageLabel) ? 'Men-Doubles'
+            : 'Doubles';
+    return { orgId, orgName, type, age, ageLabel, match };
+});
+
+// Every category currently exposed by the three federation-wide series. The
+// profile scraper keeps additional club/venue rankings and this repair job
+// preserves those uncovered rows rather than deleting them.
 const LISTS = [
-    { orgId: 15809, orgName: 'SAPA ranking', type: 3, age: 82, ageLabel: 'Men-Main', match: 'Men-Doubles' },
-    { orgId: 15809, orgName: 'SAPA ranking', type: 4, age: 83, ageLabel: 'Women-Main', match: 'Women-Doubles' },
-    { orgId: 15809, orgName: 'SAPA ranking', type: 3, age: 3, ageLabel: 'Men Over 40', match: 'Men-Doubles' },
-    { orgId: 15809, orgName: 'SAPA ranking', type: 3, age: 2, ageLabel: 'Men Over 35', match: 'Men-Doubles' },
-    { orgId: 15809, orgName: 'SAPA ranking', type: 3, age: 4, ageLabel: 'Men Over 45', match: 'Men-Doubles' },
-    { orgId: 15809, orgName: 'SAPA ranking', type: 3, age: 5, ageLabel: 'Men Over 50', match: 'Men-Doubles' },
-    { orgId: 15809, orgName: 'SAPA ranking', type: 3, age: 6, ageLabel: 'Men Over 55', match: 'Men-Doubles' },
-    { orgId: 16317, orgName: 'Broll Pro Tour', type: 3, age: 82, ageLabel: 'Men-Main', match: 'Men-Doubles' },
-    { orgId: 16317, orgName: 'Broll Pro Tour', type: 4, age: 83, ageLabel: 'Women-Main', match: 'Women-Doubles' },
-    { orgId: 16482, orgName: 'SA Grand Tour', type: 3, age: 82, ageLabel: 'Men-Main', match: 'Men-Doubles' },
-    { orgId: 16482, orgName: 'SA Grand Tour', type: 4, age: 83, ageLabel: 'Women-Main', match: 'Women-Doubles' },
-    { orgId: 16482, orgName: 'SA Grand Tour', type: 3, age: 3, ageLabel: 'Men Over 40', match: 'Men-Doubles' },
-    { orgId: 16482, orgName: 'SA Grand Tour', type: 3, age: 2, ageLabel: 'Men Over 35', match: 'Men-Doubles' },
-    { orgId: 16482, orgName: 'SA Grand Tour', type: 3, age: 4, ageLabel: 'Men Over 45', match: 'Men-Doubles' },
-    { orgId: 16482, orgName: 'SA Grand Tour', type: 3, age: 5, ageLabel: 'Men Over 50', match: 'Men-Doubles' },
-    { orgId: 16482, orgName: 'SA Grand Tour', type: 3, age: 6, ageLabel: 'Men Over 55', match: 'Men-Doubles' },
+    ...rankingList(15809, 'SAPA ranking', 3, [82, 66, 67, 68, 69, 2, 3, 4, 5, 6, 7, 8]),
+    ...rankingList(15809, 'SAPA ranking', 4, [83, 71, 72, 73, 74, 75, 14, 15, 16, 17, 18, 19, 20, 21]),
+    ...rankingList(16317, 'Broll Pro Tour', 3, [82, 68, 2, 3, 4, 5]),
+    ...rankingList(16317, 'Broll Pro Tour', 4, [83, 75, 14, 15, 16, 17, 18, 19]),
+    ...rankingList(16482, 'SA Grand Tour', 3, [82, 68, 69, 2, 3]),
+    ...rankingList(16482, 'SA Grand Tour', 4, [83, 75, 14, 15, 16, 21]),
 ];
 
 const isBadRankings = (rankings) => {
@@ -123,6 +124,7 @@ async function run() {
                 rank: String(hit.Standing),
                 points: String(Math.round(parseFloat(hit.ParticipantPoints?.Points) || 0)),
                 rpId: hit.Participant?.Id || hit.ParticipantPoints?.RankingParticipantId,
+                rankingDate: hit.ParticipantPoints?.RankingDate || null,
             };
             const rid = hit.RankedinId ? String(hit.RankedinId) : null;
             const nameKey = (hit.Name || '').trim().toLowerCase();
@@ -199,6 +201,11 @@ async function run() {
                     age_group: m.list.ageLabel,
                     points: m.points,
                     match_type: m.list.match,
+                    ranking_id: m.list.orgId,
+                    ranking_type: m.list.type,
+                    age_group_id: m.list.age,
+                    ranking_date: m.rankingDate,
+                    synced_at: new Date().toISOString(),
                     details,
                 });
             }

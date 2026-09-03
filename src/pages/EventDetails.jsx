@@ -47,6 +47,7 @@ import {
 } from '../utils/weeklyRegistration';
 import TournamentProgressBar from '../components/TournamentProgressBar';
 import VideoModal from '../components/VideoModal';
+import { resolvePlayerRanking } from '../utils/playerRankingSelection';
 
 const formatPlayerName = (fullName) => {
     if (!fullName) return '';
@@ -728,56 +729,18 @@ const EventDetails = () => {
         return event?.is_manual ? uniqueNames.size : Math.max(uniqueNames.size, event?.registered_players || 0);
     }, [participants, event?.registered_players, event?.is_manual]);
 
-    // Resolves a player's SAPA "Main" ranking points for the given gender from their
-    // locally-synced players.rankings breakdown (same matching rules used on the
-    // Rankings page's player modal: prefer an Open/Main age group of the right
-    // gender, relax to just the right gender, then fall back to whichever SAPA
-    // entry has the deepest tournament history).
-    const getMainCategoryPoints = useCallback((playerData, genderLabel) => {
-        if (!playerData) return 0;
-        const rankingsArr = playerData.rankings;
-        let matchPoints = 0;
+    const getDivisionRankingPoints = useCallback((playerData, rankingSource = 'active') => (
+        resolvePlayerRanking(playerData, rankingSource).points
+    ), []);
 
-        if (Array.isArray(rankingsArr) && rankingsArr.length > 0) {
-            const orgCandidates = rankingsArr.filter((r) => r.org?.toUpperCase().includes('SAPA'));
-            if (orgCandidates.length > 0) {
-                const genderKeywords = genderLabel === 'women' ? ['WOMEN', 'LADIES', 'FEMALE'] : ['MEN'];
-
-                let match = orgCandidates.find((r) => {
-                    const matchType = (r.match_type || '').toUpperCase();
-                    const ageGroup = (r.age_group || '').toUpperCase();
-                    const genderMatch = genderKeywords.some((k) => matchType.includes(k));
-                    const isMain = !ageGroup || ageGroup.includes('OPEN') || ageGroup.includes('MAIN');
-                    return genderMatch && isMain;
-                });
-
-                if (!match) {
-                    match = orgCandidates.find((r) =>
-                        genderKeywords.some((k) => (r.match_type || '').toUpperCase().includes(k))
-                    );
-                }
-                if (!match) {
-                    match = [...orgCandidates].sort((a, b) => (b.details?.length || 0) - (a.details?.length || 0))[0];
-                }
-
-                if (match?.points) matchPoints = Number(match.points);
-            }
-        }
-
-        // Only fall back to the flat players.points column when no SAPA ranking entry exists.
-        return matchPoints > 0 ? matchPoints : (playerData.points || 0);
-    }, []);
-
-    // Seeds each manual-event team by combined SAPA Men/Women "Main" ranking points
-    // (each player's synced best-8 points total, summed across the team), matching
-    // the gender of the division they're registered in. Only used for manual
-    // events — RankedIn events already carry their own Rank/Seed fields from the API.
+    // Seeds each manual-event team from the ranking series selected on that
+    // division. Every value comes from the player's locally-synced rankings
+    // collection; RankedIn events still carry their own Rank/Seed fields.
     const manualTeamSeeds = useMemo(() => {
         if (!event?.is_manual) return {};
         const result = {};
         playerDivisions.forEach((div) => {
-            const dname = (div.Name || '').toLowerCase();
-            const genderLabel = (dname.includes('women') || dname.includes('ladies') || dname.includes('girls')) ? 'women' : 'men';
+            const rankingSource = div.SeedingRankingSource || 'active';
 
             const teams = (participants[div.Id] || []).map((item) => {
                 const p = item.Participant || {};
@@ -792,7 +755,7 @@ const EventDetails = () => {
                         mappedData = playerRankingsMap[pName];
                     }
                     
-                    return sum + getMainCategoryPoints(mappedData, genderLabel);
+                    return sum + getDivisionRankingPoints(mappedData, rankingSource);
                 }, 0);
                 return { id: p.Id, name: p.Name, players, totalPoints };
             });
@@ -802,12 +765,12 @@ const EventDetails = () => {
             ranked.forEach((t, idx) => { seedById[t.id] = idx + 1; });
 
             result[div.Id] = {
-                genderLabel,
+                rankingSource,
                 teams: teams.map((t) => ({ ...t, seed: seedById[t.id] || null })),
             };
         });
         return result;
-    }, [event?.is_manual, playerDivisions, participants, playerRankingsMap, getMainCategoryPoints]);
+    }, [event?.is_manual, playerDivisions, participants, playerRankingsMap, getDivisionRankingPoints]);
 
     // Total registered entries for manual events.
     // Weekly: count bookable teams (not partner-mirror rows) for capacity display.
@@ -2367,6 +2330,7 @@ const EventDetails = () => {
                         Name: d.name,
                         EntryFee: resolveDivisionEntryFee(d, event),
                         StandardEntryFee: Number(d.entry_fee || 0),
+                        SeedingRankingSource: d.seeding_ranking_source || 'active',
                     }));
 
                     const { data: localRegs } = await supabase
@@ -2610,7 +2574,7 @@ const EventDetails = () => {
                 while (hasMore) {
                     const { data, error } = await supabase
                         .from('players_public')
-                        .select('name, rankedin_id, rankings, points')
+                        .select('name, rankedin_id, rankings, points, rank_label, preferred_ranking, active_ranking_label, category, gender')
                         .range(page * pageSize, (page + 1) * pageSize - 1);
 
                     if (error) {
@@ -2629,7 +2593,15 @@ const EventDetails = () => {
 
                 const lookup = {};
                 allData.forEach(p => {
-                    const payload = { rankings: p.rankings || [], points: p.points || 0 };
+                    const payload = {
+                        rankings: p.rankings || [],
+                        points: p.points || 0,
+                        rank_label: p.rank_label || null,
+                        preferred_ranking: p.preferred_ranking || null,
+                        active_ranking_label: p.active_ranking_label || null,
+                        category: p.category || null,
+                        gender: p.gender || null,
+                    };
                     if (p.rankedin_id) lookup[p.rankedin_id.toString()] = payload;
                     if (p.name) lookup[p.name.toLowerCase().trim()] = payload;
                 });
@@ -5217,8 +5189,7 @@ const EventDetails = () => {
                                                                 {clsParticipants.length > 0 ? (
                                                                     <div className="divide-y divide-gray-100">
                                                                         {(() => {
-                                                                            const dname = (cls.Name || '').toLowerCase();
-                                                                            const genderLabel = (dname.includes('women') || dname.includes('ladies') || dname.includes('girls')) ? 'women' : 'men';
+                                                                            const rankingSource = cls.SeedingRankingSource || 'active';
                                                                             
                                                                             let enrichedParticipants = clsParticipants.map((item) => {
                                                                                 const p = item.Participant || {};
@@ -5241,7 +5212,7 @@ const EventDetails = () => {
                                                                                         mappedData = playerRankingsMap[pName];
                                                                                     }
                                                                                     
-                                                                                    return getMainCategoryPoints(mappedData, genderLabel);
+                                                                                    return getDivisionRankingPoints(mappedData, rankingSource);
                                                                                 };
                                                                                 
                                                                                 p1Points = getPlayerPoints(players[0]);
