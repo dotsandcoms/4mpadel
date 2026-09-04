@@ -10,6 +10,7 @@ import { listRankingCategories, listRankingOrganisations, resolvePlayerRanking }
 import { extractRankedinId } from '../../utils/rankedinLink';
 import { useRankedin } from '../../hooks/useRankedin';
 import DrawBracketPreview from './DrawBracketPreview';
+import DrawSchedulingBoard from './DrawSchedulingBoard';
 
 const isEligible = (registration) => (
     String(registration?.status || '').toLowerCase() !== 'withdrawn'
@@ -139,6 +140,8 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
     const [activeDrawKind, setActiveDrawKind] = useState('main');
     const [availableDraws, setAvailableDraws] = useState([]);
     const [saving, setSaving] = useState(false);
+    const [confirmReopen, setConfirmReopen] = useState(false);
+    const [draftDirty, setDraftDirty] = useState(false);
     const [drawReloadKey, setDrawReloadKey] = useState(0);
     const [rankingTier, setRankingTier] = useState(null);
     const [rankingPointsTable, setRankingPointsTable] = useState([]);
@@ -411,6 +414,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                 const entryById = new Map((savedEntries || []).map((entry) => [entry.id, entry]));
                 const matches = (savedMatches || []).map((match) => ({
                     ...match,
+                    group_key: match.group_id,
                     key: match.id,
                     entry_one: entryById.get(match.entry_one_id) || null,
                     entry_two: entryById.get(match.entry_two_id) || null,
@@ -421,6 +425,8 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                     ? await supabase.from('draw_match_sets').select('*').in('match_id', matchIds).order('set_number')
                     : { data: [] };
                 setSavedDraw(draw);
+                setConfirmReopen(false);
+                setDraftDirty(false);
                 setSavedGroups(groups || []);
                 setStandings(savedStandings || []);
                 setMatchSets(savedSets || []);
@@ -437,7 +443,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                     format: draw.format || 'knockout',
                     draw_size: nextPowerOfTwo((savedEntries || []).length),
                     total_rounds: Math.max(...matches.map((match) => match.round_number), 0),
-                    entries: savedEntries || [],
+                    entries: (savedEntries || []).map((entry) => ({ ...entry, group_key: entry.group_id })),
                     matches,
                     groups: (groups || []).map((group) => ({ ...group, key: group.id, entries: (savedEntries || []).filter((entry) => entry.group_id === group.id) })),
                 });
@@ -462,6 +468,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             return;
         }
         try {
+            setDraftDirty(true);
             if (drawFormat === 'knockout') {
                 setDraft({ ...generateKnockoutDraft(entries, {
                     seedingMethod: 'native_ranking',
@@ -484,12 +491,13 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
     };
 
     const moveSeedTo = (fromIndex, toIndex) => {
-        if (!draft) return;
+        if (!draft || (savedDraw && savedDraw.status !== 'draft')) return;
         const ordered = [...draft.entries].sort((a, b) => Number(a.seed_number || 999) - Number(b.seed_number || 999));
         if (toIndex < 0 || toIndex >= ordered.length || fromIndex === toIndex) return;
         const [moved] = ordered.splice(fromIndex, 1);
         ordered.splice(toIndex, 0, moved);
         const reordered = ordered.map((entry, index) => ({ ...entry, seed_number: index + 1 }));
+        setDraftDirty(true);
         if (draft.format === 'knockout') {
             setDraft({ ...generateKnockoutDraft(reordered, {
                 seedingMethod: 'manual',
@@ -686,6 +694,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             });
             toast.success(`${division.name} draw ${existing ? 'updated' : 'saved'} as a draft`);
             setSavedDraw({ ...draw, status: 'draft' });
+            setDraftDirty(false);
             onSaved?.();
         } catch (error) {
             console.error('Failed to save native draw draft', error);
@@ -695,7 +704,33 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         }
     };
 
+    const reopenForCorrections = async () => {
+        if (!savedDraw?.id || savedDraw.status !== 'published' || activeDrawKind !== 'main') return;
+        setSaving(true);
+        try {
+            const { error } = await supabase.rpc('reopen_native_draw_for_corrections', { p_draw_id: savedDraw.id });
+            if (error) throw error;
+            setSavedDraw((current) => ({ ...current, status: 'draft' }));
+            setConfirmReopen(false);
+            setShowDrawSetup(true);
+            setShowDrawConfiguration(true);
+            setDraftDirty(false);
+            toast.success('Draw reopened. Adjust seeds, update the draft, then review and republish.');
+            onSaved?.();
+        } catch (error) {
+            toast.error(error.code === 'PGRST202'
+                ? 'Apply the reopen-draw SQL migration before using this action.'
+                : error.message || 'Could not reopen this draw.');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const publishDraft = async () => {
+        if (draftDirty) {
+            toast.error('Update the draft to save your seed changes before publishing.');
+            return;
+        }
         if (!savedDraw?.id || savedDraw.status !== 'draft') {
             toast.error('Save the draft before publishing it');
             return;
@@ -1625,6 +1660,18 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                 </div>}
             </section>
 
+            {savedDraw?.status === 'published' && activeDrawKind === 'main' && <section className="rounded-xl border border-amber-300/30 bg-amber-300/5 p-5">
+                <h2 className="font-bold text-white">Need to correct the seed order?</h2>
+                <p className="mt-2 text-sm text-gray-400">Reopen this draw only before play or results have started. Existing plate draws also prevent reseeding.</p>
+                {!confirmReopen ? <button type="button" onClick={() => setConfirmReopen(true)} disabled={saving} className="mt-3 rounded-lg border border-amber-300/40 px-4 py-3 text-sm font-bold text-amber-200 disabled:opacity-40">Reopen for corrections</button> : <div className="mt-4 space-y-3">
+                    <p className="text-sm text-amber-100">This returns the draw to draft and hides it from the public until you republish. Changing seeds rebuilds the matchups; after updating the draft, reapply courts and times. If localhost uses your live database, this affects the live draw too.</p>
+                    <div className="flex flex-wrap gap-3">
+                        <button type="button" onClick={reopenForCorrections} disabled={saving} className="rounded-lg bg-amber-300 px-4 py-3 text-sm font-bold text-black disabled:opacity-40">{saving ? 'Checking and reopening…' : 'Confirm reopen'}</button>
+                        <button type="button" onClick={() => setConfirmReopen(false)} disabled={saving} className="rounded-lg border border-white/15 px-4 py-3 text-sm text-gray-300">Cancel</button>
+                    </div>
+                </div>}
+            </section>}
+
             {draft && <div className="rounded-2xl border border-white/10 bg-[#101010] overflow-hidden">
                 <button type="button" onClick={() => setShowDrawSetup((open) => !open)} className="flex w-full items-center justify-between gap-3 border-b border-white/10 px-5 py-4 text-left hover:bg-white/[0.03]">
                     <span><span className="block font-bold text-white">Draw setup &amp; seed preview</span><span className="block text-xs text-gray-400">{showDrawSetup ? 'Collapse this section to focus on score entry.' : 'Expand to review seeds and bracket placement.'}</span></span>
@@ -1688,6 +1735,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             </div>}
 
             {savedDraw?.status === 'published' && draft && <div className="rounded-2xl border border-white/10 bg-[#101010] p-5">
+                <DrawSchedulingBoard key={savedDraw.id} eventId={event.id} drawId={savedDraw.id} playDays={playDays} onSaved={(updates) => updates.forEach(({ id, ...values }) => updateLocalMatch(id, values))} />
                 <div className="mb-4"><p className="font-bold text-white">Record results</p><p className="text-xs text-gray-400">Choose the winning team. The winner automatically moves into the next bracket slot.</p></div>
                 <div className="mb-5 rounded-xl border border-sky-300/25 bg-sky-300/5 p-4"><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-300/10 text-sky-200"><CalendarClock size={18} /></span><div><p className="font-bold text-white">Run the live draw</p><p className="mt-1 text-xs leading-5 text-gray-400">Use <strong className="text-gray-200">Match setup</strong> to set a court and start time. Then select <strong className="text-pink-200">Mark live</strong> when the players take the court. These updates appear on the public draw automatically.</p></div></div></div>
                 <div className="mb-5 overflow-hidden rounded-xl border border-sky-300/25 bg-sky-300/[0.04]">
