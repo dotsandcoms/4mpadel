@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
+import { normalizeRankedinMatchScore } from '../utils/rankedinMatchScore';
 import { SAPA_FALLBACK_RANKEDIN, fetchDefaultFederationRankedinConfig } from '../utils/federation';
 
 // Rankedin API Base URL
@@ -906,12 +907,7 @@ export const useRankedin = () => {
                                     Venue: null,
                                     IsWinner: playerIsWinner // Add helper level winner flag
                                 },
-                                Score: {
-                                    Score: (m.MatchResult?.Score?.DetailedScoring || []).map(ds => ({
-                                        Score1: ds.FirstParticipantScore,
-                                        Score2: ds.SecondParticipantScore
-                                    }))
-                                }
+                                Score: normalizeRankedinMatchScore(m.MatchResult?.Score)
                             });
                         });
                         return eventMatches;
@@ -1150,4 +1146,3 @@ export const useRankedin = () => {
         getParticipantPointsDetails,
     };
 };
-

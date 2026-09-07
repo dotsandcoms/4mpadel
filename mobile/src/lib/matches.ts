@@ -27,6 +27,7 @@ export type PlayerMatch = {
   };
   Score?: {
     Score?: { Score1: number; Score2: number }[];
+    IsSummary?: boolean;
   };
 };
 
