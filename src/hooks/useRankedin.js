@@ -143,6 +143,12 @@ const fetchWithTimeout = async (url, options = {}, timeout = 8000) => {
  * and caches the response in Supabase `rankedin_cache` for high availability and sub-second loads.
  */
 const fetchWithCache = async (url, options = {}, cacheDurationMs = 1000 * 60 * 60 * 6, forceRefresh = false) => { // Default 6 hours cache
+    // RankedIn can briefly return empty leaderboards during its weekly rollover.
+    // Never let those responses replace or mask a populated leaderboard for six hours.
+    const isLeaderboard = /\/ranking\/getrankingsasync\?/i.test(url);
+    const isUsablePayload = (payload) => !isLeaderboard || (
+        Array.isArray(payload?.Payload) && payload.Payload.length > 0
+    );
     // 1. Attempt to read from Supabase cache first (skipped when forceRefresh is requested,
     //    e.g. an admin clicking "Sync" expects live data so removals propagate immediately).
     if (!forceRefresh) {
@@ -153,7 +159,7 @@ const fetchWithCache = async (url, options = {}, cacheDurationMs = 1000 * 60 * 6
                 .eq('url', url)
                 .maybeSingle();
 
-            if (data) {
+            if (data && isUsablePayload(data.payload)) {
                 const ageMs = Date.now() - new Date(data.updated_at).getTime();
                 if (ageMs < cacheDurationMs) {
                     console.log(`[Cache HIT - Fresh]: ${url}`);
@@ -171,6 +177,9 @@ const fetchWithCache = async (url, options = {}, cacheDurationMs = 1000 * 60 * 6
         const response = await fetchWithTimeout(url, options);
         if (!response.ok) throw new Error(`Rankedin API status ${response.status}`);
         const data = await response.json();
+        if (!isUsablePayload(data)) {
+            throw new Error('RankedIn rankings are temporarily unavailable');
+        }
 
         // 3. Save to Supabase cache asynchronously so we don't block the client
         supabase
@@ -192,7 +201,7 @@ const fetchWithCache = async (url, options = {}, cacheDurationMs = 1000 * 60 * 6
                 .eq('url', url)
                 .maybeSingle();
 
-            if (data && data.payload) {
+            if (data && data.payload && isUsablePayload(data.payload)) {
                 console.warn(`[Offline Mode]: Successfully served stale cache for ${url}`);
                 return data.payload;
             }
@@ -1141,5 +1150,4 @@ export const useRankedin = () => {
         getParticipantPointsDetails,
     };
 };
-
 
