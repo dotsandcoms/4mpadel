@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { createHistoryRepair, isRealHistory, preserveHistoryScores } from './lib/matchCacheRepair.js';
 import * as dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -35,6 +36,7 @@ async function fetchWithRetry(url, options = {}, retries = 3) {
             await new Promise(r => setTimeout(r, 2000));
         }
     }
+    throw new Error(`RankedIn retries exhausted: ${url}`);
 }
 
 async function getAnonToken() {
@@ -66,6 +68,14 @@ async function run() {
 
         console.log(`Found ${players.length} players with a Rankedin ID.`);
 
+        const events = [];
+        for (let offset = 0; ; offset += 1000) {
+            const { data, error } = await supabase.from('calendar').select('event_name,rankedin_id').order('id').range(offset, offset + 999);
+            if (error) throw error;
+            events.push(...data);
+            if (data.length < 1000) break;
+        }
+        const repairHistory = createHistoryRepair(events, fetchWithRetry);
         const token = await getAnonToken();
         const headers = token ? { 'x-anonymous-token': token, 'Accept': 'application/json' } : { 'Accept': 'application/json' };
 
@@ -86,25 +96,43 @@ async function run() {
                 const upcomingRaw = await fetchWithRetry(`${API_BASE}/player/GetPlayerMatchesAsync?playerid=${internalId}&takehistory=false&skip=0&take=20&language=en`, { headers });
                 const historyRaw = await fetchWithRetry(`${API_BASE}/player/GetPlayerMatchesAsync?playerid=${internalId}&takehistory=true&skip=0&take=30&language=en`, { headers });
 
-                const upcoming = upcomingRaw?.Payload || [];
-                const history = historyRaw?.Payload || [];
-
+                const { data: saved, error: cacheError } = await supabase.from('player_matches')
+                    .select('past_matches,past_matches_updated_at,upcoming_matches_updated_at,updated_at').eq('rankedin_id', player.rankedin_id).maybeSingle();
+                if (cacheError) throw cacheError;
+                const hasLiveHistory = isRealHistory(historyRaw?.Payload);
+                const history = preserveHistoryScores(historyRaw?.Payload, saved?.past_matches);
+                const repaired = await repairHistory(history);
+                const upcoming = upcomingRaw?.Payload;
+                const validUpcoming = Array.isArray(upcoming) && (upcoming.length === 0 || isRealHistory(upcoming));
                 const nowIso = new Date().toISOString();
+                const update = { rankedin_id: player.rankedin_id, updated_at: nowIso };
+                if (saved && !hasLiveHistory) {
+                    update.past_matches_updated_at = saved.past_matches_updated_at || saved.updated_at || new Date(0).toISOString();
+                }
+                if (saved && !validUpcoming) {
+                    update.upcoming_matches_updated_at = saved.upcoming_matches_updated_at || saved.updated_at || new Date(0).toISOString();
+                }
+                if (validUpcoming) {
+                    update.upcoming_matches = upcoming;
+                    update.upcoming_matches_updated_at = nowIso;
+                }
+                if (hasLiveHistory || repaired.repaired) {
+                    update.past_matches = repaired.matches;
+                    // A score repair is not a full history refresh.
+                    if (hasLiveHistory) update.past_matches_updated_at = nowIso;
+                }
+                if (!validUpcoming && !hasLiveHistory && !repaired.repaired) {
+                    console.warn('  -> No valid live data; preserving saved matches.');
+                    continue;
+                }
                 const { error: upsertError } = await supabase
                     .from('player_matches')
-                    .upsert({
-                        rankedin_id: player.rankedin_id,
-                        upcoming_matches: upcoming,
-                        past_matches: history,
-                        upcoming_matches_updated_at: nowIso,
-                        past_matches_updated_at: nowIso,
-                        updated_at: nowIso
-                    }, { onConflict: 'rankedin_id' });
+                    .upsert(update, { onConflict: 'rankedin_id' });
 
                 if (upsertError) {
                     console.error(`  -> Supabase Upsert Error for ${player.name}:`, upsertError.message);
                 } else {
-                    console.log(`  -> Success. Upcoming: ${upcoming.length}, Past: ${history.length}`);
+                    console.log(`  -> Success. Upcoming: ${validUpcoming ? upcoming.length : "preserved"}, Past: ${repaired.matches.length}, Scores repaired: ${repaired.repaired}`);
                 }
             } catch (err) {
                 console.error(`  -> Failed to sync ${player.name}:`, err.message);

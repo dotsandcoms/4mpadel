@@ -42,18 +42,26 @@ export async function fetchPlayerMatches(rankedinId?: string | null): Promise<Ma
   if (!rankedinId) return EMPTY;
 
   const cached = await readCache(rankedinId);
-  const upcoming = splitUpcoming(cached.upcoming);
-  const past = mergePast(cached.past, cached.upcoming);
-
-  if (upcoming.length || past.length) {
-    return { upcoming, past: past.slice(0, 15) };
-  }
-
-  const live = await fetchLive(rankedinId);
+  const live = cached.upcomingFresh && cached.pastFresh
+    ? {}
+    : await fetchLive(rankedinId, !cached.upcomingFresh, !cached.pastFresh);
+  const upcoming = live.upcoming ?? cached.upcoming;
+  // An empty/placeholder history response must not erase previously published results.
+  const past = live.past?.length ? preservePublishedScores(live.past, cached.past) : cached.past;
   return {
-    upcoming: splitUpcoming(live.upcoming),
-    past: mergePast(live.past, live.upcoming).slice(0, 15),
+    upcoming: splitUpcoming(upcoming),
+    past: mergePast(past, upcoming).slice(0, 15),
   };
+}
+
+function preservePublishedScores(live: PlayerMatch[], saved: PlayerMatch[]) {
+  return live.map(match => {
+    if (match.Score?.Score?.length) return match;
+    const candidates = saved.filter(old => matchKey(old, 0) === matchKey(match, 0));
+    return candidates.length === 1 && candidates[0].Score?.Score?.length
+      ? { ...match, Score: candidates[0].Score }
+      : match;
+  });
 }
 
 export function parseMatchDate(dateStr?: string | null) {
@@ -83,7 +91,7 @@ export function parseMatchDate(dateStr?: string | null) {
 
 export function matchKey(match: PlayerMatch, index: number) {
   const info = match.Info || {};
-  return `${info.EventName || 'match'}|${info.Date || ''}|${info.Challenger?.Name || ''}|${info.Challenged?.Name || ''}|${index}`;
+  return `${info.EventName || 'match'}|${info.Date || ''}|${info.Challenger?.Name || ''}|${info.Challenged?.Name || ''}|${info.Challenger1?.Name || ''}|${info.Challenged1?.Name || ''}|${index}`;
 }
 
 export function isMatchWinner(match: PlayerMatch) {
@@ -121,65 +129,75 @@ function mergePast(past: PlayerMatch[], upcoming: PlayerMatch[]) {
   );
 }
 
-async function readCache(rankedinId: string): Promise<MatchLists> {
+type CachedMatches = MatchLists & { upcomingFresh: boolean; pastFresh: boolean };
+const EMPTY_CACHE: CachedMatches = { ...EMPTY, upcomingFresh: false, pastFresh: false };
+
+async function readCache(rankedinId: string): Promise<CachedMatches> {
   try {
     const { data, error } = await supabase
       .from('player_matches')
-      .select(
-        'upcoming_matches, past_matches, upcoming_matches_updated_at, past_matches_updated_at, updated_at'
-      )
+      .select('upcoming_matches, past_matches, upcoming_matches_updated_at, past_matches_updated_at, updated_at')
       .eq('rankedin_id', rankedinId)
       .maybeSingle();
-    if (error || !data) return EMPTY;
-
-    const upcoming = freshList(
-      data.upcoming_matches,
-      data.upcoming_matches_updated_at || data.updated_at
-    );
-    const past = freshList(data.past_matches, data.past_matches_updated_at || data.updated_at);
-    return { upcoming, past };
+    if (error || !data) return EMPTY_CACHE;
+    const upcoming = validList(data.upcoming_matches);
+    const past = validList(data.past_matches);
+    return {
+      upcoming: upcoming || [], past: past || [],
+      upcomingFresh: upcoming !== null && isFresh(data.upcoming_matches_updated_at || data.updated_at),
+      pastFresh: past !== null && isFresh(data.past_matches_updated_at || data.updated_at),
+    };
   } catch {
-    return EMPTY;
+    return EMPTY_CACHE;
   }
 }
 
-function freshList(payload: unknown, stamp: string | null) {
-  if (!Array.isArray(payload) || payload.length === 0) return [];
-  if (!stamp) return payload as PlayerMatch[];
-  const age = Date.now() - new Date(stamp).getTime();
-  if (Number.isNaN(age) || age > CACHE_MS * 12) return payload as PlayerMatch[];
-  return payload as PlayerMatch[];
+function validList(payload: unknown): PlayerMatch[] | null {
+  if (!Array.isArray(payload)) return null;
+  const matches = payload.filter(match => match && isRealMatch(match));
+  return payload.length && !matches.length ? null : matches;
 }
 
-async function fetchLive(rankedinId: string): Promise<MatchLists> {
+function isFresh(stamp?: string | null) {
+  if (!stamp) return false;
+  const age = Date.now() - Date.parse(stamp);
+  return Number.isFinite(age) && age >= 0 && age < CACHE_MS;
+}
+
+async function fetchJson(url: string, headers?: Record<string, string>) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
   try {
-    const profileRes = await fetch(
-      `${RANKEDIN_PROFILE}?rankedinId=${encodeURIComponent(rankedinId)}&language=en`
-    );
-    if (!profileRes.ok) return EMPTY;
-    const profile = (await profileRes.json()) as { Id?: number; Header?: { PlayerId?: number } };
-    const internalId = profile.Id || profile.Header?.PlayerId;
-    if (!internalId) return EMPTY;
+    const response = await fetch(url, { headers, signal: controller.signal });
+    if (!response.ok) throw new Error(`RankedIn returned ${response.status}`);
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
-    const [upcomingRes, pastRes] = await Promise.all([
-      fetch(
-        `${RANKEDIN_MATCHES}?playerid=${internalId}&takehistory=false&skip=0&take=20&language=en`
-      ),
-      fetch(
-        `${RANKEDIN_MATCHES}?playerid=${internalId}&takehistory=true&skip=0&take=40&language=en`
-      ),
+async function fetchLive(rankedinId: string, upcoming: boolean, past: boolean): Promise<Partial<MatchLists>> {
+  try {
+    const [profile, layout] = await Promise.all([
+      fetchJson(`${RANKEDIN_PROFILE}?rankedinId=${encodeURIComponent(rankedinId)}&language=en`),
+      fetchJson('https://api.rankedin.com/v1/player/getlayoutinfoasync?language=en').catch(() => null),
     ]);
-
-    const upcomingJson = upcomingRes.ok
-      ? ((await upcomingRes.json()) as { Payload?: PlayerMatch[] })
-      : {};
-    const pastJson = pastRes.ok ? ((await pastRes.json()) as { Payload?: PlayerMatch[] }) : {};
-
-    return {
-      upcoming: upcomingJson.Payload || [],
-      past: pastJson.Payload || [],
+    const internalId = profile.Id || profile.Header?.PlayerId;
+    if (!internalId) return {};
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (layout?.AnonymousToken) headers['x-anonymous-token'] = layout.AnonymousToken;
+    const load = async (history: boolean) => {
+      try {
+        const data = await fetchJson(`${RANKEDIN_MATCHES}?playerid=${internalId}&takehistory=${history}&skip=0&take=${history ? 40 : 20}&language=en`, headers);
+        return validList(data.Payload) ?? undefined;
+      } catch { return undefined; }
     };
+    const [upcomingList, pastList] = await Promise.all([
+      upcoming ? load(false) : undefined,
+      past ? load(true) : undefined,
+    ]);
+    return { upcoming: upcomingList, past: pastList };
   } catch {
-    return EMPTY;
+    return {};
   }
 }
