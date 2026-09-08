@@ -1806,6 +1806,10 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                     variant="inline"
                     isOpen
                     event={managingEvent}
+                    onEventCancelled={(updatedEvent) => {
+                        setManagingEvent(updatedEvent);
+                        fetchHostData();
+                    }}
                     onBack={() => setManagingEvent(null)}
                     onEditEvent={handleStartEditEvent}
                     backLabel="← Back to Organisation Dashboard"

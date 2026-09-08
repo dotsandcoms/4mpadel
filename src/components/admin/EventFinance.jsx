@@ -202,6 +202,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             event.clubs?.name,
             event.clubs?.short_name,
             event.venue,
+            ...(Array.isArray(event.venues) ? event.venues : []),
         ].some((value) => String(value || '').toLowerCase().includes(query)));
     }, [events, eventSearch, allowedEvents, isEventManagementModule]);
 
@@ -373,7 +374,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             try {
                 const { data: eData } = await supabase
                     .from('calendar')
-                    .select('id, event_name, start_date, end_date, registration_closes_at, rankedin_id, rankedin_url, entry_fee, category_fees, early_bird_fee, early_bird_ends_at, finance_managed, is_manual, allow_payments, slug, venue, organisation_id, club_id, organiser_interim_payments, organiser_name, organiser_email, organisations:organisation_id(id, name, slug), clubs:club_id(id, name, short_name, slug)')
+                    .select('id, event_name, start_date, end_date, registration_closes_at, rankedin_id, rankedin_url, entry_fee, category_fees, early_bird_fee, early_bird_ends_at, finance_managed, is_manual, allow_payments, slug, venue, venues, event_status, organisation_id, club_id, organiser_interim_payments, organiser_name, organiser_email, organisations:organisation_id(id, name, slug), clubs:club_id(id, name, short_name, slug)')
                     .order('start_date', { ascending: false });
 
                 const pData = await fetchAllRows(() => supabase
@@ -1467,7 +1468,15 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         const isUpcoming = eventDate >= today;
         const closeState = registrationCloseState(e.registration_closes_at);
         const organisationName = e.organisations?.name || e.organiser_name || '—';
-        const clubName = e.clubs?.short_name || e.clubs?.name || e.venue || '—';
+        const selectedVenues = (Array.isArray(e.venues) ? e.venues : [])
+            .map((name) => String(name || '').trim()).filter(Boolean);
+        const venueNames = selectedVenues.length > 0
+            ? selectedVenues
+            : String(e.venue || '').split(' / ').map((name) => name.trim()).filter(Boolean);
+        const hostClubs = [...new Map((venueNames.length > 0
+            ? venueNames
+            : [e.clubs?.short_name || e.clubs?.name || '—'])
+            .map((name) => [name.toLowerCase(), name])).values()];
 
         return (
             <tr
@@ -1514,21 +1523,27 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     )}
                 </td>
                 <td className="px-2.5 py-2.5">
-                    {e.clubs?.slug ? (
-                        <a
-                            href={`/clubs/${e.clubs.slug}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(event) => event.stopPropagation()}
-                            className="inline-flex max-w-full items-center gap-1.5 text-[11px] font-bold text-padel-green hover:text-white"
-                            title={clubName}
-                        >
-                            <span className="truncate">{clubName}</span>
-                            <ExternalLink size={11} className="shrink-0" />
-                        </a>
-                    ) : (
-                        <span className="block truncate text-[11px] font-bold text-gray-400" title={clubName}>{clubName}</span>
-                    )}
+                    <div className="flex flex-col gap-1.5">
+                        {hostClubs.map((clubName) => {
+                            const isLinkedClub = e.clubs?.slug && [e.clubs.name, e.clubs.short_name]
+                                .some((name) => name?.trim().toLowerCase() === clubName.toLowerCase());
+                            return isLinkedClub ? (
+                                <a
+                                    key={clubName}
+                                    href={`/clubs/${e.clubs.slug}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(event) => event.stopPropagation()}
+                                    className="inline-flex max-w-full items-center gap-1.5 text-[11px] font-bold text-padel-green hover:text-white"
+                                >
+                                    <span className="min-w-0 break-words">{clubName}</span>
+                                    <ExternalLink size={11} className="shrink-0" />
+                                </a>
+                            ) : (
+                                <span key={clubName} className="block break-words text-[11px] font-bold text-gray-400">{clubName}</span>
+                            );
+                        })}
+                    </div>
                 </td>
                 <td className="px-2.5 py-2.5 text-center whitespace-nowrap">
                     <div className="flex flex-col items-center">
@@ -1761,6 +1776,9 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     variant="inline"
                     isOpen
                     event={selectedEvent}
+                    onEventCancelled={(updatedEvent) => {
+                        setEvents((prev) => prev.map((item) => item.id === updatedEvent.id ? { ...item, ...updatedEvent } : item));
+                    }}
                     onBack={() => {
                         setSelectedEventId(null);
                         setViewMode('list');

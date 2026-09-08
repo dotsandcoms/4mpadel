@@ -38,6 +38,8 @@ import { logEventActivity } from '../../utils/eventActivityLog';
 import { parseEventDate } from '../../utils/eventEntryFee';
 import { downloadEventFinanceWorkbook } from '../../utils/eventFinanceExport';
 import { useAdminPermissions } from '../../hooks/useAdminPermissions';
+import CancelEventButton from './CancelEventButton';
+import CancelEventDialog from './CancelEventDialog';
 import NativeDrawManager from './NativeDrawManager';
 import { resolvePlayerRanking } from '../../utils/playerRankingSelection';
 
@@ -173,7 +175,10 @@ const TeamPlayerRows = ({ players, children }) => (
     </div>
 );
 
-const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event, variant = 'modal', backLabel = '← Back to Events List' }) => {
+const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEventCancelled, event, variant = 'modal', backLabel = '← Back to Events List' }) => {
+    const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+    const [cancelledEventId, setCancelledEventId] = useState(null);
+    const isCancelled = event?.event_status === 'cancelled' || cancelledEventId === event?.id;
     const isInline = variant === 'inline';
     const isActive = isInline || isOpen;
     const [registrations, setRegistrations] = useState([]);
@@ -3308,8 +3313,32 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event,
                                     {tab.label}
                                 </button>
                             ))}
+                            {event?.is_manual && (
+                                isCancelled ? (
+                                    <span role="status" className="self-center shrink-0 rounded-xl bg-red-500/10 px-4 py-2 text-sm font-bold text-red-300">Event cancelled</span>
+                                ) : (
+                                    <CancelEventButton
+                                        onClick={() => setShowCancelConfirm(true)}
+                                        className="self-center mb-0.5 shrink-0 text-sm"
+                                    />
+                                )
+                            )}
                         </div>
                     </div>
+
+                    {showCancelConfirm && (
+                        <CancelEventDialog
+                            key={event.id}
+                            event={event}
+                            onClose={() => setShowCancelConfirm(false)}
+                            onCancelled={(updatedEvent) => {
+                                setCancelledEventId(updatedEvent.id);
+                                setShowCancelConfirm(false);
+                                load();
+                                onEventCancelled?.(updatedEvent);
+                            }}
+                        />
+                    )}
 
                     {['eft', 'external'].includes(event?.payment_method) && (
                         <div className={`${isInline ? 'mt-4 rounded-2xl' : ''} mx-6 flex items-start gap-3 border border-amber-500/30 bg-amber-500/10 px-4 py-3`} role="status">
