@@ -1137,8 +1137,6 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         });
         setShowPreview(false);
         setShowCancelConfirm(false);
-        setCancelling(false);
-        setCancellationReason('');
         setVenueQuery('');
         setVenueOpen(false);
         if (editingEvent) {
