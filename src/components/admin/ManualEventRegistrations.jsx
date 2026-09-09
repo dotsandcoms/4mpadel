@@ -31,6 +31,7 @@ import {
     resolveRegistrationPaymentMethod,
     resolveRegistrationPayer,
 } from '../../utils/paymentRegistrationMatch';
+import { createPendingRegistrations } from '../../utils/adminEventRegistration';
 import { sendEmail } from '../../utils/emails';
 import AdminPlayerProfileModal from './AdminPlayerProfileModal';
 import EventActivityLog from './EventActivityLog';
@@ -203,6 +204,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const [addPlayerResults, setAddPlayerResults] = useState([]);
     const [addPlayerSearching, setAddPlayerSearching] = useState(false);
     const [addPlayerSelected, setAddPlayerSelected] = useState(null);
+    const [addTeam, setAddTeam] = useState(false);
+    const [addPartnerSelected, setAddPartnerSelected] = useState(null);
     const [addPlayerDivision, setAddPlayerDivision] = useState('');
     const [addPlayerNote, setAddPlayerNote] = useState('');
     const [addPlayerBusy, setAddPlayerBusy] = useState(false);
@@ -711,6 +714,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     };
 
     const openAddPlayerModal = () => {
+        setAddTeam(false);
+        setAddPartnerSelected(null);
         setAddPlayerOpen(true);
         setAddPlayerSearch('');
         setAddPlayerResults([]);
@@ -762,59 +767,14 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     }, [addPlayerOpen, addPlayerSearch]);
 
     const createRegistrationWithReleasedSlot = async (payload) => {
-        const normalizedEmail = (payload.email || '').trim().toLowerCase();
-        const { data: divisionRows, error: lookupError } = await supabase
-            .from('event_registrations')
-            .select('id, email, status')
-            .eq('event_id', payload.event_id)
-            .eq('division', payload.division);
-        if (lookupError) throw lookupError;
-
-        const matchingRows = (divisionRows || []).filter(
-            (row) => (row.email || '').trim().toLowerCase() === normalizedEmail,
-        );
-
-        const activeMatch = (matchingRows || []).find((row) => row.status !== 'withdrawn');
-        if (activeMatch) {
-            throw new Error('This player is already entered in the selected division');
-        }
-
-        const withdrawnMatches = matchingRows.filter((row) => row.status === 'withdrawn');
-
-        for (const row of withdrawnMatches) {
-            const { error: archiveError } = await supabase
-                .from('event_registrations')
-                .update({
-                    division: `__archived__/${row.id}`,
-                    division_id: null,
-                })
-                .eq('id', row.id);
-            if (archiveError) throw archiveError;
-        }
-
-        const freshValues = {
-            ...payload,
-            email: normalizedEmail,
-            payment_status: 'pending',
-            payment_method: null,
-            status: 'registered',
-        };
-
-        const { data, error } = await supabase
-            .from('event_registrations')
-            .insert(freshValues)
-            .select('id, pay_token')
-            .single();
-        if (error?.code === '23505') {
-            throw new Error('This player is already entered in the selected division');
-        }
-        if (error) throw error;
-        return { data, replacedWithdrawn: withdrawnMatches.length > 0 };
+        const result = await createPendingRegistrations(supabase, [payload]);
+        return { data: result.data[0], replacedWithdrawn: result.replacedWithdrawn };
     };
 
     const confirmAddPlayer = async () => {
-        if (!addPlayerSelected?.email) {
-            toast.error('Select a 4M player');
+        if (addPlayerBusy) return;
+        if (!addPlayerSelected?.email || (addTeam && !addPartnerSelected?.email)) {
+            toast.error(addTeam ? 'Select both teammates' : 'Select a 4M player');
             return;
         }
         if (!addPlayerDivision) {
@@ -823,15 +783,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         }
 
         const note = addPlayerNote.trim();
-        const email = addPlayerSelected.email.trim();
-        const alreadyEntered = registrations.some((r) =>
-            r.status !== 'withdrawn'
-            && r.division === addPlayerDivision
-            && (r.email || '').toLowerCase() === email.toLowerCase());
-        if (alreadyEntered) {
-            toast.error(`${addPlayerSelected.name} is already entered in ${addPlayerDivision}`);
-            return;
-        }
+        const players = addTeam ? [addPlayerSelected, addPartnerSelected] : [addPlayerSelected];
+        const names = players.map((player) => player.name).join(' & ');
 
         setAddPlayerBusy(true);
         try {
@@ -840,18 +793,20 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             const adminEmail = user?.email || null;
             const fee = Number(div?.entry_fee || 0);
 
-            const { data: inserted, replacedWithdrawn } = await createRegistrationWithReleasedSlot({
-                event_id: event.id,
-                email,
-                full_name: addPlayerSelected.name,
-                division: addPlayerDivision,
-                division_id: div?.id || null,
-                registered_by: adminEmail || email,
-                partner_name: null,
-                partner_email: null,
-                partner_payment_status: null,
-            });
-            if (!inserted?.id) throw new Error('Registration was not created');
+            const { data: inserted, replacedWithdrawn } = await createPendingRegistrations(supabase, players.map((player, index) => {
+                const partner = addTeam ? players[1 - index] : null;
+                return {
+                    event_id: event.id,
+                    email: player.email,
+                    full_name: player.name,
+                    division: addPlayerDivision,
+                    division_id: div?.id || null,
+                    registered_by: adminEmail || player.email,
+                    partner_name: partner?.name || null,
+                    partner_email: partner?.email?.trim().toLowerCase() || null,
+                    partner_payment_status: partner ? 'pending' : null,
+                };
+            }));
 
             const eventUrl = `https://4mpadel.co.za/calendar/${event.slug || event.id}`;
             const eventDates = event.event_dates
@@ -861,32 +816,37 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                     })
                     : '');
             try {
-                await sendEmail(email, 'event_registration', {
+                const emailResults = await Promise.all(players.map((player, index) => sendEmail(player.email, 'event_registration', {
                     eventId: event.id,
-                    playerName: addPlayerSelected.name,
+                    playerName: player.name,
                     eventName: event.event_name,
                     division: addPlayerDivision,
-                    partnerName: 'TBD',
+                    partnerName: addTeam ? players[1 - index].name : 'TBD',
                     eventDates,
                     venue: [event.venue, event.city].filter(Boolean).join(', '),
                     paid: false,
                     amountDue: fmtR(fee),
                     eventUrl,
-                });
+                })));
+                if (emailResults.some((result) => !result?.success)) {
+                    toast.message('Entry added, but a confirmation email could not be sent');
+                }
             } catch (mailErr) {
                 console.error('Entry confirmation email failed:', mailErr);
-                toast.message('Player added, but confirmation email could not be sent');
+                toast.message('Entry added, but a confirmation email could not be sent');
             }
 
             await logEventActivity({
                 eventId: event.id,
                 action: 'admin.added_player',
                 category: 'ADMIN',
-                summary: `Added ${addPlayerSelected.name} provisionally (${addPlayerDivision}) — payment pending`,
+                summary: `Added ${names} provisionally (${addPlayerDivision}) — payment pending`,
                 details: {
-                    registration_id: inserted.id,
-                    player_name: addPlayerSelected.name,
-                    player_email: email,
+                    registration_id: inserted[0].id,
+                    registration_ids: inserted.map((row) => row.id),
+                    player_name: names,
+                    player_email: players[0].email,
+                    partner_email: addTeam ? players[1].email : null,
                     division: addPlayerDivision,
                     note: note || null,
                     payment_status: 'pending',
@@ -895,7 +855,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                 },
             });
 
-            toast.success(`Added ${addPlayerSelected.name} — payment pending`);
+            toast.success(`Added ${names} — payment pending`);
             setAddPlayerOpen(false);
             setAddPlayerSearch('');
             setAddPlayerResults([]);
@@ -3217,7 +3177,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                             onClick={openAddPlayerModal}
                                             className="bg-padel-green text-black px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:brightness-110 shrink-0"
                                         >
-                                            <UserPlus size={16} /> Add Player
+                                            <UserPlus size={16} /> Add Player / Team
                                         </button>
                                         {linkedRankedinId && (
                                             <>
@@ -4463,7 +4423,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                         <UserPlus size={16} className="text-padel-green" />
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                        <h3 className="text-white font-bold">Add Player</h3>
+                                        <h3 className="text-white font-bold">{addTeam ? 'Add Team' : 'Add Player'}</h3>
                                         <p className="text-xs text-gray-400 mt-0.5">
                                             Add them provisionally with payment pending. Mark paid (or comp) afterwards if needed.
                                         </p>
@@ -4478,32 +4438,46 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                     </button>
                                 </div>
 
-                                {addPlayerSelected ? (
+                                <div className="flex gap-2 mb-4" role="group" aria-label="Entry type">
+                                    {[false, true].map((team) => (
+                                        <button key={String(team)} type="button" aria-pressed={addTeam === team} disabled={addPlayerBusy}
+                                            onClick={() => { setAddTeam(team); setAddPartnerSelected(null); setAddPlayerSearch(''); setAddPlayerResults([]); }}
+                                            className={`flex-1 rounded-lg border px-3 py-2 text-sm font-bold ${addTeam === team ? 'border-padel-green text-padel-green bg-padel-green/10' : 'border-white/10 text-gray-400'}`}>
+                                            {team ? 'Full team' : 'Single player'}
+                                        </button>
+                                    ))}
+                                </div>
+                                {(addTeam ? [0, 1] : [0]).map((index) => {
+                                    const selected = index === 0 ? addPlayerSelected : addPartnerSelected;
+                                    const setSelected = index === 0 ? setAddPlayerSelected : setAddPartnerSelected;
+                                    const other = index === 0 ? addPartnerSelected : addPlayerSelected;
+                                    return <React.Fragment key={index}>
+                                {selected ? (
                                     <div className="mb-4 flex items-center gap-3 rounded-xl border border-padel-green/30 bg-padel-green/5 px-3 py-2.5">
                                         <div className="w-10 h-10 rounded-full overflow-hidden bg-white/5 border border-white/10 shrink-0 flex items-center justify-center">
-                                            {addPlayerSelected.image_url ? (
-                                                <img src={addPlayerSelected.image_url} alt="" className="w-full h-full object-cover" />
+                                            {selected.image_url ? (
+                                                <img src={selected.image_url} alt="" className="w-full h-full object-cover" />
                                             ) : (
                                                 <User size={16} className="text-gray-500" />
                                             )}
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-bold text-white truncate">{addPlayerSelected.name}</p>
-                                            <p className="text-[11px] text-gray-400 truncate">{addPlayerSelected.email}</p>
+                                            <p className="text-sm font-bold text-white truncate">{selected.name}</p>
+                                            <p className="text-[11px] text-gray-400 truncate">{selected.email}</p>
                                         </div>
                                         <button
                                             type="button"
-                                            onClick={() => setAddPlayerSelected(null)}
+                                            onClick={() => { setSelected(null); setAddPlayerSearch(''); setAddPlayerResults([]); }}
                                             disabled={addPlayerBusy}
                                             className="text-[11px] font-bold uppercase tracking-wider text-gray-400 hover:text-white disabled:opacity-40"
                                         >
                                             Change
                                         </button>
                                     </div>
-                                ) : (
+                                ) : (index === 0 || addPlayerSelected) ? (
                                     <div className="mb-4">
                                         <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">
-                                            Search 4M players
+                                            Search 4M players {addTeam ? `· Player ${index + 1}` : ''}
                                         </label>
                                         <div className="relative">
                                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" size={14} />
@@ -4512,7 +4486,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                                 value={addPlayerSearch}
                                                 onChange={(e) => setAddPlayerSearch(e.target.value)}
                                                 placeholder="Name or email…"
-                                                autoFocus
+                                                disabled={addPlayerBusy}
                                                 className="w-full bg-black/30 border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white outline-none focus:border-padel-green/50"
                                             />
                                         </div>
@@ -4530,13 +4504,14 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                                     const alreadyInSelectedDiv = addPlayerDivision && registrations.some((r) =>
                                                         r.status !== 'withdrawn'
                                                         && r.division === addPlayerDivision
-                                                        && (r.email || '').toLowerCase() === (p.email || '').toLowerCase());
+                                                        && [r.email, r.partner_email].some((email) => (email || '').trim().toLowerCase() === p.email.trim().toLowerCase()));
+                                                    const isTeammate = other?.email?.trim().toLowerCase() === p.email.trim().toLowerCase();
                                                     return (
                                                         <button
                                                             key={p.id}
                                                             type="button"
-                                                            disabled={alreadyInSelectedDiv || addPlayerBusy}
-                                                            onClick={() => setAddPlayerSelected(p)}
+                                                            disabled={alreadyInSelectedDiv || isTeammate || addPlayerBusy}
+                                                            onClick={() => { setSelected(p); setAddPlayerSearch(''); setAddPlayerResults([]); }}
                                                             className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.04] disabled:opacity-40 disabled:cursor-not-allowed"
                                                         >
                                                             <div className="w-8 h-8 rounded-full overflow-hidden bg-white/5 border border-white/10 shrink-0 flex items-center justify-center">
@@ -4561,7 +4536,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                             )}
                                         </div>
                                     </div>
-                                )}
+                                ) : null}
+                                    </React.Fragment>;
+                                })}
 
                                 <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">Division</label>
                                 {divisions.length === 0 ? (
@@ -4584,7 +4561,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                 <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
                                     <p className="text-[11px] font-bold uppercase tracking-wider text-amber-400">Entry status</p>
                                     <p className="text-sm text-white font-semibold mt-0.5">
-                                        Pending payment · {fmtR(divFee(addPlayerDivision))} due
+                                        Pending payment · {fmtR(divFee(addPlayerDivision) * (addTeam ? 2 : 1))} due{addTeam ? ` (${fmtR(divFee(addPlayerDivision))} per player)` : ''}
                                     </p>
                                     <p className="text-[11px] text-gray-400 mt-1">
                                         After adding, use Mark paid on their row (comp is an option there) if needed.
@@ -4610,13 +4587,14 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                         disabled={
                                             addPlayerBusy
                                             || !addPlayerSelected
+                                            || (addTeam && !addPartnerSelected)
                                             || !addPlayerDivision
                                             || divisions.length === 0
                                         }
                                         className="w-full py-2.5 rounded-lg text-sm font-bold bg-padel-green text-black hover:brightness-110 disabled:opacity-40 inline-flex items-center justify-center gap-2"
                                     >
                                         {addPlayerBusy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                                        Add player (pending)
+                                        {addTeam ? 'Add team (pending)' : 'Add player (pending)'}
                                     </button>
                                     <button
                                         type="button"
