@@ -751,8 +751,12 @@ const Rankings = () => {
   }, []);
 
   useEffect(() => {
-    const fetchRankings = async () => {
-      setRankingsLoading(true);
+    let disposed = false;
+    let inFlight = false;
+    const fetchRankings = async (initial = false) => {
+      if (disposed || inFlight) return;
+      inFlight = true;
+      if (initial) setRankingsLoading(true);
       try {
         const categories = ORG_CATEGORIES[selectedOrgId] || ORG_CATEGORIES[15809];
 
@@ -761,13 +765,19 @@ const Rankings = () => {
 
         const results = await Promise.all(promises);
         const sessionResult = results.pop();
+        if (disposed) return;
 
         const newData = {};
         categories.forEach((cat, index) => {
           newData[cat.id] = results[index] || [];
         });
 
-        setRankingsDataRaw(newData);
+        // A temporary outage must not clear a list already visible on screen.
+        setRankingsDataRaw(previous => Object.fromEntries(
+          categories.map(cat => [cat.id,
+            newData[cat.id].length || initial ? newData[cat.id] : (previous[cat.id] || [])
+          ])
+        ));
 
         if (sessionResult.data?.session?.user?.email) {
           setUserEmail(sessionResult.data.session.user.email);
@@ -775,10 +785,23 @@ const Rankings = () => {
       } catch (err) {
         console.error('Error fetching rankings:', err);
       } finally {
-        setRankingsLoading(false);
+        inFlight = false;
+        if (!disposed && initial) setRankingsLoading(false);
       }
     };
-    fetchRankings();
+    fetchRankings(true);
+    const refreshVisible = () => {
+      if (document.visibilityState === 'visible') fetchRankings();
+    };
+    const interval = window.setInterval(refreshVisible, 60 * 1000);
+    document.addEventListener('visibilitychange', refreshVisible);
+    window.addEventListener('focus', refreshVisible);
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', refreshVisible);
+      window.removeEventListener('focus', refreshVisible);
+    };
   }, [getOrganisationRankings, selectedOrgId]);
 
   // Update active internal tab when org changes

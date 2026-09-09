@@ -147,6 +147,8 @@ const fetchWithCache = async (url, options = {}, cacheDurationMs = 1000 * 60 * 6
     // RankedIn can briefly return empty leaderboards during its weekly rollover.
     // Never let those responses replace or mask a populated leaderboard for six hours.
     const isLeaderboard = /\/ranking\/getrankingsasync\?/i.test(url);
+    // Rankings can change throughout the day, independently of the scheduled sync.
+    const maxCacheAgeMs = isLeaderboard ? Math.min(cacheDurationMs, 5 * 60 * 1000) : cacheDurationMs;
     const isUsablePayload = (payload) => !isLeaderboard || (
         Array.isArray(payload?.Payload) && payload.Payload.length > 0
     );
@@ -162,7 +164,7 @@ const fetchWithCache = async (url, options = {}, cacheDurationMs = 1000 * 60 * 6
 
             if (data && isUsablePayload(data.payload)) {
                 const ageMs = Date.now() - new Date(data.updated_at).getTime();
-                if (ageMs < cacheDurationMs) {
+                if (ageMs < maxCacheAgeMs) {
                     console.log(`[Cache HIT - Fresh]: ${url}`);
                     return data.payload;
                 }
