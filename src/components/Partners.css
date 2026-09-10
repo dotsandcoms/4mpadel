@@ -1,0 +1,52 @@
+.partners-marquee {
+    overflow: hidden;
+}
+
+.partners-track {
+    display: flex;
+    width: max-content;
+    animation: partners-scroll 45s linear infinite;
+}
+
+.partners-group {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 2rem;
+    padding-right: 2rem;
+}
+
+.partners-marquee:hover .partners-track,
+.partners-track.is-paused {
+    animation-play-state: paused;
+}
+
+@keyframes partners-scroll {
+    to { transform: translateX(-50%); }
+}
+
+@media (min-width: 768px) {
+    .partners-group {
+        gap: 4rem;
+        padding-right: 4rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .partners-track {
+        width: 100%;
+        animation: none;
+    }
+
+    .partners-group {
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: center;
+        padding-right: 0;
+    }
+
+    .partners-group[aria-hidden="true"],
+    .partners-pause {
+        display: none;
+    }
+}
