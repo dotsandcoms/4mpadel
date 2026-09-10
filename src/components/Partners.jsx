@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import './Partners.css';
 import logo1 from '../assets/logo_1.png';
 import logo2 from '../assets/logo_2.png';
@@ -11,7 +11,6 @@ import logo8 from '../assets/logo_8.png';
 import adidasLogo from '../assets/adidas-performance.png';
 
 const Partners = () => {
-    const [paused, setPaused] = useState(false);
     const logos = [
         { name: "Partner 1", img: logo1 },
         { name: "Partner 2", img: logo2 },
@@ -29,7 +28,7 @@ const Partners = () => {
             <div className="container mx-auto px-6 md:px-20 text-center">
                 <p className="text-gray-500 uppercase tracking-widest text-sm mb-12">Official Partners</p>
                 <div className="partners-marquee" role="region" aria-label="Official partner logos">
-                    <div className={`partners-track${paused ? ' is-paused' : ''}`}>
+                    <div className="partners-track">
                         {[0, 1].map((copy) => (
                             <div key={copy} className="partners-group" aria-hidden={copy === 1 ? true : undefined}>
                                 {logos.map((logo) => (
@@ -48,15 +47,6 @@ const Partners = () => {
                         ))}
                     </div>
                 </div>
-                <button
-                    type="button"
-                    className="partners-pause mt-6 text-xs text-gray-400 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-padel-green"
-                    onClick={() => setPaused((value) => !value)}
-                    aria-pressed={paused}
-                    aria-label="Pause automatic sponsor scrolling"
-                >
-                    {paused ? 'Resume scrolling' : 'Pause scrolling'}
-                </button>
             </div>
         </section>
     );

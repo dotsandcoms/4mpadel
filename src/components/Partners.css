@@ -16,8 +16,7 @@
     padding-right: 2rem;
 }
 
-.partners-marquee:hover .partners-track,
-.partners-track.is-paused {
+.partners-marquee:hover .partners-track {
     animation-play-state: paused;
 }
 
@@ -45,8 +44,7 @@
         padding-right: 0;
     }
 
-    .partners-group[aria-hidden="true"],
-    .partners-pause {
+    .partners-group[aria-hidden="true"] {
         display: none;
     }
 }
