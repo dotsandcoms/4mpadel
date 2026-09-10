@@ -9,6 +9,7 @@ import logo6 from '../assets/sapa-logo.svg';
 import logo7 from '../assets/logo_7.png';
 // Importing an 8th just in case, though user said 7.
 import logo8 from '../assets/logo_8.png';
+import adidasLogo from '../assets/adidas-performance.png';
 
 const Partners = () => {
     // Array of logos. We'll filter out any that fail to load if needed, but for now we assume all exist.
@@ -21,13 +22,14 @@ const Partners = () => {
         { name: "Partner 6", img: logo6 },
         { name: "Partner 7", img: logo7 },
         { name: "Partner 8", img: logo8 },
+        { name: "Adidas", img: adidasLogo, className: "invert" },
     ];
 
     return (
         <section className="py-20 bg-black/80 border-t border-white/5">
             <div className="container mx-auto px-6 md:px-20 text-center">
                 <p className="text-gray-500 uppercase tracking-widest text-sm mb-12">Official Partners</p>
-                <div className="flex flex-nowrap justify-center items-center gap-8 md:gap-16 overflow-x-auto pb-4 scrollbar-hide">
+                <div className="flex flex-nowrap justify-center-safe items-center gap-8 md:gap-16 overflow-x-auto pb-4 scrollbar-hide">
                     {logos.map((logo, index) => (
                         <motion.div
                             key={index}
@@ -40,7 +42,7 @@ const Partners = () => {
                             <img
                                 src={logo.img}
                                 alt={logo.name}
-                                className="max-w-full max-h-full object-contain"
+                                className={`max-w-full max-h-full object-contain ${logo.className || ''}`}
                             />
                         </motion.div>
                     ))}
