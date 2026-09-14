@@ -177,6 +177,7 @@ const TeamPlayerRows = ({ players, children }) => (
 );
 
 const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEventCancelled, event, variant = 'modal', backLabel = '← Back to Events List' }) => {
+    const [showCancelDivision, setShowCancelDivision] = useState(false);
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
     const [cancelledEventId, setCancelledEventId] = useState(null);
     const isCancelled = event?.event_status === 'cancelled' || cancelledEventId === event?.id;
@@ -3273,6 +3274,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                     {tab.label}
                                 </button>
                             ))}
+                            {event?.is_manual && !isCancelled && (
+                                <CancelEventButton label="Cancel division" onClick={() => setShowCancelDivision(true)} className="self-center mb-0.5 shrink-0 text-sm" />
+                            )}
                             {event?.is_manual && (
                                 isCancelled ? (
                                     <span role="status" className="self-center shrink-0 rounded-xl bg-red-500/10 px-4 py-2 text-sm font-bold text-red-300">Event cancelled</span>
@@ -3286,6 +3290,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                         </div>
                     </div>
 
+                    {showCancelDivision && <CancelEventDialog event={event} divisions={divisions}
+                        onClose={() => { setShowCancelDivision(false); load(); }}
+                        onCancelled={() => { setShowCancelDivision(false); load(); }} />}
                     {showCancelConfirm && (
                         <CancelEventDialog
                             key={event.id}

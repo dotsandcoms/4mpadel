@@ -1,3 +1,4 @@
+import { belongsToDivision, cancellationRefundStatus } from './division-cancellation.js';
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
@@ -37,6 +38,7 @@ type Action =
     | 'remove_partner'
     | 'admin_remove'
     | 'cancel_event'
+    | 'cancel_division'
     | 'switch_division'
     | 'retry_failed';
 
@@ -46,7 +48,8 @@ type RefundReason =
     | 'owner_removed_partner'
     | 'admin_removal'
     | 'admin_cash_refund'
-    | 'event_cancelled';
+    | 'event_cancelled'
+    | 'division_cancelled';
 
 async function sendEmailViaEdge(payload: {
     to: string;
@@ -310,7 +313,8 @@ async function processRegistration(
 
     let refundedTotal = 0;
     let anyPaystack = false;
-    let aggregateStatus = items.length === 0 ? 'no_refund' : 'processing';
+    const missingPaidEntry = ctx.reason === 'division_cancelled' && reg.payment_status === 'paid' && !items.some((item) => item.cover_type === 'entry');
+    let aggregateStatus = missingPaidEntry ? 'needs_attention' : (items.length === 0 ? 'no_refund' : 'processing');
     const refundedReferences: string[] = [];
 
     for (const item of items) {
@@ -318,6 +322,10 @@ async function processRegistration(
         const method = String((payment as unknown as Record<string, unknown>)?.payment_method || 'paystack');
         const isCash = method === 'cash' || method === 'manual';
         const useCash = ctx.skipPaystack || isCash;
+        if (ctx.reason === 'division_cancelled' && useCash) {
+            aggregateStatus = 'needs_attention';
+            continue;
+        }
 
         let refundPaymentId = item.payment_id;
         let refundReference = item.reference;
@@ -1064,6 +1072,7 @@ serve(async (req: Request) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
 
+    let divisionFailureContext: { client: SupabaseClient; id: string } | null = null;
     try {
         const authHeader = req.headers.get('Authorization');
         if (!authHeader) return json(401, { error: 'Unauthorized' });
@@ -1079,6 +1088,7 @@ serve(async (req: Request) => {
             move_team,
             payment_refund_id,
             cancellation_reason,
+            division_id,
         } = await req.json() as {
             registration_id?: string;
             action?: Action;
@@ -1090,6 +1100,7 @@ serve(async (req: Request) => {
             move_team?: boolean;
             payment_refund_id?: string;
             cancellation_reason?: string;
+            division_id?: string;
         };
         if (!action) return json(400, { error: 'Missing action' });
 
@@ -1141,7 +1152,8 @@ serve(async (req: Request) => {
         let targets: RegistrationRow[] = [];
         let eventId: string | number | undefined;
 
-        if (action === 'cancel_event') {
+        let cancelledDivision: { id: string; name: string } | null = null;
+        if (action === 'cancel_event' || action === 'cancel_division') {
             if (!event_id) return json(400, { error: 'event_id required for cancel_event' });
             eventId = event_id;
             if (!isAdmin) {
@@ -1149,12 +1161,33 @@ serve(async (req: Request) => {
                 if (!canManage) return json(403, { error: 'You do not have permission to cancel this event' });
                 isAdmin = true;
             }
-            const { data } = await supabaseAdmin
+            if (action === 'cancel_division') {
+                if (!division_id) return json(400, { error: 'division_id required' });
+                // Claim once before refunding: concurrent clicks cannot issue duplicate refunds.
+                const { data: division, error: divisionError } = await supabaseAdmin
+                    .from('tournament_divisions').select('id, name, cancelled_at, cancellation_refund_status')
+                    .eq('id', division_id).eq('event_id', eventId).maybeSingle();
+                if (divisionError) throw divisionError;
+                if (!division) return json(404, { error: 'Division not found in this event' });
+                if (division.cancelled_at) return json(409, { error: 'This division is already cancelled. Check refunds in the Income Statement; failed refunds must be retried individually.' });
+                const { data: claimed, error: claimError } = await supabaseAdmin
+                    .from('tournament_divisions').update({
+                        is_active: false, cancelled_at: new Date().toISOString(), cancelled_by: callerEmail,
+                        cancellation_reason: String(cancellation_reason || '').trim() || null,
+                        cancellation_refund_status: 'processing',
+                    }).eq('id', division_id).eq('event_id', eventId).is('cancelled_at', null).select('id, name').maybeSingle();
+                if (claimError) throw claimError;
+                if (!claimed) return json(409, { error: 'Division cancellation is already underway' });
+                cancelledDivision = claimed;
+                divisionFailureContext = { client: supabaseAdmin, id: claimed.id };
+            }
+            const { data, error: registrationsError } = await supabaseAdmin
                 .from('event_registrations')
                 .select('*')
                 .eq('event_id', event_id)
                 .neq('status', 'withdrawn');
-            targets = (data || []) as RegistrationRow[];
+            if (registrationsError) throw registrationsError;
+            targets = (cancelledDivision ? (data || []).filter((reg) => belongsToDivision(reg, cancelledDivision)) : (data || [])) as RegistrationRow[];
         } else if (action === 'withdraw_all') {
             if (!event_id) return json(400, { error: 'event_id required for withdraw_all' });
             eventId = event_id;
@@ -1228,24 +1261,28 @@ serve(async (req: Request) => {
             });
         }
 
-        if (targets.length === 0 && action !== 'cancel_event') {
+        if (targets.length === 0 && action !== 'cancel_event' && action !== 'cancel_division') {
             return json(200, { processed: false, reason: 'no_active_registrations', refunds: [] });
         }
 
         // ----- Shared context: event, divisions, payments, existing refunds -----
-        const { data: event } = await supabaseAdmin
+        const { data: event, error: eventReadError } = await supabaseAdmin
             .from('calendar')
             .select('id, event_name, event_dates, slug, is_manual, registration_closes_at')
             .eq('id', eventId)
             .maybeSingle();
-        const { data: divisions } = await supabaseAdmin
+        if (eventReadError) throw eventReadError;
+        if (!event) throw new Error('Event not found');
+        const { data: divisions, error: divisionsReadError } = await supabaseAdmin
             .from('tournament_divisions')
             .select('id, name, entry_fee, entries_close_at')
             .eq('event_id', eventId);
-        const { data: payments } = await supabaseAdmin
+        if (divisionsReadError) throw divisionsReadError;
+        const { data: payments, error: paymentsReadError } = await supabaseAdmin
             .from('payments')
             .select('*')
             .eq('event_id', eventId);
+        if (paymentsReadError) throw paymentsReadError;
         const successPayments = (payments || []).filter((p) => p.status === 'success') as PaymentRow[];
         const paymentById = new Map<string, PaymentRow>();
         for (const p of successPayments) paymentById.set(p.id, p);
@@ -1253,21 +1290,23 @@ serve(async (req: Request) => {
         const paymentIds = successPayments.map((p) => p.id);
         let existingRefunds: RefundRow[] = [];
         if (paymentIds.length) {
-            const { data: refs } = await supabaseAdmin
+            const { data: refs, error: refundsReadError } = await supabaseAdmin
                 .from('payment_refunds')
                 .select('id, payment_id, amount, status')
                 .in('payment_id', paymentIds);
+            if (refundsReadError) throw refundsReadError;
             existingRefunds = (refs || []) as RefundRow[];
         }
 
         // Pre-withdrawal snapshot of active registrations per player email, used
         // to decide whether a withdrawal removes the player's LAST active entry
         // (the temp license is per-event, so it's only refunded/cancelled then).
-        const { data: activeRegs } = await supabaseAdmin
+        const { data: activeRegs, error: activeRegsError } = await supabaseAdmin
             .from('event_registrations')
             .select('id, email')
             .eq('event_id', eventId)
             .neq('status', 'withdrawn');
+        if (activeRegsError) throw activeRegsError;
         const activeIdsByEmail = new Map<string, Set<string>>();
         for (const r of activeRegs || []) {
             const em = normEmail(r.email);
@@ -1298,7 +1337,8 @@ serve(async (req: Request) => {
 
             // Determine reason.
             let reason: RefundReason;
-            if (action === 'cancel_event') reason = 'event_cancelled';
+            if (action === 'cancel_division') reason = 'division_cancelled';
+            else if (action === 'cancel_event') reason = 'event_cancelled';
             else if (action === 'admin_remove') reason = 'admin_removal';
             else if (action === 'remove_partner') reason = 'owner_removed_partner';
             else {
@@ -1354,7 +1394,7 @@ serve(async (req: Request) => {
             // Emails.
             const div = (divisions || []).find((d) => d.id === reg.division_id || d.name === reg.division);
             const entryFee = Number(div?.entry_fee || 0);
-            if (summary.refunded_rands > 0 && action !== 'cancel_event') {
+            if (summary.refunded_rands > 0 && action !== 'cancel_event' && action !== 'cancel_division') {
                 await sendEmailViaEdge({
                     to: reg.email,
                     template: 'entry_refunded',
@@ -1371,7 +1411,7 @@ serve(async (req: Request) => {
             }
             await sendEmailViaEdge({
                 to: reg.email,
-                template: action === 'cancel_event' ? 'event_cancelled' : 'entry_withdrawn',
+                template: action === 'cancel_division' ? 'division_cancelled' : action === 'cancel_event' ? 'event_cancelled' : 'entry_withdrawn',
                 variables: {
                     eventId,
                     eventName: event?.event_name || 'Tournament',
@@ -1391,14 +1431,24 @@ serve(async (req: Request) => {
 
             // Keep existingRefunds current so a multi-division loop respects the guard.
             // (Re-query is simplest and safe for the small per-event volume.)
-            const { data: refs } = await supabaseAdmin
+            const { data: refs, error: refundsReadError } = await supabaseAdmin
                 .from('payment_refunds')
                 .select('id, payment_id, amount, status')
                 .in('payment_id', paymentIds.length ? paymentIds : ['00000000-0000-0000-0000-000000000000']);
+            if (refundsReadError) throw refundsReadError;
             existingRefunds = (refs || []) as RefundRow[];
         }
 
         const totalRefunded = roundRands(results.reduce((s, r) => s + r.refunded_rands, 0));
+        if (cancelledDivision) {
+            const refundStatus = cancellationRefundStatus(results);
+            const { error } = await supabaseAdmin.from('tournament_divisions')
+                .update({ cancellation_refund_status: refundStatus }).eq('id', cancelledDivision.id);
+            if (error) throw error;
+            return json(200, { processed: true, cancelled: true, division_id: cancelledDivision.id,
+                refund_status: refundStatus, registrations_processed: results.length,
+                total_refunded_rands: totalRefunded, refunds: results });
+        }
         if (action === 'cancel_event') {
             const needsAttention = results.some((r) => r.status === 'needs_attention' || r.status.startsWith('skipped:'));
             const processing = results.some((r) => r.status === 'processing');
@@ -1435,6 +1485,10 @@ serve(async (req: Request) => {
 
         return json(200, { processed: true, total_refunded_rands: totalRefunded, refunds: results });
     } catch (error) {
+        if (divisionFailureContext) {
+            await divisionFailureContext.client.from('tournament_divisions')
+                .update({ cancellation_refund_status: 'needs_attention' }).eq('id', divisionFailureContext.id);
+        }
         console.error('paystack-refund error:', error);
         return json(500, { error: (error as Error).message });
     }

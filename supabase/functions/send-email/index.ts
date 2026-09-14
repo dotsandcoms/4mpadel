@@ -904,12 +904,14 @@ async function generateEmailBody(
       actionLabel = 'View Event Details';
       break;
 
+    case 'division_cancelled':
     case 'event_cancelled': {
-      subject = `Event cancelled: ${vars.eventName || 'Tournament'}`;
+      const divisionCancelled = template === 'division_cancelled';
+      subject = divisionCancelled ? `Division cancelled: ${vars.division} — ${vars.eventName || 'Tournament'}` : `Event cancelled: ${vars.eventName || 'Tournament'}`;
       contentHtml = `
-        <h2 style="font-size: 24px; font-weight: 800; color: #EF4444; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Event Cancelled</h2>
+        <h2 style="font-size: 24px; font-weight: 800; color: #EF4444; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">${divisionCancelled ? 'Division Cancelled' : 'Event Cancelled'}</h2>
         <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 20px;">
-          Hi ${vars.playerName || 'Player'}, <strong style="color: #FFFFFF;">${vars.eventName || 'the event'}</strong> has been cancelled.
+          Hi ${vars.playerName || 'Player'}, <strong style="color: #FFFFFF;">${divisionCancelled ? vars.division : (vars.eventName || 'the event')}</strong> has been cancelled.${divisionCancelled ? ' The other divisions in the event will continue as scheduled.' : ''}
           ${vars.division ? `Your entry in <strong style="color: #FFFFFF;">${vars.division}</strong> has been withdrawn automatically.` : ''}
         </p>
         ${vars.cancellationReason ? `<p style="font-size: 14px; line-height: 1.6; color: #CBD5E1; margin-bottom: 20px;"><strong style="color:#FFFFFF;">Reason:</strong> ${vars.cancellationReason}</p>` : ''}
