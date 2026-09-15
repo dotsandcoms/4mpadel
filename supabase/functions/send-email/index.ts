@@ -111,6 +111,7 @@ function generateEventCardHtml(
     paid?: boolean;
     payUrl?: string;
     statusOverride?: string;
+    comped?: boolean;
   }
 ) {
   if (!eventInfo) return '';
@@ -134,13 +135,15 @@ function generateEventCardHtml(
   
   if (isWithdrawn) {
     statusBadge = `<span style="background-color: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); color: #FCA5A5; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 12px; border-radius: 20px; display: inline-block;">Withdrawn</span>`;
+  } else if (vars.comped) {
+    statusBadge = `<span style="color: #A78BFA; font-weight: 800;">Complimentary Entry ✅</span>`;
   } else if (isPaid) {
     statusBadge = `<span style="background-color: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); color: #34D399; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 12px; border-radius: 20px; display: inline-block;">Paid ✅</span>`;
   } else {
     statusBadge = `<span style="background-color: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); color: #FBBF24; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 12px; border-radius: 20px; display: inline-block;">Payment Pending ⚠️</span>`;
   }
 
-  const costLabel = isPaid ? 'Amount Paid:' : 'Amount Due:';
+  const costLabel = vars.comped ? 'Amount Due:' : isPaid ? 'Amount Paid:' : 'Amount Due:';
   const costValue = isPaid ? (vars.amount || 'R 0.00') : (vars.amountDue || vars.amount || 'R 0.00');
 
   return `
@@ -337,6 +340,11 @@ async function generateEmailBody(
     } catch (err) {
       console.error('Partner name lookup failed:', (err as Error).message);
     }
+  }
+
+  // Complimentary entries must never inherit outstanding fees or payment links.
+  if (template === 'entry_comped') {
+    vars = { ...vars, comped: true, paid: true, amount: 'R 0.00', amountDue: 'R 0.00', payUrl: '', statusOverride: '' };
   }
 
   const eventCardHtml = eventInfo ? generateEventCardHtml(eventInfo, vars) : '';
@@ -786,6 +794,21 @@ async function generateEmailBody(
         : vars.recipientRole === 'partner' && !vars.userPaysForPartner
         ? 'View Event Details'
         : (vars.recipientRole === 'partner' ? 'View Event Details' : 'Complete Payment');
+      break;
+
+    case 'entry_comped':
+      subject = `Complimentary Entry Confirmed: ${vars.eventName || 'Tournament'}`;
+      contentHtml = `
+        <h2 style="font-size: 24px; font-weight: 800; color: #9AE900; margin-top: 0; margin-bottom: 16px;">Your Entry Has Been Comped!</h2>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
+          Hi ${escapeEmailHtml(vars.playerName || 'Player')}, your entry for <strong style="color: #FFFFFF;">${escapeEmailHtml(vars.eventName || 'the tournament')}</strong>${vars.division ? ` in <strong style="color: #FFFFFF;">${escapeEmailHtml(vars.division)}</strong>` : ''} has been comped by 4M Padel.
+          <br/>Your complimentary entry is confirmed. Your entry fee for this division has been waived, so no entry fee payment is required for this registration.
+          <br/>We look forward to seeing you on court!
+        </p>
+        ${eventCardHtml}
+      `;
+      actionUrl = vars.eventUrl || 'https://4mpadel.co.za/calendar';
+      actionLabel = 'View Event Details';
       break;
 
     case 'event_registration':
@@ -1252,6 +1275,7 @@ async function generateEmailBody(
 const SUPER_ADMINS = ['bradein@dotsandcoms.co.za', 'brad@dotsandcoms.co.za', 'admin@4mpadel.co.za', 'markstillerman@gmail.com'];
 
 const ADMIN_ONLY_TEMPLATES = new Set([
+  'entry_comped',
   'broadcast',
   'org_approved',
   'org_rejected',

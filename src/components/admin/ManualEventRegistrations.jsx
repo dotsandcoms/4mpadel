@@ -1034,6 +1034,21 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                 },
             });
 
+            if (isComp) {
+                const emailResult = await sendEmail(reg.email, 'entry_comped', {
+                    eventId: event.id,
+                    registrationId: reg.id,
+                    playerName: reg.full_name,
+                    eventName: event.event_name,
+                    division: reg.division,
+                    partnerName: reg.partner_name || 'TBD',
+                    eventUrl: `https://4mpadel.co.za/calendar/${event.slug || event.id}`,
+                });
+                if (!emailResult?.success) {
+                    toast.message('Entry comped, but the complimentary entry email could not be sent');
+                }
+            }
+
             toast.success(isComp ? `Comped ${reg.full_name} — free entry` : `Marked ${reg.full_name} as paid — ${note}`);
             closeMarkPaidModal();
             load();
