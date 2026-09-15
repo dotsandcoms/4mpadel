@@ -1691,7 +1691,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
 
                 {/* High-Density Event List */}
                 <div className="bg-black/20 rounded-2xl border border-white/5 overflow-hidden">
-                    <div className="max-h-[360px] overflow-auto no-scrollbar">
+                    <div className="max-h-[720px] overflow-auto no-scrollbar">
                         <table className="w-full min-w-[1096px] table-fixed text-left border-collapse">
                             <colgroup>
                                 <col className="w-[110px]" />
