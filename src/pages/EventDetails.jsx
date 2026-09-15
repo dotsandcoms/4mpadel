@@ -3,6 +3,7 @@ import { useNavigate, useParams, useLocation, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
+import { fetchPublishedClubs } from '../utils/club';
 import { fetchAllRows } from '../utils/fetchAllRows';
 import { useRankedin } from '../hooks/useRankedin';
 import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, ChevronUp, FileText, User, Users, UserPlus, Trophy, AlertCircle, Heart, ChevronRight, Gift, Award, Layout, Circle, Check, Clock, Crown, Coins, Grid2x2, Plus, LockKeyhole } from 'lucide-react';
@@ -155,13 +156,14 @@ const EventSponsorStrip = ({ items, className = '', onPosterClick, accentColor =
     if (!items?.length) return null;
 
     const org = items.find((item) => item.type === 'org') || null;
+    const clubs = items.filter((item) => item.type === 'club');
     const poster = items.find((item) => item.type === 'poster') || null;
     const sponsors = items.filter((item) => item.type === 'sponsor');
 
     const hasOrg = Boolean(org);
     const hasPoster = Boolean(poster);
     const hasSponsors = sponsors.length > 0;
-    if (!hasOrg && !hasPoster && !hasSponsors) return null;
+    if (!hasOrg && !clubs.length && !hasPoster && !hasSponsors) return null;
 
     // Fixed-height labels keep Organisation / Event Poster / Sponsors on one baseline
     const labelClass = 'h-4 flex items-center justify-center text-[9px] sm:text-[10px] font-bold uppercase tracking-wider leading-none whitespace-nowrap';
@@ -179,7 +181,7 @@ const EventSponsorStrip = ({ items, className = '', onPosterClick, accentColor =
 
     return (
         <div className={`rounded-2xl border border-white/10 bg-black/30 backdrop-blur-sm overflow-hidden ${className}`}>
-            <div className="flex items-stretch divide-x divide-white/10">
+            <div className="flex items-stretch divide-x divide-white/10 overflow-x-auto">
                 {hasOrg && (
                     org.href ? (
                         <Link
@@ -211,6 +213,19 @@ const EventSponsorStrip = ({ items, className = '', onPosterClick, accentColor =
                         </div>
                     )
                 )}
+
+                {clubs.map((club) => (
+                    <Link key={club.href} to={club.href}
+                        className={`${sideColClass} hover:bg-white/5 transition-colors`}
+                        title={club.label} aria-label={`View ${club.label} club`}>
+                        <p className={`${labelClass} mb-2`} style={{ color: accentColor }}>Club</p>
+                        <div className="flex-1 flex items-center justify-center">
+                            {club.url ? <img src={club.url} alt={club.label}
+                                className="h-8 sm:h-10 w-auto max-w-full object-contain" />
+                                : <span className="text-[10px] text-white text-center leading-tight">{club.label}</span>}
+                        </div>
+                    </Link>
+                ))}
 
                 {hasPoster && (
                     onPosterClick ? (
@@ -246,7 +261,7 @@ const EventSponsorStrip = ({ items, className = '', onPosterClick, accentColor =
                 )}
 
                 {hasSponsors && (
-                    <div className="flex-1 min-w-0 flex flex-col items-center pt-3 pb-3 sm:pb-3.5 px-3">
+                    <div className="flex-1 min-w-[9rem] flex flex-col items-center pt-3 pb-3 sm:pb-3.5 px-3">
                         <p className={`${labelClass} mb-2`} style={{ color: accentColor }}>Sponsors</p>
                         <div className="flex-1 w-full flex items-center gap-1.5 sm:gap-2 min-w-0">
                             <div className="flex-1 min-w-0 flex items-center justify-center gap-3 sm:gap-5 overflow-hidden">
@@ -877,6 +892,7 @@ const EventDetails = () => {
     const [linkedOrgLogoUrl, setLinkedOrgLogoUrl] = useState('');
     const [linkedOrgSlug, setLinkedOrgSlug] = useState('');
     const [linkedOrgName, setLinkedOrgName] = useState('');
+    const [linkedClubs, setLinkedClubs] = useState([]);
     const [posterModalUrl, setPosterModalUrl] = useState(null);
 
     useEffect(() => {
@@ -903,6 +919,22 @@ const EventDetails = () => {
         return () => { cancelled = true; };
     }, [event?.organisation_id]);
 
+    useEffect(() => {
+        let cancelled = false;
+        setLinkedClubs([]);
+        const normalize = (value) => String(value || '').trim().toLowerCase();
+        const venues = [...(Array.isArray(event?.venues) ? event.venues : []), event?.venue]
+            .map(normalize).filter(Boolean);
+        if (!venues.length) return undefined;
+        fetchPublishedClubs().then((clubs) => {
+            const matches = clubs.filter((club) => [club.name, club.short_name]
+                .map(normalize).filter(Boolean)
+                .some((name) => venues.some((venue) => venue === name || venue.startsWith(`${name},`))));
+            if (!cancelled) setLinkedClubs(matches);
+        }).catch((error) => console.error('Failed to load event clubs:', error));
+        return () => { cancelled = true; };
+    }, [event?.venue, event?.venues]);
+
     // Order: 1) organiser logo → org page, 2) event poster (modal), 3) sponsor logos in configured order
     const eventSponsorItems = useMemo(() => {
         const items = [];
@@ -921,6 +953,14 @@ const EventDetails = () => {
                 label: linkedOrgName || 'Organiser',
             });
         }
+        for (const club of linkedClubs) {
+            items.push({
+                type: 'club',
+                url: club.logo_url || (club.club_groups?.share_logo ? club.club_groups.logo_url : '') || '',
+                href: `/clubs/${club.slug}`,
+                label: club.name,
+            });
+        }
         if (posterUrl) {
             items.push({
                 type: 'poster',
@@ -937,7 +977,7 @@ const EventDetails = () => {
             items.push({ type: 'sponsor', url: trimmed, label: 'Sponsor' });
         }
         return items;
-    }, [linkedOrgLogoUrl, linkedOrgSlug, linkedOrgName, event?.poster_image_url, event?.custom_image_url, event?.sponsor_logos]);
+    }, [linkedClubs, linkedOrgLogoUrl, linkedOrgSlug, linkedOrgName, event?.poster_image_url, event?.custom_image_url, event?.sponsor_logos]);
 
     const computedEventStatus = useMemo(() => {
         if (event?.status && event.status.toLowerCase() !== 'published' && event.status !== 'Date available' && event.status !== 'Date available offered to R&B') return event.status;
