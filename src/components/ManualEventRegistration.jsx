@@ -1781,6 +1781,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const collectTshirtSize = !!event?.collect_tshirt_size;
     const allowTshirtLogoUpload = collectTshirtSize && !!event?.allow_tshirt_logo_upload;
+    const allowTshirtSponsorName = collectTshirtSize && !!event?.allow_tshirt_sponsor_name;
 
     const selfTshirtChart = useMemo(
         () => resolveTshirtChart(displayProfile || profile, selectedDivisions),
@@ -2374,7 +2375,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 payForPartner: weeklyEntryMode === 'partner' && !!sel?.payForPartner,
                 paymentStatus: markPaid ? 'paid' : 'pending',
                 tshirtSize: tshirtSize || null,
-                tshirtSponsorName: (tshirtSponsorName || '').trim() || null,
+                tshirtSponsorName: allowTshirtSponsorName ? (tshirtSponsorName || '').trim() || null : null,
                 tshirtLogoUrl: allowTshirtLogoUpload ? (tshirtLogoUrl || null) : null,
             });
             built.rows = (built.rows || []).map((row) => ({
@@ -2427,7 +2428,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 status: 'registered',
                 registered_by: existingSelfReg?.registered_by || userEmail,
                 tshirt_size: tshirtSize || existingSelfReg?.tshirt_size || null,
-                tshirt_sponsor_name: (tshirtSponsorName || existingSelfReg?.tshirt_sponsor_name || '').trim() || null,
+                tshirt_sponsor_name: ((allowTshirtSponsorName ? tshirtSponsorName : '') || existingSelfReg?.tshirt_sponsor_name || '').trim() || null,
                 tshirt_logo_url: (allowTshirtLogoUpload ? tshirtLogoUrl : null) || existingSelfReg?.tshirt_logo_url || null,
             });
             if (selfPays && fee > 0) covers.push({ email: userEmail, division: d.name, type: 'entry' });
@@ -2485,7 +2486,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         status: 'registered',
                         registered_by: userEmail,
                         tshirt_size: partnerTshirtSizes[partnerEmailKey] || null,
-                        tshirt_sponsor_name: (partnerTshirtSponsors[partnerEmailKey] || '').trim() || null,
+                        tshirt_sponsor_name: allowTshirtSponsorName ? (partnerTshirtSponsors[partnerEmailKey] || '').trim() || null : null,
                         tshirt_logo_url: allowTshirtLogoUpload ? (partnerTshirtLogos[partnerEmailKey] || null) : null,
                     });
                     if (partnerPays && fee > 0) covers.push({ email: sel.partnerEmail, division: d.name, type: 'entry' });
@@ -2577,6 +2578,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         tshirtSponsorName,
         tshirtLogoUrl,
         allowTshirtLogoUpload,
+        allowTshirtSponsorName,
         partnerTshirtSizes,
         partnerTshirtSponsors,
         partnerTshirtLogos,
@@ -4725,7 +4727,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 <CardBody className="space-y-4">
                                     <p className="text-[11px] text-slate-600 font-normal leading-snug">
                                         This event gifts a T-shirt to entrants. Select the correct size chart for each player.
-                                        {allowTshirtLogoUpload ? ' Optionally add a sponsor name and/or logo for the shirt.' : ' You can also add an optional sponsor name.'}
+                                        {allowTshirtSponsorName && ' You can also add an optional sponsor name.'}
+                                        {allowTshirtLogoUpload && ' Logo uploads are optional.'}
                                     </p>
                                     {needsSelfTshirt && (
                                         <div className="space-y-3">
@@ -4745,19 +4748,21 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                     ))}
                                                 </select>
                                             </div>
-                                            <div>
-                                                <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
-                                                    Sponsor name <span className="font-normal text-slate-500">(optional)</span>
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={tshirtSponsorName}
-                                                    onChange={(e) => setTshirtSponsorName(e.target.value)}
-                                                    placeholder="e.g. NOX"
-                                                    maxLength={80}
-                                                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0"
-                                                />
-                                            </div>
+                                            {allowTshirtSponsorName && (
+                                                <div>
+                                                    <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
+                                                        Sponsor name <span className="font-normal text-slate-500">(optional)</span>
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={tshirtSponsorName}
+                                                        onChange={(e) => setTshirtSponsorName(e.target.value)}
+                                                        placeholder="e.g. NOX"
+                                                        maxLength={80}
+                                                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0"
+                                                    />
+                                                </div>
+                                            )}
                                             {allowTshirtLogoUpload && (
                                                 <div>
                                                     <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
@@ -4844,23 +4849,25 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                         ))}
                                                     </select>
                                                 </div>
-                                                <div>
-                                                    <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
-                                                        Sponsor name for {partner.name}{' '}
-                                                        <span className="font-normal text-slate-500">(optional)</span>
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={partnerTshirtSponsors[key] || ''}
-                                                        onChange={(e) => setPartnerTshirtSponsors((prev) => ({
-                                                            ...prev,
-                                                            [key]: e.target.value,
-                                                        }))}
-                                                        placeholder="e.g. NOX"
-                                                        maxLength={80}
-                                                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0"
-                                                    />
-                                                </div>
+                                                {allowTshirtSponsorName && (
+                                                    <div>
+                                                        <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
+                                                            Sponsor name for {partner.name}{' '}
+                                                            <span className="font-normal text-slate-500">(optional)</span>
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={partnerTshirtSponsors[key] || ''}
+                                                            onChange={(e) => setPartnerTshirtSponsors((prev) => ({
+                                                                ...prev,
+                                                                [key]: e.target.value,
+                                                            }))}
+                                                            placeholder="e.g. NOX"
+                                                            maxLength={80}
+                                                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0"
+                                                        />
+                                                    </div>
+                                                )}
                                                 {allowTshirtLogoUpload && (
                                                     <div>
                                                         <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
