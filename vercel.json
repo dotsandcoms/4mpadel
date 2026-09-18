@@ -21,26 +21,65 @@
   ],
   "rewrites": [
     {
+      "source": "/api/pro-share-image",
+      "destination": "/api/pro-share-image"
+    },
+    {
+      "source": "/pro/:proPath*",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(WhatsApp|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot).*"
+        }
+      ],
+      "destination": "/api/seo-preview?type=pro&proPath=:proPath*"
+    },
+    {
       "source": "/calendar/:slug",
       "has": [
-        { "type": "header", "key": "user-agent", "value": ".*(WhatsApp|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot).*" }
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(WhatsApp|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot).*"
+        }
       ],
       "destination": "/api/seo-preview?type=event&slug=:slug"
     },
     {
       "source": "/gallery/:slug",
       "has": [
-        { "type": "header", "key": "user-agent", "value": ".*(WhatsApp|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot).*" }
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(WhatsApp|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot).*"
+        }
       ],
       "destination": "/api/seo-preview?type=album&slug=:slug"
     },
     {
       "source": "/:path*",
       "has": [
-        { "type": "header", "key": "user-agent", "value": ".*(WhatsApp|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot).*" }
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(WhatsApp|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot).*"
+        }
       ],
       "destination": "/api/seo-preview?path=:path*"
     },
-    { "source": "/((?!assets/).*)", "destination": "/index.html" }
-  ]
+    {
+      "source": "/((?!assets/|api/).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "functions": {
+    "api/pro-padel-sync.js": {
+      "maxDuration": 60
+    },
+    "api/pro-share-image.js": {
+      "maxDuration": 30,
+      "includeFiles": "node_modules/@jimp/plugin-print/**"
+    }
+  }
 }

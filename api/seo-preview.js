@@ -1,3 +1,4 @@
+import { loadShare, shareHtml } from '../server/pro-share.mjs';
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || '';
@@ -9,6 +10,16 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
 
   const { type, slug } = req.query;
+  if (req.query.type === 'pro') {
+    try {
+      const path = String(req.query.proPath || '');
+      const playerId = path.match(/^players\/(\d+)(?:\/[^/]+)?$/)?.[1] || req.query.player;
+      const kind = playerId ? 'player' : req.query.match ? 'match' : null;
+      const data = kind && await loadShare(kind, playerId || req.query.match);
+      if (data) return res.status(200).send(shareHtml(data));
+    } catch { /* Fall through to the site preview when saved data is unavailable. */ }
+  }
+
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 

@@ -9,6 +9,7 @@ import Players from './pages/Players';
 import Calendar from './pages/Calendar';
 import EventDetails from './pages/EventDetails';
 import Rankings from './pages/Rankings';
+const ProPadel = React.lazy(() => import('./pages/ProPadel'));
 import Broll from './pages/Broll';
 import Ladies from './pages/Ladies';
 import Juniors from './pages/Juniors';
@@ -137,6 +138,10 @@ function AppContent() {
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/calendar/:slug" element={<EventDetails />} />
           <Route path="/rankings" element={<Rankings />} />
+          <Route path="/pro" element={<React.Suspense fallback={<div className="p-24 text-center">Loading Pro Padel…</div>}><ProPadel /></React.Suspense>} />
+          <Route path="/pro/:section" element={<React.Suspense fallback={<div className="p-24 text-center">Loading Pro Padel…</div>}><ProPadel /></React.Suspense>} />
+          <Route path="/pro/players/:id" element={<React.Suspense fallback={<div className="p-24 text-center">Loading player…</div>}><ProPadel /></React.Suspense>} />
+          <Route path="/pro/players/:id/:slug" element={<React.Suspense fallback={<div className="p-24 text-center">Loading player…</div>}><ProPadel /></React.Suspense>} />
           <Route path="/organisations" element={<Organisations />} />
           <Route path="/organisations/:slug" element={<OrganisationPage />} />
           <Route path="/federations" element={<Federations />} />

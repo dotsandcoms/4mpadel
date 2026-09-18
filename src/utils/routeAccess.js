@@ -3,6 +3,7 @@ const PUBLIC_EXACT = ['/reset-password', '/contact', '/rankings'];
 /** Routes accessible without signing in */
 export function isPublicRoute(pathname) {
     if (pathname === '/') return true;
+    if (pathname === '/pro' || /^\/pro\/(rankings|following|results|calendar|compare)$/.test(pathname) || /^\/pro\/players\/\d+(?:\/[a-z0-9-]+)?$/.test(pathname)) return true;
     if (pathname === '/calendar' || pathname.startsWith('/calendar/')) return true;
     if (pathname === '/organisations' || pathname.startsWith('/organisations/')) return true;
     if (pathname === '/federations' || pathname.startsWith('/federations/')) return true;

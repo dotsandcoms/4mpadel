@@ -253,6 +253,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
     { name: 'Home', href: '/' },
     { name: 'Players', href: '/players' },
     { name: 'Rankings', href: '/rankings' },
+    { name: 'Pro Padel', href: '/pro' },
     { name: 'Calendar', href: '/calendar' },
     { name: 'Media', href: '/gallery' },
     {
