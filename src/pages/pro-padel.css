@@ -179,3 +179,6 @@
 .pro-followed-heart{display:inline-flex;align-items:center;color:var(--pro-accent);margin-left:8px;vertical-align:middle;line-height:1}
 .pro-followed-heart svg{flex-shrink:0}
 .pro-leader-caption h2 .pro-followed-heart{vertical-align:baseline}
+
+.pro-dialog-bar .pro-follow-heart[aria-pressed=true]{color:var(--pro-accent);background:#2a381d}
+.pro-dialog-bar .pro-follow-heart:disabled{opacity:.5;cursor:wait}
