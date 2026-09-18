@@ -1780,6 +1780,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     }, [isWeeklyEvent, registeredWeekIds]);
 
     const collectTshirtSize = !!event?.collect_tshirt_size;
+    const allowTshirtLogoUpload = collectTshirtSize && !!event?.allow_tshirt_logo_upload;
 
     const selfTshirtChart = useMemo(
         () => resolveTshirtChart(displayProfile || profile, selectedDivisions),
@@ -2374,7 +2375,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 paymentStatus: markPaid ? 'paid' : 'pending',
                 tshirtSize: tshirtSize || null,
                 tshirtSponsorName: (tshirtSponsorName || '').trim() || null,
-                tshirtLogoUrl: tshirtLogoUrl || null,
+                tshirtLogoUrl: allowTshirtLogoUpload ? (tshirtLogoUrl || null) : null,
             });
             built.rows = (built.rows || []).map((row) => ({
                 ...row,
@@ -2427,7 +2428,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 registered_by: existingSelfReg?.registered_by || userEmail,
                 tshirt_size: tshirtSize || existingSelfReg?.tshirt_size || null,
                 tshirt_sponsor_name: (tshirtSponsorName || existingSelfReg?.tshirt_sponsor_name || '').trim() || null,
-                tshirt_logo_url: tshirtLogoUrl || existingSelfReg?.tshirt_logo_url || null,
+                tshirt_logo_url: (allowTshirtLogoUpload ? tshirtLogoUrl : null) || existingSelfReg?.tshirt_logo_url || null,
             });
             if (selfPays && fee > 0) covers.push({ email: userEmail, division: d.name, type: 'entry' });
 
@@ -2485,7 +2486,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         registered_by: userEmail,
                         tshirt_size: partnerTshirtSizes[partnerEmailKey] || null,
                         tshirt_sponsor_name: (partnerTshirtSponsors[partnerEmailKey] || '').trim() || null,
-                        tshirt_logo_url: partnerTshirtLogos[partnerEmailKey] || null,
+                        tshirt_logo_url: allowTshirtLogoUpload ? (partnerTshirtLogos[partnerEmailKey] || null) : null,
                     });
                     if (partnerPays && fee > 0) covers.push({ email: sel.partnerEmail, division: d.name, type: 'entry' });
                 }
@@ -2575,6 +2576,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         tshirtSize,
         tshirtSponsorName,
         tshirtLogoUrl,
+        allowTshirtLogoUpload,
         partnerTshirtSizes,
         partnerTshirtSponsors,
         partnerTshirtLogos,
@@ -4723,7 +4725,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 <CardBody className="space-y-4">
                                     <p className="text-[11px] text-slate-600 font-normal leading-snug">
                                         This event gifts a T-shirt to entrants. Select the correct size chart for each player.
-                                        Optionally add a sponsor name and/or logo for the shirt.
+                                        {allowTshirtLogoUpload ? ' Optionally add a sponsor name and/or logo for the shirt.' : ' You can also add an optional sponsor name.'}
                                     </p>
                                     {needsSelfTshirt && (
                                         <div className="space-y-3">
@@ -4756,63 +4758,65 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0"
                                                 />
                                             </div>
-                                            <div>
-                                                <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
-                                                    Logo <span className="font-normal text-slate-500">(optional)</span>
-                                                </label>
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-14 h-14 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
-                                                        {tshirtLogoUrl ? (
-                                                            <img src={tshirtLogoUrl} alt="T-shirt logo" className="w-full h-full object-contain" />
-                                                        ) : (
-                                                            <ImageIcon className="w-5 h-5 text-slate-400" />
-                                                        )}
-                                                    </div>
-                                                    <div className="flex-1 min-w-0 space-y-1.5">
-                                                        <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">
-                                                            {tshirtLogoUploading ? (
-                                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            {allowTshirtLogoUpload && (
+                                                <div>
+                                                    <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
+                                                        Logo <span className="font-normal text-slate-500">(optional)</span>
+                                                    </label>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-14 h-14 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
+                                                            {tshirtLogoUrl ? (
+                                                                <img src={tshirtLogoUrl} alt="T-shirt logo" className="w-full h-full object-contain" />
                                                             ) : (
-                                                                <Upload className="w-3.5 h-3.5" />
+                                                                <ImageIcon className="w-5 h-5 text-slate-400" />
                                                             )}
-                                                            {tshirtLogoUploading ? 'Uploading…' : (tshirtLogoUrl ? 'Replace logo' : 'Upload logo')}
-                                                            <input
-                                                                type="file"
-                                                                accept="image/*"
-                                                                className="hidden"
-                                                                disabled={tshirtLogoUploading}
-                                                                onChange={async (e) => {
-                                                                    const file = e.target.files?.[0];
-                                                                    e.target.value = '';
-                                                                    if (!file) return;
-                                                                    setTshirtLogoUploading(true);
-                                                                    try {
-                                                                        const url = await uploadTshirtLogo(file, {
-                                                                            eventId: event.id,
-                                                                            emailKey: userEmail || 'self',
-                                                                        });
-                                                                        setTshirtLogoUrl(url);
-                                                                        toast.success('Logo uploaded');
-                                                                    } catch (err) {
-                                                                        toast.error(err.message || 'Logo upload failed');
-                                                                    } finally {
-                                                                        setTshirtLogoUploading(false);
-                                                                    }
-                                                                }}
-                                                            />
-                                                        </label>
-                                                        {tshirtLogoUrl && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setTshirtLogoUrl('')}
-                                                                className="block text-[11px] text-slate-500 underline hover:text-slate-800"
-                                                            >
-                                                                Remove logo
-                                                            </button>
-                                                        )}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0 space-y-1.5">
+                                                            <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">
+                                                                {tshirtLogoUploading ? (
+                                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                                ) : (
+                                                                    <Upload className="w-3.5 h-3.5" />
+                                                                )}
+                                                                {tshirtLogoUploading ? 'Uploading…' : (tshirtLogoUrl ? 'Replace logo' : 'Upload logo')}
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    className="hidden"
+                                                                    disabled={tshirtLogoUploading}
+                                                                    onChange={async (e) => {
+                                                                        const file = e.target.files?.[0];
+                                                                        e.target.value = '';
+                                                                        if (!file) return;
+                                                                        setTshirtLogoUploading(true);
+                                                                        try {
+                                                                            const url = await uploadTshirtLogo(file, {
+                                                                                eventId: event.id,
+                                                                                emailKey: userEmail || 'self',
+                                                                            });
+                                                                            setTshirtLogoUrl(url);
+                                                                            toast.success('Logo uploaded');
+                                                                        } catch (err) {
+                                                                            toast.error(err.message || 'Logo upload failed');
+                                                                        } finally {
+                                                                            setTshirtLogoUploading(false);
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            </label>
+                                                            {tshirtLogoUrl && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setTshirtLogoUrl('')}
+                                                                    className="block text-[11px] text-slate-500 underline hover:text-slate-800"
+                                                                >
+                                                                    Remove logo
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
+                                            )}
                                         </div>
                                     )}
                                     {partnersNeedingTshirt.map((partner) => {
@@ -4857,64 +4861,66 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                         className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0"
                                                     />
                                                 </div>
-                                                <div>
-                                                    <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
-                                                        Logo for {partner.name}{' '}
-                                                        <span className="font-normal text-slate-500">(optional)</span>
-                                                    </label>
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-14 h-14 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
-                                                            {partnerLogo ? (
-                                                                <img src={partnerLogo} alt="" className="w-full h-full object-contain" />
-                                                            ) : (
-                                                                <ImageIcon className="w-5 h-5 text-slate-400" />
-                                                            )}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0 space-y-1.5">
-                                                            <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">
-                                                                {partnerUploading ? (
-                                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                {allowTshirtLogoUpload && (
+                                                    <div>
+                                                        <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
+                                                            Logo for {partner.name}{' '}
+                                                            <span className="font-normal text-slate-500">(optional)</span>
+                                                        </label>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-14 h-14 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
+                                                                {partnerLogo ? (
+                                                                    <img src={partnerLogo} alt="" className="w-full h-full object-contain" />
                                                                 ) : (
-                                                                    <Upload className="w-3.5 h-3.5" />
+                                                                    <ImageIcon className="w-5 h-5 text-slate-400" />
                                                                 )}
-                                                                {partnerUploading ? 'Uploading…' : (partnerLogo ? 'Replace logo' : 'Upload logo')}
-                                                                <input
-                                                                    type="file"
-                                                                    accept="image/*"
-                                                                    className="hidden"
-                                                                    disabled={partnerUploading}
-                                                                    onChange={async (e) => {
-                                                                        const file = e.target.files?.[0];
-                                                                        e.target.value = '';
-                                                                        if (!file) return;
-                                                                        setPartnerTshirtLogoUploading((prev) => ({ ...prev, [key]: true }));
-                                                                        try {
-                                                                            const url = await uploadTshirtLogo(file, {
-                                                                                eventId: event.id,
-                                                                                emailKey: key,
-                                                                            });
-                                                                            setPartnerTshirtLogos((prev) => ({ ...prev, [key]: url }));
-                                                                            toast.success(`Logo uploaded for ${partner.name}`);
-                                                                        } catch (err) {
-                                                                            toast.error(err.message || 'Logo upload failed');
-                                                                        } finally {
-                                                                            setPartnerTshirtLogoUploading((prev) => ({ ...prev, [key]: false }));
-                                                                        }
-                                                                    }}
-                                                                />
-                                                            </label>
-                                                            {partnerLogo && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setPartnerTshirtLogos((prev) => ({ ...prev, [key]: '' }))}
-                                                                    className="block text-[11px] text-slate-500 underline hover:text-slate-800"
-                                                                >
-                                                                    Remove logo
-                                                                </button>
-                                                            )}
+                                                            </div>
+                                                            <div className="flex-1 min-w-0 space-y-1.5">
+                                                                <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">
+                                                                    {partnerUploading ? (
+                                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                                    ) : (
+                                                                        <Upload className="w-3.5 h-3.5" />
+                                                                    )}
+                                                                    {partnerUploading ? 'Uploading…' : (partnerLogo ? 'Replace logo' : 'Upload logo')}
+                                                                    <input
+                                                                        type="file"
+                                                                        accept="image/*"
+                                                                        className="hidden"
+                                                                        disabled={partnerUploading}
+                                                                        onChange={async (e) => {
+                                                                            const file = e.target.files?.[0];
+                                                                            e.target.value = '';
+                                                                            if (!file) return;
+                                                                            setPartnerTshirtLogoUploading((prev) => ({ ...prev, [key]: true }));
+                                                                            try {
+                                                                                const url = await uploadTshirtLogo(file, {
+                                                                                    eventId: event.id,
+                                                                                    emailKey: key,
+                                                                                });
+                                                                                setPartnerTshirtLogos((prev) => ({ ...prev, [key]: url }));
+                                                                                toast.success(`Logo uploaded for ${partner.name}`);
+                                                                            } catch (err) {
+                                                                                toast.error(err.message || 'Logo upload failed');
+                                                                            } finally {
+                                                                                setPartnerTshirtLogoUploading((prev) => ({ ...prev, [key]: false }));
+                                                                            }
+                                                                        }}
+                                                                    />
+                                                                </label>
+                                                                {partnerLogo && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setPartnerTshirtLogos((prev) => ({ ...prev, [key]: '' }))}
+                                                                        className="block text-[11px] text-slate-500 underline hover:text-slate-800"
+                                                                    >
+                                                                        Remove logo
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
+                                                )}
                                             </div>
                                         );
                                     })}

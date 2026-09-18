@@ -998,7 +998,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
         'max_teams_capacity', 'partner_requirement', 'back_draw_options', 'event_co_admins',
         'allow_payments', 'finance_managed', 'payment_method', 'payment_bank_name', 'payment_account_name',
         'payment_account_number', 'payment_branch_code', 'payment_reference_note', 'external_payment_url',
-        'allow_temporary_license', 'license_required_default', 'collect_tshirt_size', 'player_gift_type', 'player_gift_types', 'entry_fee_notes',
+        'allow_temporary_license', 'license_required_default', 'collect_tshirt_size', 'allow_tshirt_logo_upload', 'player_gift_type', 'player_gift_types', 'entry_fee_notes',
         'federation_id', 'sanction_requested', 'default_match_format',
         'indoor_outdoor', 'courts_count'
     ];

@@ -700,6 +700,7 @@ const blankForm = {
     allow_temporary_license: true,
     license_required_default: false,
     collect_tshirt_size: false,
+    allow_tshirt_logo_upload: false,
     entry_fee_notes: '',
     // format & capacity
     golden_point: true,
@@ -1272,6 +1273,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             allow_temporary_license: ev.allow_temporary_license !== false,
             license_required_default: !!ev.license_required_default,
             collect_tshirt_size: !!ev.collect_tshirt_size,
+            allow_tshirt_logo_upload: !!ev.allow_tshirt_logo_upload,
             entry_fee_notes: ev.entry_fee_notes || '',
             organisation_id: ev.organisation_id || null,
             venues: venuesFromEvent(ev),
@@ -2118,6 +2120,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             player_gift_types: Array.isArray(form.player_gift_types) ? form.player_gift_types : [],
             player_gift_type: form.player_gift_types?.[0] || 'none',
             collect_tshirt_size: !!form.player_gift_types?.includes('tshirt'),
+            allow_tshirt_logo_upload: !!form.player_gift_types?.includes('tshirt') && !!form.allow_tshirt_logo_upload,
             entry_fee_notes: form.entry_fee_notes || null,
             payment_method: form.payment_method || (form.allow_payments ? 'platform' : 'free'),
             allow_payments: (form.payment_method || 'platform') !== 'free',
@@ -3823,6 +3826,20 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                 <p className="mt-1 text-[11px] text-gray-500">
                                                     Select any combination. Match T-shirt automatically enables shirt-size collection during registration.
                                                 </p>
+                                                {(form.player_gift_types || []).includes('tshirt') && (
+                                                    <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-[#1a1a1a] px-4 py-3">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={form.allow_tshirt_logo_upload}
+                                                            onChange={(e) => setForm((prev) => ({ ...prev, allow_tshirt_logo_upload: e.target.checked }))}
+                                                            className="mt-0.5 h-4 w-4 accent-padel-green"
+                                                        />
+                                                        <span>
+                                                            <span className="block text-sm font-medium text-white">Allow player logo uploads</span>
+                                                            <span className="mt-1 block text-[11px] text-gray-500">Show an optional T-shirt logo upload for players and their partners. Players can always continue with just their size.</span>
+                                                        </span>
+                                                    </label>
+                                                )}
                                             </div>
                                         </div>
                                     )}
@@ -4889,6 +4906,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                         <p className="text-gray-300"><span className="text-gray-500">Partner requirement:</span> {form.is_weekly ? 'Optional (player chooses)' : (form.partner_requirement || '—')}</p>
                                         <p className="text-gray-300"><span className="text-gray-500">Maximum teams / entries:</span> {form.max_teams_capacity || 'Unlimited'}</p>
                                         <p className="text-gray-300"><span className="text-gray-500">Player gifts:</span> {(form.player_gift_types || []).length ? form.player_gift_types.map((value) => PLAYER_GIFTS.find((gift) => gift.value === value)?.label || value).join(', ') : 'None'}</p>
+                                        {form.player_gift_types?.includes('tshirt') && <p className="text-gray-300"><span className="text-gray-500">Player logo uploads:</span> {form.allow_tshirt_logo_upload ? 'Optional' : 'Off'}</p>}
                                         {!form.is_weekly && (
                                             <>
                                                 <p className="text-gray-300"><span className="text-gray-500">Plate / back draw:</span> {form.back_draw_options || '—'}</p>
