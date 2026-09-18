@@ -31,7 +31,7 @@ import {
     resolveRegistrationPaymentMethod,
     resolveRegistrationPayer,
 } from '../../utils/paymentRegistrationMatch';
-import { createPendingRegistrations } from '../../utils/adminEventRegistration';
+import { createPendingRegistrations, searchRegistrationPlayers } from '../../utils/adminEventRegistration';
 import { sendEmail } from '../../utils/emails';
 import AdminPlayerProfileModal from './AdminPlayerProfileModal';
 import EventActivityLog from './EventActivityLog';
@@ -746,16 +746,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         let cancelled = false;
         const handle = setTimeout(async () => {
             setAddPlayerSearching(true);
-            const q = addPlayerSearch.trim().replace(/[,()%]/g, ' ');
-            const { data, error } = await supabase
-                .from('players')
-                .select('id, name, email, image_url')
-                .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
-                .limit(12);
+            const { data, error } = await searchRegistrationPlayers(supabase, addPlayerSearch, 12);
             if (cancelled) return;
             if (error) {
                 console.error('Add player search failed:', error);
                 setAddPlayerResults([]);
+                toast.error('Unable to search players. Please try again.');
             } else {
                 setAddPlayerResults((data || []).filter((p) => p.email));
             }
@@ -1095,13 +1091,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         let cancelled = false;
         const handle = setTimeout(async () => {
             setSearchingProfiles(true);
-            const q = linkSearch.trim().replace(/[,()%]/g, ' ');
-            const { data } = await supabase
-                .from('players')
-                .select('id, name, email, image_url')
-                .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
-                .limit(8);
+            const { data, error } = await searchRegistrationPlayers(supabase, linkSearch, 8);
             if (cancelled) return;
+            if (error) {
+                console.error('Partner search failed:', error);
+                toast.error('Unable to search players. Please try again.');
+            }
             // Exclude the solo player and anyone already entered (active) in this division.
             const taken = new Set(
                 registrations
@@ -1990,16 +1985,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         }
         setSearchingProfiles(true);
         try {
-            const { data, error } = await supabase
-                .from('players')
-                .select('id, name, email, contact_number')
-                .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
-                .order('name')
-                .limit(20);
+            const { data, error } = await searchRegistrationPlayers(supabase, q);
             if (error) throw error;
             setProfileLinkResults(data || []);
         } catch (err) {
             console.error('Profile search failed:', err.message);
+            toast.error('Unable to search players. Please try again.');
             setProfileLinkResults([]);
         } finally {
             setSearchingProfiles(false);
