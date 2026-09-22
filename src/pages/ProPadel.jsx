@@ -149,7 +149,7 @@ export default function ProPadel() {
           </>}
           </div>
         </section>
-        <footer className="pro-source"><span>Powered by <a href="https://padelapi.org" target="_blank" rel="noreferrer">Padel API <ArrowUpRight size={12} /></a></span><span>Rankings synced {formatDate(snapshot.updatedAt)} · {new Intl.DateTimeFormat('en-ZA', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Johannesburg' }).format(new Date(snapshot.updatedAt))} SAST</span></footer>
+        <footer className="pro-source"><span>Rankings synced {formatDate(snapshot.updatedAt)} · {new Intl.DateTimeFormat('en-ZA', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Johannesburg' }).format(new Date(snapshot.updatedAt))} SAST</span></footer>
         {selectedMatchId && <MatchDetailsModal key={selectedMatchId} match={selectedMatch} tournament={tournaments.find((event) => event.id === selectedMatch?.tournamentId)} loading={tourState.loading} error={tourState.error} updatedAt={tour?.updatedAt} playerLookup={playerLookup} playerHref={playerHref} onClose={closeMatch} onRetry={retry} />}
         {selectedId && <ProPlayerModal fixtureState={fixtureState} onRetryFixtures={retryFixtures} onOpenPlayer={(id) => navigate(playerHref(id), { replace: true, state: location.state })} key={selectedId} playerLookup={playerLookup} player={player} tour={tour} tourError={tourState.error} onClose={closePlayer} updatedAt={snapshot.updatedAt} follows={follows} onCompare={() => comparePlayers(player.id, null, player.category)} onSignIn={() => { closePlayer(); setAuthOpen(true); }} />}
       </>}
