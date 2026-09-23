@@ -299,8 +299,8 @@ export default function SignInScreen() {
           </Text>
           <Text className="mb-7 text-court-muted" style={{ fontSize: 16, lineHeight: 24 }}>
             {mode === 'signin'
-              ? 'Sign in to manage events, partners and your ranking.'
-              : 'Sign up, then set up your player profile to enter events and follow your game.'}
+              ? 'Sign in to enter tournaments and follow the game.'
+              : 'Join 4M Padel to compete locally and follow players around the world.'}
           </Text>
         </FadeUp>
 
