@@ -170,6 +170,39 @@ struct ScheduleWidgetView: View {
       .background(statusColor(item).opacity(0.12), in: Capsule())
   }
 
+  private var countdownFont: Font {
+    #if os(iOS)
+    Font(UIFont.monospacedSystemFont(ofSize: 14, weight: .semibold))
+    #else
+    .system(size: 14, weight: .semibold, design: .monospaced)
+    #endif
+  }
+
+  private var countdownDigitWidth: CGFloat {
+    #if os(iOS)
+    ("0" as NSString).size(withAttributes: [.font: UIFont.monospacedSystemFont(ofSize: 14, weight: .semibold)]).width
+    #else
+    8.4
+    #endif
+  }
+
+  // Each column displays its two digits from the same native live timer.
+  // Right alignment also handles single-digit hours without shifting minutes/seconds.
+  private func countdownUnit(_ label: String, end: Date, trailingCharacters: Int) -> some View {
+    VStack(spacing: 1) {
+      Text(timerInterval: entry.date...max(entry.date, end), countsDown: true, showsHours: true)
+        .font(countdownFont)
+        .multilineTextAlignment(.trailing)
+        .environment(\.locale, Locale(identifier: "en_US_POSIX"))
+        .frame(width: 200, alignment: .trailing)
+        .offset(x: CGFloat(trailingCharacters) * countdownDigitWidth)
+        .frame(width: countdownDigitWidth * 2, alignment: .trailing)
+        .clipped()
+        .accessibilityHidden(true)
+      Text(label).font(.system(size: 7, weight: .medium))
+    }.frame(maxWidth: .infinity)
+  }
+
   @ViewBuilder private func eventTiming(_ item: ScheduleItem) -> some View {
     if item.isLive(at: entry.date) {
       Text("Tournament underway").lineLimit(1)
@@ -178,30 +211,22 @@ struct ScheduleWidgetView: View {
       let clockEnd = countdown.end.addingTimeInterval(-Double(days * 86400))
       VStack(alignment: .leading, spacing: 2) {
         Text(countdown.label == "Starts in" ? countdown.label : "\(countdown.label) in").font(.system(size: 9, weight: .semibold))
-        HStack(spacing: 6) {
+        HStack(spacing: 0) {
           VStack(spacing: 1) {
-            Text(String(format: "%02d", days)).font(.system(size: 14, weight: .semibold, design: .monospaced))
+            Text(String(format: "%02d", days)).font(countdownFont)
             Text("DAYS").font(.system(size: 7, weight: .medium))
           }.frame(maxWidth: .infinity)
-          Text(":").font(.system(size: 14)).padding(.bottom, 9)
-          VStack(spacing: 1) {
-            Text(timerInterval: entry.date...max(entry.date, clockEnd), countsDown: true, showsHours: true)
-              .font(.system(size: 14, weight: .semibold, design: .monospaced))
-              .monospacedDigit().multilineTextAlignment(.center)
-            HStack(spacing: 0) {
-              ForEach(["HRS", "MINS", "SECS"], id: \.self) { label in
-                Text(label).font(.system(size: 7, weight: .medium)).frame(maxWidth: .infinity)
-              }
-            }
-          }.frame(minWidth: 72, maxWidth: 92)
-            .frame(maxWidth: .infinity)
+          countdownUnit("HRS", end: clockEnd, trailingCharacters: 6)
+          countdownUnit("MINS", end: clockEnd, trailingCharacters: 3)
+          countdownUnit("SECS", end: clockEnd, trailingCharacters: 0)
         }
         .frame(maxWidth: .infinity)
         .foregroundStyle(ink)
         .padding(.horizontal, 6).padding(.vertical, 3)
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(accent.opacity(0.35), lineWidth: 1))
       }
-      .accessibilityElement(children: .combine)
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel("\(countdown.label), \(days) days, \(Int(countdown.end.timeIntervalSince(entry.date)) % 86400 / 3600) hours, \(Int(countdown.end.timeIntervalSince(entry.date)) % 3600 / 60) minutes remaining")
     } else if let closes = item.registrationClosesAt, closes <= entry.date.timeIntervalSince1970 * 1000 {
       Text("Registration closed").lineLimit(1)
     } else {
