@@ -69,6 +69,7 @@ function RegistrationFlow() {
   const [error, setError] = useState('');
   const [reference, setReference] = useState<string | null>(null);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [returnedFromCheckout, setReturnedFromCheckout] = useState(false);
   const [done, setDone] = useState(false);
   const [paymentPending, setPaymentPending] = useState(false);
   const [partnerPayAccepted, setPartnerPayAccepted] = useState(false);
@@ -80,6 +81,7 @@ function RegistrationFlow() {
     ...(!payOnly || sponsorChanged ? { tshirtLogoUrl, tshirtSponsorName } : {}), partnerTshirtLogoUrl, partnerTshirtSponsorName,
     payForPartner, tshirtSize, partnerTshirtSize, accessGrantId: grant, isTest: __DEV__ };
   const load = async () => {
+    setReturnedFromCheckout(false);
     setLoading(true); setError(''); setQuote(null); setAgreed(false); setReference(null); setCheckoutUrl(null); setDone(false); setPartnerEmail(''); setPartnerName('');
     try {
       const row = await fetchEvent(id);
@@ -167,6 +169,7 @@ function RegistrationFlow() {
     setCheckoutUrl(result.authorizationUrl);
     if (storageKey.current) await AsyncStorage.setItem(storageKey.current, JSON.stringify({ reference: result.reference, url: result.authorizationUrl, payForPartner }));
     await WebBrowser.openBrowserAsync(result.authorizationUrl, { controlsColor: brand.padel });
+    setReturnedFromCheckout(true);
   });
   const back = () => {
     if (busy) return;
@@ -216,13 +219,20 @@ function RegistrationFlow() {
         })} />}
         <ActionButton label="View my entry" onPress={() => router.replace({ pathname: '/events/[id]', params: { id } })} />
       </> : reference ? <>
-        <Notice title="Check your payment">After completing checkout, check the payment here. Closing checkout does not confirm payment.</Notice>
-        {checkoutUrl && <ActionButton label="Reopen checkout" secondary busy={busy} onPress={() => run(async () => {
+        <Notice title={returnedFromCheckout ? 'Check your payment' : checkoutUrl ? 'Continue your payment' : 'Check your payment'}>
+          {returnedFromCheckout
+            ? 'If you completed payment, check its status below. If you closed checkout before paying, you can continue your payment.'
+            : checkoutUrl
+              ? 'You have a saved checkout for this event. Continue to secure checkout to complete payment. Already paid? Check your payment status below.'
+              : 'A previous payment attempt was found. Check its status before continuing.'}
+        </Notice>
+        {checkoutUrl && <ActionButton label="Continue to checkout" secondary={returnedFromCheckout} busy={busy} onPress={() => run(async () => {
           const url = new URL(checkoutUrl);
           if (url.protocol !== 'https:' || url.hostname !== 'checkout.paystack.com') throw new Error('This saved checkout address is invalid.');
           await WebBrowser.openBrowserAsync(url.href, { controlsColor: brand.padel });
+          setReturnedFromCheckout(true);
         })} />}
-        <ActionButton label="Check payment status" busy={busy} onPress={verify} />
+        <ActionButton label="Check payment status" secondary={!!checkoutUrl && !returnedFromCheckout} busy={busy} onPress={verify} />
         <ActionButton label="Return to event" secondary disabled={busy} onPress={() => router.back()} />
         <Text style={{ color: brand.faint, fontSize: 12 }}>Reference: {reference}</Text>
       </> : event && !loading && !event.is_manual ? <>
