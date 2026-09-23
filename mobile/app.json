@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "fourmpadel",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "backgroundColor": "#0a0a0a",
     "primaryColor": "#CCFF00",
     "ios": {
@@ -18,7 +18,7 @@
         ]
       },
       "infoPlist": {
-        "UIStatusBarStyle": "UIStatusBarStyleLightContent",
+        "UIStatusBarStyle": "UIStatusBarStyleDefault",
         "NSFaceIDUsageDescription": "Use Face ID to sign in to 4M Padel without entering your password.",
         "UIBackgroundModes": [
           "remote-notification"

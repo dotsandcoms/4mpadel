@@ -3,7 +3,7 @@ import { Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import { ActionButton } from './event-ui';
 import { pickSponsorLogo } from '@/lib/sponsor-logo';
-import { brand } from '@/theme/tokens';
+import { lightBrand as brand } from '@/theme/tokens';
 
 export function SponsorDetails({ eventId, email, name, logo, sponsor, allowLogo, allowName, disabled, onChange, onBusyChange }: {
   eventId: number; email: string; name: string; logo?: string; sponsor?: string;

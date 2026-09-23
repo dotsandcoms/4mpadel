@@ -12,11 +12,11 @@ export function SheetHeader({
   children?: ReactNode;
 }) {
   return (
-    <View collapsable={false} className="bg-page">
+    <View collapsable={false} className="bg-court-page">
       <View className="flex-row items-center px-5 pb-2 pt-3">
         <Text
           accessibilityRole="header"
-          className="flex-1 pr-3 text-[20px] font-extrabold text-premium">
+          className="flex-1 pr-3 text-[20px] font-extrabold text-court-ink">
           {title}
         </Text>
         {trailing}

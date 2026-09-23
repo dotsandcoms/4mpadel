@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler';
 import type { Session } from '@supabase/supabase-js';
-import { DarkTheme, Stack, ThemeProvider, useRouter } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
@@ -17,7 +17,7 @@ import {
 import { destinationAfterAuth } from '@/lib/profile';
 import { recordAppDevice } from '@/lib/signup-source';
 import { supabase } from '@/lib/supabase';
-import { brand } from '@/theme/tokens';
+import { brand as darkBrand, lightBrand } from '@/theme/tokens';
 import { setCompanionAccount } from '@/lib/companion';
 
 SplashScreen.preventAutoHideAsync();
@@ -42,6 +42,11 @@ SplashScreen.preventAutoHideAsync();
  */
 export default function RootLayout() {
   const router = useRouter();
+  const segments = useSegments();
+  const isAuth = segments[0] === '(auth)';
+  const legacyScreen = isAuth || segments[0] === 'edit-profile' || segments[0] === 'legal';
+  const brand = legacyScreen ? darkBrand : lightBrand;
+  const navigationTheme = legacyScreen ? DarkTheme : DefaultTheme;
   const [dataReady, setDataReady] = useState(false);
   const [bootError, setBootError] = useState(false);
   const [bootAttempt, setBootAttempt] = useState(0);
@@ -143,9 +148,9 @@ export default function RootLayout() {
   return (
     <ThemeProvider
       value={{
-        ...DarkTheme,
+        ...navigationTheme,
         colors: {
-          ...DarkTheme.colors,
+          ...navigationTheme.colors,
           primary: brand.padel,
           background: brand.page,
           card: brand.elevated,
@@ -153,7 +158,7 @@ export default function RootLayout() {
           border: brand.edge,
         },
       }}>
-      <StatusBar style="light" />
+      <StatusBar style={legacyScreen || !revealed ? "light" : "dark"} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: brand.page } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />

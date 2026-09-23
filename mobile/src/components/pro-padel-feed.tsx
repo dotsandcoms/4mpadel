@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import type { ProPadelState } from '@/hooks/use-pro-padel';
 import { proDate, proRound, proStale, proStatus, selectProMatches, type ProTournament, type ProCategory, type ProFollow, type ProMatch, type ProPerson, type ProPlayer } from '@/lib/pro-padel';
-import { brand } from '@/theme/tokens';
+import { lightBrand as brand } from '@/theme/tokens';
 
 type Filter = ProCategory | 'all';
 const followRow = (p: ProPlayer): ProFollow => ({ player_id: p.id, player_name: p.name, category: p.category });
@@ -20,7 +20,7 @@ const country = (code: string | null) => {
 function Button({ label, onPress, icon, disabled = false }: { label: string; onPress: () => void; icon?: keyof typeof Ionicons.glyphMap; disabled?: boolean }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled}
     onPress={onPress} style={[s.button, disabled && { opacity: 0.45 }]}>
-    {icon && <Ionicons name={icon} size={17} color={brand.padel} />}<Text style={s.buttonText}>{label}</Text>
+    {icon && <Ionicons name={icon} size={17} color={brand.accent} />}<Text style={s.buttonText}>{label}</Text>
   </Pressable>;
 }
 
@@ -45,7 +45,7 @@ function NextTourCard({ event, message }: { event: ProTournament; message?: stri
     <View style={s.tourMain}>
       <View style={{ flex: 1, gap: 12 }}>
         <Text accessibilityRole="header" style={s.tourTitle}>{event.name}</Text>
-        {!!event.location && <View style={s.tourMeta}><Ionicons name="location-outline" size={15} color="#b7c4b0" /><Text style={s.tourLocation}>{event.location}</Text></View>}
+        {!!event.location && <View style={s.tourMeta}><Ionicons name="location-outline" size={15} color="#52625A" /><Text style={s.tourLocation}>{event.location}</Text></View>}
       </View>
       <View style={s.tourDate} accessible accessibilityLabel={proDate(event.startDate)}>
         <Text style={s.tourMonth}>{datePart({ month: 'short' }).toUpperCase()}</Text>
@@ -53,7 +53,7 @@ function NextTourCard({ event, message }: { event: ProTournament; message?: stri
         <Text style={s.tourYear}>{datePart({ year: 'numeric' })}</Text>
       </View>
     </View>
-    <View style={s.tourMeta}><Ionicons name="calendar-outline" size={16} color="#b7c4b0" /><Text style={s.tourLocation}>{proDate(event.startDate)} – {proDate(event.endDate)}</Text></View>
+    <View style={s.tourMeta}><Ionicons name="calendar-outline" size={16} color="#52625A" /><Text style={s.tourLocation}>{proDate(event.startDate)} – {proDate(event.endDate)}</Text></View>
     <Pressable accessibilityRole="button" accessibilityState={{ disabled: adding }} disabled={adding} onPress={() => void add()} style={[s.tourCalendar, adding && { opacity: 0.65 }]}>
       <Ionicons name="calendar-outline" size={19} color="#17200c" /><Text style={s.tourCalendarText}>{adding ? 'Opening calendar…' : 'Add to my calendar'}</Text>
     </Pressable>
@@ -64,7 +64,7 @@ function NextTourCard({ event, message }: { event: ProTournament; message?: stri
 function MatchSectionToggle({ title, count, expanded, onPress }: { title: string; count: number; expanded: boolean; onPress: () => void }) {
   return <Pressable accessibilityRole="button" accessibilityState={{ expanded }} accessibilityLabel={`${title}, ${count} matches`} onPress={onPress} style={s.matchToggle}>
     <View style={{ flex: 1, gap: 4 }}><Text style={s.matchToggleTitle}>{title}</Text><Text style={s.caption}>{expanded ? 'Tap to hide matches' : 'Tap to show matches'}</Text></View>
-    <View style={s.matchCount}><Text style={{ color: brand.padel, fontSize: 12, fontWeight: '700' }}>{count}</Text></View>
+    <View style={s.matchCount}><Text style={{ color: brand.accent, fontSize: 12, fontWeight: '700' }}>{count}</Text></View>
     <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={20} color={brand.muted} />
   </Pressable>;
 }
@@ -116,12 +116,12 @@ export function MatchCard({ match, lookup, onPlayer }: { match: ProMatch; lookup
           {match.score.map((set, i) => {
             const value = String(set[index] ?? '—');
             const parts = /^(\d+)(\(\d+\))$/.exec(value);
-            return <View key={i} style={s.scoreColumn}><Text style={[s.score, winner && { color: brand.padel }]}>{parts ? parts[1] : value}{parts && <Text style={s.tieBreak}>{parts[2]}</Text>}</Text></View>;
+            return <View key={i} style={s.scoreColumn}><Text style={[s.score, winner && { color: brand.accent }]}>{parts ? parts[1] : value}{parts && <Text style={s.tieBreak}>{parts[2]}</Text>}</Text></View>;
           })}
         </View>}
       </View>;
     })}
-    <View style={s.matchFooter}><View style={s.resultStatus}><Ionicons name={upcoming ? 'time-outline' : match.status === 'finished' ? 'checkmark-circle' : 'information-circle-outline'} size={13} color={!upcoming && match.status === 'finished' ? brand.padel : brand.muted} /><Text style={s.caption}>{upcoming ? match.court || 'Court TBC' : proStatus(match)}</Text></View>
+    <View style={s.matchFooter}><View style={s.resultStatus}><Ionicons name={upcoming ? 'time-outline' : match.status === 'finished' ? 'checkmark-circle' : 'information-circle-outline'} size={13} color={!upcoming && match.status === 'finished' ? brand.accent : brand.muted} /><Text style={s.caption}>{upcoming ? match.court || 'Court TBC' : proStatus(match)}</Text></View>
       <Text style={s.caption}>{upcoming ? 'Saved schedule' : 'Premier Padel'}</Text></View>
   </View>;
 }
@@ -131,7 +131,7 @@ export function ProPadelFeed({ state }: { state: ProPadelState }) {
   const [view, setView] = useState<'for-you' | 'tour'>('for-you');
   const [filter, setFilter] = useState<Filter>('all');
   const [count, setCount] = useState(6);
-  const [resultsOpen, setResultsOpen] = useState(false);
+  const [resultsOpen, setResultsOpen] = useState(true);
   const [fixturesOpen, setFixturesOpen] = useState(false);
   const [directory, setDirectory] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -175,14 +175,14 @@ export function ProPadelFeed({ state }: { state: ProPadelState }) {
     </View>
     <Text style={s.body}>Your front row to the tour.</Text>
     <View style={s.tabs}>{(['for-you', 'tour'] as const).map(v => <Pressable key={v} accessibilityRole="tab" accessibilityState={{ selected: view === v }}
-      onPress={() => { setView(v); setCount(6); }} style={[s.tab, view === v && s.activeTab]}><Text style={[s.tabLabel, view === v && { color: brand.page }]}>{v === 'for-you' ? 'For you' : 'Tour'}</Text></Pressable>)}</View>
+      onPress={() => { setView(v); setCount(6); }} style={[s.tab, view === v && s.activeTab]}><Text style={[s.tabLabel, view === v && { color: '#16251F' }]}>{v === 'for-you' ? 'For you' : 'Tour'}</Text></Pressable>)}</View>
     <View style={s.filters}>{(['all', 'men', 'women'] as const).map(v => <Pressable key={v} accessibilityRole="button" accessibilityState={{ selected: filter === v }}
       onPress={() => { setFilter(v); setCount(6); }} style={[s.filter, filter === v && s.activeFilter]}><Text style={[s.caption, filter === v && { color: brand.premium }]}>{v === 'all' ? 'All' : v === 'men' ? 'Men' : 'Women'}</Text></Pressable>)}</View>
 
-    {state.loading && !state.rankings.data && !state.tour.data && <View style={s.loading}><ActivityIndicator color={brand.padel} /><Text style={s.body}>Loading the tour…</Text></View>}
+    {state.loading && !state.rankings.data && !state.tour.data && <View style={s.loading}><ActivityIndicator color={brand.accent} /><Text style={s.body}>Loading the tour…</Text></View>}
     {state.writeError && <Text accessibilityRole="alert" style={s.warning}>{state.writeError}</Text>}
     {state.rankings.error && <Message body={state.rankings.error} retry={retry} />}
-    {personal && state.followsLoading ? <View style={s.loading}><ActivityIndicator color={brand.padel} /><Text style={s.body}>Loading your players…</Text></View>
+    {personal && state.followsLoading ? <View style={s.loading}><ActivityIndicator color={brand.accent} /><Text style={s.body}>Loading your players…</Text></View>
       : personal && state.followsError ? <Message body={state.followsError} retry={() => { void state.refreshFollows(); }} />
       : personal && !state.userId ? <View style={s.message}><Text style={s.cardTitle}>Make the tour your own</Text><Text style={s.body}>Sign in to follow players and see their results here.</Text><Button label="Sign in" onPress={() => router.push('/(auth)/sign-in')} /></View>
       : personal && !ids.length ? <View style={s.message}><Text style={s.cardTitle}>Who’s your first pick?</Text><Text style={s.body}>Follow your favourite players for their results, ranking updates and published fixtures.</Text><Button label="Find players" icon="add" onPress={openDirectory} /></View> : null}
@@ -284,10 +284,10 @@ const s = StyleSheet.create({
   eyebrow: { fontSize: 10, fontWeight: '700', letterSpacing: 1.4, color: brand.muted },
   title: { fontSize: 30, lineHeight: 36, fontWeight: '800', color: brand.premium, marginTop: 4, letterSpacing: -0.8 },
   body: { fontSize: 14, lineHeight: 21, color: brand.muted },
-  caption: { fontSize: 11, lineHeight: 17, color: brand.muted },
+  caption: { fontSize: 12, lineHeight: 18, color: brand.muted },
   warning: { color: brand.danger, fontSize: 13, lineHeight: 20 },
   button: { minHeight: 44, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 10, backgroundColor: brand.glass },
-  buttonText: { color: brand.padel, fontSize: 12, fontWeight: '700' },
+  buttonText: { color: brand.accent, fontSize: 12, fontWeight: '700' },
   tabs: { backgroundColor: brand.elevated, borderRadius: 12, padding: 4, flexDirection: 'row', gap: 4 },
   tab: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 9 },
   activeTab: { backgroundColor: brand.padel },
@@ -301,25 +301,25 @@ const s = StyleSheet.create({
   sectionHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   sectionTitle: { color: brand.premium, fontWeight: '700', fontSize: 18, marginTop: 10 },
   playerRail: { gap: 12, paddingBottom: 4 },
-  playerCard: { width: 148, padding: 10, backgroundColor: brand.elevated, borderRadius: 16, gap: 10 },
-  portrait: { backgroundColor: '#24282b', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  playerCard: { width: 160, padding: 16, borderWidth: 1, borderColor: brand.edge, backgroundColor: brand.elevated, borderRadius: 16, gap: 10 },
+  portrait: { backgroundColor: '#E9EEE6', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   initials: { color: brand.muted, fontWeight: '700' },
   playerName: { color: brand.premium, fontSize: 14, lineHeight: 19, fontWeight: '700', minHeight: 38, marginTop: 10, marginBottom: 4 },
-  tourHero: { backgroundColor: '#1e2b1c', borderWidth: 1, borderColor: '#536b30', borderRadius: 22, padding: 20, gap: 18 },
+  tourHero: { backgroundColor: '#EDF2E7', borderWidth: 1, borderColor: '#D3DFC6', borderRadius: 22, padding: 20, gap: 18 },
   tourEyebrow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
-  tourLevel: { color: brand.padel, borderWidth: 1, borderColor: brand.padel, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 4, fontSize: 11, fontWeight: '800' },
-  tourKicker: { color: brand.padel, fontSize: 10, letterSpacing: 1.5, fontWeight: '800' },
+  tourLevel: { color: brand.accent, borderWidth: 1, borderColor: brand.padel, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 4, fontSize: 11, fontWeight: '800' },
+  tourKicker: { color: brand.accent, fontSize: 10, letterSpacing: 1.5, fontWeight: '800' },
   tourMain: { flexDirection: 'row', gap: 14, alignItems: 'center' },
-  tourTitle: { color: '#f4f7ef', fontSize: 26, lineHeight: 31, fontWeight: '800', letterSpacing: -0.7 },
-  tourDate: { width: 84, paddingVertical: 12, alignItems: 'center', borderRadius: 12, backgroundColor: '#2b3e21', borderWidth: 1, borderColor: '#415830' },
-  tourMonth: { color: '#cfdeb8', fontSize: 10, letterSpacing: 2, fontWeight: '700' },
-  tourDay: { color: '#dff5c7', fontSize: 48, lineHeight: 55, fontWeight: '800', letterSpacing: -2, fontVariant: ['tabular-nums'] },
-  tourYear: { color: '#a9bc99', fontSize: 10, letterSpacing: 1 },
+  tourTitle: { color: '#16251F', fontSize: 26, lineHeight: 31, fontWeight: '800', letterSpacing: -0.7 },
+  tourDate: { width: 84, paddingVertical: 12, alignItems: 'center', borderRadius: 12, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D3DFC6' },
+  tourMonth: { color: '#52625A', fontSize: 10, letterSpacing: 2, fontWeight: '700' },
+  tourDay: { color: '#386018', fontSize: 48, lineHeight: 55, fontWeight: '800', letterSpacing: -2, fontVariant: ['tabular-nums'] },
+  tourYear: { color: '#52625A', fontSize: 10, letterSpacing: 1 },
   tourMeta: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  tourLocation: { color: '#c0ccb8', fontSize: 13, lineHeight: 19, flexShrink: 1 },
+  tourLocation: { color: '#52625A', fontSize: 13, lineHeight: 19, flexShrink: 1 },
   tourCalendar: { minHeight: 48, backgroundColor: brand.padel, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 },
   tourCalendarText: { color: '#17200c', fontSize: 14, fontWeight: '700', flexShrink: 1 },
-  tourNote: { color: '#b1c0a7', fontSize: 12, lineHeight: 18, borderTopWidth: 1, borderTopColor: '#3b4e30', paddingTop: 14 },
+  tourNote: { color: '#52625A', fontSize: 12, lineHeight: 18, borderTopWidth: 1, borderTopColor: '#3b4e30', paddingTop: 14 },
   matchToggle: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderTopWidth: 1, borderBottomWidth: 1, borderColor: brand.edge, marginTop: 8 },
   matchToggleTitle: { color: brand.premium, fontSize: 18, fontWeight: '600' },
   matchCount: { backgroundColor: '#ccff0014', borderRadius: 12, minWidth: 28, paddingHorizontal: 8, paddingVertical: 4, alignItems: 'center' },
@@ -355,5 +355,5 @@ const s = StyleSheet.create({
   profileTop: { flexDirection: 'row', gap: 18, alignItems: 'center' },
   profileName: { color: brand.premium, fontSize: 24, fontWeight: '800', letterSpacing: -0.5 },
   stats: { flexDirection: 'row', padding: 20, backgroundColor: brand.elevated, borderRadius: 16, gap: 12 },
-  stat: { color: brand.padel, fontSize: 28, fontWeight: '800', marginBottom: 4, fontVariant: ['tabular-nums'] },
+  stat: { color: brand.accent, fontSize: 28, fontWeight: '800', marginBottom: 4, fontVariant: ['tabular-nums'] },
 });

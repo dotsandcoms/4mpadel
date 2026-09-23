@@ -23,7 +23,7 @@ import {
   type ProfileStats,
   type TempLicense,
 } from '@/lib/profile';
-import { brand, motion } from '@/theme/tokens';
+import { lightBrand as brand, motion } from '@/theme/tokens';
 
 const KNOB = 14;
 const COUNT_MS = 800;
@@ -74,7 +74,7 @@ function useCountTo(target: number, decimals = 0, playId = 0) {
   return { shown, sv };
 }
 
-const RANK_GOLD = '#EAB308';
+const RANK_GOLD = '#875E0B';
 const LOSS_RED = '#EF4444';
 
 type HeroProps = {
@@ -102,11 +102,11 @@ export function ProfileHero({ player, stats, onEditPhoto, playId = 0 }: HeroProp
   const photo = 64;
 
   return (
-    <View className="rounded-2xl border border-white/10 bg-[#0a0a0a]/70 p-3.5">
+    <View className="rounded-2xl border border-court-edge bg-court-elevated p-3.5">
       <View className="flex-row items-center">
         <View className="relative shrink-0">
           <View
-            className="items-center justify-center overflow-hidden rounded-full bg-elevated"
+            className="items-center justify-center overflow-hidden rounded-full bg-court-elevated"
             style={{
               width: photo,
               height: photo,
@@ -122,7 +122,7 @@ export function ProfileHero({ player, stats, onEditPhoto, playId = 0 }: HeroProp
                 accessibilityIgnoresInvertColors
               />
             ) : (
-              <Text className="text-lg font-bold text-white/20">
+              <Text className="text-lg font-bold text-court-muted">
                 {name.charAt(0)}
               </Text>
             )}
@@ -150,7 +150,7 @@ export function ProfileHero({ player, stats, onEditPhoto, playId = 0 }: HeroProp
             <View
               className="mb-1 flex-row items-center self-start rounded-full border px-2 py-0.5"
               style={{ borderColor: license.border, backgroundColor: license.bg }}>
-              {license.pulse ? <PulseDot color={brand.padel} size={5} /> : null}
+              {license.pulse ? <PulseDot color={brand.accent} size={5} /> : null}
               <Text
                 className="text-[7px] font-black uppercase tracking-wider"
                 style={{
@@ -163,16 +163,16 @@ export function ProfileHero({ player, stats, onEditPhoto, playId = 0 }: HeroProp
           ) : null}
 
           <Text
-            className="text-lg font-extrabold uppercase leading-tight text-premium"
+            className="text-lg font-extrabold uppercase leading-tight text-court-ink"
             numberOfLines={2}>
             {name}
           </Text>
 
           <View className="mt-1.5 flex-row items-stretch">
             <Stat value={rankValue} label="Rank" color={RANK_GOLD} />
-            <View className="h-7 w-px self-center bg-white/10" />
-            <Stat value={player.points == null ? '—' : formatPoints(pointsCount.shown)} label="Points" color={brand.padel} />
-            <View className="h-7 w-px self-center bg-white/10" />
+            <View className="h-7 w-px self-center bg-court-surface" />
+            <Stat value={player.points == null ? '—' : formatPoints(pointsCount.shown)} label="Points" color={brand.accent} />
+            <View className="h-7 w-px self-center bg-court-surface" />
             <Stat value={String(matchesCount.shown)} label="Matches" color={brand.premium} />
           </View>
         </View>
@@ -211,8 +211,8 @@ export function ProfileStatsCard({
         <MiniStat label="Total Match" value={String(played.shown)} />
         <MiniStat label="Won" value={String(wins.shown)} labelColor={brand.padel} />
         <MiniStat label="Lost" value={String(losses.shown)} labelColor="#F87171" />
-        <View className="min-h-[52px] flex-1 items-center justify-center rounded-xl border border-white/5 bg-white/[0.02] px-1 py-1">
-          <Text className="mb-1 w-full text-center text-[7px] font-black uppercase tracking-widest text-faint">
+        <View className="min-h-[52px] flex-1 items-center justify-center rounded-xl border border-court-edge bg-court-surface px-1 py-1">
+          <Text className="mb-1 w-full text-center text-[7px] font-black uppercase tracking-widest text-court-faint">
             Last 5
           </Text>
           {stats.lastFive.length ? (
@@ -243,7 +243,7 @@ export function ProfileStatsCard({
               })}
             </View>
           ) : (
-            <Text className="text-[7px] font-bold uppercase tracking-widest text-faint">
+            <Text className="text-[7px] font-bold uppercase tracking-widest text-court-faint">
               None
             </Text>
           )}
@@ -252,11 +252,11 @@ export function ProfileStatsCard({
 
       <View className="mt-3">
         <View className="mb-1.5 flex-row items-center justify-between">
-          <Text className="text-[8px] font-black uppercase tracking-widest text-muted">
+          <Text className="text-[8px] font-black uppercase tracking-widest text-court-muted">
             Win Ratio
           </Text>
           <Text
-            className="text-[8px] font-extrabold text-padel"
+            className="text-[8px] font-extrabold text-court-accent"
             style={{ fontVariant: ['tabular-nums'] }}>
             {ratio.shown.toFixed(1)}%
           </Text>
@@ -268,7 +268,7 @@ export function ProfileStatsCard({
           onLayout={(event) => {
             trackW.value = event.nativeEvent.layout.width;
           }}>
-          <View className="h-1.5 w-full rounded-full bg-white/5">
+          <View className="h-1.5 w-full rounded-full bg-court-surface">
             <Animated.View className="h-full rounded-full bg-padel" style={fillStyle} />
           </View>
           <Animated.View
@@ -314,8 +314,8 @@ export function LicenseCallout({
     <View
       className="overflow-hidden rounded-3xl border p-4"
       style={{
-        borderColor: temporary ? 'rgba(96,165,250,0.3)' : 'rgba(255,255,255,0.1)',
-        backgroundColor: 'rgba(10,10,10,0.7)',
+        borderColor: temporary ? 'rgba(96,165,250,0.3)' : 'rgba(22,37,31,0.1)',
+        backgroundColor: '#FFFFFF',
         borderLeftWidth: 2,
         borderLeftColor: temporary ? '#3B82F6' : '#6B7280',
       }}>
@@ -323,17 +323,17 @@ export function LicenseCallout({
         className="self-start rounded px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.2em]"
         style={{
           color: temporary ? '#60A5FA' : brand.faint,
-          backgroundColor: temporary ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.05)',
+          backgroundColor: temporary ? 'rgba(59,130,246,0.1)' : 'rgba(22,37,31,0.05)',
         }}>
         {temporary ? 'Temporary License Active' : 'License Inactive'}
       </Text>
       {temporary && tempLicense?.event_name ? (
-        <Text className="mt-3 text-[13px] font-bold uppercase text-premium">
+        <Text className="mt-3 text-[13px] font-bold uppercase text-court-ink">
           {tempLicense.event_name}
           {eventDate ? `  ${eventDate}` : ''}
         </Text>
       ) : (
-        <Text className="mt-3 text-[10px] leading-5 text-muted">
+        <Text className="mt-3 text-[10px] leading-5 text-court-muted">
           Activate your elite license to appear on public rankings & track tour statistics.
         </Text>
       )}
@@ -357,7 +357,7 @@ function Stat({
         style={{ color, fontVariant: ['tabular-nums'] }}>
         {value}
       </Text>
-      <Text className="mt-0.5 text-[8px] font-black uppercase tracking-widest text-faint">
+      <Text className="mt-0.5 text-[8px] font-black uppercase tracking-widest text-court-faint">
         {label}
       </Text>
     </View>
@@ -374,14 +374,14 @@ function MiniStat({
   labelColor?: string;
 }) {
   return (
-    <View className="min-h-[52px] flex-1 items-center justify-center rounded-xl border border-white/5 bg-white/[0.02] p-1">
+    <View className="min-h-[52px] flex-1 items-center justify-center rounded-xl border border-court-edge bg-court-surface p-1">
       <Text
         className="w-full text-center text-[7px] font-black uppercase tracking-widest"
         style={{ color: labelColor ?? brand.faint }}>
         {label}
       </Text>
       <Text
-        className="mt-0.5 w-full text-center text-[15px] font-black text-premium"
+        className="mt-0.5 w-full text-center text-[15px] font-black text-court-ink"
         style={{ fontVariant: ['tabular-nums'] }}>
         {value}
       </Text>

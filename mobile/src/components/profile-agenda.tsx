@@ -34,12 +34,12 @@ import {
 } from '@/lib/matches';
 import type { ProfileTransaction, RankingRow } from '@/lib/profile';
 import { sapaLabel, sapaTone } from '@/theme/sapa';
-import { brand, motion } from '@/theme/tokens';
+import { lightBrand as brand, motion } from '@/theme/tokens';
 
 export const PROFILE_SECTIONS = [
   { id: 'events', label: 'My Events', active: '#A855F7', text: '#fff' },
   { id: 'matches', label: 'My Matches', active: '#F97316', text: '#fff' },
-  { id: 'rankings', label: 'My Rankings', active: '#EAB308', text: '#0a0a0a' },
+  { id: 'rankings', label: 'My Rankings', active: '#875E0B', text: '#0a0a0a' },
   { id: 'payments', label: 'Payments', active: '#3B82F6', text: '#fff' },
 ] as const;
 
@@ -123,7 +123,7 @@ function clubLine(event: CalendarEvent) {
 }
 
 function contrastOnFill(fill: string) {
-  return fill === '#CCFF00' || fill === '#EAB308' || fill === '#F59E0B' ? '#0a0a0a' : '#ffffff';
+  return fill === '#CCFF00' || fill === '#875E0B' || fill === '#F59E0B' ? '#0a0a0a' : '#ffffff';
 }
 
 type AgendaTag = { label: string; color: string; border: string; bg: string };
@@ -138,7 +138,7 @@ function eventTags(event: CalendarEvent, pending: boolean): AgendaTag[] {
   if (event.fromSchedule) {
     tags.push({
       label: 'On Schedule',
-      color: brand.padel,
+      color: brand.accent,
       border: 'rgba(204,255,0,0.2)',
       bg: 'rgba(204,255,0,0.1)',
     });
@@ -146,7 +146,7 @@ function eventTags(event: CalendarEvent, pending: boolean): AgendaTag[] {
   if (event.isPaid) {
     tags.push({
       label: 'Paid',
-      color: brand.padel,
+      color: brand.accent,
       border: 'rgba(204,255,0,0.2)',
       bg: 'rgba(204,255,0,0.1)',
     });
@@ -265,7 +265,7 @@ export function SectionSwitcher({
       accessibilityRole="tablist"
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={{ paddingHorizontal: 20 }}>
-      <View className="flex-row rounded-2xl border border-white/10 bg-[#0a0a0a]/70 p-1">
+      <View className="flex-row rounded-2xl border border-court-edge bg-court-elevated p-1">
         {PROFILE_SECTIONS.map((item) => {
           const selected = section === item.id;
           const count = counts[item.id];
@@ -282,7 +282,7 @@ export function SectionSwitcher({
               style={selected ? { backgroundColor: item.active } : undefined}>
               <Text
                 className="text-[9px] font-black uppercase tracking-widest"
-                style={{ color: selected ? item.text : 'rgba(255,255,255,0.7)' }}>
+                style={{ color: selected ? item.text : 'rgba(22,37,31,0.7)' }}>
                 {item.label}
                 {count != null ? ` (${count})` : ''}
               </Text>
@@ -317,8 +317,8 @@ export function SegmentedControl({
   return (
     <View
       accessibilityRole="tablist"
-      className="flex-row self-start rounded-xl bg-white/[0.03] p-1"
-      style={{ borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
+      className="flex-row self-start rounded-xl bg-court-surface p-1"
+      style={{ borderWidth: 1, borderColor: 'rgba(22,37,31,0.1)' }}>
       {items.map((item) => {
         const selected = value === item.key;
         return (
@@ -333,7 +333,7 @@ export function SegmentedControl({
             style={selected ? { backgroundColor: active } : undefined}>
             <Text
               className="text-[9px] font-black uppercase tracking-wider"
-              style={{ color: selected ? activeText : 'rgba(255,255,255,0.7)' }}>
+              style={{ color: selected ? activeText : 'rgba(22,37,31,0.7)' }}>
               {item.label}
             </Text>
           </Pressable>
@@ -360,7 +360,7 @@ function FilterMenu({
       accessibilityLabel={`Filter, ${label}. Tap to change.`}
       android_ripple={RIPPLE}
       className="min-h-11 flex-row items-center px-1">
-      <Text className="text-[12px] font-bold text-muted">{label}</Text>
+      <Text className="text-[12px] font-bold text-court-muted">{label}</Text>
       <View className="ml-1">
         <SymbolView name="chevron.down" size={12} tintColor={brand.muted} />
       </View>
@@ -393,7 +393,7 @@ function PaymentCard({ item }: { item: AgendaRowModel }) {
   const success = /success|paid|completed|processed/.test(status);
   const color = failed ? '#F87171' : abandoned ? '#9CA3AF' : refund ? '#FB923C' : pending ? '#FBBF24' : success ? '#60A5FA' : '#9CA3AF';
   return <View style={{ paddingHorizontal: 20, paddingBottom: 7 }}>
-    <View style={{ flexDirection: 'row', gap: 9, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: refund ? '#FB923C33' : '#ffffff14', backgroundColor: '#141414' }}>
+    <View style={{ flexDirection: 'row', gap: 9, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: refund ? '#FB923C33' : '#16251f14', backgroundColor: '#FFFFFF' }}>
       <View style={{ width: 26, alignItems: 'center', gap: 5, paddingTop: 3 }}>
         <Text style={{ fontSize: 16, color, fontWeight: '400' }}>{item.day}</Text>
         <Text style={{ fontSize: 8, color: '#828b9a', letterSpacing: 0.5 }}>{item.weekday}</Text>
@@ -406,8 +406,8 @@ function PaymentCard({ item }: { item: AgendaRowModel }) {
           {payment.kind === 'refund' && !status.includes('refund') && <Text style={{ fontSize: 9, color: '#FB923C' }}>REFUND</Text>}
           <Text style={{ marginLeft: 'auto', fontSize: 13, fontWeight: '400', color, fontVariant: ['tabular-nums'] }}>{payment.amount}</Text>
         </View>
-        <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '400', color: '#fff' }}>{payment.event_name || item.title}</Text>
-        <Text style={{ fontSize: 10, lineHeight: 13, color: '#9ca3af' }}>{payment.kind === 'refund' ? payment.reason || 'Refund' : item.subtitle}</Text>
+        <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '400', color: '#16251F' }}>{payment.event_name || item.title}</Text>
+        <Text style={{ fontSize: 10, lineHeight: 13, color: '#65726B' }}>{payment.kind === 'refund' ? payment.reason || 'Refund' : item.subtitle}</Text>
         {!!payment.refundedTotal && status !== 'refunded' && <Text style={{ fontSize: 10, color: '#FB923C' }}>Refunded: {payment.refundedTotal.toLocaleString('en-ZA', { style: 'currency', currency: 'ZAR' })}</Text>}
       </View>
     </View>
@@ -449,14 +449,14 @@ function AgendaRow({
         .filter(Boolean)
         .join(', ')}
       className="px-5">
-      <View className="min-h-[72px] flex-row items-center border-b border-white/5 py-3">
+      <View className="min-h-[72px] flex-row items-center border-b border-court-edge py-3">
         <View className="w-11 items-start">
           <Text
-            className="text-[15px] font-extrabold leading-none text-padel"
+            className="text-[15px] font-extrabold leading-none text-court-accent"
             style={{ fontVariant: ['tabular-nums'] }}>
             {day || '–'}
           </Text>
-          <Text className="mt-1 text-[9px] font-bold uppercase tracking-widest text-faint">
+          <Text className="mt-1 text-[9px] font-bold uppercase tracking-widest text-court-faint">
             {weekday}
           </Text>
         </View>
@@ -478,7 +478,7 @@ function AgendaRow({
               ))}
             </View>
           ) : null}
-          <Text numberOfLines={1} className="text-[13px] font-extrabold uppercase text-premium">
+          <Text numberOfLines={1} className="text-[13px] font-extrabold uppercase text-court-ink">
             {title}
           </Text>
           {subtitle ? (
@@ -486,13 +486,13 @@ function AgendaRow({
               {pin ? <MapPin size={9} color="#6B7280" /> : null}
               <Text
                 numberOfLines={1}
-                className={`text-[8px] font-bold uppercase tracking-wider text-faint ${pin ? 'ml-1' : ''}`}>
+                className={`text-[8px] font-bold uppercase tracking-wider text-court-faint ${pin ? 'ml-1' : ''}`}>
                 {subtitle}
               </Text>
             </View>
           ) : null}
           {status ? (
-            <Text numberOfLines={1} className="mt-0.5 text-[11px] text-white/45">
+            <Text numberOfLines={1} className="mt-0.5 text-[11px] text-court-muted">
               {status}
             </Text>
           ) : null}
@@ -511,7 +511,7 @@ function AgendaRow({
             </Text>
           </PressableScale>
         ) : onPress ? (
-          <SymbolView name="chevron.right" size={14} tintColor="rgba(255,255,255,0.35)" />
+          <SymbolView name="chevron.right" size={14} tintColor="rgba(22,37,31,0.35)" />
         ) : null}
       </View>
     </PressableScale>
@@ -889,7 +889,7 @@ export function ProfileSectionPager({
             bottomPad={bottomPad}
             header={
               <View className="px-5 pt-4">
-                <Text className="mb-3 text-[11px] font-normal text-premium">RANKINGS POINTS BREAKDOWN</Text>
+                <Text className="mb-3 text-[11px] font-normal text-court-ink">RANKINGS POINTS BREAKDOWN</Text>
                 {rankings.length ? (
                   <ScrollView
                     horizontal
@@ -910,13 +910,13 @@ export function ProfileSectionPager({
                           android_ripple={RIPPLE}
                           className="min-h-9 justify-center rounded-xl px-3"
                           style={{
-                            backgroundColor: active ? '#EAB308' : 'rgba(255,255,255,0.02)',
+                            backgroundColor: active ? '#875E0B' : 'rgba(22,37,31,0.02)',
                             borderWidth: 1,
-                            borderColor: active ? '#EAB308' : 'rgba(255,255,255,0.1)',
+                            borderColor: active ? '#875E0B' : 'rgba(22,37,31,0.1)',
                           }}>
                           <Text
                             className="text-[8px] font-normal uppercase tracking-widest"
-                            style={{ color: active ? '#000' : 'rgba(255,255,255,0.7)' }}>
+                            style={{ color: active ? '#000' : 'rgba(22,37,31,0.7)' }}>
                             {row.org || 'SAPA'} ({row.age_group || 'Open'})
                           </Text>
                         </Pressable>
@@ -928,11 +928,11 @@ export function ProfileSectionPager({
                   <>
                     <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, marginBottom: 18 }}>
                       {[
-                        { label: 'STANDING', value: selectedRanking.rank != null ? `#${selectedRanking.rank}` : '—', color: '#EAB308' },
-                        { label: 'POINTS', value: String(selectedRanking.points ?? '—'), color: '#fff' },
-                        { label: 'TYPE', value: (selectedRanking.match_type || 'Open').toUpperCase(), color: '#d1d5db' },
+                        { label: 'STANDING', value: selectedRanking.rank != null ? `#${selectedRanking.rank}` : '—', color: '#875E0B' },
+                        { label: 'POINTS', value: String(selectedRanking.points ?? '—'), color: '#16251F' },
+                        { label: 'TYPE', value: (selectedRanking.match_type || 'Open').toUpperCase(), color: '#52625A' },
                       ].map(({ label, value, color }) => (
-                        <View key={label} style={{ flex: 1, minHeight: 66, paddingHorizontal: 8, paddingVertical: 10, borderRadius: 16, borderWidth: 1, borderColor: '#ffffff18', backgroundColor: '#ffffff05', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                        <View key={label} style={{ flex: 1, minHeight: 66, paddingHorizontal: 8, paddingVertical: 10, borderRadius: 16, borderWidth: 1, borderColor: '#16251f18', backgroundColor: '#16251f05', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                           <Text style={{ fontSize: 8, letterSpacing: 1, color: '#828b9a', fontWeight: '400' }}>{label}</Text>
                           <Text style={{ fontSize: label === 'TYPE' ? 9 : 20, color, textAlign: 'center', fontWeight: '400' }}>{value}</Text>
                         </View>
@@ -957,7 +957,7 @@ export function ProfileSectionPager({
         <PageEnter active={section === 'payments'}>
           {txLoading && !transactions.length ? (
             <View className="flex-1 items-center justify-center">
-              <Text className="text-[12px] font-bold uppercase tracking-widest text-faint">
+              <Text className="text-[12px] font-bold uppercase tracking-widest text-court-faint">
                 Loading payments
               </Text>
             </View>
@@ -970,8 +970,8 @@ export function ProfileSectionPager({
               bottomPad={bottomPad}
               header={
                 <View className="px-5 pt-4">
-                  <Text className="mb-1 text-[16px] font-bold text-premium">Payments</Text>
-                  <Text className="text-[12px] text-muted">License fees, entries, and refunds.</Text>
+                  <Text className="mb-1 text-[16px] font-bold text-court-ink">Payments</Text>
+                  <Text className="text-[12px] text-court-muted">License fees, entries, and refunds.</Text>
                 </View>
               }
               empty={

@@ -2,7 +2,7 @@ import { NativeTabs } from 'expo-router/unstable-native-tabs';
 
 import { AppDrawer } from '@/components/app-drawer';
 import { hapticMedium } from '@/lib/haptics';
-import { brand } from '@/theme/tokens';
+import { lightBrand as brand } from '@/theme/tokens';
 
 /**
  * The tab bar is rendered by the OS, not by us — Liquid Glass on iOS 26,
@@ -20,13 +20,13 @@ export default function TabsLayout() {
   return (
     <AppDrawer>
       <NativeTabs
-        // No backgroundColor on purpose: leaving it unset lets iOS 26 render its
-        // own Liquid Glass material and Android its Material 3 surface. Setting a
-        // flat fill here would paint over both.
-        tintColor={brand.padel}
+        // Native system navigation, with explicit legible V2 colors.
+        backgroundColor={brand.elevated}
+        iconColor={{ default: brand.muted, selected: brand.accent }}
+        tintColor={brand.accent}
         indicatorColor={brand.panel}
         minimizeBehavior="onScrollDown"
-        labelStyle={{ selected: { color: brand.padel } }}
+        labelStyle={{ default: { color: brand.muted }, selected: { color: brand.accent } }}
         screenListeners={{
           tabPress: () => {
             hapticMedium();
@@ -38,7 +38,7 @@ export default function TabsLayout() {
         </NativeTabs.Trigger>
 
         <NativeTabs.Trigger name="(calendar)">
-          <NativeTabs.Trigger.Label>Calendar</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>Tournaments</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf="calendar" drawable="calendar_month" />
         </NativeTabs.Trigger>
 

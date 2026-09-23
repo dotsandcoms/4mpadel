@@ -5,9 +5,9 @@ import { Text, View } from 'react-native';
 import { PressableScale } from '@/components/pressable-scale';
 import { PulseDot } from '@/components/pulse-dot';
 import { firstNameOf, greetingForNow, type HomePlayer } from '@/lib/home';
-import { brand } from '@/theme/tokens';
+import { lightBrand as brand } from '@/theme/tokens';
 
-const RANK_GOLD = '#EAB308';
+const RANK_GOLD = '#875E0B';
 
 type Props = {
   player: HomePlayer | null;
@@ -18,12 +18,12 @@ type Props = {
 export function HomeGreeting({ player }: { player: HomePlayer | null }) {
   const first = firstNameOf(player?.name);
   return (
-    <Text className="mb-3 text-[16px] font-bold text-premium">
+    <Text className="mb-3 text-[22px] font-bold text-court-ink">
       {greetingForNow()}
       {first ? (
         <>
           {', '}
-          <Text className="text-padel">{first}</Text>
+          <Text className="text-court-accent">{first}</Text>
         </>
       ) : null}
       <Text accessibilityElementsHidden> 👋</Text>
@@ -34,13 +34,13 @@ export function HomeGreeting({ player }: { player: HomePlayer | null }) {
 export function HomePlayerCard({ player, loading, onPress }: Props) {
   if (loading && !player) {
     return (
-      <View className="rounded-2xl border border-edge bg-page/70 p-3.5">
+      <View className="rounded-2xl border border-court-edge bg-court-page/70 p-3.5">
         <View className="flex-row items-center">
-          <View className="h-20 w-20 rounded-full bg-elevated" />
+          <View className="h-20 w-20 rounded-full bg-court-elevated" />
           <View className="ml-4 flex-1">
-            <View className="h-3 w-24 rounded bg-elevated" />
-            <View className="mt-2.5 h-5 w-40 rounded bg-elevated" />
-            <View className="mt-3 h-4 w-full rounded bg-elevated" />
+            <View className="h-3 w-24 rounded bg-court-elevated" />
+            <View className="mt-2.5 h-5 w-40 rounded bg-court-elevated" />
+            <View className="mt-3 h-4 w-full rounded bg-court-elevated" />
           </View>
         </View>
       </View>
@@ -63,9 +63,9 @@ export function HomePlayerCard({ player, loading, onPress }: Props) {
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`View profile, ${player.name || 'player'}. Rank ${rank}, ${points} points, record ${record}.`}
-      className="rounded-2xl border border-edge bg-[#0a0a0a]/70 p-3.5">
+      className="rounded-2xl border border-court-edge bg-court-elevated p-3.5">
       <View className="flex-row items-stretch">
-        <View className="h-20 w-20 items-center justify-center self-center overflow-hidden rounded-full border-2 border-edge bg-elevated">
+        <View className="h-20 w-20 items-center justify-center self-center overflow-hidden rounded-full border-2 border-court-edge bg-court-elevated">
           {player.image_url ? (
             <Image
               source={{ uri: player.image_url }}
@@ -86,7 +86,7 @@ export function HomePlayerCard({ player, loading, onPress }: Props) {
                 borderColor: license.border,
                 backgroundColor: license.bg,
               }}>
-              {license.pulse ? <PulseDot color={brand.padel} size={6} /> : null}
+              {license.pulse ? <PulseDot color={brand.accent} size={6} /> : null}
               <Text
                 className="text-[8px] font-black uppercase tracking-wider"
                 style={{
@@ -100,16 +100,16 @@ export function HomePlayerCard({ player, loading, onPress }: Props) {
 
           <Text
             numberOfLines={1}
-            className="text-[17px] font-extrabold uppercase tracking-tight text-premium"
+            className="text-[17px] font-extrabold uppercase tracking-tight text-court-ink"
             style={{ lineHeight: 20 }}>
             {player.name || 'Player'}
           </Text>
 
           <View className="mt-2 flex-row items-stretch">
             <Stat value={rank} label="Rank" color={RANK_GOLD} lead />
-            <View className="w-px self-stretch bg-edge" />
-            <Stat value={points} label="Points" color={brand.padel} />
-            <View className="w-px self-stretch bg-edge" />
+            <View className="w-px self-stretch bg-court-edge" />
+            <Stat value={points} label="Points" color={brand.accent} />
+            <View className="w-px self-stretch bg-court-edge" />
             <Stat value={record} label="W-L" color={brand.premium} />
           </View>
         </View>
@@ -140,7 +140,7 @@ function Stat({
         style={{ color, fontVariant: ['tabular-nums'] }}>
         {value}
       </Text>
-      <Text className="mt-0.5 text-[8px] font-black uppercase tracking-widest text-faint">
+      <Text className="mt-0.5 text-[8px] font-black uppercase tracking-widest text-court-faint">
         {label}
       </Text>
     </View>
@@ -153,7 +153,7 @@ function licenseCopy(type?: string | null) {
   if (key === 'full') {
     return {
       label: 'Full License Player',
-      color: brand.padel,
+      color: brand.accent,
       border: 'rgba(204,255,0,0.3)',
       bg: 'rgba(204,255,0,0.1)',
       pulse: true,
@@ -172,8 +172,8 @@ function licenseCopy(type?: string | null) {
     return {
       label: 'No License',
       color: brand.faint,
-      border: 'rgba(255,255,255,0.1)',
-      bg: 'rgba(255,255,255,0.05)',
+      border: 'rgba(22,37,31,0.1)',
+      bg: 'rgba(22,37,31,0.05)',
       pulse: false,
     };
   }

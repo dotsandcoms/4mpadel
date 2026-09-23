@@ -18,7 +18,7 @@ import { currentEmail, fetchDivisions, fetchEvent, fetchMyEventRegistrations, se
 import { entryFee, formatMoney, registrationState } from '@/lib/event-rules';
 import { openSitePath } from '@/lib/site';
 import { supabase } from '@/lib/supabase';
-import { brand } from '@/theme/tokens';
+import { lightBrand as brand } from '@/theme/tokens';
 
 export default function RegisterScreen() {
   const { id, mode } = useLocalSearchParams<{ id: string; mode?: string }>();
@@ -190,15 +190,15 @@ function RegistrationFlow() {
     </View>
     <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets
       contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 40, gap: 20 }}>
-      <Text style={{ color: brand.padel, fontSize: 11, fontWeight: '800', letterSpacing: 2 }}>{done ? 'ENTRY RECEIVED' : payOnly && step === 4 ? 'PAY YOUR ENTRY' : step === 4 ? 'REVIEW YOUR ENTRY' : 'JOIN THE EVENT'}</Text>
+      <Text style={{ color: brand.accent, fontSize: 11, fontWeight: '800', letterSpacing: 2 }}>{done ? 'ENTRY RECEIVED' : payOnly && step === 4 ? 'PAY YOUR ENTRY' : step === 4 ? 'REVIEW YOUR ENTRY' : 'JOIN THE EVENT'}</Text>
       <Text accessibilityRole="header" style={{ color: brand.premium, fontSize: 30, fontWeight: '800', letterSpacing: -0.8 }}>{event?.event_name || 'Registration'}</Text>
       {event?.is_manual && !reference && <View style={{ flexDirection: 'row', gap: 6 }}>
         {['Profile', event?.is_weekly ? 'Dates' : 'Division', event?.is_weekly ? 'Entry' : 'Partner', 'Review & Pay', 'Confirmed'].map((label, index) => <View key={label} style={{ flex: 1, gap: 8 }}>
           <View style={{ height: 3, borderRadius: 2, backgroundColor: index < (done && !paymentPending ? 5 : done ? 4 : step) ? brand.padel : brand.edge }} />
-          <Text style={{ color: index === (done && !paymentPending ? 4 : done ? 3 : step - 1) ? brand.padel : brand.muted, fontSize: 10 }}>{index < (done && !paymentPending ? 4 : done ? 3 : step - 1) ? '✓' : index + 1}. {label}</Text>
+          <Text style={{ color: index === (done && !paymentPending ? 4 : done ? 3 : step - 1) ? brand.accent : brand.muted, fontSize: 10 }}>{index < (done && !paymentPending ? 4 : done ? 3 : step - 1) ? '✓' : index + 1}. {label}</Text>
         </View>)}
       </View>}
-      {loading && <View style={{ gap: 12, alignItems: 'center', padding: 24 }}><ActivityIndicator color={brand.padel} /><Text style={{ color: brand.muted }}>{payOnly ? 'Loading your existing entry and outstanding fees…' : 'Loading registration details…'}</Text></View>}
+      {loading && <View style={{ gap: 12, alignItems: 'center', padding: 24 }}><ActivityIndicator color={brand.accent} /><Text style={{ color: brand.muted }}>{payOnly ? 'Loading your existing entry and outstanding fees…' : 'Loading registration details…'}</Text></View>}
       {!!error && <Text accessibilityRole="alert" style={{ color: brand.danger, fontSize: 15, lineHeight: 23 }}>{error}</Text>}
       {!event && !loading && <ActionButton label="Try again" secondary onPress={load} />}
       {done ? <>
@@ -229,7 +229,7 @@ function RegistrationFlow() {
         <View style={{ borderRadius: 22, overflow: 'hidden', backgroundColor: brand.elevated, borderWidth: 1, borderColor: brand.edge }}>
           <Image source={eventImage(event)} style={{ height: 170, width: '100%' }} contentFit="cover" />
           <View style={{ padding: 20, gap: 14 }}>
-            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}><Ionicons name="tennisball-outline" size={22} color={brand.padel} /><Text style={{ color: brand.padel, fontSize: 12, letterSpacing: 1 }}>RANKEDIN REGISTRATION</Text></View>
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}><Ionicons name="tennisball-outline" size={22} color={brand.accent} /><Text style={{ color: brand.accent, fontSize: 12, letterSpacing: 1 }}>RANKEDIN REGISTRATION</Text></View>
             <Text style={{ color: brand.premium, fontSize: 22, fontWeight: '600' }}>Enter with the organiser</Text>
             <Text style={{ color: brand.muted, lineHeight: 22 }}>{formatEventRange(event.start_date, event.end_date)}{event.venue ? ` · ${event.venue}` : ''}</Text>
             <Text style={{ color: brand.muted, lineHeight: 22 }}>Continue to RankedIn to select your division, arrange your partner and complete the organiser’s entry process.</Text>
@@ -264,7 +264,7 @@ function RegistrationFlow() {
           {quote.fee > 0 && <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}><Text style={{ color: brand.muted }}>{quote.feeLabel}</Text><Text style={{ color: brand.premium }}>{formatMoney(quote.fee)}</Text></View>}
           {quote.licenseItems?.map(item => <View key={item.label} style={{ flexDirection: 'row', gap: 12 }}><Text style={{ color: brand.muted, flex: 1 }}>{item.label}</Text><Text style={{ color: brand.premium }}>{formatMoney(item.amount)}</Text></View>)}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderColor: brand.edge, paddingTop: 14 }}>
-            <Text style={{ color: brand.premium, fontSize: 18, fontWeight: '700' }}>Total payable</Text><Text style={{ color: brand.padel, fontSize: 23, fontWeight: '800' }}>{formatMoney(quote.total)}</Text>
+            <Text style={{ color: brand.premium, fontSize: 18, fontWeight: '700' }}>Total payable</Text><Text style={{ color: brand.accent, fontSize: 23, fontWeight: '800' }}>{formatMoney(quote.total)}</Text>
           </View>
         </View>
         {event.collect_tshirt_size && (event.allow_tshirt_logo_upload || event.allow_tshirt_sponsor_name) && <View style={{ backgroundColor: brand.elevated, padding: 18, borderRadius: 16, gap: 18 }}>
@@ -306,7 +306,7 @@ function RegistrationFlow() {
             </View>
             <View style={{ padding: 18, gap: 14, backgroundColor: brand.elevated, borderRadius: 16, borderWidth: 1, borderColor: brand.padel }}>
               <Text style={{ color: brand.premium, fontSize: 18, fontWeight: '600' }}>My 4M Profile</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}><Image source={profile?.image_url ? { uri: profile.image_url } : undefined} style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: brand.edge }} /><View style={{ flex: 1, gap: 5 }}><Text style={{ color: brand.premium }}>{profile?.name || 'Complete your profile'}</Text><Text style={{ color: brand.muted, fontSize: 12 }}>SAPA Points</Text></View><Text style={{ color: brand.padel, fontSize: 21, fontWeight: '600' }}>{profile?.points?.toLocaleString('en-ZA') || '—'}</Text></View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}><Image source={profile?.image_url ? { uri: profile.image_url } : undefined} style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: brand.edge }} /><View style={{ flex: 1, gap: 5 }}><Text style={{ color: brand.premium }}>{profile?.name || 'Complete your profile'}</Text><Text style={{ color: brand.muted, fontSize: 12 }}>SAPA Points</Text></View><Text style={{ color: brand.accent, fontSize: 21, fontWeight: '600' }}>{profile?.points?.toLocaleString('en-ZA') || '—'}</Text></View>
             </View>
             <Field label="What is your current Playtomic level?" value={playtomic} onChangeText={setPlaytomic} />
             <Notice title="SAPA licence status">{hasLicence ? '✓ Your SAPA licence is active.' : 'You do not have an active SAPA licence. If one is required for this tournament, add a temporary or annual licence when sales are open.'}</Notice>
@@ -315,7 +315,7 @@ function RegistrationFlow() {
               <Text style={{ color: brand.muted }}>Do you have a RankedIn account?</Text>
               <Choices value={rankedinAccount === null ? '' : rankedinAccount ? 'yes' : 'no'} onChange={value => setRankedinAccount(value === 'yes')} options={[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]} />
               {rankedinAccount === false && <Text style={{ color: brand.muted, lineHeight: 21 }}>If you do not have a RankedIn account, please create one if you want ranking points.</Text>}
-              {rankedinAccount && profile?.rankedin_id && <Text style={{ color: brand.padel, fontSize: 12 }}>RankedIn ID linked to your 4M profile: {profile.rankedin_id}</Text>}
+              {rankedinAccount && profile?.rankedin_id && <Text style={{ color: brand.accent, fontSize: 12 }}>RankedIn ID linked to your 4M profile: {profile.rankedin_id}</Text>}
             </View>}
             <ActionButton label="Continue to Division" disabled={!profile?.name || !profile?.contact_number || (!event.is_weekly && rankedinAccount === null)} onPress={() => goStep(2)} />
             <ActionButton label="Edit my profile" secondary onPress={() => router.push('/edit-profile')} />
@@ -345,7 +345,7 @@ function RegistrationFlow() {
             if (lookupError || !found) throw new Error('No registered player found with that email address.');
             setPartnerName(found.name);
           })} />}
-          {!!partnerName && <Text style={{ color: brand.padel, fontWeight: '700' }}>{partnerName}</Text>}
+          {!!partnerName && <Text style={{ color: brand.accent, fontWeight: '700' }}>{partnerName}</Text>}
           {!!partnerEmail.trim() && <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text style={{ color: brand.premium, fontSize: 15 }}>Pay my partner’s entry too</Text>
             <Switch value={payForPartner ?? quote?.entries?.some(entry => (entry.playerCount || 0) > 1) ?? false} onValueChange={setPayForPartner} accessibilityLabel="Pay for partner" trackColor={{ true: brand.padel }} />
@@ -371,7 +371,7 @@ function Field({ label, value, onChangeText, email, secure }: { label: string; v
 }
 function Agreement({ checked, onPress, label }: { checked: boolean; onPress: () => void; label: string }) {
   return <Pressable accessibilityRole="checkbox" accessibilityState={{ checked }} onPress={onPress} style={{ flexDirection: 'row', gap: 12, minHeight: 44, alignItems: 'flex-start' }}>
-    <Ionicons name={checked ? 'checkbox' : 'square-outline'} size={24} color={brand.padel} />
+    <Ionicons name={checked ? 'checkbox' : 'square-outline'} size={24} color={brand.accent} />
     <Text style={{ flex: 1, color: brand.muted, fontSize: 14, lineHeight: 22 }}>{label}</Text>
   </Pressable>;
 }

@@ -37,7 +37,7 @@ async function screen(mode, eventOptions = {}) {
     '@/lib/events': { fetchEvent: async () => event, fetchDivisions: async () => divisions, currentEmail: async () => 'mark@example.com', fetchMyEventRegistrations: async () => mode === 'pay' ? [{ id: 'reg1', division_id: 'men40', partner_email: partner.email, partner_name: partner.name }] : [], eventImage: () => 1 },
     '@/lib/event-rules': { formatMoney: n => `R ${n}`, entryFee: () => 600, registrationState: () => 'open' },
     '@/lib/event-checkout': { invokeCheckout: async input => { requests.push(input); return { quote }; } },
-    '@/lib/site': {}, '@/theme/tokens': { brand: {} },
+    '@/lib/site': {}, '@/theme/tokens': { brand: {}, lightBrand: {} },
     '@/lib/supabase': { supabase: {
       from: table => { const q = { select: () => q, eq: () => q, ilike: () => q, maybeSingle: async () => ({ data: table === 'players' ? { id: '1', name: 'Mark', email: 'mark@example.com', contact_number: '0123', license_type: 'full', paid_registration: true, points: 1729, rankedin_id: 'R1' } : {} }) }; return q; },
       rpc: async () => ({ data: [partner] }),

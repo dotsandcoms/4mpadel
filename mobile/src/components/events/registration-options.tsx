@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Keyboard, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import { supabase } from '@/lib/supabase';
-import { brand } from '@/theme/tokens';
+import { lightBrand as brand } from '@/theme/tokens';
 import { Chip } from './event-ui';
 import { type Division, type EventDetail } from '@/lib/events';
 import { entryFee, formatMoney, registrationState } from '@/lib/event-rules';
@@ -17,7 +17,7 @@ export function Choices({ value, onChange, options }: { value: string; onChange:
   return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{options.map(o => <Chip key={o.value} label={o.label} selected={value === o.value} onPress={() => onChange(o.value)} />)}</View>;
 }
 export function LicencePicker({ value, onChange, options, name }: { value?: string; onChange: (value: 'temporary' | 'full') => void; options: LicenceOption[]; name: string }) {
-  return <View style={{ padding: 14, borderRadius: 12, backgroundColor: '#392719', gap: 12 }}>
+  return <View style={{ padding: 14, borderRadius: 12, backgroundColor: '#FFF1DF', gap: 12 }}>
     <Text style={{ color: '#fdba74', lineHeight: 21 }}>{name} needs an active SAPA licence for this division.</Text>
     {options.length ? <Choices value={value || ''} onChange={v => onChange(v as 'temporary' | 'full')} options={options.map(o => ({ value: o.type, label: `${o.type === 'full' ? 'Annual' : 'Temporary'} · ${formatMoney(o.amount)}` }))} /> : <Text style={{ color: brand.muted }}>Licence sales are closed.</Text>}
   </View>;
@@ -41,14 +41,14 @@ function DivisionOption({ event, division: d, selected, registered, value, onTog
   const closed = registrationState(event, d) !== 'open';
   return <View style={{ borderWidth: 1, borderColor: selected ? brand.padel : brand.edge, backgroundColor: brand.elevated, borderRadius: 16, padding: 16, gap: 14 }}>
     <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-      <Pressable accessibilityRole="checkbox" accessibilityLabel={`Select ${d.name}`} accessibilityState={{ checked: selected, disabled: busy || closed || registered }} disabled={busy || closed || registered} onPress={onToggle} style={{ minHeight: 44, minWidth: 32, justifyContent: 'center' }}><Text style={{ fontSize: 22, color: selected ? brand.padel : brand.muted }}>{selected ? '☑' : '☐'}</Text></Pressable>
+      <Pressable accessibilityRole="checkbox" accessibilityLabel={`Select ${d.name}`} accessibilityState={{ checked: selected, disabled: busy || closed || registered }} disabled={busy || closed || registered} onPress={onToggle} style={{ minHeight: 44, minWidth: 32, justifyContent: 'center' }}><Text style={{ fontSize: 22, color: selected ? brand.accent : brand.muted }}>{selected ? '☑' : '☐'}</Text></Pressable>
       <Pressable accessibilityRole="button" accessibilityState={{ expanded: selected && expanded }} onPress={() => selected ? setExpanded(v => !v) : !registered && !closed && !busy && onToggle()} style={{ flex: 1, gap: 5 }}>
         <Text style={{ color: brand.premium, fontSize: 17, fontWeight: '600' }}>{d.name}</Text>
         <Text style={{ color: brand.muted, fontSize: 12, lineHeight: 18 }}>{d.format ? `${d.format} · ` : ''}{formatMoney(entryFee(event, d))} per player</Text>
-        {registered && <Text style={{ color: brand.padel, fontSize: 12 }}>Already entered</Text>}
+        {registered && <Text style={{ color: brand.accent, fontSize: 12 }}>Already entered</Text>}
         {closed && !registered && <Text style={{ color: brand.danger, fontSize: 12 }}>Registration closed</Text>}
       </Pressable>
-      {selected && <Pressable accessibilityRole="button" accessibilityLabel={expanded ? 'Collapse division' : 'Expand division'} onPress={() => setExpanded(v => !v)} style={{ padding: 10 }}><Text style={{ color: brand.padel }}>{expanded ? '⌃' : '⌄'}</Text></Pressable>}
+      {selected && <Pressable accessibilityRole="button" accessibilityLabel={expanded ? 'Collapse division' : 'Expand division'} onPress={() => setExpanded(v => !v)} style={{ padding: 10 }}><Text style={{ color: brand.accent }}>{expanded ? '⌃' : '⌄'}</Text></Pressable>}
     </View>
     {selected && expanded && <>
       {!!d.details && <Text style={{ color: brand.muted, fontSize: 12, lineHeight: 18 }}>{d.details.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ')}</Text>}
@@ -60,7 +60,7 @@ function DivisionOption({ event, division: d, selected, registered, value, onTog
         <Choices value={value.payForPartner === false ? 'partner' : 'self'} onChange={v => onChange({ ...value, payForPartner: v === 'self' })} options={[{ value: 'self', label: 'I pay' }, { value: 'partner', label: 'Partner pays' }]} />
         {value.payForPartner === false && <Text style={{ color: brand.muted, fontSize: 12, lineHeight: 18 }}>Your partner will need to complete their own payment.</Text>}
         {d.license_required && value.payForPartner !== false && !value.activeLicence && <LicencePicker name={value.partnerName} value={value.licenseChoice} onChange={licenseChoice => onChange({ ...value, licenseChoice })} options={licences} />}
-        {d.license_required && value.activeLicence && <Text style={{ color: brand.padel, fontSize: 12 }}>✓ Partner has an active SAPA licence</Text>}
+        {d.license_required && value.activeLicence && <Text style={{ color: brand.accent, fontSize: 12 }}>✓ Partner has an active SAPA licence</Text>}
       </>}
     </>}
   </View>;
@@ -190,7 +190,7 @@ function PartnerSearch({ value, onChange, profileId, eventId, divisionId, divisi
     </View> : <>
       <TextInput accessibilityLabel="Search partner name or email" placeholder="Search partner name or email" placeholderTextColor={brand.faint} value={query} onChangeText={q => { seq.current++; setSearching(false); setQuery(q); setResults([]); setError(''); }} autoCapitalize="none" autoCorrect={false} editable={!busy} style={{ color: brand.premium, borderWidth: 1, borderColor: brand.edge, borderRadius: 10, padding: 12 }} />
       {searching && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <ActivityIndicator size="small" color={brand.padel} />
+        <ActivityIndicator size="small" color={brand.accent} />
         <Text accessibilityLiveRegion="polite" style={{ color: brand.muted, fontSize: 12 }}>Searching partners…</Text>
       </View>}
       {query.trim().length < 2 && <Text style={{ color: brand.muted, fontSize: 12 }}>Type at least 2 characters to find your partner.</Text>}

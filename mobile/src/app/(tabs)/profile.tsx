@@ -51,7 +51,7 @@ import {
 } from '@/lib/profile';
 import { openSitePath } from '@/lib/site';
 import { supabase } from '@/lib/supabase';
-import { brand } from '@/theme/tokens';
+import { lightBrand as brand } from '@/theme/tokens';
 
 const EMPTY_PROFILE: ProfileBundle = {
   player: null,
@@ -210,10 +210,10 @@ export default function ProfileScreen() {
   }
 
   return (
-    <View className="flex-1 bg-page">
-      <View className="bg-page" style={{ paddingTop: insets.top }}>
+    <View className="flex-1 bg-court-page">
+      <View className="bg-court-page" style={{ paddingTop: insets.top }}>
         <View className="h-[52px] flex-row items-center justify-between px-4">
-          <Text accessibilityRole="header" className="text-[20px] font-extrabold text-premium">
+          <Text accessibilityRole="header" className="text-[20px] font-extrabold text-court-ink">
             Profile
           </Text>
           <View className="flex-row items-center">
@@ -233,12 +233,12 @@ export default function ProfileScreen() {
 
       {loading && !player ? (
         <View className="px-5 pt-2">
-          <View accessibilityLabel="Loading profile" className="rounded-3xl border border-white/10 bg-page/70 p-5">
+          <View accessibilityLabel="Loading profile" className="rounded-3xl border border-court-edge bg-court-page/70 p-5">
             <View className="flex-row items-center">
-              <View className="h-[88px] w-[88px] rounded-full bg-elevated" />
+              <View className="h-[88px] w-[88px] rounded-full bg-court-elevated" />
               <View className="ml-4 flex-1">
-                <View className="h-3 w-24 rounded bg-elevated" />
-                <View className="mt-2.5 h-6 w-40 rounded bg-elevated" />
+                <View className="h-3 w-24 rounded bg-court-elevated" />
+                <View className="mt-2.5 h-6 w-40 rounded bg-court-elevated" />
               </View>
             </View>
           </View>
@@ -395,18 +395,18 @@ function CareerBlock({
       accessibilityRole="button"
       accessibilityState={{ expanded: open }}
       accessibilityLabel="Career Overview"
-      className="mt-4 rounded-3xl border border-white/10 bg-[#0a0a0a]/70 p-5">
+      className="mt-4 rounded-3xl border border-court-edge bg-[#0a0a0a]/70 p-5">
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center">
           <View className="h-9 w-9 items-center justify-center rounded-xl border border-padel/20 bg-padel/10">
-            <SymbolView name="trophy.fill" size={16} tintColor={brand.padel} />
+            <SymbolView name="trophy.fill" size={16} tintColor={brand.accent} />
           </View>
-          <Text className="ml-3 text-xs font-black uppercase tracking-wider text-premium">
+          <Text className="ml-3 text-xs font-black uppercase tracking-wider text-court-ink">
             Career Overview
           </Text>
         </View>
         <View style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}>
-          <SymbolView name="chevron.down" size={16} tintColor={brand.padel} />
+          <SymbolView name="chevron.down" size={16} tintColor={brand.accent} />
         </View>
       </View>
       {open ? (
@@ -418,10 +418,10 @@ function CareerBlock({
                 <Text className="text-xl font-black text-page">{player.skill_rating}</Text>
               </View>
               <View className="ml-4 flex-1">
-                <Text className="text-[10px] font-black uppercase tracking-widest text-padel">
+                <Text className="text-[10px] font-black uppercase tracking-widest text-court-accent">
                   Rankedin Rating
                 </Text>
-                <View className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/5">
+                <View className="mt-1 h-1.5 overflow-hidden rounded-full bg-court-surface">
                   <View
                     className="h-full bg-padel"
                     style={{ width: `${Math.min(Number(player.skill_rating) * 3.33, 100)}%` }}
@@ -431,8 +431,8 @@ function CareerBlock({
             </View>
           ) : null}
           {rankings.length ? (
-            <View className="mb-4 rounded-2xl border border-white/5 bg-white/5 p-4">
-              <Text className="mb-4 text-[10px] font-black uppercase tracking-widest text-faint">
+            <View className="mb-4 rounded-2xl border border-court-edge bg-court-surface p-4">
+              <Text className="mb-4 text-[10px] font-black uppercase tracking-widest text-court-faint">
                 Organizational Rankings
               </Text>
               {rankings.map((row, index) => {
@@ -450,7 +450,7 @@ function CareerBlock({
                     className="relative mb-2 rounded-xl border p-3"
                     style={{
                       backgroundColor: preferred ? 'rgba(204,255,0,0.1)' : 'rgba(0,0,0,0.2)',
-                      borderColor: preferred ? 'rgba(204,255,0,0.3)' : 'rgba(255,255,255,0.05)',
+                      borderColor: preferred ? 'rgba(204,255,0,0.3)' : 'rgba(22,37,31,0.05)',
                     }}>
                     <View className="flex-row justify-between">
                       <View className="min-w-0 flex-1">
@@ -459,16 +459,16 @@ function CareerBlock({
                           style={{ color: broll ? '#EF4444' : brand.padel }}>
                           {row.org || 'SAPA RANKING'}
                         </Text>
-                        <Text className="text-xs font-bold uppercase text-premium">
+                        <Text className="text-xs font-bold uppercase text-court-ink">
                           {row.age_group || row.division || 'Open'}
                         </Text>
-                        <Text className="text-[8px] font-bold uppercase text-faint">
+                        <Text className="text-[8px] font-bold uppercase text-court-faint">
                           {row.match_type}
                         </Text>
                       </View>
                       <View className="items-end">
-                        <Text className="text-sm font-black text-premium">#{row.rank}</Text>
-                        <Text className="text-[8px] font-black uppercase tracking-widest text-faint">
+                        <Text className="text-sm font-black text-court-ink">#{row.rank}</Text>
+                        <Text className="text-[8px] font-black uppercase tracking-widest text-court-faint">
                           {row.points} PTS
                         </Text>
                       </View>
@@ -478,21 +478,21 @@ function CareerBlock({
                       accessibilityRole="button"
                       accessibilityLabel="Show ranking details"
                       className="mt-2 min-h-11 justify-center self-end">
-                      <Text className="text-[8px] font-black uppercase tracking-widest text-padel">
+                      <Text className="text-[8px] font-black uppercase tracking-widest text-court-accent">
                         Show Details →
                       </Text>
                     </Pressable>
                   </Pressable>
                 );
               })}
-              <Text className="mt-2 text-center text-[8px] font-bold uppercase tracking-widest text-white/40">
+              <Text className="mt-2 text-center text-[8px] font-bold uppercase tracking-widest text-court-muted">
                 Tap a ranking to set as primary
               </Text>
             </View>
           ) : null}
           {player.match_form ? (
-            <View className="mb-4 rounded-2xl border border-white/5 bg-white/5 p-4">
-              <Text className="mb-2 text-[10px] font-black uppercase tracking-widest text-faint">
+            <View className="mb-4 rounded-2xl border border-court-edge bg-court-surface p-4">
+              <Text className="mb-2 text-[10px] font-black uppercase tracking-widest text-court-faint">
                 Recent Form
               </Text>
               <View className="flex-row" style={{ gap: 6 }}>
@@ -516,17 +516,17 @@ function CareerBlock({
               </View>
             </View>
           ) : null}
-          <View className="mb-4 rounded-2xl border border-white/5 bg-white/5 p-4">
-            <Text className="mb-1 text-[10px] font-black uppercase tracking-widest text-faint">
+          <View className="mb-4 rounded-2xl border border-court-edge bg-court-surface p-4">
+            <Text className="mb-1 text-[10px] font-black uppercase tracking-widest text-court-faint">
               Current Points
             </Text>
-            <Text className="text-3xl font-black text-premium">{player.points ?? '—'}</Text>
+            <Text className="text-3xl font-black text-court-ink">{player.points ?? '—'}</Text>
           </View>
-          <View className="rounded-2xl border border-white/5 bg-white/5 p-4">
-            <Text className="mb-1 text-[10px] font-black uppercase tracking-widest text-faint">
+          <View className="rounded-2xl border border-court-edge bg-court-surface p-4">
+            <Text className="mb-1 text-[10px] font-black uppercase tracking-widest text-court-faint">
               Division
             </Text>
-            <Text className="text-xl font-bold uppercase text-padel">
+            <Text className="text-xl font-bold uppercase text-court-accent">
               {player.category || 'Unassigned'}
             </Text>
           </View>
@@ -546,14 +546,14 @@ function GalleryBlock({
   onRemove: (index: number) => void;
 }) {
   return (
-    <View className="mt-4 rounded-3xl border border-white/10 bg-[#0a0a0a]/70 p-5">
+    <View className="mt-4 rounded-3xl border border-court-edge bg-[#0a0a0a]/70 p-5">
       <View className="mb-3 flex-row items-center">
-        <SymbolView name="photo.on.rectangle" size={12} tintColor={brand.padel} />
-        <Text className="ml-1.5 text-[10px] font-black uppercase tracking-[0.25em] text-padel">
+        <SymbolView name="photo.on.rectangle" size={12} tintColor={brand.accent} />
+        <Text className="ml-1.5 text-[10px] font-black uppercase tracking-[0.25em] text-court-accent">
           Player Gallery
         </Text>
-        <View className="ml-2 rounded-full border border-white/10 bg-white/5 px-2 py-0.5">
-          <Text className="text-[8px] font-bold text-white/50">{gallery.length} / 5</Text>
+        <View className="ml-2 rounded-full border border-court-edge bg-court-surface px-2 py-0.5">
+          <Text className="text-[8px] font-bold text-court-muted">{gallery.length} / 5</Text>
         </View>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ gap: 12 }}>
@@ -585,7 +585,7 @@ function GalleryBlock({
             onPress={() => openSitePath('/profile')}
             accessibilityRole="button"
             accessibilityLabel="Add gallery photo on 4M Padel"
-            className="h-[72px] w-[72px] items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5">
+            className="h-[72px] w-[72px] items-center justify-center rounded-2xl border border-dashed border-court-edge bg-court-surface">
             <SymbolView name="plus" size={18} tintColor={brand.faint} />
           </Pressable>
         ) : null}
@@ -606,7 +606,7 @@ function MyProfilePanel({
   return (
     <View>
       <View className="mb-3 flex-row items-center justify-between">
-        <Text className="text-[10px] font-black uppercase tracking-[0.2em] text-faint">
+        <Text className="text-[10px] font-black uppercase tracking-[0.2em] text-court-faint">
           Player Profile Details
         </Text>
         <Pressable
@@ -614,8 +614,8 @@ function MyProfilePanel({
           accessibilityRole="button"
           accessibilityLabel="Edit profile"
           className="min-h-11 flex-row items-center rounded-xl border border-padel/30 bg-padel/10 px-3">
-          <SymbolView name="pencil" size={10} tintColor={brand.padel} />
-          <Text className="ml-1 text-[8.5px] font-black uppercase tracking-wider text-padel">Edit</Text>
+          <SymbolView name="pencil" size={10} tintColor={brand.accent} />
+          <Text className="ml-1 text-[8.5px] font-black uppercase tracking-wider text-court-accent">Edit</Text>
         </Pressable>
       </View>
       <View className="flex-row flex-wrap" style={{ gap: 12 }}>
@@ -626,8 +626,8 @@ function MyProfilePanel({
         <InfoTile label="Region" value={player.region || 'Not Set'} />
         <InfoTile label="Division" value={player.category || 'Not Set'} />
       </View>
-      <View className="mt-3 rounded-3xl border border-white/10 bg-[#0a0a0a]/70 p-4">
-        <Text className="mb-2 text-[7.5px] font-black uppercase tracking-[0.2em] text-padel">
+      <View className="mt-3 rounded-3xl border border-court-edge bg-[#0a0a0a]/70 p-4">
+        <Text className="mb-2 text-[7.5px] font-black uppercase tracking-[0.2em] text-court-accent">
           Player Biography
         </Text>
         <Text className="text-[10px] font-medium leading-5 text-gray-300">
@@ -642,15 +642,15 @@ function MyProfilePanel({
           }}
           accessibilityRole="link"
           accessibilityLabel="Instagram handle"
-          className="mt-3 flex-row items-center justify-between rounded-2xl border border-white/10 bg-[#0a0a0a]/70 p-3.5">
+          className="mt-3 flex-row items-center justify-between rounded-2xl border border-court-edge bg-[#0a0a0a]/70 p-3.5">
           <Text className="text-[10px] font-bold text-gray-300">Instagram Handle</Text>
-          <Text className="text-[9.5px] font-extrabold uppercase tracking-wider text-padel">
+          <Text className="text-[9.5px] font-extrabold uppercase tracking-wider text-court-accent">
             {instagramHandle(player.instagram_link)}
           </Text>
         </Pressable>
       ) : null}
-      <View className="mt-3 rounded-3xl border border-white/10 bg-[#0a0a0a]/70 p-4">
-        <Text className="mb-3 text-[7.5px] font-black uppercase tracking-[0.2em] text-padel">
+      <View className="mt-3 rounded-3xl border border-court-edge bg-[#0a0a0a]/70 p-4">
+        <Text className="mb-3 text-[7.5px] font-black uppercase tracking-[0.2em] text-court-accent">
           Sponsors & Partners
         </Text>
         {sponsors.length ? (
@@ -658,13 +658,13 @@ function MyProfilePanel({
             {sponsors.map((sponsor) => (
               <Text
                 key={sponsor}
-                className="rounded-lg border border-padel/25 bg-padel/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-padel">
+                className="rounded-lg border border-padel/25 bg-padel/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-court-accent">
                 {sponsor}
               </Text>
             ))}
           </View>
         ) : (
-          <Text className="text-[9.5px] font-bold uppercase tracking-wider text-faint">
+          <Text className="text-[9.5px] font-bold uppercase tracking-wider text-court-faint">
             No active sponsors listed
           </Text>
         )}
@@ -675,9 +675,9 @@ function MyProfilePanel({
 
 function InfoTile({ label, value }: { label: string; value: string }) {
   return (
-    <View className="min-h-[75px] w-[47%] justify-between rounded-2xl border border-white/10 bg-[#0a0a0a]/70 p-3.5">
-      <Text className="text-[7.5px] font-black uppercase tracking-widest text-padel">{label}</Text>
-      <Text numberOfLines={2} className="mt-1 text-[11px] font-black text-premium">
+    <View className="min-h-[75px] w-[47%] justify-between rounded-2xl border border-court-edge bg-[#0a0a0a]/70 p-3.5">
+      <Text className="text-[7.5px] font-black uppercase tracking-widest text-court-accent">{label}</Text>
+      <Text numberOfLines={2} className="mt-1 text-[11px] font-black text-court-ink">
         {value}
       </Text>
     </View>

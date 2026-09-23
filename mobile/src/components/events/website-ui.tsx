@@ -11,11 +11,11 @@ export const useEventAccent = () => useContext(EventAccent);
 export type EventIconName = ComponentProps<typeof SymbolView>['name'];
 /** The website uses SF Pro Rounded on Apple devices. */
 export function EventText({ style, ...props }: TextProps) {
-  return <NativeText {...props} style={[{ fontFamily: Platform.OS === 'ios' ? 'ui-rounded' : 'sans-serif', color: '#fff', fontWeight: '400' }, style]} />;
+  return <NativeText {...props} style={[{ fontFamily: Platform.OS === 'ios' ? 'ui-rounded' : 'sans-serif', color: '#16251F', fontWeight: '400' }, style]} />;
 }
 export function EventIcon({ name, size = 16, color: suppliedColor }: { name: EventIconName; size?: number; color?: string }) {
   const accent = useEventAccent();
-  const color = suppliedColor || accent;
+  const color = suppliedColor || '#386018';
   const outlines: Record<string, ComponentProps<typeof Feather>['name']> = {
     rosette: 'award', cloud: 'cloud', envelope: 'mail', person: 'user', camera: 'camera', 'exclamationmark.circle': 'alert-circle', 'point.3.connected.trianglepath.dotted': 'git-branch', calendar: 'calendar', magnifyingglass: 'search', 'mappin.and.ellipse': 'map-pin', map: 'map',
     'person.2': 'users', lock: 'lock', clock: 'clock', 'chevron.right': 'chevron-right',
@@ -29,19 +29,19 @@ export function EventIcon({ name, size = 16, color: suppliedColor }: { name: Eve
 }
 export function WebsiteHeader() {
   const router = useRouter();
-  return <View style={{ height: 73, justifyContent: 'center', backgroundColor: '#000', borderBottomColor: '#222', borderBottomWidth: 1 }}>
+  return <View style={{ height: 60, justifyContent: 'center', backgroundColor: '#F5F6F3', borderBottomColor: '#DCE2DA', borderBottomWidth: 1 }}>
     <HomeHeader onSearch={() => router.push('/search')} onNotifications={() => router.push('/notifications')} />
   </View>;
 }
 export function CircleAction({ name, label, onPress, selected, disabled }: { name: EventIconName; label: string; onPress: () => void; selected?: boolean; disabled?: boolean }) {
   const accent = useEventAccent();
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected, disabled }} disabled={disabled} onPress={onPress} hitSlop={4}
-    style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? accent : '#ffffff33', borderWidth: 1, borderColor: selected ? accent : '#ffffff4d', opacity: disabled ? 0.5 : 1 }}>
-    <EventIcon name={name} color={selected ? '#000' : '#fff'} size={18} />
+    style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? accent : '#FFFFFF', borderWidth: 1, borderColor: selected ? accent : '#16251f4d', opacity: disabled ? 0.5 : 1 }}>
+    <EventIcon name={name} color="#16251F" size={18} />
   </Pressable>;
 }
-export function Fade({ to = '#000' }: { to?: string }) {
-  return <View pointerEvents="none" style={{ position: 'absolute', inset: 0, experimental_backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.4) 45%, ${to} 100%)` } as ViewStyle} />;
+export function Fade({ to = '#F5F6F3' }: { to?: string }) {
+  return <View pointerEvents="none" style={{ position: 'absolute', inset: 0, experimental_backgroundImage: `linear-gradient(180deg, rgba(245,246,243,0.82) 0%, rgba(245,246,243,0.94) 45%, ${to} 100%)` } as ViewStyle} />;
 }
 export function Accordion({ title, icon, children, accessory, highlighted = false, pending = false, singleLineTitle = false }: { pending?: boolean; singleLineTitle?: boolean; highlighted?: boolean; title: string; icon: EventIconName; children: ReactNode; accessory?: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -53,7 +53,7 @@ export function Accordion({ title, icon, children, accessory, highlighted = fals
         <EventText numberOfLines={singleLineTitle ? 1 : undefined} adjustsFontSizeToFit={singleLineTitle} minimumFontScale={0.75} style={{ fontSize: 14, fontWeight: '400', color: '#0f172a', flex: 1, minWidth: 0 }}>{title}</EventText>
       </Pressable>
       {accessory}
-      <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" accessibilityLabel={`${open ? 'Collapse' : 'Expand'} ${title}`} hitSlop={10} style={{ paddingLeft: 12 }}><EventIcon name={open ? 'chevron.down' : 'chevron.right'} size={12} color="#9ca3af" /></Pressable>
+      <Pressable onPress={() => setOpen(!open)} accessibilityRole="button" accessibilityLabel={`${open ? 'Collapse' : 'Expand'} ${title}`} hitSlop={10} style={{ paddingLeft: 12 }}><EventIcon name={open ? 'chevron.down' : 'chevron.right'} size={12} color="#65726B" /></Pressable>
     </View>
     {open && <View style={{ borderTopWidth: 1, borderTopColor: pending ? '#fed7aa' : '#f3f4f6', padding: 20, gap: 12 }}>{children}</View>}
   </View>;

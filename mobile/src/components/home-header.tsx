@@ -16,7 +16,7 @@ import Animated, {
 import { MenuButton } from '@/components/app-drawer';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { hapticLight } from '@/lib/haptics';
-import { brand } from '@/theme/tokens';
+import { lightBrand as brand } from '@/theme/tokens';
 
 type Props = {
   onSearch: () => void;
@@ -36,12 +36,12 @@ export function HomeHeader({ onSearch, onNotifications, noticeCount = 0 }: Props
 
   return (
     <View
-      className="flex-row items-center justify-between bg-page px-4"
+      className="flex-row items-center justify-between bg-court-page px-4"
       style={{ height: 52, zIndex: 30, elevation: 30 }}>
       <View className="flex-row items-center">
         <Image
           source={require('@/assets/images/4m-logo.png')}
-          style={{ width: 48, height: 36 }}
+          style={{ width: 48, height: 36, backgroundColor: '#16251F', borderRadius: 8 }}
           contentFit="contain"
           accessibilityLabel="4M Padel"
         />

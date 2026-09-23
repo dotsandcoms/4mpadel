@@ -10,7 +10,7 @@ import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-
 import { fetchProSnapshot, proDate, proStale, type ProTour, type ProFixtures, type ProTournament } from '@/lib/pro-padel';
 import { MatchCard } from '@/components/pro-padel-feed';
 import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
-import { brand } from '@/theme/tokens';
+import { lightBrand as brand } from '@/theme/tokens';
 
 const levels = ['', 'major', 'p1', 'p2', 'finals'];
 const dateDay = (date: string) => date.slice(0, 10);
@@ -74,7 +74,7 @@ export function ProTourCalendar() {
             <TextInput accessibilityLabel="Search tour tournaments or locations" value={search} onChangeText={setSearch} placeholder="Search tournaments or locations" placeholderTextColor={brand.faint} autoCorrect={false} style={s.input} />
           </View>
           <Pressable onPress={() => setShowFilters(true)} accessibilityRole="button" accessibilityLabel={`Filters, 1 active, ${timing}`} style={s.filterButton}>
-            <EventIcon name="line.3.horizontal.decrease" color="#9ca3af" />
+            <EventIcon name="line.3.horizontal.decrease" color="#65726B" />
             <View style={s.filterBadge}><Text style={{ color: '#000', fontSize: 10, fontWeight: '800' }}>1</Text></View>
           </Pressable>
         </View>
@@ -86,7 +86,7 @@ export function ProTourCalendar() {
         {tour && <Text style={s.caption}>Updated {proDate(tour.updatedAt)} · {rows.length} tournaments{proStale(tour.updatedAt) ? ' · Update overdue' : ''}</Text>}
         {!!error && <View style={{ gap: 8 }}><Text style={{ color: brand.danger }}>{error}</Text><Button label="Retry" onPress={() => void load()} /></View>}
       </View>}
-      ListEmptyComponent={!loading ? <View style={s.header}><Text style={s.body}>{error ? 'Tour data is unavailable.' : 'No tournaments match these filters in the available calendar.'}</Text></View> : !tour ? <ActivityIndicator color={brand.padel} style={{ margin: 30 }} /> : null}
+      ListEmptyComponent={!loading ? <View style={s.header}><Text style={s.body}>{error ? 'Tour data is unavailable.' : 'No tournaments match these filters in the available calendar.'}</Text></View> : !tour ? <ActivityIndicator color={brand.accent} style={{ margin: 30 }} /> : null}
       renderItem={({ item }) => <Pressable accessibilityRole="button" accessibilityLabel={`View ${item.name}, ${proDate(item.startDate)}`} onPress={() => setSelected(item)} style={s.card}>
         <Artwork key={item.id} event={item} />
         <View style={{ flex: 1, gap: 7 }}>
@@ -95,15 +95,15 @@ export function ProTourCalendar() {
           <Text style={s.date}>{proDate(item.startDate)} – {proDate(item.endDate)}</Text>
           <Text style={s.caption} numberOfLines={2}>{[item.location, item.country].filter(Boolean).join(' · ') || 'Location to be confirmed'}</Text>
         </View>
-        <Ionicons name="chevron-forward" size={16} color={brand.padel} />
+        <Ionicons name="chevron-forward" size={16} color={brand.accent} />
       </Pressable>} />
     <Modal visible={showFilters} animationType="slide" transparent onRequestClose={() => setShowFilters(false)}>
       <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#0009' }}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close filters" onPress={() => setShowFilters(false)} style={{ flex: 1 }} />
-        <View accessibilityViewIsModal style={{ maxHeight: '85%', backgroundColor: '#141414', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: insets.bottom + 24, gap: 20 }}>
+        <View accessibilityViewIsModal style={{ maxHeight: '85%', backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: insets.bottom + 24, gap: 20 }}>
           <Text accessibilityRole="header" style={{ color: brand.premium, fontSize: 20, fontWeight: '700' }}>Filters</Text>
           <ScrollView contentContainerStyle={{ gap: 18 }}>
-            <Text style={{ color: '#9ca3af', fontSize: 12 }}>WHEN</Text>
+            <Text style={{ color: '#65726B', fontSize: 12 }}>WHEN</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{(['upcoming', 'past'] as const).map(value => <Chip key={value} label={value === 'past' ? 'Past' : 'Upcoming'} selected={timing === value} onPress={() => setTiming(value)} />)}</View>
           </ScrollView>
           <View style={{ flexDirection: 'row', gap: 12 }}>
@@ -145,13 +145,13 @@ export function ProTourCalendar() {
 
 const s = StyleSheet.create({
   header: { padding: 20, gap: 14 }, modal: { flex: 1, backgroundColor: brand.page },
-  kicker: { color: brand.padel, fontSize: 10, fontWeight: '700', letterSpacing: 1 },
+  kicker: { color: brand.accent, fontSize: 10, fontWeight: '700', letterSpacing: 1 },
   heading: { color: brand.premium, fontSize: 36, fontWeight: '800', letterSpacing: -1 },
   detailTitle: { color: brand.premium, fontSize: 28, fontWeight: '700' },
   body: { color: brand.muted, fontSize: 14, lineHeight: 21 },
   caption: { color: brand.muted, fontSize: 11, lineHeight: 17 },
   search: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, borderRadius: 24, backgroundColor: brand.elevated, alignItems: 'center' },
-  filterButton: { paddingHorizontal: 20, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#181818', borderWidth: 1, borderColor: '#ffffff0d', borderRadius: 30 },
+  filterButton: { paddingHorizontal: 20, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#16251f0d', borderRadius: 30 },
   filterBadge: { backgroundColor: brand.padel, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   input: { flex: 1, minHeight: 48, fontSize: 13, color: brand.premium },
   button: { minHeight: 44, borderRadius: 22, paddingHorizontal: 16, justifyContent: 'center', borderWidth: 1, borderColor: brand.edge },
@@ -159,6 +159,6 @@ const s = StyleSheet.create({
   card: { marginHorizontal: 20, marginBottom: 12, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: brand.elevated, borderRadius: 20, borderColor: brand.edge, borderWidth: 1 },
   thumbnail: { width: 66, height: 90, borderRadius: 10 }, cover: { width: '100%', height: 190, borderRadius: 20 },
   name: { color: brand.premium, fontSize: 16, lineHeight: 21, fontWeight: '700' },
-  date: { color: brand.padel, fontSize: 12, lineHeight: 18, fontWeight: '600' },
+  date: { color: brand.accent, fontSize: 12, lineHeight: 18, fontWeight: '600' },
   section: { color: brand.premium, fontSize: 20, fontWeight: '700' },
 });

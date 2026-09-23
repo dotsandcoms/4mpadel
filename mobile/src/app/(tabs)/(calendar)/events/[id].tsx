@@ -20,7 +20,7 @@ import { EventLocation } from '@/components/events/event-location';
 import { TournamentDetails, PrizeMoney, EventWeatherSection } from '@/components/events/event-content';
 import { EventInformation } from '@/components/events/event-information';
 import { RegistrationEntries } from '@/components/events/registration-entries';
-import { sapaTone } from '@/theme/sapa';
+import { lightSapaTone as sapaTone } from '@/theme/sapa';
 
 export default function EventScreen() { return <EventContent />; }
 function EventContent() {
@@ -103,13 +103,11 @@ function EventContent() {
   const teams = useMemo(() => buildEventTeams(divisions, entries, profiles), [divisions, entries, profiles]);
   const pendingPayment = registrations.some(r => r.payment_status !== 'paid' && Number(divisions.find(d => d.id === r.division_id)?.entry_fee || 0) > 0);
   const sponsors = event?.sponsor_logos?.filter(url => url && url !== organisation?.logo_url && url !== event.poster_image_url && url !== event.custom_image_url) || [];
-  return <EventAccent value={accent}><View style={{ flex: 1, backgroundColor: '#000', paddingTop: insets.top }}>
+  return <EventAccent value={accent}><View style={{ flex: 1, backgroundColor: '#F5F6F3', paddingTop: insets.top }}>
     <WebsiteHeader />
     <ScrollView stickyHeaderIndices={event ? [1] : []} refreshControl={<RefreshControl refreshing={loading && !!event} onRefresh={load} tintColor={accent} />} contentContainerStyle={{ paddingBottom: tabPadding, backgroundColor: '#f9fafb' }}>
-      {event ? <View style={{ backgroundColor: '#0a0a0a' }}>
-        <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: Math.max(210, width * 0.55), overflow: 'hidden' }}>
-          <Image source={eventImage(event)} style={{ position: 'absolute', top: width * 0.1 - 73, left: -width * 0.02, width: width * 1.04, height: Math.max(280, width * 0.55) * 1.18 * 1.04 }} contentFit="cover" contentPosition="top center" /><Fade to="#0a0a0a" />
-        </View>
+      {event ? <View style={{ backgroundColor: '#F5F6F3' }}>
+        <Image source={eventImage(event)} accessibilityLabel={event.event_name || 'Tournament'} style={{ width: '100%', height: 170 }} contentFit="cover" />
         <View style={{ position: 'absolute', top: 23, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', zIndex: 5 }}>
           <CircleAction name="arrow.left" label="Back to calendar" onPress={back} />
           <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -118,33 +116,33 @@ function EventContent() {
             <CircleAction name={saved ? 'checkmark' : 'plus'} label={saved ? 'Remove from My Schedule' : 'Add to My Schedule'} onPress={toggleSaved} selected={saved} disabled={saving || !!accountError} />
           </View>
         </View>
-        <View style={{ paddingHorizontal: 20, paddingTop: Math.max(90, width * 0.38 - 65), paddingBottom: 40 }}>
+        <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 }}>
           {!!event.sapa_status && event.sapa_status !== 'None' && <Text style={{ alignSelf: 'flex-start', color: sapaTone(event.sapa_status).text, fontSize: 8, fontWeight: '700', letterSpacing: 1, borderWidth: 1, borderColor: sapaTone(event.sapa_status).border, borderRadius: 16, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 6 }}>{event.sapa_status.toUpperCase()}</Text>}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
             {!!event.sapa_status && event.sapa_status !== 'None' && <Image source={require('@/assets/sapa-logo.svg')} accessibilityLabel="SAPA" contentFit="contain" style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#fff', borderWidth: 4, borderColor: '#fff' }} />}
-            <View style={{ flex: 1 }}><Text accessibilityRole="header" style={{ fontSize: 20, fontWeight: '500', lineHeight: 25 }}>{event.event_name}</Text>
-            {!!event.sapa_status && event.sapa_status !== 'None' && <Text style={{ color: accent, fontSize: 12, fontWeight: '400', marginTop: 4, letterSpacing: 0.3 }}>SAPA {event.sapa_status.toUpperCase()} {event.points || ''}</Text>}</View>
+            <View style={{ flex: 1 }}><Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '700', lineHeight: 32 }}>{event.event_name}</Text>
+            {!!event.sapa_status && event.sapa_status !== 'None' && <Text style={{ color: "#386018", fontSize: 12, fontWeight: '400', marginTop: 4, letterSpacing: 0.3 }}>SAPA {event.sapa_status.toUpperCase()} {event.points || ''}</Text>}</View>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10 }}>
-            <EventIcon name="calendar" size={14} /><Text style={{ fontSize: 12, color: '#ffffffe6' }}>{event.event_dates || formatEventRange(event.start_date, event.end_date)}</Text>
-            <Text style={{ fontSize: 12, color: '#ffffff55' }}>|</Text><EventIcon name="mappin.and.ellipse" size={14} /><Text numberOfLines={1} style={{ fontSize: 12, flex: 1, color: '#ffffffe6' }}>{eventLocation(event)}</Text>
+            <EventIcon name="calendar" size={14} /><Text style={{ fontSize: 12, color: '#16251fe6' }}>{event.event_dates || formatEventRange(event.start_date, event.end_date)}</Text>
+            <Text style={{ fontSize: 12, color: '#16251f55' }}>|</Text><EventIcon name="mappin.and.ellipse" size={14} /><Text numberOfLines={1} style={{ fontSize: 12, flex: 1, color: '#16251fe6' }}>{eventLocation(event)}</Text>
           </View>
-          <View style={{ marginTop: 8, flexDirection: 'row', borderRadius: 16, borderColor: '#ffffff1a', borderWidth: 1, overflow: 'hidden', backgroundColor: '#0005' }}>
-            {stats.map((stat, i) => <View key={stat.label} style={{ flex: 1, paddingVertical: 16, paddingHorizontal: 1, alignItems: 'center', borderLeftWidth: i ? 1 : 0, borderColor: '#ffffff1a', gap: 4 }}><EventIcon name={stat.icon} /><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ fontSize: 14, fontWeight: '700', textAlign: 'center', alignSelf: 'stretch' }}>{stat.value}</Text><Text style={{ fontSize: 9, color: '#ffffff80', letterSpacing: 0.3 }}>{stat.label.toUpperCase()}</Text></View>)}
+          <View style={{ marginTop: 8, flexDirection: 'row', borderRadius: 16, borderColor: '#16251f1a', borderWidth: 1, overflow: 'hidden', backgroundColor: '#fff' }}>
+            {stats.map((stat, i) => <View key={stat.label} style={{ flex: 1, paddingVertical: 16, paddingHorizontal: 1, alignItems: 'center', borderLeftWidth: i ? 1 : 0, borderColor: '#16251f1a', gap: 4 }}><EventIcon name={stat.icon} /><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ fontSize: 14, fontWeight: '700', textAlign: 'center', alignSelf: 'stretch' }}>{stat.value}</Text><Text style={{ fontSize: 9, color: '#16251f80', letterSpacing: 0.3 }}>{stat.label.toUpperCase()}</Text></View>)}
           </View>
-          {(organisation?.logo_url || event.poster_image_url || sponsors.length > 0) && <View style={{ flexDirection: 'row', marginTop: 12, borderRadius: 16, borderColor: '#ffffff1a', borderWidth: 1, backgroundColor: '#0005', overflow: 'hidden' }}>
-            {organisation?.logo_url && <Pressable accessibilityRole="button" accessibilityLabel={organisation.name} onPress={() => organisation.slug && void runAction(() => openSitePath(`/organisations/${organisation.slug}`))} style={{ width: 92, paddingHorizontal: 8, paddingVertical: 12, alignItems: 'center', borderRightWidth: 1, borderColor: '#ffffff1a', gap: 8 }}><Text numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 9, color: accent }}>ORGANISATION</Text><Image source={{ uri: organisation.logo_url }} style={{ width: 55, height: 32 }} contentFit="contain" /></Pressable>}
-            {event.poster_image_url && <Pressable onPress={() => setPoster(event.poster_image_url!)} accessibilityLabel="View event poster" style={{ width: 92, padding: 12, alignItems: 'center', gap: 8, borderRightWidth: 1, borderColor: '#ffffff1a' }}><Text style={{ fontSize: 9, color: accent }}>EVENT POSTER</Text><Image source={{ uri: event.poster_image_url }} style={{ width: 40, height: 40 }} contentFit="contain" /></Pressable>}
-            {sponsors.length > 0 && <View style={{ flex: 1, padding: 12, gap: 8, alignItems: 'center' }}><Text style={{ fontSize: 9, color: accent }}>SPONSORS</Text><View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', alignSelf: 'stretch', gap: 8 }}>{Array.from({ length: Math.min(3, sponsors.length) }, (_, i) => sponsors[(sponsorOffset + i) % sponsors.length]).map(url => <Image key={url} source={{ uri: url }} style={{ width: 40, height: 32 }} contentFit="contain" />)}{sponsors.length > 3 && <Pressable accessibilityRole="button" accessibilityLabel="Next sponsors" hitSlop={10} onPress={() => setSponsorOffset((sponsorOffset + 3) % sponsors.length)}><EventIcon name="chevron.right" size={12} /></Pressable>}</View></View>}
+          {(organisation?.logo_url || event.poster_image_url || sponsors.length > 0) && <View style={{ flexDirection: 'row', marginTop: 12, borderRadius: 16, borderColor: '#16251f1a', borderWidth: 1, backgroundColor: '#fff', overflow: 'hidden' }}>
+            {organisation?.logo_url && <Pressable accessibilityRole="button" accessibilityLabel={organisation.name} onPress={() => organisation.slug && void runAction(() => openSitePath(`/organisations/${organisation.slug}`))} style={{ width: 92, paddingHorizontal: 8, paddingVertical: 12, alignItems: 'center', borderRightWidth: 1, borderColor: '#16251f1a', gap: 8 }}><Text numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 9, color: "#386018" }}>ORGANISATION</Text><Image source={{ uri: organisation.logo_url }} style={{ width: 55, height: 32 }} contentFit="contain" /></Pressable>}
+            {event.poster_image_url && <Pressable onPress={() => setPoster(event.poster_image_url!)} accessibilityLabel="View event poster" style={{ width: 92, padding: 12, alignItems: 'center', gap: 8, borderRightWidth: 1, borderColor: '#16251f1a' }}><Text style={{ fontSize: 9, color: "#386018" }}>EVENT POSTER</Text><Image source={{ uri: event.poster_image_url }} style={{ width: 40, height: 40 }} contentFit="contain" /></Pressable>}
+            {sponsors.length > 0 && <View style={{ flex: 1, padding: 12, gap: 8, alignItems: 'center' }}><Text style={{ fontSize: 9, color: "#386018" }}>SPONSORS</Text><View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', alignSelf: 'stretch', gap: 8 }}>{Array.from({ length: Math.min(3, sponsors.length) }, (_, i) => sponsors[(sponsorOffset + i) % sponsors.length]).map(url => <Image key={url} source={{ uri: url }} style={{ width: 40, height: 32 }} contentFit="contain" />)}{sponsors.length > 3 && <Pressable accessibilityRole="button" accessibilityLabel="Next sponsors" hitSlop={10} onPress={() => setSponsorOffset((sponsorOffset + 3) % sponsors.length)}><EventIcon name="chevron.right" size={12} /></Pressable>}</View></View>}
           </View>}
           <RegistrationCountdown event={event} onRegister={() => pendingPayment ? register('pay') : registrations.length ? void openSitePath(`/calendar/${event.slug || event.id}`, { forceBrowser: true }) : register()} label={pendingPayment && state === 'open' ? 'Pay Now' : registrations.length ? 'Manage Entry' : state === 'open' ? 'Register' : null} />
           <EventTimeline event={event} hasDraw={drawStatus.hasDraw} />
           {!!(actionError || accountError || publicError) && <View style={{ marginTop: 12 }}><Notice title="Please try again" onRetry={load}>{actionError || accountError || publicError}</Notice></View>}
           {state === 'cancelled' && <View style={{ marginTop: 12 }}><Notice title="Event cancelled">This event is no longer taking place.</Notice></View>}
         </View>
-      </View> : <View style={{ backgroundColor: '#0a0a0a', padding: 30 }}>{loading ? <ActivityIndicator color={accent} /> : <Notice title="Event unavailable" onRetry={load}>{error}</Notice>}</View>}
+      </View> : <View style={{ backgroundColor: '#F5F6F3', padding: 30 }}>{loading ? <ActivityIndicator color={accent} /> : <Notice title="Event unavailable" onRetry={load}>{error}</Notice>}</View>}
       {event && <View><View style={{ flexDirection: 'row', backgroundColor: '#fff', paddingHorizontal: 16, borderBottomColor: '#e5e7eb', borderBottomWidth: 1 }}>
-        {['Overview', 'Players', 'Draws', 'Results', 'Media'].map(label => <Pressable key={label} accessibilityRole="tab" accessibilityState={{ selected: label === tab }} onPress={() => setTab(label)} style={{ flex: 1, paddingVertical: 16, borderBottomWidth: 2, borderBottomColor: label === tab ? '#0a0a0a' : 'transparent', alignItems: 'center' }}><Text style={{ color: label === tab ? '#0a0a0a' : '#9ca3af', fontSize: 14, fontWeight: label === tab ? '500' : '400' }}>{label}</Text></Pressable>)}
+        {['Overview', 'Players', 'Draws', 'Results', 'Media'].map(label => <Pressable key={label} accessibilityRole="tab" accessibilityState={{ selected: label === tab }} onPress={() => setTab(label)} style={{ flex: 1, paddingVertical: 16, borderBottomWidth: 2, borderBottomColor: label === tab ? '#0a0a0a' : 'transparent', alignItems: 'center' }}><Text style={{ color: label === tab ? '#0a0a0a' : '#65726B', fontSize: 14, fontWeight: label === tab ? '500' : '400' }}>{label}</Text></Pressable>)}
       </View></View>}
       {event && <View style={{ paddingHorizontal: 16, paddingTop: 24, gap: 24, backgroundColor: '#f9fafb', minHeight: 300 }}>
         {tab === 'Overview' && <>
@@ -178,8 +176,8 @@ function EventContent() {
 
       </View>}
     </ScrollView>
-    <Modal visible={!!poster} animationType="fade" onRequestClose={() => setPoster(null)}><View style={{ flex: 1, backgroundColor: '#000', paddingTop: insets.top + 12 }}><Pressable accessibilityRole="button" onPress={() => setPoster(null)} style={{ padding: 20 }}><Text>Close</Text></Pressable>{poster && <Image source={{ uri: poster }} style={{ flex: 1 }} contentFit="contain" />}</View></Modal>
+    <Modal visible={!!poster} animationType="fade" onRequestClose={() => setPoster(null)}><View style={{ flex: 1, backgroundColor: '#F5F6F3', paddingTop: insets.top + 12 }}><Pressable accessibilityRole="button" onPress={() => setPoster(null)} style={{ padding: 20 }}><Text>Close</Text></Pressable>{poster && <Image source={{ uri: poster }} style={{ flex: 1 }} contentFit="contain" />}</View></Modal>
   </View></EventAccent>;
 }
 function LightButton({ label, onPress }: { label: string; onPress: () => void }) { const accent = useEventAccent(); return <Pressable accessibilityRole="button" onPress={onPress} style={{ backgroundColor: accent, minHeight: 44, padding: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#000', fontSize: 13, fontWeight: '400' }}>{label}</Text></Pressable>; }
-function LightEmpty({ title, text, icon }: { title: string; text: string; icon?: EventIconName }) { return <View style={{ padding: 24, paddingVertical: 64, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: '#f3f4f6', alignItems: 'center', gap: 10 }}>{icon && <EventIcon name={icon} color="#e5e7eb" size={48} />}<Text style={{ color: '#0f172a', fontSize: 16, fontWeight: '500' }}>{title}</Text><Text style={{ color: '#9ca3af', fontSize: 14, lineHeight: 20, textAlign: 'center' }}>{text}</Text></View>; }
+function LightEmpty({ title, text, icon }: { title: string; text: string; icon?: EventIconName }) { return <View style={{ padding: 24, paddingVertical: 64, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: '#f3f4f6', alignItems: 'center', gap: 10 }}>{icon && <EventIcon name={icon} color="#e5e7eb" size={48} />}<Text style={{ color: '#0f172a', fontSize: 16, fontWeight: '500' }}>{title}</Text><Text style={{ color: '#65726B', fontSize: 14, lineHeight: 20, textAlign: 'center' }}>{text}</Text></View>; }

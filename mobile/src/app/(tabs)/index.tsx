@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
@@ -7,7 +6,6 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -22,6 +20,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Notice } from '@/components/events/event-ui';
 import { FadeUp } from '@/components/fade-up';
 import { HomeAccordion } from '@/components/home-accordion';
 import {
@@ -58,7 +57,7 @@ import {
 } from '@/lib/notifications';
 import { openSitePath } from '@/lib/site';
 import { supabase } from '@/lib/supabase';
-import { brand, motion } from '@/theme/tokens';
+import { lightBrand as brand, motion } from '@/theme/tokens';
 
 const MATCH_ORANGE = '#F97316';
 
@@ -75,12 +74,13 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const tabPad = useTabScenePadding();
   const [bundle, setBundle] = useState<HomeBundle>(EMPTY_HOME);
+  const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [open, setOpen] = useState<OpenMap>({
     pending: false,
     schedule: false,
-    featured: false,
+    featured: true,
     results: false,
   });
   const [schedulePast, setSchedulePast] = useState(false);
@@ -89,12 +89,14 @@ export default function HomeScreen() {
 
   const load = useCallback(async (soft?: boolean) => {
     if (!soft) setLoading(true);
+    setLoadError(false);
     try {
       const { data } = await supabase.auth.getUser();
       const next = await fetchHomeBundle(data.user?.email, { strictSchedule: true });
       setBundle(next);
       if (data.user) void publishCompanionSchedule(data.user.id, makeCompanionSchedule(next));
     } catch (err) {
+      setLoadError(true);
       console.warn('[home]', err);
     } finally {
       setLoading(false);
@@ -153,9 +155,9 @@ export default function HomeScreen() {
   }
 
   return (
-    <View className="flex-1 bg-page">
+    <View className="flex-1 bg-court-page">
       <View
-        className="bg-page"
+        className="bg-court-page"
         style={{ paddingTop: insets.top, zIndex: 30, elevation: 30 }}>
         <HomeHeader
           onSearch={() => router.push('/search')}
@@ -165,7 +167,7 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView
-        className="flex-1 bg-page"
+        className="flex-1 bg-court-page"
         contentContainerStyle={{
           paddingBottom: tabPad,
         }}
@@ -177,19 +179,10 @@ export default function HomeScreen() {
               setRefreshing(true);
               void Promise.all([load(true), proPadel.refresh()]);
             }}
-            tintColor={brand.padel}
+            tintColor={brand.accent}
           />
         }>
         <View style={{ overflow: 'hidden' }}>
-          <Image
-            source={require('@/assets/images/hero-bg.jpg')}
-            style={styles.heroImage}
-            pointerEvents="none"
-            contentFit="cover"
-            accessibilityElementsHidden
-          />
-          <View style={[styles.heroScrim, { pointerEvents: 'none' }]} />
-
           <View className="px-4 pt-3 pb-2">
             <FadeUp>
               <HomeGreeting player={bundle.player} />
@@ -202,7 +195,17 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View className="px-4 bg-page">
+        <View className="px-4 bg-court-page">
+        <Pressable accessibilityRole="button" accessibilityLabel="Find and enter a tournament" onPress={() => router.push('/calendar')}
+          style={{ marginTop: 16, marginBottom: 20, backgroundColor: brand.padel, padding: 20, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 16, minHeight: 104 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: '#386018', fontSize: 11, fontWeight: '700', letterSpacing: 1.4 }}>GET ON COURT</Text>
+            <Text style={{ color: brand.premium, fontSize: 26, fontWeight: '800', letterSpacing: -0.8, marginTop: 5 }}>Your next tournament.</Text>
+            <Text style={{ color: '#34473D', fontSize: 13, lineHeight: 19, marginTop: 5 }}>Find an event. Pick your partner. Play.</Text>
+          </View>
+          <SymbolView name={{ ios: 'arrow.up.right', android: 'north_east', web: 'north_east' }} size={23} tintColor={brand.premium} />
+        </Pressable>
+        {loadError && <Notice title="Your latest activity couldn’t load" onRetry={() => void load(true)}>Please try again to refresh your entries, payments and schedule.</Notice>}
         {bundle.happeningNow.length ? (
           <FadeUp delay={motion.stagger * 6} className="mt-6">
             {bundle.happeningNow.slice(0, 3).map((event, i) => (
@@ -220,7 +223,7 @@ export default function HomeScreen() {
         <FadeUp delay={motion.stagger * 8} className="mt-4">
           {bundle.pending.length ? (
             <HomeAccordion
-              title="Pending Actions"
+              title="Complete your entry"
               titleCount={bundle.pending.length}
               countColor={brand.danger}
               open={open.pending}
@@ -284,7 +287,7 @@ export default function HomeScreen() {
                   }}
                 />
               </View>
-              <View className="ml-auto shrink-0 flex-row rounded-lg border border-white/15 p-0.5">
+              <View className="ml-auto shrink-0 flex-row rounded-lg border border-court-edge p-0.5">
                 {(
                   [
                     { key: false, label: 'Upcoming' },
@@ -298,11 +301,11 @@ export default function HomeScreen() {
                     accessibilityState={{ selected: schedulePast === tab.key }}
                     hitSlop={6}
                     className={`min-h-8 justify-center px-2 ${
-                      schedulePast === tab.key ? 'rounded-md bg-white/10' : ''
+                      schedulePast === tab.key ? 'rounded-md bg-court-surface' : ''
                     }`}>
                     <Text
                       className={`text-[10px] font-normal ${
-                        schedulePast === tab.key ? 'text-premium' : 'text-white/45'
+                        schedulePast === tab.key ? 'text-court-ink' : 'text-court-muted'
                       }`}>
                       {tab.label}
                     </Text>
@@ -322,12 +325,12 @@ export default function HomeScreen() {
                   ) : null}
                   {(schedulePast ? matches : matches.slice(1)).length ? (
                     <View
-                      className={`overflow-hidden rounded-2xl border border-edge bg-elevated ${
+                      className={`overflow-hidden rounded-2xl border border-court-edge bg-court-elevated ${
                         schedulePast ? '' : 'mt-3'
                       }`}>
                       {(schedulePast ? matches : matches.slice(1)).map((match, i) => (
                         <View key={matchKey(match, i)}>
-                          {i > 0 ? <View className="h-px bg-edge" /> : null}
+                          {i > 0 ? <View className="h-px bg-court-edge" /> : null}
                           <MatchRow
                             match={match}
                             showResult={schedulePast}
@@ -352,10 +355,10 @@ export default function HomeScreen() {
                 />
               )
             ) : schedule.length ? (
-              <View className="overflow-hidden rounded-2xl border border-edge bg-elevated">
+              <View className="overflow-hidden rounded-2xl border border-court-edge bg-court-elevated">
                 {schedule.map((event, i) => (
                   <View key={event.id}>
-                    {i > 0 ? <View className="h-px bg-edge" /> : null}
+                    {i > 0 ? <View className="h-px bg-court-edge" /> : null}
                     <EventRow
                       event={event}
                       showStartCountdown={!schedulePast}
@@ -380,7 +383,7 @@ export default function HomeScreen() {
           </HomeAccordion>
 
           <HomeAccordion
-            title="Featured Events"
+            title="Tournament spotlight"
             open={open.featured}
             onToggle={() => toggle('featured')}
             badges={
@@ -399,6 +402,8 @@ export default function HomeScreen() {
               />
             )}
           </HomeAccordion>
+
+          <ProPadelFeed state={proPadel} />
 
           <HomeAccordion
             title="Recent Results"
@@ -421,7 +426,7 @@ export default function HomeScreen() {
 
 
         </FadeUp>
-        <ProPadelFeed state={proPadel} />
+
         </View>
       </ScrollView>
     </View>
@@ -474,7 +479,7 @@ function EventSlide({
             <SymbolView
               name={{ ios: 'chevron.left', android: 'chevron_left', web: 'chevron_left' }}
               size={18}
-              tintColor={index === 0 ? 'rgba(255,255,255,0.28)' : brand.premium}
+              tintColor={index === 0 ? 'rgba(22,37,31,0.28)' : brand.premium}
             />
           </Pressable>
           <Pressable
@@ -497,7 +502,7 @@ function EventSlide({
             <SymbolView
               name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
               size={18}
-              tintColor={index === last ? 'rgba(255,255,255,0.28)' : brand.premium}
+              tintColor={index === last ? 'rgba(22,37,31,0.28)' : brand.premium}
             />
           </Pressable>
         </>
@@ -649,16 +654,16 @@ function KindTab({
       accessibilityState={{ selected }}
       hitSlop={6}
       className={`mr-1.5 min-h-8 shrink-0 flex-row items-center rounded-lg px-2 ${
-        selected ? 'border border-white/40 bg-white/5' : ''
+        selected ? 'border border-court-edge bg-court-surface' : ''
       }`}>
       <SymbolView
         name={icon}
         size={14}
-        tintColor={selected ? brand.premium : 'rgba(255,255,255,0.5)'}
+        tintColor={selected ? brand.premium : 'rgba(22,37,31,0.5)'}
       />
       <Text
         className={`ml-1.5 text-[12px] font-normal ${
-          selected ? 'text-premium' : 'text-white/50'
+          selected ? 'text-court-ink' : 'text-court-muted'
         }`}>
         {label}
       </Text>
@@ -676,21 +681,3 @@ function KindTab({
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  heroImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 340,
-  },
-  heroScrim: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 340,
-    backgroundColor: 'rgba(10,10,10,0.48)',
-  },
-});

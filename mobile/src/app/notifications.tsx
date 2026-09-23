@@ -7,7 +7,7 @@ import { SheetHeader } from '@/components/sheet-header';
 import { fetchPendingActions, type PendingAction } from '@/lib/home';
 import { openSitePath } from '@/lib/site';
 import { supabase } from '@/lib/supabase';
-import { brand } from '@/theme/tokens';
+import { lightBrand as brand } from '@/theme/tokens';
 
 export default function NotificationsSheet() {
   const router = useRouter();
@@ -56,11 +56,11 @@ export default function NotificationsSheet() {
         }
       />
 
-      <ScrollView className="flex-1 bg-page" contentContainerStyle={{ paddingBottom: 28 }}>
+      <ScrollView className="flex-1 bg-court-page" contentContainerStyle={{ paddingBottom: 28 }}>
         {count === 0 ? (
           <View className="px-5 pb-6 pt-4">
-            <Text className="text-[15px] font-semibold text-premium">Nothing waiting</Text>
-            <Text className="mt-1.5 text-[14px] leading-5 text-muted">
+            <Text className="text-[15px] font-semibold text-court-ink">Nothing waiting</Text>
+            <Text className="mt-1.5 text-[14px] leading-5 text-court-muted">
               Partner updates, payments and match reminders will land here once they
               are sent.
             </Text>
@@ -72,18 +72,18 @@ export default function NotificationsSheet() {
               onPress={() => openAction(action)}
               accessibilityRole="button"
               accessibilityLabel={`${action.title}. ${action.subtitle}`}
-              className="flex-row items-start border-b border-white/5 px-5 py-4">
+              className="flex-row items-start border-b border-court-edge px-5 py-4">
               <View className="mt-0.5 h-9 w-9 items-center justify-center rounded-lg bg-padel/20">
                 <SymbolView
                   name={action.kind === 'profile' ? 'person.fill' : 'creditcard.fill'}
                   size={16}
-                  tintColor={brand.padel}
+                  tintColor={brand.accent}
                 />
               </View>
               <View className="ml-3 min-w-0 flex-1">
-                <Text className="text-[15px] font-bold text-premium">{action.title}</Text>
-                <Text className="mt-1 text-[13px] leading-5 text-muted">{action.subtitle}</Text>
-                <Text className="mt-1.5 text-[10px] font-bold uppercase tracking-widest text-padel">
+                <Text className="text-[15px] font-bold text-court-ink">{action.title}</Text>
+                <Text className="mt-1 text-[13px] leading-5 text-court-muted">{action.subtitle}</Text>
+                <Text className="mt-1.5 text-[10px] font-bold uppercase tracking-widest text-court-accent">
                   {action.kind === 'profile' ? 'Open profile' : 'Pay now'}
                 </Text>
               </View>

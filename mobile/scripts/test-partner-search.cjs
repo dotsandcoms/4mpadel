@@ -17,7 +17,7 @@ function host() {
     react: hooks,
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
     'react-native': { Keyboard: { dismiss() {} }, ...Object.fromEntries(['ActivityIndicator', 'Pressable', 'ScrollView', 'Text', 'TextInput', 'View'].map(n => [n, n])) },
-    'expo-image': { Image: 'Image' }, '@/theme/tokens': { brand: {} }, './event-ui': {}, '@/lib/event-rules': {},
+    'expo-image': { Image: 'Image' }, '@/theme/tokens': { brand: {}, lightBrand: {} }, './event-ui': {}, '@/lib/event-rules': {},
     '@/lib/supabase': { supabase: { rpc: (name, args) => name === 'get_event_registrations_for_matching' ? Promise.resolve({ data: [{ email: 'brad@example.com', division_id: 'men40' }] }) : new Promise(resolve => calls.push({ name, args, resolve })) } },
   };
   const source = fs.readFileSync('src/components/events/registration-options.tsx', 'utf8') + '\nexport { PartnerSearch, hasSoloEntry, getPartnerAvailability };';
