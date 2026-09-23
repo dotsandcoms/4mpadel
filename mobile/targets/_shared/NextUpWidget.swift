@@ -166,7 +166,7 @@ struct ScheduleWidgetView: View {
     Label(item.status, systemImage: item.status == "Payment pending" ? "exclamationmark.circle.fill" : item.status == "Saved event" ? "bookmark.fill" : "checkmark.circle.fill")
       .font(.system(size: 10, weight: .semibold)).lineLimit(1)
       .foregroundStyle(statusColor(item))
-      .padding(.horizontal, 7).padding(.vertical, 5)
+      .padding(.horizontal, 8).padding(.vertical, 4)
       .background(statusColor(item).opacity(0.12), in: Capsule())
   }
 
@@ -176,13 +176,13 @@ struct ScheduleWidgetView: View {
     } else if let countdown = item.countdown(at: entry.date) {
       let days = max(0, Int(countdown.end.timeIntervalSince(entry.date)) / 86400)
       let clockEnd = countdown.end.addingTimeInterval(-Double(days * 86400))
-      VStack(alignment: .leading, spacing: 3) {
+      VStack(alignment: .leading, spacing: 2) {
         Text(countdown.label == "Starts in" ? countdown.label : "\(countdown.label) in").font(.system(size: 9, weight: .semibold))
         HStack(spacing: 6) {
           VStack(spacing: 1) {
             Text(String(format: "%02d", days)).font(.system(size: 14, weight: .semibold, design: .monospaced))
             Text("DAYS").font(.system(size: 7, weight: .medium))
-          }.frame(width: 24)
+          }.frame(maxWidth: .infinity)
           Text(":").font(.system(size: 14)).padding(.bottom, 9)
           VStack(spacing: 1) {
             Text(timerInterval: entry.date...max(entry.date, clockEnd), countsDown: true, showsHours: true)
@@ -194,9 +194,11 @@ struct ScheduleWidgetView: View {
               }
             }
           }.frame(minWidth: 72, maxWidth: 92)
+            .frame(maxWidth: .infinity)
         }
+        .frame(maxWidth: .infinity)
         .foregroundStyle(ink)
-        .padding(.horizontal, 6).padding(.vertical, 4)
+        .padding(.horizontal, 6).padding(.vertical, 3)
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(accent.opacity(0.35), lineWidth: 1))
       }
       .accessibilityElement(children: .combine)
@@ -216,9 +218,9 @@ struct ScheduleWidgetView: View {
   }
 
   private var phoneCard: some View {
-    VStack(alignment: .leading, spacing: 6) {
+    VStack(alignment: .leading, spacing: 4) {
       HStack(alignment: .center) {
-        Text("4M").font(.system(size: 19, weight: .black)).foregroundStyle(ink)
+        Text("4M").font(.system(size: 17, weight: .black)).foregroundStyle(ink)
         Text(entry.category.heading).font(.system(size: 9, weight: .bold)).tracking(1.2).foregroundStyle(muted)
         Spacer(minLength: 0)
         if let next = entry.next, next.isLive(at: entry.date) {
@@ -239,11 +241,11 @@ struct ScheduleWidgetView: View {
               Text(datePart(next, "MMM").uppercased()).font(.system(size: 10, weight: .heavy)).tracking(1.5)
               Text(datePart(next, "dd")).font(.system(size: 34, weight: .bold, design: .rounded)).monospacedDigit()
               Text(datePart(next, "EEE").uppercased()).font(.system(size: 9, weight: .bold)).tracking(1)
-            }.foregroundStyle(accent).frame(width: 62, height: 76)
+            }.foregroundStyle(accent).frame(width: 62, height: 80)
               .background(accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
-            VStack(alignment: .leading, spacing: 5) {
-              Text(next.title).font(.system(size: 15, weight: .bold)).lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 3) {
+              Text(next.title).font(.system(size: 14, weight: .bold)).lineLimit(1)
+                .minimumScaleFactor(0.85)
               eventTiming(next).font(.system(size: 11, weight: .semibold)).foregroundStyle(accent)
               if !next.venue.isEmpty {
                 Label(next.venue, systemImage: "mappin.and.ellipse")
@@ -262,7 +264,7 @@ struct ScheduleWidgetView: View {
           eventTiming(next).font(.system(size: 10)).foregroundStyle(accent)
         }
         Spacer(minLength: 0)
-        HStack(spacing: 4) {
+        HStack(alignment: .center, spacing: 4) {
           statusBadge(next)
           Spacer(minLength: 0)
           if isMedium {
