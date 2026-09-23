@@ -11,7 +11,7 @@ import {
   eventDayParts,
   eventLocation,
   featuredBackgroundSource,
-  featuredCtaLabel,
+  resolveFeaturedCta,
   formatEventRange,
   parseDay,
   resolveScheduleEntryCta,
@@ -386,7 +386,7 @@ export function RecentResultCard({ event, onPress }: CardProps) {
   );
 }
 
-export function FeaturedCard({ event, onPress }: CardProps) {
+export function FeaturedCard({ event, onPress, onCta }: CardProps) {
   const poster = event.poster_image_url?.trim();
   const posterKey = `${event.id}:${poster ?? ''}`;
   const [failedPoster, setFailedPoster] = useState<string | null>(null);
@@ -394,7 +394,7 @@ export function FeaturedCard({ event, onPress }: CardProps) {
   const label = sapaLabel(event.sapa_status);
   const range = formatEventRange(event.start_date, event.end_date);
   const name = event.event_name || 'Featured event';
-  const cta = featuredCtaLabel(event);
+  const cta = resolveFeaturedCta(event);
   return (
     <View style={{ borderRadius: 20, backgroundColor: brand.elevated, borderWidth: 1, borderColor: brand.edge, overflow: 'hidden' }}>
       <PressableScale onPress={onPress} accessibilityRole="button" accessibilityLabel={`${name}. ${range}. ${event.city || ''}`}>
@@ -416,8 +416,8 @@ export function FeaturedCard({ event, onPress }: CardProps) {
       </PressableScale>
       <View style={{ padding: 16, paddingTop: 0, gap: 12 }}>
         <RegCountdown opensAt={event.registration_opens_at} closesAt={event.registration_closes_at} accent={brand.accent} cutout={brand.elevated} compact fullWidth />
-        <PressableScale onPress={onPress} accessibilityRole="button" accessibilityLabel={`${cta}: ${name}`} style={{ backgroundColor: brand.padel, minHeight: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: brand.premium, fontSize: 14, fontWeight: '700' }}>{cta}</Text>
+        <PressableScale onPress={onCta ?? onPress} accessibilityRole="button" accessibilityLabel={`${cta.label}: ${name}`} style={{ backgroundColor: brand.padel, minHeight: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ color: brand.premium, fontSize: 14, fontWeight: '700' }}>{cta.label}</Text>
         </PressableScale>
       </View>
     </View>

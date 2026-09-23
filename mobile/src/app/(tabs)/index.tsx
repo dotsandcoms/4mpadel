@@ -45,6 +45,7 @@ import {
   EMPTY_HOME,
   eventPath,
   fetchHomeBundle,
+  resolveFeaturedCta,
   type CalendarEvent,
   type HomeBundle,
   type PendingAction,
@@ -140,6 +141,15 @@ export default function HomeScreen() {
 
   async function openEvent(event: CalendarEvent) {
     await openSitePath(eventPath(event));
+  }
+
+  function openFeaturedAction(event: CalendarEvent) {
+    const cta = resolveFeaturedCta(event);
+    if (event.is_manual && (cta.action === 'pay' || cta.action === 'register')) {
+      router.push({ pathname: '/events/register', params: { id: String(event.id), ...(cta.action === 'pay' ? { mode: 'pay' } : {}) } });
+    } else {
+      void openEvent(event);
+    }
   }
 
   function openPending(action: PendingAction) {
@@ -392,7 +402,7 @@ export default function HomeScreen() {
                 : undefined
             }>
             {bundle.featured.length ? (
-              <EventSlide events={bundle.featured} onOpen={openEvent} />
+              <EventSlide events={bundle.featured} onOpen={openEvent} onAction={openFeaturedAction} />
             ) : (
               <EmptyBlock
                 title="No featured events right now"
@@ -436,9 +446,11 @@ export default function HomeScreen() {
 function EventSlide({
   events,
   onOpen,
+  onAction,
 }: {
   events: CalendarEvent[];
   onOpen: (event: CalendarEvent) => void;
+  onAction: (event: CalendarEvent) => void;
 }) {
   const [page, setPage] = useState(0);
   const ids = events.map((event) => event.id).join(',');
@@ -456,7 +468,7 @@ function EventSlide({
 
   return (
     <View>
-      <FeaturedCard event={event} onPress={() => onOpen(event)} />
+      <FeaturedCard event={event} onPress={() => onOpen(event)} onCta={() => onAction(event)} />
       {many ? (
         <>
           <Pressable

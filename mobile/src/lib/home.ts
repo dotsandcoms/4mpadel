@@ -36,6 +36,8 @@ export type CalendarEvent = {
   fromSchedule?: boolean;
   isRegistered?: boolean;
   isPaid?: boolean;
+  hasOutstandingPayment?: boolean;
+  registrationKnown?: boolean;
   winnerName?: string | null;
   custom_image_url?: string | null;
   poster_image_url?: string | null;
@@ -108,7 +110,7 @@ export async function fetchHomeBundle(email?: string | null, options?: { strictS
       fetchHappeningNow(),
       fetchFeatured(),
       fetchRecentResults(),
-      normalised ? fetchSchedule(normalised, options?.strictSchedule) : Promise.resolve({ upcoming: [], past: [] }),
+      normalised ? fetchSchedule(normalised, options?.strictSchedule) : Promise.resolve({ upcoming: [], past: [], registrationByEvent: new Map<number, RegistrationState>() }),
       normalised ? fetchPendingPayments(normalised) : Promise.resolve([] as PendingAction[]),
     ]);
 
@@ -130,7 +132,11 @@ export async function fetchHomeBundle(email?: string | null, options?: { strictS
   return {
     player: player ? { ...player, winLoss } : null,
     happeningNow,
-    featured,
+    featured: featured.map(event => ({
+      ...event,
+      ...(schedule.registrationByEvent?.get(event.id) ?? { isRegistered: false, isPaid: false, hasOutstandingPayment: false }),
+      registrationKnown: schedule.registrationByEvent !== null,
+    })),
     recentResults,
     upcomingSchedule: schedule.upcoming,
     pastSchedule: schedule.past,
@@ -499,6 +505,38 @@ async function fetchRecentResults(): Promise<CalendarEvent[]> {
   }
 }
 
+export type RegistrationState = { isRegistered: boolean; isPaid: boolean; hasOutstandingPayment: boolean };
+
+/** Aggregate all divisions; an outstanding entry takes precedence over a paid one. */
+export function registrationStates(rows: Array<{ event_id: number; email?: string | null; payment_status?: string | null; partner_payment_status?: string | null }>, paidParticipants: Array<{ event_id: number | null }>, email: string) {
+  const states = new Map<number, RegistrationState>();
+  for (const row of rows) {
+    const state = states.get(row.event_id) ?? { isRegistered: true, isPaid: false, hasOutstandingPayment: false };
+    const status = String(row.email?.trim().toLowerCase() === email.trim().toLowerCase() ? row.payment_status ?? '' : row.partner_payment_status ?? '').toLowerCase();
+    state.isPaid ||= status === 'paid';
+    state.hasOutstandingPayment ||= ['pending', 'failed', 'unpaid'].includes(status);
+    states.set(row.event_id, state);
+  }
+  for (const row of paidParticipants) {
+    if (!row.event_id) continue;
+    const state = states.get(row.event_id) ?? { isRegistered: true, isPaid: false, hasOutstandingPayment: false };
+    state.isPaid = true;
+    states.set(row.event_id, state);
+  }
+  return states;
+}
+
+export function resolveFeaturedCta(event: CalendarEvent): { label: string; action: 'register' | 'pay' | 'manage' | 'view' } {
+  if (isEventFinished(event)) return { label: 'View results', action: 'view' };
+  if (event.registrationKnown !== true) return { label: 'View event', action: 'view' };
+  if (event.isRegistered) {
+    if (event.hasOutstandingPayment && event.allow_payments === true) return { label: 'Complete payment', action: 'pay' };
+    return { label: 'View my entry', action: 'manage' };
+  }
+  if (featuredCtaLabel(event) === 'View') return { label: 'View event', action: 'view' };
+  return { label: 'Register', action: 'register' };
+}
+
 async function fetchSchedule(email: string, strict = false) {
   try {
     const responses = await Promise.all([
@@ -525,6 +563,9 @@ async function fetchSchedule(email: string, strict = false) {
       if (failed?.error) throw failed.error;
     }
     const [{ data: scheduled }, { data: regs }, { data: paidParts }] = responses;
+    const registrationByEvent = responses.some(response => response.error)
+      ? null
+      : registrationStates(regs ?? [], paidParts ?? [], email);
     const byId = new Map<number, CalendarEvent>();
     const scheduledIds = new Set<number>();
     const registeredIds = new Set<number>();
@@ -565,10 +606,10 @@ async function fetchSchedule(email: string, strict = false) {
     }
     upcoming.sort((a, b) => (a.start_date || '').localeCompare(b.start_date || ''));
     past.sort((a, b) => (b.start_date || '').localeCompare(a.start_date || ''));
-    return { upcoming, past };
+    return { upcoming, past, registrationByEvent };
   } catch (error) {
     if (strict) throw error;
-    return { upcoming: [] as CalendarEvent[], past: [] as CalendarEvent[] };
+    return { upcoming: [] as CalendarEvent[], past: [] as CalendarEvent[], registrationByEvent: null };
   }
 }
 
