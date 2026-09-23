@@ -413,7 +413,7 @@ function CareerBlock({
             </View>
           ) : null}
           {rankings.length ? (
-            <View className="mb-4 rounded-2xl border border-court-edge bg-court-surface p-4">
+            <View className="rounded-2xl border border-court-edge bg-court-surface p-4">
               <Text className="mb-4 text-[10px] font-black uppercase tracking-widest text-court-faint">
                 Organizational Rankings
               </Text>
@@ -472,46 +472,6 @@ function CareerBlock({
               </Text>
             </View>
           ) : null}
-          {player.match_form ? (
-            <View className="mb-4 rounded-2xl border border-court-edge bg-court-surface p-4">
-              <Text className="mb-2 text-[10px] font-black uppercase tracking-widest text-court-faint">
-                Recent Form
-              </Text>
-              <View className="flex-row" style={{ gap: 6 }}>
-                {player.match_form
-                  .split(/\s+/)
-                  .filter(Boolean)
-                  .map((mark, index) => (
-                    <View
-                      key={`${mark}-${index}`}
-                      className="h-6 w-6 items-center justify-center rounded-md"
-                      style={{
-                        backgroundColor: mark === 'W' ? brand.padel : '#EF4444',
-                      }}>
-                      <Text
-                        className="text-[10px] font-black"
-                        style={{ color: mark === 'W' ? '#000' : '#fff' }}>
-                        {mark}
-                      </Text>
-                    </View>
-                  ))}
-              </View>
-            </View>
-          ) : null}
-          <View className="mb-4 rounded-2xl border border-court-edge bg-court-surface p-4">
-            <Text className="mb-1 text-[10px] font-black uppercase tracking-widest text-court-faint">
-              Current Points
-            </Text>
-            <Text className="text-3xl font-black text-court-ink">{player.points ?? '—'}</Text>
-          </View>
-          <View className="rounded-2xl border border-court-edge bg-court-surface p-4">
-            <Text className="mb-1 text-[10px] font-black uppercase tracking-widest text-court-faint">
-              Division
-            </Text>
-            <Text className="text-xl font-bold uppercase text-court-accent">
-              {player.category || 'Unassigned'}
-            </Text>
-          </View>
         </View>
       ) : null}
     </Pressable>
