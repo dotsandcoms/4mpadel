@@ -24,6 +24,7 @@ type Slide = {
   title: string;
   body: string;
   preview: ReactNode;
+  previewFrom?: 'top' | 'bottom';
 };
 
 const SLIDES: Slide[] = [
@@ -44,12 +45,14 @@ const SLIDES: Slide[] = [
     title: 'Enter with\nyour partner.',
     body: 'Add your partner and lock in the team on one entry.',
     preview: <PartnerPreview />,
+    previewFrom: 'top',
   },
   {
     eyebrow: 'Your padel journey',
     title: 'Every match is part\nof your story.',
     body: 'Keep your results, match history and national ranking together in one place.',
     preview: <RankingPreview />,
+    previewFrom: 'top',
   },
 ];
 
@@ -146,7 +149,7 @@ export default function OnboardingScreen() {
             if (e.nativeEvent.actionName === 'decrement') step(-1);
           }}>
           <View className="flex-1 justify-center px-7">
-            <FadeUp key={`preview-${index}`}>{slide.preview}</FadeUp>
+            <FadeUp key={`preview-${index}`} from={slide.previewFrom}>{slide.preview}</FadeUp>
           </View>
           <View className="px-7 pb-2">
             <FadeUp key={`copy-${index}`} delay={80}>
