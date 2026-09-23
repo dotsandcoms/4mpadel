@@ -55,6 +55,34 @@ const Admin = () => {
     // Pending organisation applications (events are managed directly by their organisations)
     const [orgBadgeCount, setOrgBadgeCount] = useState(0);
     const [clubBadgeCount, setClubBadgeCount] = useState(0);
+    const [coachBadgeCount, setCoachBadgeCount] = useState(0);
+
+    useEffect(() => {
+        const canSeeCoaches = permissions?.role === 'super_admin'
+            || (permissions?.allowed_tabs || []).includes('coaches');
+        if (!canSeeCoaches) return;
+
+        let cancelled = false;
+        const fetchCoachBadgeCount = async () => {
+            try {
+                const { count, error } = await supabase
+                    .from('coach_applications')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('status', 'pending');
+                if (error) throw error;
+                if (!cancelled) setCoachBadgeCount(count || 0);
+            } catch (err) {
+                console.error('Failed to fetch coach badge count:', err);
+            }
+        };
+
+        fetchCoachBadgeCount();
+        const interval = setInterval(fetchCoachBadgeCount, 30000);
+        return () => {
+            cancelled = true;
+            clearInterval(interval);
+        };
+    }, [permissions]);
 
     useEffect(() => {
         const hasOrganisationMembership = Boolean(permissions?.orgs?.length || permissions?.org?.id);
@@ -351,7 +379,7 @@ const Admin = () => {
                 permissions={permissions}
                 player={player}
                 session={session}
-                badgeCounts={{ organisations: orgBadgeCount, clubs: clubBadgeCount }}
+                badgeCounts={{ organisations: orgBadgeCount, clubs: clubBadgeCount, coaches: coachBadgeCount }}
             />
 
             <main className={`flex-1 transition-all duration-300 ${isDesktopCollapsed ? 'lg:ml-20' : 'lg:ml-64'} p-4 md:p-8 lg:p-12 overflow-y-auto min-h-screen lg:h-screen bg-gradient-to-br from-black to-[#0a0a0a]`}>
@@ -472,7 +500,7 @@ const Admin = () => {
                                         <GalleryManager permissions={permissions} />
                                     )}
                                     {activeTab === 'coaches' && (
-                                        <CoachManager />
+                                        <CoachManager onPendingCountChange={setCoachBadgeCount} />
                                     )}
                                     {activeTab === 'finance' && (
                                         <FinanceManager />
