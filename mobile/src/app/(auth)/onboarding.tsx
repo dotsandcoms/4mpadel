@@ -28,9 +28,9 @@ type Slide = {
 
 const SLIDES: Slide[] = [
   {
-    eyebrow: 'Find your next event',
-    title: 'South African padel,\nin one place.',
-    body: 'Browse sanctioned tournaments and leagues, then enter without leaving the app.',
+    eyebrow: 'Ready to compete',
+    title: 'Find your event.\nBring your game.',
+    body: 'Explore South African tournaments and leagues, choose your competition and secure your place.',
     preview: <EventsPreview />,
   },
   {
@@ -46,9 +46,9 @@ const SLIDES: Slide[] = [
     preview: <PartnerPreview />,
   },
   {
-    eyebrow: 'Your game',
-    title: 'Know exactly\nwhere you stand.',
-    body: 'Follow your national ranking and match history, updated after every result.',
+    eyebrow: 'Your padel journey',
+    title: 'Every match is part\nof your story.',
+    body: 'Keep your results, match history and national ranking together in one place.',
     preview: <RankingPreview />,
   },
 ];
