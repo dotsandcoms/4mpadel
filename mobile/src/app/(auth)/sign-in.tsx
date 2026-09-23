@@ -268,15 +268,18 @@ export default function SignInScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
       className="flex-1 bg-court-page"
-      style={{ flex: 1, backgroundColor: brand.page }}>
+      style={{ flex: 1, backgroundColor: brand.page, paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }}>
       <ScrollView
+        style={{ flex: 1 }}
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustContentInsets={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         contentContainerStyle={{
           flexGrow: 1,
-          paddingTop: insets.top + 12,
+          paddingTop: 12,
           paddingHorizontal: 28,
-          paddingBottom: insets.bottom + 20,
+          paddingBottom: 20,
         }}>
         <FadeUp>
           <View className="items-start self-start py-2">

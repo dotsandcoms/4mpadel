@@ -61,8 +61,8 @@ export default function ResetPasswordScreen() {
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, backgroundColor: brand.page }}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 28, paddingTop: insets.top + 32, paddingBottom: insets.bottom + 24 }}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, backgroundColor: brand.page, paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }}>
+      <ScrollView style={{ flex: 1 }} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 28, paddingTop: 32, paddingBottom: 24 }}>
         <Text accessibilityRole="header" className="text-[28px] font-extrabold text-court-ink">{done ? 'Password updated' : 'Set a new password'}</Text>
         <Text className="mb-7 mt-3 text-[16px] leading-6 text-court-muted">{done ? 'Your new password is ready to use.' : 'Choose a password you haven’t used before.'}</Text>
         {!ready && !error && <ActivityIndicator color={brand.accent} accessibilityLabel="Verifying reset link" />}
