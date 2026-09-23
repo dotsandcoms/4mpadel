@@ -53,6 +53,11 @@ export function HomePlayerCard({ player, loading, onPress }: Props) {
     player.points !== undefined && player.points !== null
       ? Number(player.points).toLocaleString('en-ZA')
       : '—';
+  const movement = player.rankingChange;
+  const hasMovement = movement != null && Number.isFinite(movement) && rank !== '—';
+  const movementLabel = hasMovement
+    ? movement > 0 ? `Up ${movement} places` : movement < 0 ? `Down ${Math.abs(movement)} places` : 'Ranking unchanged'
+    : '';
   const record = player.winLoss || '—';
   const license = licenseCopy(player.license_type);
 
@@ -60,7 +65,7 @@ export function HomePlayerCard({ player, loading, onPress }: Props) {
     <PressableScale
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`View profile, ${player.name || 'player'}. Rank ${rank}, ${points} points, record ${record}${license ? `. ${license.label}` : ''}.`}
+      accessibilityLabel={`View profile, ${player.name || 'player'}. Rank ${rank}${movementLabel ? `, ${movementLabel}` : ''}, ${points} points, record ${record}${license ? `. ${license.label}` : ''}.`}
       className="rounded-2xl border border-court-edge bg-court-elevated p-4">
       <View className="flex-row items-stretch">
         <View className="h-16 w-16 items-center justify-center self-center overflow-hidden rounded-full border-2 border-court-edge bg-court-elevated">
@@ -109,7 +114,7 @@ export function HomePlayerCard({ player, loading, onPress }: Props) {
         </View>
       </View>
       <View className="mt-4 flex-row items-stretch rounded-xl bg-court-surface px-3 py-3">
-        <Stat value={rank} label="Rank" color={brand.premium} lead />
+        <Stat value={rank} label="Rank" color={brand.premium} lead movement={hasMovement ? movement : undefined} />
         <View className="w-px self-stretch bg-court-edge" />
         <Stat value={points} label="Points" color={brand.accent} />
         <View className="w-px self-stretch bg-court-edge" />
@@ -124,11 +129,13 @@ function Stat({
   label,
   color,
   lead,
+  movement,
 }: {
   value: string;
   label: string;
   color: string;
   lead?: boolean;
+  movement?: number;
 }) {
   return (
     <View className={`min-w-0 flex-1 ${lead ? 'pr-2.5' : 'px-2.5'}`}>
@@ -137,6 +144,11 @@ function Stat({
         style={{ color, fontVariant: ['tabular-nums'] }}>
         {value}
       </Text>
+      {movement !== undefined ? (
+        <Text style={{ marginTop: 2, fontSize: 12, fontWeight: '700', color: movement > 0 ? brand.accent : movement < 0 ? brand.danger : brand.faint, fontVariant: ['tabular-nums'] }}>
+          {movement > 0 ? `▲ ${movement}` : movement < 0 ? `▼ ${Math.abs(movement)}` : '—'}
+        </Text>
+      ) : null}
       <Text className="mt-0.5 text-[9px] font-semibold uppercase tracking-wider text-court-faint">
         {label}
       </Text>

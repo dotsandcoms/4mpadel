@@ -1,3 +1,4 @@
+import { fetchHomeRankingChange } from '@/lib/rankings';
 import { joinedOne } from './query-result';
 import { fetchPlayerMatches, type PlayerMatch } from '@/lib/matches';
 import { supabase } from '@/lib/supabase';
@@ -62,6 +63,7 @@ export type HomePlayer = {
   license_type: string | null;
   paid_registration: boolean | null;
   winLoss: string | null;
+  rankingChange?: number | null;
 };
 
 export type PendingKind = 'payment' | 'profile';
@@ -117,20 +119,23 @@ export async function fetchHomeBundle(email?: string | null, options?: { strictS
   const pending = [...profileGaps(player), ...payments];
 
   let winLoss: string | null = null;
+  let rankingChange: number | null = null;
   let upcomingMatches: PlayerMatch[] = [];
   let pastMatches: PlayerMatch[] = [];
   if (player?.rankedin_id) {
-    const [record, matches] = await Promise.all([
+    const [record, matches, change] = await Promise.all([
       fetchWinLoss(player.rankedin_id),
       fetchPlayerMatches(player.rankedin_id),
+      fetchHomeRankingChange(player),
     ]);
     winLoss = record;
+    rankingChange = change;
     upcomingMatches = matches.upcoming;
     pastMatches = matches.past;
   }
 
   return {
-    player: player ? { ...player, winLoss } : null,
+    player: player ? { ...player, winLoss, rankingChange } : null,
     happeningNow,
     featured: featured.map(event => ({
       ...event,

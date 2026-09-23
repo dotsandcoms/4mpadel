@@ -60,3 +60,21 @@ export async function fetchTournamentWins(player: RankingPlayer): Promise<Trophy
  }
  return Array.from(groups, ([tier, events]) => ({ tier, count: events.length, events }));
 }
+
+/** Match movement to the displayed national rank; never substitute another player. */
+export async function fetchHomeRankingChange(player: { rankedin_id: string | null; rank_label: string | null; category: string | null }): Promise<number | null> {
+ if (!player.rankedin_id || !player.rank_label || player.rank_label === 'Unranked') return null;
+ const women = /women|ladies|female/i.test(player.category || '');
+ const categories = categoriesFor(15809);
+ const ordered = women ? [categories[1], categories[0]] : categories;
+ for (const category of ordered) {
+  try {
+   const data = await rankedin(`Ranking/GetRankingsAsync?rankingId=15809&rankingType=${category.type}&ageGroup=${category.age}&weekFromNow=0&language=en&skip=0&take=1000`);
+   const row = Array.isArray(data?.Payload) ? data.Payload.find((item: any) => String(item.RankedinId) === String(player.rankedin_id)) : null;
+   if (!row || Number(row.Standing) !== Number(player.rank_label)) continue;
+   const change = row.StandingDiff;
+   return change != null && String(change).trim() !== '' && Number.isFinite(Number(change)) ? Number(change) : null;
+  } catch { /* Movement is optional; the rest of the home card remains available. */ }
+ }
+ return null;
+}
