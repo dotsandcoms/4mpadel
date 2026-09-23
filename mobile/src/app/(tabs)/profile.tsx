@@ -18,7 +18,6 @@ import { NotificationBell } from '@/components/home-header';
 import {
   PROFILE_SECTIONS,
   ProfileSectionPager,
-  rankingKey,
   SectionSwitcher,
   type AgendaFilter,
   type EventScope,
@@ -40,7 +39,6 @@ import {
   fetchProfileTransactions,
   galleryOf,
   rankingsOf,
-  setPreferredRanking,
   updateGallery,
   type PlayerRow,
   type ProfileBundle,
@@ -166,17 +164,6 @@ export default function ProfileScreen() {
     const path = eventPath(event);
     await openSitePath(path);
     void action;
-  }
-
-  async function chooseRanking(row: RankingRow) {
-    if (!player) return;
-    try {
-      await setPreferredRanking(player.id, row);
-      flash(`Primary ranking updated to ${row.org} - ${row.age_group || 'Open'}`, 'success');
-      await load(true);
-    } catch (err) {
-      flash(err instanceof Error ? err.message : 'Unable to update ranking.');
-    }
   }
 
   async function removeGalleryImage(index: number) {
@@ -313,14 +300,8 @@ export default function ProfileScreen() {
                   <>
                     <CareerBlock
                       player={player}
-                      rankings={rankings}
                       open={careerOpen}
                       onToggle={() => setCareerOpen((current) => !current)}
-                      onChoose={chooseRanking}
-                      onShowDetails={(row) => {
-                        setSelectedRanking(row);
-                        goSection('rankings');
-                      }}
                     />
                     <GalleryBlock
                       gallery={gallery}
@@ -356,21 +337,12 @@ export default function ProfileScreen() {
 }
 
 
-function CareerBlock({
-  player,
-  rankings,
-  open,
-  onToggle,
-  onChoose,
-  onShowDetails,
-}: {
+function CareerBlock({ player, open, onToggle }: {
   player: PlayerRow;
-  rankings: RankingRow[];
   open: boolean;
   onToggle: () => void;
-  onChoose: (row: RankingRow) => void;
-  onShowDetails: (row: RankingRow) => void;
 }) {
+  if (!player.skill_rating) return null;
   return (
     <Pressable
       onPress={onToggle}
@@ -410,66 +382,6 @@ function CareerBlock({
                   />
                 </View>
               </View>
-            </View>
-          ) : null}
-          {rankings.length ? (
-            <View className="rounded-2xl border border-court-edge bg-court-surface p-4">
-              <Text className="mb-4 text-[10px] font-black uppercase tracking-widest text-court-faint">
-                Organizational Rankings
-              </Text>
-              {rankings.map((row, index) => {
-                const preferred = player.preferred_ranking
-                  ? player.preferred_ranking === rankingKey(row) &&
-                    rankings.findIndex((item) => rankingKey(item) === player.preferred_ranking) === index
-                  : index === 0;
-                const broll = (row.org || '').toLowerCase().includes('broll');
-                return (
-                  <Pressable
-                    key={`${rankingKey(row)}-${index}`}
-                    onPress={() => onChoose(row)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${row.org || 'SAPA ranking'}, ${row.age_group || 'Open'}`}
-                    className="relative mb-2 rounded-xl border p-3"
-                    style={{
-                      backgroundColor: preferred ? brand.glass : brand.elevated,
-                      borderColor: preferred ? brand.accent : brand.edge,
-                    }}>
-                    <View className="flex-row justify-between">
-                      <View className="min-w-0 flex-1">
-                        <Text
-                          className="text-[11px] font-semibold"
-                          style={{ color: broll ? brand.danger : brand.accent }}>
-                          {row.org || 'SAPA RANKING'}
-                        </Text>
-                        <Text className="text-xs font-bold uppercase text-court-ink">
-                          {row.age_group || row.division || 'Open'}
-                        </Text>
-                        <Text className="text-[11px] font-medium text-court-faint">
-                          {row.match_type}
-                        </Text>
-                      </View>
-                      <View className="items-end">
-                        <Text className="text-sm font-black text-court-ink">#{row.rank}</Text>
-                        <Text className="text-[11px] font-semibold text-court-faint">
-                          {row.points} PTS
-                        </Text>
-                      </View>
-                    </View>
-                    <Pressable
-                      onPress={() => onShowDetails(row)}
-                      accessibilityRole="button"
-                      accessibilityLabel="Show ranking details"
-                      className="mt-2 min-h-11 justify-center self-end">
-                      <Text className="text-[11px] font-semibold text-court-accent">
-                        Show Details →
-                      </Text>
-                    </Pressable>
-                  </Pressable>
-                );
-              })}
-              <Text className="mt-2 text-center text-xs font-medium text-court-muted">
-                Tap a ranking to set as primary
-              </Text>
             </View>
           ) : null}
         </View>
