@@ -61,7 +61,15 @@ struct ScheduleTimeline: AppIntentTimelineProvider {
     // Advance past expired events even when the phone has not been opened.
     let changes = snapshot.items.flatMap { [$0.expiresAt, $0.startAt, $0.registrationOpensAt, $0.registrationClosesAt].compactMap { $0 } }.map { Date(timeIntervalSince1970: $0 / 1000) }
       .filter { $0 > now && $0 < now.addingTimeInterval(86400) }
-    let dates = Array(Set([now] + changes)).sorted()
+    // Rebuild the day column when the remaining duration crosses a whole day.
+    // SwiftUI's native timer keeps the hours/minutes/seconds ticking between entries.
+    let dayChanges = snapshot.items.compactMap { item -> Date? in
+      guard let countdown = item.countdown(at: now) else { return nil }
+      let remaining = countdown.end.timeIntervalSince(now)
+      guard remaining >= 86400 else { return nil }
+      return now.addingTimeInterval(remaining.truncatingRemainder(dividingBy: 86400) + 1)
+    }
+    let dates = Array(Set([now] + changes + dayChanges)).sorted()
     let current = ScheduleEntry(date: now, snapshot: snapshot, category: configuration.category)
     let artwork = await loadArtwork(current.next?.imageUrl)
     return Timeline(entries: dates.map {
@@ -162,21 +170,36 @@ struct ScheduleWidgetView: View {
       .background(statusColor(item).opacity(0.12), in: Capsule())
   }
 
-  private func deadlineLabel(_ date: Date) -> String {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_ZA")
-    formatter.timeZone = TimeZone(identifier: "Africa/Johannesburg")
-    formatter.dateFormat = "d MMM, HH:mm 'SAST'"
-    return formatter.string(from: date)
-  }
-
   @ViewBuilder private func eventTiming(_ item: ScheduleItem) -> some View {
     if item.isLive(at: entry.date) {
       Text("Tournament underway").lineLimit(1)
     } else if let countdown = item.countdown(at: entry.date) {
-      Text("\(countdown.label) \(deadlineLabel(countdown.end))")
-        .lineLimit(2)
-        .minimumScaleFactor(0.85)
+      let days = max(0, Int(countdown.end.timeIntervalSince(entry.date)) / 86400)
+      let clockEnd = countdown.end.addingTimeInterval(-Double(days * 86400))
+      VStack(alignment: .leading, spacing: 3) {
+        Text(countdown.label == "Starts in" ? countdown.label : "\(countdown.label) in").font(.system(size: 9, weight: .semibold))
+        HStack(spacing: 6) {
+          VStack(spacing: 1) {
+            Text(String(format: "%02d", days)).font(.system(size: 14, weight: .semibold, design: .monospaced))
+            Text("DAYS").font(.system(size: 7, weight: .medium))
+          }.frame(width: 24)
+          Text(":").font(.system(size: 14)).padding(.bottom, 9)
+          VStack(spacing: 1) {
+            Text(timerInterval: entry.date...max(entry.date, clockEnd), countsDown: true, showsHours: true)
+              .font(.system(size: 14, weight: .semibold, design: .monospaced))
+              .monospacedDigit().multilineTextAlignment(.center)
+            HStack(spacing: 0) {
+              ForEach(["HRS", "MINS", "SECS"], id: \.self) { label in
+                Text(label).font(.system(size: 7, weight: .medium)).frame(maxWidth: .infinity)
+              }
+            }
+          }.frame(minWidth: 72, maxWidth: 92)
+        }
+        .foregroundStyle(ink)
+        .padding(.horizontal, 6).padding(.vertical, 4)
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(accent.opacity(0.35), lineWidth: 1))
+      }
+      .accessibilityElement(children: .combine)
     } else if let closes = item.registrationClosesAt, closes <= entry.date.timeIntervalSince1970 * 1000 {
       Text("Registration closed").lineLimit(1)
     } else {
