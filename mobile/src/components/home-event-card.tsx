@@ -387,6 +387,10 @@ export function RecentResultCard({ event, onPress }: CardProps) {
 }
 
 export function FeaturedCard({ event, onPress }: CardProps) {
+  const poster = event.poster_image_url?.trim();
+  const posterKey = `${event.id}:${poster ?? ''}`;
+  const [failedPoster, setFailedPoster] = useState<string | null>(null);
+  const showPoster = !!poster && failedPoster !== posterKey;
   const label = sapaLabel(event.sapa_status);
   const range = formatEventRange(event.start_date, event.end_date);
   const name = event.event_name || 'Featured event';
@@ -395,7 +399,13 @@ export function FeaturedCard({ event, onPress }: CardProps) {
     <View style={{ borderRadius: 20, backgroundColor: brand.elevated, borderWidth: 1, borderColor: brand.edge, overflow: 'hidden' }}>
       <PressableScale onPress={onPress} accessibilityRole="button" accessibilityLabel={`${name}. ${range}. ${event.city || ''}`}>
         <View style={{ flexDirection: 'row', padding: 16, gap: 16 }}>
-          <Image source={featuredBackgroundSource(event)} contentFit="cover" style={{ width: 90, height: 118, borderRadius: 12 }} />
+          <Image
+            key={showPoster ? posterKey : `default-${event.id}`}
+            source={showPoster ? { uri: poster } : featuredBackgroundSource(event)}
+            contentFit={showPoster ? 'contain' : 'cover'}
+            onError={showPoster ? () => setFailedPoster(posterKey) : undefined}
+            style={{ width: 90, height: 118, borderRadius: 12, backgroundColor: brand.surface }}
+          />
           <View style={{ flex: 1, gap: 8 }}>
             <Text style={{ color: brand.accent, fontSize: 11, fontWeight: '700', letterSpacing: 0.8 }}>{event.organiser_badge_text?.trim() || (label ? `SAPA ${label.toUpperCase()}` : '4M TOURNAMENT')}</Text>
             <Text style={{ color: brand.premium, fontSize: 20, fontWeight: '700', lineHeight: 25 }}>{name}</Text>
