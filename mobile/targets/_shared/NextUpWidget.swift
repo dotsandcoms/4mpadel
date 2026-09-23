@@ -162,15 +162,21 @@ struct ScheduleWidgetView: View {
       .background(statusColor(item).opacity(0.12), in: Capsule())
   }
 
+  private func deadlineLabel(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_ZA")
+    formatter.timeZone = TimeZone(identifier: "Africa/Johannesburg")
+    formatter.dateFormat = "d MMM, HH:mm 'SAST'"
+    return formatter.string(from: date)
+  }
+
   @ViewBuilder private func eventTiming(_ item: ScheduleItem) -> some View {
     if item.isLive(at: entry.date) {
       Text("Tournament underway").lineLimit(1)
     } else if let countdown = item.countdown(at: entry.date) {
-      HStack(spacing: 4) {
-        Text(countdown.label).lineLimit(1)
-        Text(timerInterval: entry.date...countdown.end, countsDown: true)
-          .monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
-      }.accessibilityElement(children: .combine)
+      Text("\(countdown.label) \(deadlineLabel(countdown.end))")
+        .lineLimit(2)
+        .minimumScaleFactor(0.85)
     } else if let closes = item.registrationClosesAt, closes <= entry.date.timeIntervalSince1970 * 1000 {
       Text("Registration closed").lineLimit(1)
     } else {
