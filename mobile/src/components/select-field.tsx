@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { brand } from '@/theme/tokens';
+import { lightBrand as brand } from '@/theme/tokens';
 
 type Option = { label: string; value: string; group?: string };
 
@@ -31,8 +31,8 @@ type Props = {
 };
 
 /** iOS grouped-secondary surface — sits above page black so the sheet reads. */
-const SHEET = '#1C1C1E';
-const ROW = '#2C2C2E';
+const SHEET = brand.page;
+const ROW = brand.elevated;
 
 /**
  * Native-first select. Short lists use the system action sheet (iOS) or a
@@ -86,7 +86,7 @@ export function SelectField({
           title: label,
           options: [...labels, 'Cancel'],
           cancelButtonIndex: labels.length,
-          userInterfaceStyle: 'dark',
+          userInterfaceStyle: 'light',
         },
         (index) => {
           if (index != null && index < options.length) onChange(options[index].value);
@@ -108,17 +108,17 @@ export function SelectField({
         accessibilityLabel={label}
         accessibilityValue={{ text: selected?.label ?? placeholder }}
         accessibilityState={{ expanded: open }}
-        className="h-[52px] flex-row items-center rounded-[14px] bg-elevated px-3.5"
+        className="h-[52px] flex-row items-center rounded-[14px] bg-court-elevated px-3.5"
         style={{
           gap: 8,
           borderWidth: 2,
-          borderColor: invalid ? brand.danger : selected ? 'rgba(204,255,0,0.35)' : brand.edge,
+          borderColor: invalid ? brand.danger : selected ? brand.accent : brand.edge,
         }}>
         {badge ? (
           <View
             className="mr-2.5 h-7 min-w-7 items-center justify-center rounded-md px-1.5"
             style={{ backgroundColor: 'rgba(204,255,0,0.12)' }}>
-            <Text className="text-[11px] font-extrabold" style={{ color: brand.padel }}>
+            <Text className="text-[11px] font-extrabold" style={{ color: brand.accent }}>
               {badge}
             </Text>
           </View>
@@ -133,14 +133,14 @@ export function SelectField({
           <SymbolView
             name={{ ios: 'checkmark', android: 'check', web: 'check' }}
             size={14}
-            tintColor={brand.padel}
+            tintColor={brand.accent}
             accessibilityElementsHidden
           />
         ) : null}
         <SymbolView name="chevron.down" size={13} tintColor={brand.placeholder} />
       </Pressable>
       {error ? (
-        <Text className="mt-2 px-1 text-[13px] leading-5 text-danger">{error}</Text>
+        <Text className="mt-2 px-1 text-[13px] leading-5 text-court-danger">{error}</Text>
       ) : null}
 
       {searchable ? (
@@ -201,7 +201,7 @@ function SearchSheet({
       onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: SHEET }}>
         <View className="flex-row items-center justify-between px-5 pt-4" style={{ minHeight: 52 }}>
-          <Text accessibilityRole="header" className="text-[20px] font-extrabold text-premium">
+          <Text accessibilityRole="header" className="text-[20px] font-extrabold text-court-ink">
             {label}
           </Text>
           <Pressable
@@ -209,7 +209,7 @@ function SearchSheet({
             accessibilityRole="button"
             accessibilityLabel="Close"
             className="h-11 justify-center px-1">
-            <Text className="text-[16px] font-semibold" style={{ color: brand.padel }}>
+            <Text className="text-[16px] font-semibold" style={{ color: brand.accent }}>
               Done
             </Text>
           </Pressable>
@@ -230,8 +230,8 @@ function SearchSheet({
             borderWidth: 2,
             borderColor: brand.edge,
           }}
-          cursorColor={brand.padel}
-          keyboardAppearance="dark"
+          cursorColor={brand.accent}
+          keyboardAppearance="light"
         />
 
         <FlatList
@@ -281,11 +281,11 @@ function DialogSheet({
             borderRadius: 16,
             maxHeight: '72%',
             borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.12)',
+            borderColor: brand.edge,
           }}>
           <Text
             accessibilityRole="header"
-            className="px-5 pb-2 pt-5 text-[18px] font-extrabold text-premium">
+            className="px-5 pb-2 pt-5 text-[18px] font-extrabold text-court-ink">
             {label}
           </Text>
           <ScrollView keyboardShouldPersistTaps="handled">
@@ -302,8 +302,8 @@ function DialogSheet({
             onPress={onClose}
             accessibilityRole="button"
             accessibilityLabel="Cancel"
-            className="min-h-12 items-center justify-center border-t border-edge">
-            <Text className="text-[16px] font-semibold" style={{ color: brand.padel }}>
+            className="min-h-12 items-center justify-center border-t border-court-edge">
+            <Text className="text-[16px] font-semibold" style={{ color: brand.accent }}>
               Cancel
             </Text>
           </Pressable>
@@ -332,7 +332,7 @@ function OptionRow({
       <Text
         className="flex-1 text-[16px]"
         style={{
-          color: active ? brand.padel : brand.premium,
+          color: active ? brand.accent : brand.premium,
           fontWeight: active ? '700' : '500',
         }}>
         {option.label}
@@ -341,7 +341,7 @@ function OptionRow({
         <SymbolView
           name={{ ios: 'checkmark', android: 'check', web: 'check' }}
           size={16}
-          tintColor={brand.padel}
+          tintColor={brand.accent}
           accessibilityElementsHidden
         />
       ) : null}

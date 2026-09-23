@@ -33,7 +33,7 @@ import {
   SA_REGIONS,
 } from '@/lib/registration';
 import { supabase } from '@/lib/supabase';
-import { brand } from '@/theme/tokens';
+import { lightBrand as brand } from '@/theme/tokens';
 
 type Form = {
   contactNumber: string;
@@ -214,9 +214,9 @@ export default function EditProfileScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      className="flex-1 bg-page"
+      className="flex-1 bg-court-page"
       style={{ flex: 1, backgroundColor: brand.page }}>
-      <View className="border-b border-edge bg-page" style={{ paddingTop: insets.top }}>
+      <View className="border-b border-court-edge bg-court-page" style={{ paddingTop: insets.top }}>
         <View className="h-[44px] justify-center px-2">
           <Pressable
             onPress={goBack}
@@ -227,14 +227,14 @@ export default function EditProfileScreen() {
             <SymbolView
               name={{ ios: 'chevron.left', android: 'chevron_left', web: 'chevron_left' }}
               size={20}
-              tintColor={brand.padel}
+              tintColor={brand.accent}
               accessibilityElementsHidden
             />
           </Pressable>
           <Text
             accessibilityRole="header"
             pointerEvents="none"
-            className="absolute inset-0 text-center text-[17px] font-bold leading-[44px] text-premium">
+            className="absolute inset-0 text-center text-[17px] font-bold leading-[44px] text-court-ink">
             Edit Profile
           </Text>
         </View>
@@ -248,21 +248,21 @@ export default function EditProfileScreen() {
         </View>
       ) : !player ? (
         <View className="flex-1 px-6 pt-10">
-          <Text className="text-[17px] font-extrabold text-premium">No profile found</Text>
-          <Text className="mt-2 text-[15px] leading-6 text-muted">
+          <Text className="text-[17px] font-extrabold text-court-ink">No profile found</Text>
+          <Text className="mt-2 text-[15px] leading-6 text-court-muted">
             We couldn&apos;t link your account to a player profile.
           </Text>
         </View>
       ) : (
         <>
           <ScrollView
-            className="flex-1 bg-page"
+            className="flex-1 bg-court-page"
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 28 }}>
             <View className="mb-5 flex-row items-center">
               <View
-                className="overflow-hidden rounded-full bg-elevated"
+                className="overflow-hidden rounded-full bg-court-elevated"
                 style={{ width: 56, height: 56, borderWidth: 2, borderColor: brand.edge }}>
                 {player.image_url ? (
                   <Image
@@ -274,15 +274,15 @@ export default function EditProfileScreen() {
                   />
                 ) : (
                   <View className="h-full w-full items-center justify-center">
-                    <Text className="text-lg font-bold text-white/20">{name.charAt(0)}</Text>
+                    <Text className="text-lg font-bold text-court-muted">{name.charAt(0)}</Text>
                   </View>
                 )}
               </View>
               <View className="ml-3 min-w-0 flex-1">
-                <Text numberOfLines={1} className="text-[16px] font-extrabold uppercase text-premium">
+                <Text numberOfLines={1} className="text-[16px] font-extrabold uppercase text-court-ink">
                   {name}
                 </Text>
-                <Text className="mt-0.5 text-[13px] text-muted">Player profile details</Text>
+                <Text className="mt-0.5 text-[13px] text-court-muted">Player profile details</Text>
               </View>
             </View>
 
@@ -378,7 +378,7 @@ export default function EditProfileScreen() {
           </ScrollView>
 
           <View
-            className="border-t border-edge bg-page px-5 pt-3"
+            className="border-t border-court-edge bg-court-page px-5 pt-3"
             style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
             <PressableScale
               onPress={save}
@@ -387,8 +387,8 @@ export default function EditProfileScreen() {
               accessibilityState={{ busy: saving, disabled: saving }}
               accessibilityLabel="Save changes"
               className="h-[52px] flex-row items-center justify-center rounded-[14px] bg-padel">
-              {saving ? <ActivityIndicator color={brand.page} style={{ marginRight: 8 }} /> : null}
-              <Text className="text-[13px] font-black uppercase tracking-widest text-page">
+              {saving ? <ActivityIndicator color={brand.premium} style={{ marginRight: 8 }} /> : null}
+              <Text className="text-[13px] font-black uppercase tracking-widest text-court-ink">
                 {saving ? 'Saving…' : 'Save Changes'}
               </Text>
             </PressableScale>

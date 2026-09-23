@@ -15,7 +15,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
-import { brand, motion } from '@/theme/tokens';
+import { lightBrand as brand, motion } from '@/theme/tokens';
 
 export type ToastKind = 'error' | 'success';
 
@@ -41,7 +41,7 @@ export function Toast({ message, kind = 'error', onDismiss }: Props) {
   const reduced = useReducedMotion();
   const drain = useSharedValue(1);
   const error = kind === 'error';
-  const accent = error ? brand.danger : brand.padel;
+  const accent = error ? brand.danger : brand.accent;
 
   useEffect(() => {
     if (!message) {
@@ -90,7 +90,7 @@ export function Toast({ message, kind = 'error', onDismiss }: Props) {
         pointerEvents: 'box-none',
       }}>
       <View
-        className="overflow-hidden rounded-[18px] bg-surface"
+        className="overflow-hidden rounded-[18px] bg-court-surface"
         style={{
           borderWidth: 1,
           borderColor: brand.edge,
@@ -113,7 +113,7 @@ export function Toast({ message, kind = 'error', onDismiss }: Props) {
             />
           </View>
 
-          <Text className="mx-3 flex-1 text-[14px] font-medium leading-5 text-premium">
+          <Text className="mx-3 flex-1 text-[14px] font-medium leading-5 text-court-ink">
             {message}
           </Text>
 

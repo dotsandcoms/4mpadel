@@ -10,14 +10,13 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { FadeUp } from '@/components/fade-up';
-import { MotionBorder } from '@/components/motion-border';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { useOnboardingEvents } from '@/lib/onboarding-events';
-import { sapaLabel, sapaTone } from '@/theme/sapa';
-import { brand, motion } from '@/theme/tokens';
+import { sapaLabel, lightSapaTone } from '@/theme/sapa';
+import { lightBrand as brand, motion } from '@/theme/tokens';
 
 /** Website `text-yellow-500` — rank only, same as Hero.jsx. */
-const RANK_GOLD = '#EAB308';
+const RANK_GOLD = '#875E0B';
 
 /**
  * Believable product snapshots for onboarding. Decorative — the slide copy
@@ -56,7 +55,7 @@ export function EventsPreview() {
 
 function EventCardSkeleton() {
   return (
-    <View className="rounded-2xl border border-edge bg-elevated px-5 py-4">
+    <View className="rounded-2xl border border-court-edge bg-court-elevated px-5 py-4">
       <View className="h-3 w-20 rounded bg-edge" />
       <View className="mt-2.5 h-4 w-3/4 rounded bg-edge" />
       <View className="mt-3 h-3.5 w-28 rounded bg-edge" />
@@ -75,15 +74,15 @@ function EventCard({
   location: string;
   sapaStatus: string | null;
 }) {
-  const tone = sapaTone(sapaStatus);
+  const tone = lightSapaTone(sapaStatus);
   const label = sapaLabel(sapaStatus);
 
   return (
-    <MotionBorder>
+    <View className="overflow-hidden rounded-3xl border border-court-edge bg-court-elevated">
       <View className="px-5 py-4">
         <View className="flex-row items-center justify-between">
           <Text
-            className="text-[11px] font-bold uppercase text-faint"
+            className="text-[11px] font-bold uppercase text-court-faint"
             style={{ letterSpacing: 1.4 }}>
             {date}
           </Text>
@@ -99,44 +98,44 @@ function EventCard({
             </View>
           ) : null}
         </View>
-        <Text className="mt-1.5 text-[16px] font-semibold text-premium" numberOfLines={1}>
+        <Text className="mt-1.5 text-[16px] font-semibold text-court-ink" numberOfLines={1}>
           {place}
         </Text>
         {location ? (
-          <Text className="mt-3 text-[14px] text-muted" numberOfLines={1}>
+          <Text className="mt-3 text-[14px] text-court-muted" numberOfLines={1}>
             {location}
           </Text>
         ) : null}
       </View>
-    </MotionBorder>
+    </View>
   );
 }
 
 export function PartnerPreview() {
   return (
     <View {...a11yHide}>
-      <MotionBorder>
+      <View className="overflow-hidden rounded-3xl border border-court-edge bg-court-elevated">
         <View className="px-5 py-5">
-          <Text className="text-[16px] font-semibold text-premium">Cape Town Open</Text>
-          <Text className="mt-1 text-[13px] text-muted">Men's Open</Text>
+          <Text className="text-[16px] font-semibold text-court-ink">Cape Town Open</Text>
+          <Text className="mt-1 text-[13px] text-court-muted">Men's Open</Text>
 
           <Text
-            className="mb-2 mt-5 text-[11px] font-bold uppercase text-faint"
+            className="mb-2 mt-5 text-[11px] font-bold uppercase text-court-faint"
             style={{ letterSpacing: 1.4 }}>
             Add a partner
           </Text>
-          <View className="flex-row items-center rounded-xl border border-padel bg-surface px-3 py-3">
-            <View className="h-9 w-9 items-center justify-center rounded-full border border-edge bg-elevated">
-            <Text className="text-[12px] font-bold text-premium">PN</Text>
+          <View className="flex-row items-center rounded-xl border border-padel bg-court-surface px-3 py-3">
+            <View className="h-9 w-9 items-center justify-center rounded-full border border-court-edge bg-court-elevated">
+            <Text className="text-[12px] font-bold text-court-ink">PN</Text>
           </View>
           <View className="ml-3 flex-1">
-            <Text className="text-[15px] font-semibold text-premium">Partner Name</Text>
-              <Text className="mt-0.5 text-[12px] text-muted">Linked to your entry</Text>
+            <Text className="text-[15px] font-semibold text-court-ink">Partner Name</Text>
+              <Text className="mt-0.5 text-[12px] text-court-muted">Linked to your entry</Text>
             </View>
-            <SymbolView name="checkmark.circle.fill" size={22} tintColor={brand.padel} />
+            <SymbolView name="checkmark.circle.fill" size={22} tintColor={brand.accent} />
           </View>
         </View>
-      </MotionBorder>
+      </View>
     </View>
   );
 }
@@ -144,7 +143,7 @@ export function PartnerPreview() {
 export function RankingPreview() {
   return (
     <View {...a11yHide}>
-      <MotionBorder>
+      <View className="overflow-hidden rounded-3xl border border-court-edge bg-court-elevated">
         <View className="flex-row items-stretch px-3.5 py-3.5">
           <View
             className="h-20 w-20 shrink-0 self-center overflow-hidden rounded-full bg-glass"
@@ -168,7 +167,7 @@ export function RankingPreview() {
               <LicenseDot />
               <Text
                 allowFontScaling={false}
-                className="ml-1.5 uppercase text-padel"
+                className="ml-1.5 uppercase text-court-accent"
                 style={{ fontSize: 8, fontWeight: '800', letterSpacing: 0.8 }}>
                 Full License Player
               </Text>
@@ -176,7 +175,7 @@ export function RankingPreview() {
 
             <Text
               allowFontScaling={false}
-              className="uppercase text-premium"
+              className="uppercase text-court-ink"
               numberOfLines={1}
               style={{ fontSize: 18, fontWeight: '800', letterSpacing: -0.4, lineHeight: 18 }}>
               Your Name
@@ -185,17 +184,17 @@ export function RankingPreview() {
             <View className="flex-row items-stretch pt-0.5">
               <Stat value="#1" label="Rank" color={RANK_GOLD} pad="start" hint="—" />
               <View className="w-px self-stretch bg-edge" style={{ marginVertical: 2 }} />
-              <Stat value="3,606" label="Points" color={brand.padel} pad="middle" />
+              <Stat value="3,606" label="Points" color={brand.accent} pad="middle" />
               <View className="w-px self-stretch bg-edge" style={{ marginVertical: 2 }} />
               <Stat value="30-0" label="W-L" color={brand.premium} pad="end" />
             </View>
           </View>
 
           <View className="shrink-0 self-center pl-1">
-            <SymbolView name="chevron.right" size={22} tintColor="rgba(255,255,255,0.5)" />
+            <SymbolView name="chevron.right" size={22} tintColor={brand.faint} />
           </View>
         </View>
-      </MotionBorder>
+      </View>
     </View>
   );
 }
@@ -232,14 +231,14 @@ function Stat({
       {hint ? (
         <Text
           allowFontScaling={false}
-          className="text-faint"
+          className="text-court-faint"
           style={{ marginTop: 2, fontSize: 9, fontWeight: '800', lineHeight: 9 }}>
           {hint}
         </Text>
       ) : null}
       <Text
         allowFontScaling={false}
-        className="uppercase text-faint"
+        className="uppercase text-court-faint"
         style={{ marginTop: 2, fontSize: 8, fontWeight: '800', letterSpacing: 1.6, lineHeight: 8 }}>
         {label}
       </Text>

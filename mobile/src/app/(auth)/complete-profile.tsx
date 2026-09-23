@@ -49,7 +49,7 @@ import {
   SA_REGIONS,
 } from '@/lib/registration';
 import { supabase } from '@/lib/supabase';
-import { brand } from '@/theme/tokens';
+import { lightBrand as brand } from '@/theme/tokens';
 
 type Errors = Partial<Record<string, string>>;
 
@@ -357,7 +357,7 @@ export default function CompleteProfileScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      className="flex-1 bg-page"
+      className="flex-1 bg-court-page"
       style={{ flex: 1, backgroundColor: brand.page }}>
       <View className="flex-1" style={{ paddingTop: insets.top + 8 }}>
         <CourtBackdrop completeness={percent / 100} />
@@ -376,12 +376,12 @@ export default function CompleteProfileScreen() {
                 tintColor={brand.muted}
                 accessibilityElementsHidden
               />
-              <Text className="ml-1 text-[15px] font-semibold text-muted">Save and exit</Text>
+              <Text className="ml-1 text-[15px] font-semibold text-court-muted">Save and exit</Text>
             </Pressable>
             {hydrate === 'ready' ? (
               <Text
                 className="text-[12px] font-bold"
-                style={{ color: percent > 0 ? brand.padel : brand.faint }}>
+                style={{ color: percent > 0 ? brand.accent : brand.faint }}>
                 Profile {percent}% complete
               </Text>
             ) : (
@@ -423,11 +423,11 @@ export default function CompleteProfileScreen() {
               <>
                 <Text
                   accessibilityRole="header"
-                  className="mb-2 font-extrabold text-premium"
+                  className="mb-2 font-extrabold text-court-ink"
                   style={{ fontSize: 28, lineHeight: 33 }}>
                   Your details
                 </Text>
-                <Text className="mb-6 text-muted" style={{ fontSize: 16, lineHeight: 24 }}>
+                <Text className="mb-6 text-court-muted" style={{ fontSize: 16, lineHeight: 24 }}>
                   Use the same name as your RankedIn profile so we can match your results.
                 </Text>
 
@@ -554,11 +554,11 @@ export default function CompleteProfileScreen() {
               <>
                 <Text
                   accessibilityRole="header"
-                  className="mb-2 font-extrabold text-premium"
+                  className="mb-2 font-extrabold text-court-ink"
                   style={{ fontSize: 28, lineHeight: 33 }}>
                   Your game
                 </Text>
-                <Text className="mb-5 text-muted" style={{ fontSize: 16, lineHeight: 24 }}>
+                <Text className="mb-5 text-court-muted" style={{ fontSize: 16, lineHeight: 24 }}>
                   Your player card fills in as you choose a level, club and preferences.
                 </Text>
 
@@ -694,36 +694,36 @@ export default function CompleteProfileScreen() {
                         backgroundColor: accepted ? brand.padel : 'transparent',
                       }}>
                       {accepted ? (
-                        <Text className="text-[13px] font-extrabold text-page">✓</Text>
+                        <Text className="text-[13px] font-extrabold text-court-ink">✓</Text>
                       ) : null}
                     </View>
                   </Pressable>
-                  <Text className="min-h-11 flex-1 pt-2.5 text-[14px] leading-5 text-muted">
+                  <Text className="min-h-11 flex-1 pt-2.5 text-[14px] leading-5 text-court-muted">
                     I agree to the{' '}
                     <Text
                       onPress={() => openLegal('terms')}
                       accessibilityRole="link"
-                      className="font-semibold text-padel">
+                      className="font-semibold text-court-accent">
                       Terms
                     </Text>
                     {' and '}
                     <Text
                       onPress={() => openLegal('privacy')}
                       accessibilityRole="link"
-                      className="font-semibold text-padel">
+                      className="font-semibold text-court-accent">
                       Privacy Policy
                     </Text>
                   </Text>
                 </View>
                 {errors.accepted ? (
-                  <Text className="mt-2 text-[13px] text-danger">{errors.accepted}</Text>
+                  <Text className="mt-2 text-[13px] text-court-danger">{errors.accepted}</Text>
                 ) : null}
               </>
             )}
           </StepSlide>
 
           {formError ? (
-            <Text accessibilityRole="alert" className="mt-3 text-[14px] leading-5 text-danger">
+            <Text accessibilityRole="alert" className="mt-3 text-[14px] leading-5 text-court-danger">
               {formError}
             </Text>
           ) : null}
@@ -745,12 +745,12 @@ export default function CompleteProfileScreen() {
             style={{
               height: CONTROL_H,
               borderRadius: CONTROL_R,
-              backgroundColor: ctaMuted ? '#5C6B14' : brand.padel,
+              backgroundColor: ctaMuted ? brand.panel : brand.padel,
             }}>
             {saving ? <CourtLine /> : null}
             <Text
               className="text-base font-bold"
-              style={{ color: ctaMuted ? 'rgba(10,10,10,0.45)' : brand.page }}>
+              style={{ color: ctaMuted ? brand.faint : brand.premium }}>
               {ctaLabel}
             </Text>
           </PressableScale>

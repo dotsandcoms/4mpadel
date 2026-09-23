@@ -44,7 +44,7 @@ export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
   const isAuth = segments[0] === '(auth)';
-  const legacyScreen = isAuth || segments[0] === 'edit-profile' || segments[0] === 'legal';
+  const legacyScreen = segments[0] === 'legal';
   const brand = legacyScreen ? darkBrand : lightBrand;
   const navigationTheme = legacyScreen ? DarkTheme : DefaultTheme;
   const [dataReady, setDataReady] = useState(false);

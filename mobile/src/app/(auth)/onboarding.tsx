@@ -17,7 +17,7 @@ import { PressableScale } from '@/components/pressable-scale';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
 import { markOnboardingSeen } from '@/lib/onboarding';
-import { brand, motion } from '@/theme/tokens';
+import { lightBrand as brand, motion } from '@/theme/tokens';
 
 type Slide = {
   eyebrow: string;
@@ -101,10 +101,10 @@ export default function OnboardingScreen() {
 
   return (
     <GestureHandlerRootView
-      className="flex-1 bg-page"
+      className="flex-1 bg-court-page"
       style={{ flex: 1, backgroundColor: brand.page, paddingTop: insets.top }}>
-      <View className="h-14 flex-row items-center justify-between px-7">
-        <View className="items-start">
+      <View className="h-20 flex-row items-center justify-between px-7">
+        <View className="items-start self-start rounded-2xl bg-[#16251F] px-3 py-2">
           <Image
             source={require('@/assets/images/4m-logo.png')}
             style={{ width: 62, height: 46 }}
@@ -120,7 +120,7 @@ export default function OnboardingScreen() {
             accessibilityRole="button"
             accessibilityLabel="Skip onboarding"
             className="min-h-11 justify-center">
-            <Text className="text-[15px] font-semibold text-muted">Skip</Text>
+            <Text className="text-[15px] font-semibold text-court-muted">Skip</Text>
           </Pressable>
         ) : null}
       </View>
@@ -145,17 +145,17 @@ export default function OnboardingScreen() {
           <View className="px-7 pb-2">
             <FadeUp key={`copy-${index}`} delay={80}>
               <Text
-                className="mb-3 text-xs font-bold uppercase text-padel"
+                className="mb-3 text-xs font-bold uppercase text-court-accent"
                 style={{ letterSpacing: 2 }}>
                 {slide.eyebrow}
               </Text>
               <Text
                 accessibilityRole="header"
-                className="mb-4 font-extrabold text-premium"
+                className="mb-4 font-extrabold text-court-ink"
                 style={{ fontSize: 34, lineHeight: 39 }}>
                 {slide.title}
               </Text>
-              <Text className="text-muted" style={{ fontSize: 17, lineHeight: 26, maxWidth: 320 }}>
+              <Text className="text-court-muted" style={{ fontSize: 17, lineHeight: 26, maxWidth: 320 }}>
                 {slide.body}
               </Text>
             </FadeUp>
@@ -186,7 +186,7 @@ export default function OnboardingScreen() {
           accessibilityRole="button"
           accessibilityLabel={isLast ? 'Build my player profile' : 'Next'}
           className="h-14 items-center justify-center rounded-2xl bg-padel">
-          <Text className="text-base font-bold text-page">
+          <Text className="text-base font-bold text-court-ink">
             {isLast ? 'Build my player profile' : 'Next'}
           </Text>
         </PressableScale>
@@ -198,9 +198,9 @@ export default function OnboardingScreen() {
             accessibilityRole="button"
             accessibilityLabel="Sign in"
             className="mt-4 min-h-11 items-center justify-center">
-            <Text className="text-[14px] text-muted">
+            <Text className="text-[14px] text-court-muted">
               Already have an account?{' '}
-              <Text className="font-semibold text-padel">Sign in</Text>
+              <Text className="font-semibold text-court-accent">Sign in</Text>
             </Text>
           </Pressable>
         ) : (
@@ -243,7 +243,7 @@ function Dot({
       accessibilityLabel={label}
       accessibilityState={{ selected: active }}
       className="justify-center py-2">
-      <Animated.View style={style} className="h-2 rounded-full bg-padel" />
+      <Animated.View style={[style, { height: 8, borderRadius: 4, backgroundColor: brand.accent }]} />
     </Pressable>
   );
 }

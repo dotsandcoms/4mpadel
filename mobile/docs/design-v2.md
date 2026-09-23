@@ -31,3 +31,16 @@ Existing Supabase bundles and Pro Padel adapters remain the source of truth. Ful
 - Native device interaction and signed-in checkout still require device QA. Expo also reports the existing missing `ios.appleTeamId` setting for signing.
 - Onboarding/auth retain V1 styling. Secondary legal and edit-profile screens retain their existing dark form styling; their status/navigation theme follows that choice.
 - Full live API coverage has not been added by this visual redesign.
+
+### V2 onboarding and account setup
+
+Extended the approved light palette to the three onboarding slides, sign-in/signup,
+profile completion, shared form fields, pickers and toasts. Profile editing uses the
+same controls and palette. Retained onboarding navigation, authentication handlers,
+validation, profile persistence and consent behavior. Native Apple sign-in now uses
+the black button; native keyboards and selection sheets use light appearance.
+
+Validation: TypeScript and all 50 existing tests pass; iOS and Android exports pass.
+Browser review at 390 × 844 covered all slides, the signup handoff and the expanded
+email/password form without submitting an account. Native visual inspection was
+unavailable while the host Mac was locked.

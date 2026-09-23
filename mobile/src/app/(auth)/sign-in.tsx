@@ -53,7 +53,7 @@ import { hapticError, hapticSuccess } from '@/lib/haptics';
 import { destinationAfterAuth } from '@/lib/profile';
 import { openLegal } from '@/lib/legal';
 import { supabase } from '@/lib/supabase';
-import { brand, motion, padelGlow } from '@/theme/tokens';
+import { lightBrand as brand, motion } from '@/theme/tokens';
 
 type Mode = 'signin' | 'signup';
 
@@ -260,7 +260,7 @@ export default function SignInScreen() {
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
-      className="flex-1 bg-page"
+      className="flex-1 bg-court-page"
       style={{ flex: 1, backgroundColor: brand.page }}>
       <ScrollView
         keyboardShouldPersistTaps="handled"
@@ -272,7 +272,7 @@ export default function SignInScreen() {
           paddingBottom: insets.bottom + 20,
         }}>
         <FadeUp>
-          <View className="items-start">
+          <View className="items-start self-start rounded-2xl bg-[#16251F] px-3 py-2">
             <Image
               source={require('@/assets/images/4m-logo.png')}
               style={{ width: 57, height: 43 }}
@@ -286,11 +286,11 @@ export default function SignInScreen() {
         <FadeUp delay={80}>
           <Text
             accessibilityRole="header"
-            className="mb-2 mt-8 font-extrabold text-premium"
+            className="mb-2 mt-8 font-extrabold text-court-ink"
             style={{ fontSize: 28, lineHeight: 33 }}>
             {mode === 'signin' ? 'Welcome back' : 'Create your player profile'}
           </Text>
-          <Text className="mb-7 text-muted" style={{ fontSize: 16, lineHeight: 24 }}>
+          <Text className="mb-7 text-court-muted" style={{ fontSize: 16, lineHeight: 24 }}>
             {mode === 'signin'
               ? 'Sign in to manage events, partners and your ranking.'
               : 'Enter events, manage partners and track your ranking.'}
@@ -302,7 +302,7 @@ export default function SignInScreen() {
             <FocusRing>
               <AppleAuthentication.AppleAuthenticationButton
                 buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
                 cornerRadius={CONTROL_R}
                 style={{ height: SOCIAL_H }}
                 onPress={() => run('apple', signInWithApple)}
@@ -317,7 +317,7 @@ export default function SignInScreen() {
               accessibilityRole="button"
               accessibilityState={{ busy: busy === 'google' }}
               accessibilityLabel="Continue with Google"
-              className="flex-row items-center justify-center border border-edge bg-elevated"
+              className="flex-row items-center justify-center border border-court-edge bg-court-elevated"
               style={{ height: SOCIAL_H, borderRadius: CONTROL_R }}>
               <View className="absolute left-4 h-11 w-11 items-center justify-center">
                 {busy === 'google' ? (
@@ -331,13 +331,13 @@ export default function SignInScreen() {
                   />
                 )}
               </View>
-              <Text className="text-[14px] font-semibold text-premium">Continue with Google</Text>
+              <Text className="text-[14px] font-semibold text-court-ink">Continue with Google</Text>
             </PressableScale>
           </FocusRing>
 
           <View className="mb-6 mt-1 flex-row items-center">
             <View className="h-px flex-1 bg-edge" />
-            <Text className="px-3 text-[12px] text-muted">or continue with email</Text>
+            <Text className="px-3 text-[12px] text-court-muted">or continue with email</Text>
             <View className="h-px flex-1 bg-edge" />
           </View>
 
@@ -399,7 +399,7 @@ export default function SignInScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Forgot password?"
                     onPress={resetPassword}>
-                    <Text className="text-[12px] font-medium text-muted">Forgot password?</Text>
+                    <Text className="text-[12px] font-medium text-court-muted">Forgot password?</Text>
                   </Pressable>
                 ) : null
               }
@@ -448,7 +448,7 @@ export default function SignInScreen() {
                       accessibilityRole="link"
                       accessibilityLabel="Terms"
                       className="min-h-11 justify-center px-1">
-                      <Text className="text-[13px] font-semibold text-padel">Terms</Text>
+                      <Text className="text-[13px] font-semibold text-court-accent">Terms</Text>
                     </Pressable>
                     <Text className="text-[13px]" style={{ color: brand.label }}>
                       and
@@ -458,7 +458,7 @@ export default function SignInScreen() {
                       accessibilityRole="link"
                       accessibilityLabel="Privacy Policy"
                       className="min-h-11 justify-center px-1">
-                      <Text className="text-[13px] font-semibold text-padel">Privacy Policy</Text>
+                      <Text className="text-[13px] font-semibold text-court-accent">Privacy Policy</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -468,12 +468,12 @@ export default function SignInScreen() {
 
           {notice ? (
             <View accessibilityLiveRegion="polite" className="mb-2 px-1">
-              <Text className="text-[14px] leading-5 text-padel">{notice}</Text>
+              <Text className="text-[14px] leading-5 text-court-accent">{notice}</Text>
             </View>
           ) : null}
           {error ? (
             <View accessibilityRole="alert" accessibilityLiveRegion="assertive" className="mb-2 px-1">
-              <Text className="text-[14px] leading-5 text-danger">{error}</Text>
+              <Text className="text-[14px] leading-5 text-court-danger">{error}</Text>
             </View>
           ) : null}
         </FadeUp>
@@ -500,9 +500,9 @@ export default function SignInScreen() {
               setAttempted(false);
               setMode((m) => (m === 'signin' ? 'signup' : 'signin'));
             }}>
-            <Text className="text-[14px] text-muted">
+            <Text className="text-[14px] text-court-muted">
               {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
-              <Text className="font-semibold text-padel">
+              <Text className="font-semibold text-court-accent">
                 {mode === 'signin' ? 'Create one' : 'Sign in'}
               </Text>
             </Text>
@@ -545,10 +545,8 @@ function EmailCta({
   }, [ready, readyT, reduced]);
 
   const surface = useAnimatedStyle(() => {
-    const glow = reduced ? 0 : 0.14 + readyT.value * 0.2;
     return {
-      backgroundColor: interpolateColor(readyT.value, [0, 1], ['#9FCB00', brand.padel]),
-      boxShadow: padelGlow(12, 20, glow),
+      backgroundColor: interpolateColor(readyT.value, [0, 1], ['#DFE9B5', brand.padel]),
     };
   });
 
@@ -574,11 +572,11 @@ function EmailCta({
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
-            elevation: 10,
+            elevation: 0,
           },
         ]}>
         {busy ? <LimeStrokeSpinner /> : null}
-        <Text className="text-base font-bold text-page">{label}</Text>
+        <Text className="text-base font-bold text-court-ink">{label}</Text>
       </Animated.View>
     </PressableScale>
   );
@@ -645,7 +643,7 @@ function FocusRing({ children, flush }: { children: ReactNode; flush?: boolean }
         marginBottom: flush ? 0 : 12,
         overflow: 'visible',
         borderWidth: RING,
-        borderColor: focused ? brand.padel : 'transparent',
+        borderColor: focused ? brand.accent : 'transparent',
         borderRadius: CONTROL_R + RING,
       }}>
       {child}
@@ -739,10 +737,10 @@ function PasswordRules({ password }: { password: string }) {
         <SymbolView
           name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
           size={16}
-          tintColor={brand.padel}
+          tintColor={brand.accent}
           accessibilityElementsHidden
         />
-        <Text className="ml-2 text-[13px] font-semibold" style={{ color: brand.padel }}>
+        <Text className="ml-2 text-[13px] font-semibold" style={{ color: brand.accent }}>
           Password meets all requirements
         </Text>
       </Pressable>
@@ -762,9 +760,9 @@ function PasswordRules({ password }: { password: string }) {
           accessibilityLabel="Requirements"
           accessibilityHint={complete ? 'Hides the checklist' : undefined}
           className="min-h-6 justify-center">
-          <Text className="text-[13px] font-semibold text-premium">Requirements</Text>
+          <Text className="text-[13px] font-semibold text-court-ink">Requirements</Text>
         </Pressable>
-        <Text className="text-[12px] font-semibold" style={{ color: complete ? brand.padel : brand.faint }}>
+        <Text className="text-[12px] font-semibold" style={{ color: complete ? brand.accent : brand.faint }}>
           {metCount} of {total} complete
         </Text>
       </View>
@@ -798,12 +796,12 @@ function PasswordRules({ password }: { password: string }) {
                   web: met ? 'check' : 'radio_button_unchecked',
                 }}
                 size={14}
-                tintColor={met ? brand.padel : brand.placeholder}
+                tintColor={met ? brand.accent : brand.placeholder}
                 accessibilityElementsHidden
               />
               <Text
                 className="ml-2 text-[13px] leading-5"
-                style={{ color: met ? brand.padel : brand.placeholder }}>
+                style={{ color: met ? brand.accent : brand.placeholder }}>
                 {rule.label}
               </Text>
             </View>

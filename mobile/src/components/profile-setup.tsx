@@ -11,7 +11,7 @@ import Animated, {
 
 import { FadeUp } from '@/components/fade-up';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
-import { brand, motion } from '@/theme/tokens';
+import { lightBrand as brand, motion } from '@/theme/tokens';
 
 /** Slim two-step track. Lime fills the completed portion; dots mark arrival. */
 export function ProgressTrack({
@@ -51,13 +51,13 @@ export function ProgressTrack({
           className="min-h-6 justify-center">
           <Text
             className="text-[11px] font-bold"
-            style={{ color: step === 1 || step1Done ? brand.padel : brand.faint }}>
+            style={{ color: step === 1 || step1Done ? brand.accent : brand.faint }}>
             Personal details
           </Text>
         </Pressable>
         <Text
           className="text-[11px] font-bold"
-          style={{ color: step === 2 ? brand.padel : brand.faint }}>
+          style={{ color: step === 2 ? brand.accent : brand.faint }}>
           Padel profile
         </Text>
       </View>
@@ -102,14 +102,14 @@ export function VerifiedEmail({ email }: { email: string }) {
       <SymbolView
         name={{ ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' }}
         size={18}
-        tintColor={brand.padel}
+        tintColor={brand.accent}
         accessibilityElementsHidden
       />
       <View className="ml-3 flex-1">
-        <Text className="text-[11px] font-bold uppercase" style={{ color: brand.padel, letterSpacing: 0.8 }}>
+        <Text className="text-[11px] font-bold uppercase" style={{ color: brand.accent, letterSpacing: 0.8 }}>
           Verified account
         </Text>
-        <Text className="text-[15px] font-semibold text-premium" numberOfLines={1}>
+        <Text className="text-[15px] font-semibold text-court-ink" numberOfLines={1}>
           {email}
         </Text>
       </View>
@@ -218,15 +218,15 @@ export function PlayerSetupPreview({
         <View
           className="h-12 w-12 items-center justify-center rounded-full"
           style={{ backgroundColor: 'rgba(204,255,0,0.12)' }}>
-          <Text className="text-[15px] font-extrabold" style={{ color: brand.padel }}>
+          <Text className="text-[15px] font-extrabold" style={{ color: brand.accent }}>
             {initials || '•'}
           </Text>
         </View>
         <View className="ml-3 flex-1">
-          <Text className="text-[16px] font-extrabold text-premium" numberOfLines={1}>
+          <Text className="text-[16px] font-extrabold text-court-ink" numberOfLines={1}>
             {name || 'Your name'}
           </Text>
-          <Text className="mt-0.5 text-[13px]" style={{ color: region ? brand.padel : brand.placeholder }}>
+          <Text className="mt-0.5 text-[13px]" style={{ color: region ? brand.accent : brand.placeholder }}>
             {region || 'Region'}
           </Text>
         </View>
@@ -250,7 +250,7 @@ function PreviewChip({ filled, label }: { filled: boolean; label: string }) {
       }}>
       <Text
         className="text-[11px] font-semibold"
-        style={{ color: filled ? brand.padel : brand.placeholder }}
+        style={{ color: filled ? brand.accent : brand.placeholder }}
         numberOfLines={1}>
         {label}
       </Text>
@@ -289,7 +289,7 @@ export function CourtLine({
           {
             width: 28,
             height: 3,
-            backgroundColor: tone === 'onDark' ? brand.padel : brand.page,
+            backgroundColor: tone === 'onDark' ? brand.accent : brand.premium,
             borderRadius: 2,
           },
           style,
@@ -316,13 +316,13 @@ export function DraftRestore({ mode }: { mode: 'pending' | 'restoring' }) {
       <FadeUp>
         <Text
           accessibilityRole="header"
-          className="mt-6 text-center font-extrabold text-premium"
+          className="mt-6 text-center font-extrabold text-court-ink"
           style={{ fontSize: 28, lineHeight: 33 }}>
           {title}
         </Text>
         <Text
           accessibilityLiveRegion="polite"
-          className="mt-3 text-center text-muted"
+          className="mt-3 text-center text-court-muted"
           style={{ fontSize: 16, lineHeight: 24 }}>
           {body}
         </Text>
