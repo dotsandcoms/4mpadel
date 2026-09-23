@@ -415,7 +415,7 @@ export function FeaturedCard({ event, onPress }: CardProps) {
         </View>
       </PressableScale>
       <View style={{ padding: 16, paddingTop: 0, gap: 12 }}>
-        <RegCountdown opensAt={event.registration_opens_at} closesAt={event.registration_closes_at} accent={brand.accent} cutout={brand.elevated} compact />
+        <RegCountdown opensAt={event.registration_opens_at} closesAt={event.registration_closes_at} accent={brand.accent} cutout={brand.elevated} compact fullWidth />
         <PressableScale onPress={onPress} accessibilityRole="button" accessibilityLabel={`${cta}: ${name}`} style={{ backgroundColor: brand.padel, minHeight: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' }}>
           <Text style={{ color: brand.premium, fontSize: 14, fontWeight: '700' }}>{cta}</Text>
         </PressableScale>
@@ -472,12 +472,14 @@ function CountdownBox({
   accent,
   cutout = brand.elevated,
   compact = false,
+  fullWidth = false,
 }: {
   label: string;
   target: number;
   accent: string;
   cutout?: string;
   compact?: boolean;
+  fullWidth?: boolean;
 }) {
   const [now, setNow] = useState(() => Date.now());
 
@@ -500,8 +502,8 @@ function CountdownBox({
     <View
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
-      className={`relative self-start rounded-lg border px-2.5 pb-1.5 pt-2.5 ${compact ? '' : 'mt-3'}`}
-      style={{ borderColor: `${accent}80` }}>
+      className={`relative rounded-lg border px-2.5 pb-1.5 pt-2.5 ${compact ? '' : 'mt-3'}`}
+      style={{ borderColor: `${accent}80`, alignSelf: fullWidth ? 'stretch' : 'flex-start' }}>
       <Text
         className="absolute -top-1.5 left-2 px-1 text-[8px] font-normal uppercase tracking-wider"
         style={{ color: accent, backgroundColor: cutout }}>
@@ -509,9 +511,9 @@ function CountdownBox({
       </Text>
       <View className="flex-row items-end">
         {parts.map((part, i) => (
-          <View key={part.unit} className="flex-row items-end">
+          <View key={part.unit} className="flex-row items-end" style={fullWidth ? { flex: 1, justifyContent: 'center' } : undefined}>
             {i > 0 ? (
-              <Text className="px-1 pb-1.5 text-[12px] font-normal text-court-muted">:</Text>
+              <Text className="px-1 pb-1.5 text-[12px] font-normal text-court-muted" style={fullWidth ? { position: 'absolute', left: -5, bottom: 0 } : undefined}>:</Text>
             ) : null}
             <View className="min-w-[1.6rem] items-center">
               <Text
@@ -561,12 +563,14 @@ function RegCountdown({
   accent,
   cutout = brand.elevated,
   compact = false,
+  fullWidth = false,
 }: {
   opensAt: string | null;
   closesAt: string | null;
   accent: string;
   cutout?: string;
   compact?: boolean;
+  fullWidth?: boolean;
 }) {
   const [now, setNow] = useState(() => Date.now());
 
@@ -595,6 +599,7 @@ function RegCountdown({
       accent={accent}
       cutout={cutout}
       compact={compact}
+      fullWidth={fullWidth}
     />
   );
 }
