@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, View } from 'react-native';
-import { EventText as Text, EventIcon, lime } from '@/components/events/website-ui';
+import { EventText as Text, EventIcon } from '@/components/events/website-ui';
+import { lightBrand as brand } from '@/theme/tokens';
 import { type PlayerMatch, isMatchWinner } from '@/lib/matches';
 
 export default function MatchResultSheet() {
@@ -29,18 +30,18 @@ export default function MatchResultSheet() {
     {!match ? <Text style={{ color: '#65726B' }}>Select a completed match from your profile to view its result.</Text> :
       <View style={{ padding: 16, borderRadius: 16, borderWidth: 1, borderColor: '#16251f20', backgroundColor: '#FFFFFF', gap: 14 }}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, paddingBottom: 12, borderBottomWidth: 1, borderColor: '#16251f0d' }}>
-          {!!(info?.Date || info?.EventStartDate) && <Text style={{ fontSize: 10, color: '#828b9a', letterSpacing: 0.5 }}>{info?.Date || info?.EventStartDate}</Text>}
-          <Text style={{ fontSize: 10, color: '#f59e0b', letterSpacing: 0.5 }}>{(info?.EventName || 'Tour Match').toUpperCase()}</Text>
+          {!!(info?.Date || info?.EventStartDate) && <Text style={{ fontSize: 10, color: brand.faint, letterSpacing: 0.5 }}>{info?.Date || info?.EventStartDate}</Text>}
+          <Text style={{ fontSize: 10, color: brand.accent, letterSpacing: 0.5 }}>{(info?.EventName || 'Tour Match').toUpperCase()}</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View style={{ flex: 1, gap: 8 }}>
             {sides.map((names, side) => {
               const won = scores.length > 0 && winners[side];
-              return <View key={side} style={{ padding: 10, borderRadius: 12, borderWidth: 1, borderColor: won ? '#CCFF004d' : '#16251f0d', backgroundColor: won ? '#CCFF000d' : '#16251f05', gap: 6 }}>
-                <Text style={{ fontSize: 9, color: '#828b9a', letterSpacing: 1 }}>TEAM {side + 1}</Text>
+              return <View key={side} style={{ padding: 10, borderRadius: 12, borderWidth: 1, borderColor: won ? brand.accent : brand.edge, backgroundColor: won ? brand.glass : brand.surface, gap: 6 }}>
+                <Text style={{ fontSize: 9, color: brand.faint, letterSpacing: 1 }}>TEAM {side + 1}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ flex: 1, fontSize: 13, lineHeight: 18, color: side === 0 ? '#fff' : '#52625A' }}>{names.join(' & ') || 'Players unavailable'}</Text>
-                  {won && <EventIcon name="trophy" size={13} color={lime} />}
+                  <Text style={{ flex: 1, fontSize: 13, lineHeight: 18, color: brand.premium, fontWeight: won ? '600' : '400' }}>{names.join(' & ') || 'Players unavailable'}</Text>
+                  {won && <EventIcon name="trophy" size={13} color={brand.accent} />}
                 </View>
               </View>;
             })}
@@ -49,12 +50,12 @@ export default function MatchResultSheet() {
             {match.Score?.IsSummary && <Text style={{ fontSize: 9, color: '#65726B' }}>MATCH SCORE</Text>}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6 }}>
               {scores.map((set, index) => <View key={index} accessibilityLabel={`${match.Score?.IsSummary ? 'Match score' : `Set ${index + 1}`}: ${set.Score1} to ${set.Score2}`} style={{ minWidth: 23, paddingHorizontal: 6, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#16251f0d', backgroundColor: '#16251f0a', alignItems: 'center' }}>
-                <Text style={{ fontSize: 12, color: Number(set.Score1) > Number(set.Score2) ? lime : '#65726B' }}>{set.Score1 ?? '—'}</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: Number(set.Score1) > Number(set.Score2) ? brand.accent : brand.muted }}>{set.Score1 ?? '—'}</Text>
                 <View style={{ height: 1, backgroundColor: '#16251f18', alignSelf: 'stretch', marginVertical: 3 }} />
-                <Text style={{ fontSize: 12, color: Number(set.Score2) > Number(set.Score1) ? lime : '#65726B' }}>{set.Score2 ?? '—'}</Text>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: Number(set.Score2) > Number(set.Score1) ? brand.accent : brand.muted }}>{set.Score2 ?? '—'}</Text>
               </View>)}
             </View>
-            {victory !== undefined && <View style={{ borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: victory ? lime : '#ef444433', backgroundColor: victory ? lime : '#ef44441a' }}><Text style={{ fontSize: 9, letterSpacing: 0.8, color: victory ? '#000' : '#ef4444' }}>{victory ? 'VICTORY' : 'DEFEAT'}</Text></View>}
+            {victory !== undefined && <View style={{ borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: victory ? brand.accent : '#B7352D33', backgroundColor: victory ? brand.glass : '#FBECEB' }}><Text style={{ fontSize: 9, letterSpacing: 0.8, color: victory ? brand.accent : brand.danger }}>{victory ? 'VICTORY' : 'DEFEAT'}</Text></View>}
           </View>}
         </View>
         {!!location && <Text style={{ color: '#65726B', fontSize: 11 }}>{location}</Text>}
