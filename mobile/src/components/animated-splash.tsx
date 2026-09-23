@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
@@ -14,7 +13,6 @@ import Animated, {
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { lightBrand as brand } from '@/theme/tokens';
 
-const HERO = require('@/assets/images/hero-bg.jpg');
 const RULE_W = 72;
 const REVEAL_MS = 1200;
 
@@ -22,15 +20,14 @@ const REVEAL_MS = 1200;
  * In-app launch screen.
  *
  * Native splash is a static light frame (storyboards cannot animate).
- * This overlay takes over on the first JS frame: court photograph, lime line
+ * This overlay takes over on the first JS frame: light background, lime line
  * draws, wordmark lands, then we hand off. If session lookup is still in
  * flight the line pulses — it is the loading cue, not a spinner.
  *
- * Reveal is 1.2s. Reduce Motion skips scale, keeps a still.
+ * Reveal is 1.2s. Reduce Motion skips movement and keeps a still.
  */
 export function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
   const reduced = useReducedMotion();
-  const ken = useSharedValue(0);
   const ruleDraw = useSharedValue(reduced ? 1 : 0);
   const rulePulse = useSharedValue(1);
   const four = useSharedValue(reduced ? 1 : 0);
@@ -42,7 +39,6 @@ export function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
 
     if (reduced) return () => clearTimeout(done);
 
-    ken.value = withTiming(1, { duration: 2800, easing: Easing.out(Easing.quad) });
     ruleDraw.value = withTiming(1, { duration: 320, easing: Easing.out(Easing.cubic) });
     four.value = withDelay(180, withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) }));
     padel.value = withDelay(360, withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) }));
@@ -56,11 +52,7 @@ export function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
     );
 
     return () => clearTimeout(done);
-  }, [four, ken, onFinish, padel, promise, reduced, ruleDraw, rulePulse]);
-
-  const photoStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 + ken.value * 0.025 }],
-  }));
+  }, [four, onFinish, padel, promise, reduced, ruleDraw, rulePulse]);
 
   const fourStyle = useAnimatedStyle(() => ({
     opacity: four.value,
@@ -87,16 +79,6 @@ export function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
       exiting={reduced ? undefined : FadeOut.duration(280)}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants">
-      <Animated.View style={[styles.photo, photoStyle]}>
-        <Image
-          source={HERO}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          contentPosition={{ top: '38%', left: '52%' }}
-          accessible={false}
-        />
-      </Animated.View>
-
       <View style={styles.mark} accessibilityLabel="4M Padel. Play local. Follow the world.">
         <View style={styles.cluster}>
           <Animated.Text style={[styles.four, fourStyle]}>4M</Animated.Text>
@@ -110,26 +92,11 @@ export function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  photo: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '56%',
-    overflow: 'hidden',
-  },
   mark: {
-    position: 'absolute',
-    top: '52%',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    backgroundColor: brand.page,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 28,
+    paddingHorizontal: 24,
   },
   cluster: {
     alignItems: 'center',
@@ -160,7 +127,8 @@ const styles = StyleSheet.create({
     color: brand.muted,
     fontSize: 13,
     fontWeight: '600',
-    letterSpacing: 1.4,
+    letterSpacing: 0.5,
+    textAlign: 'center',
     marginTop: 18,
   },
 });

@@ -52,8 +52,9 @@ The second slide introduces player profiles, world rankings, tournament coverage
 and match schedules/results. The preview is a feature illustration, with no
 invented scores, live-status claims or account writes.
 
-The splash retains the court photo with a light wordmark panel and the line
-“Play local. Follow the world.” Heavy overlays and decorative circles were removed.
+The splash uses a full light background with a centred dark wordmark and the line
+“Play local. Follow the world.” The court photo, split panel, heavy overlays and
+decorative circles were removed. Status-bar content is dark during launch.
 Native splash background is aligned to the V2 page colour; native builds need
 prebuild/rebuild to apply it.
 

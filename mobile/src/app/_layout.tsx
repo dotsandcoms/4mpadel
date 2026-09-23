@@ -159,7 +159,7 @@ export default function RootLayout() {
           border: brand.edge,
         },
       }}>
-      <StatusBar style={legacyScreen || !revealed ? "light" : "dark"} />
+      <StatusBar style={legacyScreen && revealed ? "light" : "dark"} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: brand.page } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
