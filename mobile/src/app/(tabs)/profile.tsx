@@ -40,7 +40,6 @@ import {
   galleryOf,
   rankingsOf,
   updateGallery,
-  type PlayerRow,
   type ProfileBundle,
   type ProfileTransaction,
   type RankingRow,
@@ -73,7 +72,6 @@ export default function ProfileScreen() {
   const [eventView, setEventView] = useState<AgendaFilter>('upcoming');
   const [matchView, setMatchView] = useState<AgendaFilter>('upcoming');
   const [eventScope, setEventScope] = useState<EventScope>('all');
-  const [careerOpen, setCareerOpen] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [selectedRanking, setSelectedRanking] = useState<RankingRow | null>(null);
   const [toast, setToast] = useState<{ id: number; message: string; kind: ToastKind } | null>(null);
@@ -298,11 +296,6 @@ export default function ProfileScreen() {
                 bottomPad={tabPad}
                 eventsFooter={
                   <>
-                    <CareerBlock
-                      player={player}
-                      open={careerOpen}
-                      onToggle={() => setCareerOpen((current) => !current)}
-                    />
                     <GalleryBlock
                       gallery={gallery}
                       onOpen={setLightbox}
@@ -336,59 +329,6 @@ export default function ProfileScreen() {
   );
 }
 
-
-function CareerBlock({ player, open, onToggle }: {
-  player: PlayerRow;
-  open: boolean;
-  onToggle: () => void;
-}) {
-  if (!player.skill_rating) return null;
-  return (
-    <Pressable
-      onPress={onToggle}
-      accessibilityRole="button"
-      accessibilityState={{ expanded: open }}
-      accessibilityLabel="Career Overview"
-      className="mt-4 rounded-3xl border border-court-edge bg-court-elevated p-5">
-      <View className="flex-row items-center justify-between">
-        <View className="flex-row items-center">
-          <View className="h-9 w-9 items-center justify-center rounded-xl bg-court-surface">
-            <SymbolView name="trophy.fill" size={16} tintColor={brand.accent} />
-          </View>
-          <Text className="ml-3 text-base font-bold text-court-ink">
-            Career Overview
-          </Text>
-        </View>
-        <View style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}>
-          <SymbolView name="chevron.down" size={16} tintColor={brand.accent} />
-        </View>
-      </View>
-      {open ? (
-        <View className="mt-4">
-          {player.skill_rating ? (
-            <View className="mb-4 flex-row items-center rounded-2xl border border-padel/20 bg-padel/10 p-4">
-              <View className="h-14 min-w-[4.5rem] items-center justify-center rounded-xl bg-padel px-3">
-                <Text className="text-[8px] font-black uppercase text-page">Skill</Text>
-                <Text className="text-xl font-black text-page">{player.skill_rating}</Text>
-              </View>
-              <View className="ml-4 flex-1">
-                <Text className="text-[10px] font-black uppercase tracking-widest text-court-accent">
-                  Rankedin Rating
-                </Text>
-                <View className="mt-1 h-1.5 overflow-hidden rounded-full bg-court-surface">
-                  <View
-                    className="h-full bg-padel"
-                    style={{ width: `${Math.min(Number(player.skill_rating) * 3.33, 100)}%` }}
-                  />
-                </View>
-              </View>
-            </View>
-          ) : null}
-        </View>
-      ) : null}
-    </Pressable>
-  );
-}
 
 function GalleryBlock({
   gallery,

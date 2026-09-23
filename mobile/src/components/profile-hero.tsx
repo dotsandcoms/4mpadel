@@ -142,6 +142,7 @@ export function ProfileHero({ player, stats, onEditPhoto, playId = 0 }: HeroProp
         </View>
 
         <View className="ml-3 min-w-0 flex-1">
+          <View className="mb-2 flex-row items-start justify-between" style={{ gap: 8 }}>
           {license ? (
             <View
               className="mb-1 flex-row items-center self-start rounded-full border px-2 py-0.5"
@@ -156,7 +157,17 @@ export function ProfileHero({ player, stats, onEditPhoto, playId = 0 }: HeroProp
                 {license.label}
               </Text>
             </View>
+          ) : <View />}
+          {player.skill_rating != null && Number.isFinite(Number(player.skill_rating)) ? (
+            <View
+              accessible
+              accessibilityLabel={`Skill rating ${player.skill_rating}`}
+              className="shrink-0 items-center rounded-xl bg-padel px-3 py-2">
+              <Text className="text-[9px] font-bold uppercase text-court-ink">Skill</Text>
+              <Text className="text-lg font-extrabold text-court-ink" style={{ fontVariant: ['tabular-nums'] }}>{player.skill_rating}</Text>
+            </View>
           ) : null}
+          </View>
 
           <Text
             className="text-lg font-extrabold uppercase leading-tight text-court-ink"
