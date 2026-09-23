@@ -287,9 +287,15 @@ export function WorldPadelPreview() {
         </View>
       </View>
       <View className="px-5 py-4" style={{ gap: 18 }}>
-        <WorldPreviewRow icon="people-outline" title="Your favourite players" detail="Profiles and world rankings" />
-        <WorldPreviewRow icon="trophy-outline" title="Tournaments worldwide" detail="Follow the tour, stop by stop" />
-        <WorldPreviewRow icon="tennisball-outline" title="Every match matters" detail="Schedules, scores and results" />
+        <FadeUp delay={180}>
+          <WorldPreviewRow icon="people-outline" title="Your favourite players" detail="Profiles and world rankings" />
+        </FadeUp>
+        <FadeUp delay={320}>
+          <WorldPreviewRow icon="trophy-outline" title="Tournaments worldwide" detail="Follow the tour, stop by stop" />
+        </FadeUp>
+        <FadeUp delay={460}>
+          <WorldPreviewRow icon="tennisball-outline" title="Every match matters" detail="Schedules, scores and results" />
+        </FadeUp>
       </View>
     </View>
   );
