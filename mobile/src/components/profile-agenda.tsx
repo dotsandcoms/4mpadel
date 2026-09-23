@@ -37,10 +37,10 @@ import { sapaLabel, sapaTone } from '@/theme/sapa';
 import { lightBrand as brand, motion } from '@/theme/tokens';
 
 export const PROFILE_SECTIONS = [
-  { id: 'events', label: 'My Events', active: '#A855F7', text: '#fff' },
-  { id: 'matches', label: 'My Matches', active: '#F97316', text: '#fff' },
+  { id: 'events', label: 'My Events', active: brand.accent, text: '#fff' },
+  { id: 'matches', label: 'My Matches', active: brand.accent, text: '#fff' },
   { id: 'rankings', label: 'My Rankings', active: brand.accent, text: '#fff' },
-  { id: 'payments', label: 'Payments', active: '#3B82F6', text: '#fff' },
+  { id: 'payments', label: 'Payments', active: brand.accent, text: '#fff' },
 ] as const;
 
 export type ProfileSection = (typeof PROFILE_SECTIONS)[number]['id'];
@@ -299,7 +299,7 @@ export function SegmentedControl({
   onChange,
   upcomingCount,
   completedCount,
-  active = '#A855F7',
+  active = brand.accent,
   activeText = '#fff',
 }: {
   value: AgendaFilter;
@@ -813,7 +813,7 @@ export function ProfileSectionPager({
             header={
               <View className="px-5 pt-4">
                 <View className="mb-3 flex-row items-center justify-between">
-                  <Text className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-300">
+                  <Text className="text-[10px] font-black uppercase tracking-[0.2em] text-court-muted">
                     My tournaments
                   </Text>
                   <FilterMenu value={eventScope} onChange={onEventScope} />
@@ -823,7 +823,7 @@ export function ProfileSectionPager({
                   onChange={onEventView}
                   upcomingCount={upcomingEvents.length}
                   completedCount={completedEvents.length}
-                  active="#A855F7"
+                  active={brand.accent}
                 />
               </View>
             }
@@ -852,7 +852,7 @@ export function ProfileSectionPager({
             bottomPad={bottomPad}
             header={
               <View className="px-5 pt-4">
-                <Text className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-gray-300">
+                <Text className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-court-muted">
                   My matches
                 </Text>
                 <SegmentedControl
@@ -860,7 +860,7 @@ export function ProfileSectionPager({
                   onChange={onMatchView}
                   upcomingCount={upcomingMatches.length}
                   completedCount={completedMatches.length}
-                  active="#F97316"
+                  active={brand.accent}
                 />
               </View>
             }
