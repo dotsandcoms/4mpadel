@@ -44,6 +44,8 @@ export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
   const isAuth = segments[0] === '(auth)';
+  const recoveryRoute = useRef(false);
+  recoveryRoute.current = segments[0] === 'reset-password';
   const legacyScreen = segments[0] === 'legal';
   const brand = legacyScreen ? darkBrand : lightBrand;
   const navigationTheme = legacyScreen ? DarkTheme : DefaultTheme;
@@ -96,10 +98,10 @@ export default function RootLayout() {
       if (!settled.current) return;
       sessionRef.current = session;
       if (event === 'SIGNED_OUT') router.replace('/(auth)/sign-in');
-      if (event === 'SIGNED_IN' && session && seenRef.current) {
+      if (event === 'SIGNED_IN' && session && seenRef.current && !recoveryRoute.current) {
         syncPushTokenIfGranted();
         recordAppDevice();
-        destinationAfterAuth(session).then((path) => router.replace(path)).catch(() => setBootError(true));
+        destinationAfterAuth(session).then((path) => { if (!recoveryRoute.current) router.replace(path); }).catch(() => setBootError(true));
       }
     });
 
@@ -122,7 +124,7 @@ export default function RootLayout() {
       try {
       const path = await resolvePath(seenRef.current, sessionRef.current);
       if (cancelled) return;
-      router.replace(path);
+      if (!recoveryRoute.current) router.replace(path);
       // Wait until the destination is on the stack so the splash fade
       // lands on onboarding/sign-in, not a one-frame flash of Home.
       requestAnimationFrame(() => {

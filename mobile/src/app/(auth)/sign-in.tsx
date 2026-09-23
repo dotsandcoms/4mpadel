@@ -24,7 +24,6 @@ import {
 } from 'react-native';
 import Animated, {
   Easing,
-  interpolateColor,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -57,7 +56,7 @@ import { lightBrand as brand, motion } from '@/theme/tokens';
 type Mode = 'signin' | 'signup';
 
 const CONTROL_H = 52;
-const SOCIAL_H = 46;
+const SOCIAL_H = CONTROL_H;
 const CONTROL_R = 14;
 const RING = 2;
 
@@ -76,6 +75,8 @@ export default function SignInScreen() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState<null | 'apple' | 'google' | 'email'>(null);
+  const resetLock = useRef(false);
+  const [resetting, setResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -108,6 +109,7 @@ export default function SignInScreen() {
    * message, which would be noise.
    */
   async function run(kind: 'apple' | 'google' | 'email', fn: () => Promise<unknown>) {
+    if (busy || resetLock.current) return;
     setError(null);
     setNotice(null);
     setBusy(kind);
@@ -160,7 +162,6 @@ export default function SignInScreen() {
   const passwordIssues = mode === 'signup' ? signupPasswordIssues(password) : [];
   const passwordValid = mode === 'signin' ? password.length >= 6 : passwordIssues.length === 0;
   const confirmValid = mode === 'signin' || (confirm === password && passwordValid);
-  const formReady = emailValid && passwordValid && confirmValid;
 
   const shownEmailError =
     emailError ??
@@ -235,6 +236,7 @@ export default function SignInScreen() {
   }
 
   async function resetPassword() {
+    if (resetLock.current || busy) return;
     setError(null);
     setNotice(null);
     if (!emailValid) {
@@ -244,14 +246,20 @@ export default function SignInScreen() {
       emailRef.current?.focus();
       return;
     }
+    resetLock.current = true;
+    setResetting(true);
     try {
-      const msg = `Reset link sent to ${email.trim()}. Check your inbox.`;
+      await sendPasswordReset(email);
+      const msg = 'If an account uses this email, a reset link is on its way. Open it on this device.';
       setNotice(msg);
       flash(msg, 'success');
     } catch (e: any) {
       const msg = friendlyError(e);
       setError(msg);
       flash(msg);
+    } finally {
+      resetLock.current = false;
+      setResetting(false);
     }
   }
 
@@ -287,12 +295,12 @@ export default function SignInScreen() {
             accessibilityRole="header"
             className="mb-2 mt-8 font-extrabold text-court-ink"
             style={{ fontSize: 28, lineHeight: 33 }}>
-            {mode === 'signin' ? 'Welcome back' : 'Create your player profile'}
+            {mode === 'signin' ? 'Welcome back' : 'Create your account'}
           </Text>
           <Text className="mb-7 text-court-muted" style={{ fontSize: 16, lineHeight: 24 }}>
             {mode === 'signin'
               ? 'Sign in to manage events, partners and your ranking.'
-              : 'Enter events, manage partners and track your ranking.'}
+              : 'Sign up, then set up your player profile to enter events and follow your game.'}
           </Text>
         </FadeUp>
 
@@ -335,9 +343,9 @@ export default function SignInScreen() {
           </FocusRing>
 
           <View className="mb-6 mt-1 flex-row items-center">
-            <View className="h-px flex-1 bg-edge" />
+            <View className="h-px flex-1 bg-court-edge" />
             <Text className="px-3 text-[12px] text-court-muted">or continue with email</Text>
-            <View className="h-px flex-1 bg-edge" />
+            <View className="h-px flex-1 bg-court-edge" />
           </View>
 
           <LiquidField
@@ -394,11 +402,12 @@ export default function SignInScreen() {
                   <Pressable
                     className="min-h-11 justify-center pl-3"
                     hitSlop={8}
-                    disabled={!!busy}
                     accessibilityRole="button"
                     accessibilityLabel="Forgot password?"
+                    disabled={resetting || !!busy}
+                    accessibilityState={{ disabled: resetting || !!busy, busy: resetting }}
                     onPress={resetPassword}>
-                    <Text className="text-[12px] font-medium text-court-muted">Forgot password?</Text>
+                    <Text className="text-[12px] font-medium text-court-muted">{resetting ? 'Sending link…' : 'Forgot password?'}</Text>
                   </Pressable>
                 ) : null
               }
@@ -429,7 +438,6 @@ export default function SignInScreen() {
             <View className="mt-5">
               <FocusRing flush>
                 <EmailCta
-                  ready={formReady}
                   busy={busy === 'email'}
                   signin={mode === 'signin'}
                   onPress={submitEmail}
@@ -520,35 +528,18 @@ export default function SignInScreen() {
 }
 
 function EmailCta({
-  ready,
   busy,
   signin,
   onPress,
   onFocus,
   onBlur,
 }: {
-  ready: boolean;
   busy: boolean;
   signin: boolean;
   onPress: () => void;
   onFocus?: (e: unknown) => void;
   onBlur?: (e: unknown) => void;
 }) {
-  const reduced = useReducedMotion();
-  const readyT = useSharedValue(ready ? 1 : 0);
-
-  useEffect(() => {
-    readyT.value = withTiming(ready ? 1 : 0, {
-      duration: reduced ? 1 : motion.duration.base,
-    });
-  }, [ready, readyT, reduced]);
-
-  const surface = useAnimatedStyle(() => {
-    return {
-      backgroundColor: interpolateColor(readyT.value, [0, 1], ['#DFE9B5', brand.padel]),
-    };
-  });
-
   const idle = signin ? 'Sign in' : 'Create account';
   const label = busy ? (signin ? 'Signing in…' : 'Creating account…') : idle;
 
@@ -564,7 +555,7 @@ function EmailCta({
       style={{ height: CONTROL_H, borderRadius: CONTROL_R }}>
       <Animated.View
         style={[
-          surface,
+          { backgroundColor: brand.padel },
           {
             height: CONTROL_H,
             borderRadius: CONTROL_R,
@@ -724,6 +715,10 @@ function PasswordRules({ password }: { password: string }) {
   const summary = complete
     ? 'Password meets all requirements'
     : `${metCount} of ${total} complete. ${next?.hint ?? ''}`;
+
+  if (!password) {
+    return <Text className="mb-3 px-1 text-[12px] leading-5 text-court-muted">Use 6+ characters with uppercase, lowercase, a number and a symbol.</Text>;
+  }
 
   if (complete && !expanded) {
     return (

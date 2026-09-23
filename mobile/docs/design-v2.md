@@ -64,3 +64,23 @@ or account/session data is cleared by this testing behaviour.
 
 Validated at 390 × 844: world padel is slide two of four. TypeScript and the 50
 existing tests pass; both iOS and Android exports pass.
+
+### Authentication refinements
+
+Apple, Google and email action buttons now share a 52pt height. Email actions
+use the full lime fill while retaining field validation. Signup says “Create
+your account” and explains that player profile setup follows. Password guidance
+starts as a short hint, expands when typing begins, and collapses on completion.
+
+Forgot password now awaits the existing Supabase reset request, blocks concurrent
+requests, handles API errors, and uses a non-enumerating success message. Added
+/reset-password for the existing PKCE callback: verifies the emailed code before
+allowing a password update and handles expired/missing links. Startup onboarding
+and sign-in routing preserve the recovery screen. Links should be opened on the
+device that requested them (PKCE verifier storage).
+
+Validation: all 56 tests pass, including six mocked reset/update tests; iOS and
+Android exports pass. Reviewed signup and missing-link recovery in the browser.
+No real reset email was sent or account password changed. Live email delivery and
+the hosted Supabase allowlist for fourmpadel://reset-password still need an
+end-to-end check with a test account.
