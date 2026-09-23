@@ -1,0 +1,4 @@
+project_id = "4m-padel-mobile"
+
+[functions.native-event-checkout]
+verify_jwt = false

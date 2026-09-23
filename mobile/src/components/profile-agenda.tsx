@@ -1,6 +1,7 @@
-import { FlashList } from '@shopify/flash-list';
+import { useRouter } from 'expo-router';
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useMemo, useRef, type ReactNode, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -55,27 +56,27 @@ const ease = Easing.bezier(
 
 const RIPPLE = { color: 'rgba(204,255,0,0.16)' };
 
-type MonthGroup<T> = { label: string; items: T[] };
+type MonthGroup<T> = { label: string; sort?: number; items: T[] };
 
 function monthLabel(date: Date) {
   return new Intl.DateTimeFormat('en-GB', { month: 'long' }).format(date).toUpperCase();
 }
 
-function groupByMonth<T>(items: T[], dateOf: (item: T) => Date | null): MonthGroup<T>[] {
+function groupByMonth<T>(items: T[], dateOf: (item: T) => Date | null, upcoming = false): MonthGroup<T>[] {
   const buckets = new Map<string, { label: string; sort: number; items: T[] }>();
   const undated: T[] = [];
   for (const item of items) {
     const date = dateOf(item);
-    if (!date || date.getTime() === 0) {
+    if (!date || !Number.isFinite(date.getTime()) || date.getTime() === 0) {
       undated.push(item);
       continue;
     }
     const key = `${date.getFullYear()}-${date.getMonth()}`;
     const current = buckets.get(key);
     if (current) current.items.push(item);
-    else buckets.set(key, { label: monthLabel(date), sort: date.getFullYear() * 100 + date.getMonth(), items: [item] });
+    else buckets.set(key, { label: `${monthLabel(date)}${date.getFullYear() === new Date().getFullYear() ? '' : ` ${date.getFullYear()}`}`, sort: date.getFullYear() * 100 + date.getMonth(), items: [item] });
   }
-  const groups = [...buckets.values()].sort((a, b) => a.sort - b.sort);
+  const groups = [...buckets.values()].sort((a, b) => upcoming ? a.sort - b.sort : b.sort - a.sort);
   if (undated.length) groups.push({ label: 'UNSCHEDULED', sort: 0, items: undated });
   return groups;
 }
@@ -198,7 +199,11 @@ function railParts(date: Date | null) {
 type AgendaRowModel = {
   id: string;
   kind: 'month' | 'row';
+  payment?: ProfileTransaction;
   month?: string;
+  monthKey?: string;
+  monthSort?: number;
+  recordCount?: number;
   day?: string;
   weekday?: string;
   title?: string;
@@ -218,13 +223,16 @@ function flattenGroups<T>(
 ): AgendaRowModel[] {
   const rows: AgendaRowModel[] = [];
   groups.forEach((group) => {
-    rows.push({ id: `month-${group.label}`, kind: 'month', month: group.label });
+    const monthKey = `month-${group.sort ?? group.label}`;
+    rows.push({ id: monthKey, kind: 'month', month: group.label, monthKey, monthSort: group.sort, recordCount: group.items.length });
     group.items.forEach((item, index) => {
       const next = toRow(item, index);
       const parts = railParts(next.date);
       rows.push({
         id: next.id,
         kind: 'row',
+        payment: next.payment,
+        monthKey,
         day: parts.day,
         weekday: parts.weekday,
         title: next.title,
@@ -360,14 +368,50 @@ function FilterMenu({
   );
 }
 
-function AgendaMonth({ label }: { label: string }) {
+function AgendaMonth({ label, count, expanded, onPress }: { label: string; count: number; expanded: boolean; onPress: () => void }) {
   return (
-    <Text
-      accessibilityRole="header"
-      className="px-5 pb-2 pt-5 text-[11px] font-extrabold tracking-[0.18em] text-faint">
-      {label}
-    </Text>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${label}, ${count} ${count === 1 ? 'record' : 'records'}`}
+      accessibilityState={{ expanded }}
+      onPress={onPress}
+      style={{ minHeight: 52, paddingHorizontal: 20, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <Text style={{ flex: 1, color: brand.muted, fontSize: 11, fontWeight: '400', letterSpacing: 1.5 }}>{label}</Text>
+      <Text style={{ color: brand.muted, fontSize: 11, fontWeight: '400' }}>{count}</Text>
+      <SymbolView name={expanded ? 'chevron.down' : 'chevron.right'} size={12} tintColor={brand.muted} />
+    </Pressable>
   );
+}
+
+function PaymentCard({ item }: { item: AgendaRowModel }) {
+  const payment = item.payment!;
+  const status = payment.status.toLowerCase();
+  const refund = payment.kind === 'refund' || status.includes('refund');
+  const failed = /failed|declined|rejected/.test(status);
+  const abandoned = /abandoned|cancelled|canceled/.test(status);
+  const pending = /pending|processing|queued|requested/.test(status);
+  const success = /success|paid|completed|processed/.test(status);
+  const color = failed ? '#F87171' : abandoned ? '#9CA3AF' : refund ? '#FB923C' : pending ? '#FBBF24' : success ? '#60A5FA' : '#9CA3AF';
+  return <View style={{ paddingHorizontal: 20, paddingBottom: 7 }}>
+    <View style={{ flexDirection: 'row', gap: 9, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: refund ? '#FB923C33' : '#ffffff14', backgroundColor: '#141414' }}>
+      <View style={{ width: 26, alignItems: 'center', gap: 5, paddingTop: 3 }}>
+        <Text style={{ fontSize: 16, color, fontWeight: '400' }}>{item.day}</Text>
+        <Text style={{ fontSize: 8, color: '#828b9a', letterSpacing: 0.5 }}>{item.weekday}</Text>
+      </View>
+      <View style={{ flex: 1, gap: 4 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+          <View style={{ borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, backgroundColor: `${color}18`, borderWidth: 1, borderColor: `${color}33` }}>
+            <Text style={{ color, fontSize: 9, fontWeight: '400' }}>{payment.status.toUpperCase()}</Text>
+          </View>
+          {payment.kind === 'refund' && !status.includes('refund') && <Text style={{ fontSize: 9, color: '#FB923C' }}>REFUND</Text>}
+          <Text style={{ marginLeft: 'auto', fontSize: 13, fontWeight: '400', color, fontVariant: ['tabular-nums'] }}>{payment.amount}</Text>
+        </View>
+        <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '400', color: '#fff' }}>{payment.event_name || item.title}</Text>
+        <Text style={{ fontSize: 10, lineHeight: 13, color: '#9ca3af' }}>{payment.kind === 'refund' ? payment.reason || 'Refund' : item.subtitle}</Text>
+        {!!payment.refundedTotal && status !== 'refunded' && <Text style={{ fontSize: 10, color: '#FB923C' }}>Refunded: {payment.refundedTotal.toLocaleString('en-ZA', { style: 'currency', currency: 'ZAR' })}</Text>}
+      </View>
+    </View>
+  </View>;
 }
 
 function AgendaRow({
@@ -509,6 +553,7 @@ function PageEnter({ active, children }: { active: boolean; children: ReactNode 
 function AgendaList({
   data,
   extraData,
+  resetKey,
   header,
   footer,
   empty,
@@ -518,6 +563,7 @@ function AgendaList({
 }: {
   data: AgendaRowModel[];
   extraData?: unknown;
+  resetKey?: string;
   header?: ReactNode;
   footer?: ReactNode;
   empty: ReactNode;
@@ -525,16 +571,37 @@ function AgendaList({
   onRefresh: () => void;
   bottomPad: number;
 }) {
+  const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({});
+  const listRef = useRef<FlashListRef<AgendaRowModel>>(null);
+  useEffect(() => {
+    if (resetKey === undefined) return;
+    setExpandedMonths({});
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [resetKey]);
+  const months = data.filter(row => row.kind === 'month');
+  const now = new Date();
+  const currentMonth = now.getFullYear() * 100 + now.getMonth();
+  const dated = months.filter(row => (row.monthSort ?? 0) > 0);
+  // Prefer the current month; histories open their latest available month.
+  // An upcoming-only list opens its first scheduled month.
+  const defaultMonth = dated.find(row => row.monthSort === currentMonth)
+    ?? [...dated].filter(row => row.monthSort! < currentMonth).sort((a, b) => b.monthSort! - a.monthSort!)[0]
+    ?? [...dated].sort((a, b) => a.monthSort! - b.monthSort!)[0]
+    ?? months[0];
+  const isExpanded = (key: string) => expandedMonths[key] ?? key === defaultMonth?.id;
+  const visibleRows = data.filter(row => row.kind === 'month' || !row.monthKey || isExpanded(row.monthKey));
+  const toggleMonth = (key: string) => setExpandedMonths(previous => ({ ...previous, [key]: !isExpanded(key) }));
   return (
     <FlashList
-      data={data}
-      extraData={extraData}
+      ref={listRef}
+      data={visibleRows}
+      extraData={{ extraData, expandedMonths }}
       keyExtractor={(item) => item.id}
       renderItem={({ item }) =>
         item.kind === 'month' ? (
-          <AgendaMonth label={item.month || ''} />
+          <AgendaMonth label={item.month || ''} count={item.recordCount || 0} expanded={isExpanded(item.id)} onPress={() => toggleMonth(item.id)} />
         ) : (
-          <AgendaRow
+          item.payment ? <PaymentCard item={item} /> : <AgendaRow
             day={item.day}
             weekday={item.weekday}
             title={item.title || ''}
@@ -618,6 +685,7 @@ export function ProfileSectionPager({
   eventsFooter: ReactNode;
   bottomPad: number;
 }) {
+  const router = useRouter();
   const events = eventView === 'upcoming' ? upcomingEvents : completedEvents;
   const past = eventView === 'completed';
   const visibleEvents =
@@ -629,7 +697,7 @@ export function ProfileSectionPager({
   const eventRows = useMemo(
     () =>
       flattenGroups(
-        groupByMonth(visibleEvents, (event) => parseDay(event.start_date)),
+        groupByMonth(visibleEvents, (event) => parseDay(event.start_date), !past),
         (event) => {
           const pending = pendingEventIds.has(event.id);
           const action = eventActionLabel(event, past);
@@ -660,10 +728,11 @@ export function ProfileSectionPager({
           date: parseLooseDate(match.Info?.EventStartDate || match.Info?.Date),
           title: matchTitle(match),
           subtitle: matchSubtitle(match),
-          status: matchStatus(match),
+          status: matchView === 'completed' && !match.Score?.Score?.length ? 'Result not available' : matchStatus(match),
+          onPress: matchView === 'completed' ? () => router.push({ pathname: '/match-result', params: { match: JSON.stringify(match) } }) : undefined,
         })
       ),
-    [matches]
+    [matches, matchView, router]
   );
 
   const rankingRows = useMemo(() => {
@@ -702,6 +771,7 @@ export function ProfileSectionPager({
           const refund = row.kind === 'refund';
           return {
             id: `pay-${row.kind}-${row.id}-${index}`,
+            payment: row,
             date: row.sortDate ? new Date(row.sortDate) : parseLooseDate(row.date),
             title: refund ? row.reason || 'Refund' : row.event_name || 'License fee',
             subtitle: String(row.payment_type || row.kind).replace(/_/g, ' '),
@@ -812,13 +882,14 @@ export function ProfileSectionPager({
         <PageEnter active={section === 'rankings'}>
           <AgendaList
             data={rankingRows}
+            resetKey={selectedRanking ? rankingKey(selectedRanking) : 'rankings'}
             extraData={selectedRanking?.org}
             refreshing={refreshing}
             onRefresh={onRefresh}
             bottomPad={bottomPad}
             header={
               <View className="px-5 pt-4">
-                <Text className="mb-3 text-[16px] font-bold text-premium">My rankings</Text>
+                <Text className="mb-3 text-[11px] font-normal text-premium">RANKINGS POINTS BREAKDOWN</Text>
                 {rankings.length ? (
                   <ScrollView
                     horizontal
@@ -837,14 +908,14 @@ export function ProfileSectionPager({
                           accessibilityState={{ selected: Boolean(active) }}
                           accessibilityLabel={`${row.org || 'SAPA'}, ${row.age_group || 'Open'}`}
                           android_ripple={RIPPLE}
-                          className="min-h-11 justify-center rounded-xl px-3"
+                          className="min-h-9 justify-center rounded-xl px-3"
                           style={{
                             backgroundColor: active ? '#EAB308' : 'rgba(255,255,255,0.02)',
                             borderWidth: 1,
                             borderColor: active ? '#EAB308' : 'rgba(255,255,255,0.1)',
                           }}>
                           <Text
-                            className="text-[8px] font-black uppercase tracking-widest"
+                            className="text-[8px] font-normal uppercase tracking-widest"
                             style={{ color: active ? '#000' : 'rgba(255,255,255,0.7)' }}>
                             {row.org || 'SAPA'} ({row.age_group || 'Open'})
                           </Text>
@@ -854,10 +925,21 @@ export function ProfileSectionPager({
                   </ScrollView>
                 ) : null}
                 {selectedRanking ? (
-                  <Text className="pb-1 text-[12px] text-muted">
-                    #{selectedRanking.rank} · {selectedRanking.points ?? '—'} pts ·{' '}
-                    {selectedRanking.match_type || 'Open'}
-                  </Text>
+                  <>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, marginBottom: 18 }}>
+                      {[
+                        { label: 'STANDING', value: selectedRanking.rank != null ? `#${selectedRanking.rank}` : '—', color: '#EAB308' },
+                        { label: 'POINTS', value: String(selectedRanking.points ?? '—'), color: '#fff' },
+                        { label: 'TYPE', value: (selectedRanking.match_type || 'Open').toUpperCase(), color: '#d1d5db' },
+                      ].map(({ label, value, color }) => (
+                        <View key={label} style={{ flex: 1, minHeight: 66, paddingHorizontal: 8, paddingVertical: 10, borderRadius: 16, borderWidth: 1, borderColor: '#ffffff18', backgroundColor: '#ffffff05', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                          <Text style={{ fontSize: 8, letterSpacing: 1, color: '#828b9a', fontWeight: '400' }}>{label}</Text>
+                          <Text style={{ fontSize: label === 'TYPE' ? 9 : 20, color, textAlign: 'center', fontWeight: '400' }}>{value}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#828b9a', marginBottom: 4 }}>DETAILED BREAKDOWN</Text>
+                  </>
                 ) : null}
               </View>
             }

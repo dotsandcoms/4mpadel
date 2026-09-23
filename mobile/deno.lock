@@ -1,0 +1,55 @@
+{
+  "version": "5",
+  "redirects": {
+    "https://esm.sh/@supabase/supabase-js@2": "https://esm.sh/@supabase/supabase-js@2.49.4"
+  },
+  "remote": {
+    "https://esm.sh/@supabase/supabase-js@2.49.4": "d52c4d06946766d328fdd0ac2e007f52bb6d2ef7ce6103ad9f0f57d92b73e978"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@expo/ui@~57.0.10",
+        "npm:@expo/vector-icons@^15.0.2",
+        "npm:@react-native-async-storage/async-storage@2.2.0",
+        "npm:@react-native-google-signin/google-signin@^16.1.4",
+        "npm:@shopify/flash-list@2.0.2",
+        "npm:@supabase/supabase-js@^2.112.3",
+        "npm:@tanstack/react-query@^5.101.4",
+        "npm:@types/react@~19.2.2",
+        "npm:expo-apple-authentication@~57.0.1",
+        "npm:expo-auth-session@~57.0.6",
+        "npm:expo-constants@~57.0.10",
+        "npm:expo-crypto@~57.0.1",
+        "npm:expo-device@~57.0.1",
+        "npm:expo-font@~57.0.1",
+        "npm:expo-glass-effect@~57.0.1",
+        "npm:expo-haptics@~57.0.1",
+        "npm:expo-image@~57.0.2",
+        "npm:expo-linking@~57.0.5",
+        "npm:expo-local-authentication@~57.0.2",
+        "npm:expo-notifications@~57.0.10",
+        "npm:expo-router@~57.0.12",
+        "npm:expo-secure-store@~57.0.1",
+        "npm:expo-splash-screen@~57.0.6",
+        "npm:expo-status-bar@~57.0.1",
+        "npm:expo-symbols@~57.0.2",
+        "npm:expo-system-ui@~57.0.2",
+        "npm:expo-web-browser@~57.0.2",
+        "npm:expo@~57.0.12",
+        "npm:nativewind@^4.2.6",
+        "npm:react-dom@19.2.3",
+        "npm:react-native-gesture-handler@2.32",
+        "npm:react-native-reanimated@4.5.1",
+        "npm:react-native-safe-area-context@5.7",
+        "npm:react-native-screens@4.26",
+        "npm:react-native-web@0.21",
+        "npm:react-native-worklets@0.10.1",
+        "npm:react-native@0.86.2",
+        "npm:react@19.2.3",
+        "npm:tailwindcss@^3.4.19",
+        "npm:typescript@~6.0.3"
+      ]
+    }
+  }
+}

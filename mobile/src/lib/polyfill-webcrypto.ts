@@ -8,7 +8,7 @@ import * as ExpoCrypto from 'expo-crypto';
  * Import this before `createClient`. expo-crypto is already in the native
  * binary — this only wires it onto the WebCrypto shape auth-js checks.
  */
-const g = globalThis as typeof globalThis & {
+const g = globalThis as unknown as {
   crypto?: { subtle?: { digest: typeof ExpoCrypto.digest }; getRandomValues?: typeof ExpoCrypto.getRandomValues };
 };
 
@@ -21,7 +21,10 @@ if (typeof g.crypto?.subtle?.digest !== 'function') {
           ? ExpoCrypto.CryptoDigestAlgorithm.SHA256
           : name === 'SHA-384' || name === 'SHA384'
             ? ExpoCrypto.CryptoDigestAlgorithm.SHA384
-            : ExpoCrypto.CryptoDigestAlgorithm.SHA512;
+            : name === 'SHA-512' || name === 'SHA512'
+              ? ExpoCrypto.CryptoDigestAlgorithm.SHA512
+              : null;
+      if (!algo) return Promise.reject(new Error(`Unsupported digest algorithm: ${name}`));
       return ExpoCrypto.digest(algo, data);
     },
   };

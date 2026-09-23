@@ -59,7 +59,9 @@ function AccentGradientButton({
   label,
   accent,
   onPress,
+  compact = false,
 }: {
+  compact?: boolean;
   label: string;
   accent: string;
   onPress: () => void;
@@ -74,11 +76,11 @@ function AccentGradientButton({
   return (
     <PressableScale
       onPress={onPress}
-      hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+      hitSlop={compact ? 6 : 4}
       accessibilityRole="button"
       accessibilityLabel={label}>
       <View
-        className="min-h-11 shrink-0 justify-center overflow-hidden rounded-full border px-3.5"
+        className={`shrink-0 justify-center overflow-hidden rounded-full border ${compact ? 'min-h-8 px-3' : 'min-h-11 px-3.5'}`}
         style={[
           {
             borderColor: accent,
@@ -98,7 +100,7 @@ function AccentGradientButton({
               'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.06) 45%, transparent 100%)',
           } as ViewStyle}
         />
-        <Text className="text-[11px] font-bold uppercase tracking-wide" style={{ color }}>
+        <Text className={`${compact ? 'text-[10px] font-normal' : 'text-[11px] font-bold'} uppercase tracking-wide`} style={{ color }}>
           {label}
         </Text>
       </View>
@@ -215,28 +217,28 @@ export function EventRow({ event, showStartCountdown = false, onPress, onCta }: 
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${event.event_name || 'Event'}. ${parts.weekday} ${parts.day} ${parts.month}. ${location}`}>
-      <View className="w-full gap-2.5 px-4 py-4">
+      <View className="w-full gap-2 px-3.5 py-3">
         <View className="flex-row items-center">
-          <View className="mr-3 shrink-0 flex-row items-start self-start pt-0.5">
+          <View className="mr-2.5 shrink-0 flex-row items-start self-start pt-0.5">
             <SymbolView
               name={{ ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }}
-              size={18}
+              size={16}
               weight="medium"
               tintColor={brand.padel}
             />
-            <View className="ml-3 items-center">
+            <View className="ml-2 items-center">
               <Text
-                className="text-xl font-bold leading-none text-premium"
+                className="text-[18px] font-medium leading-none text-premium"
                 style={{ fontVariant: ['tabular-nums'] }}>
                 {parts.day}
               </Text>
               {parts.month ? (
-                <Text className="mt-1.5 text-[9px] font-black uppercase tracking-widest text-padel">
+                <Text className="mt-1.5 text-[9px] font-normal uppercase tracking-widest text-padel">
                   {parts.month}
                 </Text>
               ) : null}
               {parts.weekday ? (
-                <Text className="mt-0.5 text-[8px] font-bold uppercase tracking-widest text-white/40">
+                <Text className="mt-0.5 text-[8px] font-normal uppercase tracking-widest text-white/40">
                   {parts.weekday}
                 </Text>
               ) : null}
@@ -247,7 +249,7 @@ export function EventRow({ event, showStartCountdown = false, onPress, onCta }: 
             <View className="flex-row items-center">
               <Text
                 numberOfLines={1}
-                className="min-w-0 flex-1 text-sm font-bold uppercase text-premium">
+                className="min-w-0 flex-1 text-[13px] font-normal uppercase text-premium">
                 {event.event_name}
               </Text>
               {label ? (
@@ -255,7 +257,7 @@ export function EventRow({ event, showStartCountdown = false, onPress, onCta }: 
                   className="ml-2 shrink-0 rounded-full border px-2 py-0.5"
                   style={{ borderColor: tone.border }}>
                   <Text
-                    className="text-[8px] font-black uppercase tracking-widest"
+                    className="text-[8px] font-normal uppercase tracking-widest"
                     style={{ color: tone.text }}>
                     {label}
                   </Text>
@@ -273,7 +275,7 @@ export function EventRow({ event, showStartCountdown = false, onPress, onCta }: 
           </View>
 
           <View className="ml-1 shrink-0">
-            <SymbolView name="chevron.right" size={18} tintColor={brand.padel} />
+            <SymbolView name="chevron.right" size={16} tintColor={brand.padel} />
           </View>
         </View>
 
@@ -292,6 +294,7 @@ export function EventRow({ event, showStartCountdown = false, onPress, onCta }: 
             </View>
             {cta ? (
               <AccentGradientButton
+                compact
                 label={cta.label}
                 accent={tone.fill}
                 onPress={onCta ?? onPress}
@@ -398,7 +401,8 @@ export function FeaturedCard({ event, onPress }: CardProps) {
       style={{ borderColor: tone.border }}>
       <Image
         source={featuredBackgroundSource(event)}
-        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, pointerEvents: 'none' }}
+        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+        pointerEvents="none"
         contentFit="cover"
         contentPosition={{ top: '28%', left: '82%' }}
         accessibilityElementsHidden
@@ -563,16 +567,16 @@ export function PendingRow({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${title}. ${subtitle}. ${detail}`}
-      className="mb-2 flex-row items-center rounded-xl border border-edge bg-white/5 px-3.5 py-3">
-      <View className="h-9 w-9 items-center justify-center rounded-full border border-padel/50 bg-padel/10">
+      className="mb-2 flex-row items-center rounded-xl border border-edge bg-elevated px-3.5 py-3">
+      <View className="h-8 w-8 items-center justify-center rounded-full border border-padel/50 bg-padel/10">
         <SymbolView name={icon} size={15} tintColor={brand.padel} />
       </View>
       <View className="ml-3 min-w-0 flex-1">
-        <Text className="text-[14px] font-bold text-premium">{title}</Text>
+        <Text className="text-[13px] font-normal text-premium">{title}</Text>
         <Text numberOfLines={1} className="mt-0.5 text-[12px] text-white/50">
           {subtitle}
         </Text>
-        <Text numberOfLines={1} className="mt-0.5 text-[12px] font-bold text-padel">
+        <Text numberOfLines={1} className="mt-0.5 text-[11px] font-normal text-padel">
           {detail}
         </Text>
       </View>
@@ -622,7 +626,7 @@ function CountdownBox({
       className={`relative self-start rounded-lg border px-2.5 pb-1.5 pt-2.5 ${compact ? '' : 'mt-3'}`}
       style={{ borderColor: `${accent}80` }}>
       <Text
-        className="absolute -top-1.5 left-2 px-1 text-[8px] font-bold uppercase tracking-wider"
+        className="absolute -top-1.5 left-2 px-1 text-[8px] font-normal uppercase tracking-wider"
         style={{ color: accent, backgroundColor: cutout }}>
         {label}
       </Text>
@@ -630,15 +634,15 @@ function CountdownBox({
         {parts.map((part, i) => (
           <View key={part.unit} className="flex-row items-end">
             {i > 0 ? (
-              <Text className="px-1 pb-1.5 text-[12px] font-bold text-white/40">:</Text>
+              <Text className="px-1 pb-1.5 text-[12px] font-normal text-white/40">:</Text>
             ) : null}
             <View className="min-w-[1.6rem] items-center">
               <Text
-                className="text-sm font-black leading-none text-premium"
+                className="text-[13px] font-medium leading-none text-premium"
                 style={{ fontVariant: ['tabular-nums'] }}>
                 {part.value}
               </Text>
-              <Text className="mt-0.5 text-[7px] font-bold tracking-wider text-white/50">
+              <Text className="mt-0.5 text-[7px] font-normal tracking-wider text-white/50">
                 {part.unit}
               </Text>
             </View>
@@ -660,7 +664,7 @@ function EventStartsCountdown({
 }) {
   const start = startDate ? new Date(startDate).getTime() : NaN;
   if (!Number.isFinite(start)) return null;
-  return <CountdownBox label="Event starts in" target={start} accent={accent} cutout={cutout} />;
+  return <CountdownBox compact label="Event starts in" target={start} accent={accent} cutout={cutout} />;
 }
 
 function useMatchTiming(dateStr?: string | null) {

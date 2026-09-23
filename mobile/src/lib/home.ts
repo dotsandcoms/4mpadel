@@ -1,9 +1,10 @@
+import { joinedOne } from './query-result';
 import { fetchPlayerMatches, type PlayerMatch } from '@/lib/matches';
 import { supabase } from '@/lib/supabase';
 import { siteUrl } from '@/lib/site';
 
 const CALENDAR_FIELDS =
-  'id, event_name, start_date, end_date, city, venue, sapa_status, slug, registered_players, featured_event, is_spotlight, is_manual, featured_live, live_youtube_url, registration_opens_at, registration_closes_at, rankedin_url, organiser_name, organiser_badge_text, points, entry_fee, category_fees, allow_payments';
+  'id, event_name, start_date, end_date, city, venue, sapa_status, slug, registered_players, featured_event, is_spotlight, is_manual, featured_live, live_youtube_url, registration_opens_at, registration_closes_at, rankedin_url, organiser_name, organiser_badge_text, points, entry_fee, category_fees, allow_payments, custom_image_url, poster_image_url, image_url';
 
 const RANKEDIN_PROFILE =
   'https://api.rankedin.com/v1/player/playerprofileinfoasync';
@@ -36,6 +37,9 @@ export type CalendarEvent = {
   isRegistered?: boolean;
   isPaid?: boolean;
   winnerName?: string | null;
+  custom_image_url?: string | null;
+  poster_image_url?: string | null;
+  image_url?: string | null;
 };
 
 export type ScheduleEntryCta = {
@@ -95,7 +99,7 @@ const EMPTY: HomeBundle = {
 
 const AUTO_RESULT_TIERS = new Set(['gold', 'super gold', 's gold', 'major']);
 
-export async function fetchHomeBundle(email?: string | null): Promise<HomeBundle> {
+export async function fetchHomeBundle(email?: string | null, options?: { strictSchedule?: boolean }): Promise<HomeBundle> {
   const normalised = email?.trim().toLowerCase() ?? '';
 
   const [player, happeningNow, featured, recentResults, schedule, payments] =
@@ -104,7 +108,7 @@ export async function fetchHomeBundle(email?: string | null): Promise<HomeBundle
       fetchHappeningNow(),
       fetchFeatured(),
       fetchRecentResults(),
-      normalised ? fetchSchedule(normalised) : Promise.resolve({ upcoming: [], past: [] }),
+      normalised ? fetchSchedule(normalised, options?.strictSchedule) : Promise.resolve({ upcoming: [], past: [] }),
       normalised ? fetchPendingPayments(normalised) : Promise.resolve([] as PendingAction[]),
     ]);
 
@@ -495,9 +499,9 @@ async function fetchRecentResults(): Promise<CalendarEvent[]> {
   }
 }
 
-async function fetchSchedule(email: string) {
+async function fetchSchedule(email: string, strict = false) {
   try {
-    const [{ data: scheduled }, { data: regs }, { data: paidParts }] = await Promise.all([
+    const responses = await Promise.all([
       supabase
         .from('player_schedule_events')
         .select(`event_id, calendar(${CALENDAR_FIELDS})`)
@@ -516,26 +520,25 @@ async function fetchSchedule(email: string) {
         .eq('is_paid', true),
     ]);
 
+    if (strict) {
+      const failed = responses.find(response => response.error);
+      if (failed?.error) throw failed.error;
+    }
+    const [{ data: scheduled }, { data: regs }, { data: paidParts }] = responses;
     const byId = new Map<number, CalendarEvent>();
     const scheduledIds = new Set<number>();
     const registeredIds = new Set<number>();
     const paidIds = new Set<number>();
 
     for (const row of scheduled ?? []) {
-      const cal = (row as { calendar?: CalendarEvent | null }).calendar;
+      const cal = joinedOne<CalendarEvent>(row.calendar);
       if (!cal?.id) continue;
       scheduledIds.add(cal.id);
       byId.set(cal.id, cal);
     }
 
-    for (const row of (regs ?? []) as Array<{
-      email: string | null;
-      partner_email: string | null;
-      payment_status: string | null;
-      partner_payment_status: string | null;
-      calendar?: CalendarEvent | null;
-    }>) {
-      const cal = row.calendar;
+    for (const row of regs ?? []) {
+      const cal = joinedOne<CalendarEvent>(row.calendar);
       if (!cal?.id) continue;
       registeredIds.add(cal.id);
       const isRegistrant = row.email?.toLowerCase() === email;
@@ -563,7 +566,8 @@ async function fetchSchedule(email: string) {
     upcoming.sort((a, b) => (a.start_date || '').localeCompare(b.start_date || ''));
     past.sort((a, b) => (b.start_date || '').localeCompare(a.start_date || ''));
     return { upcoming, past };
-  } catch {
+  } catch (error) {
+    if (strict) throw error;
     return { upcoming: [] as CalendarEvent[], past: [] as CalendarEvent[] };
   }
 }
@@ -613,21 +617,8 @@ async function fetchPendingPayments(email: string): Promise<PendingAction[]> {
     const today = startOfToday();
     const actions: PendingAction[] = [];
 
-    for (const row of data as Array<{
-      id: number;
-      event_id: number;
-      email: string | null;
-      partner_email: string | null;
-      payment_status: string | null;
-      partner_payment_status: string | null;
-      calendar: {
-        id: number;
-        event_name: string | null;
-        slug: string | null;
-        start_date: string | null;
-      } | null;
-    }>) {
-      const cal = row.calendar;
+    for (const row of data) {
+      const cal = joinedOne<Pick<CalendarEvent, 'id' | 'event_name' | 'slug' | 'start_date'>>(row.calendar);
       const start = parseDay(cal?.start_date);
       if (start && start < today) continue;
 
@@ -641,7 +632,7 @@ async function fetchPendingPayments(email: string): Promise<PendingAction[]> {
         title: 'Complete payment',
         subtitle: cal?.event_name || 'Tournament',
         detail: 'Payment outstanding',
-        path: `/calendar/${cal?.slug || row.event_id}`,
+        path: `/events/register?id=${row.event_id}&mode=pay`,
       });
     }
 

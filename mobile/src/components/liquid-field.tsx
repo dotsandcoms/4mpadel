@@ -27,12 +27,12 @@ type Props = {
   labelAccessory?: ReactNode;
 } & React.ComponentProps<typeof TextInput>;
 
-const ANDROID_ICON: Record<FieldIcon, string> = {
+const ANDROID_ICON = {
   'envelope.fill': 'mail',
   'lock.fill': 'lock',
   'person.fill': 'person',
   'phone.fill': 'phone',
-};
+} as const;
 
 /**
  * Auth field. Persistent label above the input. Lime 2px ring + restrained
@@ -184,9 +184,8 @@ export const LiquidField = forwardRef<TextInput, Props>(function LiquidField(
           placeholderTextColor={brand.placeholder}
           accessibilityLabel={label}
           accessibilityLabelledBy={labelId}
-          accessibilityState={{ invalid: !!invalid }}
           aria-invalid={!!invalid}
-          accessibilityDescribedBy={describedBy || undefined}
+          accessibilityHint={error || hint || undefined}
           onFocus={(e) => {
             setFocused(true);
             onFocus?.(e);

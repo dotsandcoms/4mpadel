@@ -1,8 +1,9 @@
 import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
 import {
+  AppState,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -34,8 +35,11 @@ import {
   RecentResultCard,
 } from '@/components/home-event-card';
 import { HomeHeader } from '@/components/home-header';
+import { ProPadelFeed } from '@/components/pro-padel-feed';
+import { useProPadel } from '@/hooks/use-pro-padel';
+import { makeCompanionSchedule } from '@/lib/companion-schedule';
+import { publishCompanionSchedule } from '@/lib/companion';
 import { HomeGreeting, HomePlayerCard } from '@/components/home-player-card';
-import { PressableScale } from '@/components/pressable-scale';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
 import {
@@ -58,42 +62,15 @@ import { brand, motion } from '@/theme/tokens';
 
 const MATCH_ORANGE = '#F97316';
 
-const QUICK_LINKS = [
-  {
-    key: 'rankings',
-    label: 'Player Rankings',
-    icon: 'chart.bar.fill' as const,
-    tab: '/(tabs)/rankings' as const,
-  },
-  {
-    key: 'calendar',
-    label: 'Find Tournaments',
-    icon: 'magnifyingglass' as const,
-    tab: '/(tabs)/calendar' as const,
-  },
-  {
-    key: 'profile',
-    label: 'My Profile',
-    icon: 'person.fill' as const,
-    tab: '/(tabs)/profile' as const,
-  },
-  {
-    key: 'help',
-    label: 'Help & Support',
-    icon: 'questionmark.circle' as const,
-    href: '/contact',
-  },
-];
-
 type OpenMap = {
   pending: boolean;
   schedule: boolean;
   featured: boolean;
   results: boolean;
-  links: boolean;
 };
 
 export default function HomeScreen() {
+  const proPadel = useProPadel();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const tabPad = useTabScenePadding();
@@ -105,7 +82,6 @@ export default function HomeScreen() {
     schedule: false,
     featured: false,
     results: false,
-    links: false,
   });
   const [schedulePast, setSchedulePast] = useState(false);
   const [scheduleKind, setScheduleKind] = useState<'matches' | 'events'>('events');
@@ -115,7 +91,9 @@ export default function HomeScreen() {
     if (!soft) setLoading(true);
     try {
       const { data } = await supabase.auth.getUser();
-      setBundle(await fetchHomeBundle(data.user?.email));
+      const next = await fetchHomeBundle(data.user?.email, { strictSchedule: true });
+      setBundle(next);
+      if (data.user) void publishCompanionSchedule(data.user.id, makeCompanionSchedule(next));
     } catch (err) {
       console.warn('[home]', err);
     } finally {
@@ -124,9 +102,13 @@ export default function HomeScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useFocusEffect(useCallback(() => {
+    void load(true);
+    const foreground = AppState.addEventListener('change', state => {
+      if (state === 'active') void load(true);
+    });
+    return () => foreground.remove();
+  }, [load]));
 
   useEffect(() => {
     if (bundle.pending.length > 0) {
@@ -190,18 +172,19 @@ export default function HomeScreen() {
         keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
+            refreshing={refreshing || proPadel.loading}
             onRefresh={() => {
               setRefreshing(true);
-              load(true);
+              void Promise.all([load(true), proPadel.refresh()]);
             }}
             tintColor={brand.padel}
           />
         }>
-        <View>
+        <View style={{ overflow: 'hidden' }}>
           <Image
             source={require('@/assets/images/hero-bg.jpg')}
-            style={[styles.heroImage, { pointerEvents: 'none' }]}
+            style={styles.heroImage}
+            pointerEvents="none"
             contentFit="cover"
             accessibilityElementsHidden
           />
@@ -219,7 +202,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View className="px-4">
+        <View className="px-4 bg-page">
         {bundle.happeningNow.length ? (
           <FadeUp delay={motion.stagger * 6} className="mt-6">
             {bundle.happeningNow.slice(0, 3).map((event, i) => (
@@ -237,10 +220,12 @@ export default function HomeScreen() {
         <FadeUp delay={motion.stagger * 8} className="mt-4">
           {bundle.pending.length ? (
             <HomeAccordion
-              title={`Pending Actions (${bundle.pending.length})`}
+              title="Pending Actions"
+              titleCount={bundle.pending.length}
+              countColor={brand.danger}
               open={open.pending}
               onToggle={() => toggle('pending')}
-              badges={[{ label: String(bundle.pending.length), count: true }]}>
+              badges={[{ label: String(bundle.pending.length), count: true, color: brand.danger }]}>
               {bundle.pending.map((action) => (
                 <PendingRow
                   key={action.key}
@@ -311,11 +296,12 @@ export default function HomeScreen() {
                     onPress={() => setSchedulePast(tab.key)}
                     accessibilityRole="button"
                     accessibilityState={{ selected: schedulePast === tab.key }}
-                    className={`min-h-10 justify-center px-2.5 ${
+                    hitSlop={6}
+                    className={`min-h-8 justify-center px-2 ${
                       schedulePast === tab.key ? 'rounded-md bg-white/10' : ''
                     }`}>
                     <Text
-                      className={`text-[11px] font-semibold ${
+                      className={`text-[10px] font-normal ${
                         schedulePast === tab.key ? 'text-premium' : 'text-white/45'
                       }`}>
                       {tab.label}
@@ -336,7 +322,7 @@ export default function HomeScreen() {
                   ) : null}
                   {(schedulePast ? matches : matches.slice(1)).length ? (
                     <View
-                      className={`overflow-hidden rounded-2xl border border-edge bg-white/5 ${
+                      className={`overflow-hidden rounded-2xl border border-edge bg-elevated ${
                         schedulePast ? '' : 'mt-3'
                       }`}>
                       {(schedulePast ? matches : matches.slice(1)).map((match, i) => (
@@ -366,7 +352,7 @@ export default function HomeScreen() {
                 />
               )
             ) : schedule.length ? (
-              <View className="overflow-hidden rounded-2xl border border-edge bg-white/5">
+              <View className="overflow-hidden rounded-2xl border border-edge bg-elevated">
                 {schedule.map((event, i) => (
                   <View key={event.id}>
                     {i > 0 ? <View className="h-px bg-edge" /> : null}
@@ -388,7 +374,7 @@ export default function HomeScreen() {
                     : 'Explore the calendar to find your next event.'
                 }
                 actionLabel={schedulePast ? undefined : 'Explore Calendar'}
-                onAction={schedulePast ? undefined : () => router.push('/(tabs)/calendar')}
+                onAction={schedulePast ? undefined : () => router.push('/calendar')}
               />
             )}
           </HomeAccordion>
@@ -409,7 +395,7 @@ export default function HomeScreen() {
                 title="No featured events right now"
                 body="Spotlight tournaments will appear here when they are announced."
                 actionLabel="Browse calendar"
-                onAction={() => router.push('/(tabs)/calendar')}
+                onAction={() => router.push('/calendar')}
               />
             )}
           </HomeAccordion>
@@ -433,33 +419,9 @@ export default function HomeScreen() {
             )}
           </HomeAccordion>
 
-          <HomeAccordion
-            title="Quick Links"
-            open={open.links}
-            onToggle={() => toggle('links')}>
-            <View className="overflow-hidden rounded-2xl border border-edge bg-elevated">
-              {QUICK_LINKS.map((link, i) => (
-                <View key={link.key}>
-                  {i > 0 ? <View className="h-px bg-edge" /> : null}
-                  <PressableScale
-                    onPress={() => {
-                      if ('tab' in link && link.tab) router.push(link.tab);
-                      else if ('href' in link && link.href) openSitePath(link.href);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={link.label}
-                    className="min-h-[52px] flex-row items-center px-4">
-                    <SymbolView name={link.icon} size={18} tintColor={brand.faint} />
-                    <Text className="ml-3.5 flex-1 text-[14px] font-medium text-premium">
-                      {link.label}
-                    </Text>
-                    <SymbolView name="chevron.right" size={14} tintColor={brand.faint} />
-                  </PressableScale>
-                </View>
-              ))}
-            </View>
-          </HomeAccordion>
+
         </FadeUp>
+        <ProPadelFeed state={proPadel} />
         </View>
       </ScrollView>
     </View>
@@ -685,7 +647,8 @@ function KindTab({
       onPress={onPress}
       accessibilityRole="tab"
       accessibilityState={{ selected }}
-      className={`mr-1.5 min-h-11 shrink-0 flex-row items-center rounded-lg px-2.5 ${
+      hitSlop={6}
+      className={`mr-1.5 min-h-8 shrink-0 flex-row items-center rounded-lg px-2 ${
         selected ? 'border border-white/40 bg-white/5' : ''
       }`}>
       <SymbolView
@@ -694,7 +657,7 @@ function KindTab({
         tintColor={selected ? brand.premium : 'rgba(255,255,255,0.5)'}
       />
       <Text
-        className={`ml-1.5 text-[13px] font-bold ${
+        className={`ml-1.5 text-[12px] font-normal ${
           selected ? 'text-premium' : 'text-white/50'
         }`}>
         {label}
@@ -704,7 +667,7 @@ function KindTab({
           className="ml-1.5 min-h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5"
           style={{ backgroundColor: badgeColor }}>
           <Text
-            className="text-[10px] font-black text-black"
+            className="text-[9px] font-normal text-black"
             style={{ fontVariant: ['tabular-nums'] }}>
             {count}
           </Text>

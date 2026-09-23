@@ -12,6 +12,11 @@
     "ios": {
       "bundleIdentifier": "com.fourmpadel.app",
       "supportsTablet": false,
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.fourmpadel.app.schedule"
+        ]
+      },
       "infoPlist": {
         "UIStatusBarStyle": "UIStatusBarStyleLightContent",
         "NSFaceIDUsageDescription": "Use Face ID to sign in to 4M Padel without entering your password.",
@@ -22,6 +27,12 @@
           {
             "CFBundleURLSchemes": [
               "com.googleusercontent.apps.777893152228-fgqp4i3hj3qqe3qlcssstn8t5pfkv9hq"
+            ]
+          },
+          {
+            "CFBundleURLSchemes": [
+              "fourmpadel",
+              "com.fourmpadel.app"
             ]
           }
         ]
@@ -39,8 +50,7 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": true,
-      "edgeToEdgeEnabled": true
+      "predictiveBackGestureEnabled": true
     },
     "web": {
       "output": "static",
@@ -70,7 +80,16 @@
           "backgroundColor": "#0a0a0a"
         }
       ],
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      "@bacons/apple-targets",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow 4M Padel to add tournaments to your calendar.",
+          "writeOnlyAccess": true,
+          "writeOnlyCalendarPermission": "Allow 4M Padel to add tournaments to your calendar."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

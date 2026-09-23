@@ -30,7 +30,7 @@ const AMBER = '#F59E0B';
 const LOGOUT_RED = '#F87171';
 const SKY = '#7DD3FC';
 
-type SymbolName = { ios: string; android: string; web: string };
+type SymbolName = React.ComponentProps<typeof SymbolView>['name'];
 type Dest = { kind: 'tab'; href: string } | { kind: 'site'; path: string };
 
 type NavChild = { name: string; dest: Dest };

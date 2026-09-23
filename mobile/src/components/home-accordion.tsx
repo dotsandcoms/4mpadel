@@ -14,10 +14,12 @@ import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { hapticLight } from '@/lib/haptics';
 import { brand, motion } from '@/theme/tokens';
 
-type Badge = { label: string; count?: boolean };
+type Badge = { label: string; count?: boolean; color?: string };
 
 type Props = {
   title: string;
+  titleCount?: number;
+  countColor?: string;
   open: boolean;
   onToggle: () => void;
   badges?: Badge[];
@@ -28,7 +30,7 @@ type Props = {
  * Website home accordion: uppercase label, count pills when collapsed,
  * chevron points trailing when closed and down when open.
  */
-export function HomeAccordion({ title, open, onToggle, badges, children }: Props) {
+export function HomeAccordion({ title, titleCount, countColor, open, onToggle, badges, children }: Props) {
   const reduced = useReducedMotion();
   const rot = useSharedValue(open ? 0 : -90);
 
@@ -48,7 +50,7 @@ export function HomeAccordion({ title, open, onToggle, badges, children }: Props
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
-        accessibilityLabel={title}
+        accessibilityLabel={titleCount == null ? title : `${title} (${titleCount})`}
         onPress={() => {
           hapticLight();
           onToggle();
@@ -56,16 +58,18 @@ export function HomeAccordion({ title, open, onToggle, badges, children }: Props
         className="min-h-11 flex-row items-center justify-between px-1">
         <Text className="text-xs font-bold uppercase tracking-[0.2em] text-white/80">
           {title}
+          {titleCount != null && <Text style={{ color: countColor }}> ({titleCount})</Text>}
         </Text>
         <View className="flex-row items-center">
           {!open && badges?.length
             ? badges.map((badge) => (
                 <View
                   key={badge.label}
+                  style={badge.color ? { borderColor: badge.color } : undefined}
                   className="ml-1.5 rounded-full border border-white/20 px-2 py-0.5">
                   <Text
                     className="text-[9px] font-bold uppercase tracking-wider text-white/80"
-                    style={badge.count ? { fontVariant: ['tabular-nums'] } : undefined}>
+                    style={[badge.count ? { fontVariant: ['tabular-nums'] } : undefined, badge.color ? { color: badge.color } : undefined]}>
                     {badge.label}
                   </Text>
                 </View>

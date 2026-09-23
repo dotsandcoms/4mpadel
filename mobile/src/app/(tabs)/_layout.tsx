@@ -37,7 +37,7 @@ export default function TabsLayout() {
           <NativeTabs.Trigger.Icon sf="house.fill" drawable="home" />
         </NativeTabs.Trigger>
 
-        <NativeTabs.Trigger name="calendar">
+        <NativeTabs.Trigger name="(calendar)">
           <NativeTabs.Trigger.Label>Calendar</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf="calendar" drawable="calendar_month" />
         </NativeTabs.Trigger>

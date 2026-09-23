@@ -28,17 +28,17 @@ export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
 /** Default in-app path when the sender does not supply one. */
 export const NOTIFICATION_PATHS: Record<NotificationType, string> = {
-  partner_assigned: '/(tabs)/calendar',
-  partner_entry_paid: '/(tabs)/calendar',
-  partner_invite: '/(tabs)/calendar',
-  event_registration: '/(tabs)/calendar',
-  payment_confirmation: '/(tabs)/calendar',
-  payment_reminder: '/(tabs)/calendar',
-  entry_withdrawn: '/(tabs)/calendar',
-  entry_refunded: '/(tabs)/calendar',
-  draws_ready: '/(tabs)/calendar',
-  division_changed: '/(tabs)/calendar',
-  match_reminder: '/(tabs)/calendar',
+  partner_assigned: '/calendar',
+  partner_entry_paid: '/calendar',
+  partner_invite: '/calendar',
+  event_registration: '/calendar',
+  payment_confirmation: '/calendar',
+  payment_reminder: '/calendar',
+  entry_withdrawn: '/calendar',
+  entry_refunded: '/calendar',
+  draws_ready: '/calendar',
+  division_changed: '/calendar',
+  match_reminder: '/calendar',
   ranking_change: '/(tabs)/rankings',
   club_announcement: '/(tabs)/explore',
 };

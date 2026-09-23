@@ -3,6 +3,8 @@ import type { Session } from '@supabase/supabase-js';
 import { DarkTheme, Stack, ThemeProvider, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import { View } from 'react-native';
+import { Notice } from '@/components/events/event-ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import '@/global.css';
@@ -16,15 +18,15 @@ import { destinationAfterAuth } from '@/lib/profile';
 import { recordAppDevice } from '@/lib/signup-source';
 import { supabase } from '@/lib/supabase';
 import { brand } from '@/theme/tokens';
+import { setCompanionAccount } from '@/lib/companion';
 
 SplashScreen.preventAutoHideAsync();
 
 /**
  * Root layout, session gate, and splash handoff.
  *
- * The app is dark-only by design — the 4M Padel identity is electric lime on
- * near-black and has no light counterpart, so we commit to one world rather
- * than ship a washed-out light mode.
+ * App chrome uses the dark 4M identity. Event overview content follows the
+ * website’s white tabs and light accordion surfaces.
  *
  * Launch runs as: static native splash (near-black) → in-app AnimatedSplash
  * (full-bleed court, lime line, wordmark) → app. Native cannot animate, so
@@ -41,6 +43,8 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const router = useRouter();
   const [dataReady, setDataReady] = useState(false);
+  const [bootError, setBootError] = useState(false);
+  const [bootAttempt, setBootAttempt] = useState(0);
   const [animDone, setAnimDone] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const seenRef = useRef(false);
@@ -59,11 +63,14 @@ export default function RootLayout() {
     let cancelled = false;
 
     (async () => {
-      const [seen, { data }] = await Promise.all([
+      try {
+      const [seen, { data, error: sessionError }] = await Promise.all([
         hasSeenOnboarding(),
         supabase.auth.getSession(),
       ]);
       if (cancelled) return;
+      if (sessionError) throw sessionError;
+      void setCompanionAccount(data.session?.user.id ?? null);
 
       seenRef.current = seen;
       sessionRef.current = data.session;
@@ -73,16 +80,20 @@ export default function RootLayout() {
         syncPushTokenIfGranted();
         recordAppDevice();
       }
+      } catch {
+        if (!cancelled) setBootError(true);
+      }
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      void setCompanionAccount(session?.user.id ?? null);
       if (!settled.current) return;
       sessionRef.current = session;
       if (event === 'SIGNED_OUT') router.replace('/(auth)/sign-in');
       if (event === 'SIGNED_IN' && session && seenRef.current) {
         syncPushTokenIfGranted();
         recordAppDevice();
-        destinationAfterAuth(session).then((path) => router.replace(path));
+        destinationAfterAuth(session).then((path) => router.replace(path)).catch(() => setBootError(true));
       }
     });
 
@@ -95,13 +106,14 @@ export default function RootLayout() {
       sub.subscription.unsubscribe();
       tap.remove();
     };
-  }, [router]);
+  }, [router, bootAttempt]);
 
   useEffect(() => {
     if (!dataReady || !animDone || revealed) return;
     let cancelled = false;
 
     (async () => {
+      try {
       const path = await resolvePath(seenRef.current, sessionRef.current);
       if (cancelled) return;
       router.replace(path);
@@ -112,6 +124,9 @@ export default function RootLayout() {
           if (!cancelled) setRevealed(true);
         });
       });
+      } catch {
+        if (!cancelled) setBootError(true);
+      }
     })();
 
     return () => {
@@ -142,11 +157,22 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: brand.page } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
+        <Stack.Screen name="events/register" />
         <Stack.Screen
           name="search"
           options={{
             presentation: 'formSheet',
             sheetAllowedDetents: [0.62, 1],
+            sheetGrabberVisible: true,
+            sheetCornerRadius: 24,
+            contentStyle: { backgroundColor: brand.page },
+          }}
+        />
+        <Stack.Screen
+          name="match-result"
+          options={{
+            presentation: 'formSheet',
+            sheetAllowedDetents: [0.42, 0.78],
             sheetGrabberVisible: true,
             sheetCornerRadius: 24,
             contentStyle: { backgroundColor: brand.page },
@@ -183,6 +209,15 @@ export default function RootLayout() {
         />
       </Stack>
       {showSplash ? <AnimatedSplash onFinish={onSplashFinish} /> : null}
+      {bootError && <View style={{ position: 'absolute', inset: 0, backgroundColor: brand.page, justifyContent: 'center', padding: 24 }}>
+        <Notice title="Could not restore your session" onRetry={() => {
+          settled.current = false;
+          setBootError(false);
+          setDataReady(false);
+          setRevealed(false);
+          setBootAttempt(value => value + 1);
+        }}>We couldn’t access your saved sign-in. Please try again. If this continues, close and reopen the app.</Notice>
+      </View>}
     </ThemeProvider>
   );
 }
