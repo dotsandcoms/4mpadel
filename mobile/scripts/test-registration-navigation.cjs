@@ -6,7 +6,7 @@ const vm = require('node:vm');
 
 // Render the actual screen with an in-memory hook host and read-only API fixtures.
 // This checks its button handlers and conditional branches without a native device.
-async function screen(mode, eventOptions = {}) {
+async function screen(mode, eventOptions = {}, savedCheckout = null) {
   const values = [], effects = [], navigation = [], requests = [];
   let cursor = 0, mounted = false;
   const hooks = {
@@ -30,7 +30,7 @@ async function screen(mode, eventOptions = {}) {
     'expo-image': { Image: 'Image' }, '@expo/vector-icons': { Ionicons: 'Ionicons' },
     'expo-crypto': { randomUUID: () => 'test-attempt' },
     'expo-web-browser': {}, 'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 20, bottom: 20 }) },
-    '@react-native-async-storage/async-storage': { default: { getItem: async () => null } },
+    '@react-native-async-storage/async-storage': { default: { getItem: async () => savedCheckout } },
     '@/components/events/event-ui': { ActionButton: 'ActionButton', Chip: 'Chip', Notice: 'Notice' },
     '@/components/events/registration-options': { Choices: 'Choices', DivisionOptions: 'DivisionOptions', LicencePicker: 'LicencePicker' },
     '@/lib/home': { formatEventRange: () => '2–4 Oct' },
@@ -104,4 +104,16 @@ test('logo controls follow organiser flags and checkout receives explicit sponso
   app.find('ActionButton', p => p.label === 'Continue to Review & Pay').props.onPress();
   await app.flush();
   assert.equal(app.find('SponsorDetails', p => p.email === 'mark@example.com').props.logo, 'https://example.test/logo.png');
+});
+
+test('Pay Now opens Review & Pay even when an earlier checkout was saved', async () => {
+  const app = await screen('pay', {}, JSON.stringify({ reference: 'previous-attempt', url: 'https://checkout.paystack.com/saved', payForPartner: false }));
+  assert.ok(app.find('Text', p => p.children === 'Review & Pay'));
+  assert.ok(app.find('ActionButton', p => p.label === 'Pay & Complete Registration'));
+  assert.ok(app.find('ActionButton', p => p.label === 'Already paid? Check payment status'));
+  assert.equal(app.find('ActionButton', p => p.label === 'Continue to checkout'), undefined);
+  assert.ok(app.find('Text', p => p.children === 'Entries'));
+  app.find('ActionButton', p => p.label === '‹ Back').props.onPress();
+  assert.ok(app.find('DivisionOptions'));
+  assert.equal(app.navigation.length, 0);
 });

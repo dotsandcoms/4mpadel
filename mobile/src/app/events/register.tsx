@@ -70,6 +70,8 @@ function RegistrationFlow() {
   const [reference, setReference] = useState<string | null>(null);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [returnedFromCheckout, setReturnedFromCheckout] = useState(false);
+  const [checkoutStarted, setCheckoutStarted] = useState(false);
+  const showPaymentStatus = !!reference && (!payOnly || checkoutStarted);
   const [done, setDone] = useState(false);
   const [paymentPending, setPaymentPending] = useState(false);
   const [partnerPayAccepted, setPartnerPayAccepted] = useState(false);
@@ -81,7 +83,7 @@ function RegistrationFlow() {
     ...(!payOnly || sponsorChanged ? { tshirtLogoUrl, tshirtSponsorName } : {}), partnerTshirtLogoUrl, partnerTshirtSponsorName,
     payForPartner, tshirtSize, partnerTshirtSize, accessGrantId: grant, isTest: __DEV__ };
   const load = async () => {
-    setReturnedFromCheckout(false);
+    setReturnedFromCheckout(false); setCheckoutStarted(false);
     setLoading(true); setError(''); setQuote(null); setAgreed(false); setReference(null); setCheckoutUrl(null); setDone(false); setPartnerEmail(''); setPartnerName('');
     try {
       const row = await fetchEvent(id);
@@ -165,6 +167,7 @@ function RegistrationFlow() {
     if (!result.authorizationUrl || !result.reference) throw new Error('Checkout could not be opened. Please try again.');
     const url = new URL(result.authorizationUrl);
     if (url.protocol !== 'https:' || url.hostname !== 'checkout.paystack.com') throw new Error('The payment provider returned an unexpected checkout address.');
+    setCheckoutStarted(true);
     setReference(result.reference);
     setCheckoutUrl(result.authorizationUrl);
     if (storageKey.current) await AsyncStorage.setItem(storageKey.current, JSON.stringify({ reference: result.reference, url: result.authorizationUrl, payForPartner }));
@@ -173,7 +176,7 @@ function RegistrationFlow() {
   });
   const back = () => {
     if (busy) return;
-    if (!done && !reference && step > 1) {
+    if (!done && !showPaymentStatus && step > 1) {
       setError(''); setAgreed(false); setObligations(false); setSapaAgreed(false);
       attempt.current = Crypto.randomUUID();
       goStep(step === 4 ? event?.is_weekly ? 3 : 2 : step - 1);
@@ -195,7 +198,7 @@ function RegistrationFlow() {
       contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 40, gap: 20 }}>
       <Text style={{ color: brand.accent, fontSize: 11, fontWeight: '800', letterSpacing: 2 }}>{done ? 'ENTRY RECEIVED' : payOnly && step === 4 ? 'PAY YOUR ENTRY' : step === 4 ? 'REVIEW YOUR ENTRY' : 'JOIN THE EVENT'}</Text>
       <Text accessibilityRole="header" style={{ color: brand.premium, fontSize: 30, fontWeight: '800', letterSpacing: -0.8 }}>{event?.event_name || 'Registration'}</Text>
-      {event?.is_manual && !reference && <View style={{ flexDirection: 'row', gap: 6 }}>
+      {event?.is_manual && !showPaymentStatus && <View style={{ flexDirection: 'row', gap: 6 }}>
         {['Profile', event?.is_weekly ? 'Dates' : 'Division', event?.is_weekly ? 'Entry' : 'Partner', 'Review & Pay', 'Confirmed'].map((label, index) => <View key={label} style={{ flex: 1, gap: 8 }}>
           <View style={{ height: 3, borderRadius: 2, backgroundColor: index < (done && !paymentPending ? 5 : done ? 4 : step) ? brand.padel : brand.edge }} />
           <Text style={{ color: index === (done && !paymentPending ? 4 : done ? 3 : step - 1) ? brand.accent : brand.muted, fontSize: 10 }}>{index < (done && !paymentPending ? 4 : done ? 3 : step - 1) ? '✓' : index + 1}. {label}</Text>
@@ -218,7 +221,7 @@ function RegistrationFlow() {
           const url = new URL(event.external_payment_url!); if (url.protocol !== 'https:') throw new Error('Contact the organiser for their secure payment link.'); await Linking.openURL(url.href);
         })} />}
         <ActionButton label="View my entry" onPress={() => router.replace({ pathname: '/events/[id]', params: { id } })} />
-      </> : reference ? <>
+      </> : showPaymentStatus ? <>
         <Notice title={returnedFromCheckout ? 'Check your payment' : checkoutUrl ? 'Continue your payment' : 'Check your payment'}>
           {returnedFromCheckout
             ? 'If you completed payment, check its status below. If you closed checkout before paying, you can continue your payment.'
@@ -254,6 +257,7 @@ function RegistrationFlow() {
       </> : event && !loading && quote && step === 4 ? <>
         <Text style={{ color: brand.premium, fontSize: 24, fontWeight: '600' }}>Review & Pay</Text>
         <Text style={{ color: brand.muted, lineHeight: 22 }}>Review your entries and fees. Registration is confirmed once payment is completed successfully.</Text>
+        {payOnly && reference && <ActionButton label="Already paid? Check payment status" secondary busy={busy} onPress={verify} />}
         {quote.isTest && <Text style={{ color: brand.muted, fontSize: 12 }}>Test checkout · Changes still use the shared 4M database.</Text>}
         {!event.is_weekly && <View style={{ padding: 16, borderRadius: 16, backgroundColor: brand.elevated, flexDirection: 'row', justifyContent: 'space-between' }}><Text style={{ color: brand.muted }}>Your current SAPA Points</Text><Text style={{ color: brand.premium, fontWeight: '600' }}>{profile?.points == null ? '—' : Number(profile.points).toLocaleString('en-ZA')}</Text></View>}
         <View style={{ padding: 18, borderRadius: 16, backgroundColor: brand.elevated, gap: 12 }}>
