@@ -63,7 +63,7 @@
     "ios:device": "expo run:ios --device",
     "android:device": "expo run:android --device",
     "typecheck": "tsc --noEmit",
-    "test": "node scripts/test-events.cjs && node scripts/test-checkout.cjs && node scripts/test-registration-navigation.cjs && node scripts/test-partner-search.cjs && node scripts/test-sponsor-logo.cjs && node scripts/test-rankings.cjs && node scripts/test-pro-padel.cjs && node scripts/test-companion.cjs && node scripts/test-password-reset.cjs && node scripts/test-spotlight-registration.cjs",
+    "test": "node scripts/test-events.cjs && node scripts/test-checkout.cjs && node scripts/test-registration-navigation.cjs && node scripts/test-partner-search.cjs && node scripts/test-sponsor-logo.cjs && node scripts/test-rankings.cjs && node scripts/test-pro-padel.cjs && node scripts/test-companion.cjs && node scripts/test-password-reset.cjs && node scripts/test-spotlight-registration.cjs && node scripts/test-home-ranking-movement.cjs",
     "check": "npm run typecheck && npm test"
   },
   "private": true

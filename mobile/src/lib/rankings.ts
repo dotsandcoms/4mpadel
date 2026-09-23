@@ -4,10 +4,10 @@ export const categoriesFor = (org:number) => org === 16482 ? [35,40,45,50,55].ma
 export type RankingPlayer = { id:string; participantId:string; name:string; rank:number; points:number; change:number; profile?:PlayerProfile };
 type PlayerProfile = {id:string;name:string;image_url?:string;home_club?:string;nationality?:string;rankings?:{org?:string;age_group?:string;match_type?:string;details?:PointResult[]}[]};
 export type PointResult = {date:string;name:string;class:string;place:string;event_type:string;points:number};
-async function rankedin(path:string) {
+async function rankedin(path:string, acceptsCache: (payload: any) => boolean = () => true) {
  const url=`https://api.rankedin.com/v1/${path}`;
  const {data:cache}=await supabase.from('rankedin_cache').select('payload,updated_at').eq('url',url).maybeSingle();
- if(cache?.payload && (!Array.isArray(cache.payload.Payload) || cache.payload.Payload.length > 0) && Date.now()-Date.parse(cache.updated_at)<6*3600000) return cache.payload;
+ if(cache?.payload && acceptsCache(cache.payload) && (!Array.isArray(cache.payload.Payload) || cache.payload.Payload.length > 0) && Date.now()-Date.parse(cache.updated_at)<6*3600000) return cache.payload;
  const controller=new AbortController(); const timer=setTimeout(()=>controller.abort(),15000);
  try {const response=await fetch(url,{signal:controller.signal}); if(!response.ok)throw new Error(`Rankings service returned ${response.status}`); return await response.json();}
  catch(error){if(cache?.payload)return cache.payload;throw error;} finally{clearTimeout(timer);}
@@ -69,7 +69,11 @@ export async function fetchHomeRankingChange(player: { rankedin_id: string | nul
  const ordered = women ? [categories[1], categories[0]] : categories;
  for (const category of ordered) {
   try {
-   const data = await rankedin(`Ranking/GetRankingsAsync?rankingId=15809&rankingType=${category.type}&ageGroup=${category.age}&weekFromNow=0&language=en&skip=0&take=1000`);
+   const data = await rankedin(`Ranking/GetRankingsAsync?rankingId=15809&rankingType=${category.type}&ageGroup=${category.age}&weekFromNow=0&language=en&skip=0&take=1000`, payload => {
+    const cachedPlayer = payload?.Payload?.find((item: any) => String(item.RankedinId) === String(player.rankedin_id));
+    // Cache timestamps can be fresh while the underlying ranking edition is old.
+    return cachedPlayer != null && Number(cachedPlayer.Standing) === Number(player.rank_label);
+   });
    const row = Array.isArray(data?.Payload) ? data.Payload.find((item: any) => String(item.RankedinId) === String(player.rankedin_id)) : null;
    if (!row || Number(row.Standing) !== Number(player.rank_label)) continue;
    const change = row.StandingDiff;
