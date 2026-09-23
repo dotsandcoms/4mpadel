@@ -252,7 +252,7 @@ export default function ProfileScreen() {
               </FadeUp>
             ) : null}
             <FadeUp className="mt-3">
-              <ProfileStatsCard stats={bundle.stats} playId={statsPlayId} />
+              <ProfileStatsCard stats={bundle.stats} skillRating={player.skill_rating} playId={statsPlayId} />
             </FadeUp>
           </View>
 

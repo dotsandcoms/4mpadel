@@ -142,7 +142,6 @@ export function ProfileHero({ player, stats, onEditPhoto, playId = 0 }: HeroProp
         </View>
 
         <View className="ml-3 min-w-0 flex-1">
-          <View className="mb-2 flex-row items-start justify-between" style={{ gap: 8 }}>
           {license ? (
             <View
               className="mb-1 flex-row items-center self-start rounded-full border px-2 py-0.5"
@@ -157,17 +156,7 @@ export function ProfileHero({ player, stats, onEditPhoto, playId = 0 }: HeroProp
                 {license.label}
               </Text>
             </View>
-          ) : <View />}
-          {player.skill_rating != null && Number.isFinite(Number(player.skill_rating)) ? (
-            <View
-              accessible
-              accessibilityLabel={`Skill rating ${player.skill_rating}`}
-              className="shrink-0 items-center rounded-xl bg-padel px-3 py-2">
-              <Text className="text-[9px] font-bold uppercase text-court-ink">Skill</Text>
-              <Text className="text-lg font-extrabold text-court-ink" style={{ fontVariant: ['tabular-nums'] }}>{player.skill_rating}</Text>
-            </View>
           ) : null}
-          </View>
 
           <Text
             className="text-lg font-extrabold uppercase leading-tight text-court-ink"
@@ -190,9 +179,11 @@ export function ProfileHero({ player, stats, onEditPhoto, playId = 0 }: HeroProp
 
 export function ProfileStatsCard({
   stats,
+  skillRating,
   playId = 0,
 }: {
   stats: ProfileStats;
+  skillRating?: PlayerRow['skill_rating'];
   playId?: number;
 }) {
   const ratioTarget = Math.min(100, Math.max(0, stats.winRatio));
@@ -211,6 +202,9 @@ export function ProfileStatsCard({
         <MiniStat label="Matches" value={String(played.shown)} />
         <MiniStat label="Won" value={String(wins.shown)} labelColor={brand.accent} />
         <MiniStat label="Lost" value={String(losses.shown)} labelColor={brand.danger} />
+        {skillRating != null && Number.isFinite(Number(skillRating)) ? (
+          <MiniStat label="Skill" value={String(skillRating)} labelColor={brand.premium} highlight />
+        ) : null}
       </View>
 
       <View className="mt-4 flex-row items-center justify-between">
@@ -323,13 +317,15 @@ function MiniStat({
   label,
   value,
   labelColor,
+  highlight = false,
 }: {
   label: string;
   value: string;
   labelColor?: string;
+  highlight?: boolean;
 }) {
   return (
-    <View className="min-h-[64px] flex-1 items-center justify-center rounded-xl bg-court-surface p-2">
+    <View className="min-h-[64px] min-w-0 flex-1 items-center justify-center rounded-xl p-2" style={{ backgroundColor: highlight ? brand.padel : brand.surface }}>
       <Text
         className="w-full text-center text-[11px] font-semibold"
         style={{ color: labelColor ?? brand.faint }}>
