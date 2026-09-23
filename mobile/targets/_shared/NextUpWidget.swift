@@ -98,7 +98,10 @@ struct ScheduleTimeline: AppIntentTimelineProvider {
 struct ScheduleWidgetView: View {
   @Environment(\.widgetFamily) private var family
   let entry: ScheduleEntry
-  private let lime = Color(red: 0.8, green: 1, blue: 0)
+  private let accent = Color(red: 56/255, green: 96/255, blue: 24/255)
+  private let ink = Color(red: 22/255, green: 37/255, blue: 31/255)
+  private let muted = Color(red: 82/255, green: 98/255, blue: 90/255)
+  private let page = Color(red: 245/255, green: 246/255, blue: 243/255)
   var body: some View {
     Group {
       if family == .accessoryInline {
@@ -129,18 +132,8 @@ struct ScheduleWidgetView: View {
 
   @ViewBuilder private var widgetBackground: some View {
     #if os(iOS)
-    if (family == .systemSmall || family == .systemMedium), entry.next != nil {
-      GeometryReader { geometry in
-        ZStack {
-          if let data = entry.artwork, let image = UIImage(data: data) {
-            Image(uiImage: image).resizable().scaledToFill()
-          } else {
-            Image("PadelHero").resizable().scaledToFill()
-          }
-        }.frame(width: geometry.size.width, height: geometry.size.height).clipped()
-        LinearGradient(colors: [.black.opacity(0.84), .black.opacity(0.55)], startPoint: .leading, endPoint: .trailing)
-        LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
-      }
+    if family == .systemSmall || family == .systemMedium {
+      page
     } else { Color(red: 0.04, green: 0.04, blue: 0.04) }
     #else
     Color(red: 0.04, green: 0.04, blue: 0.04)
@@ -157,8 +150,8 @@ struct ScheduleWidgetView: View {
   }
 
   private func statusColor(_ item: ScheduleItem) -> Color {
-    item.status == "Payment pending" ? Color(red: 1, green: 0.48, blue: 0.42)
-      : item.status == "Saved event" ? Color(red: 0.72, green: 0.79, blue: 0.87) : lime
+    item.status == "Payment pending" ? Color(red: 183/255, green: 53/255, blue: 45/255)
+      : item.status == "Saved event" ? muted : accent
   }
 
   private func statusBadge(_ item: ScheduleItem) -> some View {
@@ -196,18 +189,18 @@ struct ScheduleWidgetView: View {
   private var phoneCard: some View {
     VStack(alignment: .leading, spacing: 6) {
       HStack(alignment: .center) {
-        Text("4M").font(.system(size: 17, weight: .black, design: .rounded)).italic().foregroundStyle(lime)
-        Text(entry.category.heading).font(.system(size: 9, weight: .bold)).tracking(1.2).foregroundStyle(.secondary)
+        Text("4M").font(.system(size: 19, weight: .black)).foregroundStyle(ink)
+        Text(entry.category.heading).font(.system(size: 9, weight: .bold)).tracking(1.2).foregroundStyle(muted)
         Spacer(minLength: 0)
         if let next = entry.next, next.isLive(at: entry.date) {
           HStack(spacing: 4) {
-            Circle().fill(Color.orange).frame(width: 5, height: 5)
+            Circle().fill(accent).frame(width: 5, height: 5)
             Text("LIVE").font(.system(size: 9, weight: .heavy)).tracking(0.8)
-          }.foregroundStyle(.orange).padding(.horizontal, 6).padding(.vertical, 3)
-            .background(Color.orange.opacity(0.15), in: Capsule())
+          }.foregroundStyle(accent).padding(.horizontal, 6).padding(.vertical, 3)
+            .background(accent.opacity(0.1), in: Capsule())
             .accessibilityLabel("Tournament underway, based on event dates")
         } else {
-          Image(systemName: entry.next?.kind == "event" ? "calendar" : "tennisball.fill").font(.system(size: 13)).foregroundStyle(lime)
+          Image(systemName: entry.next?.kind == "event" ? "calendar" : "tennisball.fill").font(.system(size: 13)).foregroundStyle(accent)
         }
       }
       if let next = entry.next {
@@ -217,17 +210,17 @@ struct ScheduleWidgetView: View {
               Text(datePart(next, "MMM").uppercased()).font(.system(size: 10, weight: .heavy)).tracking(1.5)
               Text(datePart(next, "dd")).font(.system(size: 34, weight: .bold, design: .rounded)).monospacedDigit()
               Text(datePart(next, "EEE").uppercased()).font(.system(size: 9, weight: .bold)).tracking(1)
-            }.foregroundStyle(lime).frame(width: 62, height: 76)
-              .background(lime.opacity(0.09), in: RoundedRectangle(cornerRadius: 13))
+            }.foregroundStyle(accent).frame(width: 62, height: 76)
+              .background(accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
             VStack(alignment: .leading, spacing: 5) {
               Text(next.title).font(.system(size: 15, weight: .bold)).lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
-              eventTiming(next).font(.system(size: 11, weight: .semibold)).foregroundStyle(lime)
+              eventTiming(next).font(.system(size: 11, weight: .semibold)).foregroundStyle(accent)
               if !next.venue.isEmpty {
                 Label(next.venue, systemImage: "mappin.and.ellipse")
-                  .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
+                  .font(.system(size: 10)).foregroundStyle(muted).lineLimit(1)
               }
-              if !next.court.isEmpty { Text(next.court).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1) }
+              if !next.court.isEmpty { Text(next.court).font(.system(size: 10)).foregroundStyle(muted).lineLimit(1) }
             }.frame(maxWidth: .infinity, alignment: .leading)
           }
         } else {
@@ -235,9 +228,9 @@ struct ScheduleWidgetView: View {
             Text(datePart(next, "dd")).font(.system(size: 27, weight: .bold, design: .rounded))
             Text(datePart(next, "MMM").uppercased()).font(.system(size: 11, weight: .bold))
             Spacer(minLength: 0)
-          }.foregroundStyle(lime)
+          }.foregroundStyle(accent)
           Text(next.title).font(.system(size: 13, weight: .bold)).lineLimit(2)
-          eventTiming(next).font(.system(size: 10)).foregroundStyle(lime)
+          eventTiming(next).font(.system(size: 10)).foregroundStyle(accent)
         }
         Spacer(minLength: 0)
         HStack(spacing: 4) {
@@ -245,17 +238,17 @@ struct ScheduleWidgetView: View {
           Spacer(minLength: 0)
           if isMedium {
             Text(entry.snapshot.isStale(at: entry.date) ? "Refresh in app" : "Updated " + entry.snapshot.updated.formatted(date: .omitted, time: .shortened))
-              .font(.system(size: 8)).foregroundStyle(.secondary).lineLimit(1)
+              .font(.system(size: 8)).foregroundStyle(muted).lineLimit(1)
           }
         }
       } else {
         Spacer(minLength: 0)
         Label(entry.emptyTitle, systemImage: "calendar.badge.clock").font(.headline)
-        Text(entry.emptyMessage).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+        Text(entry.emptyMessage).font(.caption).foregroundStyle(muted).lineLimit(3)
         Spacer(minLength: 0)
       }
     }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-      .foregroundStyle(.white).environment(\.colorScheme, .dark)
+      .foregroundStyle(ink).environment(\.colorScheme, .light)
   }
 
 }
