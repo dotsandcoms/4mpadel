@@ -39,7 +39,7 @@ import { lightBrand as brand, motion } from '@/theme/tokens';
 export const PROFILE_SECTIONS = [
   { id: 'events', label: 'My Events', active: '#A855F7', text: '#fff' },
   { id: 'matches', label: 'My Matches', active: '#F97316', text: '#fff' },
-  { id: 'rankings', label: 'My Rankings', active: '#875E0B', text: '#0a0a0a' },
+  { id: 'rankings', label: 'My Rankings', active: brand.accent, text: '#fff' },
   { id: 'payments', label: 'Payments', active: '#3B82F6', text: '#fff' },
 ] as const;
 
@@ -123,7 +123,7 @@ function clubLine(event: CalendarEvent) {
 }
 
 function contrastOnFill(fill: string) {
-  return fill === '#CCFF00' || fill === '#875E0B' || fill === '#F59E0B' ? '#0a0a0a' : '#ffffff';
+  return fill === '#CCFF00' || fill === '#F59E0B' ? '#0a0a0a' : '#ffffff';
 }
 
 type AgendaTag = { label: string; color: string; border: string; bg: string };
@@ -910,13 +910,13 @@ export function ProfileSectionPager({
                           android_ripple={RIPPLE}
                           className="min-h-9 justify-center rounded-xl px-3"
                           style={{
-                            backgroundColor: active ? '#875E0B' : 'rgba(22,37,31,0.02)',
+                            backgroundColor: active ? brand.accent : 'rgba(22,37,31,0.02)',
                             borderWidth: 1,
-                            borderColor: active ? '#875E0B' : 'rgba(22,37,31,0.1)',
+                            borderColor: active ? brand.accent : 'rgba(22,37,31,0.1)',
                           }}>
                           <Text
                             className="text-[8px] font-normal uppercase tracking-widest"
-                            style={{ color: active ? '#000' : 'rgba(22,37,31,0.7)' }}>
+                            style={{ color: active ? '#fff' : 'rgba(22,37,31,0.7)' }}>
                             {row.org || 'SAPA'} ({row.age_group || 'Open'})
                           </Text>
                         </Pressable>
@@ -928,7 +928,7 @@ export function ProfileSectionPager({
                   <>
                     <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, marginBottom: 18 }}>
                       {[
-                        { label: 'STANDING', value: selectedRanking.rank != null ? `#${selectedRanking.rank}` : '—', color: '#875E0B' },
+                        { label: 'STANDING', value: selectedRanking.rank != null ? `#${selectedRanking.rank}` : '—', color: brand.premium },
                         { label: 'POINTS', value: String(selectedRanking.points ?? '—'), color: '#16251F' },
                         { label: 'TYPE', value: (selectedRanking.match_type || 'Open').toUpperCase(), color: '#52625A' },
                       ].map(({ label, value, color }) => (
