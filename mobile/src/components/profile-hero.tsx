@@ -12,7 +12,6 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { FadeUp } from '@/components/fade-up';
-import { MotionBorder } from '@/components/motion-border';
 import { PulseDot } from '@/components/pulse-dot';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import {
@@ -25,7 +24,6 @@ import {
 } from '@/lib/profile';
 import { lightBrand as brand, motion } from '@/theme/tokens';
 
-const KNOB = 14;
 const COUNT_MS = 800;
 const countEase = Easing.bezier(
   motion.easing.decelerate[0],
@@ -74,7 +72,6 @@ function useCountTo(target: number, decimals = 0, playId = 0) {
   return { shown, sv };
 }
 
-const LOSS_RED = '#EF4444';
 
 type HeroProps = {
   player: PlayerRow;
@@ -197,96 +194,44 @@ export function ProfileStatsCard({
   const fillStyle = useAnimatedStyle(() => ({
     width: (trackW.value * ratio.sv.value) / 100,
   }));
-  const knobStyle = useAnimatedStyle(() => {
-    const x = (trackW.value * ratio.sv.value) / 100 - KNOB / 2;
-    const max = Math.max(0, trackW.value - KNOB);
-    return { transform: [{ translateX: Math.min(max, Math.max(0, x)) }] };
-  });
-
   return (
-    <MotionBorder>
-      <View className="p-3.5">
-      <View className="flex-row" style={{ gap: 6 }}>
-        <MiniStat label="Total Match" value={String(played.shown)} />
-        <MiniStat label="Won" value={String(wins.shown)} labelColor={brand.padel} />
-        <MiniStat label="Lost" value={String(losses.shown)} labelColor="#F87171" />
-        <View className="min-h-[52px] flex-1 items-center justify-center rounded-xl border border-court-edge bg-court-surface px-1 py-1">
-          <Text className="mb-1 w-full text-center text-[7px] font-black uppercase tracking-widest text-court-faint">
-            Last 5
-          </Text>
-          {stats.lastFive.length ? (
-            <View
-              accessible
-              accessibilityLabel={`Last 5 matches, ${stats.lastFive.join(', ')}`}
-              className="flex-row items-center"
-              style={{ gap: 2 }}>
-              {stats.lastFive.map((mark, index) => {
-                const win = mark === 'W';
-                return (
-                  <FadeUp key={`${playId}-${mark}-${index}`} delay={index * motion.stagger}>
-                    <View
-                      accessibilityElementsHidden
-                      className="h-2 w-2 items-center justify-center rounded-full"
-                      style={{ backgroundColor: win ? brand.padel : LOSS_RED }}>
-                      <View
-                        className="rounded-full"
-                        style={{
-                          width: 3.5,
-                          height: 3.5,
-                          backgroundColor: win ? '#000' : '#fff',
-                        }}
-                      />
-                    </View>
-                  </FadeUp>
-                );
-              })}
-            </View>
-          ) : (
-            <Text className="text-[7px] font-bold uppercase tracking-widest text-court-faint">
-              None
-            </Text>
-          )}
-        </View>
+    <View className="rounded-2xl border border-court-edge bg-court-elevated p-4">
+      <View className="flex-row" style={{ gap: 8 }}>
+        <MiniStat label="Matches" value={String(played.shown)} />
+        <MiniStat label="Won" value={String(wins.shown)} labelColor={brand.accent} />
+        <MiniStat label="Lost" value={String(losses.shown)} labelColor={brand.danger} />
       </View>
 
-      <View className="mt-3">
-        <View className="mb-1.5 flex-row items-center justify-between">
-          <Text className="text-[8px] font-black uppercase tracking-widest text-court-muted">
-            Win Ratio
-          </Text>
-          <Text
-            className="text-[8px] font-extrabold text-court-accent"
-            style={{ fontVariant: ['tabular-nums'] }}>
-            {ratio.shown.toFixed(1)}%
-          </Text>
+      <View className="mt-4 flex-row items-center justify-between">
+        <Text className="text-xs font-semibold text-court-muted">Last 5 matches</Text>
+        {stats.lastFive.length ? (
+          <View accessible accessibilityLabel={`Last 5 matches: ${stats.lastFive.map(mark => mark === 'W' ? 'win' : 'loss').join(', ')}`} className="flex-row" style={{ gap: 6 }}>
+            {stats.lastFive.map((mark, index) => (
+              <FadeUp key={`${playId}-${mark}-${index}`} delay={index * motion.stagger}>
+                <View className="h-6 w-6 items-center justify-center rounded-full" style={{ backgroundColor: mark === 'W' ? brand.glass : '#FBECEB' }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: mark === 'W' ? brand.accent : brand.danger }}>{mark}</Text>
+                </View>
+              </FadeUp>
+            ))}
+          </View>
+        ) : <Text className="text-xs text-court-faint">No matches yet</Text>}
+      </View>
+
+      <View className="mt-4">
+        <View className="mb-2 flex-row items-center justify-between">
+          <Text className="text-xs font-semibold text-court-muted">Win ratio</Text>
+          <Text className="text-sm font-bold text-court-ink" style={{ fontVariant: ['tabular-nums'] }}>{ratio.shown.toFixed(1)}%</Text>
         </View>
         <View
           accessibilityRole="progressbar"
+          accessibilityLabel="Win ratio"
           accessibilityValue={{ min: 0, max: 100, now: Math.round(ratioTarget) }}
-          className="relative mt-1 h-2.5 w-full justify-center"
-          onLayout={(event) => {
-            trackW.value = event.nativeEvent.layout.width;
-          }}>
-          <View className="h-1.5 w-full rounded-full bg-court-surface">
-            <Animated.View className="h-full rounded-full bg-padel" style={fillStyle} />
-          </View>
-          <Animated.View
-            accessibilityElementsHidden
-            className="absolute items-center justify-center rounded-full border border-black bg-padel"
-            style={[
-              {
-                width: KNOB,
-                height: KNOB,
-                top: -2,
-              },
-              knobStyle,
-            ]}>
-            <View className="h-1.5 w-1.5 rounded-full bg-black" />
-          </Animated.View>
+          className="h-2 w-full overflow-hidden rounded-full bg-court-surface"
+          onLayout={event => { trackW.value = event.nativeEvent.layout.width; }}>
+          <Animated.View className="h-full rounded-full" style={[{ backgroundColor: brand.accent }, fillStyle]} />
         </View>
       </View>
-      </View>
-    </MotionBorder>
+    </View>
   );
 }
 
@@ -373,14 +318,14 @@ function MiniStat({
   labelColor?: string;
 }) {
   return (
-    <View className="min-h-[52px] flex-1 items-center justify-center rounded-xl border border-court-edge bg-court-surface p-1">
+    <View className="min-h-[64px] flex-1 items-center justify-center rounded-xl bg-court-surface p-2">
       <Text
-        className="w-full text-center text-[7px] font-black uppercase tracking-widest"
+        className="w-full text-center text-[11px] font-semibold"
         style={{ color: labelColor ?? brand.faint }}>
         {label}
       </Text>
       <Text
-        className="mt-0.5 w-full text-center text-[15px] font-black text-court-ink"
+        className="mt-1 w-full text-center text-[22px] font-bold text-court-ink"
         style={{ fontVariant: ['tabular-nums'] }}>
         {value}
       </Text>
