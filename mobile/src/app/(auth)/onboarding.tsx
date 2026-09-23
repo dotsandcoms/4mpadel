@@ -7,7 +7,6 @@ import Animated, { runOnJS, useAnimatedStyle, withTiming } from 'react-native-re
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FadeUp } from '@/components/fade-up';
-import { LimeRule } from '@/components/lime-rule';
 import {
   EventsPreview,
   WorldPadelPreview,
@@ -111,14 +110,14 @@ export default function OnboardingScreen() {
       className="flex-1 bg-court-page"
       style={{ flex: 1, backgroundColor: brand.page, paddingTop: insets.top }}>
       <View className="h-20 flex-row items-center justify-between px-7">
-        <View className="items-start self-start rounded-2xl bg-[#16251F] px-3 py-2">
+        <View className="items-start self-start py-2">
           <Image
             source={require('@/assets/images/4m-logo.png')}
-            style={{ width: 62, height: 46 }}
+            style={{ width: 68, height: 51 }}
+            tintColor={brand.premium}
             contentFit="contain"
             accessibilityLabel="4M Padel"
           />
-          <LimeRule width={36} style={{ marginTop: 8 }} />
         </View>
         {!isLast ? (
           <Pressable

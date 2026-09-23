@@ -34,7 +34,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ExpandReveal } from '@/components/expand-reveal';
 import { FadeUp } from '@/components/fade-up';
-import { LimeRule } from '@/components/lime-rule';
 import { LiquidField } from '@/components/liquid-field';
 import { PressableScale } from '@/components/pressable-scale';
 import { Toast, type ToastKind } from '@/components/toast';
@@ -272,14 +271,14 @@ export default function SignInScreen() {
           paddingBottom: insets.bottom + 20,
         }}>
         <FadeUp>
-          <View className="items-start self-start rounded-2xl bg-[#16251F] px-3 py-2">
+          <View className="items-start self-start py-2">
             <Image
               source={require('@/assets/images/4m-logo.png')}
-              style={{ width: 57, height: 43 }}
+              style={{ width: 68, height: 51 }}
+              tintColor={brand.premium}
               contentFit="contain"
               accessibilityLabel="4M Padel"
             />
-            <LimeRule draw width={30} style={{ marginTop: 8 }} />
           </View>
         </FadeUp>
 
