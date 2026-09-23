@@ -41,7 +41,8 @@ export function HomeHeader({ onSearch, onNotifications, noticeCount = 0 }: Props
       <View className="flex-row items-center">
         <Image
           source={require('@/assets/images/4m-logo.png')}
-          style={{ width: 48, height: 36, backgroundColor: '#16251F', borderRadius: 8 }}
+          style={{ width: 48, height: 36 }}
+          tintColor={brand.premium}
           contentFit="contain"
           accessibilityLabel="4M Padel"
         />
