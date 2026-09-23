@@ -4,7 +4,7 @@ import type { Session, User } from '@supabase/supabase-js';
 import { fetchPlayerMatches, isMatchWinner, type PlayerMatch } from './matches';
 import { collectSignupDevice, resolveSignupSource } from './signup-source';
 import { supabase } from './supabase';
-import { brand } from '@/theme/tokens';
+import { brand, lightBrand } from '@/theme/tokens';
 
 const DRAFT_KEY = 'player_profile_draft_v1';
 
@@ -308,10 +308,10 @@ export function licenseBadge(type?: string | null): LicenseBadge | null {
   const key = (type || '').toLowerCase();
   if (key === 'full') {
     return {
-      label: 'Full License Player',
-      color: brand.padel,
-      border: 'rgba(204,255,0,0.3)',
-      bg: 'rgba(204,255,0,0.1)',
+      label: 'SAPA Registered',
+      color: lightBrand.accent,
+      border: lightBrand.edge,
+      bg: lightBrand.glass,
       pulse: true,
     };
   }

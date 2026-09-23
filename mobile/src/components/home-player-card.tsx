@@ -3,11 +3,9 @@ import { SymbolView } from 'expo-symbols';
 import { Text, View } from 'react-native';
 
 import { PressableScale } from '@/components/pressable-scale';
-import { PulseDot } from '@/components/pulse-dot';
 import { firstNameOf, greetingForNow, type HomePlayer } from '@/lib/home';
 import { lightBrand as brand } from '@/theme/tokens';
 
-const RANK_GOLD = '#875E0B';
 
 type Props = {
   player: HomePlayer | null;
@@ -62,14 +60,14 @@ export function HomePlayerCard({ player, loading, onPress }: Props) {
     <PressableScale
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`View profile, ${player.name || 'player'}. Rank ${rank}, ${points} points, record ${record}.`}
-      className="rounded-2xl border border-court-edge bg-court-elevated p-3.5">
+      accessibilityLabel={`View profile, ${player.name || 'player'}. Rank ${rank}, ${points} points, record ${record}${license ? `. ${license.label}` : ''}.`}
+      className="rounded-2xl border border-court-edge bg-court-elevated p-4">
       <View className="flex-row items-stretch">
-        <View className="h-20 w-20 items-center justify-center self-center overflow-hidden rounded-full border-2 border-court-edge bg-court-elevated">
+        <View className="h-16 w-16 items-center justify-center self-center overflow-hidden rounded-full border-2 border-court-edge bg-court-elevated">
           {player.image_url ? (
             <Image
               source={{ uri: player.image_url }}
-              style={{ width: 80, height: 80 }}
+              style={{ width: 64, height: 64 }}
               contentFit="cover"
               accessibilityIgnoresInvertColors
             />
@@ -78,7 +76,7 @@ export function HomePlayerCard({ player, loading, onPress }: Props) {
           )}
         </View>
 
-        <View className="ml-4 min-w-0 flex-1">
+        <View className="ml-3 min-w-0 flex-1 justify-center">
           {license ? (
             <View
               className="mb-1.5 flex-row items-center self-start rounded-full border px-2 py-0.5"
@@ -86,9 +84,9 @@ export function HomePlayerCard({ player, loading, onPress }: Props) {
                 borderColor: license.border,
                 backgroundColor: license.bg,
               }}>
-              {license.pulse ? <PulseDot color={brand.accent} size={6} /> : null}
+              {license.pulse ? <SymbolView name={{ ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' }} size={12} tintColor={brand.accent} /> : null}
               <Text
-                className="text-[8px] font-black uppercase tracking-wider"
+                className="text-[9px] font-bold uppercase tracking-wider"
                 style={{
                   color: license.color,
                   marginLeft: license.pulse ? 6 : 0,
@@ -104,19 +102,18 @@ export function HomePlayerCard({ player, loading, onPress }: Props) {
             style={{ lineHeight: 20 }}>
             {player.name || 'Player'}
           </Text>
-
-          <View className="mt-2 flex-row items-stretch">
-            <Stat value={rank} label="Rank" color={RANK_GOLD} lead />
-            <View className="w-px self-stretch bg-court-edge" />
-            <Stat value={points} label="Points" color={brand.accent} />
-            <View className="w-px self-stretch bg-court-edge" />
-            <Stat value={record} label="W-L" color={brand.premium} />
-          </View>
         </View>
 
         <View className="ml-1 justify-center">
           <SymbolView name="chevron.right" size={16} tintColor={brand.faint} />
         </View>
+      </View>
+      <View className="mt-4 flex-row items-stretch rounded-xl bg-court-surface px-3 py-3">
+        <Stat value={rank} label="Rank" color={brand.premium} lead />
+        <View className="w-px self-stretch bg-court-edge" />
+        <Stat value={points} label="Points" color={brand.accent} />
+        <View className="w-px self-stretch bg-court-edge" />
+        <Stat value={record} label="Wins–losses" color={brand.premium} />
       </View>
     </PressableScale>
   );
@@ -136,11 +133,11 @@ function Stat({
   return (
     <View className={`min-w-0 flex-1 ${lead ? 'pr-2.5' : 'px-2.5'}`}>
       <Text
-        className="text-[16px] font-extrabold"
+        className="text-[20px] font-bold"
         style={{ color, fontVariant: ['tabular-nums'] }}>
         {value}
       </Text>
-      <Text className="mt-0.5 text-[8px] font-black uppercase tracking-widest text-court-faint">
+      <Text className="mt-0.5 text-[9px] font-semibold uppercase tracking-wider text-court-faint">
         {label}
       </Text>
     </View>
@@ -152,10 +149,10 @@ function licenseCopy(type?: string | null) {
   if (!key) return null;
   if (key === 'full') {
     return {
-      label: 'Full License Player',
+      label: 'SAPA Registered',
       color: brand.accent,
-      border: 'rgba(204,255,0,0.3)',
-      bg: 'rgba(204,255,0,0.1)',
+      border: brand.edge,
+      bg: brand.glass,
       pulse: true,
     };
   }

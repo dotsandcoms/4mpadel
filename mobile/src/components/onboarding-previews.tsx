@@ -16,8 +16,6 @@ import { useOnboardingEvents } from '@/lib/onboarding-events';
 import { sapaLabel, lightSapaTone } from '@/theme/sapa';
 import { lightBrand as brand, motion } from '@/theme/tokens';
 
-/** Website `text-yellow-500` — rank only, same as Hero.jsx. */
-const RANK_GOLD = '#875E0B';
 
 /**
  * Believable product snapshots for onboarding. Decorative — the slide copy
@@ -170,7 +168,7 @@ export function RankingPreview() {
                 allowFontScaling={false}
                 className="ml-1.5 uppercase text-court-accent"
                 style={{ fontSize: 8, fontWeight: '800', letterSpacing: 0.8 }}>
-                Full License Player
+                SAPA Registered
               </Text>
             </View>
 
@@ -183,7 +181,7 @@ export function RankingPreview() {
             </Text>
 
             <View className="flex-row items-stretch pt-0.5">
-              <Stat value="#1" label="Rank" color={RANK_GOLD} pad="start" hint="—" />
+              <Stat value="#1" label="Rank" color={brand.premium} pad="start" hint="—" />
               <View className="w-px self-stretch bg-edge" style={{ marginVertical: 2 }} />
               <Stat value="3,606" label="Points" color={brand.accent} pad="middle" />
               <View className="w-px self-stretch bg-edge" style={{ marginVertical: 2 }} />

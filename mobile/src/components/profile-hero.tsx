@@ -74,7 +74,6 @@ function useCountTo(target: number, decimals = 0, playId = 0) {
   return { shown, sv };
 }
 
-const RANK_GOLD = '#875E0B';
 const LOSS_RED = '#EF4444';
 
 type HeroProps = {
@@ -169,7 +168,7 @@ export function ProfileHero({ player, stats, onEditPhoto, playId = 0 }: HeroProp
           </Text>
 
           <View className="mt-1.5 flex-row items-stretch">
-            <Stat value={rankValue} label="Rank" color={RANK_GOLD} />
+            <Stat value={rankValue} label="Rank" color={brand.premium} />
             <View className="h-7 w-px self-center bg-court-surface" />
             <Stat value={player.points == null ? '—' : formatPoints(pointsCount.shown)} label="Points" color={brand.accent} />
             <View className="h-7 w-px self-center bg-court-surface" />
