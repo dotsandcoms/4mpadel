@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "fourmpadel",
     "userInterfaceStyle": "light",
-    "backgroundColor": "#0a0a0a",
+    "backgroundColor": "#F5F6F3",
     "primaryColor": "#CCFF00",
     "ios": {
       "bundleIdentifier": "com.fourmpadel.app",
@@ -77,7 +77,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0a0a0a"
+          "backgroundColor": "#F5F6F3"
         }
       ],
       "@react-native-google-signin/google-signin",

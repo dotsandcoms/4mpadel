@@ -59,7 +59,8 @@ export default function RootLayout() {
   const onSplashFinish = useCallback(() => setAnimDone(true), []);
 
   const resolvePath = useCallback(async (seen: boolean, session: Session | null) => {
-    if (!seen) return '/(auth)/onboarding' as const;
+    // Replay the introduction in development; production keeps first-launch onboarding.
+    if (__DEV__ || !seen) return '/(auth)/onboarding' as const;
     if (!session) return '/(auth)/sign-in' as const;
     return destinationAfterAuth(session);
   }, []);

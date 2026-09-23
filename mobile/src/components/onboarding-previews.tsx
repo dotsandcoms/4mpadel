@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { SymbolView } from 'expo-symbols';
 import { useEffect } from 'react';
 import { Text, View } from 'react-native';
@@ -269,5 +270,41 @@ function LicenseDot() {
         reduced ? null : style,
       ]}
     />
+  );
+}
+
+/** Feature illustration; no invented scores or implied live coverage. */
+export function WorldPadelPreview() {
+  return (
+    <View {...a11yHide} className="overflow-hidden rounded-3xl border border-court-edge bg-court-elevated">
+      <View className="flex-row items-center border-b border-court-edge px-5 py-4" style={{ gap: 12 }}>
+        <View className="h-11 w-11 items-center justify-center rounded-full bg-court-glass">
+          <Ionicons name="globe-outline" size={28} color={brand.accent} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text className="text-[17px] font-extrabold text-court-ink">World padel</Text>
+          <Text className="mt-1 text-[12px] text-court-muted">From your court to the world tour</Text>
+        </View>
+      </View>
+      <View className="px-5 py-4" style={{ gap: 18 }}>
+        <WorldPreviewRow icon="people-outline" title="Your favourite players" detail="Profiles and world rankings" />
+        <WorldPreviewRow icon="trophy-outline" title="Tournaments worldwide" detail="Follow the tour, stop by stop" />
+        <WorldPreviewRow icon="tennisball-outline" title="Every match matters" detail="Schedules, scores and results" />
+      </View>
+    </View>
+  );
+}
+
+function WorldPreviewRow({ icon, title, detail }: {
+  icon: 'people-outline' | 'trophy-outline' | 'tennisball-outline'; title: string; detail: string;
+}) {
+  return (
+    <View className="flex-row items-center" style={{ gap: 12 }}>
+      <Ionicons name={icon} size={20} color={brand.accent} />
+      <View style={{ flex: 1 }}>
+        <Text className="text-[14px] font-bold text-court-ink">{title}</Text>
+        <Text className="mt-1 text-[12px] text-court-muted">{detail}</Text>
+      </View>
+    </View>
   );
 }

@@ -44,3 +44,22 @@ Validation: TypeScript and all 50 existing tests pass; iOS and Android exports p
 Browser review at 390 × 844 covered all slides, the signup handoff and the expanded
 email/password form without submitting an account. Native visual inspection was
 unavailable while the host Mac was locked.
+
+### World padel introduction and launch screen
+
+Onboarding now has four slides: local events, world padel, partners, rankings.
+The second slide introduces player profiles, world rankings, tournament coverage,
+and match schedules/results. The preview is a feature illustration, with no
+invented scores, live-status claims or account writes.
+
+The splash retains the court photo with a light wordmark panel and the line
+“Play local. Follow the world.” Heavy overlays and decorative circles were removed.
+Native splash background is aligned to the V2 page colour; native builds need
+prebuild/rebuild to apply it.
+
+Development builds (`__DEV__`) replay onboarding on every launch for review.
+Release builds retain the persisted first-launch check. No saved onboarding flag
+or account/session data is cleared by this testing behaviour.
+
+Validated at 390 × 844: world padel is slide two of four. TypeScript and the 50
+existing tests pass; both iOS and Android exports pass.

@@ -10,6 +10,7 @@ import { FadeUp } from '@/components/fade-up';
 import { LimeRule } from '@/components/lime-rule';
 import {
   EventsPreview,
+  WorldPadelPreview,
   PartnerPreview,
   RankingPreview,
 } from '@/components/onboarding-previews';
@@ -32,6 +33,12 @@ const SLIDES: Slide[] = [
     title: 'South African padel,\nin one place.',
     body: 'Browse sanctioned tournaments and leagues, then enter without leaving the app.',
     preview: <EventsPreview />,
+  },
+  {
+    eyebrow: 'Follow the world tour',
+    title: 'Your game.\nA global stage.',
+    body: 'Follow your favourite players, explore tournaments around the world, and keep up with match schedules and results.',
+    preview: <WorldPadelPreview />,
   },
   {
     eyebrow: 'Play together',

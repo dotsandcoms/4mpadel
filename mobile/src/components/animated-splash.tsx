@@ -12,7 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
-import { brand } from '@/theme/tokens';
+import { lightBrand as brand } from '@/theme/tokens';
 
 const HERO = require('@/assets/images/hero-bg.jpg');
 const RULE_W = 72;
@@ -21,17 +21,16 @@ const REVEAL_MS = 1200;
 /**
  * In-app launch screen.
  *
- * Native splash is a static near-black frame (storyboards cannot animate).
- * This overlay takes over on the first JS frame: full-bleed court, lime line
+ * Native splash is a static light frame (storyboards cannot animate).
+ * This overlay takes over on the first JS frame: court photograph, lime line
  * draws, wordmark lands, then we hand off. If session lookup is still in
  * flight the line pulses — it is the loading cue, not a spinner.
  *
- * Reveal is 1.2s. Reduce Motion skips scale and bloom, keeps a still.
+ * Reveal is 1.2s. Reduce Motion skips scale, keeps a still.
  */
 export function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
   const reduced = useReducedMotion();
   const ken = useSharedValue(0);
-  const bloom = useSharedValue(reduced ? 0 : 0.08);
   const ruleDraw = useSharedValue(reduced ? 1 : 0);
   const rulePulse = useSharedValue(1);
   const four = useSharedValue(reduced ? 1 : 0);
@@ -44,12 +43,6 @@ export function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
     if (reduced) return () => clearTimeout(done);
 
     ken.value = withTiming(1, { duration: 2800, easing: Easing.out(Easing.quad) });
-    bloom.value = withRepeat(
-      withTiming(0.16, { duration: 1400, easing: Easing.inOut(Easing.quad) }),
-      -1,
-      true
-    );
-
     ruleDraw.value = withTiming(1, { duration: 320, easing: Easing.out(Easing.cubic) });
     four.value = withDelay(180, withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) }));
     padel.value = withDelay(360, withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) }));
@@ -63,14 +56,10 @@ export function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
     );
 
     return () => clearTimeout(done);
-  }, [bloom, four, ken, onFinish, padel, promise, reduced, ruleDraw, rulePulse]);
+  }, [four, ken, onFinish, padel, promise, reduced, ruleDraw, rulePulse]);
 
   const photoStyle = useAnimatedStyle(() => ({
     transform: [{ scale: 1 + ken.value * 0.025 }],
-  }));
-
-  const bloomStyle = useAnimatedStyle(() => ({
-    opacity: bloom.value,
   }));
 
   const fourStyle = useAnimatedStyle(() => ({
@@ -98,7 +87,7 @@ export function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
       exiting={reduced ? undefined : FadeOut.duration(280)}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants">
-      <Animated.View style={[StyleSheet.absoluteFill, photoStyle]}>
+      <Animated.View style={[styles.photo, photoStyle]}>
         <Image
           source={HERO}
           style={StyleSheet.absoluteFill}
@@ -108,21 +97,12 @@ export function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
         />
       </Animated.View>
 
-      <Animated.View style={[styles.bloom, bloomStyle]} />
-
-      <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]}>
-        <View style={styles.veilTop} />
-        <View style={styles.veilMid} />
-        <View style={styles.veilBottom} />
-      </View>
-
-      <View style={styles.mark} accessibilityLabel="4M Padel. Book. Play. Belong.">
+      <View style={styles.mark} accessibilityLabel="4M Padel. Play local. Follow the world.">
         <View style={styles.cluster}>
-          <View style={styles.halo} />
           <Animated.Text style={[styles.four, fourStyle]}>4M</Animated.Text>
           <Animated.Text style={[styles.padel, padelStyle]}>PADEL</Animated.Text>
           <Animated.View style={[styles.rule, ruleStyle]} />
-          <Animated.Text style={[styles.promise, promiseStyle]}>Book. Play. Belong.</Animated.Text>
+          <Animated.Text style={[styles.promise, promiseStyle]}>Play local. Follow the world.</Animated.Text>
         </View>
       </View>
     </Animated.View>
@@ -130,41 +110,26 @@ export function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  veilTop: {
-    flex: 0.38,
-    backgroundColor: 'rgba(10,10,10,0.18)',
-  },
-  veilMid: {
-    flex: 0.36,
-    backgroundColor: 'rgba(10,10,10,0.68)',
-  },
-  veilBottom: {
-    flex: 0.26,
-    backgroundColor: 'rgba(10,10,10,0.5)',
-  },
-  bloom: {
+  photo: {
     position: 'absolute',
-    top: '12%',
-    right: '-8%',
-    width: 280,
-    height: 280,
-    borderRadius: 140,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-  },
-  halo: {
-    position: 'absolute',
-    top: -48,
-    bottom: -48,
-    left: -64,
-    right: -64,
-    borderRadius: 160,
-    backgroundColor: 'rgba(10,10,10,0.5)',
-    boxShadow: '0px 0px 56px rgba(0, 0, 0, 0.95)',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '56%',
+    overflow: 'hidden',
   },
   mark: {
-    ...StyleSheet.absoluteFill,
+    position: 'absolute',
+    top: '52%',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    backgroundColor: brand.page,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingBottom: 28,
   },
   cluster: {
     alignItems: 'center',
