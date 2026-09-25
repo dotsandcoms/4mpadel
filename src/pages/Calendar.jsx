@@ -532,6 +532,7 @@ const Calendar = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilters, setStatusFilters] = useState([]);
     const [cityFilter, setCityFilter] = useState('All');
+    const [timingFilter, setTimingFilter] = useState('Upcoming');
     const [activeTab, setActiveTab] = useState(initialTab); // 'upcoming', 'past', 'all', 'my-calendar'
     const [leagueFilter, setLeagueFilter] = useState('Tournaments'); // 'All' | 'League' | 'Tournaments'
     const [showFilters, setShowFilters] = useState(false);
@@ -807,31 +808,30 @@ const Calendar = () => {
             const matchesSchedule = !scheduleOnly || (event.event_status !== 'cancelled' && scheduledEventIds.has(Number(event.id)));
 
 
-            let matchesTiming = true;
-            if (viewMode === 'list' && !searchTerm) {
-                const startDateStr = event.start_date || event.startDate;
-                const endDateStr = event.end_date || event.endDate || startDateStr;
-
-                const eventDate = new Date(endDateStr);
-                // Default to showing only upcoming events when browsing tabs
-                matchesTiming = !isNaN(eventDate.getTime()) && eventDate >= today;
-            }
-
+            const endDateStr = event.end_date || event.endDate || event.start_date || event.startDate;
+            const eventEnd = new Date(endDateStr);
+            eventEnd.setHours(23, 59, 59, 999);
+            const matchesTiming = !isNaN(eventEnd.getTime()) && (
+                timingFilter === 'Past' ? eventEnd < today : eventEnd >= today
+            );
 
             const matchesLeague = leagueFilter === 'All' ||
                 (leagueFilter === 'League' && event.is_league === true) ||
                 (leagueFilter === 'Tournaments' && !event.is_league);
 
             return matchesSearch && matchesStatus && matchesDrawerStatus && matchesCity && matchesTiming && matchesLeague && matchesSchedule;
+        }).sort((a, b) => {
+            const dateA = new Date(a.start_date || a.startDate).getTime();
+            const dateB = new Date(b.start_date || b.startDate).getTime();
+            return timingFilter === 'Past' ? dateB - dateA : dateA - dateB;
         });
-    }, [events, personalEvents, activeTab, searchTerm, statusFilters, cityFilter, leagueFilter, viewMode, scheduleOnly, scheduledEventIds]);
+    }, [events, personalEvents, activeTab, searchTerm, statusFilters, cityFilter, leagueFilter, timingFilter, scheduleOnly, scheduledEventIds]);
 
     const spotlightEvents = useMemo(() => {
         return events.filter(event => event.is_spotlight === true);
     }, [events]);
 
-    // Upcoming count of events the player has added to their schedule —
-    // shown as a "My Schedule (N)" chip next to the Upcoming Events heading.
+    // Count scheduled events in the selected time period.
     const scheduleCount = useMemo(() => {
         if (!sessionEmail || scheduledEventIds.size === 0) return 0;
         const today = new Date();
@@ -840,9 +840,10 @@ const Calendar = () => {
             if (event.event_status === 'cancelled') return false;
             if (!scheduledEventIds.has(Number(event.id))) return false;
             const endDate = new Date(event.end_date || event.start_date);
-            return !isNaN(endDate.getTime()) && endDate >= today;
+            endDate.setHours(23, 59, 59, 999);
+            return !isNaN(endDate.getTime()) && (timingFilter === 'Past' ? endDate < today : endDate >= today);
         }).length;
-    }, [events, scheduledEventIds, sessionEmail]);
+    }, [events, scheduledEventIds, sessionEmail, timingFilter]);
 
     // Pagination Logic
     const totalPages = Math.ceil(filteredEvents.length / itemsPerPage);
@@ -854,12 +855,12 @@ const Calendar = () => {
     // Reset page on filter change
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, statusFilters, cityFilter, activeTab, leagueFilter, viewMode, scheduleOnly]);
+    }, [searchTerm, statusFilters, cityFilter, activeTab, leagueFilter, timingFilter, viewMode, scheduleOnly]);
 
     // Scroll to top on filter change, but NOT on search typing
     useEffect(() => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, [statusFilters, cityFilter, activeTab, leagueFilter, viewMode]);
+    }, [statusFilters, cityFilter, activeTab, leagueFilter, timingFilter, viewMode]);
 
 
     // Scroll to top on page change
@@ -1037,9 +1038,9 @@ const Calendar = () => {
                         >
                             <Filter className="w-4 h-4 md:w-5 md:h-5 text-gray-400 group-hover:text-white transition-colors" />
                             <span className="hidden sm:block">Filters</span>
-                            {((statusFilters.length > 0) || (cityFilter !== 'All') || (leagueFilter !== 'All')) && (
+                            {((statusFilters.length > 0) || (cityFilter !== 'All') || (leagueFilter !== 'All') || (timingFilter !== 'Upcoming')) && (
                                 <span className="w-5 h-5 bg-[#CCFF00] text-black font-black text-[10px] md:text-xs rounded-full flex items-center justify-center shadow-lg ml-1">
-                                    {(statusFilters.length > 0 ? 1 : 0) + (cityFilter !== 'All' ? 1 : 0) + (leagueFilter !== 'All' ? 1 : 0)}
+                                    {(statusFilters.length > 0 ? 1 : 0) + (cityFilter !== 'All' ? 1 : 0) + (leagueFilter !== 'All' ? 1 : 0) + (timingFilter !== 'Upcoming' ? 1 : 0)}
                                 </span>
                             )}
                         </button>
@@ -1075,6 +1076,25 @@ const Calendar = () => {
                                 </div>
 
                                 <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label htmlFor="calendar-timing" className="text-sm font-semibold text-gray-300">When</label>
+                                        <div className="relative">
+                                            <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4 pointer-events-none" />
+                                            <select
+                                                id="calendar-timing"
+                                                value={timingFilter}
+                                                onChange={(e) => setTimingFilter(e.target.value)}
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-12 pr-10 text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green transition-colors font-semibold text-sm"
+                                            >
+                                                <option value="Upcoming" className="bg-[#141414]">Upcoming Events</option>
+                                                <option value="Past" className="bg-[#141414]">Past Events</option>
+                                            </select>
+                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                                <ChevronDown className="w-4 h-4 text-gray-400" />
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     {/* Type Filter */}
                                     <div className="space-y-2">
                                         <label className="text-sm font-semibold text-gray-300">Event Type</label>
@@ -1164,6 +1184,7 @@ const Calendar = () => {
                                         onClick={() => {
                                             setStatusFilters([]);
                                             setCityFilter('All');
+                                            setTimingFilter('Upcoming');
                                             setLeagueFilter('All');
                                         }}
                                         className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold py-3.5 rounded-xl transition-colors text-sm"
@@ -1248,7 +1269,7 @@ const Calendar = () => {
                     <div className="text-center py-32 text-gray-400 bg-white/5 border border-white/10 rounded-3xl">
                         <p className="text-xl mb-4">No events found matching your criteria.</p>
                         <button
-                            onClick={() => { setSearchTerm(''); setStatusFilters([]); setCityFilter('All'); setTimingFilter('All'); setLeagueFilter('All'); }}
+                            onClick={() => { setSearchTerm(''); setStatusFilters([]); setCityFilter('All'); setTimingFilter('Upcoming'); setLeagueFilter('All'); }}
                             className="text-padel-green font-bold hover:text-white flex items-center gap-2 mx-auto transition-colors"
                         >
                             <X className="w-4 h-4" /> Clear all filters
@@ -1266,7 +1287,7 @@ const Calendar = () => {
                                         disabled={!scheduleOnly}
                                         className={`flex items-center gap-2 transition-opacity ${scheduleOnly ? 'opacity-50 hover:opacity-100 cursor-pointer' : 'cursor-default'}`}
                                     >
-                                        <h2 className="text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest text-white/80">Upcoming Events</h2>
+                                        <h2 className="text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest text-white/80">{timingFilter} Events</h2>
                                         <div className="bg-padel-green/10 border border-padel-green/20 text-padel-green px-2 py-0.5 rounded-full text-[10px] font-black">
                                             {filteredEvents.length}
                                         </div>
