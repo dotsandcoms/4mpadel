@@ -1,5 +1,11 @@
 const normalise = (value) => String(value || '').trim().toLowerCase();
 
+// RankedIn stores the full series name; the UI also uses its short label.
+const normaliseOrganisation = (value) => {
+    const name = normalise(value);
+    return name === 'sapa ranking' ? 'sapa' : name;
+};
+
 const rankingKeyParts = (value) => String(value || '').split('|').map((part) => part.trim());
 
 const MEN_AGE_BANDS = new Map([
@@ -152,7 +158,7 @@ export const resolvePlayerRanking = (player, source = 'active') => {
     const category = rankingSourceCategory(source);
     const ranking = category
         ? rankings.find((row) => (
-            normalise(row?.org) === normalise(category.organisation)
+            normaliseOrganisation(row?.org) === normaliseOrganisation(category.organisation)
             && normalise(row?.age_group) === normalise(category.ageGroup)
             && (!category.matchType || normalise(row?.match_type) === normalise(category.matchType)
                 || (normalise(category.matchType) === 'doubles' && normalise(row?.match_type).endsWith('-doubles')))

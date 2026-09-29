@@ -42,3 +42,28 @@ test('doubles seeding excludes singles records', () => {
     const player = { rankings: [{ org: 'SAPA', age_group: 'Men Over 40', match_type: 'Men-Singles', points: 9999 }, ...mark.rankings] };
     assert.equal(resolvePlayerRanking(player, source).points, 1936);
 });
+
+test('automatic division seeding matches the actual imported SAPA organisation name', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const captured = JSON.parse(await readFile(new URL('../scratch/player_rankings_response.json', import.meta.url), 'utf8'));
+    const { rankedInAgeGroupLabel } = await import('../src/utils/playerRankingSelection.js');
+    const rankings = captured.PlayerRankings.Payload.map((row) => ({
+        org: row.RankingName,
+        age_group: rankedInAgeGroupLabel(row.AgeGroup, row.RankingType),
+        points: row.Points,
+        rank: row.Position,
+        match_type: 'Men-Doubles',
+    }));
+    const selected = resolvePlayerRanking({ rankings }, divisionRankingSource({ name: "Men's 40+" }));
+    assert.equal(selected.points, 1936);
+    assert.equal(selected.rank, '3');
+    assert.equal(selected.missing, false);
+});
+
+test('SAPA aliases do not match unrelated ranking organisations', () => {
+    const source = divisionRankingSource({ name: 'Mens 40+' });
+    for (const org of ['SAPA', 'SAPA ranking', ' SAPA RANKING ']) {
+        assert.equal(resolvePlayerRanking({ rankings: [{ org, age_group: 'Men Over 40', match_type: 'Doubles', points: 1936 }] }, source).points, 1936);
+    }
+    assert.equal(resolvePlayerRanking({ rankings: [{ org: 'SA Grand Tour', age_group: 'Men Over 40', match_type: 'Doubles', points: 9000 }] }, source).points, 0);
+});
