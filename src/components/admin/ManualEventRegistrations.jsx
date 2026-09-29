@@ -15,7 +15,6 @@ import {
     findAdminMarkedPayment,
     findParentEntryPayment,
     findPaymentForRegistration,
-    findStrictPaystackEntryPayment,
     getRegistrationEntryFeePaid,
     hasBlockingProcessedRefund,
     isEntryFeeRefund,
@@ -37,6 +36,7 @@ import AdminPlayerProfileModal from './AdminPlayerProfileModal';
 import EventActivityLog from './EventActivityLog';
 import { logEventActivity } from '../../utils/eventActivityLog';
 import { parseEventDate } from '../../utils/eventEntryFee';
+import { findFinancePayment, buildFinanceAllocations, loadEventRefunds } from '../../utils/eventFinanceReconciliation';
 import { downloadEventFinanceWorkbook } from '../../utils/eventFinanceExport';
 import { useAdminPermissions } from '../../hooks/useAdminPermissions';
 import CancelEventButton from './CancelEventButton';
@@ -88,17 +88,6 @@ const dedupeRegistrationsByEmailDivision = (regs) => {
         }
     });
     return [...preferred.values(), ...noEmail];
-};
-
-/** Income-statement label for a registration payment row — never invents 'paid'. */
-const resolveIncomeStatementPaymentStatus = (reg, refundByRegMap = null, payments = null) => {
-    if (!reg) return 'pending';
-    if (isWithdrawnRegistration(reg)) return 'withdrawn';
-    const paymentStatus = String(reg.payment_status || 'pending').toLowerCase();
-    if (paymentStatus === 'refunded' || hasBlockingProcessedRefund(reg, refundByRegMap, payments)) return 'refunded';
-    if (registrationCountsAsPaid(reg, refundByRegMap, payments)) return 'paid';
-    if (paymentStatus === 'unpaid') return 'pending';
-    return paymentStatus || 'pending';
 };
 
 const PLATFORM_COMMISSION_RATE = 0.05;
@@ -189,6 +178,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const [refunds, setRefunds] = useState([]);
     const [playersByEmail, setPlayersByEmail] = useState(new Map());
     const [loading, setLoading] = useState(true);
+    const [financeLoadError, setFinanceLoadError] = useState(null);
     const [search, setSearch] = useState('');
     const [playerSearch, setPlayerSearch] = useState('');
     const [paymentFilter, setPaymentFilter] = useState('all'); // all | paid | manual | pending | refunded | withdrawn
@@ -386,7 +376,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const load = useCallback(async () => {
         if (!event?.id) return;
         setLoading(true);
-
+        setFinanceLoadError(null);
+        try {
         const abandonCutoff = new Date(Date.now() - ABANDONED_CHECKOUT_AFTER_MS).toISOString();
         await supabase
             .from('payments')
@@ -404,28 +395,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         if (eventRes?.data && Array.isArray(eventRes.data.organiser_interim_payments)) {
             setInterimPayments(eventRes.data.organiser_interim_payments);
         }
+        for (const result of [regRes, payRes, divRes, eventRes]) {
+            if (result.error) throw new Error(result.error.message);
+        }
         let regs = regRes.data || [];
         const payRows = payRes.data || [];
-        const successPayments = payRows.filter((p) => p.status === 'success');
-
-        const paymentMethodPatches = [];
-        for (const reg of regs) {
-            if (isWithdrawnRegistration(reg)) continue;
-            if (reg.payment_status !== 'paid') continue;
-            if (String(reg.payment_method || '').toLowerCase() === 'paystack') continue;
-            if (!findStrictPaystackEntryPayment(successPayments, reg)) continue;
-            paymentMethodPatches.push(reg.id);
-        }
-        if (paymentMethodPatches.length > 0) {
-            await Promise.all(
-                paymentMethodPatches.map((id) => supabase
-                    .from('event_registrations')
-                    .update({ payment_method: 'paystack' })
-                    .eq('id', id)),
-            );
-            const patched = new Set(paymentMethodPatches);
-            regs = regs.map((r) => (patched.has(r.id) ? { ...r, payment_method: 'paystack' } : r));
-        }
 
         setRegistrations(regs);
         setPayments(payRows);
@@ -436,27 +410,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         // registration-id match, so include refunds found through this event's
         // payments as well. Otherwise the original receipt remains in the
         // payment ledger while its refund silently drops out of the settlement.
-        const regIds = regs.map((r) => r.id);
-        const paymentIds = payRows.map((p) => p.id);
-        const refundQueries = [];
-        if (regIds.length > 0) {
-            refundQueries.push(supabase
-                .from('payment_refunds')
-                .select('*')
-                .in('event_registration_id', regIds));
-        }
-        if (paymentIds.length > 0) {
-            refundQueries.push(supabase
-                .from('payment_refunds')
-                .select('*')
-                .in('payment_id', paymentIds));
-        }
-        const refundResults = await Promise.all(refundQueries);
-        const refundById = new Map();
-        refundResults.forEach(({ data }) => {
-            (data || []).forEach((refund) => refundById.set(refund.id, refund));
-        });
-        setRefunds([...refundById.values()]);
+        setRefunds(await loadEventRefunds(supabase, regs, payRows));
 
         const emails = [...new Set(regs.flatMap((r) => [r.email, r.partner_email]).filter(Boolean))];
         if (emails.length > 0) {
@@ -470,7 +424,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             setPlayersByEmail(new Map());
         }
 
-        setLoading(false);
+        } catch (error) {
+            setFinanceLoadError(error.message);
+            toast.error(error.message);
+        } finally {
+            setLoading(false);
+        }
     }, [event?.id]);
 
     const handleSyncToRankedin = useCallback(async () => {
@@ -1632,8 +1591,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     };
 
     const findPaymentForReg = useCallback(
-        (reg) => findPaymentForRegistration(payments.filter((p) => p.status === 'success'), reg),
-        [payments],
+        (reg) => findFinancePayment(payments, reg, refunds),
+        [payments, refunds],
     );
 
     const resolvePaymentPayer = useCallback((reg, payment) => {
@@ -2334,6 +2293,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         };
     }, [activeRegistrations, divFee, playersByEmail, payments, event?.id, refundByReg, refunds, stats.paid, stats.total]);
 
+    const financeReconciliation = useMemo(() => {
+        try { return { allocations: buildFinanceAllocations(registrations, payments, refunds), error: null }; }
+        catch (error) { return { allocations: [], error: error.message }; }
+    }, [registrations, payments, refunds]);
+
     const overviewStats = useMemo(() => {
         let paid4M = 0;
         let paidClub = 0;
@@ -2428,20 +2392,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         // an unpaid withdrawal was never billed.
         const billedTiers = new Map();
         const successPays = successPaymentsOnly(payments);
-        registrations.forEach((r) => {
-            if (registrationIsCompedEntry(r, payments)) return;
-            const payment = findStrictPaystackEntryPayment(successPays, r)
-                || findPaymentForRegistration(successPays, r);
-            if (!payment && isWithdrawnRegistration(r)) return;
-            const amount = payment
-                ? getRegistrationEntryFeePaid(payment, r, divFee(r.division))
-                : divFee(r.division);
-            if (amount <= 0) return;
-            const rate = Math.round(Number(amount) * 100) / 100;
-            const current = billedTiers.get(rate) || { rate, count: 0, total: 0 };
-            current.count += 1;
-            current.total += rate;
-            billedTiers.set(rate, current);
+        const allocations = financeReconciliation.allocations;
+        allocations.forEach(({ amount }) => {
+            const rate = Math.round(amount * 100) / 100;
+            const tier = billedTiers.get(rate) || { rate, count: 0, total: 0 };
+            tier.count += 1;
+            tier.total += rate;
+            billedTiers.set(rate, tier);
         });
         const billedTierBreakdown = [...billedTiers.values()].sort((a, b) => a.rate - b.rate);
         // The organiser settlement is based on total event income: Paystack and
@@ -2463,7 +2420,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             : null;
         const paidFeeAmounts = [];
         activeRegistrations.forEach((r) => {
-            const payment = findStrictPaystackEntryPayment(successPays, r);
+            const payment = findFinancePayment(successPays, r, refunds);
             if (!payment) return;
             const fee = getRegistrationEntryFeePaid(payment, r, 0);
             if (fee > 0) paidFeeAmounts.push(Math.round(Number(fee) * 100) / 100);
@@ -2478,7 +2435,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         let earlyBirdSignups = 0;
         let normalSignups = 0;
         activeRegistrations.forEach((r) => {
-            const payment = findStrictPaystackEntryPayment(successPays, r);
+            const payment = findFinancePayment(successPays, r, refunds);
             const paid = payment ? getRegistrationEntryFeePaid(payment, r, 0) : null;
 
             let isEarly = false;
@@ -2521,102 +2478,36 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             earlyBirdSignups,
             normalSignups,
         };
-    }, [activeRegistrations, payments, divFee, formatPaymentMethodForExport, formatLicenseForExport, refundByReg, refunds, interimPayments, earlyBirdMeta, registrations]);
+    }, [activeRegistrations, payments, divFee, formatPaymentMethodForExport, formatLicenseForExport, refundByReg, refunds, interimPayments, earlyBirdMeta, registrations, financeReconciliation]);
 
     const incomeStatementRows = useMemo(() => {
         const rows = [];
         const usedPaymentIds = new Set();
         const teamLabel = (r) => [r.full_name, r.partner_name].filter(Boolean).join(' / ') || r.email || '—';
-        const successPays = successPaymentsOnly(payments);
-
+        financeReconciliation.allocations.forEach(({ registration: r, payment, amount }, index) => {
+            usedPaymentIds.add(payment.id);
+            const meta = normalizePaymentMetadata(payment.metadata);
+            rows.push({
+                id: `entry-${payment.id}-${r?.id || index}`, date: payment.created_at,
+                description: `${r?.division || meta.division || 'Unallocated entry'} — Entry Fee`,
+                category: 'Entry payment', bucket: isPaystackPaymentMethod(payment.payment_method) ? '4M Paystack' : 'Manual / club',
+                type: 'payment', player: r ? teamLabel(r) : meta.paid_by_name || meta.email || 'Unallocated entry',
+                email: r?.email || meta.email || '', division: r?.division || meta.division || '',
+                amount, status: 'success', method: labelPaymentMethod(payment.payment_method),
+                reference: payment.reference || '', note: meta.note || meta.payment_note || '',
+            });
+        });
         activeRegistrations.forEach((r) => {
-            const player = teamLabel(r);
-            const email = r.email || '';
-            const division = r.division || 'Entry';
-            const status = resolveIncomeStatementPaymentStatus(r, refundByReg, payments);
-
-            if (registrationIsCompedEntry(r, payments)) {
-                const payment = findPaymentForReg(r);
-                if (payment?.id) usedPaymentIds.add(payment.id);
-                rows.push({
-                    id: `comp-${r.id}`,
-                    date: payment?.created_at || r.paid_at || r.created_at,
-                    description: `${division} — Comped Entry`,
-                    category: 'Comped entry',
-                    bucket: 'Informational',
-                    type: 'comped',
-                    player,
-                    email,
-                    division,
-                    amount: 0,
-                    status: 'comped',
-                    method: 'Comped',
-                    reference: payment?.reference || '',
-                    note: payment?.metadata?.note || payment?.metadata?.payment_note || '',
-                });
-                return;
-            }
-
-            const paystackPay = findStrictPaystackEntryPayment(successPays, r);
-            if (paystackPay) {
-                usedPaymentIds.add(paystackPay.id);
-                const fee = getRegistrationEntryFeePaid(paystackPay, r, 0);
-                if (fee > 0) {
-                    rows.push({
-                        id: `pay-${r.id}`,
-                        date: paystackPay.created_at || r.paid_at || r.created_at,
-                        description: `${division} — Entry Fee`,
-                        category: 'Entry payment',
-                        bucket: '4M Paystack',
-                        type: 'payment',
-                        player,
-                        email,
-                        division,
-                        amount: fee,
-                        status,
-                        method: 'Paystack',
-                        reference: paystackPay.reference || '',
-                        note: '',
-                    });
-                }
-            } else if (registrationCountsAsPaid(r, refundByReg, payments)) {
-                const payment = findPaymentForReg(r);
-                if (payment?.id) usedPaymentIds.add(payment.id);
-                const fee = getRegistrationEntryFeePaid(payment, r, divFee(r.division));
-                rows.push({
-                    id: `manual-${r.id}`,
-                    date: payment?.created_at || r.paid_at || r.created_at,
-                    description: `${division} — Entry Fee (Manual)`,
-                    category: 'Entry payment',
-                    bucket: 'Manual / club',
-                    type: 'payment',
-                    player,
-                    email,
-                    division,
-                    amount: fee,
-                    status,
-                    method: formatPaymentMethodForExport(r) || 'Manual',
-                    reference: payment?.reference || '',
-                    note: payment?.metadata?.note || payment?.metadata?.payment_note || '',
-                });
-            } else if (status !== 'refunded' && status !== 'withdrawn') {
-                rows.push({
-                    id: `pending-${r.id}`,
-                    date: r.created_at,
-                    description: `${division} — Outstanding entry fee`,
-                    category: 'Pending / unpaid',
-                    bucket: 'Outstanding',
-                    type: 'pending',
-                    player,
-                    email,
-                    division,
-                    amount: divFee(r.division),
-                    status: 'pending',
-                    method: '—',
-                    reference: '',
-                    note: '',
-                });
-            }
+            const comped = registrationIsCompedEntry(r, payments);
+            if (!comped && registrationCountsAsPaid(r, refundByReg, payments)) return;
+            if (r.payment_status === 'refunded') return;
+            rows.push({ id: `uncollected-${r.id}`, date: r.created_at,
+                description: `${r.division} — ${comped ? 'Comped Entry' : 'Outstanding entry fee'}`,
+                category: comped ? 'Comped entry' : 'Pending / unpaid', bucket: comped ? 'Informational' : 'Outstanding',
+                type: comped ? 'comped' : 'pending', player: teamLabel(r), email: r.email,
+                division: r.division, amount: comped ? 0 : divFee(r.division), status: comped ? 'comped' : 'pending',
+                method: comped ? 'Comped' : '—', reference: '', note: '',
+            });
         });
 
         const paymentById = new Map((payments || []).map((p) => [p.id, p]));
@@ -2746,7 +2637,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         });
 
         return rows;
-    }, [activeRegistrations, payments, findPaymentForReg, refundByReg, refunds, registrations, overviewStats.commission, interimPayments, event?.organiser_name, event?.organiser_email, divFee, formatPaymentMethodForExport]);
+    }, [activeRegistrations, payments, refundByReg, refunds, registrations, overviewStats.commission, interimPayments, event?.organiser_name, event?.organiser_email, divFee, financeReconciliation]);
 
     const filteredIncomeStatementRows = useMemo(() => {
         const q = statementSearch.trim().toLowerCase();
@@ -2944,6 +2835,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     };
 
     const exportFinanceExcel = async (reportType = 'full') => {
+        if (loading || financeLoadError || financeReconciliation.error) { toast.error(financeLoadError || financeReconciliation.error || 'Wait for finance records to finish loading.'); return; }
         const normalizedReportType = reportType === 'organiser' ? 'organiser' : 'full';
         if (normalizedReportType === 'full' && !isSuperAdmin) {
             toast.error('Only Super Admins can export the full event report.');
@@ -2962,7 +2854,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                     ? 'Early bird'
                     : 'Regular';
                 return {
-                    section: 'Billed composition',
+                    section: 'Collected entry composition',
                     label: `${label} (${tier.count} × ${fmtR(tier.rate)})`,
                     value: tier.total,
                     money: true,
@@ -3031,7 +2923,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                     else if (details.isManualChannel) channel = `Manual (${labelPaymentMethod(details.method) || 'Admin'})`;
                     else channel = labelPaymentMethod(details.method) || 'Paystack';
                 }
-                const paystackPay = findStrictPaystackEntryPayment(successPaymentsOnly(payments), r);
+                const paystackPay = findFinancePayment(successPaymentsOnly(payments), r, refunds);
                 const payment = paystackPay || findPaymentForReg(r);
                 const isComped = registrationIsCompedEntry(r, payments);
                 const paid = registrationCountsAsPaid(r, refundByReg, payments);
@@ -3039,7 +2931,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                 if (isComped) entryAmount = 0;
                 else if (paystackPay) entryAmount = getRegistrationEntryFeePaid(paystackPay, r, 0);
                 else if (paid) entryAmount = getRegistrationEntryFeePaid(payment, r, divFee(r.division));
-                else entryAmount = divFee(r.division);
+                else entryAmount = r.status === 'withdrawn' ? 0 : divFee(r.division);
 
                 return {
                     name: r.full_name,
@@ -3105,7 +2997,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                 <button
                     type="button"
                     onClick={() => setExportMenuOpen((open) => !open)}
-                    disabled={exportingFinance}
+                    disabled={exportingFinance || loading || Boolean(financeLoadError)}
                     className={buttonClass}
                     aria-haspopup="menu"
                     aria-expanded={exportMenuOpen}
@@ -3145,6 +3037,16 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     if (!isActive) return null;
 
     const handleClose = onBack || onClose;
+    if (financeLoadError || financeReconciliation.error) return (
+        <div role="alert" className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-6">
+            <div className="max-w-lg rounded-xl bg-[#151515] p-6 text-white">
+                <h2 className="text-xl font-bold">Finance records could not be verified</h2>
+                <p className="my-4">{financeLoadError || financeReconciliation.error}</p>
+                <button onClick={load} disabled={loading} className="mr-4 rounded bg-padel-green px-4 py-2 text-black">Retry</button>
+                <button onClick={handleClose}>Close</button>
+            </div>
+        </div>
+    );
 
     const panelContent = (
         <>
@@ -3263,7 +3165,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                 </div>
                             </div>
                         )}
-                        <div className="flex gap-6 overflow-x-auto no-scrollbar border-b border-white/10">
+                        <>{financeLoadError && <p role="alert" className="p-4 text-red-300">Finance report unavailable: {financeLoadError}</p>}</><div className="flex gap-6 overflow-x-auto no-scrollbar border-b border-white/10">
                             {[
                                 { id: 'overview', label: 'Overview' },
                                 { id: 'players', label: 'Teams' },
@@ -3504,7 +3406,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                         </div>
                                         {overviewStats.billedTierBreakdown.length > 0 && (
                                             <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 space-y-1.5">
-                                                <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Billed composition</p>
+                                                <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Collected entry composition</p>
                                                 {overviewStats.billedTierBreakdown.map((tier, index) => (
                                                     <div key={tier.rate} className="flex items-center justify-between gap-4 text-xs">
                                                         <span className="text-gray-400">
