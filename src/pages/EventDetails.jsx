@@ -48,7 +48,7 @@ import {
 } from '../utils/weeklyRegistration';
 import TournamentProgressBar from '../components/TournamentProgressBar';
 import VideoModal from '../components/VideoModal';
-import { resolvePlayerRanking } from '../utils/playerRankingSelection';
+import { divisionRankingSource, resolvePlayerRanking } from '../utils/playerRankingSelection';
 
 const formatPlayerName = (fullName) => {
     if (!fullName) return '';
@@ -2370,7 +2370,7 @@ const EventDetails = () => {
                         Name: d.name,
                         EntryFee: resolveDivisionEntryFee(d, event),
                         StandardEntryFee: Number(d.entry_fee || 0),
-                        SeedingRankingSource: d.seeding_ranking_source || 'active',
+                        SeedingRankingSource: divisionRankingSource(d),
                     }));
 
                     const { data: localRegs } = await supabase

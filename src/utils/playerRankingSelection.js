@@ -125,6 +125,27 @@ export const rankingSourceCategory = (source) => {
         : null;
 };
 
+/** Resolve the default against the entered division, never the player's profile choice. */
+export const divisionRankingSource = (division) => {
+    const source = division?.seeding_ranking_source;
+    if (source && source !== 'active') return source;
+
+    const name = normalise(division?.name).replace(/[’']/g, '');
+    const gender = /\b(women|womens|ladies|female)\b/.test(name) ? 'Women'
+        : /\b(men|mens|male)\b/.test(name) ? 'Men'
+        : /\bmixed\b/.test(name) ? 'Mixed'
+        : /\bboys?\b/.test(name) ? 'Boys'
+        : /\bgirls?\b/.test(name) ? 'Girls' : null;
+    if (!gender) return 'active';
+
+    const under = name.match(/\b(?:under\s*|u\s*)(\d{2})\b/);
+    const over = name.match(/\b(?:over\s*|o\s*)(\d{2})\b/) || name.match(/\b(\d{2})\s*\+/);
+    const ageGroup = under ? `${gender} Under ${under[1]}`
+        : over ? `${gender} Over ${over[1]}`
+        : ['Men', 'Women', 'Mixed'].includes(gender) ? `${gender}-Main` : null;
+    return ageGroup ? `category:SAPA|${ageGroup}|Doubles` : 'active';
+};
+
 export const resolvePlayerRanking = (player, source = 'active') => {
     const rankings = Array.isArray(player?.rankings) ? player.rankings : [];
     const organisation = rankingSourceOrganisation(source);
@@ -133,7 +154,8 @@ export const resolvePlayerRanking = (player, source = 'active') => {
         ? rankings.find((row) => (
             normalise(row?.org) === normalise(category.organisation)
             && normalise(row?.age_group) === normalise(category.ageGroup)
-            && (!category.matchType || normalise(row?.match_type) === normalise(category.matchType))
+            && (!category.matchType || normalise(row?.match_type) === normalise(category.matchType)
+                || (normalise(category.matchType) === 'doubles' && normalise(row?.match_type).endsWith('-doubles')))
         ))
         : organisation
         ? findOrganisationMainRanking(rankings, organisation, player)

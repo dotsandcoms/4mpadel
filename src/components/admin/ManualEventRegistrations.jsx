@@ -42,7 +42,7 @@ import { useAdminPermissions } from '../../hooks/useAdminPermissions';
 import CancelEventButton from './CancelEventButton';
 import CancelEventDialog from './CancelEventDialog';
 import NativeDrawManager from './NativeDrawManager';
-import { resolvePlayerRanking } from '../../utils/playerRankingSelection';
+import { divisionRankingSource, resolvePlayerRanking } from '../../utils/playerRankingSelection';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 const normEmail = (value) => String(value || '').trim().toLowerCase();
@@ -2231,7 +2231,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         const result = {};
         divisions.forEach((cls) => {
             const teams = teamsByDivision[cls.name] || [];
-            const rankingSource = cls.seeding_ranking_source || 'active';
+            const rankingSource = divisionRankingSource(cls);
             const enriched = teams.map((team) => {
                 const playerPoints = team.players.map((reg) => getPlayerPoints(reg, rankingSource));
                 const totalPoints = playerPoints.reduce((sum, points) => sum + points, 0);
