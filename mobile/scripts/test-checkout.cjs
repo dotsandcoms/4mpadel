@@ -7,7 +7,7 @@ const source = ts.transpileModule(fs.readFileSync('supabase/functions/native-eve
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 function server(overrides = {}) {
-  let handler, writes = [];
+  let handler, writes = [], emails = [], gatewayCalls = [];
   const tables = {
     calendar: { id: 1, is_manual: true, is_visible: true, sanction_status: 'approved', event_name: 'Test event', start_date: '2099-01-01', end_date: '2099-01-02', payment_method: 'platform' },
     players: { id: 3, name: 'Test player', email: 'player@example.com', contact_number: '0123456789', license_type: 'none', temporary_licenses: [] },
@@ -25,11 +25,16 @@ function server(overrides = {}) {
     },
   };
   vm.runInNewContext(source, { exports: {}, require: () => ({ createClient: () => client }),
-    Deno: { env: { get: () => 'test' }, serve: fn => { handler = fn; } },
-    Response, Request, Date, Intl, Number, Set, Error, JSON,
-    fetch: async () => { throw new Error('Tests must not contact a payment gateway'); },
+    Deno: { env: { get: name => name === 'PUSH_TEST_RECIPIENTS' ? overrides.testRecipients : 'test' }, serve: fn => { handler = fn; } },
+    Response, Request, URL, Date, Intl, Number, Set, Error, JSON, AbortSignal,
+    fetch: async (url, options) => {
+      if (url === 'https://api.paystack.co/transaction/initialize' && overrides.gateway) { gatewayCalls.push(JSON.parse(options.body)); return Response.json({ status: true, data: { authorization_url: 'https://checkout.paystack.com/test' } }); }
+      if (!url.endsWith('/functions/v1/send-email')) throw new Error('Tests must not contact a payment gateway');
+      emails.push(JSON.parse(options.body));
+      return Response.json(overrides.emailFailure ? { error: 'provider unavailable' } : { success: true }, { status: overrides.emailFailure ? 500 : 200 });
+    },
   });
-  return { writes, call: async input => {
+  return { writes, emails, gatewayCalls, get: url => handler(new Request(url)), call: async input => {
     const response = await handler(new Request('https://example.test', { method: 'POST', headers: { Authorization: 'Bearer test' }, body: JSON.stringify({ action: 'quote', eventId: 1, divisionIds: ['division-1'], ...input }) }));
     return { status: response.status, body: await response.json() };
   } };
@@ -174,4 +179,80 @@ test('new partner logo is kept on the partner row, independently of the payer lo
   const rows = app.writes[0].value;
   assert.equal(rows.find(r => r.email === 'player@example.com').tshirt_logo_url, prefix + 'self.png');
   assert.equal(rows.find(r => r.email === 'partner@example.com').tshirt_logo_url, prefix + 'partner.png');
+});
+
+const freeCheckout = { action: 'checkout', agreed: true, acceptedTotal: 0, attemptId: '11111111-1111-1111-1111-111111111111' };
+const freeDivision = { tournament_divisions: [{ id: 'division-1', name: 'Open', entry_fee: 0 }] };
+test('native free checkout sends a registration email after saving, without claiming a payment', async () => {
+  const app = server({ tables: freeDivision });
+  const result = await app.call(freeCheckout);
+  assert.equal(result.body.registered, true);
+  assert.equal(app.emails.length, 1);
+  assert.equal(app.emails[0].to, 'player@example.com');
+  assert.equal(app.emails[0].template, 'event_registration');
+  assert.equal(app.emails[0].variables.paymentMethod, 'free');
+  assert.equal(app.emails[0].variables.amountDue, 'R 0.00');
+  assert.ok(app.writes.some(w => w.table === 'event_registrations'));
+});
+test('email failure never turns a saved registration into a checkout failure', async () => {
+  const app = server({ tables: freeDivision, emailFailure: true });
+  const result = await app.call(freeCheckout);
+  assert.equal(result.status, 200);
+  assert.equal(result.body.registered, true);
+  assert.match(result.body.emailWarning, /entry is saved/);
+});
+test('a checkout retry for an existing active entry does not resend email', async () => {
+  const app = server({ tables: freeDivision, rpc: name => name === 'get_event_registrations_for_matching'
+    ? [{ id: 'existing', email: 'player@example.com', division: 'Open', status: 'registered', payment_status: 'paid' }] : [] });
+  const result = await app.call(freeCheckout);
+  assert.equal(result.body.registered, true);
+  assert.equal(app.emails.length, 0);
+});
+test('test recipient scope also limits native registration emails', async () => {
+  for (const testRecipients of ['', 'someone-else@example.com']) {
+    const app = server({ tables: freeDivision, testRecipients });
+    assert.equal((await app.call(freeCheckout)).body.registered, true);
+    assert.equal(app.emails.length, 0);
+  }
+});
+
+test('valid private access grant never bypasses closed registration', async () => {
+  for (const action of ['quote', 'checkout']) {
+    const app = server({ tables: { calendar: { id: 1, is_manual: true, registration_access: 'code', registration_closes_at: '2000-01-01T00:00:00Z' } }, rpc: () => true });
+    const result = await app.call({ action, accessGrantId: 'valid-grant', agreed: true });
+    assert.equal(result.status, 400);
+    assert.match(result.body.error, /Registration has closed/);
+    assert.equal(app.writes.length, 0);
+    assert.equal(app.emails.length, 0);
+  }
+});
+
+test('payment return redirects only to the fixed native event screen and never marks payment paid', async () => {
+  const app = server();
+  const reference = 'MOBILE-12345678-11111111-1111-1111-1111-111111111111';
+  const response = await app.get(`https://example.test/functions/v1/native-event-checkout/return?event_id=553&reference=${reference}&mode=pay&redirect=https://evil.test`);
+  assert.equal(response.status,302);
+  const target=new URL(response.headers.get('location'));
+  assert.equal(target.protocol,'fourmpadel:');assert.equal(target.hostname,'events');assert.equal(target.pathname,'/register');assert.equal(target.searchParams.get('id'),'553');assert.equal(target.searchParams.get('mode'),'pay');assert.equal(target.searchParams.get('pay_ref'),reference);
+  assert.equal(app.writes.length,0);assert.equal(app.emails.length,0);
+  assert.equal((await app.get('https://example.test/functions/v1/native-event-checkout/return?event_id=bad&reference=bad')).status,400);
+});
+
+test('new native checkout gives Paystack the app return endpoint', async () => {
+ const app=server({gateway:true});
+ const result=await app.call({action:'checkout',agreed:true,acceptedTotal:367.5,attemptId:'11111111-1111-1111-1111-111111111111'});
+ assert.equal(result.status,200);assert.equal(app.gatewayCalls.length,1);
+ assert.equal(app.gatewayCalls[0].callback_url,'test/functions/v1/native-event-checkout/return?event_id=1');
+ assert.equal(result.body.authorizationUrl,'https://checkout.paystack.com/test');
+});
+
+test('adding a partner to a paid solo entry charges only the new partner', async () => {
+  const existing = { id: 'entry-1', email: 'player@example.com', division_id: 'division-1', division: 'Open', full_name: 'Test player', partner_email: null, payment_status: 'paid', status: 'registered' };
+  const app = server({ tables: { event_registrations: [existing] }, rpc: name => name === 'get_event_registrations_for_matching' ? [existing] : name === 'find_registration_partner' ? [{ name: 'Partner', email: 'partner@example.com' }] : [] });
+  const { body, status } = await app.call({ partnerEmail: 'partner@example.com', payForPartner: true });
+  assert.equal(status, 200);
+  assert.equal(body.quote.total, 367.5);
+  assert.equal(body.quote.entries[0].paymentStatus, 'paid');
+  assert.equal(body.quote.entries[0].playerCount, 1);
+  assert.equal(app.writes.length, 0);
 });

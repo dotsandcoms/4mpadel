@@ -154,9 +154,6 @@ export default function ProfileScreen() {
     }
   }
 
-  function openProfileEdit() {
-    router.push('/edit-profile');
-  }
 
   async function openEvent(event: CalendarEvent, action?: 'register' | 'pay' | 'manage') {
     const path = eventPath(event);
@@ -196,6 +193,7 @@ export default function ProfileScreen() {
               onPress={() => router.push('/notifications')}
               ringing={(home?.pending.length ?? 0) > 0}
             />
+            <Pressable accessibilityRole="button" accessibilityLabel="Account & settings" onPress={() => router.push('/settings')} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><SymbolView name={{ ios: 'gearshape', android: 'settings', web: 'settings' }} size={22} tintColor="#2449D8" /></Pressable>
             <MenuButton />
           </View>
         </View>
@@ -232,16 +230,15 @@ export default function ProfileScreen() {
                 player={player}
                 stats={bundle.stats}
                 playId={statsPlayId}
-                onEditPhoto={openProfileEdit}
               />
             </FadeUp>
             {(player.license_type || 'none').toLowerCase() !== 'full' ? (
               <FadeUp className="mt-3">
                 <LicenseCallout licenseType={player.license_type} tempLicense={bundle.tempLicense} />
                 <PressableScale
-                  onPress={() => openSitePath('/profile')}
-                  accessibilityRole="link"
-                  accessibilityLabel="Pay for a license on 4M Padel"
+                  onPress={() => router.push('/license')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Manage your SAPA licence"
                   className="mt-3 h-[44px] items-center justify-center rounded-xl bg-padel">
                   <Text className="text-[10px] font-black uppercase tracking-widest text-page">
                     {(player.license_type || '').toLowerCase() === 'temporary'

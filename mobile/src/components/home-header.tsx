@@ -135,7 +135,7 @@ export function NotificationBell({
       hitSlop={8}
       className="h-11 w-11 items-center justify-center">
       <Animated.View style={bellStyle} collapsable={false}>
-        <SymbolView name="bell" size={20} tintColor={brand.premium} />
+        <SymbolView name={{ ios: 'bell', android: 'notifications', web: 'notifications' }} size={20} tintColor={brand.premium} />
       </Animated.View>
       {ringing ? (
         <>
@@ -195,7 +195,7 @@ function HeaderIcon({
       accessibilityLabel={label}
       hitSlop={8}
       className="h-11 w-11 items-center justify-center">
-      <SymbolView name={name} size={20} tintColor={brand.premium} />
+      <SymbolView name={{ ios: name, android: 'search', web: 'search' }} size={20} tintColor={brand.premium} />
     </Pressable>
   );
 }

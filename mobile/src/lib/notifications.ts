@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { NOTIFICATION_PATHS, type NotificationType } from './notification-events';
 import { supabase } from './supabase';
@@ -22,13 +22,14 @@ export { NOTIFICATION_PATHS, NOTIFICATION_TYPES, pushCopy } from './notification
 const PROMPT_KEY = 'push_prompt_native_v1';
 
 let lastToken: string | null = null;
+let registrationInFlight: Promise<boolean> | null = null;
 
 if (Platform.OS !== 'web') {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowBanner: true,
       shouldShowList: true,
-      shouldPlaySound: false,
+      shouldPlaySound: true,
       shouldSetBadge: false,
     }),
   });
@@ -36,6 +37,7 @@ if (Platform.OS !== 'web') {
 
 function easProjectId(): string | undefined {
   return (
+    process.env.EXPO_PUBLIC_EAS_PROJECT_ID ??
     Constants.easConfig?.projectId ??
     (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas?.projectId
   );
@@ -46,22 +48,19 @@ function appVersion(): string | null {
 }
 
 /** Safe in-app route from a notification payload. Rejects anything that is not a path. */
-export function pathFromNotificationData(
-  data: Record<string, unknown> | undefined
-): string | null {
-  const path = data?.path;
-  if (typeof path === 'string' && path.startsWith('/')) return path;
-  const type = data?.type;
-  if (typeof type === 'string' && type in NOTIFICATION_PATHS) {
-    return NOTIFICATION_PATHS[type as NotificationType];
-  }
-  return null;
+export { pathFromNotificationData } from './notification-routing';
+import { pathFromNotificationData } from './notification-routing';
+
+// SDK 57 supports Android emulators with Google Play services. Token fetching
+// still fails safely on emulator images without FCM support.
+function canRegisterPush(): boolean {
+  return Platform.OS !== 'web' && (Device.isDevice || Platform.OS === 'android');
 }
 
 export async function getPushPermissionStatus(): Promise<Notifications.PermissionStatus | 'unavailable'> {
-  if (Platform.OS === 'web' || !Device.isDevice) return 'unavailable';
+  if (!canRegisterPush()) return 'unavailable';
   const current = await Notifications.getPermissionsAsync();
-  return current.status;
+  return current.granted || current.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL ? Notifications.PermissionStatus.GRANTED : current.status;
 }
 
 export async function markPushPromptSeen(): Promise<void> {
@@ -116,19 +115,28 @@ export async function requestPushPermission(): Promise<boolean> {
     status = next.status;
   }
   if (status !== 'granted') return false;
-  if (!Device.isDevice) return true;
+  if (!canRegisterPush()) return true;
   return registerCurrentToken();
 }
 
 /** Refresh the stored token when permission is already granted. Never prompts. */
 export async function syncPushTokenIfGranted(): Promise<void> {
-  if (Platform.OS === 'web' || !Device.isDevice) return;
-  const { status } = await Notifications.getPermissionsAsync();
-  if (status !== 'granted') return;
+  if (!canRegisterPush()) return;
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) return;
+  const status = await getPushPermissionStatus();
+  if (status !== 'granted') { await unregisterPushToken(); return; }
   await registerCurrentToken();
 }
 
-async function registerCurrentToken(): Promise<boolean> {
+function registerCurrentToken(): Promise<boolean> {
+  if (!registrationInFlight) {
+    registrationInFlight = registerCurrentTokenImpl().finally(() => { registrationInFlight = null; });
+  }
+  return registrationInFlight;
+}
+
+async function registerCurrentTokenImpl(): Promise<boolean> {
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {
       name: '4M Padel',
@@ -138,43 +146,37 @@ async function registerCurrentToken(): Promise<boolean> {
 
   const projectId = easProjectId();
   let token: string;
-  let tokenKind: 'expo' | 'apns' | 'fcm' = 'expo';
-
+  if (!projectId) {
+    console.warn('[push] Configure EXPO_PUBLIC_EAS_PROJECT_ID or EAS projectId to enable delivery.');
+    return false;
+  }
   try {
-    if (projectId) {
-      const result = await Notifications.getExpoPushTokenAsync({ projectId });
-      token = result.data;
-    } else {
-      const result = await Notifications.getDevicePushTokenAsync();
-      token = typeof result.data === 'string' ? result.data : JSON.stringify(result.data);
-      tokenKind = Platform.OS === 'ios' ? 'apns' : 'fcm';
-      console.warn(
-        '[push] No EAS projectId — stored a device token. Run eas init before Expo Push can deliver.'
-      );
-    }
+    token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
   } catch (error) {
     console.warn('[push] token not available:', error);
     return false;
   }
 
-  lastToken = token;
   const { error } = await supabase.rpc('register_push_token', {
     p_token: token,
     p_platform: Platform.OS === 'ios' ? 'ios' : 'android',
-    p_token_kind: tokenKind,
+    p_token_kind: 'expo',
     p_app_version: appVersion(),
   });
   if (error) {
     console.warn('[push] token not saved:', error.message);
     return false;
   }
+  lastToken = token;
+  await AsyncStorage.setItem('push_registered_token', token);
   return true;
 }
 
 /** Drop this device’s token before sign-out so the next account is not mixed in. */
 export async function unregisterPushToken(): Promise<void> {
-  if (Platform.OS === 'web' || !Device.isDevice) return;
-  let token = lastToken;
+  if (registrationInFlight) await registrationInFlight;
+  if (!canRegisterPush()) return;
+  let token = lastToken ?? await AsyncStorage.getItem('push_registered_token');
   if (!token) {
     try {
       const { status } = await Notifications.getPermissionsAsync();
@@ -188,8 +190,9 @@ export async function unregisterPushToken(): Promise<void> {
   }
   if (!token) return;
   const { error } = await supabase.rpc('unregister_push_token', { p_token: token });
-  if (error) console.warn('[push] token not removed:', error.message);
+  if (error) throw new Error('Could not disconnect notifications. Please try signing out again.');
   lastToken = null;
+  await AsyncStorage.removeItem('push_registered_token');
 }
 
 export function addNotificationResponseListener(
@@ -202,4 +205,21 @@ export function addNotificationResponseListener(
     if (path) onPath(path);
   });
   return sub;
+}
+
+/** Consume the launch response only after authentication and navigation are ready. */
+export function consumeInitialNotificationPath(): string | null {
+  const response = Notifications.getLastNotificationResponse();
+  if (!response) return null;
+  const path = pathFromNotificationData(response.notification.request.content.data);
+  Notifications.clearLastNotificationResponse();
+  return path;
+}
+
+/** Refresh after OS permission changes and native token rotation. Never prompts. */
+export function watchPushRegistration(): { remove(): void } {
+  const sync = () => { void syncPushTokenIfGranted().catch(error => console.warn('[push] sync failed', error)); };
+  const state = AppState.addEventListener('change', value => { if (value === 'active') sync(); });
+  const token = Notifications.addPushTokenListener(sync);
+  return { remove() { state.remove(); token.remove(); } };
 }

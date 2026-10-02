@@ -1,3 +1,5 @@
+import { queueWelcomeEmail } from '@/lib/welcome-email';
+import { parseSponsors } from '@/lib/sponsors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session, User } from '@supabase/supabase-js';
 
@@ -104,6 +106,13 @@ export async function createPlayerProfile(draft: PlayerDraft, clubs: ClubRow[]) 
     const { p_club_id: _clubId, ...withoutClubId } = payload;
     const retry = await supabase.rpc('create_player_profile', withoutClubId);
     if (retry.error) throw first.error;
+  }
+
+  // Profile creation has succeeded; email must never turn this into a failed signup.
+  try {
+    await queueWelcomeEmail();
+  } catch {
+    console.warn('[profile] Unable to persist welcome-email retry');
   }
 
   const { data: sessionData } = await supabase.auth.getUser();
@@ -446,14 +455,7 @@ export function galleryOf(player: PlayerRow | null): string[] {
 }
 
 export function sponsorsOf(player: PlayerRow | null): string[] {
-  if (!player?.sponsors) return [];
-  try {
-    const parsed = JSON.parse(player.sponsors) as unknown;
-    if (Array.isArray(parsed)) return parsed.filter((item) => typeof item === 'string');
-  } catch {
-    /* plain string */
-  }
-  return player.sponsors.trim() ? [player.sponsors] : [];
+  return parseSponsors(player?.sponsors ?? '');
 }
 
 export async function setPreferredRanking(playerId: number, ranking: RankingRow) {

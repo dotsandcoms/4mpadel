@@ -492,7 +492,10 @@ function AgendaRow({
             </View>
           ) : null}
           {status ? (
-            <Text numberOfLines={1} className="mt-0.5 text-[11px] text-court-muted">
+            <Text
+              numberOfLines={1}
+              className="mt-0.5 text-[11px] text-court-muted"
+              style={status.endsWith(' pts') ? { color: '#526CA3', fontWeight: '600' } : undefined}>
               {status}
             </Text>
           ) : null}

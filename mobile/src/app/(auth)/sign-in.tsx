@@ -1,4 +1,3 @@
-import * as AppleAuthentication from 'expo-apple-authentication';
 import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -310,13 +309,21 @@ export default function SignInScreen() {
         <FadeUp delay={200}>
           {appleReady ? (
             <FocusRing>
-              <AppleAuthentication.AppleAuthenticationButton
-                buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-                cornerRadius={CONTROL_R}
-                style={{ height: SOCIAL_H }}
+              <PressableScale
                 onPress={() => run('apple', signInWithApple)}
-              />
+                disabled={!!busy}
+                accessibilityRole="button"
+                accessibilityState={{ busy: busy === 'apple', disabled: !!busy }}
+                accessibilityLabel="Continue with Apple"
+                className="flex-row items-center justify-center bg-black"
+                style={{ height: SOCIAL_H, borderRadius: CONTROL_R }}>
+                <View className="absolute left-4 h-11 w-11 items-center justify-center" accessible={false}>
+                  {busy === 'apple' ? <ActivityIndicator color="#FFFFFF" /> : (
+                    <SymbolView name="apple.logo" size={18} tintColor="#FFFFFF" />
+                  )}
+                </View>
+                <Text className="text-[14px] font-semibold text-white">Continue with Apple</Text>
+              </PressableScale>
             </FocusRing>
           ) : null}
 

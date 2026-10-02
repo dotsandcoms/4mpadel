@@ -10,6 +10,17 @@ export function siteUrl(path: string) {
 }
 
 export async function openSitePath(path: string, options?: { forceBrowser?: boolean }) {
+  if (!options?.forceBrowser && /^\/players(?:[?#]|$)/.test(path)) {
+    const id = new URL(siteUrl(path)).searchParams.get('id');
+    if (id && /^\d+$/.test(id)) router.push({ pathname: '/players/[id]', params: { id } });
+    else router.push('/players');
+    return;
+  }
+  const balanceMatch = /^\/events\/pay-balance\?registrationId=([^&#]+)$/.exec(path);
+  if (balanceMatch && !options?.forceBrowser) {
+    router.push({ pathname: '/events/pay-balance', params: { registrationId: decodeURIComponent(balanceMatch[1]) } });
+    return;
+  }
   const payMatch = /^\/events\/register\?id=(\d+)&mode=pay$/.exec(path);
   if (payMatch && !options?.forceBrowser) {
     router.push({ pathname: '/events/register', params: { id: payMatch[1], mode: 'pay' } });

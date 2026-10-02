@@ -17,7 +17,7 @@ export type ProMatch = {
 };
 export type ProTournament = { id: number; name: string; startDate: string; endDate: string; location: string | null; photoUrl: string | null; level?: string | null; status?: string | null; country?: string | null; venue?: string | null };
 type Snapshot = { version: 1; updatedAt: string };
-export type ProRankings = Snapshot & { limit: number; categories: Record<ProCategory, { players: ProPlayer[] }> };
+export type ProRankings = Snapshot & { limit: number; categories: Record<ProCategory, { players: ProPlayer[]; editionDate?: string | null; previousEdition?: boolean }> };
 export type ProTour = Snapshot & { coverage: string; matches: ProMatch[]; tournaments: ProTournament[] };
 export type ProFixtures = Snapshot & { coverage: string; matches: ProMatch[]; drawPublished: boolean; tournament: ProTournament | null };
 export type ProFollow = { player_id: number; player_name: string; category: ProCategory };
@@ -35,7 +35,7 @@ const match = (v: unknown) => isObject(v) && Number.isSafeInteger(v.id) && categ
 
 /** Validate public snapshots, never contact the credentialed provider from a device. */
 export function parseProSnapshot<K extends keyof ProSnapshots>(kind: K, value: unknown): ProSnapshots[K] {
-  if (!isObject(value) || value.version !== 1 || !dated(value.updatedAt)) throw new Error('Invalid Pro Padel snapshot');
+  if (!isObject(value) || value.version !== 1 || !dated(value.updatedAt)) throw new Error('Invalid international padel snapshot');
   if (kind === 'rankings') {
     if (!isObject(value.categories) || !['men', 'women'].every(c =>
       Array.isArray(value.categories[c]?.players) && value.categories[c].players.every((p: unknown) =>
@@ -55,7 +55,7 @@ export async function fetchProSnapshot<K extends keyof ProSnapshots>(kind: K): P
   const timer = setTimeout(() => controller.abort(), 12000);
   try {
     const response = await fetch(data.publicUrl, { signal: controller.signal });
-    if (!response.ok) throw new Error('Pro Padel is unavailable');
+    if (!response.ok) throw new Error('International padel data is unavailable');
     return parseProSnapshot(kind, await response.json());
   } finally { clearTimeout(timer); }
 }
@@ -93,4 +93,4 @@ export function proDate(value?: string | null, time = false) {
     ...(time ? { hour: '2-digit', minute: '2-digit' } as const : {}) }).format(new Date(value)) + (time ? ' SAST' : '');
 }
 export const proRound = (m: ProMatch) => m.roundName || ({ 1: 'Final', 2: 'Semi-final', 4: 'Quarter-final' }[m.round] ?? `Round of ${m.round * 2}`);
-export const proStatus = (m: ProMatch) => ({ finished: 'Final score', retired: 'Retirement', walkover: 'Walkover', bye: 'Bye', ended: 'Unconfirmed score', scheduled: 'Scheduled at last update' }[m.status] ?? 'Result pending');
+export const proStatus = (m: ProMatch) => ({ live: 'Live now', finished: 'Final score', retired: 'Retirement', walkover: 'Walkover', bye: 'Bye', ended: 'Unconfirmed score', scheduled: 'Scheduled at last update' }[m.status] ?? 'Result pending');

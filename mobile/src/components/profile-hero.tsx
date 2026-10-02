@@ -76,7 +76,6 @@ function useCountTo(target: number, decimals = 0, playId = 0) {
 type HeroProps = {
   player: PlayerRow;
   stats: ProfileStats;
-  onEditPhoto: () => void;
   playId?: number;
 };
 
@@ -86,8 +85,8 @@ function rankNumber(label?: string | null) {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Website mobile identity card: photo + pencil, license, name, rank / points / matches. */
-export function ProfileHero({ player, stats, onEditPhoto, playId = 0 }: HeroProps) {
+/** Website mobile identity card: photo, license, name, rank / points / matches. */
+export function ProfileHero({ player, stats, playId = 0 }: HeroProps) {
   const license = licenseBadge(player.license_type);
   const name = player.name?.trim() || 'Player';
   const rankN = rankNumber(player.rank_label);
@@ -123,22 +122,6 @@ export function ProfileHero({ player, stats, onEditPhoto, playId = 0 }: HeroProp
               </Text>
             )}
           </View>
-          <Pressable
-            onPress={onEditPhoto}
-            accessibilityRole="button"
-            accessibilityLabel="Edit profile"
-            hitSlop={8}
-            className="absolute items-center justify-center rounded-full bg-padel"
-            style={{
-              width: 22,
-              height: 22,
-              bottom: 0,
-              right: 0,
-              borderWidth: 1,
-              borderColor: '#000',
-            }}>
-            <SymbolView name="pencil" size={10} tintColor="#000" />
-          </Pressable>
         </View>
 
         <View className="ml-3 min-w-0 flex-1">
@@ -325,15 +308,15 @@ function MiniStat({
   highlight?: boolean;
 }) {
   return (
-    <View className="min-h-[64px] min-w-0 flex-1 items-center justify-center rounded-xl p-2" style={{ backgroundColor: highlight ? brand.padel : brand.surface }}>
+    <View className="min-h-[64px] min-w-0 flex-1 items-center justify-center rounded-xl p-2" style={{ backgroundColor: highlight ? '#2449D8' : brand.surface }}>
       <Text
         className="w-full text-center text-[11px] font-semibold"
-        style={{ color: labelColor ?? brand.faint }}>
+        style={{ color: highlight ? '#FFFFFF' : labelColor ?? brand.faint }}>
         {label}
       </Text>
       <Text
         className="mt-1 w-full text-center text-[22px] font-bold text-court-ink"
-        style={{ fontVariant: ['tabular-nums'] }}>
+        style={{ fontVariant: ['tabular-nums'], color: highlight ? '#FFFFFF' : brand.premium }}>
         {value}
       </Text>
     </View>

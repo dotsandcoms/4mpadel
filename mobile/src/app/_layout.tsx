@@ -1,6 +1,7 @@
+import { watchWelcomeEmailRetries } from '@/lib/welcome-email';
 import 'react-native-gesture-handler';
 import type { Session } from '@supabase/supabase-js';
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
+import { DefaultTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
@@ -12,12 +13,14 @@ import { AnimatedSplash } from '@/components/animated-splash';
 import { hasSeenOnboarding } from '@/lib/onboarding';
 import {
   addNotificationResponseListener,
+  consumeInitialNotificationPath,
+  watchPushRegistration,
   syncPushTokenIfGranted,
 } from '@/lib/notifications';
 import { destinationAfterAuth } from '@/lib/profile';
 import { recordAppDevice } from '@/lib/signup-source';
 import { supabase } from '@/lib/supabase';
-import { brand as darkBrand, lightBrand } from '@/theme/tokens';
+import { lightBrand } from '@/theme/tokens';
 import { setCompanionAccount } from '@/lib/companion';
 
 SplashScreen.preventAutoHideAsync();
@@ -46,9 +49,8 @@ export default function RootLayout() {
   const isAuth = segments[0] === '(auth)';
   const recoveryRoute = useRef(false);
   recoveryRoute.current = segments[0] === 'reset-password';
-  const legacyScreen = segments[0] === 'legal';
-  const brand = legacyScreen ? darkBrand : lightBrand;
-  const navigationTheme = legacyScreen ? DarkTheme : DefaultTheme;
+  const brand = lightBrand;
+  const navigationTheme = DefaultTheme;
   const [dataReady, setDataReady] = useState(false);
   const [bootError, setBootError] = useState(false);
   const [bootAttempt, setBootAttempt] = useState(0);
@@ -57,6 +59,9 @@ export default function RootLayout() {
   const seenRef = useRef(false);
   const sessionRef = useRef<Session | null>(null);
   const settled = useRef(false);
+  const [pendingPushPath, setPendingPushPath] = useState<string | null>(null);
+
+  useEffect(() => watchWelcomeEmailRetries(), []);
 
   const onSplashFinish = useCallback(() => setAnimDone(true), []);
 
@@ -85,7 +90,7 @@ export default function RootLayout() {
       settled.current = true;
       setDataReady(true);
       if (data.session) {
-        syncPushTokenIfGranted();
+        void syncPushTokenIfGranted().catch(error => console.warn('[push] sync failed', error));
         recordAppDevice();
       }
       } catch {
@@ -99,20 +104,22 @@ export default function RootLayout() {
       sessionRef.current = session;
       if (event === 'SIGNED_OUT') router.replace('/(auth)/sign-in');
       if (event === 'SIGNED_IN' && session && seenRef.current && !recoveryRoute.current) {
-        syncPushTokenIfGranted();
+        void syncPushTokenIfGranted().catch(error => console.warn('[push] sync failed', error));
         recordAppDevice();
         destinationAfterAuth(session).then((path) => { if (!recoveryRoute.current) router.replace(path); }).catch(() => setBootError(true));
       }
     });
 
+    const pushRegistration = watchPushRegistration();
     const tap = addNotificationResponseListener((path) => {
-      router.push(path as never);
+      setPendingPushPath(path);
     });
 
     return () => {
       cancelled = true;
       sub.subscription.unsubscribe();
       tap.remove();
+      pushRegistration.remove();
     };
   }, [router, bootAttempt]);
 
@@ -146,6 +153,16 @@ export default function RootLayout() {
     SplashScreen.hideAsync();
   }, []);
 
+  useEffect(() => {
+    if (!revealed || !sessionRef.current || isAuth || recoveryRoute.current) return;
+    const path = pendingPushPath ?? consumeInitialNotificationPath();
+    if (path) {
+      consumeInitialNotificationPath();
+      setPendingPushPath(null);
+      router.push(path as never);
+    }
+  }, [revealed, isAuth, pendingPushPath, router]);
+
   const showSplash = !revealed;
 
   return (
@@ -161,7 +178,7 @@ export default function RootLayout() {
           border: brand.edge,
         },
       }}>
-      <StatusBar style={legacyScreen && revealed ? "light" : "dark"} />
+      <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: brand.page } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
@@ -199,10 +216,8 @@ export default function RootLayout() {
         <Stack.Screen
           name="legal"
           options={{
-            presentation: 'formSheet',
-            sheetAllowedDetents: [0.72, 1],
-            sheetGrabberVisible: true,
-            sheetCornerRadius: 24,
+            presentation: 'card',
+            animation: 'slide_from_right',
             contentStyle: { backgroundColor: brand.page },
           }}
         />

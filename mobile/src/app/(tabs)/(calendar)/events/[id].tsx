@@ -1,14 +1,17 @@
+import { requestPushPermission } from '@/lib/notifications';
+import { EventNotificationBell } from '@/components/events/follow-tournament';
+import { TournamentMatches } from '@/components/events/tournament-matches';
 import { addToDeviceCalendar } from '@/lib/device-calendar';
 import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Linking, Modal, Pressable, RefreshControl, ScrollView, Share, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
 import { Notice } from '@/components/events/event-ui';
 import { Accordion, CircleAction, EventIcon, EventText as Text, Fade, InfoRows, WebsiteHeader, EventAccent, useEventAccent, type EventIconName } from '@/components/events/website-ui';
 import { EventTimeline, RegistrationCountdown } from '@/components/events/event-timeline';
-import { currentEmail, eventImage, fetchEventPlayerRankings, fetchDivisions, fetchDrawStatus, fetchEvent, fetchEventOrganisation, fetchMyEventRegistrations, fetchPublicEntries, fetchScheduledIds, setEventScheduled,
+import { fetchEntryBalances, currentEmail, eventImage, fetchEventPlayerRankings, fetchDivisions, fetchDrawStatus, fetchEvent, fetchEventOrganisation, fetchMyEventRegistrations, fetchPublicEntries, fetchScheduledIds, setEventScheduled,
   type Division, type EventDetail, type EventOrganisation, type EventRegistration, type PublicEntry } from '@/lib/events';
 import { entryFee, formatMoney, plainText, registrationState } from '@/lib/event-rules';
 import { eventLocation, eventWebUrl, formatEventRange } from '@/lib/home';
@@ -24,7 +27,10 @@ import { lightSapaTone as sapaTone } from '@/theme/sapa';
 
 export default function EventScreen() { return <EventContent />; }
 function EventContent() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, division, match, tab: initialTab } = useLocalSearchParams<{ id: string; division?: string; match?: string; tab?: string }>();
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const divisionId = division && uuid.test(division) ? division : undefined;
+  const matchId = match && uuid.test(match) ? match : undefined;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const tabPadding = useTabScenePadding();
@@ -35,7 +41,7 @@ function EventContent() {
   const [entries, setEntries] = useState<PublicEntry[]>([]);
   const [profiles, setProfiles] = useState<RankedPlayer[]>([]);
   const [organisation, setOrganisation] = useState<EventOrganisation | null>(null);
-  const [drawStatus, setDrawStatus] = useState({ hasDraw: false, hasResults: false });
+  const [drawStatus, setDrawStatus] = useState({ hasDraw: false, hasResults: false, isFinished: false, isLive: false });
   const [publicError, setPublicError] = useState('');
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -43,7 +49,9 @@ function EventContent() {
   const [error, setError] = useState('');
   const [actionError, setActionError] = useState('');
   const [accountError, setAccountError] = useState('');
+  const [manageRequested, setManageRequested] = useState(false);
   const [tab, setTab] = useState('Overview');
+  useEffect(() => { setTab(initialTab === 'Results' ? 'Results' : initialTab === 'Draws' || matchId || divisionId ? 'Draws' : 'Overview'); }, [id, initialTab, matchId, divisionId]);
   const [gender, setGender] = useState('Men');
   const [sponsorOffset, setSponsorOffset] = useState(0);
   const [poster, setPoster] = useState<string | null>(null);
@@ -67,7 +75,12 @@ function EventContent() {
         const email = await currentEmail();
         const [ids, regs] = email ? await Promise.all([fetchScheduledIds(email), fetchMyEventRegistrations(row.id, email)]) : [[], []];
         if (current !== request.current) return;
-        setSaved(ids.includes(row.id)); setRegistrations(regs);
+        setSaved(ids.includes(row.id));
+        setRegistrations(regs);
+        if (regs.length && row.is_manual) {
+          try { const balances = await fetchEntryBalances(row.id); if (current === request.current) setRegistrations(regs.map(r => ({ ...r, balance: balances.find(b => b.registrationId === r.id) }))); }
+          catch { if (current === request.current) setAccountError('Could not check your entry balance. Pull down to retry.'); }
+        }
       } catch { if (current === request.current) setAccountError('Could not refresh your schedule and entries. Pull down to retry.'); }
     } catch (e) { if (current === request.current) setError(e instanceof Error ? e.message : 'Could not load this event.'); }
     finally { if (current === request.current) setLoading(false); }
@@ -84,11 +97,15 @@ function EventContent() {
   const toggleSaved = async () => {
     if (!event || saving) return;
     setSaving(true);
-    await runAction(async () => { await setEventScheduled(event.id, !saved); setSaved(!saved); });
+    await runAction(async () => { await setEventScheduled(event.id, !saved); setSaved(!saved); if (!saved) void requestPushPermission().catch(() => {}); });
     setSaving(false);
   };
   const back = () => router.canGoBack() ? router.back() : router.replace('/calendar');
-  const register = (mode?: 'pay') => event && router.push({ pathname: '/events/register', params: { id: String(event.id), ...(mode ? { mode } : {}) } });
+  const register = (mode?: 'pay') => {
+    if (!event) return;
+    if (registrationState(event) !== 'open') { setActionError('Registration is not open for this event. An access code cannot override the registration dates.'); return; }
+    router.push({ pathname: '/events/register', params: { id: String(event.id), ...(mode ? { mode } : {}) } });
+  };
   const directions = () => event && runAction(() => Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent([event.venue, event.address, event.city].filter(Boolean).join(' '))}`));
   const state = event ? registrationState(event) : 'closed';
   const count = event?.is_manual ? event.is_weekly ? entries.filter(r => r.status !== 'withdrawn' && (!r.registered_by_hash || !r.email_hash || r.email_hash === r.registered_by_hash)).length : entries.length : event?.registered_players || 0;
@@ -107,14 +124,17 @@ function EventContent() {
     <WebsiteHeader />
     <ScrollView stickyHeaderIndices={event ? [1] : []} refreshControl={<RefreshControl refreshing={loading && !!event} onRefresh={load} tintColor={accent} />} contentContainerStyle={{ paddingBottom: tabPadding, backgroundColor: '#f9fafb' }}>
       {event ? <View style={{ backgroundColor: '#F5F6F3' }}>
+        <View>
         <Image source={eventImage(event)} accessibilityLabel={event.event_name || 'Tournament'} style={{ width: '100%', height: 170 }} contentFit="cover" />
         <View style={{ position: 'absolute', top: 23, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', zIndex: 5 }}>
           <CircleAction name="arrow.left" label="Back to calendar" onPress={back} />
           <View style={{ flexDirection: 'row', gap: 8 }}>
+            <EventNotificationBell eventId={event.id} eventName={event.event_name || 'Tournament'} circle />
             <CircleAction name="calendar" label="Add to calendar" onPress={() => void runAction(() => addToDeviceCalendar({ title: event.event_name || "Padel event", startDate: event.start_date || "", endDate: event.end_date, location: eventLocation(event), url: eventWebUrl(event) }))} />
             <CircleAction name="square.and.arrow.up" label="Share event" onPress={() => void runAction(() => Share.share({ message: `${event.event_name}\n${eventWebUrl(event)}`, url: eventWebUrl(event) }))} />
             <CircleAction name={saved ? 'checkmark' : 'plus'} label={saved ? 'Remove from My Schedule' : 'Add to My Schedule'} onPress={toggleSaved} selected={saved} disabled={saving || !!accountError} />
           </View>
+        </View>
         </View>
         <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 }}>
           {!!event.sapa_status && event.sapa_status !== 'None' && <Text style={{ alignSelf: 'flex-start', color: sapaTone(event.sapa_status).text, fontSize: 8, fontWeight: '700', letterSpacing: 1, borderWidth: 1, borderColor: sapaTone(event.sapa_status).border, borderRadius: 16, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 6 }}>{event.sapa_status.toUpperCase()}</Text>}
@@ -135,7 +155,7 @@ function EventContent() {
             {event.poster_image_url && <Pressable onPress={() => setPoster(event.poster_image_url!)} accessibilityLabel="View event poster" style={{ width: 92, padding: 12, alignItems: 'center', gap: 8, borderRightWidth: 1, borderColor: '#16251f1a' }}><Text style={{ fontSize: 9, color: "#386018" }}>EVENT POSTER</Text><Image source={{ uri: event.poster_image_url }} style={{ width: 40, height: 40 }} contentFit="contain" /></Pressable>}
             {sponsors.length > 0 && <View style={{ flex: 1, padding: 12, gap: 8, alignItems: 'center' }}><Text style={{ fontSize: 9, color: "#386018" }}>SPONSORS</Text><View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', alignSelf: 'stretch', gap: 8 }}>{Array.from({ length: Math.min(3, sponsors.length) }, (_, i) => sponsors[(sponsorOffset + i) % sponsors.length]).map(url => <Image key={url} source={{ uri: url }} style={{ width: 40, height: 32 }} contentFit="contain" />)}{sponsors.length > 3 && <Pressable accessibilityRole="button" accessibilityLabel="Next sponsors" hitSlop={10} onPress={() => setSponsorOffset((sponsorOffset + 3) % sponsors.length)}><EventIcon name="chevron.right" size={12} /></Pressable>}</View></View>}
           </View>}
-          <RegistrationCountdown event={event} onRegister={() => pendingPayment ? register('pay') : registrations.length ? void openSitePath(`/calendar/${event.slug || event.id}`, { forceBrowser: true }) : register()} label={pendingPayment && state === 'open' ? 'Pay Now' : registrations.length ? 'Manage Entry' : state === 'open' ? 'Register' : null} />
+          <RegistrationCountdown event={event} onRegister={() => { if (registrations.length) { setTab('Overview'); setManageRequested(true); } else register(); }} label={registrations.length ? 'Manage Entry' : state === 'open' ? 'Register' : null} />
           <EventTimeline event={event} hasDraw={drawStatus.hasDraw} />
           {!!(actionError || accountError || publicError) && <View style={{ marginTop: 12 }}><Notice title="Please try again" onRetry={load}>{actionError || accountError || publicError}</Notice></View>}
           {state === 'cancelled' && <View style={{ marginTop: 12 }}><Notice title="Event cancelled">This event is no longer taking place.</Notice></View>}
@@ -146,11 +166,11 @@ function EventContent() {
       </View></View>}
       {event && <View style={{ paddingHorizontal: 16, paddingTop: 24, gap: 24, backgroundColor: '#f9fafb', minHeight: 300 }}>
         {tab === 'Overview' && <>
-          {event.registration_access === 'code' && <View style={{ padding: 16, borderRadius: 16, backgroundColor: '#fff7ed', borderColor: '#fed7aa', borderWidth: 1, gap: 18 }}>
+          {event.registration_access === 'code' && state === 'open' && !registrations.length && <View style={{ padding: 16, borderRadius: 16, backgroundColor: '#fff7ed', borderColor: '#fed7aa', borderWidth: 1, gap: 18 }}>
             <View style={{ flexDirection: 'row', gap: 12 }}><View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#ffedd5', alignItems: 'center', justifyContent: 'center' }}><EventIcon name="lock" size={20} color="#c2410c" /></View><View style={{ flex: 1, gap: 6 }}><Text style={{ fontSize: 16, fontWeight: '400', color: '#020617' }}>Access code required</Text><Text style={{ fontSize: 14, lineHeight: 20, color: '#475569' }}>This is a private event. Enter the code supplied by the organiser to register.</Text></View></View>
             <Pressable accessibilityRole="button" onPress={() => register()} style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: '#ff5900', borderRadius: 12 }}><Text style={{ fontSize: 14, fontWeight: '400' }}>Unlock registration</Text></Pressable>
           </View>}
-          {registrations.length > 0 ? <RegistrationEntries event={event} divisions={divisions} registrations={registrations} profiles={profiles} onManage={register} onRefresh={load} /> : (<Accordion title="Divisions" icon="trophy">{divisions.length ? divisions.map(d => <View key={d.id} style={{ gap: 6 }}><Text style={{ color: '#0f172a', fontSize: 15, fontWeight: '400' }}>{d.name}</Text><Text style={{ color: '#64748b', fontSize: 13 }}>{[d.gender, d.format].filter(Boolean).join(' · ')} · {formatMoney(entryFee(event, d))} per player</Text><Text style={{ color: '#64748b', fontSize: 13 }}>{plainText(d.details)}</Text></View>) : <Text style={{ fontSize: 14, color: '#64748b' }}>{event.is_weekly ? 'Open entries' : 'No divisions setup yet'}</Text>}<LightButton label="View players" onPress={() => setTab('Players')} /></Accordion>)}
+          {registrations.length > 0 ? <RegistrationEntries manageRequested={manageRequested} onManageOpened={() => setManageRequested(false)} event={event} divisions={divisions} registrations={registrations} profiles={profiles} onManage={register} onRefresh={load} /> : (<Accordion title="Divisions" icon="trophy">{divisions.length ? divisions.map(d => <View key={d.id} style={{ gap: 6 }}><Text style={{ color: '#0f172a', fontSize: 15, fontWeight: '400' }}>{d.name}</Text><Text style={{ color: '#64748b', fontSize: 13 }}>{[d.gender, d.format].filter(Boolean).join(' · ')} · {formatMoney(entryFee(event, d))} per player</Text><Text style={{ color: '#64748b', fontSize: 13 }}>{plainText(d.details)}</Text></View>) : <Text style={{ fontSize: 14, color: '#64748b' }}>{event.is_weekly ? 'Open entries' : 'No divisions setup yet'}</Text>}<LightButton label="View players" onPress={() => setTab('Players')} /></Accordion>)}
           <Accordion title="Event Information" icon="doc.text"><EventInformation event={event} /></Accordion>
           <Accordion title="Top Seeds" icon="crown" accessory={<View style={{ flexDirection: 'row', backgroundColor: '#f3f4f6', borderRadius: 20, padding: 2 }}>{['Men', 'Women'].map(g => <Pressable key={g} accessibilityRole="button" accessibilityState={{ selected: g === gender }} onPress={() => setGender(g)} hitSlop={{ top: 10, bottom: 10 }} style={{ paddingHorizontal: 9, paddingVertical: 7, borderRadius: 18, backgroundColor: gender === g ? accent : 'transparent' }}><Text style={{ fontSize: 10, fontWeight: '400', color: gender === g ? '#000' : '#6b7280' }}>{g.toUpperCase()}</Text></Pressable>)}</View>}>
             <TopSeedRows groups={teams} gender={gender} />
@@ -170,12 +190,14 @@ function EventContent() {
         </>}
         {tab === 'Players' && <>{publicError ? <LightEmpty title="Players could not load" text={publicError} /> : !event.is_manual ? <LightButton label="View entry list on website" onPress={() => void runAction(() => openSitePath(`/calendar/${event.slug || event.id}?tab=players`, { forceBrowser: true }))} /> : teams.length ? teams.map(group => <TeamDivisionCard key={group.division.id} group={group} />) : <LightEmpty title="No players yet" text="Registered players will appear here." />}</>}
         {(tab === 'Draws' || tab === 'Results') && <>
+          {event.is_manual && <TournamentMatches eventId={event.id} divisionId={divisionId} matchId={matchId} showPoints={tab === 'Results'} />}
           {publicError ? <LightEmpty title="Tournament information unavailable" text={publicError} /> : (tab === 'Draws' ? drawStatus.hasDraw : drawStatus.hasResults) ? <><LightEmpty title={tab === 'Draws' ? 'Tournament Draws' : 'Tournament Results'} text="View live brackets and match results." /><LightButton label="View published draws and results" onPress={() => void runAction(() => openSitePath(`/draws/${event.slug || event.id}`, { forceBrowser: true }))} /></> : <LightEmpty icon={tab === 'Draws' ? 'point.3.connected.trianglepath.dotted' : 'trophy'} title={tab === 'Draws' ? 'Draws Coming Soon' : 'No Results Yet'} text={tab === 'Draws' ? 'Draws will be released shortly before the tournament begins.' : 'Tournament results will appear here once matches are completed.'} />}
         </>}
         {tab === 'Media' && <>{event.youtube_playlist_url ? <><LightEmpty icon="play.rectangle" title="Event Highlights" text="Watch the event videos." /><LightButton label="Watch highlights" onPress={() => void runAction(() => Linking.openURL(event.youtube_playlist_url!))} /></> : event.gallery_album_id ? <LightButton label="View event gallery" onPress={() => void runAction(() => openSitePath(`/calendar/${event.slug || event.id}?tab=media`, { forceBrowser: true }))} /> : <LightEmpty icon="camera" title="No Media Yet" text="Media will be added after the event." />}</>}
 
       </View>}
     </ScrollView>
+
     <Modal visible={!!poster} animationType="fade" onRequestClose={() => setPoster(null)}><View style={{ flex: 1, backgroundColor: '#F5F6F3', paddingTop: insets.top + 12 }}><Pressable accessibilityRole="button" onPress={() => setPoster(null)} style={{ padding: 20 }}><Text>Close</Text></Pressable>{poster && <Image source={{ uri: poster }} style={{ flex: 1 }} contentFit="contain" />}</View></Modal>
   </View></EventAccent>;
 }

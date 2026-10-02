@@ -30,7 +30,7 @@ export function makeCompanionSchedule(bundle: HomeBundle, now = Date.now()): Com
   const events: CompanionItem[] = bundle.upcomingSchedule.map(e => {
     const date = companionDate(e.start_date);
     const token = String(e.slug || e.id);
-    const pending = bundle.pending.some(p => p.kind === 'payment' && p.path.split(/[/?#]/).includes(token));
+    const pending = bundle.pending.some(p => p.kind === 'payment' && (p.eventId === e.id || p.path.split(/[/?#]/).includes(token)));
     return { id: `event-${e.id}`, kind: 'event', title: e.event_name || 'Padel event', subtitle: e.city || '',
       imageUrl: e.custom_image_url || e.poster_image_url || e.image_url || null,
       registrationOpensAt: companionDate(e.registration_opens_at).time,

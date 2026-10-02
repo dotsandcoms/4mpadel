@@ -6,11 +6,8 @@ export { NOTIFICATION_PATHS, NOTIFICATION_TYPES, pushCopy } from './notification
  * native push stays in notifications.ts and never loads here.
  */
 
-export function pathFromNotificationData(
-  _data: Record<string, unknown> | undefined
-): string | null {
-  return null;
-}
+export { pathFromNotificationData } from './notification-routing';
+import { pathFromNotificationData } from './notification-routing';
 
 export async function getPushPermissionStatus() {
   return 'unavailable' as const;
@@ -35,3 +32,6 @@ export function addNotificationResponseListener(_onPath: (path: string) => void)
 } {
   return { remove() {} };
 }
+
+export function consumeInitialNotificationPath(): string | null { return null; }
+export function watchPushRegistration() { return { remove() {} }; }

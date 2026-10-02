@@ -185,11 +185,7 @@ export async function sendPasswordReset(email: string) {
 }
 
 export async function signOut() {
-  try {
-    await unregisterPushToken();
-  } catch {
-    // Token drop is best-effort — still sign out.
-  }
+  await unregisterPushToken();
   try {
     await GoogleSignin.signOut();
   } catch {

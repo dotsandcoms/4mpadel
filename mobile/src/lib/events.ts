@@ -72,7 +72,11 @@ export type Division = {
   is_active?: boolean;
   seeding_ranking_source?: string | null;
 };
+export type EntryBalance = { registrationId: string; known: boolean; paid: number | null; price: number; due: number | null };
 export type EventRegistration = {
+  balance?: EntryBalance;
+  registered_by?: string | null;
+  tshirt_size?: string | null;
   tshirt_logo_url?: string; tshirt_sponsor_name?: string;
   id: string;
   division: string;
@@ -191,13 +195,16 @@ export async function fetchEventOrganisation(id?: string | null): Promise<EventO
 }
 export async function fetchDrawStatus(event: EventDetail) {
   if (event.is_manual) {
-    const { data, error } = await supabase.from('draws').select('status').eq('event_id', event.id).in('status', ['published', 'in_progress', 'completed']);
+    const { data, error } = await supabase.from('draws').select('id, status').eq('event_id', event.id).in('status', ['published', 'in_progress', 'completed']);
     if (error) throw error;
-    return { hasDraw: data.length > 0, hasResults: data.some(row => row.status === 'completed') };
+    const started = data.length ? await supabase.from('draw_matches').select('id', { count: 'exact', head: true }).in('draw_id', data.map(row => row.id)).in('status', ['in_progress', 'completed', 'walkover', 'retired']) : { count: 0, error: null };
+    if (started.error) throw started.error;
+    return { hasDraw: data.length > 0, hasResults: data.some(row => row.status === 'completed'), isFinished: data.length > 0 && data.every(row => row.status === 'completed'), isLive: (started.count ?? 0) > 0 };
+
   }
   const { data, error } = await supabase.from('rankedin_results_cache').select('has_draw, has_results').eq('event_id', event.id).maybeSingle();
   if (error) throw error;
-  return { hasDraw: !!data?.has_draw, hasResults: !!data?.has_results };
+  return { hasDraw: !!data?.has_draw, hasResults: !!data?.has_results, isFinished: false, isLive: false };
 }
 
 /** Same precedence as website imageUtils.getEventImage. */
@@ -211,10 +218,13 @@ export async function fetchEventPlayerRankings(): Promise<import('./event-teams'
   const players: import('./event-teams').RankedPlayer[] = [];
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await supabase.from('players_public')
-      .select('name, image_url, rankedin_id, rankings, points, rank_label, preferred_ranking, active_ranking_label, category, gender')
+      .select('id, name, image_url, rankedin_id, rankings, points, rank_label, preferred_ranking, active_ranking_label, category, gender')
       .order('id').range(offset, offset + 999);
     if (error) throw error;
     players.push(...data);
     if (data.length < 1000) return players;
   }
 }
+
+
+export { fetchEntryBalances } from './entry-balances';

@@ -1,3 +1,5 @@
+import { SponsorField } from '@/components/sponsor-field';
+import { parseSponsors, serializeSponsors } from '@/lib/sponsors';
 import { SymbolView } from 'expo-symbols';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -49,7 +51,7 @@ import {
   SA_REGIONS,
 } from '@/lib/registration';
 import { supabase } from '@/lib/supabase';
-import { lightBrand as brand } from '@/theme/tokens';
+import { FieldColors, profileColors as brand } from '@/components/field-colors';
 
 type Errors = Partial<Record<string, string>>;
 
@@ -110,6 +112,7 @@ export default function CompleteProfileScreen() {
   const [bio, setBio] = useState('');
   const [instagramLink, setInstagramLink] = useState('');
   const [sponsors, setSponsors] = useState('');
+  const [sponsorInput, setSponsorInput] = useState('');
   const [racketBrand, setRacketBrand] = useState('');
   const [customRacketBrand, setCustomRacketBrand] = useState('');
 
@@ -128,7 +131,7 @@ export default function CompleteProfileScreen() {
       customClub,
       bio,
       instagramLink,
-      sponsors,
+      sponsors: serializeSponsors([...parseSponsors(sponsors), ...parseSponsors(sponsorInput)]),
       racketBrand,
       customRacketBrand,
       accepted,
@@ -151,6 +154,7 @@ export default function CompleteProfileScreen() {
     racketBrand,
     region,
     sponsors,
+    sponsorInput,
   ]);
 
   useEffect(() => {
@@ -355,6 +359,7 @@ export default function CompleteProfileScreen() {
         : 'Continue';
 
   return (
+    <FieldColors.Provider value={brand}>
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       className="flex-1 bg-court-page"
@@ -636,13 +641,11 @@ export default function CompleteProfileScreen() {
                   keyboardType="url"
                   placeholder="https://instagram.com/you"
                 />
-                <LiquidField
-                  label="Sponsors (optional)"
+                <SponsorField
                   value={sponsors}
-                  valid={filled(sponsors)}
-                  onChangeText={setSponsors}
-                  autoCapitalize="words"
-                  autoCorrect
+                  input={sponsorInput}
+                  onChange={setSponsors}
+                  onInputChange={setSponsorInput}
                 />
 
                 <SectionLabel>Kit</SectionLabel>
@@ -694,7 +697,7 @@ export default function CompleteProfileScreen() {
                         backgroundColor: accepted ? brand.padel : 'transparent',
                       }}>
                       {accepted ? (
-                        <Text className="text-[13px] font-extrabold text-court-ink">✓</Text>
+                        <Text className="text-[13px] font-extrabold" style={{ color: '#FFFFFF' }}>✓</Text>
                       ) : null}
                     </View>
                   </Pressable>
@@ -703,14 +706,14 @@ export default function CompleteProfileScreen() {
                     <Text
                       onPress={() => openLegal('terms')}
                       accessibilityRole="link"
-                      className="font-semibold text-court-accent">
+                      className="font-semibold" style={{ color: brand.accent }}>
                       Terms
                     </Text>
                     {' and '}
                     <Text
                       onPress={() => openLegal('privacy')}
                       accessibilityRole="link"
-                      className="font-semibold text-court-accent">
+                      className="font-semibold" style={{ color: brand.accent }}>
                       Privacy Policy
                     </Text>
                   </Text>
@@ -750,7 +753,7 @@ export default function CompleteProfileScreen() {
             {saving ? <CourtLine /> : null}
             <Text
               className="text-base font-bold"
-              style={{ color: ctaMuted ? brand.faint : brand.premium }}>
+              style={{ color: ctaMuted ? brand.faint : '#FFFFFF' }}>
               {ctaLabel}
             </Text>
           </PressableScale>
@@ -765,5 +768,6 @@ export default function CompleteProfileScreen() {
         onDismiss={dismissToast}
       />
     </KeyboardAvoidingView>
+    </FieldColors.Provider>
   );
 }

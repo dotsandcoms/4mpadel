@@ -2,3 +2,27 @@ project_id = "4m-padel-mobile"
 
 [functions.native-event-checkout]
 verify_jwt = false
+
+[functions.deliver-push]
+verify_jwt = false
+
+[functions.native-license-checkout]
+verify_jwt = false
+
+[functions.native-division-switch]
+verify_jwt = false
+
+[functions.native-entry-balance]
+verify_jwt = false
+
+[functions.paystack-refund]
+verify_jwt = false
+
+[functions.player-search]
+verify_jwt = false
+
+[functions.native-welcome-email]
+verify_jwt = false
+
+[functions.pro-padel-explore]
+verify_jwt = false

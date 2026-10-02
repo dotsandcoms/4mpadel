@@ -15,7 +15,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { lightBrand as brand } from '@/theme/tokens';
 
-type Option = { label: string; value: string; group?: string };
+import { useFieldColors } from '@/components/field-colors';
+
+export type SelectOption = { label: string; value: string; group?: string; detail?: string; amount?: string; status?: { label: string; color: string; background: string }; note?: string };
+type Option = SelectOption;
 
 type Props = {
   label: string;
@@ -52,6 +55,7 @@ export function SelectField({
   emptyLabel = 'No matches.',
   onChange,
 }: Props) {
+  const brand = useFieldColors();
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -61,7 +65,7 @@ export function SelectField({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return options;
-    return options.filter((o) => o.label.toLowerCase().includes(q));
+    return options.filter((o) => [o.label, o.detail, o.amount, o.status?.label].filter(Boolean).join(' ').toLowerCase().includes(q));
   }, [options, query]);
 
   function close() {
@@ -87,6 +91,7 @@ export function SelectField({
           options: [...labels, 'Cancel'],
           cancelButtonIndex: labels.length,
           userInterfaceStyle: 'light',
+          tintColor: brand.accent,
         },
         (index) => {
           if (index != null && index < options.length) onChange(options[index].value);
@@ -117,7 +122,7 @@ export function SelectField({
         {badge ? (
           <View
             className="mr-2.5 h-7 min-w-7 items-center justify-center rounded-md px-1.5"
-            style={{ backgroundColor: 'rgba(204,255,0,0.12)' }}>
+            style={{ backgroundColor: brand.soft }}>
             <Text className="text-[11px] font-extrabold" style={{ color: brand.accent }}>
               {badge}
             </Text>
@@ -193,6 +198,7 @@ function SearchSheet({
   onClose: () => void;
   onChoose: (value: string) => void;
 }) {
+  const brand = useFieldColors();
   return (
     <Modal
       visible={visible}
@@ -231,6 +237,7 @@ function SearchSheet({
             borderColor: brand.edge,
           }}
           cursorColor={brand.accent}
+          selectionColor={brand.selection}
           keyboardAppearance="light"
         />
 
@@ -270,6 +277,7 @@ function DialogSheet({
   onClose: () => void;
   onChoose: (value: string) => void;
 }) {
+  const brand = useFieldColors();
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: 'rgba(0,0,0,0.62)' }}>
@@ -322,13 +330,29 @@ function OptionRow({
   active: boolean;
   onPress: () => void;
 }) {
+  const brand = useFieldColors();
+  if (option.status) return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${option.label}, ${option.amount}, ${option.detail}, ${option.status.label}`} accessibilityState={{ selected: active }}>
+      <View style={{ marginHorizontal: 8, marginBottom: 10, padding: 15, backgroundColor: active ? brand.soft : brand.elevated, borderRadius: 16, borderWidth: 1, borderColor: active ? brand.accent : brand.edge }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+          <Text style={{ flex: 1, color: brand.premium, fontSize: 14, lineHeight: 20, fontWeight: '700' }}>{option.label}</Text>
+          <Text style={{ color: brand.premium, fontSize: 14, lineHeight: 20, fontWeight: '700' }}>{option.amount}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 10 }}>
+          <Text style={{ color: brand.muted, fontSize: 12 }}>{option.detail}</Text>
+          <View style={{ backgroundColor: option.status.background, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 }}><Text style={{ color: option.status.color, fontSize: 11, fontWeight: '700' }}>{option.status.label}</Text></View>
+          {active && <View style={{ marginLeft: 'auto' }}><SymbolView name={{ ios: 'checkmark', android: 'check', web: 'check' }} size={16} tintColor={brand.accent} /></View>}
+        </View>
+      </View>
+    </Pressable>
+  );
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       className="mx-2 mb-1 min-h-12 flex-row items-center rounded-xl px-3"
-      style={{ backgroundColor: active ? 'rgba(204,255,0,0.14)' : 'transparent' }}>
+      style={{ backgroundColor: active ? brand.soft : 'transparent' }}>
       <Text
         className="flex-1 text-[16px]"
         style={{

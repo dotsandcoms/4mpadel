@@ -23,7 +23,7 @@ export default function CalendarScreen() {
     <View style={{ flexDirection: 'row', marginHorizontal: 20, marginVertical: 12, padding: 4, borderRadius: 28, backgroundColor: '#FFFFFF', gap: 4 }}>
       {(['sa', 'pro'] as const).map(value => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: pro === (value === 'pro') }}
         onPress={() => router.setParams({ circuit: value })} style={{ flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 24, backgroundColor: pro === (value === 'pro') ? lime : 'transparent' }}>
-        <Text style={{ fontSize: 13, fontWeight: '700', color: pro === (value === 'pro') ? '#000' : '#52625A' }}>{value === 'sa' ? 'South Africa' : 'Pro Tour'}</Text>
+        <Text style={{ fontSize: 13, fontWeight: '700', color: pro === (value === 'pro') ? '#000' : '#52625A' }}>{value === 'sa' ? 'South Africa' : 'Premier Padel & FIP'}</Text>
       </Pressable>)}
     </View>
     {pro ? <ProTourCalendar /> : <SouthAfricaCalendar />}

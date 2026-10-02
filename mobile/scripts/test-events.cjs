@@ -71,3 +71,11 @@ test('division-specific ranking source does not silently fall back to unrelated 
   assert.equal(result[0].teams[0].total, 0);
   assert.equal(result[0].teams[0].seed, null);
 });
+test('event player rows link only an unambiguous public profile', () => {
+  const division = { id: 'open', name: 'Open' };
+  const entries = [{ id: 'a', division_id: 'open', full_name: 'Adam' }, { id: 'b', division_id: 'open', full_name: 'Sam' }];
+  const profiles = [{ id: 12, name: 'Adam' }, { id: 13, name: 'Sam' }, { id: 14, name: 'Sam' }];
+  const teams = buildEventTeams([division], entries, profiles)[0].teams;
+  assert.equal(teams.find(team => team.players[0].name === 'Adam').players[0].id, '12');
+  assert.equal(teams.find(team => team.players[0].name === 'Sam').players[0].id, null);
+});

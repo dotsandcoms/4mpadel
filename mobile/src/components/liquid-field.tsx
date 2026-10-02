@@ -9,13 +9,15 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
-import { lightBrand as brand, motion } from '@/theme/tokens';
+import { motion } from '@/theme/tokens';
 
 export type FieldIcon =
   | 'envelope.fill'
   | 'lock.fill'
   | 'person.fill'
   | 'phone.fill';
+
+import { useFieldColors } from '@/components/field-colors';
 
 type Props = {
   label: string;
@@ -60,6 +62,7 @@ export const LiquidField = forwardRef<TextInput, Props>(function LiquidField(
   },
   ref
 ) {
+  const brand = useFieldColors();
   const reduced = useReducedMotion();
   const uid = useId();
   const labelId = `${uid}-label`;
@@ -206,7 +209,7 @@ export const LiquidField = forwardRef<TextInput, Props>(function LiquidField(
           textAlignVertical={multiline ? 'top' : 'center'}
           importantForAutofill="yes"
           cursorColor={brand.accent}
-          selectionColor="rgba(204,255,0,0.35)"
+          selectionColor={brand.selection}
           keyboardAppearance="light"
           className="flex-1 text-[16px]"
           style={{

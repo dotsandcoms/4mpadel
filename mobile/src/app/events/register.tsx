@@ -1,3 +1,4 @@
+import { EntrySavedBanner } from '@/components/events/entry-saved-banner';
 import { SizePicker } from '@/components/events/tshirt-size-picker';
 import { SponsorDetails } from '@/components/events/sponsor-details';
 import { Choices, DivisionOptions, LicencePicker, type LicenceOption, type PartnerChoice } from '@/components/events/registration-options';
@@ -10,7 +11,7 @@ import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActionButton, Notice } from '@/components/events/event-ui';
 import { confirmCheckout, invokeCheckout, type CheckoutInput, type Quote } from '@/lib/event-checkout';
@@ -18,20 +19,32 @@ import { currentEmail, fetchDivisions, fetchEvent, fetchMyEventRegistrations, se
 import { entryFee, formatMoney, registrationState } from '@/lib/event-rules';
 import { openSitePath } from '@/lib/site';
 import { supabase } from '@/lib/supabase';
+import { parsePaymentReturn } from '@/lib/payment-return';
 import { lightBrand as brand } from '@/theme/tokens';
+import { requestPushPermission } from '@/lib/notifications';
 
 export default function RegisterScreen() {
-  const { id, mode } = useLocalSearchParams<{ id: string; mode?: string }>();
-  return <RegistrationFlow key={`${id}:${mode || 'register'}`} />;
+  const { id, mode, entry } = useLocalSearchParams<{ id: string; mode?: string; entry?: string }>();
+  return <RegistrationFlow key={`${id}:${mode || 'register'}:${entry || ''}`} />;
 }
 function RegistrationFlow() {
-  const { id, mode } = useLocalSearchParams<{ id: string; mode?: string }>();
+  const { id, mode, entry, pay_ref, payment_return } = useLocalSearchParams<{ id: string; mode?: string; entry?: string; pay_ref?: string; payment_return?: string }>();
+  const autoVerified = useRef('');
+  useEffect(() => {
+    const listener = Linking.addEventListener('url', ({ url }) => {
+      if (parsePaymentReturn(url) && Platform.OS === 'ios') void WebBrowser.dismissBrowser().catch(() => {});
+    });
+    return () => listener.remove();
+  }, []);
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => { const timer = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(timer); }, []);
   const [registrationEdited, setRegistrationEdited] = useState(false);
   const payOnly = mode === 'pay' && !registrationEdited;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [event, setEvent] = useState<(EventDetail & { collect_tshirt_size?: boolean }) | null>(null);
-  const [step, setStep] = useState(mode === 'pay' ? 4 : 1);
+  const availability = event ? registrationState(event, null, now) : 'open';
+  const [step, setStep] = useState(mode === 'pay' ? 2 : 1);
   const [partners, setPartners] = useState<Record<string, PartnerChoice>>({});
   const [playtomic, setPlaytomic] = useState('');
   const [rankedinAccount, setRankedinAccount] = useState<boolean | null>(null);
@@ -71,7 +84,7 @@ function RegistrationFlow() {
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [returnedFromCheckout, setReturnedFromCheckout] = useState(false);
   const [checkoutStarted, setCheckoutStarted] = useState(false);
-  const showPaymentStatus = !!reference && (!payOnly || checkoutStarted);
+  const showPaymentStatus = !!reference && (!payOnly || checkoutStarted || payment_return === '1');
   const [done, setDone] = useState(false);
   const [paymentPending, setPaymentPending] = useState(false);
   const [partnerPayAccepted, setPartnerPayAccepted] = useState(false);
@@ -115,6 +128,16 @@ function RegistrationFlow() {
         const registeredIds = regs.map(r => r.division_id).filter((v): v is string => !!v);
         setExistingDivisionIds(registeredIds);
         setSelected(payOnly ? registeredIds : []);
+        if (mode === 'add-partner') {
+          const existing = regs.find(r => r.id === entry);
+          if (!existing) throw new Error('This entry is no longer available. Return to the event and refresh.');
+          if (existing.partner_email) throw new Error('Remove the current partner through Manage entry before adding another.');
+          setSelected(existing.division_id ? [existing.division_id] : []);
+          setTshirtSize(existing.tshirt_size || '');
+          setTshirtLogoUrl(existing.tshirt_logo_url);
+          setTshirtSponsorName(existing.tshirt_sponsor_name);
+          setStep(2);
+        }
         if (payOnly && regs[0]?.partner_email) { setPartnerEmail(regs[0].partner_email); setPartnerName(regs[0].partner_name || ''); }
         storageKey.current = `native-checkout:${email}:${row.id}${payOnly ? ':pay' : ''}`;
         const stored = await AsyncStorage.getItem(storageKey.current);
@@ -123,7 +146,7 @@ function RegistrationFlow() {
           catch { setReference(stored); }
         }
       }
-      if (payOnly && row.is_manual) {
+      if (payOnly && row.is_manual && payment_return !== '1') {
         if (!email) throw new Error('Sign in to pay your existing entry.');
         const result = await invokeCheckout({ ...input, eventId: row.id, mode: 'pay', payForPartner: restoredPartnerPayment });
         setQuote(result.quote);
@@ -132,7 +155,7 @@ function RegistrationFlow() {
           if (!entry.divisionId) continue;
           const { data: found } = entry.partnerEmail ? await supabase.rpc('find_registration_partner', { p_email: entry.partnerEmail, p_event_id: row.id }) : { data: [] };
           const p = found?.find((p: any) => p.email?.toLowerCase() === entry.partnerEmail?.toLowerCase());
-          restored[entry.divisionId] = { partnerEmail: entry.partnerEmail, partnerName: entry.partnerName || undefined, tshirtLogoUrl: entry.partnerTshirtLogoUrl, tshirtSponsorName: entry.partnerTshirtSponsorName, partnerId: p?.id, image_url: p?.image_url, activeLicence: !!((p?.license_type === 'full' && p?.paid_registration) || p?.has_temp_license_for_event), payForPartner: (entry.playerCount || 0) > 1 };
+          restored[entry.divisionId] = { partnerEmail: entry.partnerEmail, partnerName: entry.partnerName || undefined, tshirtLogoUrl: entry.partnerTshirtLogoUrl, tshirtSponsorName: entry.partnerTshirtSponsorName, partnerId: p?.id, image_url: p?.image_url, activeLicence: !!((p?.license_type === 'full' && p?.paid_registration) || p?.has_temp_license_for_event), payForPartner: entry.partnerEmail && entry.partnerPaymentStatus !== 'paid' ? restoredPartnerPayment ?? true : false };
         }
         setPartners(restored);
         setSelected(Object.keys(restored));
@@ -147,23 +170,38 @@ function RegistrationFlow() {
     try { await action(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not complete that action.'); }
     finally { submitted.current = false; setBusy(false); }
   };
+  const [showSavedBanner, setShowSavedBanner] = useState(false);
   const finish = async (pending: boolean) => {
+    setShowSavedBanner(true);
+    scroll.current?.scrollTo({ y: 0, animated: true });
     setPaymentPending(pending); setDone(true); setReference(null);
     if (storageKey.current) await AsyncStorage.removeItem(storageKey.current);
     try { await setEventScheduled(Number(id), true); } catch { setError('Your entry was saved, but the event could not be added to your schedule. You can save it from the event page.'); }
+    void requestPushPermission().catch(() => {});
   };
   const verify = () => run(async () => {
     if (!reference) return;
     await confirmCheckout(reference);
     const email = await currentEmail();
     const entries = email ? await fetchMyEventRegistrations(Number(id), email) : [];
-    if (!entries.length || (payOnly ? !!quote?.entries && !quote.entries.every(entry => entries.some(r => r.id === entry.id && r.payment_status === 'paid' && (!payForPartner || !r.partner_email || r.partner_payment_status === 'paid'))) : !entries.some(r => r.payment_status === 'paid'))) throw new Error('Your payment is being processed. Wait a moment and check again.');
+    if (!entries.length || (payOnly ? !!quote?.entries && !quote.entries.every(item => entries.some(r => r.id === item.id && r.payment_status === 'paid' && (!(item.divisionId ? partners[item.divisionId]?.payForPartner : payForPartner) || !item.partnerEmail || r.partner_payment_status === 'paid'))) : !entries.some(r => r.payment_status === 'paid'))) throw new Error('Your payment is being processed. Wait a moment and check again.');
     await finish(false);
   });
+  useEffect(() => {
+    if (payment_return !== '1' || !pay_ref || loading || busy || done || autoVerified.current === pay_ref) return;
+    autoVerified.current = pay_ref;
+    if (reference !== pay_ref) { setError('This return does not match your saved checkout. Open your event entry to check the payment.'); return; }
+    setReturnedFromCheckout(true);
+    void verify();
+  }, [payment_return, pay_ref, reference, loading, busy, done]);
   const checkout = () => run(async () => {
     if (!quote) return;
     const result = await invokeCheckout(input, { attemptId: attempt.current, acceptedTotal: quote.total, agreed: agreementsComplete });
-    if (result.registered) { await finish(!!result.paymentPending); return; }
+    if (result.registered) {
+      await finish(!!result.paymentPending);
+      if (result.emailWarning) setError(result.emailWarning);
+      return;
+    }
     if (!result.authorizationUrl || !result.reference) throw new Error('Checkout could not be opened. Please try again.');
     const url = new URL(result.authorizationUrl);
     if (url.protocol !== 'https:' || url.hostname !== 'checkout.paystack.com') throw new Error('The payment provider returned an unexpected checkout address.');
@@ -176,27 +214,34 @@ function RegistrationFlow() {
   });
   const back = () => {
     if (busy) return;
-    if (!done && !showPaymentStatus && step > 1) {
+    if (!done && !showPaymentStatus && payOnly && step === 2) {
+      router.replace({ pathname: '/events/[id]', params: { id: String(event?.id || id) } });
+    } else if (!done && !showPaymentStatus && step > 1) {
       setError(''); setAgreed(false); setObligations(false); setSapaAgreed(false);
       attempt.current = Crypto.randomUUID();
-      goStep(step === 4 ? event?.is_weekly ? 3 : 2 : step - 1);
+      goStep(step === 4 ? payOnly ? 2 : event?.is_weekly ? 3 : 2 : step - 1);
     } else if (router.canGoBack()) router.back();
     else router.replace({ pathname: '/events/[id]', params: { id: String(event?.id || id) } });
   };
   const review = () => run(async () => {
-    if (selected.some(id => partners[id]?.partnerEmail && partners[id].payForPartner === false) && !partnerPayAccepted) throw new Error('Confirm that you accept responsibility for your partner’s payment before continuing.');
+    if (needsPartnerPaymentAcknowledgment && !partnerPayAccepted) throw new Error('Confirm that you accept responsibility for your partner’s payment before continuing.');
     const result = await invokeCheckout(input);
     setQuote(result.quote); setAgreed(false); setObligations(false); setSapaAgreed(false);
     attempt.current = Crypto.randomUUID(); goStep(4);
   });
+  const needsPartnerPaymentAcknowledgment = payOnly
+    ? !!quote?.entries?.some(item => item.partnerEmail && item.partnerPaymentStatus !== 'paid' && (item.divisionId ? partners[item.divisionId]?.payForPartner : payForPartner) === false)
+    : event?.is_weekly ? !!partnerEmail.trim() && payForPartner === false
+      : selected.some(divisionId => !!partners[divisionId]?.partnerEmail && partners[divisionId].payForPartner === false);
   return <View style={{ flex: 1, backgroundColor: brand.page }}>
     <View style={{ paddingTop: insets.top + 4, paddingHorizontal: 20 }}>
       <Pressable onPress={back} disabled={busy} accessibilityRole="button" accessibilityLabel="Back" style={{ minHeight: 48, justifyContent: 'center' }}>
         <Text style={{ color: brand.premium, fontSize: 16 }}>‹  Back</Text></Pressable>
     </View>
+    {showSavedBanner && <EntrySavedBanner eventName={event?.event_name || 'this event'} pending={paymentPending} onDismiss={() => setShowSavedBanner(false)} />}
     <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets
       contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 40, gap: 20 }}>
-      <Text style={{ color: brand.accent, fontSize: 11, fontWeight: '800', letterSpacing: 2 }}>{done ? 'ENTRY RECEIVED' : payOnly && step === 4 ? 'PAY YOUR ENTRY' : step === 4 ? 'REVIEW YOUR ENTRY' : 'JOIN THE EVENT'}</Text>
+      <Text style={{ color: brand.accent, fontSize: 11, fontWeight: '800', letterSpacing: 2 }}>{done ? 'ENTRY RECEIVED' : payOnly ? 'PAY YOUR ENTRY' : step === 4 ? 'REVIEW YOUR ENTRY' : 'JOIN THE EVENT'}</Text>
       <Text accessibilityRole="header" style={{ color: brand.premium, fontSize: 30, fontWeight: '800', letterSpacing: -0.8 }}>{event?.event_name || 'Registration'}</Text>
       {event?.is_manual && !showPaymentStatus && <View style={{ flexDirection: 'row', gap: 6 }}>
         {['Profile', event?.is_weekly ? 'Dates' : 'Division', event?.is_weekly ? 'Entry' : 'Partner', 'Review & Pay', 'Confirmed'].map((label, index) => <View key={label} style={{ flex: 1, gap: 8 }}>
@@ -238,6 +283,11 @@ function RegistrationFlow() {
         <ActionButton label="Check payment status" secondary={!!checkoutUrl && !returnedFromCheckout} busy={busy} onPress={verify} />
         <ActionButton label="Return to event" secondary disabled={busy} onPress={() => router.back()} />
         <Text style={{ color: brand.faint, fontSize: 12 }}>Reference: {reference}</Text>
+      </> : event && !loading && availability !== 'open' ? <>
+        <Notice title={availability === 'not-open' ? 'Registration has not opened yet' : availability === 'cancelled' ? 'Event cancelled' : availability === 'finished' ? 'Event finished' : 'Registration closed'}>
+          Entries are not available for this event. An access code does not override the registration dates.
+        </Notice>
+        <ActionButton label="Return to event" onPress={() => router.replace({ pathname: '/events/[id]', params: { id } })} />
       </> : event && !loading && !event.is_manual ? <>
         <View style={{ borderRadius: 22, overflow: 'hidden', backgroundColor: brand.elevated, borderWidth: 1, borderColor: brand.edge }}>
           <Image source={eventImage(event)} style={{ height: 170, width: '100%' }} contentFit="cover" />
@@ -303,11 +353,14 @@ function RegistrationFlow() {
         <Notice title="Existing entry payment">Your divisions and partner details stay unchanged. Payment review will include only outstanding fees.</Notice>
         <ActionButton label="Retry payment review" busy={loading} onPress={load} />
         <ActionButton label="Edit my profile / licence" secondary onPress={() => router.push('/edit-profile')} />
-        <ActionButton label="Manage entry on website" secondary onPress={() => run(() => openSitePath(`/calendar/${event.slug || event.id}`, { forceBrowser: true }))} />
+        <ActionButton label="Back to my entry" secondary onPress={() => router.replace({ pathname: "/events/[id]", params: { id: String(event.id) } })} />
       </> : event && !loading ? <>
         {event.registration_access === 'code' && !grant ? <>
           <Field label="Event access code" value={code} onChangeText={setCode} secure />
           <ActionButton label="Unlock registration" busy={busy} onPress={() => run(async () => {
+            const latest = await fetchEvent(id);
+            setEvent(latest); setNow(new Date());
+            if (registrationState(latest) !== 'open') throw new Error('Registration is not open. An access code cannot override the registration dates.');
             const { data, error: unlockError } = await supabase.rpc('unlock_event_registration', { p_event_id: event.id, p_code: code });
             if (unlockError || !data) throw new Error('That access code could not be verified. Please try again.');
             setGrant(String(data)); setCode('');
@@ -334,20 +387,28 @@ function RegistrationFlow() {
             <ActionButton label="Continue to Division" disabled={!profile?.name || !profile?.contact_number || (!event.is_weekly && rankedinAccount === null)} onPress={() => goStep(2)} />
             <ActionButton label="Edit my profile" secondary onPress={() => router.push('/edit-profile')} />
           </>}
-          {step === 2 && <>
-            {event.is_weekly ? <Notice title="This week’s entry">{formatMoney(entryFee(event))} per player for this event date.</Notice> : <DivisionOptions event={event} divisions={divisions} selected={selected} registered={mode === 'pay' ? [] : existingDivisionIds} values={partners} profileId={profile?.id} currentUserEmail={profile?.email} licences={licences} busy={busy}
-              onToggle={divisionId => { setRegistrationEdited(true); setSelected(values => values.includes(divisionId) ? values.filter(v => v !== divisionId) : [...values, divisionId]); }}
+          {payOnly && step === 2 && <>
+            {!quote && <ActionButton label="Retry payment options" busy={busy} onPress={load} />}
+            {event.is_weekly ? <>
+              <Notice title="Your entry">{formatMoney(entryFee(event))} per player for this event date.</Notice>
+              {!!partnerName && <Text style={{ color: brand.premium }}>Partner: {partnerName}</Text>}
+              {!!partnerEmail && <Choices value={payForPartner === false ? 'partner' : 'self'} onChange={value => { setPartnerPayAccepted(false); setPayForPartner(value === 'self'); }} options={[{ value: 'self', label: 'I pay' }, { value: 'partner', label: 'Partner pays' }]} />}
+            </> : <DivisionOptions event={event} divisions={divisions.filter(division => selected.includes(division.id))} selected={selected} registered={[]} values={partners} profileId={profile?.id} currentUserEmail={profile?.email} licences={licences} busy={busy} lockEntry paidPartnerDivisionIds={(quote?.entries || []).filter(item => item.partnerPaymentStatus === 'paid' && item.divisionId).map(item => item.divisionId!)} onToggle={() => {}} onChange={(divisionId, value) => { setPartnerPayAccepted(false); setPartners(current => ({ ...current, [divisionId]: { ...current[divisionId], payForPartner: value.payForPartner } })); }} />}
+            {needsPartnerPaymentAcknowledgment && <PartnerPaymentRequirement checked={partnerPayAccepted} onPress={() => setPartnerPayAccepted(value => !value)} />}
+            <ActionButton label="Continue to Review & Pay" busy={busy} disabled={!quote?.entries?.length || (needsPartnerPaymentAcknowledgment && !partnerPayAccepted)} onPress={review} />
+            <ActionButton label="Back to my entry" secondary onPress={back} />
+          </>}
+          {!payOnly && step === 2 && <>
+            {event.is_weekly ? <Notice title="This week’s entry">{formatMoney(entryFee(event))} per player for this event date.</Notice> : <DivisionOptions event={event} divisions={mode === 'add-partner' ? divisions.filter(d => selected.includes(d.id)) : divisions} selected={selected} registered={mode === 'pay' || mode === 'add-partner' ? [] : existingDivisionIds} values={partners} profileId={profile?.id} currentUserEmail={profile?.email} licences={licences} busy={busy}
+              onToggle={divisionId => { if (mode === 'add-partner') return; setRegistrationEdited(true); setSelected(values => values.includes(divisionId) ? values.filter(v => v !== divisionId) : [...values, divisionId]); }}
               onChange={(divisionId, value) => { if ((partners[divisionId]?.partnerEmail || '') !== (value.partnerEmail || '')) setRegistrationEdited(true); setPartnerPayAccepted(false); setPartners(values => Object.fromEntries(Object.entries({ ...values, [divisionId]: value }).map(([key, p]) => [key, value.partnerEmail && p.partnerEmail === value.partnerEmail && value.licenseChoice ? { ...p, licenseChoice: value.licenseChoice } : p]))); }} />}
             {!event.is_weekly && !hasLicence && divisions.some(d => selected.includes(d.id) && d.license_required) && <LicencePicker name="You" value={licenseChoice} onChange={setLicenseChoice} options={licences} />}
             {event.collect_tshirt_size && <>
               <SizePicker label="Your T-shirt size" value={tshirtSize} onChange={setTshirtSize} />
               {selected.filter(key => !!partners[key]?.partnerEmail).filter((key, index, all) => all.findIndex(k => partners[k]?.partnerEmail === partners[key]?.partnerEmail) === index).map(key => <SizePicker key={key} label={`${partners[key].partnerName} — T-shirt size`} value={partners[key].tshirtSize || ''} onChange={tshirtSize => setPartners(values => Object.fromEntries(Object.entries(values).map(([id, p]) => [id, p.partnerEmail === values[key].partnerEmail ? { ...p, tshirtSize } : p])))} />)}
             </>}
-            {selected.some(id => partners[id]?.partnerEmail && partners[id].payForPartner === false) && <View style={{ padding: 16, borderRadius: 14, backgroundColor: brand.elevated, gap: 10 }}>
-              <Text style={{ color: brand.muted, lineHeight: 21 }}>It is your responsibility to ensure that your partner completes payment before registration closes. Your team entry will only be confirmed once both players have paid in full.</Text>
-              <Agreement checked={partnerPayAccepted} onPress={() => setPartnerPayAccepted(v => !v)} label="I understand and accept responsibility for ensuring that my partner pays." />
-            </View>}
-            <ActionButton label={event.is_weekly ? 'Continue to Entry' : 'Continue to Review & Pay'} busy={busy} disabled={!event.is_weekly && !selected.length} onPress={event.is_weekly ? () => goStep(3) : review} />
+            {needsPartnerPaymentAcknowledgment && !event.is_weekly && <PartnerPaymentRequirement checked={partnerPayAccepted} onPress={() => setPartnerPayAccepted(v => !v)} />}
+            <ActionButton label={event.is_weekly ? 'Continue to Entry' : 'Continue to Review & Pay'} busy={busy} disabled={(!event.is_weekly && !selected.length) || (!event.is_weekly && needsPartnerPaymentAcknowledgment && !partnerPayAccepted)} onPress={event.is_weekly ? () => goStep(3) : review} />
             <ActionButton label="‹ Back" secondary disabled={busy} onPress={back} />
           </>}
           {step === 3 && <>
@@ -362,13 +423,14 @@ function RegistrationFlow() {
           {!!partnerName && <Text style={{ color: brand.accent, fontWeight: '700' }}>{partnerName}</Text>}
           {!!partnerEmail.trim() && <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text style={{ color: brand.premium, fontSize: 15 }}>Pay my partner’s entry too</Text>
-            <Switch value={payForPartner ?? quote?.entries?.some(entry => (entry.playerCount || 0) > 1) ?? false} onValueChange={setPayForPartner} accessibilityLabel="Pay for partner" trackColor={{ true: brand.padel }} />
+            <Switch value={payForPartner ?? quote?.entries?.some(entry => (entry.playerCount || 0) > 1) ?? false} onValueChange={value => { setPartnerPayAccepted(false); setPayForPartner(value); }} accessibilityLabel="Pay for partner" trackColor={{ true: brand.padel }} />
           </View>}
+          {needsPartnerPaymentAcknowledgment && <PartnerPaymentRequirement checked={partnerPayAccepted} onPress={() => setPartnerPayAccepted(v => !v)} />}
           {event.collect_tshirt_size && <>
             <SizePicker label="Your T-shirt size" value={tshirtSize} onChange={setTshirtSize} />
             {!!partnerEmail.trim() && <SizePicker label="Partner T-shirt size" value={partnerTshirtSize} onChange={setPartnerTshirtSize} />}
           </>}
-          <ActionButton label="Review entry" busy={busy} disabled={(!event.is_weekly && !selected.length) || registrationState(event) !== 'open'}
+          <ActionButton label="Review entry" busy={busy} disabled={(!event.is_weekly && !selected.length) || registrationState(event) !== 'open' || (needsPartnerPaymentAcknowledgment && !partnerPayAccepted)}
             onPress={review} />
           </>}
         </>}
@@ -388,4 +450,12 @@ function Agreement({ checked, onPress, label }: { checked: boolean; onPress: () 
     <Ionicons name={checked ? 'checkbox' : 'square-outline'} size={24} color={brand.accent} />
     <Text style={{ flex: 1, color: brand.muted, fontSize: 14, lineHeight: 22 }}>{label}</Text>
   </Pressable>;
+}
+function PartnerPaymentRequirement({ checked, onPress }: { checked: boolean; onPress: () => void }) {
+  return <View style={{ padding: 18, borderRadius: 16, borderWidth: 1, borderColor: '#f4c58c', backgroundColor: '#fff7e9', gap: 12 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}><Ionicons name="alert-circle-outline" size={23} color="#b45309" /><Text style={{ color: '#7c2d12', fontSize: 17, fontWeight: '700', flex: 1 }}>Partner payment required</Text></View>
+    <Text style={{ color: '#644b36', lineHeight: 22 }}>It is your responsibility to ensure that your partner completes payment before registration closes. Your team entry will only be confirmed once both players have paid in full.</Text>
+    <Text style={{ color: '#644b36', lineHeight: 22 }}>If either player has not paid by the registration deadline, neither player will be included in the draw.</Text>
+    <View style={{ borderTopWidth: 1, borderColor: '#f4dfc1', paddingTop: 12 }}><Agreement checked={checked} onPress={onPress} label="I understand and accept responsibility for ensuring that my partner pays." /></View>
+  </View>;
 }

@@ -35,7 +35,7 @@ import {
 } from '@/components/home-event-card';
 import { HomeHeader } from '@/components/home-header';
 import { ProPadelFeed } from '@/components/pro-padel-feed';
-import { useProPadel } from '@/hooks/use-pro-padel';
+import { usePlayerHub } from '@/hooks/use-player-hub';
 import { makeCompanionSchedule } from '@/lib/companion-schedule';
 import { publishCompanionSchedule } from '@/lib/companion';
 import { HomeGreeting, HomePlayerCard } from '@/components/home-player-card';
@@ -45,6 +45,7 @@ import {
   EMPTY_HOME,
   eventPath,
   fetchHomeBundle,
+  fetchHomePlayerExtras,
   resolveFeaturedCta,
   type CalendarEvent,
   type HomeBundle,
@@ -70,7 +71,8 @@ type OpenMap = {
 };
 
 export default function HomeScreen() {
-  const proPadel = useProPadel();
+  const playerHub = usePlayerHub();
+  const proPadel = playerHub.pro;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const tabPad = useTabScenePadding();
@@ -87,21 +89,49 @@ export default function HomeScreen() {
   const [schedulePast, setSchedulePast] = useState(false);
   const [scheduleKind, setScheduleKind] = useState<'matches' | 'events'>('events');
   const scheduleKindTouched = useRef(false);
+  const loadId = useRef(0);
 
   const load = useCallback(async (soft?: boolean) => {
+    const currentLoad = ++loadId.current;
     if (!soft) setLoading(true);
     setLoadError(false);
     try {
       const { data } = await supabase.auth.getUser();
-      const next = await fetchHomeBundle(data.user?.email, { strictSchedule: true });
+      if (currentLoad !== loadId.current) return;
+      const next = await fetchHomeBundle(data.user?.email, {
+        strictSchedule: true,
+        deferPlayerExtras: true,
+        onPlayer: player => {
+          if (currentLoad === loadId.current) {
+            setBundle(previous => ({ ...previous, player }));
+          }
+        },
+      });
+      if (currentLoad !== loadId.current) return;
       setBundle(next);
-      if (data.user) void publishCompanionSchedule(data.user.id, makeCompanionSchedule(next));
+      if (next.player?.rankedin_id) {
+        void fetchHomePlayerExtras(next.player).then(extras => {
+          if (currentLoad !== loadId.current) return;
+          const enriched: HomeBundle = {
+            ...next,
+            player: next.player ? { ...next.player, winLoss: extras.winLoss, rankingChange: extras.rankingChange } : null,
+            upcomingMatches: extras.upcomingMatches,
+            pastMatches: extras.pastMatches,
+          };
+          setBundle(enriched);
+          if (data.user) void publishCompanionSchedule(data.user.id, makeCompanionSchedule(enriched));
+        }).catch(error => console.warn('[home] Optional player details', error));
+      } else if (data.user) {
+        void publishCompanionSchedule(data.user.id, makeCompanionSchedule(next));
+      }
     } catch (err) {
-      setLoadError(true);
+      if (currentLoad === loadId.current) setLoadError(true);
       console.warn('[home]', err);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (currentLoad === loadId.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
@@ -110,7 +140,10 @@ export default function HomeScreen() {
     const foreground = AppState.addEventListener('change', state => {
       if (state === 'active') void load(true);
     });
-    return () => foreground.remove();
+    return () => {
+      loadId.current += 1;
+      foreground.remove();
+    };
   }, [load]));
 
   useEffect(() => {
@@ -187,7 +220,7 @@ export default function HomeScreen() {
             refreshing={refreshing || proPadel.loading}
             onRefresh={() => {
               setRefreshing(true);
-              void Promise.all([load(true), proPadel.refresh()]);
+              void Promise.all([load(true), playerHub.refresh()]);
             }}
             tintColor={brand.accent}
           />
@@ -413,8 +446,6 @@ export default function HomeScreen() {
             )}
           </HomeAccordion>
 
-          <ProPadelFeed state={proPadel} />
-
           <HomeAccordion
             title="Recent Results"
             open={open.results}
@@ -434,6 +465,7 @@ export default function HomeScreen() {
             )}
           </HomeAccordion>
 
+          <ProPadelFeed state={proPadel} localState={playerHub} />
 
         </FadeUp>
 
@@ -452,75 +484,21 @@ function EventSlide({
   onOpen: (event: CalendarEvent) => void;
   onAction: (event: CalendarEvent) => void;
 }) {
-  const [page, setPage] = useState(0);
-  const ids = events.map((event) => event.id).join(',');
-
-  useEffect(() => {
-    setPage(0);
-  }, [ids]);
-
-  const last = Math.max(0, events.length - 1);
-  const index = Math.min(page, last);
-  const event = events[index];
-  if (!event) return null;
-
-  const many = events.length > 1;
-
-  return (
-    <View>
-      <FeaturedCard event={event} onPress={() => onOpen(event)} onCta={() => onAction(event)} />
-      {many ? (
-        <>
-          <Pressable
-            onPress={() => setPage((current) => Math.max(0, current - 1))}
-            disabled={index === 0}
-            accessibilityRole="button"
-            accessibilityLabel="Previous featured event"
-            accessibilityState={{ disabled: index === 0 }}
-            style={{
-              position: 'absolute',
-              top: '50%',
-              left: 0,
-              marginTop: -22,
-              width: 44,
-              height: 44,
-              justifyContent: 'center',
-              alignItems: 'center',
-              zIndex: 10,
-            }}>
-            <SymbolView
-              name={{ ios: 'chevron.left', android: 'chevron_left', web: 'chevron_left' }}
-              size={18}
-              tintColor={index === 0 ? 'rgba(22,37,31,0.28)' : brand.premium}
-            />
-          </Pressable>
-          <Pressable
-            onPress={() => setPage((current) => Math.min(last, current + 1))}
-            disabled={index === last}
-            accessibilityRole="button"
-            accessibilityLabel="Next featured event"
-            accessibilityState={{ disabled: index === last }}
-            style={{
-              position: 'absolute',
-              top: '50%',
-              right: 0,
-              marginTop: -22,
-              width: 44,
-              height: 44,
-              justifyContent: 'center',
-              alignItems: 'center',
-              zIndex: 10,
-            }}>
-            <SymbolView
-              name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-              size={18}
-              tintColor={index === last ? 'rgba(22,37,31,0.28)' : brand.premium}
-            />
-          </Pressable>
-        </>
-      ) : null}
-    </View>
-  );
+  const [width, setWidth] = useState(0);
+  const rail = useRef<ScrollView>(null);
+  const ids = events.map(event => event.id).join(',');
+  const cardWidth = events.length > 1 ? Math.min(340, width * 0.86) : width;
+  useEffect(() => { rail.current?.scrollTo({ x: 0, animated: false }); }, [ids, width]);
+  return <View onLayout={event => setWidth(event.nativeEvent.layout.width)}>
+    {width > 0 && <ScrollView ref={rail} horizontal showsHorizontalScrollIndicator={false}
+      decelerationRate="fast" snapToInterval={cardWidth + 12} snapToAlignment="start"
+      disableIntervalMomentum directionalLockEnabled
+      contentContainerStyle={{ gap: 12, paddingRight: Math.max(0, width - cardWidth) }}>
+      {events.map(event => <View key={event.id} style={{ width: cardWidth }}>
+        <FeaturedCard event={event} onPress={() => onOpen(event)} onCta={() => onAction(event)} />
+      </View>)}
+    </ScrollView>}
+  </View>;
 }
 
 function ResultSwipe({

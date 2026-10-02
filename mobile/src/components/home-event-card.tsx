@@ -1,10 +1,9 @@
 import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useState, type ComponentProps } from 'react';
-import { Text, View, type ViewStyle } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { MapPin } from '@/components/map-pin';
-import { MotionBorder } from '@/components/motion-border';
 import { PressableScale } from '@/components/pressable-scale';
 import { PulseDot } from '@/components/pulse-dot';
 import {
@@ -23,8 +22,9 @@ import {
   type PlayerMatch,
 } from '@/lib/matches';
 import { formatHomeWhen, matchTiming } from '@/lib/when';
-import { sapaLabel, sapaTone } from '@/theme/sapa';
+import { sapaLabel, lightSapaTone as sapaTone } from '@/theme/sapa';
 import { lightBrand as brand } from '@/theme/tokens';
+import { EventNotificationBell } from '@/components/events/follow-tournament';
 
 const MATCH_ORANGE = '#F97316';
 
@@ -32,80 +32,14 @@ function contrastOnAccent(accent: string) {
   return accent === '#CCFF00' || accent === '#EAB308' || accent === '#F59E0B' ? '#0a0a0a' : '#ffffff';
 }
 
-function hexRgb(hex: string) {
-  const n = hex.replace('#', '');
-  return {
-    r: parseInt(n.slice(0, 2), 16),
-    g: parseInt(n.slice(2, 4), 16),
-    b: parseInt(n.slice(4, 6), 16),
-  };
-}
-
-function mixHex(hex: string, other: string, hexWeight: number) {
-  const a = hexRgb(hex);
-  const b = hexRgb(other);
-  const t = Math.min(1, Math.max(0, hexWeight));
-  const to = (x: number) => Math.round(x).toString(16).padStart(2, '0');
-  return `#${to(a.r * t + b.r * (1 - t))}${to(a.g * t + b.g * (1 - t))}${to(a.b * t + b.b * (1 - t))}`;
-}
-
-function hexAlpha(hex: string, alpha: number) {
-  const { r, g, b } = hexRgb(hex);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
-/** Website hero CTA: 145° gloss + top sheen. RN has no gradient Button — this is a Pressable with a linear-gradient fill. */
-function AccentGradientButton({
-  label,
-  accent,
-  onPress,
-  compact = false,
-}: {
-  compact?: boolean;
-  label: string;
-  accent: string;
-  onPress: () => void;
+function AccentGradientButton({ label, accent, onPress, compact = false }: {
+  label: string; accent: string; onPress: () => void; compact?: boolean;
 }) {
-  const highlight = mixHex(accent, '#ffffff', 0.68);
-  const shade = mixHex(accent, '#000000', 0.82);
-  const color = contrastOnAccent(accent);
-  const fill = {
-    experimental_backgroundImage: `linear-gradient(145deg, ${highlight} 0%, ${accent} 50%, ${shade} 100%)`,
-  } as ViewStyle;
-
-  return (
-    <PressableScale
-      onPress={onPress}
-      hitSlop={compact ? 6 : 4}
-      accessibilityRole="button"
-      accessibilityLabel={label}>
-      <View
-        className={`shrink-0 justify-center overflow-hidden rounded-full border ${compact ? 'min-h-8 px-3' : 'min-h-11 px-3.5'}`}
-        style={[
-          {
-            borderColor: accent,
-            boxShadow: `inset 0px 1px 0px rgba(22,37,31,0.28), 0px 1px 6px ${hexAlpha(accent, 0.35)}`,
-          },
-          fill,
-        ]}>
-        <View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            bottom: 0,
-            left: 0,
-            experimental_backgroundImage:
-              'linear-gradient(180deg, rgba(22,37,31,0.22) 0%, rgba(22,37,31,0.06) 45%, transparent 100%)',
-          } as ViewStyle}
-        />
-        <Text className={`${compact ? 'text-[10px] font-normal' : 'text-[11px] font-bold'} uppercase tracking-wide`} style={{ color }}>
-          {label}
-        </Text>
-      </View>
-    </PressableScale>
-  );
+  return <PressableScale onPress={onPress} accessibilityRole="button" accessibilityLabel={label}
+    style={{ minHeight: 44, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12,
+      backgroundColor: accent, justifyContent: 'center', alignItems: 'center' }}>
+    <Text style={{ color: contrastOnAccent(accent), fontSize: compact ? 12 : 14, fontWeight: '600' }}>{label}</Text>
+  </PressableScale>;
 }
 
 type CardProps = {
@@ -163,7 +97,7 @@ export function NowOnCard({ event, live = true, showLabel = true, onPress }: Car
             ) : null}
             {registered > 0 ? (
               <View className="mt-1 flex-row items-center">
-                <SymbolView name="person.2.fill" size={11} tintColor={tone.fill} />
+                <SymbolView name="person.2.fill" size={11} tintColor={tone.text} />
                 <Text className="ml-1 text-[10px] font-medium text-court-muted">
                   {registered} Registered
                 </Text>
@@ -182,6 +116,7 @@ export function NowOnCard({ event, live = true, showLabel = true, onPress }: Car
             ) : (
               <View />
             )}
+            <EventNotificationBell eventId={event.id} eventName={event.event_name || 'Tournament'} />
             <SymbolView name="chevron.right" size={14} tintColor={brand.accent} />
             {label ? (
               <View
@@ -274,7 +209,8 @@ export function EventRow({ event, showStartCountdown = false, onPress, onCta }: 
             ) : null}
           </View>
 
-          <View className="ml-1 shrink-0">
+          <View className="ml-1 shrink-0 flex-row items-center">
+            <EventNotificationBell eventId={event.id} eventName={event.event_name || 'Tournament'} />
             <SymbolView name="chevron.right" size={16} tintColor={brand.accent} />
           </View>
         </View>
@@ -287,7 +223,7 @@ export function EventRow({ event, showStartCountdown = false, onPress, onCta }: 
               {showStartCountdown ? (
                 <EventStartsCountdown
                   startDate={event.start_date}
-                  accent={tone.fill}
+                  accent={label ? tone.text : brand.premium}
                   cutout={brand.elevated}
                 />
               ) : null}
@@ -296,7 +232,7 @@ export function EventRow({ event, showStartCountdown = false, onPress, onCta }: 
               <AccentGradientButton
                 compact
                 label={cta.label}
-                accent={tone.fill}
+                accent={label ? tone.text : brand.premium}
                 onPress={onCta ?? onPress}
               />
             ) : null}
@@ -324,12 +260,12 @@ export function RecentResultCard({ event, onPress }: CardProps) {
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${title}${winner ? `. Winner ${winner}` : ''}. ${location}`}>
-      <MotionBorder>
+      <View style={{ backgroundColor: brand.elevated, borderRadius: 16, borderWidth: 1, borderColor: brand.edge }}>
         <View className="flex-row items-center px-3.5 py-3.5">
           {parts.month ? (
             <View
               className="h-14 w-14 shrink-0 items-center justify-center rounded-xl"
-              style={{ borderWidth: 1, borderColor: 'rgba(204,255,0,0.3)' }}>
+              style={{ borderWidth: 1, borderColor: brand.edge, backgroundColor: brand.surface }}>
               <Text className="text-[9px] font-black uppercase tracking-widest text-court-accent">
                 {parts.month}
               </Text>
@@ -348,21 +284,21 @@ export function RecentResultCard({ event, onPress }: CardProps) {
                 style={{ borderColor: tone.border }}>
                 <Text
                   className="text-[8px] font-black uppercase tracking-widest"
-                  style={{ color: tone.fill }}>
+                  style={{ color: tone.text, backgroundColor: tone.bg }}>
                   {label}
                 </Text>
               </View>
             ) : null}
             <Text
-              numberOfLines={1}
-              className="text-[14px] font-bold uppercase leading-tight tracking-tight text-court-ink">
+              numberOfLines={2}
+              className="text-[16px] font-bold leading-tight text-court-ink">
               {title}
               {trophy ? ' 🏆' : ''}
             </Text>
             {location ? (
               <View className="mt-1 flex-row items-center">
                 <MapPin size={12} color={brand.faint} />
-                <Text numberOfLines={1} className="ml-1.5 flex-1 text-[10px] text-court-muted">
+                <Text numberOfLines={2} className="ml-1.5 flex-1 text-[12px] text-court-muted">
                   {location}
                 </Text>
               </View>
@@ -372,16 +308,16 @@ export function RecentResultCard({ event, onPress }: CardProps) {
                 <SymbolView
                   name={{ ios: 'person.2.fill', android: 'group', web: 'group' }}
                   size={11}
-                  tintColor={tone.fill}
+                  tintColor={tone.text}
                 />
-                <Text numberOfLines={1} className="ml-1.5 flex-1 text-[10px] text-court-muted">
-                  Winner: {winner}
+                <Text numberOfLines={2} className="ml-1.5 flex-1 text-[12px] text-court-muted">
+                  Winner: <Text style={{ fontWeight: '700' }}>{winner}</Text>
                 </Text>
               </View>
             ) : null}
           </View>
         </View>
-      </MotionBorder>
+      </View>
     </PressableScale>
   );
 }
@@ -396,28 +332,28 @@ export function FeaturedCard({ event, onPress, onCta }: CardProps) {
   const name = event.event_name || 'Featured event';
   const cta = resolveFeaturedCta(event);
   return (
-    <View style={{ borderRadius: 20, backgroundColor: brand.elevated, borderWidth: 1, borderColor: brand.edge, overflow: 'hidden' }}>
-      <PressableScale onPress={onPress} accessibilityRole="button" accessibilityLabel={`${name}. ${range}. ${event.city || ''}`}>
-        <View style={{ flexDirection: 'row', padding: 16, gap: 16 }}>
-          <Image
-            key={showPoster ? posterKey : `default-${event.id}`}
-            source={showPoster ? { uri: poster } : featuredBackgroundSource(event)}
-            contentFit={showPoster ? 'contain' : 'cover'}
-            onError={showPoster ? () => setFailedPoster(posterKey) : undefined}
-            style={{ width: 90, height: 118, borderRadius: 12, backgroundColor: brand.surface }}
-          />
-          <View style={{ flex: 1, gap: 8 }}>
-            <Text style={{ color: brand.accent, fontSize: 11, fontWeight: '700', letterSpacing: 0.8 }}>{event.organiser_badge_text?.trim() || (label ? `SAPA ${label.toUpperCase()}` : '4M TOURNAMENT')}</Text>
-            <Text style={{ color: brand.premium, fontSize: 20, fontWeight: '700', lineHeight: 25 }}>{name}</Text>
-            <Text style={{ color: brand.muted, fontSize: 13, lineHeight: 19 }}>{range}</Text>
-            {!!event.city && <Text style={{ color: brand.muted, fontSize: 13 }}>{event.city}</Text>}
-          </View>
+    <View style={{ borderRadius: 20, backgroundColor: brand.elevated, borderWidth: 1, borderColor: brand.edge, padding: 12, flexDirection: 'row', gap: 12 }}>
+      <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`View ${name}`} style={{ width: 82, alignSelf: 'stretch', minHeight: 150, borderRadius: 12, overflow: 'hidden', backgroundColor: brand.surface }}>
+        <Image
+          key={showPoster ? posterKey : `default-${event.id}`}
+          source={showPoster ? { uri: poster } : featuredBackgroundSource(event)}
+          contentFit={showPoster ? 'contain' : 'cover'}
+          onError={showPoster ? () => setFailedPoster(posterKey) : undefined}
+          style={{ position: 'absolute', width: '100%', height: '100%' }}
+        />
+      </Pressable>
+      <View style={{ flex: 1, minWidth: 0, gap: 8 }}>
+        <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${name}. ${range}. ${event.city || ''}`} style={{ gap: 5 }}>
+          <Text numberOfLines={2} style={{ color: brand.accent, fontSize: 9, fontWeight: '700', letterSpacing: 0.5 }}>{event.organiser_badge_text?.trim() || (label ? `SAPA ${label.toUpperCase()}` : '4M TOURNAMENT')}</Text>
+          <Text numberOfLines={2} style={{ color: brand.premium, fontSize: 17, fontWeight: '700', lineHeight: 21 }}>{name}</Text>
+          <Text style={{ color: brand.muted, fontSize: 11, lineHeight: 15 }}>{range}</Text>
+          {!!event.city && <Text numberOfLines={1} style={{ color: brand.muted, fontSize: 11 }}>{event.city}</Text>}
+        </Pressable>
+        <View style={{ paddingTop: 7 }}>
+          <RegCountdown opensAt={event.registration_opens_at} closesAt={event.registration_closes_at} accent={brand.accent} />
         </View>
-      </PressableScale>
-      <View style={{ padding: 16, paddingTop: 0, gap: 12 }}>
-        <RegCountdown opensAt={event.registration_opens_at} closesAt={event.registration_closes_at} accent={brand.accent} cutout={brand.elevated} compact fullWidth />
-        <PressableScale onPress={onCta ?? onPress} accessibilityRole="button" accessibilityLabel={`${cta.label}: ${name}`} style={{ backgroundColor: brand.padel, minHeight: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: brand.premium, fontSize: 14, fontWeight: '700' }}>{cta.label}</Text>
+        <PressableScale onPress={onCta ?? onPress} accessibilityRole="button" accessibilityLabel={`${cta.label}: ${name}`} style={{ backgroundColor: brand.padel, minHeight: 44, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ color: brand.premium, fontSize: 12, fontWeight: '700', textAlign: 'center' }}>{cta.label}</Text>
         </PressableScale>
       </View>
     </View>
@@ -437,7 +373,9 @@ export function PendingRow({
   kind?: 'payment' | 'profile';
   onPress: () => void;
 }) {
-  const icon = kind === 'profile' ? 'person.fill' : 'creditcard.fill';
+  const icon = kind === 'profile'
+    ? { ios: 'person.fill', android: 'person', web: 'person' } as const
+    : { ios: 'creditcard.fill', android: 'credit_card', web: 'credit_card' } as const;
 
   return (
     <PressableScale
@@ -457,7 +395,7 @@ export function PendingRow({
           {detail}
         </Text>
       </View>
-      <SymbolView name="chevron.right" size={14} tintColor={brand.accent} />
+      <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} size={14} tintColor={brand.accent} />
     </PressableScale>
   );
 }
@@ -557,51 +495,25 @@ function useMatchTiming(dateStr?: string | null) {
   return matchTiming(parseMatchDate(dateStr), dateStr, now);
 }
 
-function RegCountdown({
-  opensAt,
-  closesAt,
-  accent,
-  cutout = brand.elevated,
-  compact = false,
-  fullWidth = false,
-}: {
-  opensAt: string | null;
-  closesAt: string | null;
-  accent: string;
-  cutout?: string;
-  compact?: boolean;
-  fullWidth?: boolean;
+function RegCountdown({ opensAt, closesAt, accent }: {
+  opensAt: string | null; closesAt: string | null; accent: string;
 }) {
   const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
-
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
   const opens = opensAt ? new Date(opensAt).getTime() : NaN;
   const closes = closesAt ? new Date(closesAt).getTime() : NaN;
-  let label: string | null = null;
-  let target = 0;
-  if (Number.isFinite(opens) && opens > now) {
-    label = 'Registration opens in';
-    target = opens;
-  } else if (Number.isFinite(closes) && closes > now) {
-    label = 'Registration closes in';
-    target = closes;
-  }
-  if (!label) return null;
-
-  return (
-    <CountdownBox
-      label={label}
-      target={target}
-      accent={accent}
-      cutout={cutout}
-      compact={compact}
-      fullWidth={fullWidth}
-    />
-  );
+  const opening = Number.isFinite(opens) && opens > now;
+  const target = opening ? opens : closes;
+  const diff = target - now;
+  if (!Number.isFinite(diff) || diff <= 0) return <Text style={{ color: brand.muted, fontSize: 10 }}>{Number.isFinite(closes) ? 'Registration closed' : 'Tournament details'}</Text>;
+  return <CountdownBox
+    label={`Registration ${opening ? 'opens' : 'closes'} in`}
+    target={target}
+    accent={accent}
+    cutout={brand.elevated}
+    compact
+    fullWidth
+  />;
 }
 
 export function EmptyBlock({

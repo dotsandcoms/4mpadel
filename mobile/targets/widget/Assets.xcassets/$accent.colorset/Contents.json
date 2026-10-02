@@ -2,7 +2,7 @@
   "colors": [
     {
       "color": {
-        "color-space": "srgb",
+        "color-space": "display-p3",
         "components": {
           "red": 0.2196078431372549,
           "green": 0.3764705882352941,

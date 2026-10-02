@@ -13,8 +13,8 @@ export function entryFee(event: EventDetail, division?: Division | null, now = n
 export function registrationState(event: EventDetail, division?: Division | null, now = new Date()) {
   if (event.event_status === 'cancelled') return 'cancelled' as const;
   if (event.registration_opens_at && new Date(event.registration_opens_at) > now) return 'not-open' as const;
-  if ((event.registration_closes_at && new Date(event.registration_closes_at) < now)
-    || (division?.entries_close_at && new Date(division.entries_close_at) < now)) return 'closed' as const;
+  if ((event.registration_closes_at && new Date(event.registration_closes_at) <= now)
+    || (division?.entries_close_at && new Date(division.entries_close_at) <= now)) return 'closed' as const;
   const end = event.end_date || event.start_date;
   if (end && end.slice(0, 10) < localDay(now)) return 'finished' as const;
   return 'open' as const;
@@ -23,7 +23,7 @@ export function localDay(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 export function formatMoney(value: number) {
-  return `R ${value.toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  return `R ${value.toLocaleString('en-ZA', { minimumFractionDigits: Number.isInteger(value) ? 0 : 2, maximumFractionDigits: 2 })}`;
 }
 
 export type EventFilters = { search: string; timing: 'upcoming' | 'past' | 'saved'; city: string; tier: string };

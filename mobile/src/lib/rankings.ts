@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 export const organisations = [{id:15809,label:'SAPA'},{id:16317,label:'Broll Pro Tour'},{id:16482,label:'SA Grand Tour'}];
 export const categoriesFor = (org:number) => org === 16482 ? [35,40,45,50,55].map((age,i)=>({id:`mo${age}`,label:`Men Over ${age}`,type:3,age:i+2})) : [{id:'men',label:'Men',type:3,age:82},{id:'ladies',label:'Women',type:4,age:83}];
-export type RankingPlayer = { id:string; participantId:string; name:string; rank:number; points:number; change:number; profile?:PlayerProfile };
+export type RankingPlayer = { rankedinId?:string; id:string; participantId:string; name:string; rank:number; points:number; change:number; profile?:PlayerProfile };
 type PlayerProfile = {id:string;name:string;image_url?:string;home_club?:string;nationality?:string;rankings?:{org?:string;age_group?:string;match_type?:string;details?:PointResult[]}[]};
 export type PointResult = {date:string;name:string;class:string;place:string;event_type:string;points:number};
 async function rankedin(path:string, acceptsCache: (payload: any) => boolean = () => true) {
@@ -12,7 +12,7 @@ async function rankedin(path:string, acceptsCache: (payload: any) => boolean = (
  try {const response=await fetch(url,{signal:controller.signal}); if(!response.ok)throw new Error(`Rankings service returned ${response.status}`); return await response.json();}
  catch(error){if(cache?.payload)return cache.payload;throw error;} finally{clearTimeout(timer);}
 }
-export function normalizeRankings(payload:any[]):RankingPlayer[]{return payload.filter(x=>x.Name).map(x=>({id:String(x.Participant?.Id||x.RankedinId||x.Name),participantId:String(x.Participant?.Id||x.ParticipantPoints?.RankingParticipantId||''),name:x.Name,rank:Number(x.Standing),points:Number(x.ParticipantPoints?.Points||0),change:Number(x.StandingDiff||0)}));}
+export function normalizeRankings(payload:any[]):RankingPlayer[]{return payload.filter(x=>x.Name).map(x=>({rankedinId:x.RankedinId == null ? undefined : String(x.RankedinId),id:String(x.Participant?.Id||x.RankedinId||x.Name),participantId:String(x.Participant?.Id||x.ParticipantPoints?.RankingParticipantId||''),name:x.Name,rank:Number(x.Standing),points:Number(x.ParticipantPoints?.Points||0),change:Number(x.StandingDiff||0)}));}
 export async function fetchRankings(org:number,category:ReturnType<typeof categoriesFor>[number]){
  const data=await rankedin(`Ranking/GetRankingsAsync?rankingId=${org}&rankingType=${category.type}&ageGroup=${category.age}&weekFromNow=0&language=en&skip=0&take=1000`);
  if(!Array.isArray(data?.Payload))throw new Error('Rankings are temporarily unavailable. Please try again.');

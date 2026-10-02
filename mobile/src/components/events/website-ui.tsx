@@ -22,6 +22,8 @@ export function EventIcon({ name, size = 16, color: suppliedColor }: { name: Eve
     'chevron.down': 'chevron-down', plus: 'plus', checkmark: 'check', 'arrow.left': 'arrow-left',
     'square.and.arrow.up': 'share-2', 'line.3.horizontal.decrease': 'filter', 'doc.text': 'file-text',
     phone: 'phone', 'info.circle': 'info', bolt: 'zap', star: 'star', 'rectangle.split.2x2': 'layout',
+    'person.crop.circle.badge.xmark': 'user-x', 'circle.inset.filled': 'radio',
+    'list.bullet.rectangle': 'list', 'chart.bar': 'bar-chart-2', 'square.grid.2x2': 'grid',
   };
   if (typeof name === 'string' && outlines[name]) return <Feather name={outlines[name]} size={size} color={color} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />;
   if (name === 'trophy' || name === 'crown') return <MaterialCommunityIcons name={name === 'trophy' ? 'trophy-outline' : 'crown-outline'} size={size} color={color} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />;

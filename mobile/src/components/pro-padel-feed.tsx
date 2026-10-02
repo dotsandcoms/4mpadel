@@ -1,12 +1,16 @@
+import { FollowedLocalMatches } from '@/components/followed-local-matches';
 import { addToDeviceCalendar } from '@/lib/device-calendar';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, usePathname, useRouter } from 'expo-router';
+import { supabase } from '@/lib/supabase';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import type { usePlayerHub } from '@/hooks/use-player-hub';
+import { homePlayerSelection, playerRankLabel, proHubPlayer, type HubPlayer } from '@/lib/player-hub';
 import type { ProPadelState } from '@/hooks/use-pro-padel';
-import { proDate, proRound, proStale, proStatus, selectProMatches, type ProTournament, type ProCategory, type ProFollow, type ProMatch, type ProPerson, type ProPlayer } from '@/lib/pro-padel';
+import { proDate, proRound, proStale, proStatus, selectProMatches, type ProTournament, type ProCategory, type ProFollow, type ProMatch, type ProPerson, type ProPlayer, type ProRankings } from '@/lib/pro-padel';
 import { lightBrand as brand } from '@/theme/tokens';
 
 type Filter = ProCategory | 'all';
@@ -17,14 +21,14 @@ const country = (code: string | null) => {
   catch { return code || ''; }
 };
 
-function Button({ label, onPress, icon, disabled = false }: { label: string; onPress: () => void; icon?: keyof typeof Ionicons.glyphMap; disabled?: boolean }) {
+function Button({ label, onPress, icon, disabled = false, local = false }: { label: string; onPress: () => void; icon?: keyof typeof Ionicons.glyphMap; disabled?: boolean; local?: boolean }) {
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled}
-    onPress={onPress} style={[s.button, disabled && { opacity: 0.45 }]}>
-    {icon && <Ionicons name={icon} size={17} color={brand.accent} />}<Text style={s.buttonText}>{label}</Text>
+    onPress={onPress} style={[s.button, local && { backgroundColor: '#EAF0FF' }, disabled && { opacity: 0.45 }]}>
+    {icon && <Ionicons name={icon} size={17} color={local ? '#2449D8' : brand.accent} />}<Text style={[s.buttonText, local && { color: '#2449D8' }]}>{label}</Text>
   </Pressable>;
 }
 
-function NextTourCard({ event, message }: { event: ProTournament; message?: string }) {
+function NextTourCard({ event, local = false, onOpen }: { event: ProTournament; local?: boolean; onOpen?: () => void }) {
   const [adding, setAdding] = useState(false);
   const date = new Date(event.startDate);
   const validDate = Number.isFinite(date.getTime());
@@ -37,27 +41,72 @@ function NextTourCard({ event, message }: { event: ProTournament; message?: stri
     catch (error) { Alert.alert('Calendar unavailable', error instanceof Error ? error.message : 'Please try again.'); }
     finally { setAdding(false); }
   };
-  return <View style={s.tourHero}>
+  return <View style={[s.tourHero, local && { backgroundColor: '#EAF0FF', borderColor: '#2449D830' }]}>
     <View style={s.tourEyebrow}>
-      {!!event.level && <Text style={s.tourLevel}>{event.level.toUpperCase()}</Text>}
-      <Text style={s.tourKicker}>NEXT STOP ON TOUR</Text>
+      {!!event.level && <Text style={[s.tourLevel, local && { color: '#2449D8', borderColor: '#2449D8' }]}>{event.level.toUpperCase()}</Text>}
+      <Text style={[s.tourKicker, local && { color: '#2449D8' }]}>{local ? 'NEXT IN 4M' : 'NEXT STOP ON TOUR'}</Text>
     </View>
-    <View style={s.tourMain}>
+    <Pressable disabled={!onOpen} accessibilityRole={onOpen ? "button" : undefined} accessibilityLabel={onOpen ? `View ${event.name}` : undefined} onPress={onOpen} style={s.tourMain}>
       <View style={{ flex: 1, gap: 12 }}>
-        <Text accessibilityRole="header" style={s.tourTitle}>{event.name}</Text>
-        {!!event.location && <View style={s.tourMeta}><Ionicons name="location-outline" size={15} color="#52625A" /><Text style={s.tourLocation}>{event.location}</Text></View>}
+        <Text accessibilityRole="header" numberOfLines={3} ellipsizeMode="tail" style={s.tourTitle}>{event.name}</Text>
+        <View style={s.tourMeta}><Ionicons name="location-outline" size={15} color="#52625A" /><Text numberOfLines={1} style={s.tourLocation}>{event.location || event.venue || 'Location to be announced'}</Text></View>
       </View>
-      <View style={s.tourDate} accessible accessibilityLabel={proDate(event.startDate)}>
+      <View style={[s.tourDate, local && { borderColor: '#2449D830' }]} accessible accessibilityLabel={proDate(event.startDate)}>
         <Text style={s.tourMonth}>{datePart({ month: 'short' }).toUpperCase()}</Text>
-        <Text style={s.tourDay} maxFontSizeMultiplier={1.3}>{datePart({ day: '2-digit' })}</Text>
+        <Text style={[s.tourDay, local && { color: '#2449D8' }]} maxFontSizeMultiplier={1.3}>{datePart({ day: '2-digit' })}</Text>
         <Text style={s.tourYear}>{datePart({ year: 'numeric' })}</Text>
       </View>
-    </View>
-    <View style={s.tourMeta}><Ionicons name="calendar-outline" size={16} color="#52625A" /><Text style={s.tourLocation}>{proDate(event.startDate)} – {proDate(event.endDate)}</Text></View>
-    <Pressable accessibilityRole="button" accessibilityState={{ disabled: adding }} disabled={adding} onPress={() => void add()} style={[s.tourCalendar, adding && { opacity: 0.65 }]}>
-      <Ionicons name="calendar-outline" size={19} color="#17200c" /><Text style={s.tourCalendarText}>{adding ? 'Opening calendar…' : 'Add to my calendar'}</Text>
     </Pressable>
-    {!!message && <Text style={s.tourNote}>{message}</Text>}
+    <View style={s.tourMeta}><Ionicons name="calendar-outline" size={16} color="#52625A" /><Text style={s.tourLocation}>{proDate(event.startDate)} – {proDate(event.endDate)}</Text></View>
+    <Pressable accessibilityRole="button" accessibilityState={{ disabled: adding }} disabled={adding} onPress={() => void add()} style={[s.tourCalendar, local && { backgroundColor: '#2449D8' }, adding && { opacity: 0.65 }]}>
+      <Ionicons name="calendar-outline" size={19} color={local ? '#FFFFFF' : '#17200c'} /><Text style={[s.tourCalendarText, local && { color: '#FFFFFF' }]}>{adding ? 'Opening calendar…' : 'Add to my calendar'}</Text>
+    </Pressable>
+  </View>;
+}
+
+type LocalUpcomingEvent = { id: number; event_name: string | null; start_date: string; end_date: string | null; city: string | null; venue: string | null; event_status: string | null };
+function IntegratedUpNext({ tournament, showLocal, message }: { tournament?: ProTournament | null; showLocal: boolean; message?: string }) {
+  const router = useRouter();
+  const [events, setEvents] = useState<LocalUpcomingEvent[]>([]), [loading, setLoading] = useState(false), [error, setError] = useState(''), [retry, setRetry] = useState(0);
+  useFocusEffect(useCallback(() => {
+    if (!showLocal) return;
+    let active = true;
+    setLoading(true); setError('');
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    void (async () => {
+      try {
+        const { data, error: failure } = await supabase.from('calendar')
+          .select('id,event_name,start_date,end_date,city,venue,event_status')
+          .neq('is_visible', false).or('sanction_status.eq.approved,sanction_status.is.null')
+          .or(`end_date.gte.${today},and(end_date.is.null,start_date.gte.${today})`)
+          .or('event_status.is.null,event_status.not.in.(cancelled,canceled)')
+          .order('start_date', { ascending: true }).order('id', { ascending: true }).limit(6);
+        if (failure) throw failure;
+        if (active) setEvents((data || []) as LocalUpcomingEvent[]);
+      } catch { if (active) setError('Local tournaments could not be loaded.'); }
+      finally { if (active) setLoading(false); }
+    })();
+    return () => { active = false; };
+  }, [showLocal, retry]));
+  const cards = [...(showLocal ? events.map(event => ({ key: `4m:${event.id}`, date: event.start_date, local: event })) : []), ...(tournament ? [{ key: `pro:${tournament.id}`, date: tournament.startDate, local: null }] : [])].sort((a, b) => a.date.localeCompare(b.date));
+  return <View style={{ gap: 12 }}>
+    <Text style={s.sectionTitle}>Up next</Text>
+    {loading && <ActivityIndicator color={brand.accent} />}
+    {!!error && <Message body={error} retry={() => setRetry(n => n + 1)} />}
+    {!cards.length && !loading && !error && <Text style={s.caption}>No upcoming tournaments are published yet.</Text>}
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} decelerationRate="fast" snapToInterval={298} contentContainerStyle={{ gap: 12, alignItems: 'flex-start' }}>
+      {cards.map(card => <View key={card.key} style={{ width: 286, gap: 6 }}>
+        <Text style={[s.caption, { color: card.local ? '#2449D8' : brand.accent, fontWeight: '700' }]}>{card.local ? '4M · LOCAL' : 'PREMIER PADEL · INTERNATIONAL'}</Text>
+        {card.local ? <NextTourCard local event={{
+          id: card.local.id, name: card.local.event_name || 'Tournament',
+          startDate: card.local.start_date, endDate: card.local.end_date || card.local.start_date,
+          location: card.local.city || card.local.venue || 'Venue to be announced', venue: card.local.venue,
+          photoUrl: null, level: '4M',
+        }} onOpen={() => router.push({ pathname: '/events/[id]', params: { id: String(card.local!.id) } })} />
+          : tournament && <><NextTourCard event={tournament} />{!!message && <Text style={s.tourNote}>{message}</Text>}</>}
+      </View>)}
+    </ScrollView>
+    {showLocal && <Button label="View local calendar" icon="calendar-outline" onPress={() => router.push('/calendar')} />}
   </View>;
 }
 
@@ -71,6 +120,7 @@ function MatchSectionToggle({ title, count, expanded, onPress }: { title: string
 
 function Portrait({ player, size = 48 }: { player: ProPerson & { photoUrl?: string | null }; size?: number }) {
   const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [player.photoUrl]);
   return <View style={[s.portrait, { width: size, height: size, borderRadius: size > 80 ? 18 : 10 }]}>
     {player.photoUrl && !failed ? <Image source={{ uri: player.photoUrl }} recyclingKey={String(player.id)} onError={() => setFailed(true)} contentFit="cover" contentPosition="top" style={{ width: size, height: size }} />
       : <Text style={[s.initials, { fontSize: size > 80 ? 32 : 16 }]}>{player.name.split(' ').slice(0, 2).map(n => n[0]).join('')}</Text>}
@@ -86,7 +136,20 @@ function Updated({ date, coverage }: { date: string; coverage?: string }) {
     {proStale(date) && <Text style={s.warning}>This update is over two days old. Details may have changed.</Text>}</View>;
 }
 
-export function MatchCard({ match, lookup, onPlayer }: { match: ProMatch; lookup: Map<number, ProPlayer>; onPlayer: (id: number) => void }) {
+function RankingsUpdated({ rankings }: { rankings: ProRankings }) {
+  const edition = (category: ProCategory) => rankings.categories[category].editionDate || rankings.categories[category].players[0]?.rankingDate;
+  return <View style={{ gap: 5 }}>
+    <Text style={s.caption}>Official weekly rankings · Men {proDate(edition('men'))} · Women {proDate(edition('women'))}</Text>
+    {rankings.categories.women.previousEdition || rankings.categories.men.previousEdition
+      ? <Text style={s.warning}>PadelAPI has not published the latest {rankings.categories.women.previousEdition ? 'women’s' : 'men’s'} edition yet. Showing its previous official ranking.</Text> : null}
+    {proStale(rankings.updatedAt) && <Text style={s.warning}>Ranking sync is overdue. Scores may have changed.</Text>}
+  </View>;
+}
+
+export function MatchCard({ match, lookup, onPlayer, onOpenMatch }: { match: ProMatch; lookup: Map<number, ProPlayer>; onPlayer: (id: number) => void; onOpenMatch?: (id: number, from: string) => void }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const from = pathname === '/pro/live' ? 'live' : pathname === '/calendar' ? 'calendar' : pathname === '/rankings' ? 'rankings' : 'home';
   const upcoming = match.status === 'scheduled';
   return <View style={s.match}>
     <View style={s.matchHeader}>
@@ -108,7 +171,7 @@ export function MatchCard({ match, lookup, onPlayer }: { match: ProMatch; lookup
             const player = lookup.get(person.id);
             return <Pressable key={person.id} disabled={!player} onPress={() => onPlayer(person.id)} accessibilityRole={player ? 'button' : undefined}
               accessibilityLabel={player ? `View ${person.name}` : person.name} style={s.matchPerson}>
-              <Portrait key={person.id} player={player || person} size={30} /><Text style={s.matchName}>{person.name}</Text>
+              <Portrait key={person.id} player={player || person} size={36} /><Text style={s.matchName}>{person.name}</Text>
             </Pressable>;
           }) : <Text style={s.body}>Opponents TBC</Text>}
         </View>
@@ -122,19 +185,21 @@ export function MatchCard({ match, lookup, onPlayer }: { match: ProMatch; lookup
       </View>;
     })}
     <View style={s.matchFooter}><View style={s.resultStatus}><Ionicons name={upcoming ? 'time-outline' : match.status === 'finished' ? 'checkmark-circle' : 'information-circle-outline'} size={13} color={!upcoming && match.status === 'finished' ? brand.accent : brand.muted} /><Text style={s.caption}>{upcoming ? match.court || 'Court TBC' : proStatus(match)}</Text></View>
-      <Text style={s.caption}>{upcoming ? 'Saved schedule' : 'Premier Padel'}</Text></View>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Explore ${match.tournamentName} match details`} onPress={() => onOpenMatch ? onOpenMatch(match.id, from) : router.push({ pathname: '/pro/match/[id]', params: { id: String(match.id), from } })} style={{ flexDirection: 'row', alignItems: 'center', gap: 3, padding: 7 }}><Text style={[s.caption, { color: brand.accent, fontWeight: '700' }]}>Match details</Text><Ionicons name="arrow-forward" size={14} color={brand.accent} /></Pressable></View>
   </View>;
 }
 
-export function ProPadelFeed({ state }: { state: ProPadelState }) {
+export function ProPadelFeed({ state, localState }: { state: ProPadelState; localState?: ReturnType<typeof usePlayerHub> }) {
   const router = useRouter();
   const [view, setView] = useState<'for-you' | 'tour'>('for-you');
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<Filter | '4m' | 'pro'>('all');
+  const proFilter = filter === '4m' || filter === 'pro' ? 'all' : filter;
   const [count, setCount] = useState(6);
   const [resultsOpen, setResultsOpen] = useState(true);
   const [fixturesOpen, setFixturesOpen] = useState(false);
   const [directory, setDirectory] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [matchOpen, setMatchOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [directoryFilter, setDirectoryFilter] = useState<Filter>('all');
   const [onlyFollowing, setOnlyFollowing] = useState(false);
@@ -146,18 +211,39 @@ export function ProPadelFeed({ state }: { state: ProPadelState }) {
   const ids = state.follows.map(p => p.player_id);
   const selected = selectedId == null ? null : lookup.get(selectedId);
   const personal = view === 'for-you';
-  const ready = !personal || (!!state.userId && !state.followsLoading && !state.followsError && ids.length > 0);
-  const results = selectProMatches(state.tour.data?.matches || [], personal ? ids : null, filter);
-  const upcoming = selectProMatches(state.fixtures.data?.matches || [], personal ? ids : null, filter, true);
-  const rail = players.filter(p => (filter === 'all' || p.category === filter) && (!personal || ids.includes(p.id)));
-  const suggestions = players.filter(p => filter === 'all' || p.category === filter).slice(0, 8);
-  const visiblePlayers = rail.length ? rail.slice(0, 12) : suggestions;
+  const ready = filter !== '4m' && (!personal || (!!state.userId && !state.followsLoading && !state.followsError && ids.length > 0));
+  const results = selectProMatches(state.tour.data?.matches || [], personal ? ids : null, proFilter);
+  const upcoming = selectProMatches(state.fixtures.data?.matches || [], personal ? ids : null, proFilter, true);
+  const rail = players.filter(p => (filter === 'all' || filter === 'pro' || p.category === filter) && (!personal || ids.includes(p.id)));
+  const suggestions = players.filter(p => filter === 'all' || filter === 'pro' || p.category === filter);
+  const localPlayers = (localState?.locals || []).filter(p => (filter === 'all' || filter === '4m' || filter === 'pro' && !!(p.fipPlayerId || p.fipProfileUrl) || p.gender === filter) && (!personal || localState!.isFollowing(p)));
+  const hasFollows = ids.length > 0 || !!localState?.ids.length;
+  const verifiedFipIds = new Set((localState?.fipLinks || []).filter(link => link.status === 'verified').map(link => link.fip_player_id).filter((id): id is number => id != null));
+  const proCards = filter === '4m' ? [] : (personal && hasFollows ? rail : rail.length ? rail : suggestions).filter(p => !verifiedFipIds.has(p.id)).map(proHubPlayer);
+  if (personal && filter !== '4m') for (const p of state.follows) {
+    if (!lookup.has(p.player_id) && !verifiedFipIds.has(p.player_id) && (filter === 'all' || filter === 'pro' || filter === p.category)) proCards.push({ key: `pro:${p.player_id}`, source: 'pro', id: String(p.player_id), name: p.player_name, photo: null, gender: p.category, rank: null, points: null, subtitle: 'FIP player' });
+  }
+  const topTen = (rows: HubPlayer[]) => rows.filter(p => p.rank != null && p.rank > 0)
+    .sort((a, b) => a.rank! - b.rank! || a.name.localeCompare(b.name)).slice(0, 10);
+  const localSuggestions = (localState?.locals || []).filter(p =>
+    (filter === 'all' || filter === '4m' || filter === 'pro' && !!(p.fipPlayerId || p.fipProfileUrl) || p.gender === filter) &&
+    (p.rank != null || p.fipRank != null))
+    .sort((a, b) => (a.rank ?? a.fipRank ?? Infinity) - (b.rank ?? b.fipRank ?? Infinity))
+    .slice(0, 10);
+  const proSuggestions = filter === '4m' ? [] : topTen(suggestions.filter(p => !verifiedFipIds.has(p.id)).map(proHubPlayer));
+  const { players: visiblePlayers, showingFollowed } = homePlayerSelection(personal, hasFollows ? [...localPlayers, ...proCards] : [], [...localSuggestions, ...proSuggestions]);
   const moves = rail.filter(p => Number.isFinite(p.rankChange) && p.rankChange !== 0 || Number.isFinite(p.pointsChange) && p.pointsChange !== 0).slice(0, 4);
   const directoryPlayers = players.filter(p => (directoryFilter === 'all' || p.category === directoryFilter) &&
     (!onlyFollowing || ids.includes(p.id)) && `${p.name} ${country(p.nationality)}`.toLowerCase().includes(query.trim().toLowerCase()));
   const outsideEdition = state.follows.filter(p => !lookup.has(p.player_id));
 
-  function openDirectory() { setSelectedId(null); setDirectory(true); }
+  useFocusEffect(useCallback(() => { setMatchOpen(false); }, []));
+  const openMatchFromPlayer = (id: number, from: string) => {
+    setMatchOpen(true);
+    router.push({ pathname: '/pro/match/[id]', params: { id: String(id), from } });
+  };
+
+  function openDirectory() { setSelectedId(null); setDirectory(false); router.push({ pathname: '/rankings', params: { view: 'Discover', source: 'all', gender: 'all' } }); }
   function followControl(player: ProPlayer | ProFollow) {
     const row = 'player_id' in player ? player : followRow(player);
     const followed = ids.includes(row.player_id);
@@ -170,40 +256,56 @@ export function ProPadelFeed({ state }: { state: ProPadelState }) {
   const selectedFixtures = selected ? selectProMatches(state.fixtures.data?.matches || [], [selected.id], 'all', true) : [];
 
   return <View style={s.feed}>
-    <View style={s.heading}><View style={{ flex: 1 }}><Text style={s.eyebrow}>THE PROFESSIONAL GAME</Text><Text accessibilityRole="header" style={s.title}>Pro Padel</Text></View>
+    <View style={s.heading}><View style={{ flex: 1 }}><Text style={s.eyebrow}>YOUR PADEL COMMUNITY</Text><Text accessibilityRole="header" style={s.title}>Players & padel</Text></View>
       <Button label="Players" icon="people-outline" onPress={openDirectory} />
     </View>
-    <Text style={s.body}>Your front row to the tour.</Text>
+    <Text style={s.body}>Local favourites. Global stars. All in one place.</Text>
+    <Pressable accessibilityRole="button" onPress={() => router.push('/pro/live')} style={{ backgroundColor: '#172E20', borderColor: '#3F6E45', borderWidth: 1, borderRadius: 16, padding: 15, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: brand.padel }} />
+      <View style={{ flex: 1 }}><Text style={{ color: '#F8FAFC', fontWeight: '800', fontSize: 16 }}>International matches · Live</Text><Text style={{ color: '#D5E4D8', fontSize: 12, marginTop: 3 }}>Scores, point history and match stats</Text></View>
+      <Ionicons name="arrow-forward" size={20} color={brand.padel} />
+    </Pressable>
     <View style={s.tabs}>{(['for-you', 'tour'] as const).map(v => <Pressable key={v} accessibilityRole="tab" accessibilityState={{ selected: view === v }}
       onPress={() => { setView(v); setCount(6); }} style={[s.tab, view === v && s.activeTab]}><Text style={[s.tabLabel, view === v && { color: '#16251F' }]}>{v === 'for-you' ? 'For you' : 'Tour'}</Text></Pressable>)}</View>
-    <View style={s.filters}>{(['all', 'men', 'women'] as const).map(v => <Pressable key={v} accessibilityRole="button" accessibilityState={{ selected: filter === v }}
-      onPress={() => { setFilter(v); setCount(6); }} style={[s.filter, filter === v && s.activeFilter]}><Text style={[s.caption, filter === v && { color: brand.premium }]}>{v === 'all' ? 'All' : v === 'men' ? 'Men' : 'Women'}</Text></Pressable>)}</View>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.filterScroll} contentContainerStyle={s.filters}>{(localState ? ['all', '4m', 'pro', 'men', 'women'] as const : ['all', 'men', 'women'] as const).map(v => <Pressable key={v} accessibilityRole="button" accessibilityState={{ selected: filter === v }}
+      onPress={() => { setFilter(v); setCount(6); }} style={[s.filter, filter === v && s.activeFilter, v === '4m' && filter === v && { backgroundColor: '#EAF0FF', borderColor: '#2449D8' }]}><Text style={[s.caption, filter === v && { color: v === '4m' ? '#2449D8' : brand.premium }]}>{v === 'all' ? 'All' : v === '4m' ? '4M' : v === 'pro' ? 'FIP' : v === 'men' ? 'Men' : 'Women'}</Text></Pressable>)}</ScrollView>
 
     {state.loading && !state.rankings.data && !state.tour.data && <View style={s.loading}><ActivityIndicator color={brand.accent} /><Text style={s.body}>Loading the tour…</Text></View>}
     {state.writeError && <Text accessibilityRole="alert" style={s.warning}>{state.writeError}</Text>}
     {state.rankings.error && <Message body={state.rankings.error} retry={retry} />}
-    {personal && state.followsLoading ? <View style={s.loading}><ActivityIndicator color={brand.accent} /><Text style={s.body}>Loading your players…</Text></View>
+    {localState?.error && filter !== 'pro' && <Message body={localState.error} retry={() => { void localState.refresh(); }} />}
+    {localState?.followError && <Message body={localState.followError} retry={() => { void localState.refresh(); }} />}
+    {personal && (state.followsLoading || localState?.followLoading || localState?.loading) ? <View style={s.loading}><ActivityIndicator color={brand.accent} /><Text style={s.body}>Loading your players…</Text></View>
       : personal && state.followsError ? <Message body={state.followsError} retry={() => { void state.refreshFollows(); }} />
-      : personal && !state.userId ? <View style={s.message}><Text style={s.cardTitle}>Make the tour your own</Text><Text style={s.body}>Sign in to follow players and see their results here.</Text><Button label="Sign in" onPress={() => router.push('/(auth)/sign-in')} /></View>
-      : personal && !ids.length ? <View style={s.message}><Text style={s.cardTitle}>Who’s your first pick?</Text><Text style={s.body}>Follow your favourite players for their results, ranking updates and published fixtures.</Text><Button label="Find players" icon="add" onPress={openDirectory} /></View> : null}
+      : personal && !state.userId ? <View style={s.message}><Text style={s.cardTitle}>Make padel your own</Text><Text style={s.body}>Sign in to follow players and see their results here.</Text><Button label="Sign in" onPress={() => router.push('/(auth)/sign-in')} /></View>
+      : personal && !hasFollows ? <View style={s.message}><Text style={s.cardTitle}>Who’s your first pick?</Text><Text style={s.body}>Follow your favourite players for their results, ranking updates and published fixtures.</Text><Button label="Find players" icon="add" onPress={openDirectory} /></View> : null}
 
     {visiblePlayers.length > 0 && <>
-      <View style={s.sectionHeading}><Text style={s.sectionTitle}>{personal && rail.length ? 'Your players' : 'Players to follow'}</Text><Text style={s.caption}>Men & women</Text></View>
+      <View style={s.sectionHeading}><Text style={s.sectionTitle}>{showingFollowed ? 'Your players' : 'Players to follow'}</Text><Text style={s.caption}>{filter === '4m' ? '4M players' : filter === 'pro' ? 'FIP players' : '4M & FIP'}</Text></View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.playerRail}>
-        {visiblePlayers.map(player => <View key={player.id} style={s.playerCard}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`View ${player.name}, world number ${player.rank}`} onPress={() => setSelectedId(player.id)}>
-            <Portrait key={player.id} player={player} size={128} /><Text numberOfLines={2} style={s.playerName}>{player.name}</Text><Text style={s.caption}>World #{player.rank} · {player.category === 'men' ? 'Men' : 'Women'}</Text>
-          </Pressable>{followControl(player)}
+        {visiblePlayers.map(player => <View key={player.key} style={s.playerCard}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`View ${player.name}`} onPress={() => {
+            if (player.source === '4m') router.push({ pathname: '/players/[id]', params: { id: player.id } });
+            else if (lookup.has(Number(player.id))) setSelectedId(Number(player.id));
+            else router.push({ pathname: '/rankings', params: { view: 'Discover', source: 'pro', gender: 'all', query: player.name } });
+          }}>
+            <View style={{ width: 128, height: 128, borderRadius: 18, backgroundColor: player.source === '4m' ? '#2449D8' : brand.glass, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
+              {player.photo ? <Image source={{ uri: player.photo }} style={{ width: 128, height: 128 }} contentFit="cover" /> : <Text style={{ color: player.source === '4m' ? '#FFF' : brand.accent, fontWeight: '700', fontSize: 32 }}>{player.name.split(' ').slice(0, 2).map(n => n[0]).join('')}</Text>}
+            </View>
+            <Text numberOfLines={2} style={s.playerName}>{player.name}</Text>
+            <Text style={[s.caption, player.source === '4m' && { color: '#2449D8' }]}>{playerRankLabel(player)} · {player.gender === 'men' ? 'Men' : player.gender === 'women' ? 'Women' : 'Player'}</Text>
+            {player.fipUnverified && <Text style={[s.caption, { color: '#2449D8', fontWeight: '700' }]}>Unverified link</Text>}
+          </Pressable>
+          {player.source === '4m' && localState ? <Button local label={localState.pending === player.key ? 'Saving…' : localState.isFollowing(player) ? 'Following' : 'Follow'} icon={localState.isFollowing(player) ? 'heart' : 'heart-outline'} disabled={localState.followLoading || !!localState.followError || !!localState.pending} onPress={() => { if (!state.userId) router.push('/(auth)/sign-in'); else void localState.toggle(player); }} /> : followControl({ player_id: Number(player.id), player_name: player.name, category: player.gender === 'women' ? 'women' : 'men' })}
         </View>)}
       </ScrollView>
     </>}
+    {personal && hasFollows && !visiblePlayers.length && !localState?.loading && !localState?.error && <View style={s.message}><Text style={s.body}>No players are available for this filter yet.</Text><Button label="Find players" onPress={openDirectory} /></View>}
+    <IntegratedUpNext showLocal={filter === 'all' || filter === '4m'} tournament={filter !== '4m' ? state.fixtures.data?.tournament : null} message={state.fixtures.data && !state.fixtures.data.drawPublished ? 'Draw coming soon · Player appearances will show once confirmed.' : undefined} />
+    {filter !== 'pro' && localState && !localState.loading && !localState.followLoading && !localState.followError && <FollowedLocalMatches players={localState.locals.filter(p => localState.ids.includes(p.id) && (filter === 'all' || filter === '4m' || p.gender === filter))} />}
     {ready && <>
-      <Text style={s.sectionTitle}>Up next</Text>
       {state.fixtures.error && <Message body={state.fixtures.error} retry={retry} />}
       {state.fixtures.data && <>
-        <Updated date={state.fixtures.data.updatedAt} />
-        {state.fixtures.data.tournament && <NextTourCard event={state.fixtures.data.tournament}
-          message={!state.fixtures.data.drawPublished ? 'Draw coming soon · Player appearances will show once confirmed.' : undefined} />}
         {upcoming.length ? <>
           <MatchSectionToggle title="Upcoming matches" count={upcoming.length} expanded={fixturesOpen} onPress={() => setFixturesOpen(value => !value)} />
           {fixturesOpen && upcoming.map(m => <MatchCard key={m.id} match={m} lookup={lookup} onPlayer={setSelectedId} />)}
@@ -212,13 +314,13 @@ export function ProPadelFeed({ state }: { state: ProPadelState }) {
             : state.fixtures.data.drawPublished ? <Text style={s.caption}>{personal ? 'No published fixtures for your players in this selection.' : 'No published fixtures in this selection.'}</Text> : null}
       </>}
       {moves.length > 0 && <><Text style={s.sectionTitle}>Ranking updates</Text>
-        {state.rankings.data && <Updated date={state.rankings.data.updatedAt} coverage="Changes since each player’s previous official ranking entry" />}
+        {state.rankings.data && <RankingsUpdated rankings={state.rankings.data} />}
         <View style={s.movementList}>{moves.map(p => <Pressable key={p.id} accessibilityRole="button" accessibilityLabel={`View ${p.name}`} onPress={() => setSelectedId(p.id)} style={s.movement}>
           <Portrait key={p.id} player={p} size={40} /><View style={{ flex: 1, gap: 4 }}><Text style={s.personName}>{p.name}</Text><Text style={s.caption}>World #{p.rank} · {proDate(p.rankingDate)}</Text></View>
-          <View style={{ alignItems: 'flex-end', gap: 4 }}>{p.rankChange != null && <Text style={[s.movementValue, { color: p.rankChange > 0 ? brand.padel : brand.muted }]}>{p.rankChange > 0 ? '↑' : p.rankChange < 0 ? '↓' : '—'} {p.rankChange ? Math.abs(p.rankChange) : ''}</Text>}
+          <View style={{ alignItems: 'flex-end', gap: 4 }}>{p.rankChange != null && <Text style={[s.movementValue, { color: p.rankChange > 0 ? '#226047' : brand.muted }]}>{p.rankChange > 0 ? '↑' : p.rankChange < 0 ? '↓' : '—'} {p.rankChange ? Math.abs(p.rankChange) : ''}</Text>}
             {p.pointsChange != null && <Text style={s.caption}>{p.pointsChange > 0 ? '+' : ''}{number(p.pointsChange)} pts</Text>}</View>
         </Pressable>)}</View></>}
-      <MatchSectionToggle title="Latest Pro Tour results" count={results.length} expanded={resultsOpen} onPress={() => { setResultsOpen(value => !value); setCount(6); }} />
+      <MatchSectionToggle title="Latest international results" count={results.length} expanded={resultsOpen} onPress={() => { setResultsOpen(value => !value); setCount(6); }} />
       {state.tour.error && <Message body={state.tour.error} retry={retry} />}
       {state.tour.data && <><Updated date={state.tour.data.updatedAt} coverage={state.tour.data.coverage} />
         {resultsOpen && (results.length ? results.slice(0, count).map(m => <MatchCard key={m.id} match={m} lookup={lookup} onPlayer={setSelectedId} />)
@@ -226,16 +328,15 @@ export function ProPadelFeed({ state }: { state: ProPadelState }) {
         {resultsOpen && results.length > count && <Button label={`Show more results (${results.length - count})`} onPress={() => setCount(n => n + 6)} />}
       </>}
     </>}
-    <Button label="View tour calendar" icon="calendar-outline" onPress={() => router.push({ pathname: '/calendar', params: { circuit: 'pro' } })} />
-    <Text style={s.caption}>Padel API · Published results and schedules. Live scores and match alerts are not available yet.</Text>
+    {filter !== '4m' && <Button label="View tour calendar" icon="calendar-outline" onPress={() => router.push({ pathname: '/calendar', params: { circuit: 'pro' } })} />}
 
-    <Modal visible={directory || selectedId !== null} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { if (selectedId !== null && directory) setSelectedId(null); else { setSelectedId(null); setDirectory(false); } }}>
+    <Modal visible={(directory || selectedId !== null) && !matchOpen} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => { if (selectedId !== null && directory) setSelectedId(null); else { setSelectedId(null); setDirectory(false); } }}>
       {/* Native modals need their own safe-area measurements, outside the tab screen. */}
       <SafeAreaProvider style={s.modal}>
       <SafeAreaView style={s.modal} edges={['top', 'bottom', 'left', 'right']}>
         <View style={s.modalHeader}>
           <Button label={selectedId !== null && directory ? 'Players' : 'Close'} icon="chevron-back" onPress={() => { if (selectedId !== null && directory) setSelectedId(null); else { setSelectedId(null); setDirectory(false); } }} />
-          <Text style={s.eyebrow}>4M / PRO PADEL</Text>
+          <Text style={s.eyebrow}>4M / FIP</Text>
         </View>
         {state.writeError && <Text accessibilityRole="alert" style={[s.warning, { paddingHorizontal: 20 }]}>{state.writeError}</Text>}
         {state.followsError && <View style={{ paddingHorizontal: 20 }}><Message body={state.followsError} retry={() => { void state.refreshFollows(); }} /></View>}
@@ -249,14 +350,14 @@ export function ProPadelFeed({ state }: { state: ProPadelState }) {
           <Text style={s.sectionTitle}>Published fixtures</Text>
           {state.fixtures.error && <Message body={state.fixtures.error} retry={retry} />}
           {state.fixtures.data && <Updated date={state.fixtures.data.updatedAt} />}
-          {selectedFixtures.length ? selectedFixtures.map(m => <MatchCard key={m.id} match={m} lookup={lookup} onPlayer={setSelectedId} />) : state.fixtures.data ? <Text style={s.body}>{state.fixtures.data.drawPublished ? 'No upcoming match is listed for this player.' : 'The next draw has not been published yet.'}</Text> : null}
+          {selectedFixtures.length ? selectedFixtures.map(m => <MatchCard key={m.id} match={m} lookup={lookup} onPlayer={setSelectedId} onOpenMatch={openMatchFromPlayer} />) : state.fixtures.data ? <Text style={s.body}>{state.fixtures.data.drawPublished ? 'No upcoming match is listed for this player.' : 'The next draw has not been published yet.'}</Text> : null}
           <Text style={s.sectionTitle}>Recent results</Text>
           {state.tour.error && <Message body={state.tour.error} retry={retry} />}
           {state.tour.data && <Updated date={state.tour.data.updatedAt} coverage={state.tour.data.coverage} />}
-          {selectedMatches.map(m => <MatchCard key={m.id} match={m} lookup={lookup} onPlayer={setSelectedId} />)}
+          {selectedMatches.map(m => <MatchCard key={m.id} match={m} lookup={lookup} onPlayer={setSelectedId} onOpenMatch={openMatchFromPlayer} />)}
           {!selectedMatches.length && state.tour.data && <Text style={s.body}>No results for this player in the covered rounds.</Text>}
         </ScrollView> : selectedId !== null ? <Message title="Player unavailable" body="This player is no longer in the current ranking edition." /> : <>
-          <View style={s.directoryHeader}><Text accessibilityRole="header" style={s.title}>Find your players</Text><Text style={s.body}>Current top {state.rankings.data?.limit || 50} men and women. Follows sync with your 4M account.</Text>
+          <View style={s.directoryHeader}><Text accessibilityRole="header" style={s.title}>Find your players</Text><Text style={s.body}>Featured official rankings. Open Players to search the full FIP directory.</Text>
             <TextInput accessibilityLabel="Search professional players" placeholder="Search name or country" placeholderTextColor={brand.placeholder} value={query} onChangeText={setQuery} autoCorrect={false} style={s.search} />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
               {(['all', 'men', 'women'] as const).map(c => <Button key={c} label={c === 'all' ? 'All' : c === 'men' ? 'Men' : 'Women'} icon={directoryFilter === c ? 'checkmark' : undefined} onPress={() => setDirectoryFilter(c)} />)}
@@ -292,8 +393,9 @@ const s = StyleSheet.create({
   tab: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 9 },
   activeTab: { backgroundColor: brand.padel },
   tabLabel: { color: brand.muted, fontSize: 14, fontWeight: '700' },
-  filters: { flexDirection: 'row', gap: 8 },
-  filter: { minHeight: 44, paddingHorizontal: 18, justifyContent: 'center', borderRadius: 22, borderWidth: 1, borderColor: brand.edge },
+  filterScroll: { flexGrow: 0, flexShrink: 0, minHeight: 52 },
+  filters: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  filter: { minHeight: 44, flexShrink: 0, paddingVertical: 12, paddingHorizontal: 18, justifyContent: 'center', borderRadius: 22, borderWidth: 1, borderColor: brand.edge },
   activeFilter: { backgroundColor: brand.panel, borderColor: brand.muted },
   loading: { flexDirection: 'row', gap: 12, paddingVertical: 20, alignItems: 'center' },
   message: { padding: 18, borderRadius: 14, backgroundColor: brand.elevated, gap: 10 },
@@ -310,7 +412,7 @@ const s = StyleSheet.create({
   tourLevel: { color: brand.accent, borderWidth: 1, borderColor: brand.padel, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 4, fontSize: 11, fontWeight: '800' },
   tourKicker: { color: brand.accent, fontSize: 10, letterSpacing: 1.5, fontWeight: '800' },
   tourMain: { flexDirection: 'row', gap: 14, alignItems: 'center' },
-  tourTitle: { color: '#16251F', fontSize: 26, lineHeight: 31, fontWeight: '800', letterSpacing: -0.7 },
+  tourTitle: { color: '#16251F', fontSize: 26, lineHeight: 31, minHeight: 93, fontWeight: '800', letterSpacing: -0.7 },
   tourDate: { width: 84, paddingVertical: 12, alignItems: 'center', borderRadius: 12, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D3DFC6' },
   tourMonth: { color: '#52625A', fontSize: 10, letterSpacing: 2, fontWeight: '700' },
   tourDay: { color: '#386018', fontSize: 48, lineHeight: 55, fontWeight: '800', letterSpacing: -2, fontVariant: ['tabular-nums'] },
@@ -319,7 +421,7 @@ const s = StyleSheet.create({
   tourLocation: { color: '#52625A', fontSize: 13, lineHeight: 19, flexShrink: 1 },
   tourCalendar: { minHeight: 48, backgroundColor: brand.padel, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 },
   tourCalendarText: { color: '#17200c', fontSize: 14, fontWeight: '700', flexShrink: 1 },
-  tourNote: { color: '#52625A', fontSize: 12, lineHeight: 18, borderTopWidth: 1, borderTopColor: '#3b4e30', paddingTop: 14 },
+  tourNote: { color: '#52625A', fontSize: 12, lineHeight: 18, paddingHorizontal: 4 },
   matchToggle: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderTopWidth: 1, borderBottomWidth: 1, borderColor: brand.edge, marginTop: 8 },
   matchToggleTitle: { color: brand.premium, fontSize: 18, fontWeight: '600' },
   matchCount: { backgroundColor: '#ccff0014', borderRadius: 12, minWidth: 28, paddingHorizontal: 8, paddingVertical: 4, alignItems: 'center' },

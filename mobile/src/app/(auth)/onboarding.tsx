@@ -1,14 +1,14 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withTiming, type SharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FadeUp } from '@/components/fade-up';
 import {
   EventsPreview,
+  TournamentFollowPreview,
   WorldPadelPreview,
   PartnerPreview,
   RankingPreview,
@@ -24,7 +24,6 @@ type Slide = {
   title: string;
   body: string;
   preview: ReactNode;
-  previewFrom?: 'top' | 'bottom';
 };
 
 const SLIDES: Slide[] = [
@@ -35,24 +34,28 @@ const SLIDES: Slide[] = [
     preview: <EventsPreview />,
   },
   {
-    eyebrow: 'Follow the world tour',
-    title: 'Your game.\nA global stage.',
-    body: 'Follow your favourite players, explore tournaments around the world, and keep up with match schedules and results.',
+    eyebrow: 'Your players. One community.',
+    title: 'Local heroes.\nGlobal stars.',
+    body: 'Follow local 4M players and international pros. Discover tournaments, rankings and results in one place.',
     preview: <WorldPadelPreview />,
+  },
+  {
+    eyebrow: 'Never miss a moment',
+    title: 'Follow the action.\nStay in the know.',
+    body: 'Follow a tournament for live push alerts when registration opens, draws are published and match or event details change.',
+    preview: <TournamentFollowPreview />,
   },
   {
     eyebrow: 'Play together',
     title: 'Enter with\nyour partner.',
     body: 'Add your partner and lock in the team on one entry.',
     preview: <PartnerPreview />,
-    previewFrom: 'top',
   },
   {
     eyebrow: 'Your padel journey',
     title: 'Every match is part\nof your story.',
     body: 'Keep your results, match history and national ranking together in one place.',
     preview: <RankingPreview />,
-    previewFrom: 'top',
   },
 ];
 
@@ -64,18 +67,18 @@ export default function OnboardingScreen() {
   const indexRef = useRef(0);
   indexRef.current = index;
 
-  const step = useCallback((dir: 1 | -1) => {
-    const next = indexRef.current + dir;
-    if (next < 0 || next >= SLIDES.length) return;
-    setIndex(next);
-    hapticLight();
-  }, []);
-
+  const direction = useSharedValue(1);
+  const transitionUntil = useRef(0);
+  const leaving = useRef(false);
   const goTo = useCallback((next: number) => {
-    if (next === indexRef.current) return;
+    if (next < 0 || next >= SLIDES.length || next === indexRef.current || Date.now() < transitionUntil.current) return;
+    direction.value = next > indexRef.current ? 1 : -1;
+    transitionUntil.current = Date.now() + (reduced ? 0 : 650);
+    indexRef.current = next;
     setIndex(next);
     hapticLight();
-  }, []);
+  }, [direction, reduced]);
+  const step = useCallback((dir: 1 | -1) => goTo(indexRef.current + dir), [goTo]);
 
   const pan = useMemo(
     () =>
@@ -83,14 +86,16 @@ export default function OnboardingScreen() {
         .activeOffsetX([-24, 24])
         .failOffsetY([-20, 20])
         .onEnd((e) => {
-          if (e.translationX < -48) runOnJS(step)(1);
-          else if (e.translationX > 48) runOnJS(step)(-1);
+          if ((e.translationX < -48 || e.velocityX < -500)) runOnJS(step)(1);
+          else if ((e.translationX > 48 || e.velocityX > 500)) runOnJS(step)(-1);
         }),
     [step]
   );
 
   const leave = useCallback(
     async (intent: 'signin' | 'signup') => {
+      if (leaving.current) return;
+      leaving.current = true;
       hapticMedium();
       await markOnboardingSeen();
       router.replace(
@@ -101,6 +106,7 @@ export default function OnboardingScreen() {
   );
 
   const advance = useCallback(() => {
+    if (Date.now() < transitionUntil.current) return;
     if (index < SLIDES.length - 1) step(1);
     else leave('signup');
   }, [index, step, leave]);
@@ -113,7 +119,7 @@ export default function OnboardingScreen() {
       className="flex-1 bg-court-page"
       style={{ flex: 1, backgroundColor: brand.page, paddingTop: insets.top }}>
       <View className="h-20 flex-row items-center justify-between px-7">
-        <View className="items-start self-start py-2">
+        <View className="items-start self-start py-2" style={{ flex: 1 }}>
           <Image
             source={require('@/assets/images/4m-logo.png')}
             style={{ width: 68, height: 51 }}
@@ -137,6 +143,7 @@ export default function OnboardingScreen() {
       <GestureDetector gesture={pan}>
         <View
           className="flex-1"
+          style={{ overflow: 'hidden' }}
           accessibilityRole="adjustable"
           accessibilityLabel={`Onboarding, slide ${index + 1} of ${SLIDES.length}`}
           accessibilityValue={{ min: 1, max: SLIDES.length, now: index + 1 }}
@@ -149,25 +156,18 @@ export default function OnboardingScreen() {
             if (e.nativeEvent.actionName === 'decrement') step(-1);
           }}>
           <View className="flex-1 justify-center px-7">
-            <FadeUp key={`preview-${index}`} from={slide.previewFrom}>{slide.preview}</FadeUp>
+            <OnboardingMotion key={`preview-${index}`} direction={direction} reduced={reduced} illustration>{slide.preview}</OnboardingMotion>
           </View>
-          <View className="px-7 pb-2">
-            <FadeUp key={`copy-${index}`} delay={80}>
-              <Text
-                className="mb-3 text-xs font-bold uppercase text-court-accent"
-                style={{ letterSpacing: 2 }}>
-                {slide.eyebrow}
-              </Text>
-              <Text
-                accessibilityRole="header"
-                className="mb-4 font-extrabold text-court-ink"
-                style={{ fontSize: 34, lineHeight: 39 }}>
-                {slide.title}
-              </Text>
-              <Text className="text-court-muted" style={{ fontSize: 17, lineHeight: 26, maxWidth: 320 }}>
-                {slide.body}
-              </Text>
-            </FadeUp>
+          <View className="px-7 pb-2" style={{ minHeight: 222 }}>
+            <OnboardingMotion key={`eyebrow-${index}`} direction={direction} reduced={reduced} delay={80}>
+              <Text className="mb-3 text-xs font-bold uppercase text-court-accent" style={{ letterSpacing: 2 }}>{slide.eyebrow}</Text>
+            </OnboardingMotion>
+            <OnboardingMotion key={`title-${index}`} direction={direction} reduced={reduced} delay={130}>
+              <Text accessibilityRole="header" className="mb-4 font-extrabold text-court-ink" style={{ fontSize: 34, lineHeight: 39 }}>{slide.title}</Text>
+            </OnboardingMotion>
+            <OnboardingMotion key={`body-${index}`} direction={direction} reduced={reduced} delay={180}>
+              <Text className="text-court-muted" style={{ fontSize: 17, lineHeight: 26, maxWidth: 340 }}>{slide.body}</Text>
+            </OnboardingMotion>
           </View>
         </View>
       </GestureDetector>
@@ -255,4 +255,33 @@ function Dot({
       <Animated.View style={[style, { height: 8, borderRadius: 4, backgroundColor: brand.accent }]} />
     </Pressable>
   );
+}
+
+/** Separate layers keep artwork and copy moving together without replacing the whole screen. */
+function OnboardingMotion({ children, direction, reduced, delay = 0, illustration = false }: {
+  children: ReactNode; direction: SharedValue<number>; reduced: boolean; delay?: number; illustration?: boolean;
+}) {
+  const { width } = useWindowDimensions();
+  const entering = useMemo(() => () => {
+    'worklet';
+    const distance = reduced ? 0 : width * (illustration ? 0.8 : 0.22) * direction.value;
+    return {
+      initialValues: { opacity: reduced ? 1 : 0, transform: [{ translateX: distance }] },
+      animations: {
+        opacity: withDelay(reduced ? 0 : delay, withTiming(1, { duration: reduced ? 0 : 300 })),
+        transform: [{ translateX: withDelay(reduced ? 0 : delay, withTiming(0, { duration: reduced ? 0 : 460, easing: Easing.out(Easing.cubic) })) }],
+      },
+    };
+  }, [width, illustration, direction, reduced, delay]);
+  const exiting = useMemo(() => () => {
+    'worklet';
+    return {
+      initialValues: { opacity: 1, transform: [{ translateX: 0 }] },
+      animations: {
+        opacity: withTiming(0, { duration: reduced ? 0 : 160 }),
+        transform: [{ translateX: withTiming(reduced ? 0 : -direction.value * width * (illustration ? 0.45 : 0.12), { duration: reduced ? 0 : 240, easing: Easing.in(Easing.cubic) }) }],
+      },
+    };
+  }, [width, illustration, direction, reduced]);
+  return <Animated.View entering={entering} exiting={exiting}>{children}</Animated.View>;
 }

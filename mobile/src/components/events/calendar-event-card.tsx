@@ -5,6 +5,7 @@ import { eventImage, type EventDetail } from '@/lib/events';
 import { formatEventRange } from '@/lib/home';
 import { lightSapaTone, sapaLabel } from '@/theme/sapa';
 import { lightBrand as brand } from '@/theme/tokens';
+import { EventNotificationBell } from './follow-tournament';
 
 /** Separate event discovery and schedule actions, with room for real event names. */
 export function CalendarEventCard({ event, saved, onPress, onSave }: {
@@ -33,6 +34,7 @@ export function CalendarEventCard({ event, saved, onPress, onSave }: {
         <EventIcon name="person.2" size={14} color={brand.muted} />
         <Text style={{ fontSize: 12, color: brand.muted }}>{event.registered_players == null ? 'View event details' : `${event.registered_players} players entered`}</Text>
       </View>
+      <EventNotificationBell eventId={event.id} eventName={event.event_name || 'Tournament'} />
       <Pressable onPress={onSave} accessibilityRole="button" accessibilityLabel={`${saved ? 'Remove from' : 'Add to'} My Schedule: ${event.event_name}`} accessibilityState={{ selected: saved }}
         style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 }}>
         <EventIcon name={saved ? 'checkmark' : 'plus'} size={16} color={brand.accent} />

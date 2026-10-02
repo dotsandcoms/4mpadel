@@ -1,12 +1,15 @@
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { SymbolView } from 'expo-symbols';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import Animated, {
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withRepeat,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -48,6 +51,68 @@ export function EventsPreview() {
           </FadeUp>
         ))
       )}
+    </View>
+  );
+}
+
+export function TournamentFollowPreview() {
+  const reduced = useReducedMotion();
+  const { events } = useOnboardingEvents();
+  const event = events?.[0];
+  const followed = useSharedValue(reduced ? 1 : 0);
+  const alert = useSharedValue(reduced ? 1 : 0);
+
+  useEffect(() => {
+    if (reduced) {
+      followed.value = 1;
+      alert.value = 1;
+      return;
+    }
+    followed.value = withDelay(550, withSpring(1, { damping: 13, stiffness: 190 }));
+    alert.value = withDelay(1050, withTiming(1, { duration: 360 }));
+    return () => {
+      cancelAnimation(followed);
+      cancelAnimation(alert);
+    };
+  }, [alert, followed, reduced]);
+
+  const followStyle = useAnimatedStyle(() => ({
+    opacity: followed.value,
+    transform: [{ scale: 0.85 + followed.value * 0.15 }],
+  }));
+  const alertStyle = useAnimatedStyle(() => ({
+    opacity: alert.value,
+    transform: [{ translateY: (1 - alert.value) * 18 }],
+  }));
+
+  return (
+    <View {...a11yHide} style={{ gap: 12 }}>
+      <View style={{ padding: 18, borderRadius: 22, borderWidth: 1, borderColor: brand.edge, backgroundColor: brand.elevated, gap: 18 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          <View style={{ width: 54, height: 62, borderRadius: 12, backgroundColor: brand.glass, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="calendar-outline" size={25} color={brand.accent} />
+          </View>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={{ color: brand.premium, fontSize: 17, fontWeight: '800' }} numberOfLines={1}>{event?.place || 'Your next tournament'}</Text>
+            <Text style={{ color: brand.muted, fontSize: 12 }} numberOfLines={1}>{event ? `${event.date} · ${event.location}` : 'Follow for event updates'}</Text>
+          </View>
+        </View>
+        <View style={{ height: 1, backgroundColor: brand.edge }} />
+        <Animated.View style={[followStyle, { minHeight: 46, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, borderRadius: 12, backgroundColor: brand.padel }]}>
+          <Ionicons name="notifications" size={19} color={brand.premium} />
+          <Text style={{ color: brand.premium, fontSize: 14, fontWeight: '800' }}>Following tournament</Text>
+        </Animated.View>
+      </View>
+      <Animated.View style={[alertStyle, { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 15, borderRadius: 18, borderWidth: 1, borderColor: brand.edge, backgroundColor: brand.elevated }]}>
+        <View style={{ width: 35, height: 35, borderRadius: 9, backgroundColor: brand.padel, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name="notifications" size={18} color={brand.premium} />
+        </View>
+        <View style={{ flex: 1, gap: 3 }}>
+          <Text style={{ color: brand.muted, fontSize: 10, fontWeight: '700', letterSpacing: 1.1 }}>4M PADEL · NOW</Text>
+          <Text style={{ color: brand.premium, fontSize: 14, fontWeight: '800' }}>Draws are ready</Text>
+          <Text style={{ color: brand.muted, fontSize: 12, lineHeight: 17 }} numberOfLines={2}>{event ? `${event.place} has published its draw.` : 'Your tournament has published its draw.'}</Text>
+        </View>
+      </Animated.View>
     </View>
   );
 }
@@ -111,6 +176,21 @@ function EventCard({
 }
 
 export function PartnerPreview() {
+  const reduced = useReducedMotion();
+  const checkScale = useSharedValue(0);
+
+  useEffect(() => {
+    checkScale.value = reduced
+      ? 1
+      : withDelay(600, withSpring(1, { damping: 10, stiffness: 220, mass: 0.7 }));
+    return () => cancelAnimation(checkScale);
+  }, [checkScale, reduced]);
+
+  const checkStyle = useAnimatedStyle(() => ({
+    opacity: reduced ? 1 : Math.min(1, checkScale.value),
+    transform: [{ scale: reduced ? 1 : checkScale.value }],
+  }));
+
   return (
     <View {...a11yHide}>
       <View className="overflow-hidden rounded-3xl border border-court-edge bg-court-elevated">
@@ -131,7 +211,9 @@ export function PartnerPreview() {
             <Text className="text-[15px] font-semibold text-court-ink">Partner Name</Text>
               <Text className="mt-0.5 text-[12px] text-court-muted">Linked to your entry</Text>
             </View>
-            <SymbolView name="checkmark.circle.fill" size={22} tintColor={brand.accent} />
+            <Animated.View style={checkStyle}>
+              <SymbolView name="checkmark.circle.fill" size={22} tintColor={brand.accent} />
+            </Animated.View>
           </View>
         </View>
       </View>
@@ -140,6 +222,32 @@ export function PartnerPreview() {
 }
 
 export function RankingPreview() {
+  const reduced = useReducedMotion();
+  const [points, setPoints] = useState(0);
+
+  useEffect(() => {
+    if (reduced) {
+      setPoints(3606);
+      return;
+    }
+    setPoints(0);
+    let frame = 0;
+    const delay = setTimeout(() => {
+      let started: number | undefined;
+      const tick = (now: number) => {
+        started ??= now;
+        const progress = Math.min((now - started) / 1200, 1);
+        setPoints(Math.round(3606 * (1 - Math.pow(1 - progress, 3))));
+        if (progress < 1) frame = requestAnimationFrame(tick);
+      };
+      frame = requestAnimationFrame(tick);
+    }, 500);
+    return () => {
+      clearTimeout(delay);
+      cancelAnimationFrame(frame);
+    };
+  }, [reduced]);
+
   return (
     <View {...a11yHide}>
       <View className="overflow-hidden rounded-3xl border border-court-edge bg-court-elevated">
@@ -183,15 +291,12 @@ export function RankingPreview() {
             <View className="flex-row items-stretch pt-0.5">
               <Stat value="#1" label="Rank" color={brand.premium} pad="start" hint="—" />
               <View className="w-px self-stretch bg-edge" style={{ marginVertical: 2 }} />
-              <Stat value="3,606" label="Points" color={brand.accent} pad="middle" />
+              <Stat value={(reduced ? 3606 : points).toLocaleString('en-US')} label="Points" color={brand.accent} pad="middle" />
               <View className="w-px self-stretch bg-edge" style={{ marginVertical: 2 }} />
               <Stat value="30-0" label="W-L" color={brand.premium} pad="end" />
             </View>
           </View>
 
-          <View className="shrink-0 self-center pl-1">
-            <SymbolView name="chevron.right" size={22} tintColor={brand.faint} />
-          </View>
         </View>
       </View>
     </View>

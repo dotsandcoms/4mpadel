@@ -60,7 +60,6 @@ export default function MatchResultSheet() {
         </View>
         {!!location && <Text style={{ color: '#65726B', fontSize: 11 }}>{location}</Text>}
         {!!info?.Court && <View style={{ alignSelf: 'flex-start', borderRadius: 9, borderWidth: 1, borderColor: '#f9731640', backgroundColor: '#f973161a', paddingHorizontal: 9, paddingVertical: 4 }}><Text style={{ fontSize: 10, letterSpacing: 0.6, color: '#f97316' }}>{info.Court.toUpperCase()}</Text></View>}
-        {match.Score?.IsSummary && <Text style={{ color: '#65726B', fontSize: 13 }}>Individual set scores are not available from RankedIn.</Text>}
         {!scores.length && <Text style={{ color: '#65726B', fontSize: 13 }}>The score is not available here yet.</Text>}
       </View>}
   </ScrollView>;

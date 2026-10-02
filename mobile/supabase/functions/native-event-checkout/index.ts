@@ -13,6 +13,18 @@ const feeFor = (event: any, division: any) => event.early_bird_ends_at && new Da
   ? Number(event.early_bird_fee) : Number(division.entry_fee ?? event.entry_fee ?? 0);
 
 Deno.serve(async req => {
+  if (req.method === 'GET' && new URL(req.url).pathname.endsWith('/native-event-checkout/return')) {
+    const params = new URL(req.url).searchParams;
+    const eventId = params.get('event_id') || '';
+    const reference = params.get('reference') || params.get('trxref') || '';
+    if (!/^[1-9]\d*$/.test(eventId) || !/^MOBILE-[a-f0-9]{8}-[a-f0-9-]{36}$/i.test(reference)) return json({ error: 'Invalid payment return.' }, 400);
+    const target = new URL('fourmpadel://events/register');
+    target.searchParams.set('id', eventId);
+    target.searchParams.set('pay_ref', reference);
+    target.searchParams.set('payment_return', '1');
+    if (params.get('mode') === 'pay') target.searchParams.set('mode', 'pay');
+    return new Response(null, { status: 302, headers: { Location: target.href, 'Cache-Control': 'no-store' } });
+  }
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
   try {
@@ -39,7 +51,7 @@ Deno.serve(async req => {
     if (!event.is_manual) fail('This event uses RankedIn registration. Please register with the event organiser.');
     if (event.event_status === 'cancelled') fail('This event has been cancelled.');
     if (event.registration_opens_at && new Date(event.registration_opens_at).getTime() > Date.now()) fail('Registration has not opened yet.');
-    if (event.registration_closes_at && new Date(event.registration_closes_at).getTime() < Date.now()) fail('Registration has closed.');
+    if (event.registration_closes_at && new Date(event.registration_closes_at).getTime() <= Date.now()) fail('Registration has closed.');
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg' }).format(new Date());
     if (String(event.end_date || event.start_date || '9999').slice(0, 10) < today) fail('This event has finished.');
     if (!payOnly && event.registration_access === 'code') {
@@ -59,7 +71,7 @@ Deno.serve(async req => {
     const divisions = event.is_weekly ? [{ id: null, name: 'Open', entry_fee: event.entry_fee, license_required: false }]
       : await checked(client.from('tournament_divisions').select('*').eq('event_id', eventId).eq('is_active', true).in('id', Array.isArray(divisionIds) ? divisionIds : []));
     if (!divisions.length || (!event.is_weekly && divisions.length !== new Set(divisionIds).size)) fail('Choose valid active divisions.');
-    for (const d of divisions) if (d.entries_close_at && new Date(d.entries_close_at).getTime() < Date.now()) fail(`${d.name}: entries have closed.`);
+    for (const d of divisions) if (d.entries_close_at && new Date(d.entries_close_at).getTime() <= Date.now()) fail(`${d.name}: entries have closed.`);
     const hasLicence = (profile.license_type === 'full' && profile.paid_registration)
       || profile.temporary_licenses?.some((l: any) => Number(l.event_id) === eventId || String(l.event_date || '').slice(0, 10) >= String(event.end_date || event.start_date || today).slice(0, 10));
     const commerce = await checked(client.from('commerce_config').select('*').eq('id', 'default').maybeSingle());
@@ -228,7 +240,45 @@ Deno.serve(async req => {
       // Use the authenticated client so the website's existing registration RLS applies.
       for (const link of soloLinks) await checked(client.from('event_registrations').update({ partner_name: link.partner_name, partner_email: link.partner_email }).eq('id', link.id));
       await checked(client.from('event_registrations').upsert(rows, { onConflict: 'event_id,email,division' }).select('id'));
-      return json({ registered: true, paymentPending: total > 0, quote });
+      // Free/EFT/external entries never reach the Paystack confirmation handlers,
+      // so they must send their own registration confirmation after persistence.
+      // Existing active entries are excluded so ordinary checkout retries don't resend.
+      const newRows = rows.filter((row: any) => !active.some((old: any) =>
+        norm(old.email) === norm(row.email) && old.division === row.division));
+      const testScope = Deno.env.get('PUSH_TEST_RECIPIENTS');
+      const allowed = testScope === undefined ? null : testScope.split(',').map(norm).filter(Boolean);
+      let emailFailed = false;
+      for (const recipient of [...new Set(newRows.map((row: any) => norm(row.email)))]) {
+        if (allowed && !allowed.includes(recipient)) continue;
+        const entries = newRows.filter((row: any) => norm(row.email) === recipient);
+        const paid = entries.every((row: any) => row.payment_status === 'paid');
+        const amountDue = entries.filter((row: any) => row.payment_status !== 'paid')
+          .reduce((sum: number, row: any) => sum + (divisionFees[row.division] || 0), 0);
+        try {
+          const response = await fetch(`${url}/functions/v1/send-email`, {
+            method: 'POST',
+            headers: { Authorization: auth, apikey: Deno.env.get('SUPABASE_ANON_KEY')!, 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(15000),
+            body: JSON.stringify({ to: recipient, template: 'event_registration', variables: {
+              eventId, playerName: entries[0].full_name, eventName: event.event_name,
+              division: entries.map((row: any) => row.division).join(', '),
+              partnerName: [...new Set(entries.map((row: any) => row.partner_name).filter(Boolean))].join(', ') || 'TBD',
+              eventDates: event.event_dates || '', venue: [event.venue, event.city].filter(Boolean).join(', '),
+              paid, amountDue: `R ${money(amountDue).toFixed(2)}`, paymentMethod: total === 0 ? 'free' : method,
+              externalPaymentUrl: event.external_payment_url || null,
+              eventUrl: `https://4mpadel.co.za/calendar/${event.slug || eventId}`,
+            } }),
+          });
+          if (!response.ok || (await response.json()).success !== true) throw new Error('Email delivery request failed');
+        } catch {
+          // Registration is already saved; an email failure must never undo it or
+          // suggest that the player should register/pay a second time.
+          emailFailed = true;
+          console.error('[native-event-checkout] Registration saved but confirmation email failed.');
+        }
+      }
+      return json({ registered: true, paymentPending: total > 0, quote,
+        ...(emailFailed ? { emailWarning: 'Your entry is saved, but the confirmation email could not be sent.' } : {}) });
     }
     const secret = Deno.env.get(input.isTest === true ? 'PAYSTACK_SECRET_KEY_TEST' : 'PAYSTACK_SECRET_KEY');
     if (!secret) fail('Checkout is not configured for this payment mode. Contact the organiser.');
@@ -255,7 +305,7 @@ Deno.serve(async req => {
     const gateway = await fetch('https://api.paystack.co/transaction/initialize', { method: 'POST',
       headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, amount: Math.round(total * 100), currency: 'ZAR', reference,
-        callback_url: `${eventUrl}?pay_ref=${encodeURIComponent(reference)}`, metadata,
+        callback_url: `${url}/functions/v1/native-event-checkout/return?event_id=${eventId}${payOnly ? '&mode=pay' : ''}`, metadata,
         channels: ['card', 'eft', 'bank_transfer', 'apple_pay'] }) });
     const result = await gateway.json();
     if (!gateway.ok || !result.status || !result.data?.authorization_url) fail('Could not start checkout. Please try again.');

@@ -3,6 +3,9 @@ import { joinedOne } from './query-result';
 import { fetchPlayerMatches, type PlayerMatch } from '@/lib/matches';
 import { supabase } from '@/lib/supabase';
 import { siteUrl } from '@/lib/site';
+import { fetchEntryBalances } from '@/lib/entry-balances';
+import type { EntryBalance } from '@/lib/events';
+import { formatMoney } from '@/lib/event-rules';
 
 const CALENDAR_FIELDS =
   'id, event_name, start_date, end_date, city, venue, sapa_status, slug, registered_players, featured_event, is_spotlight, is_manual, featured_live, live_youtube_url, registration_opens_at, registration_closes_at, rankedin_url, organiser_name, organiser_badge_text, points, entry_fee, category_fees, allow_payments, custom_image_url, poster_image_url, image_url';
@@ -39,6 +42,7 @@ export type CalendarEvent = {
   isPaid?: boolean;
   hasOutstandingPayment?: boolean;
   registrationKnown?: boolean;
+  hasEntryBalance?: boolean;
   winnerName?: string | null;
   custom_image_url?: string | null;
   poster_image_url?: string | null;
@@ -75,6 +79,8 @@ export type PendingAction = {
   subtitle: string;
   detail: string;
   path: string;
+  eventId?: number;
+  balanceDue?: number;
 };
 
 export type HomeBundle = {
@@ -103,12 +109,21 @@ const EMPTY: HomeBundle = {
 
 const AUTO_RESULT_TIERS = new Set(['gold', 'super gold', 's gold', 'major']);
 
-export async function fetchHomeBundle(email?: string | null, options?: { strictSchedule?: boolean }): Promise<HomeBundle> {
+type HomeBundleOptions = {
+  strictSchedule?: boolean;
+  deferPlayerExtras?: boolean;
+  onPlayer?: (player: HomePlayer | null) => void;
+};
+
+export async function fetchHomeBundle(email?: string | null, options?: HomeBundleOptions): Promise<HomeBundle> {
   const normalised = email?.trim().toLowerCase() ?? '';
 
   const [player, happeningNow, featured, recentResults, schedule, payments] =
     await Promise.all([
-      normalised ? fetchPlayer(normalised) : Promise.resolve(null),
+      normalised ? fetchPlayer(normalised).then(value => {
+        options?.onPlayer?.(value ? { ...value, winLoss: null } : null);
+        return value;
+      }) : Promise.resolve(null),
       fetchHappeningNow(),
       fetchFeatured(),
       fetchRecentResults(),
@@ -116,38 +131,55 @@ export async function fetchHomeBundle(email?: string | null, options?: { strictS
       normalised ? fetchPendingPayments(normalised) : Promise.resolve([] as PendingAction[]),
     ]);
 
-  const pending = [...profileGaps(player), ...payments];
+  const pending = [...payments, ...profileGaps(player)];
+  const balanceEvents = new Set(payments.filter(p => p.balanceDue && p.balanceDue > 0).map(p => p.eventId));
+  const withBalance = (event: CalendarEvent): CalendarEvent => balanceEvents.has(event.id)
+    ? { ...event, isPaid: false, hasOutstandingPayment: true, hasEntryBalance: true } : event;
 
   let winLoss: string | null = null;
   let rankingChange: number | null = null;
   let upcomingMatches: PlayerMatch[] = [];
   let pastMatches: PlayerMatch[] = [];
-  if (player?.rankedin_id) {
-    const [record, matches, change] = await Promise.all([
-      fetchWinLoss(player.rankedin_id),
-      fetchPlayerMatches(player.rankedin_id),
-      fetchHomeRankingChange(player),
-    ]);
-    winLoss = record;
-    rankingChange = change;
-    upcomingMatches = matches.upcoming;
-    pastMatches = matches.past;
+  if (player?.rankedin_id && !options?.deferPlayerExtras) {
+    const extras = await fetchHomePlayerExtras({ ...player, winLoss: null });
+    winLoss = extras.winLoss;
+    rankingChange = extras.rankingChange;
+    upcomingMatches = extras.upcomingMatches;
+    pastMatches = extras.pastMatches;
   }
 
   return {
     player: player ? { ...player, winLoss, rankingChange } : null,
     happeningNow,
-    featured: featured.map(event => ({
+    featured: featured.map(event => withBalance({
       ...event,
       ...(schedule.registrationByEvent?.get(event.id) ?? { isRegistered: false, isPaid: false, hasOutstandingPayment: false }),
       registrationKnown: schedule.registrationByEvent !== null,
     })),
     recentResults,
-    upcomingSchedule: schedule.upcoming,
-    pastSchedule: schedule.past,
+    upcomingSchedule: schedule.upcoming.map(withBalance),
+    pastSchedule: schedule.past.map(withBalance),
     upcomingMatches,
     pastMatches,
     pending,
+  };
+}
+
+export async function fetchHomePlayerExtras(player: HomePlayer) {
+  if (!player.rankedin_id) return {
+    winLoss: null, rankingChange: null,
+    upcomingMatches: [] as PlayerMatch[], pastMatches: [] as PlayerMatch[],
+  };
+  const [winLoss, matches, rankingChange] = await Promise.all([
+    fetchWinLoss(player.rankedin_id),
+    fetchPlayerMatches(player.rankedin_id),
+    fetchHomeRankingChange(player),
+  ]);
+  return {
+    winLoss,
+    rankingChange,
+    upcomingMatches: matches.upcoming,
+    pastMatches: matches.past,
   };
 }
 
@@ -158,7 +190,7 @@ export async function fetchPendingActions(email?: string | null): Promise<Pendin
     fetchPlayer(normalised),
     fetchPendingPayments(normalised),
   ]);
-  return [...profileGaps(player), ...payments];
+  return [...payments, ...profileGaps(player)];
 }
 
 export async function fetchSearchEvents(): Promise<CalendarEvent[]> {
@@ -250,6 +282,7 @@ export function featuredBackgroundSource(
 
 /** Same rules as website `resolveScheduleEntryCta`. */
 export function resolveScheduleEntryCta(event: CalendarEvent): ScheduleEntryCta {
+  if (event.hasEntryBalance) return { label: 'Pay balance', action: 'manage' };
   if (event.fromSchedule && !event.isRegistered) return { label: 'Register', action: 'register' };
   const hasFee =
     Number(event.entry_fee) > 0
@@ -532,6 +565,7 @@ export function registrationStates(rows: Array<{ event_id: number; email?: strin
 }
 
 export function resolveFeaturedCta(event: CalendarEvent): { label: string; action: 'register' | 'pay' | 'manage' | 'view' } {
+  if (event.hasEntryBalance) return { label: 'Pay balance', action: 'manage' };
   if (isEventFinished(event)) return { label: 'View results', action: 'view' };
   if (event.registrationKnown !== true) return { label: 'View event', action: 'view' };
   if (event.isRegistered) {
@@ -648,32 +682,57 @@ function profileGaps(player: Omit<HomePlayer, 'winLoss'> | null): PendingAction[
   return actions;
 }
 
-async function fetchPendingPayments(email: string): Promise<PendingAction[]> {
+export async function fetchPendingPayments(email: string): Promise<PendingAction[]> {
   try {
     const { data, error } = await supabase
       .from('event_registrations')
       .select(
-        `id, event_id, email, partner_email, payment_status, partner_payment_status, calendar(id, event_name, slug, start_date)`
+        `id, event_id, email, partner_email, payment_status, partner_payment_status, division, calendar(id, event_name, slug, start_date)`
       )
       .or(`email.ilike.${email},partner_email.ilike.${email}`)
       .neq('status', 'withdrawn');
 
     if (error || !data) return [];
 
+    const balances = new Map<string, EntryBalance>();
+    const failedEvents = new Set<number>();
+    const eventIds = [...new Set(data.filter(row => row.email?.toLowerCase() === email && row.payment_status === 'paid').map(row => Number(row.event_id)))];
+    // One authenticated summary per event, bounded to avoid a request burst.
+    for (let offset = 0; offset < eventIds.length; offset += 3) {
+      await Promise.all(eventIds.slice(offset, offset + 3).map(async id => {
+        try { for (const balance of await fetchEntryBalances(id)) balances.set(String(balance.registrationId), balance); }
+        catch { failedEvents.add(id); }
+      }));
+    }
     const today = startOfToday();
     const actions: PendingAction[] = [];
 
     for (const row of data) {
       const cal = joinedOne<Pick<CalendarEvent, 'id' | 'event_name' | 'slug' | 'start_date'>>(row.calendar);
       const start = parseDay(cal?.start_date);
-      if (start && start < today) continue;
-
       const isRegistrant = row.email?.toLowerCase() === email;
       const status = isRegistrant ? row.payment_status : row.partner_payment_status;
-      if (!['pending', 'failed'].includes(String(status || '').toLowerCase())) continue;
+      const balance = isRegistrant && status === 'paid' ? balances.get(String(row.id)) : undefined;
+      if (balance?.known && balance.due != null && balance.due > 0) {
+        actions.push({ key: `balance_${row.id}`, kind: 'payment', title: 'Pay outstanding balance',
+          subtitle: cal?.event_name || 'Tournament',
+          detail: `${row.division ? `${row.division} · ` : ''}${formatMoney(balance.paid || 0)} paid · ${formatMoney(balance.due)} outstanding`,
+          eventId: Number(row.event_id), balanceDue: balance.due,
+          path: `/events/pay-balance?registrationId=${encodeURIComponent(row.id)}` });
+        continue;
+      }
+      if (isRegistrant && status === 'paid' && failedEvents.has(Number(row.event_id))) {
+        actions.push({ key: `balance_check_${row.id}`, kind: 'payment', title: 'Check entry balance', subtitle: cal?.event_name || 'Tournament',
+          detail: 'Balance could not be verified. Tap to retry.', eventId: Number(row.event_id),
+          path: `/events/pay-balance?registrationId=${encodeURIComponent(row.id)}` });
+        continue;
+      }
+      if (start && start < today) continue;
+      if (!['pending', 'failed', 'unpaid'].includes(String(status || '').toLowerCase())) continue;
 
       actions.push({
         key: `pay_${row.id}`,
+        eventId: Number(row.event_id),
         kind: 'payment',
         title: 'Complete payment',
         subtitle: cal?.event_name || 'Tournament',

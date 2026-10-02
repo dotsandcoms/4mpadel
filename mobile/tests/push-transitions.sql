@@ -1,0 +1,53 @@
+-- Run against an isolated schema with the shared foundation and new migration applied.
+BEGIN;
+CREATE FUNCTION pg_temp.assert(ok boolean, message text) RETURNS void LANGUAGE plpgsql AS $$ BEGIN IF ok IS DISTINCT FROM true THEN RAISE EXCEPTION '%',message; END IF; END $$;
+INSERT INTO players(email,name) VALUES('a@example.com','Alice'),('b@example.com','Bob');
+SELECT pg_temp.assert((SELECT count(*)=2 FROM push_outbox WHERE type='registration_complete'),'profile notifications');
+INSERT INTO calendar(id,event_name) VALUES(1,'Cape Open');
+INSERT INTO tournament_divisions(id,event_id,name) VALUES('00000000-0000-0000-0000-000000000001',1,'Mixed');
+INSERT INTO event_registrations(event_id,division_id,email,full_name,partner_email,partner_name,registered_by,division) VALUES
+(1,'00000000-0000-0000-0000-000000000001','a@example.com','Alice','b@example.com','Bob','a@example.com','Mixed'),
+(1,'00000000-0000-0000-0000-000000000001','b@example.com','Bob','a@example.com','Alice','a@example.com','Mixed');
+SET CONSTRAINTS ALL IMMEDIATE;
+SELECT pg_temp.assert((SELECT count(*)=1 FROM push_outbox WHERE type='partner_entry_paid' AND email='b@example.com'),'partner gets exactly one entry notification');
+SELECT pg_temp.assert((SELECT count(*)=1 FROM push_outbox WHERE type='event_registration' AND email='a@example.com'),'entrant confirmation');
+UPDATE event_registrations SET full_name=full_name;
+SELECT pg_temp.assert((SELECT count(*)=4 FROM push_outbox),'unchanged saves do not notify');
+UPDATE event_registrations SET payment_status='paid' WHERE email='a@example.com';
+UPDATE event_registrations SET payment_status='paid' WHERE email='a@example.com';
+SELECT pg_temp.assert((SELECT count(*)=1 FROM push_outbox WHERE type='payment_confirmation'),'repeated payment callback does not duplicate');
+UPDATE event_registrations SET status='withdrawn' WHERE email='a@example.com';
+SELECT pg_temp.assert((SELECT count(*)=1 FROM push_outbox WHERE type='entry_withdrawn' AND email='b@example.com' AND title='Partner withdrew'),'partner withdrawal recipient');
+UPDATE calendar SET event_status='cancelled' WHERE id=1;
+UPDATE calendar SET event_status='cancelled' WHERE id=1;
+SELECT pg_temp.assert((SELECT count(*)=2 FROM push_outbox WHERE type='event_cancelled'),'cancellation recipient dedupe');
+UPDATE event_registrations SET status='withdrawn' WHERE email='b@example.com';
+SELECT pg_temp.assert((SELECT count(*)=2 FROM push_outbox WHERE type='entry_withdrawn'),'event cancellation does not send withdrawal noise');
+INSERT INTO calendar(id,event_name) VALUES(2,'Club Open');
+INSERT INTO tournament_divisions(id,event_id,name) VALUES('00000000-0000-0000-0000-000000000002',2,'Open');
+INSERT INTO event_registrations(event_id,division_id,email,full_name,partner_email,partner_name,registered_by) VALUES
+(2,'00000000-0000-0000-0000-000000000002','a@example.com','Alice','c@example.com','Charlie','a@example.com');
+SELECT pg_temp.assert((SELECT count(*)=1 FROM push_outbox WHERE type='partner_entry_paid' AND email='c@example.com'),'single row team partner notified');
+UPDATE tournament_divisions SET cancelled_at=now() WHERE event_id=2;
+SELECT pg_temp.assert((SELECT count(*)=4 FROM push_outbox WHERE type='event_cancelled'),'division cancellation recipients');
+INSERT INTO draws(event_id,division_id,status) VALUES(2,'00000000-0000-0000-0000-000000000002','published');
+SELECT pg_temp.assert((SELECT count(*)=2 FROM push_outbox WHERE type='draws_ready'),'draw publication notifies team');
+SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',true);
+SELECT set_config('request.jwt.claims','{"email":"a@example.com"}',true);
+SELECT set_notification_pref('push_enabled',false);
+SELECT pg_temp.assert(get_notification_preferences()->>'push_enabled'='false','preferences persisted');
+SELECT set_notification_pref('event_cancelled',false);
+SELECT pg_temp.assert(get_notification_preferences()->>'push_enabled'='false','preference update preserves other keys');
+SELECT register_push_token('ExpoPushToken[test-one]','ios');
+SELECT register_push_token('ExpoPushToken[test-two]','android');
+SELECT count(*) FROM claim_push_deliveries();
+SELECT pg_temp.assert((SELECT count(*)>0 FROM push_deliveries),'device deliveries created');
+SELECT pg_temp.assert((SELECT count(*)=0 FROM claim_push_deliveries()),'concurrent claim does not reclaim lease');
+SELECT set_config('request.jwt.claims','{"email":"b@example.com"}',true);
+SELECT register_push_token('ExpoPushToken[test-one]','ios');
+SELECT pg_temp.assert((SELECT email='b@example.com' FROM player_push_tokens WHERE token='ExpoPushToken[test-one]'),'device reassigned on account switch');
+SELECT unregister_push_token('ExpoPushToken[test-two]');
+SELECT pg_temp.assert((SELECT count(*)=1 FROM player_push_tokens WHERE token='ExpoPushToken[test-two]'),'cannot unregister another account');
+SELECT pg_temp.assert((SELECT count(*)>0 FROM get_player_notifications()),'own inbox available');
+SELECT pg_temp.assert(NOT EXISTS(SELECT 1 FROM get_player_notifications() n JOIN push_outbox o ON o.id=n.id WHERE o.email<>'b@example.com'),'inbox does not expose another player');
+ROLLBACK;

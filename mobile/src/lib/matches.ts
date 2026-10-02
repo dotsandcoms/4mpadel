@@ -38,13 +38,16 @@ export type MatchLists = {
 
 const EMPTY: MatchLists = { upcoming: [], past: [] };
 
-export async function fetchPlayerMatches(rankedinId?: string | null): Promise<MatchLists> {
+export async function fetchPlayerMatches(rankedinId?: string | null, options?: { requireUpcoming?: boolean }): Promise<MatchLists> {
   if (!rankedinId) return EMPTY;
 
   const cached = await readCache(rankedinId);
   const live = cached.upcomingFresh && cached.pastFresh
     ? {}
     : await fetchLive(rankedinId, !cached.upcomingFresh, !cached.pastFresh);
+  if (options?.requireUpcoming && live.upcoming === undefined && !cached.upcomingAvailable) {
+    throw new Error('The published match schedule could not be loaded.');
+  }
   const upcoming = live.upcoming ?? cached.upcoming;
   // An empty/placeholder history response must not erase previously published results.
   const past = live.past?.length ? preservePublishedScores(live.past, cached.past) : cached.past;
@@ -129,8 +132,8 @@ function mergePast(past: PlayerMatch[], upcoming: PlayerMatch[]) {
   );
 }
 
-type CachedMatches = MatchLists & { upcomingFresh: boolean; pastFresh: boolean };
-const EMPTY_CACHE: CachedMatches = { ...EMPTY, upcomingFresh: false, pastFresh: false };
+type CachedMatches = MatchLists & { upcomingFresh: boolean; pastFresh: boolean; upcomingAvailable: boolean };
+const EMPTY_CACHE: CachedMatches = { ...EMPTY, upcomingFresh: false, pastFresh: false, upcomingAvailable: false };
 
 async function readCache(rankedinId: string): Promise<CachedMatches> {
   try {
@@ -143,7 +146,7 @@ async function readCache(rankedinId: string): Promise<CachedMatches> {
     const upcoming = validList(data.upcoming_matches);
     const past = validList(data.past_matches);
     return {
-      upcoming: upcoming || [], past: past || [],
+      upcoming: upcoming || [], past: past || [], upcomingAvailable: upcoming !== null,
       upcomingFresh: upcoming !== null && isFresh(data.upcoming_matches_updated_at || data.updated_at),
       pastFresh: past !== null && isFresh(data.past_matches_updated_at || data.updated_at),
     };

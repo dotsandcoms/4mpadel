@@ -16,7 +16,7 @@ export type Quote = {
   divisionNames: string[]; isTest: boolean;
 };
 export type CheckoutResult = {
-  quote: Quote; registered?: boolean; paymentPending?: boolean; authorizationUrl?: string; reference?: string;
+  quote: Quote; registered?: boolean; paymentPending?: boolean; emailWarning?: string; authorizationUrl?: string; reference?: string;
 };
 export async function invokeCheckout(input: CheckoutInput, checkout?: { attemptId: string; acceptedTotal: number; agreed: boolean }): Promise<CheckoutResult> {
   const controller = new AbortController();
