@@ -43,6 +43,13 @@ import CancelEventButton from './CancelEventButton';
 import CancelEventDialog from './CancelEventDialog';
 import NativeDrawManager from './NativeDrawManager';
 import { divisionRankingSource, resolvePlayerRanking } from '../../utils/playerRankingSelection';
+import {
+    buildRegistrationTeamsByDivision,
+    registrationDivisionKey,
+    registrationMatchesDivision,
+    registrationsShareDivision,
+    resolveRegistrationDivision,
+} from '../../utils/registrationDivision';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 const normEmail = (value) => String(value || '').trim().toLowerCase();
@@ -64,7 +71,7 @@ const isWithdrawnRegistration = (reg) => String(reg?.status || '').toLowerCase()
  * Prefer one registration per email+division (paid / more complete partner info wins).
  * Prevents abandoned-checkout duplicates from appearing twice in admin lists.
  */
-const dedupeRegistrationsByEmailDivision = (regs) => {
+const dedupeRegistrationsByEmailDivision = (regs, divisions) => {
     const preferred = new Map();
     const noEmail = [];
     const scoreReg = (reg) => {
@@ -81,7 +88,7 @@ const dedupeRegistrationsByEmailDivision = (regs) => {
             noEmail.push(reg);
             return;
         }
-        const key = `${email}::${reg.division || ''}`;
+        const key = `${email}::${registrationDivisionKey(reg, divisions)}`;
         const existing = preferred.get(key);
         if (!existing || scoreReg(reg) > scoreReg(existing)) {
             preferred.set(key, reg);
@@ -567,7 +574,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     }, [isActive, load]);
 
     const divFee = useCallback(
-        (name) => Number(divisions.find((d) => d.name === name)?.entry_fee || 0),
+        (registrationOrName) => Number(resolveRegistrationDivision(
+            typeof registrationOrName === 'string' ? { division: registrationOrName } : registrationOrName,
+            divisions,
+        )?.entry_fee || 0),
         [divisions]
     );
 
@@ -598,6 +608,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const stats = useMemo(() => {
         const active = dedupeRegistrationsByEmailDivision(
             registrations.filter((r) => !isWithdrawnRegistration(r)),
+            divisions,
         );
         const paid = active.filter((r) => registrationCountsAsPaid(r, refundByReg, payments)).length;
         const pending = active.length - paid;
@@ -621,7 +632,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             abandonedCheckoutCount: abandonedCheckouts.length,
             withdrawn: registrations.filter((r) => isWithdrawnRegistration(r)).length,
         };
-    }, [registrations, payments, refundByReg]);
+    }, [registrations, payments, refundByReg, divisions]);
 
     const refundSummaryFor = (regId) => {
         const e = refundByReg.get(regId);
@@ -976,7 +987,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             if (error) throw error;
 
             const reference = isComp ? `MANUAL-ADMIN-COMP-${reg.id}` : `MANUAL-ADMIN-${reg.id}`;
-            const amount = isComp ? 0 : divFee(reg.division);
+            const amount = isComp ? 0 : divFee(reg);
             const paymentMetadata = {
                 source: isComp ? 'admin_add_player' : 'manual_event_admin',
                 division: reg.division,
@@ -1065,14 +1076,14 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         const q = linkSearch.trim().toLowerCase();
         return registrations.filter((r) => {
             if (r.id === linkTarget.id) return false;
-            if (r.division !== linkTarget.division) return false;        // same division only
+            if (!registrationsShareDivision(r, linkTarget, divisions)) return false;
             if (r.status === 'withdrawn') return false;
             if ((r.email || '').toLowerCase() === targetEmail) return false;
             if (r.partner_name?.trim() || r.partner_email?.trim()) return false; // must be solo
             // exclude anyone already listed as another active entry's partner in this division
             const alreadyTaken = registrations.some((x) =>
                 x.id !== r.id
-                && x.division === r.division
+                && registrationsShareDivision(x, r, divisions)
                 && x.status !== 'withdrawn'
                 && (x.partner_email || '').toLowerCase() === (r.email || '').toLowerCase());
             if (alreadyTaken) return false;
@@ -1082,7 +1093,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             }
             return true;
         });
-    }, [linkTarget, registrations, linkSearch]);
+    }, [linkTarget, registrations, linkSearch, divisions]);
 
     // Search 4M player profiles who are NOT yet entered in this division — these can
     // be added as a partner and will be invited (by email) to pay their entry.
@@ -1100,7 +1111,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             // Exclude the solo player and anyone already entered (active) in this division.
             const taken = new Set(
                 registrations
-                    .filter((r) => r.division === linkTarget.division && r.status !== 'withdrawn')
+                    .filter((r) => registrationsShareDivision(r, linkTarget, divisions) && r.status !== 'withdrawn')
                     .map((r) => (r.email || '').toLowerCase()),
             );
             taken.add((linkTarget.email || '').toLowerCase());
@@ -1108,7 +1119,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             setSearchingProfiles(false);
         }, 300);
         return () => { cancelled = true; clearTimeout(handle); };
-    }, [linkTarget, linkSearch, registrations]);
+    }, [linkTarget, linkSearch, registrations, divisions]);
 
     // Add a profile-holder who isn't entered yet as a partner: create their PENDING
     // entry, link it to the solo entry, and email them an invite to pay. Guards
@@ -1117,7 +1128,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         setLinkBusy(true);
         try {
             const alreadyEntered = registrations.some((r) =>
-                r.division === soloReg.division
+                registrationsShareDivision(r, soloReg, divisions)
                 && r.status !== 'withdrawn'
                 && (r.email || '').toLowerCase() === (profile.email || '').toLowerCase());
             if (alreadyEntered) {
@@ -1126,8 +1137,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                 return;
             }
 
-            const div = divisions.find((d) => d.name === soloReg.division);
-            const fee = divFee(soloReg.division);
+            const div = resolveRegistrationDivision(soloReg, divisions);
+            const fee = divFee(soloReg);
 
             const { data: inserted } = await createRegistrationWithReleasedSlot({
                 event_id: event.id,
@@ -1261,11 +1272,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     ), [moveTeamTogether, moveTeamPlayers, moveTarget]);
 
     const registrationInDivision = useCallback((regRow, div) => {
-        if (!regRow || !div) return false;
-        if (regRow.division_id && div.id && regRow.division_id === div.id) return true;
-        if (regRow.division === div.name) return true;
-        const linked = divisions.find((d) => d.id === regRow.division_id);
-        return linked?.name === div.name;
+        return registrationMatchesDivision(regRow, div, divisions);
     }, [divisions]);
 
     // Divisions entries can be moved into: active, not the current one, and not
@@ -1353,7 +1360,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         const movingIds = toMove.map((r) => r.id);
         setMoveBusy(true);
         try {
-            const oldFee = divFee(moveTarget.division);
+            const oldFee = divFee(moveTarget);
             const newFee = Number(targetDiv.entry_fee || 0);
             const sourceDivision = moveTarget.division;
 
@@ -1581,7 +1588,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         return registrations.find(
             (x) => x.id !== reg.id
                 && (x.email || '').toLowerCase() === pe
-                && x.division === reg.division
+                && registrationsShareDivision(x, reg, divisions)
                 && x.status !== 'withdrawn',
         ) || null;
     };
@@ -1796,6 +1803,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         } else {
             rows = dedupeRegistrationsByEmailDivision(
                 rows.filter((r) => !isWithdrawnRegistration(r)),
+                divisions,
             );
             if (paymentFilter !== 'all') {
                 rows = rows.filter((r) => regMatchesPaymentFilter(r));
@@ -1805,7 +1813,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             rows = rows.filter((r) => regMatchesLicenseFilter(r));
         }
         if (divisionFilter !== 'all') {
-            rows = rows.filter((r) => r.division === divisionFilter);
+            const division = divisions.find((d) => d.name === divisionFilter);
+            rows = rows.filter((r) => registrationInDivision(r, division));
         }
         if (search.trim()) {
             const q = search.toLowerCase();
@@ -1822,13 +1831,14 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             sorted.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
         }
         return sorted;
-    }, [registrations, paymentFilter, licenseFilter, search, divisionFilter, sortBy, regMatchesPaymentFilter, regMatchesLicenseFilter]);
+    }, [registrations, paymentFilter, licenseFilter, search, divisionFilter, sortBy, regMatchesPaymentFilter, regMatchesLicenseFilter, divisions, registrationInDivision]);
 
     const activeRegistrations = useMemo(
         () => dedupeRegistrationsByEmailDivision(
             registrations.filter((r) => !isWithdrawnRegistration(r)),
+            divisions,
         ),
-        [registrations],
+        [registrations, divisions],
     );
 
     const orderTeamPlayers = useCallback((players) => {
@@ -1848,29 +1858,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         });
     }, [playersByEmail]);
 
-    const teamsByDivision = useMemo(() => {
-        const result = {};
-        divisions.forEach(d => {
-            result[d.name] = [];
-            const divRegs = activeRegistrations.filter(r => r.division === d.name);
-            const processed = new Set();
-
-            divRegs.forEach(reg => {
-                if (processed.has(reg.id)) return;
-                processed.add(reg.id);
-
-                const partner = divRegs.find(r => r.id !== reg.id && (r.email || '').toLowerCase() === (reg.partner_email || '').toLowerCase());
-                if (partner) {
-                    processed.add(partner.id);
-                    const players = orderTeamPlayers([reg, partner]);
-                    result[d.name].push({ id: `team_${players[0].id}`, players });
-                } else {
-                    result[d.name].push({ id: `team_${reg.id}`, players: [reg] });
-                }
-            });
-        });
-        return result;
-    }, [activeRegistrations, divisions, orderTeamPlayers]);
+    const teamsByDivision = useMemo(
+        () => buildRegistrationTeamsByDivision(activeRegistrations, divisions, orderTeamPlayers),
+        [activeRegistrations, divisions, orderTeamPlayers],
+    );
 
     const getPlayerProfile = useCallback((reg) => {
         if (!reg?.email) return null;
@@ -2296,12 +2287,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                 const actualPaid = getRegistrationEntryFeePaid(
                     findPaymentForRegistration(successPaymentsOnly(payments), r),
                     r,
-                    divFee(r.division),
+                    divFee(r),
                 );
                 expected += actualPaid;
                 collected += actualPaid;
             } else {
-                expected += divFee(r.division);
+                expected += divFee(r);
             }
 
             const email = (r.email || '').toLowerCase().trim();
@@ -2405,7 +2396,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             const ps = String(r.payment_status || '').toLowerCase();
             if (ps === 'refunded' || hasBlockingProcessedRefund(r, refundByReg, payments)) return;
             pendingCount += 1;
-            pendingAmount += divFee(r.division);
+            pendingAmount += divFee(r);
         });
 
         const withdrawnCount = registrations.filter((r) => isWithdrawnRegistration(r)).length;
@@ -2434,8 +2425,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                 || findPaymentForRegistration(successPays, r);
             if (!payment && isWithdrawnRegistration(r)) return;
             const amount = payment
-                ? getRegistrationEntryFeePaid(payment, r, divFee(r.division))
-                : divFee(r.division);
+                ? getRegistrationEntryFeePaid(payment, r, divFee(r))
+                : divFee(r);
             if (amount <= 0) return;
             const rate = Math.round(Number(amount) * 100) / 100;
             const current = billedTiers.get(rate) || { rate, count: 0, total: 0 };
@@ -2582,7 +2573,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             } else if (registrationCountsAsPaid(r, refundByReg, payments)) {
                 const payment = findPaymentForReg(r);
                 if (payment?.id) usedPaymentIds.add(payment.id);
-                const fee = getRegistrationEntryFeePaid(payment, r, divFee(r.division));
+                const fee = getRegistrationEntryFeePaid(payment, r, divFee(r));
                 rows.push({
                     id: `manual-${r.id}`,
                     date: payment?.created_at || r.paid_at || r.created_at,
@@ -2610,7 +2601,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                     player,
                     email,
                     division,
-                    amount: divFee(r.division),
+                    amount: divFee(r),
                     status: 'pending',
                     method: '—',
                     reference: '',
@@ -3038,8 +3029,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                 let entryAmount = 0;
                 if (isComped) entryAmount = 0;
                 else if (paystackPay) entryAmount = getRegistrationEntryFeePaid(paystackPay, r, 0);
-                else if (paid) entryAmount = getRegistrationEntryFeePaid(payment, r, divFee(r.division));
-                else entryAmount = divFee(r.division);
+                else if (paid) entryAmount = getRegistrationEntryFeePaid(payment, r, divFee(r));
+                else entryAmount = divFee(r);
 
                 return {
                     name: r.full_name,
@@ -3943,7 +3934,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                     >
                                         <option value="all">All divisions ({stats.total})</option>
                                         {divisions.map((d) => {
-                                            const count = registrations.filter(r => r.status !== 'withdrawn' && r.division === d.name).length;
+                                            const count = activeRegistrations.filter(r => registrationInDivision(r, d)).length;
                                             return (
                                                 <option key={d.id} value={d.name}>{d.name} ({count})</option>
                                             );
@@ -4259,7 +4250,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                     <div className="min-w-0">
                                         <h3 className="text-white font-bold truncate">Unmark {unmarkTarget.full_name} as paid?</h3>
                                         <p className="text-xs text-gray-400 mt-0.5">
-                                            {unmarkTarget.division} · {fmtR(divFee(unmarkTarget.division))}
+                                            {unmarkTarget.division} · {fmtR(divFee(unmarkTarget))}
                                         </p>
                                     </div>
                                 </div>
@@ -4373,7 +4364,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                             {markPaidMethod === 'comp' ? 'Comp ' : 'Mark '}{markPaidTarget.full_name}{markPaidMethod === 'comp' ? '?' : ' as paid'}
                                         </h3>
                                         <p className="text-xs text-gray-400 mt-0.5">
-                                            {markPaidTarget.division} · {markPaidMethod === 'comp' ? 'Free / complimentary entry (R 0)' : fmtR(divFee(markPaidTarget.division))}
+                                            {markPaidTarget.division} · {markPaidMethod === 'comp' ? 'Free / complimentary entry (R 0)' : fmtR(divFee(markPaidTarget))}
                                         </p>
                                     </div>
                                 </div>
@@ -4687,7 +4678,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
 
                     {moveTarget && (() => {
                         const targetDiv = divisions.find((d) => d.id === moveDivId);
-                        const oldFee = divFee(moveTarget.division);
+                        const oldFee = divFee(moveTarget);
                         const newFee = targetDiv ? Number(targetDiv.entry_fee || 0) : null;
                         const owesMore = !!targetDiv && playersToMove.some((reg) => newFee > oldFee && reg.payment_status === 'paid');
                         const cheaper = !!targetDiv && newFee < oldFee;
