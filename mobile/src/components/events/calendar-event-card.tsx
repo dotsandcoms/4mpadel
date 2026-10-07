@@ -20,7 +20,10 @@ export function CalendarEventCard({ event, saved, onPress, onSave }: {
       <Image source={eventImage(event)} style={{ width: 64, height: 88, borderRadius: 10 }} contentFit="cover" />
       <View style={{ flex: 1, gap: 7 }}>
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-          {!!tier && <Text style={{ fontSize: 11, fontWeight: '700', color: tone.text }}>{tier.toUpperCase()}</Text>}
+          {!!tier && <>
+            <Text style={{ color: tone.text, fontSize: 9, fontWeight: '700', letterSpacing: 1, borderWidth: 1, borderColor: tone.border, borderRadius: 16, paddingHorizontal: 9, paddingVertical: 4 }}>{tier.toUpperCase()}</Text>
+            <Text style={{ color: tone.text, fontSize: 9, fontWeight: '700', letterSpacing: 1, borderWidth: 1, borderColor: tone.border, borderRadius: 16, paddingHorizontal: 9, paddingVertical: 4 }}>SAPA</Text>
+          </>}
           {event.event_status === 'cancelled' && <Text style={{ color: brand.danger, fontSize: 11, fontWeight: '700' }}>CANCELLED</Text>}
           {event.registration_access === 'code' && <Text style={{ color: '#87520B', fontSize: 11, fontWeight: '700' }}>CODE REQUIRED</Text>}
         </View>

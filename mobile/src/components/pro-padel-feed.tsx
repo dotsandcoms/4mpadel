@@ -8,9 +8,10 @@ import { useFocusEffect, usePathname, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import type { usePlayerHub } from '@/hooks/use-player-hub';
-import { homePlayerSelection, playerRankLabel, proHubPlayer, type HubPlayer } from '@/lib/player-hub';
+import { homePlayerSelection, playerCountryFlag, playerRankLabel, proHubPlayer, type HubPlayer } from '@/lib/player-hub';
 import type { ProPadelState } from '@/hooks/use-pro-padel';
 import { proDate, proRound, proStale, proStatus, selectProMatches, type ProTournament, type ProCategory, type ProFollow, type ProMatch, type ProPerson, type ProPlayer, type ProRankings } from '@/lib/pro-padel';
+import { fetchTournamentMatches, withLiveScores, type MatchDetails } from '@/lib/pro-padel-live';
 import { lightBrand as brand } from '@/theme/tokens';
 
 type Filter = ProCategory | 'all';
@@ -48,7 +49,7 @@ function NextTourCard({ event, local = false, onOpen }: { event: ProTournament; 
     </View>
     <Pressable disabled={!onOpen} accessibilityRole={onOpen ? "button" : undefined} accessibilityLabel={onOpen ? `View ${event.name}` : undefined} onPress={onOpen} style={s.tourMain}>
       <View style={{ flex: 1, gap: 12 }}>
-        <Text accessibilityRole="header" numberOfLines={3} ellipsizeMode="tail" style={s.tourTitle}>{event.name}</Text>
+        <Text accessibilityRole="header" numberOfLines={3} ellipsizeMode="tail" style={s.tourTitle}>{playerCountryFlag(event.country)}{event.country ? ' ' : ''}{event.name}</Text>
         <View style={s.tourMeta}><Ionicons name="location-outline" size={15} color="#52625A" /><Text numberOfLines={1} style={s.tourLocation}>{event.location || event.venue || 'Location to be announced'}</Text></View>
       </View>
       <View style={[s.tourDate, local && { borderColor: '#2449D830' }]} accessible accessibilityLabel={proDate(event.startDate)}>
@@ -64,10 +65,78 @@ function NextTourCard({ event, local = false, onOpen }: { event: ProTournament; 
   </View>;
 }
 
+function matchDay(value?: string | null) {
+  if (!value) return null;
+  if (!/(Z|[+-]\d{2}:\d{2})$/i.test(value)) return value.slice(0, 10);
+  const date = new Date(value);
+  return Number.isFinite(date.getTime())
+    ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date)
+    : null;
+}
+
+async function fetchTourPreview(id: number) {
+  const first = await fetchTournamentMatches(id, 1);
+  const pages = await Promise.allSettled(Array.from({ length: Math.min(first.lastPage, 4) - 1 }, (_, index) => fetchTournamentMatches(id, index + 2)));
+  const rows = [...first.matches, ...pages.flatMap(result => result.status === 'fulfilled' ? result.value.matches : [])];
+  return { rows: await withLiveScores([...new Map(rows.map(row => [row.match.id, row])).values()]),
+    complete: first.lastPage <= 4 && pages.every(result => result.status === 'fulfilled') };
+}
+
+function LiveTourCard({ event, matchesToday, liveCount, onOpen }: { event: ProTournament; matchesToday: number | null; liveCount: number; onOpen: () => void }) {
+  return <View style={s.liveTourCard}>
+    {event.photoUrl && <Image source={{ uri: event.photoUrl }} contentFit="cover" style={s.liveArtwork} />}
+    <View style={s.liveTourContent}>
+      <View style={s.liveBadges}><Text style={s.liveBadge}>● LIVE</Text>{event.level && <Text style={s.liveLevel}>{event.level.toUpperCase()}</Text>}</View>
+      <View style={{ flex: 1 }} />
+      <Text accessibilityRole="header" numberOfLines={3} style={s.liveTourTitle}>{playerCountryFlag(event.country)}{event.country ? ' ' : ''}{event.name}</Text>
+      <Text numberOfLines={1} style={s.liveTourPlace}>{event.location || event.venue || 'Location to be announced'}</Text>
+      <Text style={s.liveTourCount}>{matchesToday != null ? `${matchesToday} match${matchesToday === 1 ? '' : 'es'} today` : liveCount ? `${liveCount} match${liveCount === 1 ? '' : 'es'} live now` : 'Main draw in progress'}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={`View ${event.name} matches`} onPress={onOpen} style={s.liveTourAction}><Text style={s.liveTourActionText}>VIEW MATCHES</Text><Ionicons name="arrow-forward" size={18} color="#17200C" /></Pressable>
+    </View>
+  </View>;
+}
+
+function TourMatchPreview({ row, onOpen }: { row: MatchDetails; onOpen: () => void }) {
+  const match = row.match;
+  const live = match.status === 'live' || match.status === 'ongoing';
+  const time = match.scheduleLabel || (match.scheduledAt && /(Z|[+-]\d{2}:\d{2})$/i.test(match.scheduledAt) ? proDate(match.scheduledAt, true) : 'Time to be confirmed');
+  const scores = match.score.length ? match.score : row.liveScore?.sets || [];
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${live ? 'Live' : 'Upcoming'} ${match.tournamentName} match: ${match.teams.map(team => team.map(person => person.name).join(' and ')).join(' versus ')}`} onPress={onOpen} style={s.liveMatchCard}>
+    <View style={s.liveMatchHeader}><Text style={live ? s.liveMatchStatus : s.nextMatchStatus}>{live ? '● LIVE' : 'UP NEXT'}</Text><Text numberOfLines={1} style={s.liveMatchCourt}>{match.court || (live ? proRound(match) : time)}</Text><Ionicons name="chevron-forward" size={16} color="#D5E4D8" /></View>
+    {match.teams.map((team, index) => <View key={index} style={s.liveMatchTeam}>
+      <Text numberOfLines={2} style={s.liveMatchNames}>{team.length ? team.map(person => `${playerCountryFlag(person.nationality)}${person.nationality ? ' ' : ''}${person.name}`).join(' / ') : 'Players to be confirmed'}</Text>
+      {live && scores.length > 0 && <Text style={s.liveMatchScore}>{scores.slice(0, 3).map(set => set[index] ?? '—').join('   ')}</Text>}
+    </View>)}
+    {live && row.liveScore?.points && <Text style={s.liveMatchTime}>Current point {row.liveScore.points}{row.liveScore.serving ? ` · ${row.liveScore.serving === 'team_1' ? 'Top team' : 'Bottom team'} serving` : ''}</Text>}
+    {!live && <Text style={s.liveMatchTime}>{time}</Text>}
+  </Pressable>;
+}
+
 type LocalUpcomingEvent = { id: number; event_name: string | null; start_date: string; end_date: string | null; city: string | null; venue: string | null; event_status: string | null };
 function IntegratedUpNext({ tournament, showLocal, message }: { tournament?: ProTournament | null; showLocal: boolean; message?: string }) {
   const router = useRouter();
   const [events, setEvents] = useState<LocalUpcomingEvent[]>([]), [loading, setLoading] = useState(false), [error, setError] = useState(''), [retry, setRetry] = useState(0);
+  const liveTour = tournament?.status === 'live' || tournament?.status === 'ongoing' ? tournament : null;
+  const [tourPreview, setTourPreview] = useState<{ id: number; rows: MatchDetails[]; complete: boolean } | null>(null);
+  const [tourPreviewError, setTourPreviewError] = useState(false);
+  useFocusEffect(useCallback(() => {
+    if (!liveTour) { setTourPreview(null); setTourPreviewError(false); return; }
+    setTourPreviewError(false);
+    let active = true;
+    let inFlight = false;
+    const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const next = await fetchTourPreview(liveTour.id);
+        if (active) { setTourPreview({ id: liveTour.id, ...next }); setTourPreviewError(false); }
+      } catch { if (active) setTourPreviewError(true); }
+      finally { inFlight = false; }
+    };
+    void refresh();
+    const timer = setInterval(() => { void refresh(); }, 60000);
+    return () => { active = false; clearInterval(timer); };
+  }, [liveTour?.id]));
   useFocusEffect(useCallback(() => {
     if (!showLocal) return;
     let active = true;
@@ -88,13 +157,32 @@ function IntegratedUpNext({ tournament, showLocal, message }: { tournament?: Pro
     })();
     return () => { active = false; };
   }, [showLocal, retry]));
-  const cards = [...(showLocal ? events.map(event => ({ key: `4m:${event.id}`, date: event.start_date, local: event })) : []), ...(tournament ? [{ key: `pro:${tournament.id}`, date: tournament.startDate, local: null }] : [])].sort((a, b) => a.date.localeCompare(b.date));
+  const cards = [...(showLocal ? events.map(event => ({ key: `4m:${event.id}`, date: event.start_date, local: event })) : []), ...(tournament && !liveTour ? [{ key: `pro:${tournament.id}`, date: tournament.startDate, local: null }] : [])].sort((a, b) => a.date.localeCompare(b.date));
+  const activePreview = liveTour && tourPreview?.id === liveTour.id ? tourPreview : null;
+  const liveRows = activePreview?.rows ?? [];
+  const currentDay = matchDay(new Date().toISOString());
+  const todayCount = activePreview?.complete
+    ? liveRows.filter(row => matchDay(row.match.scheduledAt || row.match.playedAt) === currentDay).length : 0;
+  const matchesToday = todayCount > 0 ? todayCount : null;
+  const liveMatches = liveRows.filter(row => row.match.status === 'live' || row.match.status === 'ongoing');
+  const nextMatches = liveRows.filter(row => {
+    const day = matchDay(row.match.scheduledAt);
+    return row.match.status === 'scheduled' && (!day || !currentDay || day >= currentDay);
+  })
+    .sort((a, b) => (a.match.scheduledAt || '9999').localeCompare(b.match.scheduledAt || '9999'));
+  const previewMatches = [...liveMatches.slice(0, 1), ...nextMatches.slice(0, liveMatches.length ? 1 : 2)];
   return <View style={{ gap: 12 }}>
-    <Text style={s.sectionTitle}>Up next</Text>
+    {liveTour && <>
+      <Text style={s.sectionTitle}>Live now</Text>
+      <LiveTourCard event={liveTour} matchesToday={matchesToday} liveCount={liveMatches.length} onOpen={() => router.push({ pathname: '/pro/live', params: { tournament: String(liveTour.id) } })} />
+      {previewMatches.map(row => <TourMatchPreview key={row.match.id} row={row} onOpen={() => router.push({ pathname: '/pro/match/[id]', params: { id: String(row.match.id), from: 'home' } })} />)}
+      {tourPreviewError && !liveRows.length && <Text style={s.tourNote}>Match updates are temporarily unavailable. View matches to retry.</Text>}
+    </>}
+    {(cards.length > 0 || loading || error) && <Text style={s.sectionTitle}>Up next</Text>}
     {loading && <ActivityIndicator color={brand.accent} />}
     {!!error && <Message body={error} retry={() => setRetry(n => n + 1)} />}
-    {!cards.length && !loading && !error && <Text style={s.caption}>No upcoming tournaments are published yet.</Text>}
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} decelerationRate="fast" snapToInterval={298} contentContainerStyle={{ gap: 12, alignItems: 'flex-start' }}>
+    {!cards.length && !loading && !error && !liveTour && <Text style={s.caption}>No upcoming tournaments are published yet.</Text>}
+    {cards.length > 0 && <ScrollView horizontal showsHorizontalScrollIndicator={false} decelerationRate="fast" snapToInterval={298} contentContainerStyle={{ gap: 12, alignItems: 'flex-start' }}>
       {cards.map(card => <View key={card.key} style={{ width: 286, gap: 6 }}>
         <Text style={[s.caption, { color: card.local ? '#2449D8' : brand.accent, fontWeight: '700' }]}>{card.local ? '4M · LOCAL' : 'PREMIER PADEL · INTERNATIONAL'}</Text>
         {card.local ? <NextTourCard local event={{
@@ -105,7 +193,7 @@ function IntegratedUpNext({ tournament, showLocal, message }: { tournament?: Pro
         }} onOpen={() => router.push({ pathname: '/events/[id]', params: { id: String(card.local!.id) } })} />
           : tournament && <><NextTourCard event={tournament} />{!!message && <Text style={s.tourNote}>{message}</Text>}</>}
       </View>)}
-    </ScrollView>
+    </ScrollView>}
     {showLocal && <Button label="View local calendar" icon="calendar-outline" onPress={() => router.push('/calendar')} />}
   </View>;
 }
@@ -169,9 +257,10 @@ export function MatchCard({ match, lookup, onPlayer, onOpenMatch }: { match: Pro
         <View style={[s.pair, winner && s.winningPair]}>
           {team.length ? team.map(person => {
             const player = lookup.get(person.id);
+            const flag = playerCountryFlag(person.nationality || player?.nationality);
             return <Pressable key={person.id} disabled={!player} onPress={() => onPlayer(person.id)} accessibilityRole={player ? 'button' : undefined}
               accessibilityLabel={player ? `View ${person.name}` : person.name} style={s.matchPerson}>
-              <Portrait key={person.id} player={player || person} size={36} /><Text style={s.matchName}>{person.name}</Text>
+              <Portrait key={person.id} player={player || person} size={36} /><Text style={s.matchName}>{flag ? `${flag} ` : ''}{person.name}</Text>
             </Pressable>;
           }) : <Text style={s.body}>Opponents TBC</Text>}
         </View>
@@ -422,6 +511,26 @@ const s = StyleSheet.create({
   tourCalendar: { minHeight: 48, backgroundColor: brand.padel, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 },
   tourCalendarText: { color: '#17200c', fontSize: 14, fontWeight: '700', flexShrink: 1 },
   tourNote: { color: '#52625A', fontSize: 12, lineHeight: 18, paddingHorizontal: 4 },
+  liveTourCard: { minHeight: 320, borderRadius: 20, overflow: 'hidden', backgroundColor: '#172E20' },
+  liveArtwork: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
+  liveTourContent: { flex: 1, minHeight: 320, padding: 18, gap: 10 },
+  liveBadges: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  liveBadge: { color: '#FFFFFF', backgroundColor: '#ED4354', paddingHorizontal: 10, paddingVertical: 6, fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+  liveLevel: { color: '#FFFFFF', backgroundColor: '#7229C5', paddingHorizontal: 10, paddingVertical: 6, fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+  liveTourTitle: { color: '#FFFFFF', fontSize: 28, lineHeight: 33, fontWeight: '800', textShadowColor: '#07140C', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8 },
+  liveTourPlace: { color: '#FFFFFF', fontSize: 14, textShadowColor: '#07140C', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6 },
+  liveTourCount: { color: brand.padel, fontSize: 14, fontWeight: '800', marginTop: 4, textShadowColor: '#07140C', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6 },
+  liveTourAction: { minHeight: 48, marginTop: 4, backgroundColor: brand.padel, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  liveTourActionText: { color: '#17200C', fontSize: 14, fontWeight: '800', letterSpacing: 0.6 },
+  liveMatchCard: { backgroundColor: '#17201C', borderRadius: 16, padding: 14, gap: 10 },
+  liveMatchHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  liveMatchStatus: { color: '#FFFFFF', backgroundColor: '#ED4354', paddingHorizontal: 8, paddingVertical: 4, fontSize: 10, fontWeight: '800' },
+  nextMatchStatus: { color: '#17200C', backgroundColor: brand.padel, paddingHorizontal: 8, paddingVertical: 4, fontSize: 10, fontWeight: '800' },
+  liveMatchCourt: { color: '#D5E4D8', fontSize: 11, flex: 1, textAlign: 'right' },
+  liveMatchTeam: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  liveMatchNames: { color: '#FFFFFF', fontSize: 12, fontWeight: '700', flex: 1 },
+  liveMatchScore: { color: brand.padel, fontSize: 13, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  liveMatchTime: { color: '#D5E4D8', fontSize: 11 },
   matchToggle: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderTopWidth: 1, borderBottomWidth: 1, borderColor: brand.edge, marginTop: 8 },
   matchToggleTitle: { color: brand.premium, fontSize: 18, fontWeight: '600' },
   matchCount: { backgroundColor: '#ccff0014', borderRadius: 12, minWidth: 28, paddingHorizontal: 8, paddingVertical: 4, alignItems: 'center' },

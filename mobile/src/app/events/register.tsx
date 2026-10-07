@@ -1,4 +1,5 @@
 import { EntrySavedBanner } from '@/components/events/entry-saved-banner';
+import { Toast } from '@/components/toast';
 import { SizePicker } from '@/components/events/tshirt-size-picker';
 import { SponsorDetails } from '@/components/events/sponsor-details';
 import { Choices, DivisionOptions, LicencePicker, type LicenceOption, type PartnerChoice } from '@/components/events/registration-options';
@@ -57,6 +58,8 @@ function RegistrationFlow() {
   const goStep = (value: number) => { setStep(value); scroll.current?.scrollTo({ y: 0, animated: true }); };
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
+  const [paymentOptions, setPaymentOptions] = useState<NonNullable<Quote['entries']>>([]);
+  const [paymentChoices, setPaymentChoices] = useState<Record<string, { self: boolean; partner: boolean }>>({});
   const [partnerEmail, setPartnerEmail] = useState('');
   const [partnerName, setPartnerName] = useState('');
   const [payForPartner, setPayForPartner] = useState<boolean | undefined>(payOnly ? undefined : false);
@@ -80,6 +83,10 @@ function RegistrationFlow() {
   const [actionBusy, setBusy] = useState(false);
   const busy = actionBusy || logoUploading;
   const [error, setError] = useState('');
+  const [errorToast, setErrorToast] = useState<{ id: number; message: string } | null>(null);
+  const errorToastId = useRef(0);
+  const dismissErrorToast = useRef(() => setErrorToast(null)).current;
+  const showError = (message: string) => { setError(message); setErrorToast({ id: ++errorToastId.current, message }); };
   const [reference, setReference] = useState<string | null>(null);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   const [returnedFromCheckout, setReturnedFromCheckout] = useState(false);
@@ -92,12 +99,13 @@ function RegistrationFlow() {
   const submitted = useRef(false);
   const storageKey = useRef('');
   const input: CheckoutInput = { ...(payOnly ? { mode: 'pay' as const } : {}), eventId: event?.id || Number(id), divisionIds: selected, partnerEmail: partnerEmail.trim().toLowerCase(),
-    selections: event?.is_weekly ? undefined : selected.map(divisionId => ({ divisionId, ...partners[divisionId] })), licenseChoice,
+    selections: event?.is_weekly ? undefined : selected.map(divisionId => ({ divisionId, ...partners[divisionId], ...(payOnly ? { payForSelf: paymentChoices[divisionId]?.self ?? false, payForPartner: paymentChoices[divisionId]?.partner ?? false } : {}) })), licenseChoice,
     ...(!payOnly || sponsorChanged ? { tshirtLogoUrl, tshirtSponsorName } : {}), partnerTshirtLogoUrl, partnerTshirtSponsorName,
-    payForPartner, tshirtSize, partnerTshirtSize, accessGrantId: grant, isTest: __DEV__ };
+    payForSelf: payOnly && event?.is_weekly ? paymentChoices.weekly?.self : undefined,
+    payForPartner: payOnly && event?.is_weekly ? paymentChoices.weekly?.partner : payForPartner, tshirtSize, partnerTshirtSize, accessGrantId: grant, isTest: __DEV__ };
   const load = async () => {
     setReturnedFromCheckout(false); setCheckoutStarted(false);
-    setLoading(true); setError(''); setQuote(null); setAgreed(false); setReference(null); setCheckoutUrl(null); setDone(false); setPartnerEmail(''); setPartnerName('');
+    setLoading(true); setError(''); setErrorToast(null); setQuote(null); setPaymentOptions([]); setAgreed(false); setReference(null); setCheckoutUrl(null); setDone(false); setPartnerEmail(''); setPartnerName('');
     try {
       const row = await fetchEvent(id);
       setEvent(row);
@@ -127,7 +135,7 @@ function RegistrationFlow() {
 
         const registeredIds = regs.map(r => r.division_id).filter((v): v is string => !!v);
         setExistingDivisionIds(registeredIds);
-        setSelected(payOnly ? registeredIds : []);
+        setSelected(payOnly ? entry ? regs.filter(r => r.id === entry).map(r => r.division_id).filter((v): v is string => !!v) : registeredIds : []);
         if (mode === 'add-partner') {
           const existing = regs.find(r => r.id === entry);
           if (!existing) throw new Error('This entry is no longer available. Return to the event and refresh.');
@@ -142,7 +150,7 @@ function RegistrationFlow() {
         storageKey.current = `native-checkout:${email}:${row.id}${payOnly ? ':pay' : ''}`;
         const stored = await AsyncStorage.getItem(storageKey.current);
         if (stored) {
-          try { const pending = JSON.parse(stored); setReference(pending.reference); setCheckoutUrl(pending.url); restoredPartnerPayment = pending.payForPartner; setPayForPartner(restoredPartnerPayment); }
+          try { const pending = JSON.parse(stored); setReference(pending.reference); setCheckoutUrl(pending.url); if (pending.quote) setQuote(pending.quote); if (pending.selected) setSelected(pending.selected); if (pending.paymentChoices) setPaymentChoices(pending.paymentChoices); restoredPartnerPayment = pending.payForPartner; setPayForPartner(restoredPartnerPayment); }
           catch { setReference(stored); }
         }
       }
@@ -150,6 +158,7 @@ function RegistrationFlow() {
         if (!email) throw new Error('Sign in to pay your existing entry.');
         const result = await invokeCheckout({ ...input, eventId: row.id, mode: 'pay', payForPartner: restoredPartnerPayment });
         setQuote(result.quote);
+        setPaymentOptions(result.quote.entries || []);
         const restored: Record<string, PartnerChoice> = {};
         for (const entry of result.quote.entries || []) {
           if (!entry.divisionId) continue;
@@ -158,16 +167,22 @@ function RegistrationFlow() {
           restored[entry.divisionId] = { partnerEmail: entry.partnerEmail, partnerName: entry.partnerName || undefined, tshirtLogoUrl: entry.partnerTshirtLogoUrl, tshirtSponsorName: entry.partnerTshirtSponsorName, partnerId: p?.id, image_url: p?.image_url, activeLicence: !!((p?.license_type === 'full' && p?.paid_registration) || p?.has_temp_license_for_event), payForPartner: entry.partnerEmail && entry.partnerPaymentStatus !== 'paid' ? restoredPartnerPayment ?? true : false };
         }
         setPartners(restored);
-        setSelected(Object.keys(restored));
+        if (entry && !(result.quote.entries || []).some(item => item.id === entry)) throw new Error('This entry is no longer available for payment. Return to the event and refresh.');
+        const targetIds = entry ? (result.quote.entries || []).filter(item => item.id === entry && item.divisionId).map(item => item.divisionId!) : Object.keys(restored);
+        setSelected(targetIds);
+        setPaymentChoices(Object.fromEntries((result.quote.entries || []).map(item => {
+          const included = !entry || item.id === entry;
+          return [item.divisionId || 'weekly', { self: included && item.paymentStatus !== 'paid', partner: included && item.paymentStatus === 'paid' && !!item.partnerEmail && item.partnerPaymentStatus !== 'paid' }];
+        })));
       }
-    } catch (e) { setError(e instanceof Error ? e.message : 'Could not load registration.'); }
+    } catch (e) { showError(e instanceof Error ? e.message : 'Could not load registration.'); }
     finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, [id, mode]);
   const run = async (action: () => Promise<void>) => {
     if (submitted.current) return;
-    submitted.current = true; setBusy(true); setError('');
-    try { await action(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not complete that action.'); }
+    submitted.current = true; setBusy(true); setError(''); setErrorToast(null);
+    try { await action(); } catch (e) { showError(e instanceof Error ? e.message : 'Could not complete that action.'); }
     finally { submitted.current = false; setBusy(false); }
   };
   const [showSavedBanner, setShowSavedBanner] = useState(false);
@@ -176,7 +191,7 @@ function RegistrationFlow() {
     scroll.current?.scrollTo({ y: 0, animated: true });
     setPaymentPending(pending); setDone(true); setReference(null);
     if (storageKey.current) await AsyncStorage.removeItem(storageKey.current);
-    try { await setEventScheduled(Number(id), true); } catch { setError('Your entry was saved, but the event could not be added to your schedule. You can save it from the event page.'); }
+    try { await setEventScheduled(Number(id), true); } catch { showError('Your entry was saved, but the event could not be added to your schedule. You can save it from the event page.'); }
     void requestPushPermission().catch(() => {});
   };
   const verify = () => run(async () => {
@@ -184,13 +199,13 @@ function RegistrationFlow() {
     await confirmCheckout(reference);
     const email = await currentEmail();
     const entries = email ? await fetchMyEventRegistrations(Number(id), email) : [];
-    if (!entries.length || (payOnly ? !!quote?.entries && !quote.entries.every(item => entries.some(r => r.id === item.id && r.payment_status === 'paid' && (!(item.divisionId ? partners[item.divisionId]?.payForPartner : payForPartner) || !item.partnerEmail || r.partner_payment_status === 'paid'))) : !entries.some(r => r.payment_status === 'paid'))) throw new Error('Your payment is being processed. Wait a moment and check again.');
+    if (!entries.length || (payOnly ? !quote?.entries?.length || !quote.entries.every(item => entries.some(r => r.id === item.id && (!item.payForSelf || r.payment_status === 'paid') && (!item.payForPartner || r.partner_payment_status === 'paid'))) : !entries.some(r => r.payment_status === 'paid'))) throw new Error('Your payment is being processed. Wait a moment and check again.');
     await finish(false);
   });
   useEffect(() => {
     if (payment_return !== '1' || !pay_ref || loading || busy || done || autoVerified.current === pay_ref) return;
     autoVerified.current = pay_ref;
-    if (reference !== pay_ref) { setError('This return does not match your saved checkout. Open your event entry to check the payment.'); return; }
+    if (reference !== pay_ref) { showError('This return does not match your saved checkout. Open your event entry to check the payment.'); return; }
     setReturnedFromCheckout(true);
     void verify();
   }, [payment_return, pay_ref, reference, loading, busy, done]);
@@ -199,7 +214,7 @@ function RegistrationFlow() {
     const result = await invokeCheckout(input, { attemptId: attempt.current, acceptedTotal: quote.total, agreed: agreementsComplete });
     if (result.registered) {
       await finish(!!result.paymentPending);
-      if (result.emailWarning) setError(result.emailWarning);
+      if (result.emailWarning) showError(result.emailWarning);
       return;
     }
     if (!result.authorizationUrl || !result.reference) throw new Error('Checkout could not be opened. Please try again.');
@@ -208,7 +223,7 @@ function RegistrationFlow() {
     setCheckoutStarted(true);
     setReference(result.reference);
     setCheckoutUrl(result.authorizationUrl);
-    if (storageKey.current) await AsyncStorage.setItem(storageKey.current, JSON.stringify({ reference: result.reference, url: result.authorizationUrl, payForPartner }));
+    if (storageKey.current) await AsyncStorage.setItem(storageKey.current, JSON.stringify({ reference: result.reference, url: result.authorizationUrl, payForPartner, selected, paymentChoices, quote: result.quote }));
     await WebBrowser.openBrowserAsync(result.authorizationUrl, { controlsColor: brand.padel });
     setReturnedFromCheckout(true);
   });
@@ -217,7 +232,7 @@ function RegistrationFlow() {
     if (!done && !showPaymentStatus && payOnly && step === 2) {
       router.replace({ pathname: '/events/[id]', params: { id: String(event?.id || id) } });
     } else if (!done && !showPaymentStatus && step > 1) {
-      setError(''); setAgreed(false); setObligations(false); setSapaAgreed(false);
+      setError(''); setErrorToast(null); setAgreed(false); setObligations(false); setSapaAgreed(false);
       attempt.current = Crypto.randomUUID();
       goStep(step === 4 ? payOnly ? 2 : event?.is_weekly ? 3 : 2 : step - 1);
     } else if (router.canGoBack()) router.back();
@@ -230,9 +245,17 @@ function RegistrationFlow() {
     attempt.current = Crypto.randomUUID(); goStep(4);
   });
   const needsPartnerPaymentAcknowledgment = payOnly
-    ? !!quote?.entries?.some(item => item.partnerEmail && item.partnerPaymentStatus !== 'paid' && (item.divisionId ? partners[item.divisionId]?.payForPartner : payForPartner) === false)
+    ? false
     : event?.is_weekly ? !!partnerEmail.trim() && payForPartner === false
       : selected.some(divisionId => !!partners[divisionId]?.partnerEmail && partners[divisionId].payForPartner === false);
+  const togglePayment = (divisionId: string, person: 'self' | 'partner') => {
+    const current = paymentChoices[divisionId] || { self: false, partner: false };
+    const next = { ...current, [person]: !current[person] };
+    setPaymentChoices(values => ({ ...values, [divisionId]: next }));
+    if (divisionId !== 'weekly') setSelected(ids => next.self || next.partner ? [...new Set([...ids, divisionId])] : ids.filter(id => id !== divisionId));
+    setQuote(null);
+    attempt.current = Crypto.randomUUID();
+  };
   return <View style={{ flex: 1, backgroundColor: brand.page }}>
     <View style={{ paddingTop: insets.top + 4, paddingHorizontal: 20 }}>
       <Pressable onPress={back} disabled={busy} accessibilityRole="button" accessibilityLabel="Back" style={{ minHeight: 48, justifyContent: 'center' }}>
@@ -250,7 +273,6 @@ function RegistrationFlow() {
         </View>)}
       </View>}
       {loading && <View style={{ gap: 12, alignItems: 'center', padding: 24 }}><ActivityIndicator color={brand.accent} /><Text style={{ color: brand.muted }}>{payOnly ? 'Loading your existing entry and outstanding fees…' : 'Loading registration details…'}</Text></View>}
-      {!!error && <Text accessibilityRole="alert" style={{ color: brand.danger, fontSize: 15, lineHeight: 23 }}>{error}</Text>}
       {!event && !loading && <ActionButton label="Try again" secondary onPress={load} />}
       {done ? <>
         <Notice title={paymentPending ? 'Registration received — payment pending' : 'Your entry is confirmed'}>
@@ -317,7 +339,7 @@ function RegistrationFlow() {
             <View style={{ flexDirection: 'row' }}><Image source={profile?.image_url ? { uri: profile.image_url } : undefined} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#374151' }} />{entry.partnerName && <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#374151', marginLeft: -6, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: brand.elevated }}><Ionicons name="person-outline" size={20} color={brand.muted} /></View>}</View>
             <Text style={{ color: brand.premium, fontWeight: '600' }}>{entry.division}</Text>
             <Text style={{ color: brand.muted }}>{entry.playerName}{entry.partnerName ? `, ${entry.partnerName}` : ' · Partner not selected yet'}</Text>
-            <Text style={{ color: '#fb923c', fontSize: 12 }}>{(entry.playerCount || 0) > 1 ? 'You are paying both entries' : 'You are paying your entry'}</Text>
+            <Text style={{ color: '#fb923c', fontSize: 12 }}>{entry.payForPartner && !entry.payForSelf ? 'You are paying your partner’s entry' : (entry.playerCount || 0) > 1 ? 'You are paying both entries' : 'You are paying your entry'}</Text>
             {entry.amount != null && <Text style={{ color: brand.premium, fontSize: 18 }}>{formatMoney(entry.amount)} <Text style={{ color: brand.muted, fontSize: 12 }}>({entry.playerCount} × {formatMoney(entry.unitFee || 0)})</Text></Text>}
 
           </View>) : <Text style={{ color: brand.muted }}>Partner: {quote.partnerName || 'I will choose a partner later'}</Text>}
@@ -388,14 +410,22 @@ function RegistrationFlow() {
             <ActionButton label="Edit my profile" secondary onPress={() => router.push('/edit-profile')} />
           </>}
           {payOnly && step === 2 && <>
-            {!quote && <ActionButton label="Retry payment options" busy={busy} onPress={load} />}
-            {event.is_weekly ? <>
-              <Notice title="Your entry">{formatMoney(entryFee(event))} per player for this event date.</Notice>
-              {!!partnerName && <Text style={{ color: brand.premium }}>Partner: {partnerName}</Text>}
-              {!!partnerEmail && <Choices value={payForPartner === false ? 'partner' : 'self'} onChange={value => { setPartnerPayAccepted(false); setPayForPartner(value === 'self'); }} options={[{ value: 'self', label: 'I pay' }, { value: 'partner', label: 'Partner pays' }]} />}
-            </> : <DivisionOptions event={event} divisions={divisions.filter(division => selected.includes(division.id))} selected={selected} registered={[]} values={partners} profileId={profile?.id} currentUserEmail={profile?.email} licences={licences} busy={busy} lockEntry paidPartnerDivisionIds={(quote?.entries || []).filter(item => item.partnerPaymentStatus === 'paid' && item.divisionId).map(item => item.divisionId!)} onToggle={() => {}} onChange={(divisionId, value) => { setPartnerPayAccepted(false); setPartners(current => ({ ...current, [divisionId]: { ...current[divisionId], payForPartner: value.payForPartner } })); }} />}
+            {!paymentOptions.length && <ActionButton label="Retry payment options" busy={busy} onPress={load} />}
+            <Notice title="Choose what to pay">Select your entry, your partner’s entry, or both in each division. Only the selected fees will appear in Review & Pay.</Notice>
+            {paymentOptions.map(item => {
+              const key = item.divisionId || 'weekly';
+              const choice = paymentChoices[key] || { self: false, partner: false };
+              return <View key={item.id} style={{ backgroundColor: brand.elevated, borderColor: brand.edge, borderWidth: 1, borderRadius: 16, padding: 16, gap: 12 }}>
+                <Text style={{ color: brand.premium, fontWeight: '700', fontSize: 18 }}>{item.division}</Text>
+                {([['self', item.playerName, item.paymentStatus], ['partner', item.partnerName, item.partnerPaymentStatus]] as const).map(([person, name, status]) => name && status !== 'paid' ? <Pressable key={person} accessibilityRole="checkbox" accessibilityState={{ checked: choice[person] }} onPress={() => togglePayment(key, person)} style={{ minHeight: 48, flexDirection: 'row', gap: 12, alignItems: 'center' }}><Ionicons name={choice[person] ? 'checkbox' : 'square-outline'} size={24} color={brand.accent} /><Text style={{ color: brand.premium, flex: 1 }}>{person === 'self' ? 'My entry' : `${name}’s entry`}</Text><Text style={{ color: brand.muted }}>{formatMoney(item.unitFee || 0)}</Text></Pressable> : null)}
+                {item.paymentStatus === 'paid' && <Text style={{ color: brand.muted }}>Your entry is paid</Text>}
+                {item.partnerName && item.partnerPaymentStatus === 'paid' && <Text style={{ color: brand.muted }}>Your partner’s entry is paid</Text>}
+                {divisions.find(d => d.id === item.divisionId)?.license_required && choice.self && !hasLicence && <LicencePicker name="You" value={licenseChoice} onChange={setLicenseChoice} options={licences} />}
+                {divisions.find(d => d.id === item.divisionId)?.license_required && choice.partner && !partners[key]?.activeLicence && <LicencePicker name={item.partnerName || 'Your partner'} value={partners[key]?.licenseChoice} onChange={licenseChoice => setPartners(current => ({ ...current, [key]: { ...current[key], licenseChoice } }))} options={licences} />}
+              </View>;
+            })}
             {needsPartnerPaymentAcknowledgment && <PartnerPaymentRequirement checked={partnerPayAccepted} onPress={() => setPartnerPayAccepted(value => !value)} />}
-            <ActionButton label="Continue to Review & Pay" busy={busy} disabled={!quote?.entries?.length || (needsPartnerPaymentAcknowledgment && !partnerPayAccepted)} onPress={review} />
+            <ActionButton label="Continue to Review & Pay" busy={busy} disabled={!paymentOptions.some(item => paymentChoices[item.divisionId || 'weekly']?.self || paymentChoices[item.divisionId || 'weekly']?.partner)} onPress={review} />
             <ActionButton label="Back to my entry" secondary onPress={back} />
           </>}
           {!payOnly && step === 2 && <>
@@ -436,6 +466,7 @@ function RegistrationFlow() {
         </>}
       </> : null}
     </ScrollView>
+    <Toast key={errorToast?.id ?? 0} message={errorToast?.message ?? null} fromTop onDismiss={dismissErrorToast} />
   </View>;
 }
 function Field({ label, value, onChangeText, email, secure }: { label: string; value: string; onChangeText: (v: string) => void; email?: boolean; secure?: boolean }) {

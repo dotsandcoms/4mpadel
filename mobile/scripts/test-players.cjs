@@ -8,6 +8,14 @@ function load(file, modules) {
  const exports = {}; vm.runInNewContext(source, { exports, require: name => modules[name], URL }); return exports;
 }
 const players = load('src/lib/players.ts', { '@/lib/supabase': { supabase: {} } });
+const preferences = load('src/lib/player-preferences.ts', {});
+test('court side and playing hand labels match the profile selections', () => {
+ assert.equal(preferences.courtSideLabel('either'), 'Either');
+ assert.equal(preferences.courtSideLabel('left'), 'Left');
+ assert.equal(preferences.playingHandLabel('right'), 'Right-handed');
+ assert.equal(preferences.playingHandLabel('left'), 'Left-handed');
+ assert.equal(preferences.playingHandLabel(null), null);
+});
 test('directory filters combine name, category and club without confusing list positions with rank', () => {
  const rows = [{ id:'1', name:'Brad Elin', category:'Men', home_club:'KCC' }, { id:'2', name:'Brad Other', category:'Men', home_club:'City' }, {id:'3', name:'Sarah', category:'Women', home_club:'KCC'}];
  assert.deepEqual(Array.from(players.filterPlayers(rows, ' BRAD ', 'Men', 'KCC'), x=>x.id), ['1']);
@@ -18,6 +26,21 @@ test('profile handles legacy gallery/sponsor formats and absent points', () => {
  assert.deepEqual(Array.from(players.stringList('["A","B"]')), ['A','B']);
  assert.deepEqual(Array.from(players.stringList('A, B')), ['A','B']);
  assert.equal(players.playerPoints(null), '—'); assert.equal(players.playerPoints(0), '0');
+});
+test('player profile defaults rank and points to the SAPA main doubles ranking', () => {
+ const aidan = { category: "Men's Open (Pro/Elite)", points: 1000, rankings: [
+  { org: 'SA Grand Tour', age_group: 'Men-Main', match_type: 'Men-Doubles', rank: '1', points: '1000' },
+  { org: 'SAPA ranking', ranking_id: 15809, age_group: 'Men-Main', match_type: 'Men-Doubles', rank: '6', points: '7672' },
+  { org: 'SAPA ranking', ranking_id: 15809, age_group: 'Men-Over 35', match_type: 'Men-Doubles', rank: '2', points: '400' },
+ ] };
+ const ranking = players.sapaMainRanking(aidan);
+ assert.equal(players.publicRank(ranking.rank), '#6');
+ assert.equal(players.playerPoints(ranking.points), Number(7672).toLocaleString('en-ZA'));
+ assert.equal(players.sapaMainRanking({ category: "Women's Open", rankings: [
+  { org: 'SAPA ranking', age_group: 'Men-Main', rank: '4' },
+  { org: 'SAPA ranking', age_group: 'Women-Main', match_type: 'Women-Doubles', rank: '2', points: 1200 },
+ ] }).rank, '2');
+ assert.equal(players.sapaMainRanking({ category: "Men's Open", rankings: aidan.rankings.slice(0, 1) }), null);
 });
 test('directory reads only public columns and loads beyond the Supabase row cap', async () => {
  const ranges = []; const fields = [];
@@ -40,8 +63,9 @@ test('player website links open the native directory or selected profile', async
 });
 test('profile loads the selected public ID and normalizes optional detail data', async () => {
  let selected;
- const api=load('src/lib/players.ts',{'@/lib/supabase':{supabase:{from(table){assert.equal(table,'players_public');const q={select(fields){assert.ok(!fields.includes('email'));return q},eq(field,id){selected=[field,id];return q},maybeSingle:async()=>({data:{id:42,name:'Player',rankings:null,sponsors:'A, B',additional_images:'["https://example.com/photo.jpg","javascript:bad"]'}})};return q;}}}});
+ const api=load('src/lib/players.ts',{'@/lib/supabase':{supabase:{from(table){assert.equal(table,'players_public');const q={select(fields){assert.ok(!fields.includes('email'));assert.ok(fields.includes('court_side,playing_hand'));return q},eq(field,id){selected=[field,id];return q},maybeSingle:async()=>({data:{id:42,name:'Player',court_side:'either',playing_hand:'left',rankings:null,sponsors:'A, B',additional_images:'["https://example.com/photo.jpg","javascript:bad"]'}})};return q;}}}});
  const player=await api.fetchPublicPlayer('42'); assert.deepEqual(selected,['id','42']);assert.equal(player.id,'42');assert.equal(player.rankings.length,0);assert.equal(player.sponsors.length,2);assert.equal(player.additional_images.length,1);
+ assert.equal(player.court_side,'either');assert.equal(player.playing_hand,'left');
  await assert.rejects(api.fetchPublicPlayer('invalid'),/Player not found/);
 });
 test('points gains retain signs and missing values are not invented', () => {

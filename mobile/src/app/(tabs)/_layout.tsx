@@ -39,7 +39,22 @@ export default function TabsLayout() {
           <NativeTabs.Trigger.Icon sf="house.fill" md="home" />
         </NativeTabs.Trigger>
 
-        <NativeTabs.Trigger name="(calendar)">
+        <NativeTabs.Trigger
+          name="(calendar)"
+          listeners={({ navigation }) => ({
+            blur: () => {
+              const calendarStack = navigation.getState()?.routes.find(
+                (tab: { name: string }) => tab.name === '(calendar)'
+              )?.state;
+              if (
+                calendarStack?.type === 'stack' &&
+                typeof calendarStack.index === 'number' &&
+                calendarStack.index > 0
+              ) {
+                navigation.dispatch({ type: 'POP_TO_TOP', target: calendarStack.key });
+              }
+            },
+          })}>
           <NativeTabs.Trigger.Label>Tournaments</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf="calendar" md="calendar_month" />
         </NativeTabs.Trigger>

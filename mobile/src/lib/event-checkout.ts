@@ -2,14 +2,14 @@ import { supabase } from './supabase';
 
 export type CheckoutInput = {
   mode?: 'pay';
-  selections?: ({ divisionId: string; partnerEmail?: string; payForPartner?: boolean; licenseChoice?: 'temporary' | 'full'; tshirtSize?: string; tshirtLogoUrl?: string; tshirtSponsorName?: string })[];
+  selections?: ({ divisionId: string; partnerEmail?: string; payForSelf?: boolean; payForPartner?: boolean; licenseChoice?: 'temporary' | 'full'; tshirtSize?: string; tshirtLogoUrl?: string; tshirtSponsorName?: string })[];
   tshirtLogoUrl?: string; tshirtSponsorName?: string; partnerTshirtLogoUrl?: string; partnerTshirtSponsorName?: string;
   licenseChoice?: 'temporary' | 'full';
-  eventId: number; divisionIds: string[]; partnerEmail: string; payForPartner?: boolean;
+  eventId: number; divisionIds: string[]; partnerEmail: string; payForSelf?: boolean; payForPartner?: boolean;
   tshirtSize: string; partnerTshirtSize: string; accessGrantId: string | null; isTest: boolean;
 };
 export type Quote = {
-  mode?: 'pay' | 'register'; entries?: { id: string; divisionId?: string; canCustomizePartner?: boolean; partnerEmail?: string; tshirtLogoUrl?: string; tshirtSponsorName?: string; partnerTshirtLogoUrl?: string; partnerTshirtSponsorName?: string; division: string; playerName: string; partnerName: string | null; paymentStatus: string; partnerPaymentStatus: string | null; amount?: number; playerCount?: number; unitFee?: number }[];
+  mode?: 'pay' | 'register'; entries?: { id: string; divisionId?: string; canCustomizePartner?: boolean; partnerEmail?: string; tshirtLogoUrl?: string; tshirtSponsorName?: string; partnerTshirtLogoUrl?: string; partnerTshirtSponsorName?: string; division: string; playerName: string; partnerName: string | null; paymentStatus: string; partnerPaymentStatus: string | null; payForSelf?: boolean; payForPartner?: boolean; amount?: number; playerCount?: number; unitFee?: number }[];
   licenseTotal?: number; licenseItems?: { label: string; amount: number }[];
   total: number; base: number; fee: number; feeLabel: string; lineItems: { label: string; amount: number }[];
   eventName: string; profileName: string; partnerName: string | null; method: string;

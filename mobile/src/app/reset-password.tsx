@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LiquidField } from '@/components/liquid-field';
+import { ObserveReady } from '@/components/observe-ready';
 import { supabase } from '@/lib/supabase';
 import { lightBrand as brand } from '@/theme/tokens';
 
@@ -62,6 +63,7 @@ export default function ResetPasswordScreen() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, backgroundColor: brand.page, paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }}>
+      <ObserveReady ready={ready || !!error} />
       <ScrollView style={{ flex: 1 }} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 28, paddingTop: 32, paddingBottom: 24 }}>
         <Text accessibilityRole="header" className="text-[28px] font-extrabold text-court-ink">{done ? 'Password updated' : 'Set a new password'}</Text>
         <Text className="mb-7 mt-3 text-[16px] leading-6 text-court-muted">{done ? 'Your new password is ready to use.' : 'Choose a password you haven’t used before.'}</Text>

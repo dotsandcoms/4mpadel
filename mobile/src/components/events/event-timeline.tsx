@@ -35,6 +35,7 @@ export function RegistrationCountdown({ event, onRegister, label }: { event: Eve
   const values = [Math.floor(diff / 86400000), Math.floor(diff / 3600000) % 24, Math.floor(diff / 60000) % 60, Math.floor(diff / 1000) % 60];
   const compact = width < 420;
   const dateLabel = end ? `${end.getDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'][end.getMonth()]}, ${end.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}` : '';
+  const managing = label === 'Manage Entry';
   return <View style={{ ...panel, marginTop: 8, paddingHorizontal: 12, paddingVertical: 12, minHeight: 60, flexDirection: 'row', gap: 8, alignItems: 'center' }}>
     <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: compact ? 7 : 8 }}>
       <View style={{ width: compact ? 32 : 36, height: compact ? 32 : 36, borderRadius: 18, borderWidth: 1, borderColor: `${accent}66`, backgroundColor: `${accent}20`, alignItems: 'center', justifyContent: 'center' }}><EventIcon name="clock" size={16} /></View>
@@ -49,13 +50,14 @@ export function RegistrationCountdown({ event, onRegister, label }: { event: Eve
         <Text style={{ fontSize: compact ? 7 : 8, lineHeight: 10, color: '#65726B', marginTop: 3 }}>{['DAYS', 'HRS', 'MINS', 'SECS'][i]}</Text>
       </View>)}
     </View>}
-    {label && <Pressable accessibilityRole="button" onPress={onRegister} hitSlop={{ top: 8, bottom: 8, left: 3, right: 3 }} style={{ flexShrink: 0, minHeight: 44, justifyContent: 'center', paddingHorizontal: compact ? 10 : 12, paddingVertical: 8, borderRadius: 24, borderColor: accent, borderWidth: 1, backgroundColor: accent, boxShadow: `0px 1px 6px ${accent}59`, experimental_backgroundImage: `linear-gradient(145deg, ${accent} 0%, ${accent} 50%, ${accent}cc 100%)` } as ViewStyle}><Text style={{ color: '#000', fontSize: compact ? 9 : 10, fontWeight: '700' }}>{label.toUpperCase()}</Text></Pressable>}
+    {label && <Pressable accessibilityRole="button" onPress={onRegister} hitSlop={{ top: 8, bottom: 8, left: 3, right: 3 }} style={managing ? { flexShrink: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: compact ? 9 : 12, paddingVertical: 8, borderRadius: 12, borderColor: '#B9CDB0', borderWidth: 1, backgroundColor: '#F0F6EA' } : { flexShrink: 0, minHeight: 44, justifyContent: 'center', paddingHorizontal: compact ? 10 : 12, paddingVertical: 8, borderRadius: 24, borderColor: accent, borderWidth: 1, backgroundColor: accent, boxShadow: `0px 1px 6px ${accent}59`, experimental_backgroundImage: `linear-gradient(145deg, ${accent} 0%, ${accent} 50%, ${accent}cc 100%)` } as ViewStyle}><Text style={{ color: managing ? '#244A16' : '#000', fontSize: compact ? 10 : 11, fontWeight: '700' }}>{managing ? 'Manage entry' : label.toUpperCase()}</Text>{managing && <EventIcon name="chevron.right" size={12} color="#244A16" />}</Pressable>}
   </View>;
 }
 /** Dates and step ordering mirror website TournamentProgressBar. */
 export function EventTimeline({ event, hasDraw }: { event: EventDetail; hasDraw: boolean }) {
   const accent = useEventAccent();
   const [now, setNow] = useState(Date.now());
+  const [showDateNote, setShowDateNote] = useState(false);
   const { width } = useWindowDimensions();
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(timer); }, []);
   const parse = (raw?: string | null) => raw ? new Date(raw.includes('T') ? raw : `${raw.slice(0, 10)}T00:00:00`).getTime() : 0;
@@ -76,7 +78,8 @@ export function EventTimeline({ event, hasDraw }: { event: EventDetail; hasDraw:
   if (isEarlyBirdActive(event, new Date(now))) { const index = steps.findIndex(s => s.label === 'Early Bird Entries'); if (index >= 0 && now >= steps[index].at) active = index; }
   if (!steps.length) return null;
   return <View style={{ ...panel, marginTop: 12, paddingHorizontal: 12, paddingVertical: 16 }}>
-    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 16 }}><EventIcon name="bolt" size={14} /><Text style={{ fontSize: 10, letterSpacing: 0.4 }}>TOURNAMENT PROGRESS</Text></View>
+    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 16 }}><EventIcon name="bolt" size={14} /><Text style={{ flex: 1, fontSize: 10, letterSpacing: 0.4 }}>TOURNAMENT PROGRESS</Text><Pressable accessibilityRole="button" accessibilityLabel="Dates and times are subject to change" accessibilityState={{ expanded: showDateNote }} onPress={() => setShowDateNote(!showDateNote)} hitSlop={10}><EventIcon name="info.circle" size={16} color="#65726B" /></Pressable></View>
+    {showDateNote && <Text style={{ fontSize: 11, color: '#65726B', marginBottom: 8 }}>Dates and times are subject to change</Text>}
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, paddingVertical: 10 }}>
       {steps.map((step, i) => {
         const live = i === active && (!step.until || now <= step.until);
@@ -92,6 +95,5 @@ export function EventTimeline({ event, hasDraw }: { event: EventDetail; hasDraw:
         </View>;
       })}
     </ScrollView>
-    <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', marginTop: 14 }}><EventIcon name="info.circle" size={12} color="#65726B" /><Text style={{ fontSize: 9, color: '#65726B' }}>Dates and times are subject to change</Text></View>
   </View>;
 }

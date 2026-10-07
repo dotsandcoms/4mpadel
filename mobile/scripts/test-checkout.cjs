@@ -77,13 +77,34 @@ test('licence obligations cannot be bypassed by client state', async () => {
   assert.equal(app.writes.length, 0);
 });
 
-test('payment-only restores unpaid entries and ignores replacement partner/division input without writes', async () => {
+test('payment-only keeps the existing partner and rejects a division outside the user’s entries', async () => {
   const app = server({ tables: { event_registrations: [{ id: 'entry-1', email: 'player@example.com', division_id: 'division-1', division: 'Open', full_name: 'Test player', partner_name: 'Original partner', partner_email: 'original@example.com', payment_status: 'pending', status: 'registered' }] } });
-  const { body, status } = await app.call({ mode: 'pay', divisionIds: ['injected-division'], partnerEmail: 'replacement@example.com' });
+  const invalid = await app.call({ mode: 'pay', divisionIds: ['injected-division'] });
+  assert.equal(invalid.status, 400);
+  const { body, status } = await app.call({ mode: 'pay', divisionIds: ['division-1'], partnerEmail: 'replacement@example.com' });
   assert.equal(status, 200);
   assert.equal(body.quote.mode, 'pay');
   assert.equal(body.quote.entries[0].partnerName, 'Original partner');
   assert.equal(body.quote.total, 367.5);
+  assert.equal(app.writes.length, 0);
+});
+test('payment-only can cover one person in one division', async () => {
+  const registrations = [
+    { id: 'self-a', email: 'player@example.com', division_id: 'a', division: 'Open', full_name: 'Test player', partner_email: 'partner@example.com', payment_status: 'pending', status: 'registered' },
+    { id: 'partner-a', email: 'partner@example.com', partner_email: 'player@example.com', registered_by: 'player@example.com', division_id: 'a', division: 'Open', full_name: 'Partner', payment_status: 'pending', status: 'registered' },
+    { id: 'self-b', email: 'player@example.com', division_id: 'b', division: 'Mixed', full_name: 'Test player', payment_status: 'pending', status: 'registered' },
+  ];
+  const app = server({ tables: { tournament_divisions: [{ id: 'a', name: 'Open', entry_fee: 350 }, { id: 'b', name: 'Mixed', entry_fee: 200 }], event_registrations: registrations } });
+  const partnerOnly = await app.call({ mode: 'pay', divisionIds: ['a'], selections: [{ divisionId: 'a', payForSelf: false, payForPartner: true }] });
+  assert.equal(partnerOnly.status, 200);
+  assert.equal(partnerOnly.body.quote.base, 350);
+  assert.deepEqual(Array.from(partnerOnly.body.quote.entries, entry => entry.division), ['Open']);
+  assert.equal(partnerOnly.body.quote.entries[0].payForSelf, false);
+  assert.equal(partnerOnly.body.quote.entries[0].payForPartner, true);
+  const selfOnly = await app.call({ mode: 'pay', divisionIds: ['b'], selections: [{ divisionId: 'b', payForSelf: true, payForPartner: false }] });
+  assert.equal(selfOnly.status, 200);
+  assert.equal(selfOnly.body.quote.base, 200);
+  assert.deepEqual(Array.from(selfOnly.body.quote.entries, entry => entry.division), ['Mixed']);
   assert.equal(app.writes.length, 0);
 });
 test('payment-only refuses missing, paid, withdrawn and another account entries', async () => {
@@ -103,8 +124,8 @@ test('payment-only direct-organiser checkout does not rewrite registration or pa
 
 test('payment review restores partner entries registered by the payer, with an explicit opt-out', async () => {
   const app = server({ tables: { event_registrations: [
-    { id: 'self', email: 'player@example.com', division_id: 'division-1', division: 'Open', full_name: 'Test player', payment_status: 'pending', status: 'registered' },
-    { id: 'partner', email: 'partner@example.com', registered_by: 'player@example.com', division_id: 'division-1', division: 'Open', full_name: 'Original partner', payment_status: 'pending', status: 'registered' },
+    { id: 'self', email: 'player@example.com', division_id: 'division-1', division: 'Open', full_name: 'Test player', partner_email: 'partner@example.com', payment_status: 'pending', status: 'registered' },
+    { id: 'partner', email: 'partner@example.com', partner_email: 'player@example.com', registered_by: 'player@example.com', division_id: 'division-1', division: 'Open', full_name: 'Original partner', payment_status: 'pending', status: 'registered' },
   ] } });
   const restored = await app.call({ mode: 'pay' });
   assert.equal(restored.body.quote.base, 700);
@@ -113,6 +134,21 @@ test('payment review restores partner entries registered by the payer, with an e
   const selfOnly = await app.call({ mode: 'pay', payForPartner: false });
   assert.equal(selfOnly.body.quote.base, 350);
   assert.equal(app.writes.length, 0);
+});
+
+test('payment review does not treat a solo entry as partnered with another entry it created', async () => {
+  const app = server({ tables: { event_registrations: [
+    { id: 'self', email: 'player@example.com', division_id: 'division-1', division: 'Open', full_name: 'Test player', partner_name: null, partner_email: null, payment_status: 'pending', status: 'registered' },
+    { id: 'other', email: 'other@example.com', registered_by: 'player@example.com', division_id: 'division-1', division: 'Open', full_name: 'Other player', partner_name: null, partner_email: null, payment_status: 'paid', status: 'registered' },
+  ] } });
+  const { body, status } = await app.call({ mode: 'pay' });
+  assert.equal(status, 200);
+  assert.equal(body.quote.entries[0].partnerEmail, null);
+  assert.equal(body.quote.entries[0].partnerName, null);
+  assert.equal(body.quote.entries[0].partnerPaymentStatus, null);
+  assert.equal(body.quote.entries[0].canCustomizePartner, false);
+  assert.equal(body.quote.base, 350);
+  assert.equal(body.quote.entries[0].playerCount, 1);
 });
 
 test('different divisions retain independent partner and payer choices', async () => {

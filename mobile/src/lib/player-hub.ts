@@ -48,8 +48,11 @@ export function playerCountryLabel(value: string | null | undefined): string {
   const code = value?.trim().toUpperCase();
   if (!code) return 'FIP player';
   if (!/^[A-Z]{2}$/.test(code)) return value!.trim();
-  const flag = String.fromCodePoint(...[...code].map(letter => 0x1F1E6 + letter.charCodeAt(0) - 65));
-  return `${flag} ${code}`;
+  return `${playerCountryFlag(code)} ${code}`;
+}
+export function playerCountryFlag(value: string | null | undefined): string {
+  const code = value?.trim().toUpperCase();
+  return code && /^[A-Z]{2}$/.test(code) ? String.fromCodePoint(...[...code].map(letter => 0x1F1E6 + letter.charCodeAt(0) - 65)) : '';
 }
 export function proHubPlayer(p: ProPlayer): HubPlayer {
   return { key: `pro:${p.id}`, source: 'pro', id: String(p.id), name: p.name, photo: p.photoUrl, gender: p.category, rank: p.rank != null && p.rank > 0 ? p.rank : null, points: p.points, subtitle: playerCountryLabel(p.nationality), pro: p };

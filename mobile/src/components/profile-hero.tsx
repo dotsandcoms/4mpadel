@@ -12,7 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { FadeUp } from '@/components/fade-up';
-import { PulseDot } from '@/components/pulse-dot';
+import { IdentityBadge } from '@/components/home-player-card';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import {
   formatPoints,
@@ -22,6 +22,7 @@ import {
   type ProfileStats,
   type TempLicense,
 } from '@/lib/profile';
+import { courtSideLabel, playingHandLabel } from '@/lib/player-preferences';
 import { lightBrand as brand, motion } from '@/theme/tokens';
 
 const COUNT_MS = 800;
@@ -77,6 +78,8 @@ type HeroProps = {
   player: PlayerRow;
   stats: ProfileStats;
   playId?: number;
+  fipLinked?: boolean;
+  statsReady?: boolean;
 };
 
 function rankNumber(label?: string | null) {
@@ -85,8 +88,8 @@ function rankNumber(label?: string | null) {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Website mobile identity card: photo, license, name, rank / points / matches. */
-export function ProfileHero({ player, stats, playId = 0 }: HeroProps) {
+/** Profile identity card with the same badges and SAPA career heading as Home. */
+export function ProfileHero({ player, stats, playId = 0, fipLinked = false, statsReady = true }: HeroProps) {
   const license = licenseBadge(player.license_type);
   const name = player.name?.trim() || 'Player';
   const rankN = rankNumber(player.rank_label);
@@ -94,7 +97,10 @@ export function ProfileHero({ player, stats, playId = 0 }: HeroProps) {
   const pointsCount = useCountTo(player.points ?? 0, 0, playId);
   const matchesCount = useCountTo(stats.matchCount, 0, playId);
   const rankValue = rankN == null ? formatRank(player.rank_label) : `#${rankCount.shown}`;
+  const sapaProfile = rankN != null || player.license_type?.toLowerCase() === 'full';
   const photo = 64;
+  const side = courtSideLabel(player.court_side);
+  const hand = playingHandLabel(player.playing_hand);
 
   return (
     <View className="rounded-2xl border border-court-edge bg-court-elevated p-3.5">
@@ -125,35 +131,30 @@ export function ProfileHero({ player, stats, playId = 0 }: HeroProps) {
         </View>
 
         <View className="ml-3 min-w-0 flex-1">
-          {license ? (
-            <View
-              className="mb-1 flex-row items-center self-start rounded-full border px-2 py-0.5"
-              style={{ borderColor: license.border, backgroundColor: license.bg }}>
-              {license.pulse ? <PulseDot color={brand.accent} size={5} /> : null}
-              <Text
-                className="text-[7px] font-black uppercase tracking-wider"
-                style={{
-                  color: license.color,
-                  marginLeft: license.pulse ? 5 : 0,
-                }}>
-                {license.label}
-              </Text>
-            </View>
-          ) : null}
+          <View className="mb-1.5 flex-row flex-wrap items-center" style={{ gap: 6 }}>
+            {sapaProfile ? <IdentityBadge label="SAPA" color={brand.accent} border={brand.edge} background={brand.glass} /> : null}
+            <IdentityBadge label="4M" color="#8D610C" border="#EFDCAA" background="#FFF7E5" />
+            {fipLinked ? <IdentityBadge label="FIP" color="#2449D8" border="#CAD8FF" background="#EEF3FF" /> : null}
+            {license && !sapaProfile ? <IdentityBadge label={license.label} color={license.color} border={license.border} background={license.bg} /> : null}
+          </View>
 
           <Text
             className="text-lg font-extrabold uppercase leading-tight text-court-ink"
             numberOfLines={2}>
             {name}
           </Text>
+          {(side || hand) && <Text style={{ color: brand.muted, fontSize: 12, lineHeight: 17 }} numberOfLines={2}>{[side && `${side} court`, hand].filter(Boolean).join(' · ')}</Text>}
 
-          <View className="mt-1.5 flex-row items-stretch">
-            <Stat value={rankValue} label="Rank" color={brand.premium} />
-            <View className="h-7 w-px self-center bg-court-surface" />
-            <Stat value={player.points == null ? '—' : formatPoints(pointsCount.shown)} label="Points" color={brand.accent} />
-            <View className="h-7 w-px self-center bg-court-surface" />
-            <Stat value={String(matchesCount.shown)} label="Matches" color={brand.premium} />
-          </View>
+        </View>
+      </View>
+      <View className="mt-3 rounded-xl bg-court-surface px-3 py-2.5">
+        <Text className="mb-2 text-[11px] font-bold text-court-muted">SAPA Career</Text>
+        <View className="flex-row items-stretch">
+          <Stat value={rankValue} label="Rank" color={brand.premium} />
+          <View className="w-px self-stretch bg-court-edge" />
+          <Stat value={player.points == null ? '—' : formatPoints(pointsCount.shown)} label="Points" color={brand.accent} />
+          <View className="w-px self-stretch bg-court-edge" />
+          <Stat value={statsReady ? String(matchesCount.shown) : '—'} label="Matches" color={brand.premium} />
         </View>
       </View>
     </View>

@@ -6,7 +6,7 @@ const vm = require('node:vm');
 
 // Render the actual screen with an in-memory hook host and read-only API fixtures.
 // This checks its button handlers and conditional branches without a native device.
-async function screen(mode, eventOptions = {}, savedCheckout = null) {
+async function screen(mode, eventOptions = {}, savedCheckout = null, quoteError = null) {
   const values = [], effects = [], navigation = [], requests = [];
   let cursor = 0, mounted = false;
   const hooks = {
@@ -17,11 +17,12 @@ async function screen(mode, eventOptions = {}, savedCheckout = null) {
   const event = { id: 524, event_name: 'Legends', is_manual: true, start_date: '2099-10-02', ...eventOptions };
   const divisions = [{ id: 'men40', name: "Men's 40+", entry_fee: 600 }];
   const partner = { id: '2', name: 'Brad', email: 'brad@example.com', license_type: 'full', paid_registration: true };
-  const quote = { mode: mode === 'pay' ? 'pay' : 'register', total: 1200, base: 1200, fee: 0, entries: [{ id: 'reg1', divisionId: 'men40', division: "Men's 40+", playerName: 'Mark', partnerName: 'Brad', partnerEmail: partner.email, partnerPaymentStatus: 'pending', playerCount: 2, unitFee: 600, amount: 1200 }], divisionNames: ["Men's 40+"], lineItems: [], method: 'platform' };
+  const quote = { mode: mode === 'pay' ? 'pay' : 'register', total: 1200, base: 1200, fee: 0, entries: [{ id: 'reg1', divisionId: 'men40', division: "Men's 40+", playerName: 'Mark', partnerName: 'Brad', partnerEmail: partner.email, paymentStatus: 'pending', partnerPaymentStatus: 'pending', playerCount: 2, unitFee: 600, amount: 1200 }], divisionNames: ["Men's 40+"], lineItems: [], method: 'platform' };
   const router = Object.fromEntries(['back', 'push', 'replace', 'dismissTo'].map(k => [k, v => navigation.push([k, v])])); router.canGoBack = () => true;
   const native = Object.fromEntries(['ActivityIndicator', 'Pressable', 'ScrollView', 'Switch', 'Text', 'TextInput', 'View'].map(k => [k, k]));
   const modules = {
     '@/components/events/entry-saved-banner': { EntrySavedBanner: 'EntrySavedBanner' },
+    '@/components/toast': { Toast: 'Toast' },
     '@/components/events/tshirt-size-picker': { SizePicker: 'SizePicker' },
     '@/components/events/sponsor-details': { SponsorDetails: 'SponsorDetails' },
     react: hooks,
@@ -38,7 +39,7 @@ async function screen(mode, eventOptions = {}, savedCheckout = null) {
     '@/lib/home': { formatEventRange: () => '2–4 Oct' },
     '@/lib/events': { fetchEvent: async () => event, fetchDivisions: async () => divisions, currentEmail: async () => 'mark@example.com', fetchMyEventRegistrations: async () => mode === 'add-partner' ? [{ id: 'reg1', division_id: 'men40', tshirt_size: 'L', payment_status: 'paid' }] : mode === 'pay' ? [{ id: 'reg1', division_id: 'men40', partner_email: partner.email, partner_name: partner.name }] : [], eventImage: () => 1 },
     '@/lib/event-rules': { formatMoney: n => `R ${n}`, entryFee: () => 600, registrationState: event => event.registration_closes_at && new Date(event.registration_closes_at) <= new Date() ? 'closed' : 'open' },
-    '@/lib/event-checkout': { invokeCheckout: async input => { requests.push(input); return { quote }; } },
+    '@/lib/event-checkout': { invokeCheckout: async input => { requests.push(input); if (quoteError && !input.tshirtSize) throw new Error(quoteError); return { quote }; } },
     '@/lib/site': {}, '@/theme/tokens': { brand: {}, lightBrand: {} },
     '@/lib/notifications': { requestPushPermission: async () => true },
     '@/lib/supabase': { supabase: {
@@ -48,7 +49,7 @@ async function screen(mode, eventOptions = {}, savedCheckout = null) {
   };
   const source = ts.transpileModule(fs.readFileSync('src/app/events/register.tsx', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: false } }).outputText;
   const exports = {};
-  vm.runInNewContext(source, { exports, require: name => { assert.ok(name in modules, name); return modules[name]; }, __DEV__: true, console, setInterval: () => 0, clearInterval: () => {} });
+  vm.runInNewContext(source, { exports, require: name => { assert.ok(name in modules, name); return modules[name]; }, __DEV__: true, console, Error, setInterval: () => 0, clearInterval: () => {} });
   const render = () => { cursor = 0; const component = exports.default().type; const tree = component(); mounted = true; return tree; };
   render(); effects.forEach(fn => fn());
   await new Promise(resolve => setImmediate(resolve));
@@ -60,34 +61,33 @@ async function screen(mode, eventOptions = {}, savedCheckout = null) {
 }
 test('existing-entry payment opens the existing division step and Back returns there', async () => {
   const app = await screen('pay');
-  const division = app.find('DivisionOptions').props;
-  assert.equal(division.lockEntry, true);
-  assert.deepEqual(Array.from(division.selected), ['men40']);
-  assert.equal(division.values.men40.payForPartner, true);
+  assert.ok(app.find('Text', p => p.children === "Men's 40+"));
+  assert.equal(app.find('Pressable', p => p.accessibilityRole === 'checkbox').props.accessibilityState.checked, true);
   app.find('ActionButton', p => p.label === 'Continue to Review & Pay').props.onPress();
   await app.flush();
   assert.ok(app.find('ActionButton', p => p.label === 'Pay & Complete Registration'));
   app.find('ActionButton', p => p.label === '‹ Back').props.onPress();
-  assert.equal(app.find('DivisionOptions').props.values.men40.payForPartner, true);
+  assert.equal(app.find('Pressable', p => p.accessibilityRole === 'checkbox').props.accessibilityState.checked, true);
   assert.equal(app.navigation.length, 0);
   app.find('ActionButton', p => p.label === 'Continue to Review & Pay').props.onPress();
   await app.flush();
   assert.ok(app.find('ActionButton', p => p.label === 'Pay & Complete Registration'));
   assert.equal(app.requests.at(-1).selections[0].partnerEmail, 'brad@example.com');
+  assert.equal(app.requests.at(-1).selections[0].payForSelf, true);
+  assert.equal(app.requests.at(-1).selections[0].payForPartner, false);
   assert.equal(app.navigation.length, 0);
 });
-test('paying only myself requires partner-payment acknowledgment before review', async () => {
+test('paying only a partner selects only their fee for review', async () => {
   const app = await screen('pay');
-  app.find('DivisionOptions').props.onChange('men40', { payForPartner: false });
-  const requirement = app.find('PartnerPaymentRequirement');
-  assert.ok(requirement);
+  app.find('Pressable', p => p.accessibilityRole === 'checkbox').props.onPress();
   assert.equal(app.find('ActionButton', p => p.label === 'Continue to Review & Pay').props.disabled, true);
-  requirement.props.onPress();
+  app.find('Pressable', p => p.accessibilityRole === 'checkbox' && String(p.children?.[1]?.props?.children).includes('Brad')).props.onPress();
   assert.equal(app.find('ActionButton', p => p.label === 'Continue to Review & Pay').props.disabled, false);
   app.find('ActionButton', p => p.label === 'Continue to Review & Pay').props.onPress();
   await app.flush();
   assert.equal(app.requests.at(-1).mode, 'pay');
-  assert.equal(app.requests.at(-1).selections[0].payForPartner, false);
+  assert.equal(app.requests.at(-1).selections[0].payForSelf, false);
+  assert.equal(app.requests.at(-1).selections[0].payForPartner, true);
 });
 test('new registration preserves each division partner when returning from review', async () => {
   const app = await screen();
@@ -113,6 +113,21 @@ test('new registration explains and requires acknowledgment when partner pays se
   assert.equal(app.find('ActionButton', p => p.label === 'Continue to Review & Pay').props.disabled, true);
   requirement.props.onPress();
   assert.equal(app.find('ActionButton', p => p.label === 'Continue to Review & Pay').props.disabled, false);
+});
+
+test('required-field errors appear in a floating banner without scrolling', async () => {
+  const app = await screen(undefined, { collect_tshirt_size: true }, null, 'Select your T-shirt size.');
+  app.find('ActionButton', p => p.label === 'Continue to Division').props.onPress();
+  app.find('DivisionOptions').props.onToggle('men40');
+  app.find('ActionButton', p => p.label === 'Continue to Review & Pay').props.onPress();
+  await app.flush();
+  assert.equal(app.find('Toast').props.message, 'Select your T-shirt size.');
+  assert.equal(app.find('Toast').props.fromTop, true);
+  app.find('Toast').props.onDismiss();
+  assert.equal(app.find('Toast').props.message, null);
+  app.find('ActionButton', p => p.label === 'Continue to Review & Pay').props.onPress();
+  await app.flush();
+  assert.equal(app.find('Toast').props.message, 'Select your T-shirt size.');
 });
 
 test('logo controls follow organiser flags and checkout receives explicit sponsor edits', async () => {
@@ -141,8 +156,7 @@ test('logo controls follow organiser flags and checkout receives explicit sponso
 
 test('saved checkout still opens the division step and can reach review', async () => {
   const app = await screen('pay', {}, JSON.stringify({ reference: 'previous-attempt', url: 'https://checkout.paystack.com/saved', payForPartner: false }));
-  assert.ok(app.find('DivisionOptions', p => p.lockEntry));
-  app.find('PartnerPaymentRequirement').props.onPress();
+  assert.ok(app.find('Pressable', p => p.accessibilityRole === 'checkbox'));
   app.find('ActionButton', p => p.label === 'Continue to Review & Pay').props.onPress();
   await app.flush();
   assert.ok(app.find('Text', p => p.children === 'Review & Pay'));
@@ -151,7 +165,7 @@ test('saved checkout still opens the division step and can reach review', async 
   assert.equal(app.find('ActionButton', p => p.label === 'Continue to checkout'), undefined);
   assert.ok(app.find('Text', p => p.children === 'Entries'));
   app.find('ActionButton', p => p.label === '‹ Back').props.onPress();
-  assert.ok(app.find('DivisionOptions', p => p.lockEntry));
+  assert.ok(app.find('Pressable', p => p.accessibilityRole === 'checkbox'));
   assert.equal(app.navigation.length, 0);
 });
 

@@ -5,6 +5,7 @@ import Animated, {
   Easing,
   FadeIn,
   FadeInDown,
+  FadeInUp,
   FadeOut,
   FadeOutUp,
   cancelAnimation,
@@ -22,6 +23,7 @@ export type ToastKind = 'error' | 'success';
 type Props = {
   message: string | null;
   kind?: ToastKind;
+  fromTop?: boolean;
   onDismiss: () => void;
 };
 
@@ -36,7 +38,7 @@ const easeOut = Easing.bezier(0, 0, 0, 1);
  * Floating status chip. Field errors stay on the field; this repeats them
  * above the keyboard. Soft enter, shorter exit. Dismiss does not steal focus.
  */
-export function Toast({ message, kind = 'error', onDismiss }: Props) {
+export function Toast({ message, kind = 'error', fromTop = false, onDismiss }: Props) {
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
   const drain = useSharedValue(1);
@@ -70,7 +72,7 @@ export function Toast({ message, kind = 'error', onDismiss }: Props) {
 
   const enter = reduced
     ? FadeIn.duration(motion.duration.fast)
-    : FadeInDown.duration(motion.duration.enter).easing(easeOut);
+    : (fromTop ? FadeInUp : FadeInDown).duration(motion.duration.enter).easing(easeOut);
   const exit = reduced
     ? FadeOut.duration(motion.duration.instant)
     : FadeOutUp.duration(motion.duration.fast).easing(easeOut);

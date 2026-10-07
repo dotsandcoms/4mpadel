@@ -10,6 +10,7 @@ import { lightBrand as brand } from '@/theme/tokens';
 type Props = {
   player: HomePlayer | null;
   loading: boolean;
+  fipLinked: boolean;
   onPress: () => void;
 };
 
@@ -29,7 +30,7 @@ export function HomeGreeting({ player }: { player: HomePlayer | null }) {
   );
 }
 
-export function HomePlayerCard({ player, loading, onPress }: Props) {
+export function HomePlayerCard({ player, loading, fipLinked, onPress }: Props) {
   if (loading && !player) {
     return (
       <View className="rounded-2xl border border-court-edge bg-court-page/70 p-3.5">
@@ -60,6 +61,7 @@ export function HomePlayerCard({ player, loading, onPress }: Props) {
     : '';
   const record = player.winLoss || '—';
   const license = licenseCopy(player.license_type);
+  const sapaProfile = rank !== '—' || player.license_type?.toLowerCase() === 'full';
 
   return (
     <PressableScale
@@ -82,24 +84,12 @@ export function HomePlayerCard({ player, loading, onPress }: Props) {
         </View>
 
         <View className="ml-3 min-w-0 flex-1 justify-center">
-          {license ? (
-            <View
-              className="mb-1.5 flex-row items-center self-start rounded-full border px-2 py-0.5"
-              style={{
-                borderColor: license.border,
-                backgroundColor: license.bg,
-              }}>
-              {license.pulse ? <SymbolView name={{ ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' }} size={12} tintColor={brand.accent} /> : null}
-              <Text
-                className="text-[9px] font-bold uppercase tracking-wider"
-                style={{
-                  color: license.color,
-                  marginLeft: license.pulse ? 6 : 0,
-                }}>
-                {license.label}
-              </Text>
-            </View>
-          ) : null}
+          <View className="mb-1.5 flex-row flex-wrap items-center" style={{ gap: 6 }}>
+            {sapaProfile ? <IdentityBadge label="SAPA" color={brand.accent} border={brand.edge} background={brand.glass} /> : null}
+            <IdentityBadge label="4M" color="#8D610C" border="#EFDCAA" background="#FFF7E5" />
+            {fipLinked ? <IdentityBadge label="FIP" color="#2449D8" border="#CAD8FF" background="#EEF3FF" /> : null}
+            {license && !sapaProfile ? <IdentityBadge label={license.label} color={license.color} border={license.border} background={license.bg} /> : null}
+          </View>
 
           <Text
             numberOfLines={1}
@@ -113,15 +103,25 @@ export function HomePlayerCard({ player, loading, onPress }: Props) {
           <SymbolView name="chevron.right" size={16} tintColor={brand.faint} />
         </View>
       </View>
-      <View className="mt-4 flex-row items-stretch rounded-xl bg-court-surface px-3 py-3">
-        <Stat value={rank} label="Rank" color={brand.premium} lead movement={hasMovement ? movement : undefined} />
-        <View className="w-px self-stretch bg-court-edge" />
-        <Stat value={points} label="Points" color={brand.accent} />
-        <View className="w-px self-stretch bg-court-edge" />
-        <Stat value={record} label="Wins–losses" color={brand.premium} />
+      <View className="mt-4 rounded-xl bg-court-surface px-3 py-3">
+        <Text className="mb-2 text-[11px] font-bold text-court-muted">SAPA Career</Text>
+        <View className="flex-row items-stretch">
+          <Stat value={rank} label="Rank" color={brand.premium} lead movement={hasMovement ? movement : undefined} />
+          <View className="w-px self-stretch bg-court-edge" />
+          <Stat value={points} label="Points" color={brand.accent} />
+          <View className="w-px self-stretch bg-court-edge" />
+          <Stat value={record} label="Wins–losses" color={brand.premium} />
+        </View>
       </View>
     </PressableScale>
   );
+}
+
+export function IdentityBadge({ label, color, border, background }: { label: string; color: string; border: string; background: string }) {
+  return <View className="flex-row items-center rounded-full border px-2 py-0.5" style={{ borderColor: border, backgroundColor: background, gap: 4 }}>
+    <SymbolView name={{ ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' }} size={11} tintColor={color} />
+    <Text className="text-[9px] font-bold tracking-wider" style={{ color }}>{label}</Text>
+  </View>;
 }
 
 function Stat({

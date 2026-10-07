@@ -6,12 +6,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebsiteHeader } from '@/components/events/website-ui';
 import { LocalRankings } from '@/components/rankings/local-rankings';
-import { ProPadelFeed, MatchCard } from '@/components/pro-padel-feed';
+import { ProPadelFeed } from '@/components/pro-padel-feed';
+import { ProPlayerProfile } from '@/components/players/pro-player-profile';
 import { usePlayerHub } from '@/hooks/use-player-hub';
 import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
 import { filterHubPlayers, playerRankLabel, proHubPlayer, searchProPlayers, topLocalPlayers, type HubPlayer } from '@/lib/player-hub';
 import { playerPoints } from '@/lib/players';
-import { selectProMatches } from '@/lib/pro-padel';
 import { lightBrand as b } from '@/theme/tokens';
 const BLUE = '#2449D8';
 const panel = { padding: 16, borderRadius: 20, backgroundColor: b.elevated, borderWidth: 1, borderColor: b.edge } as const;
@@ -26,9 +26,9 @@ export default function PlayerHub() {
   const [remote, setRemote] = useState<HubPlayer[]>([]), [page, setPage] = useState(1), [more, setMore] = useState(false), [searching, setSearching] = useState(false), [searchError, setSearchError] = useState('');
   const [remoteTotal, setRemoteTotal] = useState<number | null>(null);
   const [browse, setBrowse] = useState(false), [reload, setReload] = useState(0);
-  const [selected, setSelected] = useState<HubPlayer | null>(null), [detailError, setDetailError] = useState(''), [detailLoading, setDetailLoading] = useState(false);
+  const [selected, setSelected] = useState<HubPlayer | null>(null);
   const [matchOpen, setMatchOpen] = useState(false);
-  const sequence = useRef(0), detailSequence = useRef(0);
+  const sequence = useRef(0);
   useFocusEffect(useCallback(() => { setMatchOpen(false); }, []));
   useEffect(() => { if (['Discover', 'Following', 'Rankings', 'Tour'].includes(params.view || '')) setView(params.view as ViewName); if (['all', '4m', 'pro'].includes(params.source || '')) setSource(params.source!); if (params.query != null) setQuery(params.query); if (['all', 'men', 'women'].includes(params.gender || '')) setGender(params.gender!); }, [params.view, params.source, params.query, params.gender]);
   useEffect(() => { if (view === 'Rankings') { if (source === 'all') setSource('4m'); if (gender === 'all') setGender('men'); } }, [view, source, gender]);
@@ -65,13 +65,9 @@ export default function PlayerHub() {
   const signIn = () => router.push('/(auth)/sign-in');
   const follow = (p: HubPlayer) => { if (!state.pro.userId) signIn(); else void state.toggle(p); };
   const followDisabled = (p: HubPlayer) => !!state.pending || state.pro.pendingId !== null || (p.source === '4m' ? state.followLoading || !!state.followError : state.pro.followsLoading || !!state.pro.followsError);
-  const openPlayer = async (p: HubPlayer) => {
+  const openPlayer = (p: HubPlayer) => {
     if (p.source === '4m') { router.push({ pathname: '/players/[id]', params: { id: p.id } }); return; }
-    const version = ++detailSequence.current;
-    setSelected(p); setDetailError(''); setDetailLoading(true);
-    try { const data = await searchProPlayers('', 'all', 1, Number(p.id)); if (version === detailSequence.current && data.players[0]) setSelected(proHubPlayer(data.players[0])); }
-    catch (e) { if (version === detailSequence.current) setDetailError(e instanceof Error ? e.message : 'Profile could not be refreshed.'); }
-    finally { if (version === detailSequence.current) setDetailLoading(false); }
+    setSelected(p);
   };
   const openMatchFromPlayer = (id: number, from: string) => {
     setMatchOpen(true);
@@ -106,7 +102,18 @@ export default function PlayerHub() {
       </View>}
       ListEmptyComponent={view === 'Following' ? <View style={panel}><Text style={{ color: b.muted }}>Follow a local or FIP player to start your list. Your favourites will appear together here.</Text></View> : searchingDirectory && !searching ? <Text style={{ color: b.muted }}>No players found. Try another name or filter.</Text> : null}
       ListFooterComponent={more && source !== '4m' && view !== 'Following' ? <Pressable disabled={searching} accessibilityRole="button" onPress={() => setPage(p => p + 1)} style={{ ...panel, alignItems: 'center' }}><Text style={{ color: b.accent, fontWeight: '700' }}>{searching ? 'Loading…' : `Load more FIP players${remoteTotal !== null ? ` (${remote.length} of ${remoteTotal.toLocaleString('en-ZA')})` : ''}`}</Text></Pressable> : null} />}
-    <Modal visible={!!selected && !matchOpen} animationType="slide" onRequestClose={() => { detailSequence.current++; setSelected(null); }}><View style={{ flex: 1, paddingTop: safe.top, backgroundColor: b.page }}><Pressable accessibilityRole="button" onPress={() => { detailSequence.current++; setSelected(null); }} style={{ padding: 16, minHeight: 48 }}><Text style={{ color: b.accent }}>Close</Text></Pressable>{selected && <ScrollView contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: safe.bottom + 24 }}><Text style={{ color: b.accent, fontWeight: '700' }}>FIP PLAYER</Text>{selected.photo && <Image source={{ uri: selected.photo }} style={{ width: 110, height: 130, borderRadius: 18, backgroundColor: b.glass }} contentFit="cover" />}<Text style={{ color: b.premium, fontSize: 28, fontWeight: '800' }}>{selected.name}</Text><Text style={{ color: b.muted }}>{selected.rank ? `World #${selected.rank}` : 'Unranked'} · {playerPoints(selected.points)} points</Text>{followButton(selected)}{detailLoading && <ActivityIndicator color={b.accent} />}{!!detailError && <Text style={{ color: b.danger }}>{detailError}</Text>}<Text style={{ color: b.muted }}>{[selected.subtitle, selected.pro?.side, selected.pro?.hand && `${selected.pro.hand}-handed`].filter(Boolean).join(' · ')}</Text><Text style={{ color: b.premium, fontWeight: '800', fontSize: 18 }}>Recent results</Text>{selectProMatches(state.pro.tour.data?.matches || [], [Number(selected.id)]).slice(0, 6).map(m => <MatchCard key={m.id} match={m} lookup={new Map(pros.filter(p => p.pro).map(p => [Number(p.id), p.pro!]))} onPlayer={id => { const p = all.find(p => p.key === `pro:${id}`); if (p) void openPlayer(p); }} onOpenMatch={openMatchFromPlayer} />)}{!selectProMatches(state.pro.tour.data?.matches || [], [Number(selected.id)]).length && <Text style={{ color: b.muted }}>No results in the currently published tour feed.</Text>}</ScrollView>}</View></Modal>
+    <Modal visible={!!selected && !matchOpen} animationType="slide" onRequestClose={() => setSelected(null)}>
+      {selected && <ProPlayerProfile
+        key={selected.key}
+        player={selected}
+        followButton={followButton(selected)}
+        onClose={() => setSelected(null)}
+        onMatch={id => openMatchFromPlayer(id, 'players')}
+        onPlayer={(id, name) => {
+          const known = all.find(person => person.key === `pro:${id}`);
+          setSelected(known || { key: `pro:${id}`, source: 'pro', id: String(id), name, photo: null, gender: selected.gender, rank: null, points: null, subtitle: 'FIP player' });
+        }} />}
+    </Modal>
   </View>;
 }
 function Chip({ label, active, onPress, blue = false, compact = false }: { label: string; active: boolean; onPress: () => void; blue?: boolean; compact?: boolean }) {

@@ -14,6 +14,7 @@ import {
   RankingPreview,
 } from '@/components/onboarding-previews';
 import { PressableScale } from '@/components/pressable-scale';
+import { ObserveReady } from '@/components/observe-ready';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
 import { markOnboardingSeen } from '@/lib/onboarding';
@@ -118,6 +119,7 @@ export default function OnboardingScreen() {
     <GestureHandlerRootView
       className="flex-1 bg-court-page"
       style={{ flex: 1, backgroundColor: brand.page, paddingTop: insets.top }}>
+      <ObserveReady />
       <View className="h-20 flex-row items-center justify-between px-7">
         <View className="items-start self-start py-2" style={{ flex: 1 }}>
           <Image

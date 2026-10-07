@@ -211,6 +211,8 @@ export type PlayerRow = {
   instagram_link: string | null;
   region: string | null;
   racket_brand: string | null;
+  court_side: string | null;
+  playing_hand: string | null;
   image_url: string | null;
   license_type: string | null;
   paid_registration: boolean | null;
@@ -269,6 +271,8 @@ export type PlayerDetailsUpdate = {
   bio: string;
   instagram_link: string | null;
   racket_brand: string | null;
+  court_side: string | null;
+  playing_hand: string | null;
 };
 
 const EMPTY_STATS: ProfileStats = {
@@ -281,13 +285,15 @@ const EMPTY_STATS: ProfileStats = {
 };
 
 /** Load the signed-in player, RankedIn form, and any still-valid temp license. */
-export async function fetchProfileBundle(email?: string | null): Promise<ProfileBundle> {
+export async function fetchProfileBundle(email?: string | null, onPlayer?: (player: PlayerRow | null) => void): Promise<ProfileBundle> {
   const normalised = email?.trim().toLowerCase() ?? '';
   if (!normalised) {
+    onPlayer?.(null);
     return { player: null, stats: EMPTY_STATS, tempLicense: null };
   }
 
   const player = await fetchPlayerRow(normalised);
+  onPlayer?.(player);
   if (!player) {
     return { player: null, stats: EMPTY_STATS, tempLicense: null };
   }
@@ -301,8 +307,9 @@ export async function fetchProfileBundle(email?: string | null): Promise<Profile
 }
 
 export async function updatePlayerDetails(id: number, updates: PlayerDetailsUpdate) {
-  const { error } = await supabase.from('players').update(updates).eq('id', id);
+  const { data, error } = await supabase.from('players').update(updates).eq('id', id).select('id').maybeSingle();
   if (error) throw error;
+  if (!data) throw new Error('Unable to save your player profile. Please try again.');
 }
 
 export type LicenseBadge = {

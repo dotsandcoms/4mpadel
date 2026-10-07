@@ -7,21 +7,32 @@ import { fetchNotificationPreferences, NOTIFICATION_GROUPS, saveNotificationPref
 import { getPushPermissionStatus, requestPushPermission } from '@/lib/notifications';
 import { lightBrand as brand } from '@/theme/tokens';
 
+function within<T>(task: Promise<T>, milliseconds: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  return Promise.race([
+    task,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Request timed out')), milliseconds);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
 export default function NotificationSettings() {
   const insets = useSafeAreaInsets();
   const [prefs, setPrefs] = useState<NotificationPreferences>({});
   const [loaded, setLoaded] = useState(false);
-  const [permission, setPermission] = useState<string>('loading');
+  const [permission, setPermission] = useState<Awaited<ReturnType<typeof getPushPermissionStatus>> | 'loading' | 'error'>('loading');
   const [busy, setBusy] = useState<string | null>(null);
   const lock = useRef(false);
   const [error, setError] = useState('');
   const refreshPermission = useCallback(async () => {
-    try { setPermission(await getPushPermissionStatus()); }
-    catch { setError('Could not read device permissions. Please try again.'); }
+    setPermission('loading');
+    try { setPermission(await within(getPushPermissionStatus(), 5000)); }
+    catch { setPermission('error'); }
   }, []);
   const load = useCallback(async () => {
     setError('');
-    try { setPrefs(await fetchNotificationPreferences()); setLoaded(true); }
+    try { setPrefs(await within(fetchNotificationPreferences(), 10000)); setLoaded(true); }
     catch { setError('Could not load your preferences. Please try again.'); }
   }, []);
   useEffect(() => {
@@ -49,11 +60,10 @@ export default function NotificationSettings() {
     if (lock.current) return;
     lock.current = true; setBusy('permission'); setError('');
     try {
-      if (permission === 'denied' || permission === 'granted') await Linking.openSettings();
-      else if (!await requestPushPermission()) setError('Push notifications could not be enabled. Check device permissions and try again.');
-      await refreshPermission();
+      if (permission === 'denied' || permission === 'granted') await within(Linking.openSettings(), 15000);
+      else if (!await within(requestPushPermission(), 15000)) setError('Push notifications could not be enabled. Check device permissions and try again.');
     } catch { setError('Could not update device permissions. Please try again.'); }
-    finally { lock.current = false; setBusy(null); }
+    finally { await refreshPermission(); lock.current = false; setBusy(null); }
   }
   function toggle(key: NotificationToggle, label: string, detail: string) {
     return <View key={key} style={{ flexDirection: 'row', alignItems: 'center', padding: 16, gap: 16, borderBottomWidth: 0.5, borderColor: brand.edge }}>
@@ -68,8 +78,8 @@ export default function NotificationSettings() {
       <View style={{ backgroundColor: brand.surface, borderRadius: 16, overflow: 'hidden' }}>
         {toggle('push_enabled', 'Push notifications', 'Allow updates from 4M Padel.')}
         <View style={{ padding: 16 }}>
-          <Text style={{ color: brand.premium, fontSize: 15 }}>This device: {permission === 'granted' ? 'notifications allowed' : permission === 'unavailable' ? 'push unavailable' : permission === 'loading' ? 'checking permissions…' : 'notifications not allowed'}</Text>
-          {permission !== 'unavailable' && <Pressable accessibilityRole="button" disabled={busy !== null} onPress={() => void enableDevice()} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: brand.accent, fontWeight: '600', fontSize: 15 }}>{permission === 'denied' || permission === 'granted' ? 'Open device settings' : 'Enable on this device'}</Text></Pressable>}
+          <Text style={{ color: brand.premium, fontSize: 15 }}>This device: {permission === 'granted' ? 'notifications allowed' : permission === 'unavailable' ? 'push unavailable' : permission === 'loading' ? 'checking permissions…' : permission === 'error' ? 'could not check permissions' : 'notifications not allowed'}</Text>
+          {permission !== 'unavailable' && <Pressable accessibilityRole="button" disabled={busy !== null || permission === 'loading'} onPress={() => void (permission === 'error' ? refreshPermission() : enableDevice())} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: brand.accent, fontWeight: '600', fontSize: 15 }}>{permission === 'error' ? 'Retry device check' : permission === 'denied' || permission === 'granted' ? 'Open device settings' : 'Enable on this device'}</Text></Pressable>}
         </View>
       </View>
       {busy && <ActivityIndicator accessibilityLabel="Saving notification preference" style={{ marginTop: 16 }} />}

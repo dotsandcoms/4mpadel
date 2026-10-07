@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { PublicPlayer } from '@/lib/players';
 import { playerForm } from '@/lib/players';
+import { courtSideLabel, playingHandLabel } from '@/lib/player-preferences';
 import type { PlayerMatch, MatchSide } from '@/lib/matches';
 import { lightBrand as b } from '@/theme/tokens';
 
@@ -13,6 +14,8 @@ export function PlayerOverview({ player }: { player: PublicPlayer }) {
     { label: 'HOME CLUB', value: player.home_club, icon: 'home-outline' },
     { label: 'REGION', value: player.region, icon: 'location-outline' },
     { label: 'NATIONALITY', value: player.nationality, icon: 'flag-outline' },
+    { label: 'COURT SIDE', value: courtSideLabel(player.court_side), icon: 'swap-horizontal-outline' },
+    { label: 'PLAYING HAND', value: playingHandLabel(player.playing_hand), icon: 'hand-right-outline' },
     { label: 'RACKET', value: player.racket_brand, icon: 'tennisball-outline' },
   ];
   return <>

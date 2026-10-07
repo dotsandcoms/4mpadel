@@ -33,6 +33,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ExpandReveal } from '@/components/expand-reveal';
 import { FadeUp } from '@/components/fade-up';
 import { LiquidField } from '@/components/liquid-field';
+import { ObserveReady } from '@/components/observe-ready';
 import { PressableScale } from '@/components/pressable-scale';
 import { Toast, type ToastKind } from '@/components/toast';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
@@ -268,6 +269,7 @@ export default function SignInScreen() {
       keyboardVerticalOffset={0}
       className="flex-1 bg-court-page"
       style={{ flex: 1, backgroundColor: brand.page, paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }}>
+      <ObserveReady />
       <ScrollView
         style={{ flex: 1 }}
         contentInsetAdjustmentBehavior="never"

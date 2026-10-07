@@ -1,5 +1,6 @@
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { Observe } from 'expo-observe';
 import { SymbolView } from 'expo-symbols';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
@@ -15,6 +16,7 @@ import { MenuButton } from '@/components/app-drawer';
 import { FadeUp } from '@/components/fade-up';
 import { EmptyBlock } from '@/components/home-event-card';
 import { NotificationBell } from '@/components/home-header';
+import { ObserveReady } from '@/components/observe-ready';
 import {
   PROFILE_SECTIONS,
   ProfileSectionPager,
@@ -64,9 +66,11 @@ export default function ProfileScreen() {
   const [pagerH, setPagerH] = useState(0);
   const [bundle, setBundle] = useState<ProfileBundle>(EMPTY_PROFILE);
   const [home, setHome] = useState<HomeBundle | null>(null);
+  const [fipLinked, setFipLinked] = useState(false);
   const [transactions, setTransactions] = useState<ProfileTransaction[]>([]);
   const [txLoading, setTxLoading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [statsReady, setStatsReady] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [section, setSection] = useState<ProfileSection>('events');
   const [eventView, setEventView] = useState<AgendaFilter>('upcoming');
@@ -77,6 +81,8 @@ export default function ProfileScreen() {
   const [toast, setToast] = useState<{ id: number; message: string; kind: ToastKind } | null>(null);
   const toastSeq = useRef(0);
   const [statsPlayId, setStatsPlayId] = useState(0);
+  const loadId = useRef(0);
+  const statsPlayerId = useRef<number | null>(null);
 
   const dismissToast = useCallback(() => setToast(null), []);
   function flash(message: string, kind: ToastKind = 'error') {
@@ -85,30 +91,61 @@ export default function ProfileScreen() {
   }
 
   const load = useCallback(async (soft?: boolean) => {
+    const currentLoad = ++loadId.current;
     if (!soft) setLoading(true);
     try {
       const { data } = await supabase.auth.getUser();
+      if (currentLoad !== loadId.current) return;
       const email = data.user?.email ?? null;
-      const [next, homeNext] = await Promise.all([
-        fetchProfileBundle(email),
-        email ? fetchHomeBundle(email) : Promise.resolve(null),
-      ]);
+      const next = await fetchProfileBundle(email, player => {
+        if (currentLoad !== loadId.current) return;
+        if (statsPlayerId.current !== player?.id) setStatsReady(false);
+        setBundle(previous => ({
+          player,
+          stats: previous.player?.id === player?.id ? previous.stats : EMPTY_PROFILE.stats,
+          tempLicense: previous.player?.id === player?.id ? previous.tempLicense : null,
+        }));
+        setLoading(false);
+        setFipLinked(false);
+        if (email && player) {
+          void fetchHomeBundle(email).then(next => {
+            if (currentLoad === loadId.current) setHome(next);
+          }).catch(err => console.warn('[profile] Activity could not load', err));
+          setTxLoading(true);
+          void fetchProfileTransactions(email)
+            .then(next => { if (currentLoad === loadId.current) setTransactions(next); })
+            .catch(() => { if (currentLoad === loadId.current) setTransactions([]); })
+            .finally(() => { if (currentLoad === loadId.current) setTxLoading(false); });
+        } else {
+          setHome(null);
+          setTransactions([]);
+        }
+        if (player) {
+          void (async () => {
+            try {
+              const { data: link } = await supabase.from('player_fip_links').select('local_player_id')
+                .eq('local_player_id', player.id).eq('status', 'verified').limit(1).maybeSingle();
+              if (currentLoad === loadId.current) setFipLinked(!!link);
+            } catch { /* The FIP badge is optional. */ }
+          })();
+        }
+      });
+      if (currentLoad !== loadId.current) return;
       setBundle(next);
-      setHome(homeNext);
+      statsPlayerId.current = next.player?.id ?? null;
+      setStatsReady(true);
       const ranks = rankingsOf(next.player);
       setSelectedRanking((current) => current ?? ranks[0] ?? null);
-      if (email) {
-        setTxLoading(true);
-        fetchProfileTransactions(email)
-          .then(setTransactions)
-          .catch(() => setTransactions([]))
-          .finally(() => setTxLoading(false));
-      }
     } catch (err) {
-      console.warn('[profile]', err);
+      if (currentLoad === loadId.current) {
+        Observe.reportError(new Error('Profile data load failed'));
+        console.warn('[profile]', err);
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (currentLoad === loadId.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
@@ -116,6 +153,7 @@ export default function ProfileScreen() {
     useCallback(() => {
       setStatsPlayId((n) => n + 1);
       void load(true);
+      return () => { loadId.current += 1; };
     }, [load])
   );
 
@@ -178,6 +216,7 @@ export default function ProfileScreen() {
 
   return (
     <View className="flex-1 bg-court-page">
+      <ObserveReady ready={!loading} />
       <View className="bg-court-page" style={{ paddingTop: insets.top }}>
         <View className="h-[52px] flex-row items-center justify-between px-4">
           <Text accessibilityRole="header" className="text-[20px] font-extrabold text-court-ink">
@@ -230,6 +269,8 @@ export default function ProfileScreen() {
                 player={player}
                 stats={bundle.stats}
                 playId={statsPlayId}
+                fipLinked={fipLinked}
+                statsReady={statsReady}
               />
             </FadeUp>
             {(player.license_type || 'none').toLowerCase() !== 'full' ? (
@@ -248,9 +289,17 @@ export default function ProfileScreen() {
                 </PressableScale>
               </FadeUp>
             ) : null}
-            <FadeUp className="mt-3">
-              <ProfileStatsCard stats={bundle.stats} skillRating={player.skill_rating} playId={statsPlayId} />
-            </FadeUp>
+            {statsReady ? (
+              <FadeUp className="mt-3">
+                <ProfileStatsCard stats={bundle.stats} skillRating={player.skill_rating} playId={statsPlayId} />
+              </FadeUp>
+            ) : (
+              <View className="mt-3 h-[148px] rounded-2xl border border-court-edge bg-court-elevated p-4" accessibilityLabel="Loading match statistics">
+                <View className="h-4 w-32 rounded bg-court-surface" />
+                <View className="mt-5 h-4 w-full rounded bg-court-surface" />
+                <View className="mt-5 h-4 w-40 rounded bg-court-surface" />
+              </View>
+            )}
           </View>
 
           <View className="mt-4 pb-3">
@@ -384,4 +433,3 @@ function GalleryBlock({
     </View>
   );
 }
-

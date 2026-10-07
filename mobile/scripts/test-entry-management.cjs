@@ -3,9 +3,9 @@ const assert = require('node:assert/strict');
 const ts = require('typescript');
 const fs = require('node:fs');
 const vm = require('node:vm');
-function screen(partner = true, open = true, higher = false, balance = undefined) {
+function screen(partner = true, open = true, higher = false, balance = undefined, registrations = undefined) {
   let cursor = 0;
-  const state = [], routes = [], calls = [];
+  const state = [], routes = [], calls = [], manageCalls = [];
   const modules = {
     react: { useEffect() {}, useState: value => { const i = cursor++; if (!(i in state)) state[i] = value; return [state[i], next => state[i] = next]; } },
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }), Fragment: 'Fragment' },
@@ -22,7 +22,7 @@ function screen(partner = true, open = true, higher = false, balance = undefined
   const exports = {};
   const source = ts.transpileModule(fs.readFileSync('src/components/events/registration-entries.tsx', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   vm.runInNewContext(source, { exports, require: name => { assert.ok(modules[name], name); return modules[name]; } });
-  const props = { event: { id: 553, event_name: 'Test' }, divisions: [{ id: 'd1', entry_fee: 100 }, ...(higher ? [{ id: 'd2', name: 'Advanced', entry_fee: 250 }] : [])], registrations: [{ id: 'r1', division_id: 'd1', division: 'Open', full_name: 'Brad', email: 'brad@test.test', registered_by: 'brad@test.test', partner_email: partner ? 'partner@test.test' : null, partner_name: partner ? 'Partner' : null, payment_status: 'paid', balance }], profiles: [], onRefresh: async () => {}, onManage: () => {} };
+  const props = { event: { id: 553, event_name: 'Test' }, divisions: [{ id: 'd1', entry_fee: 100 }, ...(higher ? [{ id: 'd2', name: 'Advanced', entry_fee: 250 }] : [])], registrations: registrations ?? [{ id: 'r1', division_id: 'd1', division: 'Open', full_name: 'Brad', email: 'brad@test.test', registered_by: 'brad@test.test', partner_email: partner ? 'partner@test.test' : null, partner_name: partner ? 'Partner' : null, payment_status: 'paid', balance }], profiles: [], onRefresh: async () => {}, onManage: (...args) => manageCalls.push(args) };
   function find(predicate) {
     cursor = 0;
     const tree = exports.RegistrationEntries(props);
@@ -35,7 +35,7 @@ function screen(partner = true, open = true, higher = false, balance = undefined
     }
     return visit(tree);
   }
-  return { find, routes, calls };
+  return { find, routes, calls, manageCalls };
 }
 test('management opens a native sheet and partner removal calls the authenticated refund service', async () => {
   const app = screen();
@@ -58,6 +58,16 @@ test('solo entry adds a partner through the native registration route', () => {
   assert.equal(app.routes[0].pathname, '/events/register');
   assert.equal(app.routes[0].params.mode, 'add-partner');
   assert.equal(app.routes[0].params.entry, 'r1');
+});
+test('entry summary keeps payments in Manage entry and offers one clear registration action', () => {
+  const registrations = ['Open', 'Advanced'].map((division, index) => ({ id: `r${index + 1}`, division_id: `d${index + 1}`, division, full_name: 'Brad', email: 'brad@test.test', registered_by: 'brad@test.test', partner_email: null, partner_name: null, payment_status: 'pending' }));
+  const app = screen(false, true, true, undefined, registrations);
+  assert.equal(app.find(n => n.props?.accessibilityLabel?.startsWith('Pay now for')), undefined);
+  assert.equal(app.find(n => n.props?.children === 'Pay Entry'), undefined);
+  const register = app.find(n => n.props?.accessibilityLabel === 'Register another division');
+  assert.ok(register.props.style.minHeight >= 48);
+  register.props.onPress();
+  assert.equal(app.manageCalls.length, 1);
 });
 test('closed entry remains viewable without partner mutations', () => {
   const app = screen(true, false);

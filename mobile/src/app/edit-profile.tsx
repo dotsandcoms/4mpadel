@@ -34,12 +34,15 @@ import {
   SA_REGIONS,
 } from '@/lib/registration';
 import { supabase } from '@/lib/supabase';
+import { COURT_SIDE_OPTIONS, PLAYING_HAND_OPTIONS, courtSideLabel, playingHandLabel } from '@/lib/player-preferences';
 import { lightBrand as brand } from '@/theme/tokens';
 
 type Form = {
   contactNumber: string;
   region: string;
   category: string;
+  courtSide: string;
+  playingHand: string;
   clubId: string;
   customClub: string;
   bio: string;
@@ -55,6 +58,8 @@ const EMPTY_FORM: Form = {
   contactNumber: '',
   region: '',
   category: '',
+  courtSide: '',
+  playingHand: '',
   clubId: '',
   customClub: '',
   bio: '',
@@ -75,6 +80,8 @@ function formFromPlayer(player: PlayerRow, clubs: ClubRow[]): Form {
     contactNumber: player.contact_number ?? '',
     region: player.region ?? '',
     category: player.category ?? '',
+    courtSide: player.court_side ?? '',
+    playingHand: player.playing_hand ?? '',
     clubId,
     customClub: clubId === 'Other' ? player.home_club ?? '' : '',
     bio: player.bio ?? '',
@@ -216,6 +223,8 @@ export default function EditProfileScreen() {
         bio: form.bio.trim(),
         instagram_link: form.instagramLink.trim() || null,
         racket_brand: racket || null,
+        court_side: form.courtSide || null,
+        playing_hand: form.playingHand || null,
       });
       goBack();
     } catch (err) {
@@ -293,12 +302,14 @@ export default function EditProfileScreen() {
               title="Player details"
               icon="person-outline"
               summary={[form.region, form.category].filter(Boolean).join(' · ') || 'Add your region and category'}
-              detail={[form.contactNumber, clubName].filter(Boolean).join(' · ')}
+              detail={[form.contactNumber, clubName, courtSideLabel(form.courtSide) && `${courtSideLabel(form.courtSide)} court`, playingHandLabel(form.playingHand)].filter(Boolean).join(' · ')}
               expanded={expanded === 'essentials'}
               onPress={() => setExpanded(expanded === 'essentials' ? null : 'essentials')}>
               <LiquidField label="Mobile number" icon="phone.fill" value={form.contactNumber} error={errors.contactNumber} invalid={!!errors.contactNumber} valid={filled(form.contactNumber) && !errors.contactNumber} onChangeText={(value) => patch('contactNumber', value)} keyboardType="phone-pad" autoComplete="tel" textContentType="telephoneNumber" />
               <SelectField label="Region" value={form.region} error={errors.region} valid={!!form.region && !errors.region} badge={regionBadge} options={SA_REGIONS.map((region) => ({ label: region, value: region }))} onChange={(value) => patch('region', value)} />
               <SelectField label="Category" value={form.category} error={errors.category} valid={!!form.category && !errors.category} options={categoryOptions} onChange={(value) => patch('category', value)} />
+              <SelectField label="Court side" value={form.courtSide} valid={!!form.courtSide} options={COURT_SIDE_OPTIONS} onChange={(value) => patch('courtSide', value)} />
+              <SelectField label="Playing hand" value={form.playingHand} valid={!!form.playingHand} options={PLAYING_HAND_OPTIONS} onChange={(value) => patch('playingHand', value)} />
               <SelectField label="Home club" value={form.clubId} error={errors.clubId} valid={clubReady && !errors.clubId} options={clubOptions} searchable emptyLabel="No clubs match that search." onChange={(value) => patch('clubId', value)} />
               {form.clubId === 'Other' && <LiquidField label="Club name" value={form.customClub} error={errors.customClub} invalid={!!errors.customClub} valid={filled(form.customClub) && !errors.customClub} onChangeText={(value) => patch('customClub', value)} autoCapitalize="words" />}
             </ProfileSection>

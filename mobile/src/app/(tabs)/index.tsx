@@ -1,5 +1,6 @@
 import { SymbolView } from 'expo-symbols';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { Observe } from 'expo-observe';
 import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
 import {
   AppState,
@@ -34,6 +35,7 @@ import {
   RecentResultCard,
 } from '@/components/home-event-card';
 import { HomeHeader } from '@/components/home-header';
+import { ObserveReady } from '@/components/observe-ready';
 import { ProPadelFeed } from '@/components/pro-padel-feed';
 import { usePlayerHub } from '@/hooks/use-player-hub';
 import { makeCompanionSchedule } from '@/lib/companion-schedule';
@@ -125,7 +127,10 @@ export default function HomeScreen() {
         void publishCompanionSchedule(data.user.id, makeCompanionSchedule(next));
       }
     } catch (err) {
-      if (currentLoad === loadId.current) setLoadError(true);
+      if (currentLoad === loadId.current) {
+        Observe.reportError(new Error('Home data load failed'));
+        setLoadError(true);
+      }
       console.warn('[home]', err);
     } finally {
       if (currentLoad === loadId.current) {
@@ -199,6 +204,7 @@ export default function HomeScreen() {
 
   return (
     <View className="flex-1 bg-court-page">
+      <ObserveReady ready={!loading} />
       <View
         className="bg-court-page"
         style={{ paddingTop: insets.top, zIndex: 30, elevation: 30 }}>
@@ -232,6 +238,7 @@ export default function HomeScreen() {
               <HomePlayerCard
                 player={bundle.player}
                 loading={loading}
+                fipLinked={playerHub.fipLinks.some(link => link.local_player_id === bundle.player?.id && link.status === 'verified')}
                 onPress={() => router.push('/(tabs)/profile')}
               />
             </FadeUp>

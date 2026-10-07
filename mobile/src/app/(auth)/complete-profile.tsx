@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LiquidField } from '@/components/liquid-field';
+import { ObserveReady } from '@/components/observe-ready';
 import { PressableScale } from '@/components/pressable-scale';
 import {
   CourtBackdrop,
@@ -360,6 +361,7 @@ export default function CompleteProfileScreen() {
 
   return (
     <FieldColors.Provider value={brand}>
+    <ObserveReady ready={hydrate === 'ready'} />
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       className="flex-1 bg-court-page"

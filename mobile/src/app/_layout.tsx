@@ -2,10 +2,12 @@ import { watchWelcomeEmailRetries } from '@/lib/welcome-email';
 import 'react-native-gesture-handler';
 import type { Session } from '@supabase/supabase-js';
 import { DefaultTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
+import { Observe, ObserveRoot } from 'expo-observe';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Notice } from '@/components/events/event-ui';
+import { StartupRevealedContext } from '@/components/observe-ready';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import '@/global.css';
@@ -24,6 +26,13 @@ import { lightBrand } from '@/theme/tokens';
 import { setCompanionAccount } from '@/lib/companion';
 
 SplashScreen.preventAutoHideAsync();
+Observe.configure({
+  integrations: {
+    'expo-router': {
+      filteredParams: ['id', 'code', 'entry', 'pay_ref', 'payment_return', 'reference', 'registrationId', 'match', 'query', 'email', 'token'],
+    },
+  },
+});
 
 /**
  * Root layout, session gate, and splash handoff.
@@ -43,7 +52,7 @@ SplashScreen.preventAutoHideAsync();
  * Expo Router's default screen is Home, so clearing the splash any earlier
  * flashes the tabs for a frame. The fade then lands on the real first screen.
  */
-export default function RootLayout() {
+function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
   const isAuth = segments[0] === '(auth)';
@@ -94,7 +103,10 @@ export default function RootLayout() {
         recordAppDevice();
       }
       } catch {
-        if (!cancelled) setBootError(true);
+        if (!cancelled) {
+          Observe.reportError(new Error('Startup session restoration failed'));
+          setBootError(true);
+        }
       }
     })();
 
@@ -140,7 +152,10 @@ export default function RootLayout() {
         });
       });
       } catch {
-        if (!cancelled) setBootError(true);
+        if (!cancelled) {
+          Observe.reportError(new Error('Startup destination could not be resolved'));
+          setBootError(true);
+        }
       }
     })();
 
@@ -166,6 +181,7 @@ export default function RootLayout() {
   const showSplash = !revealed;
 
   return (
+    <StartupRevealedContext.Provider value={revealed}>
     <ThemeProvider
       value={{
         ...navigationTheme,
@@ -242,5 +258,22 @@ export default function RootLayout() {
         }}>We couldn’t access your saved sign-in. Please try again. If this continues, close and reopen the app.</Notice>
       </View>}
     </ThemeProvider>
+    </StartupRevealedContext.Provider>
   );
+}
+
+function ObserveFailure({ onRetry }: { onRetry: () => void }) {
+  return <View style={{ flex: 1, backgroundColor: lightBrand.page, justifyContent: 'center', padding: 24, gap: 16 }}>
+    <Text accessibilityRole="header" style={{ color: lightBrand.premium, fontSize: 24, fontWeight: '700' }}>Something went wrong</Text>
+    <Text style={{ color: lightBrand.muted, fontSize: 15 }}>Please try opening this screen again.</Text>
+    <Pressable accessibilityRole="button" onPress={onRetry} style={{ backgroundColor: lightBrand.padel, borderRadius: 12, padding: 15, alignItems: 'center' }}>
+      <Text style={{ color: lightBrand.premium, fontWeight: '700' }}>Try again</Text>
+    </Pressable>
+  </View>;
+}
+
+export default function ObservedRootLayout() {
+  return <ObserveRoot errorBoundaryFallback={({ resetError }) => <ObserveFailure onRetry={resetError} />}>
+    <RootLayout />
+  </ObserveRoot>;
 }

@@ -62,14 +62,16 @@ Deno.serve(async req => {
     if (!profile?.name || !profile.contact_number) fail('Add your name and phone number to your profile before registering.');
     const mine = await checked(client.from('event_registrations').select('*').eq('event_id', eventId).ilike('email', email).neq('status', 'withdrawn'));
     const createdPartners = payOnly ? await checked(client.from('event_registrations').select('*').eq('event_id', eventId).ilike('registered_by', email).neq('email', email).neq('status', 'withdrawn')) : [];
-    const linkedPartner = (r: any) => createdPartners.find((p: any) => norm(p.email) !== email && p.status !== 'withdrawn' && p.division_id === r.division_id && (!r.partner_email || norm(p.email) === norm(r.partner_email)));
+    const linkedPartner = (r: any) => r.partner_email ? createdPartners.find((p: any) => norm(p.email) === norm(r.partner_email) && norm(p.partner_email) === email && p.status !== 'withdrawn' && p.division_id === r.division_id) : undefined;
     const unpaid = (status: unknown) => ['pending', 'failed'].includes(norm(status));
     const payPartner = (r: any) => (selectionFor(r.division_id)?.payForPartner ?? input.payForPartner) === true || ((selectionFor(r.division_id)?.payForPartner ?? input.payForPartner) == null && !!linkedPartner(r) && unpaid(linkedPartner(r).payment_status));
-    const payable = mine.filter((r: any) => norm(r.email) === email && r.status !== 'withdrawn' && (unpaid(r.payment_status) || (payPartner(r) && unpaid(linkedPartner(r)?.payment_status || r.partner_payment_status))));
+    const payable = mine.filter((r: any) => norm(r.email) === email && r.status !== 'withdrawn' && (unpaid(r.payment_status) || (!!linkedPartner(r) && unpaid(linkedPartner(r).payment_status))));
     if (payOnly && !payable.length) fail('No outstanding entry payment found. Return to the event to refresh your entries.');
-    const divisionIds = payOnly ? payable.map((r: any) => r.division_id) : selections.length ? selections.map((s: any) => s.divisionId) : input.divisionIds;
+    const requestedPayIds = Array.isArray(input.divisionIds) && input.divisionIds.length ? input.divisionIds : selections.length ? selections.map((s: any) => s.divisionId) : null;
+    if (payOnly && requestedPayIds && (new Set(requestedPayIds).size !== requestedPayIds.length || requestedPayIds.some((id: string) => !payable.some((r: any) => r.division_id === id)))) fail('Choose your own outstanding divisions.');
+    const divisionIds = payOnly ? requestedPayIds || payable.map((r: any) => r.division_id) : selections.length ? selections.map((s: any) => s.divisionId) : Array.isArray(input.divisionIds) ? input.divisionIds : [];
     const divisions = event.is_weekly ? [{ id: null, name: 'Open', entry_fee: event.entry_fee, license_required: false }]
-      : await checked(client.from('tournament_divisions').select('*').eq('event_id', eventId).eq('is_active', true).in('id', Array.isArray(divisionIds) ? divisionIds : []));
+      : (await checked(client.from('tournament_divisions').select('*').eq('event_id', eventId).eq('is_active', true).in('id', Array.isArray(divisionIds) ? divisionIds : []))).filter((d: any) => divisionIds.includes(d.id));
     if (!divisions.length || (!event.is_weekly && divisions.length !== new Set(divisionIds).size)) fail('Choose valid active divisions.');
     for (const d of divisions) if (d.entries_close_at && new Date(d.entries_close_at).getTime() <= Date.now()) fail(`${d.name}: entries have closed.`);
     const hasLicence = (profile.license_type === 'full' && profile.paid_registration)
@@ -88,7 +90,7 @@ Deno.serve(async req => {
       licenceCovers.push({ type: 'license', email: personEmail, license: choice });
       licenceItems.push({ label: `${full ? 'Annual' : 'Temporary'} SAPA license — ${name}`, amount });
     };
-    if (divisions.some((d: any) => d.license_required)) requireLicence(email, profile.name, !!hasLicence, input.licenseChoice);
+    if (divisions.some((d: any) => d.license_required && (!payOnly || ((selectionFor(d.id)?.payForSelf ?? input.payForSelf) !== false && payable.some((r: any) => r.division_id === d.id && unpaid(r.payment_status)))))) requireLicence(email, profile.name, !!hasLicence, input.licenseChoice);
     const matching = await checked(client.rpc('get_event_registrations_for_matching', { p_event_id: eventId }));
     const active = (matching || []).filter((r: any) => r.status !== 'withdrawn');
     const sizes = ['Youth XS', 'Youth S', 'Youth M', 'Youth L', 'Youth XL', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
@@ -147,7 +149,7 @@ Deno.serve(async req => {
         updateSponsor(selfReg, input);
         const sponsorPartner = linkedPartner(selfReg);
         if (sponsorPartner) updateSponsor(sponsorPartner, selection || { tshirtLogoUrl: input.partnerTshirtLogoUrl, tshirtSponsorName: input.partnerTshirtSponsorName });
-        if (unpaid(selfReg.payment_status) && fee > 0) {
+        if ((selection?.payForSelf ?? input.payForSelf) !== false && unpaid(selfReg.payment_status) && fee > 0) {
           base += fee; covers.push({ type: 'entry', email, division: d.name, event_id: eventId });
           lineItems.push({ label: `${d.name} — ${selfReg.full_name || profile.name}`, amount: fee });
         }
@@ -223,7 +225,7 @@ Deno.serve(async req => {
     if (fee) lineItems.push({ label: commerce.fee_label || 'Management fee', amount: fee });
     const quote = { licenseTotal, licenseItems: licenceItems, total, base: money(base), fee, feeLabel: commerce.fee_label || 'Management fee', lineItems,
       eventName: event.event_name, profileName: profile.name, partnerName: [...new Set(partnerNames)].join(', ') || null, method,
-      mode: payOnly ? 'pay' : 'register', entries: payOnly ? payable.map((r: any) => ({ id: r.id, divisionId: r.division_id, partnerEmail: r.partner_email || linkedPartner(r)?.email || null, canCustomizePartner: !!linkedPartner(r), tshirtLogoUrl: r.tshirt_logo_url, tshirtSponsorName: r.tshirt_sponsor_name, partnerTshirtLogoUrl: linkedPartner(r)?.tshirt_logo_url, partnerTshirtSponsorName: linkedPartner(r)?.tshirt_sponsor_name, division: r.division, playerName: r.full_name, partnerName: r.partner_name || linkedPartner(r)?.full_name || null, paymentStatus: r.payment_status, partnerPaymentStatus: linkedPartner(r)?.payment_status || r.partner_payment_status, amount: money(covers.filter((c: any) => c.type === 'entry' && c.division === r.division).length * divisionFees[r.division]), playerCount: covers.filter((c: any) => c.type === 'entry' && c.division === r.division).length, unitFee: divisionFees[r.division] })) : reviewEntries,
+      mode: payOnly ? 'pay' : 'register', entries: payOnly ? payable.filter((r: any) => divisionIds.includes(r.division_id)).map((r: any) => ({ id: r.id, divisionId: r.division_id, partnerEmail: r.partner_email || linkedPartner(r)?.email || null, canCustomizePartner: !!linkedPartner(r), tshirtLogoUrl: r.tshirt_logo_url, tshirtSponsorName: r.tshirt_sponsor_name, partnerTshirtLogoUrl: linkedPartner(r)?.tshirt_logo_url, partnerTshirtSponsorName: linkedPartner(r)?.tshirt_sponsor_name, division: r.division, playerName: r.full_name, partnerName: r.partner_email ? r.partner_name || linkedPartner(r)?.full_name || null : null, paymentStatus: r.payment_status, partnerPaymentStatus: r.partner_email ? linkedPartner(r)?.payment_status || r.partner_payment_status || null : null, payForSelf: covers.some((c: any) => c.type === 'entry' && c.division === r.division && c.email === email), payForPartner: covers.some((c: any) => c.type === 'entry' && c.division === r.division && c.email === norm(r.partner_email || linkedPartner(r)?.email)), amount: money(covers.filter((c: any) => c.type === 'entry' && c.division === r.division).length * divisionFees[r.division]), playerCount: covers.filter((c: any) => c.type === 'entry' && c.division === r.division).length, unitFee: divisionFees[r.division] })) : reviewEntries,
       divisionNames: divisions.map((d: any) => d.name), isTest: input.isTest === true };
     if (input.action === 'quote') return json({ quote });
     if (input.action !== 'checkout') fail('Choose a valid registration action.');

@@ -3,15 +3,16 @@ import { EventNotificationBell } from '@/components/events/follow-tournament';
 import { TournamentMatches } from '@/components/events/tournament-matches';
 import { addToDeviceCalendar } from '@/lib/device-calendar';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Linking, Modal, Pressable, RefreshControl, ScrollView, Share, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, AppState, Linking, Modal, Pressable, RefreshControl, ScrollView, Share, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
 import { Notice } from '@/components/events/event-ui';
 import { Accordion, CircleAction, EventIcon, EventText as Text, Fade, InfoRows, WebsiteHeader, EventAccent, useEventAccent, type EventIconName } from '@/components/events/website-ui';
 import { EventTimeline, RegistrationCountdown } from '@/components/events/event-timeline';
-import { fetchEntryBalances, currentEmail, eventImage, fetchEventPlayerRankings, fetchDivisions, fetchDrawStatus, fetchEvent, fetchEventOrganisation, fetchMyEventRegistrations, fetchPublicEntries, fetchScheduledIds, setEventScheduled,
+import { fetchEntryBalances, currentEmail, fetchEventPlayerRankings, fetchDivisions, fetchDrawStatus, fetchEvent, fetchEventOrganisation, fetchMyEventRegistrations, fetchPublicEntries, fetchScheduledIds, setEventScheduled,
   type Division, type EventDetail, type EventOrganisation, type EventRegistration, type PublicEntry } from '@/lib/events';
 import { entryFee, formatMoney, plainText, registrationState } from '@/lib/event-rules';
 import { eventLocation, eventWebUrl, formatEventRange } from '@/lib/home';
@@ -34,7 +35,6 @@ function EventContent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const tabPadding = useTabScenePadding();
-  const { width } = useWindowDimensions();
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [registrations, setRegistrations] = useState<EventRegistration[]>([]);
@@ -50,11 +50,11 @@ function EventContent() {
   const [actionError, setActionError] = useState('');
   const [accountError, setAccountError] = useState('');
   const [manageRequested, setManageRequested] = useState(false);
+  const [posterOpen, setPosterOpen] = useState(false);
+  const [selectedVenue, setSelectedVenue] = useState('');
   const [tab, setTab] = useState('Overview');
   useEffect(() => { setTab(initialTab === 'Results' ? 'Results' : initialTab === 'Draws' || matchId || divisionId ? 'Draws' : 'Overview'); }, [id, initialTab, matchId, divisionId]);
   const [gender, setGender] = useState('Men');
-  const [sponsorOffset, setSponsorOffset] = useState(0);
-  const [poster, setPoster] = useState<string | null>(null);
   const request = useRef(0);
   const load = useCallback(async () => {
     const current = ++request.current;
@@ -106,7 +106,7 @@ function EventContent() {
     if (registrationState(event) !== 'open') { setActionError('Registration is not open for this event. An access code cannot override the registration dates.'); return; }
     router.push({ pathname: '/events/register', params: { id: String(event.id), ...(mode ? { mode } : {}) } });
   };
-  const directions = () => event && runAction(() => Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent([event.venue, event.address, event.city].filter(Boolean).join(' '))}`));
+  const directions = () => event && runAction(() => Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent([selectedVenue || event.venues?.[0] || event.venue, event.city].filter(Boolean).join(' '))}`));
   const state = event ? registrationState(event) : 'closed';
   const count = event?.is_manual ? event.is_weekly ? entries.filter(r => r.status !== 'withdrawn' && (!r.registered_by_hash || !r.email_hash || r.email_hash === r.registered_by_hash)).length : entries.length : event?.registered_players || 0;
   const fees = event ? divisions.map(d => entryFee(event, d)).filter(f => f > 0) : [];
@@ -115,18 +115,18 @@ function EventContent() {
     { label: 'Entries', value: publicError && event.is_manual ? '—' : count, icon: 'person.2' },
     ...(event.is_quick_event ? [{ label: 'Time', value: [event.start_time?.slice(0, 5), event.end_time?.slice(0, 5)].filter(Boolean).join('–') || 'TBC', icon: 'clock' as const }, { label: 'Court Type', value: event.indoor_outdoor || event.courts || 'TBC', icon: 'rectangle.split.2x2' as const }] : !event.is_weekly ? [{ label: 'Points', value: event.points || '1000', icon: 'trophy' as const }, { label: 'Divisions', value: divisions.length, icon: 'square.grid.2x2' as const }] : []),
     { label: 'Entry Fee', value: fee, icon: 'dollarsign.circle' },
+    ...(Number(event.prize_money_total) > 0 ? [{ label: 'Prize Money', value: `R${Number(event.prize_money_total).toLocaleString('en-GB')}`, icon: 'trophy' as const }] : []),
   ] : [];
   const accent = sapaTone(event?.sapa_status).fill;
   const teams = useMemo(() => buildEventTeams(divisions, entries, profiles), [divisions, entries, profiles]);
   const pendingPayment = registrations.some(r => r.payment_status !== 'paid' && Number(divisions.find(d => d.id === r.division_id)?.entry_fee || 0) > 0);
+  const posterUrl = event?.poster_image_url || event?.custom_image_url;
   const sponsors = event?.sponsor_logos?.filter(url => url && url !== organisation?.logo_url && url !== event.poster_image_url && url !== event.custom_image_url) || [];
   return <EventAccent value={accent}><View style={{ flex: 1, backgroundColor: '#F5F6F3', paddingTop: insets.top }}>
     <WebsiteHeader />
     <ScrollView stickyHeaderIndices={event ? [1] : []} refreshControl={<RefreshControl refreshing={loading && !!event} onRefresh={load} tintColor={accent} />} contentContainerStyle={{ paddingBottom: tabPadding, backgroundColor: '#f9fafb' }}>
       {event ? <View style={{ backgroundColor: '#F5F6F3' }}>
-        <View>
-        <Image source={eventImage(event)} accessibilityLabel={event.event_name || 'Tournament'} style={{ width: '100%', height: 170 }} contentFit="cover" />
-        <View style={{ position: 'absolute', top: 23, left: 20, right: 20, flexDirection: 'row', justifyContent: 'space-between', zIndex: 5 }}>
+        <View style={{ paddingHorizontal: 20, paddingTop: 16, flexDirection: 'row', justifyContent: 'space-between' }}>
           <CircleAction name="arrow.left" label="Back to calendar" onPress={back} />
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <EventNotificationBell eventId={event.id} eventName={event.event_name || 'Tournament'} circle />
@@ -135,13 +135,11 @@ function EventContent() {
             <CircleAction name={saved ? 'checkmark' : 'plus'} label={saved ? 'Remove from My Schedule' : 'Add to My Schedule'} onPress={toggleSaved} selected={saved} disabled={saving || !!accountError} />
           </View>
         </View>
-        </View>
-        <View style={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 }}>
-          {!!event.sapa_status && event.sapa_status !== 'None' && <Text style={{ alignSelf: 'flex-start', color: sapaTone(event.sapa_status).text, fontSize: 8, fontWeight: '700', letterSpacing: 1, borderWidth: 1, borderColor: sapaTone(event.sapa_status).border, borderRadius: 16, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 6 }}>{event.sapa_status.toUpperCase()}</Text>}
+        <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 40 }}>
+          {!!event.sapa_status && event.sapa_status !== 'None' && <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}><Text style={{ color: sapaTone(event.sapa_status).text, fontSize: 9, fontWeight: '700', letterSpacing: 1, borderWidth: 1, borderColor: sapaTone(event.sapa_status).border, borderRadius: 16, paddingHorizontal: 9, paddingVertical: 4 }}>{event.sapa_status.toUpperCase()}</Text><Text style={{ color: sapaTone(event.sapa_status).text, fontSize: 9, fontWeight: '700', letterSpacing: 1, borderWidth: 1, borderColor: sapaTone(event.sapa_status).border, borderRadius: 16, paddingHorizontal: 9, paddingVertical: 4 }}>SAPA</Text></View>}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
             {!!event.sapa_status && event.sapa_status !== 'None' && <Image source={require('@/assets/sapa-logo.svg')} accessibilityLabel="SAPA" contentFit="contain" style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#fff', borderWidth: 4, borderColor: '#fff' }} />}
-            <View style={{ flex: 1 }}><Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '700', lineHeight: 32 }}>{event.event_name}</Text>
-            {!!event.sapa_status && event.sapa_status !== 'None' && <Text style={{ color: "#386018", fontSize: 12, fontWeight: '400', marginTop: 4, letterSpacing: 0.3 }}>SAPA {event.sapa_status.toUpperCase()} {event.points || ''}</Text>}</View>
+            <View style={{ flex: 1 }}><Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '700', lineHeight: 32 }}>{event.event_name}</Text></View>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10 }}>
             <EventIcon name="calendar" size={14} /><Text style={{ fontSize: 12, color: '#16251fe6' }}>{event.event_dates || formatEventRange(event.start_date, event.end_date)}</Text>
@@ -150,10 +148,10 @@ function EventContent() {
           <View style={{ marginTop: 8, flexDirection: 'row', borderRadius: 16, borderColor: '#16251f1a', borderWidth: 1, overflow: 'hidden', backgroundColor: '#fff' }}>
             {stats.map((stat, i) => <View key={stat.label} style={{ flex: 1, paddingVertical: 16, paddingHorizontal: 1, alignItems: 'center', borderLeftWidth: i ? 1 : 0, borderColor: '#16251f1a', gap: 4 }}><EventIcon name={stat.icon} /><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ fontSize: 14, fontWeight: '700', textAlign: 'center', alignSelf: 'stretch' }}>{stat.value}</Text><Text style={{ fontSize: 9, color: '#16251f80', letterSpacing: 0.3 }}>{stat.label.toUpperCase()}</Text></View>)}
           </View>
-          {(organisation?.logo_url || event.poster_image_url || sponsors.length > 0) && <View style={{ flexDirection: 'row', marginTop: 12, borderRadius: 16, borderColor: '#16251f1a', borderWidth: 1, backgroundColor: '#fff', overflow: 'hidden' }}>
+          {(organisation?.logo_url || posterUrl || sponsors.length > 0) && <View style={{ flexDirection: 'row', marginTop: 12, borderRadius: 16, borderColor: '#16251f1a', borderWidth: 1, backgroundColor: '#fff', overflow: 'hidden' }}>
             {organisation?.logo_url && <Pressable accessibilityRole="button" accessibilityLabel={organisation.name} onPress={() => organisation.slug && void runAction(() => openSitePath(`/organisations/${organisation.slug}`))} style={{ width: 92, paddingHorizontal: 8, paddingVertical: 12, alignItems: 'center', borderRightWidth: 1, borderColor: '#16251f1a', gap: 8 }}><Text numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 9, color: "#386018" }}>ORGANISATION</Text><Image source={{ uri: organisation.logo_url }} style={{ width: 55, height: 32 }} contentFit="contain" /></Pressable>}
-            {event.poster_image_url && <Pressable onPress={() => setPoster(event.poster_image_url!)} accessibilityLabel="View event poster" style={{ width: 92, padding: 12, alignItems: 'center', gap: 8, borderRightWidth: 1, borderColor: '#16251f1a' }}><Text style={{ fontSize: 9, color: "#386018" }}>EVENT POSTER</Text><Image source={{ uri: event.poster_image_url }} style={{ width: 40, height: 40 }} contentFit="contain" /></Pressable>}
-            {sponsors.length > 0 && <View style={{ flex: 1, padding: 12, gap: 8, alignItems: 'center' }}><Text style={{ fontSize: 9, color: "#386018" }}>SPONSORS</Text><View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', alignSelf: 'stretch', gap: 8 }}>{Array.from({ length: Math.min(3, sponsors.length) }, (_, i) => sponsors[(sponsorOffset + i) % sponsors.length]).map(url => <Image key={url} source={{ uri: url }} style={{ width: 40, height: 32 }} contentFit="contain" />)}{sponsors.length > 3 && <Pressable accessibilityRole="button" accessibilityLabel="Next sponsors" hitSlop={10} onPress={() => setSponsorOffset((sponsorOffset + 3) % sponsors.length)}><EventIcon name="chevron.right" size={12} /></Pressable>}</View></View>}
+            {!!posterUrl && <Pressable accessibilityRole="button" accessibilityLabel="View event poster" onPress={() => setPosterOpen(true)} style={{ width: 92, paddingHorizontal: 8, paddingVertical: 12, alignItems: 'center', borderRightWidth: sponsors.length ? 1 : 0, borderColor: '#16251f1a', gap: 8 }}><Text style={{ fontSize: 9, color: '#386018' }}>POSTER</Text><Image source={{ uri: posterUrl }} style={{ width: 58, height: 48 }} contentFit="contain" /></Pressable>}
+            {sponsors.length > 0 && <View style={{ flex: 1, padding: 12, gap: 8, alignItems: 'center' }}><Text style={{ fontSize: 9, color: "#386018" }}>SPONSORS</Text><ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ alignSelf: 'stretch' }} contentContainerStyle={{ alignItems: 'center', justifyContent: sponsors.length <= 3 ? 'space-evenly' : 'flex-start', flexGrow: 1, gap: 8 }}>{sponsors.map(url => <Image key={url} source={{ uri: url }} style={{ width: 40, height: 32 }} contentFit="contain" />)}</ScrollView></View>}
           </View>}
           <RegistrationCountdown event={event} onRegister={() => { if (registrations.length) { setTab('Overview'); setManageRequested(true); } else register(); }} label={registrations.length ? 'Manage Entry' : state === 'open' ? 'Register' : null} />
           <EventTimeline event={event} hasDraw={drawStatus.hasDraw} />
@@ -178,12 +176,12 @@ function EventContent() {
           {!!(event.courts || event.balls || event.draw_released || event.cut_off_times || event.tournament_director || event.referees) && <Accordion title="Tournament Details" icon="rectangle.split.2x2"><TournamentDetails event={event} /></Accordion>}
           {!!event.description && <Accordion title="About This Event" icon="doc.text"><EventRichText html={event.description} /></Accordion>}
           {!!(event.contact_details || event.organiser_phone || event.organiser_email) && <Accordion title="Contact" icon="phone">{!!event.contact_details && <Text style={{ color: '#334155', fontSize: 14, lineHeight: 20 }}>{event.contact_details}</Text>}{[{ value: event.organiser_phone, icon: 'phone' as const, url: `tel:${event.organiser_phone}` }, { value: event.organiser_email, icon: 'envelope' as const, url: `mailto:${event.organiser_email}` }].filter(item => item.value).map(item => <Pressable key={item.icon} accessibilityRole="link" onPress={() => void runAction(() => Linking.openURL(item.url))} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}><EventIcon name={item.icon} color="#64748b" /><Text style={{ color: '#1e293b', fontSize: 14, flexShrink: 1 }}>{item.value}</Text></Pressable>)}</Accordion>}
-          <Accordion title="Location" icon="mappin.and.ellipse" accessory={<Pressable accessibilityRole="button" onPress={directions} hitSlop={8} style={{ backgroundColor: accent, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}><Text style={{ fontSize: 10, color: '#000' }}>DIRECTIONS</Text></Pressable>}><EventLocation event={event} /></Accordion>
+          <Accordion title="Location" icon="mappin.and.ellipse" accessory={<Pressable accessibilityRole="button" onPress={directions} hitSlop={8} style={{ backgroundColor: accent, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}><Text style={{ fontSize: 10, color: '#fff' }}>DIRECTIONS</Text></Pressable>}><EventLocation event={event} selectedVenue={selectedVenue} onSelectVenue={setSelectedVenue} /></Accordion>
           {!!event.points_breakdown && <Accordion title="Points Breakdown" icon="trophy"><EventRichText html={event.points_breakdown} /></Accordion>}
           <PrizeMoney event={event} />
           {!!event.rules_regs && <Accordion title="Rules & Regulations" icon="doc.text"><EventRichText html={event.rules_regs} /></Accordion>}
           {!!event.sanctioning_details && <Accordion title="Sanctioning Details" icon="checkmark.circle"><EventRichText html={event.sanctioning_details} /></Accordion>}
-          {(sponsors.length > 0 || organisation?.logo_url || event.poster_image_url) && <Accordion title="Sponsors" icon="photo"><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>{[...(organisation?.logo_url ? [{ url: organisation.logo_url, action: () => organisation.slug && void runAction(() => openSitePath(`/organisations/${organisation.slug}`)), label: organisation.name }] : []), ...(event.poster_image_url ? [{ url: event.poster_image_url, action: () => setPoster(event.poster_image_url!), label: 'View event poster' }] : []), ...sponsors.map(url => ({ url, action: undefined, label: 'Sponsor' }))].map((item, i) => <Pressable key={`${item.url}-${i}`} accessibilityRole={item.action ? 'button' : 'image'} accessibilityLabel={item.label} disabled={!item.action} onPress={item.action} style={{ width: '29%', aspectRatio: 1.5, borderRadius: 12, borderWidth: 1, borderColor: '#f3f4f6', backgroundColor: '#f9fafb', padding: 12 }}><Image source={{ uri: item.url }} style={{ width: '100%', height: '100%' }} contentFit="contain" /></Pressable>)}</View></Accordion>}
+          {(sponsors.length > 0 || organisation?.logo_url) && <Accordion title="Sponsors" icon="photo"><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>{[...(organisation?.logo_url ? [{ url: organisation.logo_url, action: () => organisation.slug && void runAction(() => openSitePath(`/organisations/${organisation.slug}`)), label: organisation.name }] : []), ...sponsors.map(url => ({ url, action: undefined, label: 'Sponsor' }))].map((item, i) => <Pressable key={`${item.url}-${i}`} accessibilityRole={item.action ? 'button' : 'image'} accessibilityLabel={item.label} disabled={!item.action} onPress={item.action} style={{ width: '29%', aspectRatio: 1.5, borderRadius: 12, borderWidth: 1, borderColor: '#f3f4f6', backgroundColor: '#f9fafb', padding: 12 }}><Image source={{ uri: item.url }} style={{ width: '100%', height: '100%' }} contentFit="contain" /></Pressable>)}</View></Accordion>}
           <EventWeatherSection event={event} />
           {!!event.withdrawal_substitution && <Accordion title="Withdrawal & Substitution" icon="exclamationmark.circle"><EventRichText html={event.withdrawal_substitution} /></Accordion>}
 
@@ -197,8 +195,8 @@ function EventContent() {
 
       </View>}
     </ScrollView>
+    <Modal visible={posterOpen} transparent animationType="fade" onRequestClose={() => setPosterOpen(false)}><Pressable accessibilityRole="button" accessibilityLabel="Close event poster" onPress={() => setPosterOpen(false)} style={{ flex: 1, backgroundColor: '#000d', paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12, paddingHorizontal: 16 }}><View style={{ alignItems: 'flex-end' }}><Ionicons name="close" size={28} color="#fff" /></View>{!!posterUrl && <Image source={{ uri: posterUrl }} style={{ flex: 1, width: '100%' }} contentFit="contain" />}</Pressable></Modal>
 
-    <Modal visible={!!poster} animationType="fade" onRequestClose={() => setPoster(null)}><View style={{ flex: 1, backgroundColor: '#F5F6F3', paddingTop: insets.top + 12 }}><Pressable accessibilityRole="button" onPress={() => setPoster(null)} style={{ padding: 20 }}><Text>Close</Text></Pressable>{poster && <Image source={{ uri: poster }} style={{ flex: 1 }} contentFit="contain" />}</View></Modal>
   </View></EventAccent>;
 }
 function LightButton({ label, onPress }: { label: string; onPress: () => void }) { const accent = useEventAccent(); return <Pressable accessibilityRole="button" onPress={onPress} style={{ backgroundColor: accent, minHeight: 44, padding: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#000', fontSize: 13, fontWeight: '400' }}>{label}</Text></Pressable>; }

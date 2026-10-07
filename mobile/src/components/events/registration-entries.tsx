@@ -23,6 +23,8 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
   const paid = (r: EventRegistration) => (r.payment_status === 'paid' && !(Number(r.balance?.due) > 0)) || Number(divisions.find(d => d.id === r.division_id)?.entry_fee) === 0;
   const statusLabel = (r: EventRegistration) => Number(r.balance?.due) > 0 ? `${formatMoney(r.balance!.due!)} outstanding` : r.payment_status === 'paid' && !r.balance?.known ? 'Payment recorded · balance unverified' : paid(r) ? 'Paid & Confirmed' : 'Payment Pending';
   const payBalance = (r: EventRegistration) => { setManaging(false); router.push({ pathname: '/events/pay-balance', params: { registrationId: r.id } }); };
+  const addPartner = (r: EventRegistration) => { setManaging(false); router.push({ pathname: '/events/register', params: { id: String(event.id), mode: 'add-partner', entry: r.id } }); };
+  const payDivision = (r: EventRegistration) => { setManaging(false); router.push({ pathname: '/events/register', params: { id: String(event.id), mode: 'pay', entry: r.id } }); };
   const pending = registrations.some(r => !paid(r));
   const available = divisions.filter(d => d.id !== action?.entry.division_id && !registrations.some(r => r.division_id === d.id) && registrationState(event, d) === 'open');
   const targetDivision = available.find(d => d.id === target);
@@ -59,12 +61,10 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
           </Pressable>
         </View>
         <Text style={{ alignSelf: 'flex-start', fontSize: 10, color: paid(r) ? '#047857' : '#b45309', backgroundColor: paid(r) ? '#ecfdf5' : '#fffbeb', borderColor: paid(r) ? '#a7f3d0' : '#fde68a', borderWidth: 1, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3, marginTop: 12 }}>{statusLabel(r)}</Text>
-        {r.payment_status === 'paid' && Number(r.balance?.due) > 0 && <Pressable accessibilityRole="button" accessibilityLabel={`Pay balance, ${formatMoney(r.balance!.due!)}`} onPress={() => payBalance(r)} style={{ minHeight: 44, marginTop: 12, paddingHorizontal: 16, borderRadius: 12, backgroundColor: accent, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: '#16251F', fontSize: 14, fontWeight: '700' }}>{`Pay balance · ${formatMoney(r.balance!.due!)}`}</Text></Pressable>}
         {registrationState(event, divisions.find(d => d.id === r.division_id)) === 'open' && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}><Outline label="⇄  Switch division" color="#7c3aed" onPress={() => begin('switch_division', r)} /><Outline label="Withdraw" color="#ef4444" onPress={() => begin('withdraw', r)} /></View>}
         {registrationState(event, divisions.find(d => d.id === r.division_id)) !== 'open' && <Text style={{ color: '#64748b', fontSize: 12, lineHeight: 18, marginTop: 10 }}>Self-service withdrawal closed with registration. Contact the organiser for entry changes.</Text>}
       </View>)}
-      {registrationState(event) === 'open' && <Pressable accessibilityRole="button" onPress={() => registrations.some(r => Number(r.balance?.due) > 0 && r.payment_status === 'paid') ? setManaging(true) : onManage(pending ? 'pay' : undefined)} style={{ padding: 14, borderRadius: 12, backgroundColor: pending ? '#fb923c' : accent, alignItems: 'center' }}><Text style={{ color: '#0a0a0a', fontSize: 14, fontWeight: '400' }}>{pending ? 'Pay Entry' : 'Add Division'}</Text></Pressable>}
-      {pending && registrationState(event) === 'open' && <Outline label="Register another division" color="#9a3412" onPress={() => onManage()} />}
+      {registrationState(event) === 'open' && <Pressable accessibilityRole="button" accessibilityLabel="Register another division" onPress={() => onManage()} style={{ minHeight: 52, borderRadius: 12, backgroundColor: brand.accent, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 16 }}><EventIcon name="plus" color="#fff" size={18} /><Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>Register another division</Text></Pressable>}
     </Accordion>
     <Modal visible={managing || !!action} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { if (!busy) { setAction(null); setManaging(false); } }}>
       <View style={{ flex: 1, backgroundColor: brand.page }}>
@@ -91,11 +91,11 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                   <View style={{ flex: 1, minWidth: 0, alignItems: 'center', gap: 6 }}><PlayerAvatar player={{ name: r.full_name, image: image(r.full_name) }} size={44} /><Text style={{ color: brand.faint, fontSize: 10, fontWeight: '700', letterSpacing: 0.8 }}>PLAYER</Text><Text style={{ color: brand.premium, fontSize: 13, fontWeight: '700', textAlign: 'center' }} numberOfLines={2}>{r.full_name}</Text></View>
                   <View style={{ alignSelf: 'center', width: 18, height: 1, backgroundColor: brand.edge }} />
-                  <View style={{ flex: 1, minWidth: 0, alignItems: 'center', gap: 6 }}>
+                  <Pressable accessibilityRole="button" accessibilityLabel={r.partner_email ? `Partner ${r.partner_name || ''}` : 'Add partner to this division'} accessibilityState={{ disabled: !!r.partner_email || !editable || !ownsBooking }} disabled={!!r.partner_email || !editable || !ownsBooking} onPress={() => addPartner(r)} style={{ flex: 1, minWidth: 0, alignItems: 'center', gap: 6, minHeight: 86 }}>
                     {r.partner_email ? <PlayerAvatar player={{ name: r.partner_name || 'Partner', image: image(r.partner_name || '') }} size={44} /> : <View style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderStyle: 'dashed', borderColor: brand.faint, alignItems: 'center', justifyContent: 'center', backgroundColor: brand.page }}><EventIcon name="plus" size={18} color={brand.faint} /></View>}
                     <Text style={{ color: brand.faint, fontSize: 10, fontWeight: '700', letterSpacing: 0.8 }}>PARTNER</Text>
                     <Text style={{ color: r.partner_name ? brand.premium : brand.muted, fontSize: 13, fontWeight: r.partner_name ? '700' : '400', textAlign: 'center' }} numberOfLines={2}>{r.partner_name || 'No partner yet'}</Text>
-                  </View>
+                  </Pressable>
                 </View>
                 <View style={{ borderRadius: 15, backgroundColor: paid(r) ? '#EEF4E9' : '#FFF4E5', padding: 14, gap: 6 }}>
                   <Text style={{ color: paid(r) ? brand.accent : '#9A4B0A', fontSize: 11, fontWeight: '800', letterSpacing: 0.7 }}>{paid(r) ? 'ENTRY CONFIRMED' : 'PAYMENT OUTSTANDING'}</Text>
@@ -104,8 +104,9 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
                 </View>
                 {!!r.tshirt_size && <Text style={{ color: brand.muted, fontSize: 12 }}>T-shirt size · {r.tshirt_size}</Text>}
                 {r.payment_status === 'paid' && balanceDue > 0 && <ManageActionRow label={`Pay balance · ${formatMoney(balanceDue)}`} icon="card-outline" tone="primary" onPress={() => payBalance(r)} />}
+                {editable && (r.payment_status !== 'paid' || (r.partner_email && r.partner_payment_status !== 'paid')) && <ManageActionRow label={`Pay ${r.division} only`} icon="card-outline" tone="primary" onPress={() => payDivision(r)} />}
                 {!editable ? <Text style={{ color: brand.muted, fontSize: 13, lineHeight: 20 }}>Registration is closed. Contact the organiser for entry changes.</Text> : <View style={{ borderTopWidth: 1, borderTopColor: brand.edge, paddingTop: 8 }}>
-                  {r.partner_email ? ownsBooking ? <ManageActionRow label="Remove partner" icon="person-remove-outline" tone="danger" onPress={() => begin('remove_partner', r)} /> : <Text style={{ color: brand.muted, fontSize: 13, lineHeight: 20, paddingVertical: 12 }}>The booking owner manages partner changes.</Text> : <ManageActionRow label="Add partner" icon="person-add-outline" tone="primary" onPress={() => { setManaging(false); router.push({ pathname: '/events/register', params: { id: String(event.id), mode: 'add-partner', entry: r.id } }); }} />}
+                  {r.partner_email ? ownsBooking ? <ManageActionRow label="Remove partner" icon="person-remove-outline" tone="danger" onPress={() => begin('remove_partner', r)} /> : <Text style={{ color: brand.muted, fontSize: 13, lineHeight: 20, paddingVertical: 12 }}>The booking owner manages partner changes.</Text> : <ManageActionRow label="Add partner" icon="person-add-outline" tone="secondary" onPress={() => addPartner(r)} />}
                   <ManageActionRow label="Switch division" icon="swap-horizontal" onPress={() => begin('switch_division', r)} />
                   <ManageActionRow label="Withdraw entry" icon="trash-outline" tone="danger" onPress={() => begin('withdraw', r)} />
                 </View>}
@@ -128,10 +129,10 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
   </>;
 }
 function Outline({ label, color, onPress }: { label: string; color: string; onPress: () => void }) { return <Pressable accessibilityRole="button" onPress={onPress} style={{ minHeight: 48, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: `${color}40`, backgroundColor: '#fff', justifyContent: 'center' }}><Text style={{ color, fontSize: 12 }}>{label}</Text></Pressable>; }
-function ManageActionRow({ label, icon, tone = 'neutral', onPress }: { label: string; icon: 'card-outline' | 'person-add-outline' | 'person-remove-outline' | 'swap-horizontal' | 'trash-outline'; tone?: 'primary' | 'neutral' | 'danger'; onPress: () => void }) {
+function ManageActionRow({ label, icon, tone = 'neutral', onPress }: { label: string; icon: 'card-outline' | 'person-add-outline' | 'person-remove-outline' | 'swap-horizontal' | 'trash-outline'; tone?: 'primary' | 'secondary' | 'neutral' | 'danger'; onPress: () => void }) {
   const color = tone === 'danger' ? brand.danger : brand.premium;
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={{ minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 13, paddingHorizontal: 10, backgroundColor: tone === 'primary' ? brand.padel : 'transparent' }}>
-    <View style={{ width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: tone === 'primary' ? '#16251F15' : tone === 'danger' ? '#B7352D12' : brand.surface }}><Ionicons name={icon} size={18} color={tone === 'danger' ? brand.danger : brand.accent} /></View>
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={{ minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 13, paddingHorizontal: 10, backgroundColor: tone === 'primary' ? brand.padel : tone === 'secondary' ? brand.surface : 'transparent', borderWidth: tone === 'secondary' ? 1 : 0, borderColor: brand.edge }}>
+    <View style={{ width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: tone === 'primary' ? '#16251F15' : tone === 'secondary' ? brand.elevated : tone === 'danger' ? '#B7352D12' : brand.surface }}><Ionicons name={icon} size={18} color={tone === 'danger' ? brand.danger : brand.accent} /></View>
     <Text style={{ color, fontSize: 14, fontWeight: '700', flex: 1 }}>{label}</Text>
     <EventIcon name="chevron.right" size={15} color={tone === 'danger' ? brand.danger : brand.faint} />
   </Pressable>;

@@ -4,7 +4,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fetchPublicPlayer, publicRank, playerPoints, pointsGain, instagramUrl, type PublicPlayer } from '@/lib/players';
+import { fetchPublicPlayer, publicRank, playerPoints, pointsGain, instagramUrl, sapaMainRanking, type PublicPlayer } from '@/lib/players';
 import { fetchPlayerMatches, matchKey, type MatchLists } from '@/lib/matches';
 import { siteUrl } from '@/lib/site';
 import { LocalFollowButton } from '@/components/players/local-follow-button';
@@ -13,7 +13,6 @@ import { lightBrand as b } from '@/theme/tokens';
 import { fetchMyFipLink } from '@/lib/player-fip-link';
 import { lookupOfficialFipProfile, searchProPlayers, type OfficialFipProfile, type PlayerFipLink } from '@/lib/player-hub';
 import type { ProPlayer } from '@/lib/pro-padel';
-import { categoriesFor, fetchRankings } from '@/lib/rankings';
 
 const card = { padding: 16, gap: 10, backgroundColor: b.elevated, borderRadius: 16, borderWidth: 1, borderColor: b.edge } as const;
 export default function PlayerProfile() {
@@ -24,9 +23,8 @@ export default function PlayerProfile() {
   const [fipLink, setFipLink] = useState<PlayerFipLink | null>(null);
   const [fipLive, setFipLive] = useState<ProPlayer | null>(null);
   const [officialFip, setOfficialFip] = useState<OfficialFipProfile | null>(null);
-  const [sapaRank, setSapaRank] = useState<number | null>(null);
   const load = useCallback(async () => { const current = ++request.current; setLoading(true); setError(''); setPlayer(null); setMatches(null); setMatchError('');
-    setFipLink(null); setFipLive(null); setOfficialFip(null); setSapaRank(null);
+    setFipLink(null); setFipLive(null); setOfficialFip(null);
     try { const next = await fetchPublicPlayer(id); if (current !== request.current) return; setPlayer(next);
       void fetchMyFipLink(Number(id)).then(link => {
         if (current !== request.current) return;
@@ -38,18 +36,13 @@ export default function PlayerProfile() {
           .then(profile => { if (current === request.current) setOfficialFip(profile); })
           .catch(() => {});
       }).catch(() => {});
-      if (next.rankedin_id) void Promise.allSettled(categoriesFor(15809).map(category => fetchRankings(15809, category))).then(results => {
-        if (current !== request.current) return;
-        const entries = results.flatMap(result => result.status === 'fulfilled' ? result.value : []);
-        const exact = entries.filter(entry => entry.rankedinId === String(next.rankedin_id));
-        if (exact.length === 1) setSapaRank(exact[0].rank);
-      });
       if (next.rankedin_id) void fetchPlayerMatches(next.rankedin_id).then(rows => { if (current === request.current) setMatches(rows); }).catch(() => { if (current === request.current) setMatchError('Published matches could not be loaded. Pull down to retry.'); });
     } catch (e) { if (current === request.current) setError(e instanceof Error ? e.message : 'Player could not be loaded.'); }
     finally { if (current === request.current) setLoading(false); }
   }, [id]);
   useEffect(() => { setTab('Overview'); setRanking(null); void load(); return () => { request.current++; }; }, [load]);
   const gallery = [...new Set([player?.image_url, ...(player?.additional_images || [])].filter((url): url is string => !!url))];
+  const sapaRanking = player ? sapaMainRanking(player) : null;
   const currentFipRank = fipLive?.rank || officialFip?.rank || fipLink?.fip_rank || null;
   const share = async () => { if (!player) return; try { setShareError(''); await Share.share({ title: player.name, message: `${player.name} on 4M Padel\n${siteUrl(`/players?id=${player.id}`)}` }); } catch { setShareError('Could not open sharing. Please try again.'); } };
   return <View style={{ flex: 1, backgroundColor: b.page }}>
@@ -67,7 +60,10 @@ export default function PlayerProfile() {
           {!!player.category && <Text style={{ color: b.accent, fontWeight: '600' }}>{player.category}</Text>}
           <Text style={{ color: b.muted, textAlign: 'center', lineHeight: 21 }}>{[player.home_club, player.nationality].filter(Boolean).join(' · ') || '4M Padel player'}</Text>
         </View>
-        <View style={{ ...card, flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 8 }}>{[['SAPA rank', sapaRank ? `#${sapaRank}` : '—'], ['Points', playerPoints(player.points)], ['Skill rating', player.skill_rating == null ? '—' : String(player.skill_rating)]].map(([label, value]) => <View key={label} style={{ flex: 1, alignItems: 'center', gap: 6 }}><Text style={{ color: b.premium, fontSize: 17, fontWeight: '700' }}>{value}</Text><Text style={{ color: b.muted, fontSize: 12, textAlign: 'center' }}>{label}</Text></View>)}</View>
+        <View style={{ ...card, flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 8 }}>{[['SAPA rank', sapaRanking ? publicRank(sapaRanking.rank) : '—'], ['Points', playerPoints(sapaRanking?.points)], ['Skill rating', player.skill_rating == null ? '—' : String(player.skill_rating)]].map(([label, value]) => {
+          const skill = label === 'Skill rating';
+          return <View key={label} style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 64, borderRadius: 12, backgroundColor: skill ? '#2449D8' : undefined, padding: skill ? 8 : 0 }}><Text style={{ color: skill ? '#FFFFFF' : b.premium, fontSize: 17, fontWeight: '700' }}>{value}</Text><Text style={{ color: skill ? '#FFFFFF' : b.muted, fontSize: 12, textAlign: 'center' }}>{label}</Text></View>;
+        })}</View>
         {fipLink && <View style={{ ...card, backgroundColor: '#EAF0FF', borderColor: '#B7C9FF', borderWidth: 1.5, gap: 14 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}><Text style={{ color: '#173FB8', fontSize: 13, fontWeight: '800', letterSpacing: 1 }}>FIP PROFILE</Text><Text style={{ color: '#173FB8', fontSize: 11, fontWeight: '700', backgroundColor: '#D7E2FF', borderRadius: 20, paddingHorizontal: 9, paddingVertical: 5 }}>{fipLink.status === 'verified' ? 'Record verified' : 'Link pending'}</Text></View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
