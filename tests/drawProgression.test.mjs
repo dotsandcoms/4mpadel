@@ -1,0 +1,8 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { drawProgression } from '../src/utils/drawProgression.js';
+const entries=['Brad','Mark','Jonti','Tamir'].map(team_name=>({id:team_name,team_name}));
+const matches=[{id:'a',round_label:'Semifinal',entry_one:entries[0],entry_two:entries[1],winner_to_match_id:'f',winner_to_slot:1,loser_to_match_id:'p',loser_to_slot:1},{id:'b',round_label:'Semifinal',entry_one:entries[2],entry_two:entries[3],winner_to_match_id:'f',winner_to_slot:2,loser_to_match_id:'p',loser_to_slot:2},{id:'f',round_label:'Final'},{id:'p',round_label:'Places 3–4'}];
+test('future matchup shows names and possible entrants on both winner and loser routes',()=>{const rows=drawProgression(matches,entries);assert.equal(rows[2].sides[0].label,'Winner of Brad vs Mark');assert.equal(rows[2].sides[1].label,'Winner of Jonti vs Tamir');assert.equal(rows[3].sides[0].label,'Loser of Brad vs Mark');assert.equal(rows[2].sides[0].candidates.length,2);});
+test('result narrows winner and loser paths independently',()=>{const rows=drawProgression(matches.map(m=>m.id==='a'?{...m,status:'walkover',winner_entry_id:'Mark',loser_entry_id:'Brad'}:m),entries);assert.deepEqual(rows[2].sides[0].candidates,[entries[1]]);assert.deepEqual(rows[3].sides[0].candidates,[entries[0]]);assert.equal(rows[2].sides[0].label,'Mark');});
+test('unsaved source keys and automatic byes resolve without invented opponents',()=>{const rows=drawProgression([{key:'a',status:'completed',result_type:'walkover',winner:entries[0],entry_one:entries[0]},{key:'b',source_slots:[{source_match_key:'a',type:'match'},{type:'entry',entry:null}]}],entries);assert.equal(rows[1].sides[0].label,'Brad');assert.equal(rows[1].sides[1].label,'Bye');});

@@ -63,16 +63,11 @@ function AppContent() {
   const [membersOnlyPrompt, setMembersOnlyPrompt] = React.useState(false);
 
   useEffect(() => {
-    // Initial session check
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    // Listen for auth state changes to handle magic links, recovery links, etc.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // INITIAL_SESSION also supplies the saved session without a separate lock request.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('App: Auth Event:', event);
       setSession(session);
+      setLoading(false);
 
       // SIGNED_IN can happen via magic link OR normal login
       // INITIAL_SESSION occurs on page load if a session already exists

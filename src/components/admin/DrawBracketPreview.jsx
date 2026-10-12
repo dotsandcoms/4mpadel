@@ -1,16 +1,31 @@
 import React, { useMemo } from 'react';
 import { CalendarClock, Trophy } from 'lucide-react';
 
-const CARD_HEIGHT = 94;
-const ROW_PITCH = 118;
+const CARD_HEIGHT = 120;
+const ROW_PITCH = 142;
 const COLUMN_WIDTH = 252;
 const CONNECTOR_WIDTH = 36;
 
 const teamName = (entry, fallback) => entry?.team_name || fallback;
 
-const DrawBracketPreview = ({ matches = [], title = 'Bracket preview' }) => {
+const scheduleLabel = (match) => {
+    if (!match.court_name && !match.scheduled_start) return 'Court & time TBC';
+    const time = match.scheduled_start
+        ? new Date(match.scheduled_start).toLocaleString('en-ZA', {
+            timeZone: 'Africa/Johannesburg',
+            weekday: 'short',
+            day: '2-digit',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+        })
+        : 'Time TBC';
+    return [match.court_name || 'Court TBC', time].join(' · ');
+};
+
+const DrawBracketPreview = ({ matches = [], title = 'Bracket preview', contextMatches = matches }) => {
     const knockoutMatches = useMemo(() => matches.filter((match) => match.stage === 'knockout'), [matches]);
-    const placementMatches = useMemo(() => matches.filter((match) => match.stage === 'placement'), [matches]);
+    const placementMatches = useMemo(() => matches.filter((match) => match.stage === 'placement' && !match.round_code?.startsWith('places_')), [matches]);
     const rounds = useMemo(() => {
         const grouped = new Map();
         knockoutMatches.forEach((match) => {
@@ -26,29 +41,30 @@ const DrawBracketPreview = ({ matches = [], title = 'Bracket preview' }) => {
             }));
     }, [knockoutMatches]);
 
-    const matchNumberByKey = useMemo(() => new Map(knockoutMatches
+    const matchNumberByKey = useMemo(() => new Map(contextMatches
         .slice()
         .sort((a, b) => a.round_number - b.round_number || a.bracket_position - b.bracket_position)
-        .map((match, index) => [match.key || match.id, index + 1])), [knockoutMatches]);
+        .map((match, index) => [match.key || match.id, index + 1])), [contextMatches]);
     const feederByTarget = useMemo(() => {
         const feeders = new Map();
-        knockoutMatches.forEach((match) => {
+        contextMatches.forEach((match) => {
             if (match.winner_to_match_id) feeders.set(`winner:${match.winner_to_match_id}:${match.winner_to_slot}`, match);
             if (match.loser_to_match_id) feeders.set(`loser:${match.loser_to_match_id}:${match.loser_to_slot}`, match);
         });
         return feeders;
-    }, [knockoutMatches]);
+    }, [contextMatches]);
 
     if (rounds.length === 0) return null;
 
     const firstRoundCount = Math.max(1, rounds[0].matches.length);
     const canvasHeight = Math.max(220, firstRoundCount * ROW_PITCH);
     const fallbackForSlot = (match, slotIndex) => {
+        if (match.status === 'cancelled' || (match.status === 'walkover' && !match[slotIndex === 0 ? 'entry_one' : 'entry_two'])) return 'BYE';
         const source = match.source_slots?.[slotIndex];
         if (source?.type === 'entry' && !source.entry) return 'BYE';
         if (source?.source_match_key) {
             const number = matchNumberByKey.get(source.source_match_key);
-            return `${source.type === 'loser' ? 'Loser' : 'Winner'} of M${number || ''}`.trim();
+            if (number) return `${source.type === 'loser' ? 'Loser' : 'Winner'} of M${number}`;
         }
         const loserFeeder = feederByTarget.get(`loser:${match.id}:${slotIndex + 1}`);
         if (loserFeeder) return `Loser of M${matchNumberByKey.get(loserFeeder.key || loserFeeder.id) || ''}`;
@@ -85,8 +101,9 @@ const DrawBracketPreview = ({ matches = [], title = 'Bracket preview' }) => {
                                                 </div>
                                                 {[match.entry_one, match.entry_two].map((entry, slotIndex) => {
                                                     const winner = entry && (match.winner?.id === entry.id || match.winner_entry_id === entry.id);
-                                                    return <div key={slotIndex} className={`flex h-[33px] items-center gap-2 border-b border-white/10 px-3 last:border-0 ${winner ? 'bg-padel-green/10' : ''}`}><span className={`w-5 shrink-0 text-[10px] font-black ${entry?.seed_number ? 'text-padel-green' : 'text-gray-600'}`}>{entry?.seed_number ? `#${entry.seed_number}` : '—'}</span><span className={`min-w-0 truncate text-xs ${entry ? 'font-semibold text-white' : 'font-medium text-gray-500'}`} title={teamName(entry, fallbackForSlot(match, slotIndex))}>{teamName(entry, fallbackForSlot(match, slotIndex))}</span></div>;
+                                                    return <div key={slotIndex} className={`flex h-[31px] items-center gap-2 border-b border-white/10 px-3 ${winner ? 'bg-padel-green/10' : ''}`}><span className={`w-5 shrink-0 text-[10px] font-black ${entry?.seed_number ? 'text-padel-green' : 'text-gray-600'}`}>{entry?.seed_number ? `#${entry.seed_number}` : '—'}</span><span className={`min-w-0 truncate text-xs ${entry ? 'font-semibold text-white' : 'font-medium text-gray-500'}`} title={teamName(entry, fallbackForSlot(match, slotIndex))}>{teamName(entry, fallbackForSlot(match, slotIndex))}</span></div>;
                                                 })}
+                                                <div className={`flex h-[30px] items-center gap-1.5 px-3 text-[9px] font-bold ${match.court_name || match.scheduled_start ? 'bg-sky-300/[0.07] text-sky-200' : 'text-gray-600'}`} title={scheduleLabel(match)}><CalendarClock size={11} className="shrink-0" /><span className="truncate">{scheduleLabel(match)}</span></div>
                                             </article>
                                             {roundIndex < rounds.length - 1 && <>
                                                 <span aria-hidden="true" className="absolute bg-white/20" style={{ left: `${COLUMN_WIDTH}px`, top: `${CARD_HEIGHT / 2}px`, width: `${CONNECTOR_WIDTH}px`, height: '1px' }} />
@@ -103,9 +120,10 @@ const DrawBracketPreview = ({ matches = [], title = 'Bracket preview' }) => {
                     })}
                 </div>
             </div>
+            {[...new Set(matches.filter(m=>m.stage==='placement' && m.round_code?.startsWith('places_')).map(m=>m.round_code.replace(/_r\d+$/, '')))].map(key=><DrawBracketPreview key={key} title={key.replace('places_', 'Places ').replace('_', '–')} contextMatches={contextMatches} matches={matches.filter(m=>m.round_code?.startsWith(`${key}_r`)).map(m=>({...m,stage:'knockout'}))} />)}
             {placementMatches.length > 0 && <div className="border-t border-amber-300/20 bg-amber-300/[0.04] p-5">
                 <p className="mb-3 text-xs font-black uppercase tracking-[0.16em] text-amber-200">Top 4 playoff</p>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{placementMatches.map((match) => <article key={match.key || match.id} className="overflow-hidden rounded-xl border border-amber-300/25 bg-black/20"><div className="flex items-center justify-between border-b border-white/10 px-3 py-2"><span className="text-xs font-bold text-white">{match.round_label}</span>{match.scheduled_start && <span className="inline-flex items-center gap-1 text-[10px] font-bold text-gray-400"><CalendarClock size={11} /> Scheduled</span>}</div>{[match.entry_one, match.entry_two].map((entry, index) => <div key={index} className="border-b border-white/10 px-3 py-2 text-xs font-semibold text-gray-200 last:border-0">{teamName(entry, fallbackForSlot(match, index))}</div>)}</article>)}</div>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{placementMatches.map((match) => <article key={match.key || match.id} className="overflow-hidden rounded-xl border border-amber-300/25 bg-black/20"><div className="flex items-center justify-between border-b border-white/10 px-3 py-2"><span className="text-xs font-bold text-white">{match.round_label}</span>{(match.scheduled_start || match.court_name) && <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-200"><CalendarClock size={11} /> {scheduleLabel(match)}</span>}</div>{[match.entry_one, match.entry_two].map((entry, index) => <div key={index} className="border-b border-white/10 px-3 py-2 text-xs font-semibold text-gray-200 last:border-0">{teamName(entry, fallbackForSlot(match, index))}</div>)}</article>)}</div>
             </div>}
         </section>
     );

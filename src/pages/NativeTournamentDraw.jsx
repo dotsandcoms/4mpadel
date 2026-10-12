@@ -1,11 +1,13 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import DrawBracketPreview from '../components/admin/DrawBracketPreview';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Activity, ArrowLeft, Brackets, CalendarDays, ChevronLeft, ChevronRight, Clock3, Loader2, MapPin, Megaphone, Radio, Share2, Sparkles, Trophy, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../supabaseClient';
 import PlayerModal from '../components/PlayerModal';
-import DrawCourtCalendar from '../components/DrawCourtCalendar';
+import TournamentCourtSchedule from '../components/TournamentCourtSchedule';
+import { AmericanoBoard } from '../components/admin/AmericanoDraw';
 
 const knockoutRoundLabel = (matchCount, fallbackLabel) => {
     if (matchCount === 1) return 'Final';
@@ -34,6 +36,7 @@ const NativeTournamentDraw = ({ event, preview = false }) => {
     const [activeAnnouncementIndex, setActiveAnnouncementIndex] = useState(0);
     const [lastUpdated, setLastUpdated] = useState(null);
     const [refreshTick, setRefreshTick] = useState(0);
+    const realtimeRefreshRef = useRef(null);
     const reduceMotion = useReducedMotion();
     const reveal = (delay = 0) => reduceMotion ? {} : ({
         initial: { opacity: 0, y: 16 },
@@ -47,7 +50,7 @@ const NativeTournamentDraw = ({ event, preview = false }) => {
         const load = async () => {
             let query = supabase
                 .from('draws')
-                .select('id, division_id, draw_kind, format, status, generated_at, public_announcement, announcement_updated_at, tournament_divisions(name)')
+                .select('id, division_id, draw_kind, format, status, scoring_rules, generated_at, public_announcement, announcement_updated_at, tournament_divisions(name)')
                 .eq('event_id', event.id)
                 .order('created_at');
             query = preview
@@ -104,7 +107,6 @@ const NativeTournamentDraw = ({ event, preview = false }) => {
             setMatches(nextMatches || []);
             setGroups(nextGroups || []);
             setStandings(nextStandings || []);
-            setActiveRoundIndex(0);
             setLastUpdated(new Date());
 
             const playerIds = [...new Set((nextEntries || []).flatMap((entry) => [entry.player_one_id, entry.player_two_id]).filter(Boolean))];
@@ -127,6 +129,10 @@ const NativeTournamentDraw = ({ event, preview = false }) => {
         return () => { active = false; };
     }, [selectedDrawId, refreshTick]);
 
+    useEffect(() => {
+        setActiveRoundIndex(0);
+    }, [selectedDrawId]);
+
     const entryById = useMemo(() => new Map(entries.map((entry) => [entry.id, entry])), [entries]);
     const rounds = useMemo(() => {
         const byRound = new Map();
@@ -139,7 +145,7 @@ const NativeTournamentDraw = ({ event, preview = false }) => {
             .sort((a, b) => a.number - b.number)
             .map((round) => ({ ...round, label: knockoutRoundLabel(round.matches.length, round.label) }));
     }, [matches]);
-    const placementMatches = useMemo(() => matches.filter((match) => match.stage === 'placement'), [matches]);
+    const placementMatches = useMemo(() => matches.filter((match) => match.stage === 'placement' && !match.round_code?.startsWith('places_')), [matches]);
     const roundLabelForMatch = (match) => match.stage === 'placement' ? match.round_label : rounds.find((round) => round.number === match.round_number)?.label || match.round_label;
     const groupMatchesById = useMemo(() => groups.reduce((result, group) => ({
         ...result,
@@ -296,7 +302,7 @@ const NativeTournamentDraw = ({ event, preview = false }) => {
         if (drawId) params.set('draw', drawId);
         if (matchId) params.set('match', matchId);
         const query = params.toString();
-        return `/native-draws/${event.slug}${query ? `?${query}` : ''}`;
+        return `/${preview ? 'draws-preview' : 'native-draws'}/${event.slug}${query ? `?${query}` : ''}`;
     };
     const shareDraw = async () => {
         const shareUrl = `${window.location.origin}${drawUrl(selectedDrawId, selectedMatch?.id || null)}`;
@@ -375,10 +381,27 @@ const NativeTournamentDraw = ({ event, preview = false }) => {
     }, [event.start_date, event.end_date]);
 
     useEffect(() => {
-        if (preview || !selectedDrawId || selectedDraw?.status === 'completed') return undefined;
-        const refreshTimer = window.setInterval(() => setRefreshTick((tick) => tick + 1), 20000);
-        return () => window.clearInterval(refreshTimer);
-    }, [preview, selectedDrawId, selectedDraw?.status]);
+        if (preview || !selectedDrawId || typeof supabase.channel !== 'function') return undefined;
+        const publicDrawIds = new Set(draws.map((draw) => draw.id));
+        const refresh = (payload) => {
+            const row = payload?.new || payload?.old;
+            if (row?.draw_id && !publicDrawIds.has(row.draw_id)) return;
+            window.clearTimeout(realtimeRefreshRef.current);
+            realtimeRefreshRef.current = window.setTimeout(() => {
+                if (document.visibilityState === 'visible') setRefreshTick((tick) => tick + 1);
+            }, 300);
+        };
+        const channel = supabase.channel(`public-draw-${event.id}`)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'draws', filter: `event_id=eq.${event.id}` }, refresh)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'native_draw_announcements', filter: `event_id=eq.${event.id}` }, refresh)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'draw_matches' }, refresh)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'draw_standings' }, refresh)
+            .subscribe();
+        return () => {
+            window.clearTimeout(realtimeRefreshRef.current);
+            supabase.removeChannel(channel);
+        };
+    }, [preview, selectedDrawId, event.id, draws]);
     const renderMatchCard = (match) => {
         const entryOneWon = match.winner_entry_id && match.winner_entry_id === match.entry_one_id;
         const entryTwoWon = match.winner_entry_id && match.winner_entry_id === match.entry_two_id;
@@ -429,6 +452,8 @@ const NativeTournamentDraw = ({ event, preview = false }) => {
         const sets = setsForMatch(match.id);
         return <motion.article key={match.id} layout="position" initial={reduceMotion ? false : { opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: 'spring', duration: 0.3, bounce: 0 }} className="overflow-hidden rounded-2xl border border-pink-300/35 bg-black/15 shadow-lg shadow-black/20"><header className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3"><div><p className="text-[10px] font-black uppercase tracking-[0.16em] text-pink-200">{roundLabelForMatch(match)} · Match {match.bracket_position}</p><p className="mt-1 text-xs font-semibold text-gray-400">{match.court_name || 'Court to be confirmed'}</p></div><span className="inline-flex items-center gap-1.5 rounded-full bg-pink-400 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-black"><Radio size={10} className="animate-pulse motion-reduce:animate-none" /> Live</span></header><div className="p-4"><div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center"><div className="min-w-0 space-y-2">{teamPlayers(match.entry_one_id).map((player) => renderPlayerLine(player, 'text-sm font-bold text-white'))}</div><span className="text-center text-[10px] font-black uppercase tracking-[0.16em] text-gray-500">vs</span><div className="min-w-0 space-y-2">{teamPlayers(match.entry_two_id).map((player) => renderPlayerLine(player, 'text-sm font-bold text-white'))}</div></div><div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-3"><div className="flex flex-wrap gap-1.5">{sets.length > 0 ? sets.map((set) => <span key={set.id} className="rounded-lg border border-pink-300/25 bg-pink-400/10 px-2.5 py-1 text-sm font-black tabular-nums text-white">{set.entry_one_games}–{set.entry_two_games}</span>) : <span className="text-xs font-semibold text-gray-400">Score pending</span>}</div><Link to={matchHref(match)} className="shrink-0 text-xs font-black text-pink-200 transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-padel-green">Open match →</Link></div></div></motion.article>;
     };
+
+    if (!loading && selectedDraw?.format === 'americano' && selectedDraw.scoring_rules?.americano) return <main className="min-h-screen bg-[#06080d] px-4 pb-20 pt-24 text-white"><div className="mx-auto max-w-6xl space-y-6"><Link className="text-sm text-padel-green" to={`/calendar/${event.slug}`}>← Back to event</Link><h1 className="text-3xl font-bold">{event.title || event.name} · {selectedDraw.scoring_rules.americano.variant==='team'?'Team Americano':'Americano'}</h1><p className="text-sm capitalize text-gray-400">{preview ? 'Private draft preview' : selectedDraw.status.replace('_', ' ')}</p><label className="block text-sm text-gray-300">Division<select className="mt-2 block w-full rounded-xl border border-white/15 bg-[#151515] p-3" value={selectedDrawId} onChange={e => setSearchParams({ draw: e.target.value })}>{draws.map(draw => <option key={draw.id} value={draw.id}>{draw.tournament_divisions?.name} · {draw.draw_kind}</option>)}</select></label><AmericanoBoard key={selectedDrawId} state={selectedDraw.scoring_rules.americano} /></div></main>;
 
     return (
         <main className="min-h-screen bg-[#06080d] px-4 pb-20 pt-20 text-white md:px-8 md:pt-24">
@@ -505,10 +530,8 @@ const NativeTournamentDraw = ({ event, preview = false }) => {
                     </motion.section>
                     {selectedMatch && <section id="match-centre" className="mb-10 scroll-mt-24 overflow-hidden rounded-[1.5rem] border border-pink-400/35 bg-gradient-to-br from-[#151129] via-[#0c1628] to-[#08101f] shadow-2xl shadow-black/30"><div className="flex flex-col gap-4 border-b border-white/10 px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-7"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-pink-300">Match centre</p><h2 className="mt-1 text-2xl font-black text-white">{roundLabelForMatch(selectedMatch)} · Match {selectedMatch.bracket_position}</h2><p className="mt-1 text-sm text-gray-400">Follow the score, seeds and route through the draw.</p></div><div className="flex items-center gap-2"><button type="button" onClick={shareDraw} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/15 bg-black/20 px-3 py-2 text-xs font-black text-white transition-transform transition-colors hover:border-pink-300/60 hover:text-pink-100 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-padel-green"><Share2 size={14} /> Share match</button><Link to={drawUrl(selectedDrawId)} className="inline-flex min-h-10 items-center rounded-xl border border-white/15 px-3 py-2 text-xs font-black text-gray-300 transition-colors hover:border-white/40 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-padel-green">Close</Link></div></div><div className="grid gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_220px_minmax(0,1fr)] lg:items-center lg:p-7"><div className={`rounded-2xl border p-4 ${selectedMatch.winner_entry_id === selectedMatch.entry_one_id ? 'border-padel-green/40 bg-padel-green/10' : 'border-white/10 bg-black/15'}`}><p className="mb-3 text-[10px] font-black uppercase tracking-[0.16em] text-gray-500">Team one</p><div className="space-y-3">{teamPlayers(selectedMatch.entry_one_id).map((player) => renderPlayerLine(player, 'text-base font-bold text-white'))}</div>{entryById.get(selectedMatch.entry_one_id)?.seed_number && <p className="mt-4 text-xs font-black text-amber-300">Seed #{entryById.get(selectedMatch.entry_one_id).seed_number}</p>}</div><div className="text-center"><span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-wide ${selectedMatch.status === 'in_progress' ? 'bg-pink-400 text-black' : selectedMatch.status === 'completed' ? 'bg-padel-green text-black' : 'bg-white/10 text-gray-300'}`}>{selectedMatch.status === 'in_progress' && <Radio size={11} className="animate-pulse motion-reduce:animate-none" />}{selectedMatch.status === 'in_progress' ? 'Live' : matchBadge(selectedMatch)}</span><p className="my-4 text-xs font-black uppercase tracking-[0.16em] text-gray-500">vs</p><div className="flex flex-wrap justify-center gap-2">{setsForMatch(selectedMatch.id).length > 0 ? setsForMatch(selectedMatch.id).map((set) => <span key={set.id} className="rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-sm font-black tabular-nums text-white">{set.entry_one_games}–{set.entry_two_games}</span>) : <span className="text-sm font-semibold text-gray-400">{resultLabel(selectedMatch)}</span>}</div><p className="mt-4 text-xs text-gray-400">{selectedMatch.scheduled_start ? new Date(selectedMatch.scheduled_start).toLocaleString('en-ZA', { weekday: 'long', hour: '2-digit', minute: '2-digit' }) : 'Court and time to be confirmed'}</p></div><div className={`rounded-2xl border p-4 ${selectedMatch.winner_entry_id === selectedMatch.entry_two_id ? 'border-padel-green/40 bg-padel-green/10' : 'border-white/10 bg-black/15'}`}><p className="mb-3 text-[10px] font-black uppercase tracking-[0.16em] text-gray-500">Team two</p><div className="space-y-3">{teamPlayers(selectedMatch.entry_two_id).map((player) => renderPlayerLine(player, 'text-base font-bold text-white'))}</div>{entryById.get(selectedMatch.entry_two_id)?.seed_number && <p className="mt-4 text-xs font-black text-amber-300">Seed #{entryById.get(selectedMatch.entry_two_id).seed_number}</p>}</div></div><footer className="border-t border-white/10 px-5 py-4 text-sm text-gray-400 sm:px-7"><span className="font-bold text-white">Draw route: </span>{selectedMatch.winner_to_match_id ? 'The winner advances to the next scheduled bracket slot.' : selectedMatch.status === 'completed' ? 'This match is at the end of its current route.' : 'The result will determine the next step in the draw.'}</footer></section>}
                     <section id="schedule" className="mb-10 scroll-mt-24">
-                        <div className="mb-5"><p className="text-xs font-black uppercase tracking-[0.18em] text-sky-300">Court schedule</p><h2 className="mt-1 text-2xl font-black text-white sm:text-3xl">Where to watch next</h2><p className="mt-1 text-sm text-gray-400">Matches appear by court once they have been scheduled.</p></div>
-                        <DrawCourtCalendar key={selectedDrawId} matches={matches} teamName={teamName} matchHref={matchHref}>
-                        {matchesByCourt.size > 0 ? <div className="grid gap-4 lg:grid-cols-2">{[...matchesByCourt.entries()].map(([court, courtMatches]) => <article key={court} className="overflow-hidden rounded-2xl border border-white/10 bg-[#08101f] shadow-xl shadow-black/20"><header className="flex items-center justify-between border-b border-white/10 px-5 py-4"><div><p className="font-bold text-white">{court}</p><p className="mt-1 text-xs text-gray-500">{courtMatches.length} {courtMatches.length === 1 ? 'match' : 'matches'} assigned to this court</p></div><CalendarDays size={17} className="text-sky-300" /></header><div className="divide-y divide-white/10">{courtMatches.map((match) => <Link key={match.id} to={matchHref(match)} className="flex items-center justify-between gap-4 px-5 py-3 transition-colors hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-padel-green"><div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-wide text-sky-200">{match.scheduled_start ? new Date(match.scheduled_start).toLocaleString('en-ZA', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : 'Time to be confirmed'}</p><p className="mt-1 truncate text-sm font-semibold text-white">{teamName(match.entry_one_id)} <span className="text-gray-500">vs</span> {teamName(match.entry_two_id)}</p></div><span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${match.status === 'in_progress' ? 'bg-pink-400 text-black' : 'bg-padel-green/10 text-padel-green'}`}>{match.status === 'in_progress' ? 'Live' : 'Next'}</span></Link>)}</div></article>)}</div> : <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-6 text-sm text-gray-400">No courts have been assigned yet. Check the live centre for the next match ready to play.</div>}
-                        </DrawCourtCalendar>
+                        <div className="mb-5"><p className="text-xs font-black uppercase tracking-[0.18em] text-sky-300">Court schedule</p><h2 className="mt-1 text-2xl font-black text-white sm:text-3xl">Where to watch next</h2><p className="mt-1 text-sm text-gray-400">All divisions in one schedule. Filter by division, or switch to List to include matches awaiting a time.</p></div>
+                        <TournamentCourtSchedule draws={draws} refreshTick={refreshTick} drawUrl={drawUrl} />
                     </section>
                     <section id="overview" className="mb-10 scroll-mt-24">
                         <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-padel-green">Tournament centre</p><h2 className="mt-1 text-2xl font-black text-white sm:text-3xl">Everything happening now</h2></div>{(eventDate || event.venue || event.city) && <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-400"><MapPin size={14} className="text-padel-green" /> {[eventDate, event.venue || event.city].filter(Boolean).join(' · ')}</p>}</div>
@@ -535,7 +558,7 @@ const NativeTournamentDraw = ({ event, preview = false }) => {
                             })}
                         </div>
                     </section>}
-                    {rounds.length > 0 && <section id="bracket" className="scroll-mt-24">
+                    {rounds.length > 0 && !matches.some(m=>m.round_code?.startsWith('places_')) && <section id="bracket" className="scroll-mt-24">
                     <div className="mb-5 flex flex-col gap-4 rounded-2xl border border-white/10 bg-gradient-to-r from-[#101b31] to-[#0b1220] p-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-padel-green">{groups.length ? 'Elimination stage' : 'Tournament bracket'}</p><h2 className="mt-1 text-2xl font-black text-white sm:text-3xl">{groups.length ? 'The knockout road' : 'Every match. One champion.'}</h2><p className="mt-1 max-w-2xl text-sm text-gray-400">Follow winners as they advance through the bracket to the final.</p></div><div className="inline-flex w-fit items-center gap-2 rounded-full border border-padel-green/30 bg-padel-green/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-padel-green"><Brackets size={13} /> {rounds.length} rounds</div></div>
                     <div className="mb-4 rounded-2xl border border-white/10 bg-[#08101f] p-3 md:hidden">
                         <div className="flex items-center justify-between gap-2">
@@ -561,6 +584,7 @@ const NativeTournamentDraw = ({ event, preview = false }) => {
                     </div>
                     </div>
                     </section>}
+                    {matches.some(m=>m.round_code?.startsWith('places_')) && <DrawBracketPreview title="Main draw and placement brackets" matches={matches.map(m=>({...m,key:m.id,entry_one:entries.find(e=>e.id===m.entry_one_id),entry_two:entries.find(e=>e.id===m.entry_two_id)}))} />}
                     {placementMatches.length > 0 && <section className="mt-6 overflow-hidden rounded-2xl border border-amber-300/25 bg-gradient-to-r from-amber-300/[0.06] to-[#08101f]">
                         <header className="flex flex-col gap-2 border-b border-white/10 px-5 py-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-amber-200">Top 4 playoff</p><h2 className="mt-1 text-xl font-black text-white">Third place on the line</h2></div><p className="text-xs text-gray-400">The semifinal losers meet to decide third and fourth.</p></header>
                         <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-3">{placementMatches.map(renderRoundMatchCard)}</div>

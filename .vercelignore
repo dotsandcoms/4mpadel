@@ -5,3 +5,5 @@ mobile/ios
 mobile/android
 node_modules
 dist
+
+.tmp

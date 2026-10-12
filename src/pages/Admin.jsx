@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { authErrorMessage } from '../utils/authErrors';
 import AdminSidebar from '../components/admin/AdminSidebar';
 import DashboardHome from '../components/admin/DashboardHome';
 import PlayerManager from '../components/admin/PlayerManager';
@@ -182,13 +183,17 @@ const Admin = () => {
     const handleLogin = async (e) => {
         e.preventDefault();
         setLoginLoading(true);
-        const { error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-        });
-
-        if (error) alert(error.message);
-        setLoginLoading(false);
+        try {
+            const { error } = await supabase.auth.signInWithPassword({
+                email: email.trim(),
+                password,
+            });
+            if (error) throw error;
+        } catch (error) {
+            alert(authErrorMessage(error));
+        } finally {
+            setLoginLoading(false);
+        }
     };
 
     const handleLogout = async () => {
