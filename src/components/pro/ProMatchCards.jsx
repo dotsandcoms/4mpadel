@@ -15,19 +15,19 @@ export function PlayerPortrait({ player, className = '', loading }) {
 export function MatchPlayer({ person, playerLookup = {}, playerHref }) {
   const profile = playerLookup[person.id];
   const content = <><PlayerPortrait key={person.id} player={profile || person} className="pro-match-avatar" loading="lazy" /><span className="pro-match-person-name">{person.name}{profile?.nationality && <CountryLabel code={profile.nationality} flagOnly />}</span></>;
-  return profile && playerHref ? <Link className="pro-match-person" to={playerHref(person.id)} state={{ proModal: true }} aria-haspopup="dialog">{content}</Link> : <div className="pro-match-person">{content}</div>;
+  return playerHref ? <Link className="pro-match-person" to={playerHref(person.id)} state={{ proModal: true }} aria-haspopup="dialog">{content}</Link> : <div className="pro-match-person">{content}</div>;
 }
 
 export function ResultCard({ match, playerId, playerLookup = {}, playerHref }) {
   const openMatch = useContext(ProMatchContext);
   const outcome = playerId ? playerResult(match, playerId) : null;
   return <article className="pro-match">
-    <header><span>{match.tournamentName}</span><span className={outcome ? `pro-outcome outcome-${outcome}` : ''}>{outcome || (match.round === 1 ? 'FINAL' : match.round === 2 ? 'SEMI-FINAL' : 'QUARTER-FINAL')}</span></header>
+    <header><span>{match.tournamentName}</span><span className={outcome ? `pro-outcome outcome-${outcome}` : ''}>{outcome || (match.round === 1 ? 'FINAL' : match.round === 2 ? 'SEMI-FINAL' : match.round === 4 ? 'QUARTER-FINAL' : (match.roundName || `ROUND OF ${match.round * 2}`).toUpperCase())}</span></header>
     {match.teams.map((team, index) => <div className={`pro-match-team ${match.winner === `team_${index + 1}` ? 'is-winner' : ''}`} key={index}>
       <div className="pro-match-names">{team.map((person) => <MatchPlayer key={person.id} person={person} playerLookup={playerLookup} playerHref={playerHref} />)}</div>
       <div className="pro-set-scores">{match.score.map((set, setIndex) => <span key={setIndex}>{set[index] ?? '—'}</span>)}{match.winner === `team_${index + 1}` && <span className="sr-only">Winning pair</span>}</div>
     </div>)}
-    <footer><span>{formatDate(match.playedAt)} · {match.round === 1 ? 'Final' : match.round === 2 ? 'Semi-final' : 'Quarter-final'}</span><span>{({ finished: 'Final score', retired: 'Retirement', walkover: 'Walkover', bye: 'Bye', ended: 'Unconfirmed score' })[match.status] || 'Result pending'}</span></footer>
+    <footer><span>{formatDate(match.playedAt)} · {match.round === 1 ? 'Final' : match.round === 2 ? 'Semi-final' : match.round === 4 ? 'Quarter-final' : match.roundName || `Round of ${match.round * 2}`}</span><span>{({ finished: 'Final score', retired: 'Retirement', walkover: 'Walkover', bye: 'Bye', ended: 'Unconfirmed score' })[match.status] || (match.status === 'live' ? 'In progress' : match.status === 'scheduled' ? 'Scheduled' : 'Result pending')}</span></footer>
     {openMatch && <button className="pro-match-details-button" aria-haspopup="dialog" aria-label={`Match details: ${match.teams.flat().map(person => person.name).join(', ')} · ${match.tournamentName}`} onClick={() => openMatch(match.id)}>Match details <ArrowUpRight size={15} /></button>}
   </article>;
 }

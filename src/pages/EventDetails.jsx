@@ -48,6 +48,7 @@ import {
 } from '../utils/weeklyRegistration';
 import TournamentProgressBar from '../components/TournamentProgressBar';
 import VideoModal from '../components/VideoModal';
+import EventMediaGallery from '../components/EventMediaGallery';
 import { divisionRankingSource, resolvePlayerRanking } from '../utils/playerRankingSelection';
 
 const formatPlayerName = (fullName) => {
@@ -660,6 +661,10 @@ const EventDetails = () => {
     const [weather, setWeather] = useState(null);
     const [albumPhotos, setAlbumPhotos] = useState([]);
     const [albumInfo, setAlbumInfo] = useState(null);
+    const [loadingAlbum, setLoadingAlbum] = useState(true);
+    const eventGalleryImages = useMemo(() => Array.isArray(event?.media_gallery_urls)
+        ? [...new Set(event.media_gallery_urls.filter((url) => typeof url === 'string' && url.trim()).map((url) => url.trim()))]
+        : [], [event?.media_gallery_urls]);
 
     // Animation Variants
     const containerVariants = {
@@ -2671,8 +2676,12 @@ const EventDetails = () => {
     }, [getOrganisationRankings]);
 
     useEffect(() => {
+        let cancelled = false;
         const fetchAlbumPhotos = async () => {
-            if (!event) return;
+            if (!event?.id) return;
+            setLoadingAlbum(true);
+            setAlbumInfo(null);
+            setAlbumPhotos([]);
 
             // Check if there's an album linked to this event in our DB
             try {
@@ -2680,9 +2689,11 @@ const EventDetails = () => {
                     .from('albums')
                     .select('id, title, description, slug')
                     .eq('event_id', event.id)
+                    .eq('is_active', true)
                     .is('parent_album_id', null)
                     .limit(1);
 
+                if (cancelled) return;
                 if (!albumError && albumsData && albumsData.length > 0) {
                     const albumData = albumsData[0];
                     setAlbumInfo(albumData);
@@ -2692,16 +2703,19 @@ const EventDetails = () => {
                         .eq('album_id', albumData.id)
                         .order('sort_order', { ascending: true });
 
-                    if (images && !imageError) {
+                    if (!cancelled && images && !imageError) {
                         setAlbumPhotos(images);
                     }
                 }
             } catch (err) {
                 console.error("Error fetching event album:", err);
+            } finally {
+                if (!cancelled) setLoadingAlbum(false);
             }
         };
         fetchAlbumPhotos();
-    }, [event]);
+        return () => { cancelled = true; };
+    }, [event?.id]);
 
     useEffect(() => {
         const fetchWeather = async () => {
@@ -5531,7 +5545,7 @@ const EventDetails = () => {
                                                     {albumPhotos.slice(0, 3).map((photo, i) => (
                                                         <div key={i} className={`relative overflow-hidden ${i === 0 ? 'col-span-2' : ''}`}>
                                                             <img
-                                                                src={photo.url || photo.photo_url}
+                                                                src={photo.thumbnail_url || photo.image_url}
                                                                 alt=""
                                                                 className="w-full h-full object-cover opacity-80"
                                                             />
@@ -5553,6 +5567,10 @@ const EventDetails = () => {
                                                 </Link>
                                             </div>
                                         </div>
+                                    )}
+
+                                    {!loadingAlbum && !albumInfo && eventGalleryImages.length > 0 && (
+                                        <EventMediaGallery key={event.id} images={eventGalleryImages} eventName={event.event_name} />
                                     )}
 
                                     {/* YouTube Videos */}
@@ -5609,7 +5627,8 @@ const EventDetails = () => {
                                         </div>
                                     )}
 
-                                    {!albumInfo && !event.youtube_playlist_url && (
+                                    {loadingAlbum && <p role="status" className="py-6 text-center text-sm text-gray-500">Loading event photos…</p>}
+                                    {!loadingAlbum && !albumInfo && eventGalleryImages.length === 0 && !event.youtube_playlist_url && (
                                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-16 flex flex-col items-center text-center">
                                             <ImageIcon className="w-12 h-12 text-gray-200 mb-4" />
                                             <h3 className="text-base font-semibold text-slate-900 mb-2">No Media Yet</h3>

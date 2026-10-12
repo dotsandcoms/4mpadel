@@ -155,6 +155,7 @@ const PlayerProfile = () => {
     const [hasSession, setHasSession] = useState(null);
     const [isMobileAccordionOpen, setIsMobileAccordionOpen] = useState(false);
     const [isCareerAccordionOpen, setIsCareerAccordionOpen] = useState(false);
+    const [statsExpanded, setStatsExpanded] = useState(false);
     const [isSecurityAccordionOpen, setIsSecurityAccordionOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [uploadingImage, setUploadingImage] = useState(false);
@@ -1940,7 +1941,20 @@ const PlayerProfile = () => {
                         )}
 
                         {/* Performance Statistics Card */}
-                        <div className="bg-[#0a0a0a]/70 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 shadow-2xl space-y-4">
+                        <div className="bg-[#0a0a0a]/70 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 shadow-2xl">
+                            <button
+                                type="button"
+                                aria-expanded={statsExpanded}
+                                aria-controls="profile-performance"
+                                onClick={() => setStatsExpanded(open => !open)}
+                                className="flex w-full min-h-[44px] items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-padel-green"
+                            >
+                                <TrendingUp size={16} className="text-gray-400" />
+                                <span className="flex-1 text-[11px] font-black uppercase tracking-widest text-gray-400">Stats &amp; Performance</span>
+                                <span className="text-sm font-bold text-white">{statsExpanded ? 'Hide' : 'Show'}</span>
+                                <ChevronDown size={16} className={`text-gray-400 transition-transform ${statsExpanded ? 'rotate-180' : ''}`} />
+                            </button>
+                            <div id="profile-performance" hidden={!statsExpanded} className="mt-4 space-y-4">
                             <div className="grid grid-cols-4 gap-2 text-center">
                                 <div className="flex flex-col p-1.5 bg-white/[0.02] border border-white/5 rounded-xl">
                                     <span className="text-[7px] font-black text-gray-500 uppercase tracking-widest">Total Match</span>
@@ -1994,6 +2008,7 @@ const PlayerProfile = () => {
                                         <span className="w-1.5 h-1.5 bg-black rounded-full" />
                                     </div>
                                 </div>
+                            </div>
                             </div>
                         </div>
 

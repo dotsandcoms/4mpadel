@@ -27,3 +27,21 @@ export async function loadProFixtures(signal) {
   if (snapshot?.version !== 1 || !Array.isArray(snapshot.matches) || typeof snapshot.drawPublished !== 'boolean' || !Number.isFinite(Date.parse(snapshot.updatedAt))) throw new Error('Invalid fixture snapshot.');
   return snapshot;
 }
+
+export async function loadProExplore(kind, params = {}, signal) {
+  const query = new URLSearchParams({ kind, ...Object.fromEntries(Object.entries(params).filter(([,value]) => value !== null && value !== undefined && value !== '')) });
+  const response = await fetch(`/api/pro-explore?${query}`, { signal });
+  if (!response.ok) throw new Error('Pro Padel details are temporarily unavailable. Please retry.');
+  const body = await response.json();
+  if (!body || typeof body !== 'object') throw new Error('Invalid Pro Padel response.');
+  return body;
+}
+
+export async function loadOfficialFipCalendar(signal) {
+  const { data } = supabase.storage.from('pro-padel').getPublicUrl('fip-calendar-v1.json');
+  const response = await fetch(data.publicUrl, { signal });
+  if (!response.ok) throw new Error('Official FIP calendar is unavailable.');
+  const value = await response.json();
+  if (value?.version !== 1 || !Array.isArray(value.tournaments) || !Number.isFinite(Date.parse(value.updatedAt)) || !value.tournaments.every(event => /^https:\/\/www\.padelfip\.com\/events\//.test(event.sourceUrl || ''))) throw new Error('Invalid official FIP calendar.');
+  return value;
+}

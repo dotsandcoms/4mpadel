@@ -1,0 +1,7 @@
+.env*
+.git
+mobile/assets
+mobile/ios
+mobile/android
+node_modules
+dist

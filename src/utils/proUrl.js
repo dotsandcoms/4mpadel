@@ -11,7 +11,7 @@ export function proUrl(section, input) {
   params.delete('rankingPage');
   params.delete('page');
   if (section === 'rankings' && Number.isSafeInteger(page) && page > 1) params.set('page', String(page));
-  const scoped = { rankings: ['q', 'country', 'side'], compare: ['compare', 'against'], results: ['event'], calendar: ['tourSearch', 'tourLevel'] };
+  const scoped = { rankings: ['q', 'country', 'side', 'directory'], compare: ['compare', 'against'], results: ['event'], calendar: ['tourSearch', 'tourLevel'] };
   for (const [scope, keys] of Object.entries(scoped)) if (scope !== section) keys.forEach(key => params.delete(key));
   for (const [key, value] of [...params]) if (!value) params.delete(key);
   return `/pro/${section}${params.size ? `?${params}` : ''}`;

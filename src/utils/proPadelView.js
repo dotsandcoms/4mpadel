@@ -4,7 +4,7 @@ export function countryName(code) { try { return code ? countries.of(code.toUppe
 export function formatDate(value, options = {}) {
   return value && Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat('en-ZA', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Africa/Johannesburg', ...options }).format(new Date(value)) : 'Date to be confirmed';
 }
-export const levelName = (level) => ({ major: 'MAJOR', p1: 'P1', p2: 'P2', finals: 'FINALS' })[level] || 'TOUR';
+export const levelName = (level) => ({ major: 'MAJOR', p1: 'P1', p2: 'P2', finals: 'FINALS', fip_promises: 'FIP PROMISES', fip_bronze: 'FIP BRONZE', fip_silver: 'FIP SILVER', fip_gold: 'FIP GOLD', fip_platinum: 'FIP PLATINUM' })[level] || 'TOUR';
 export function playerResult(match, id) {
   if (!['finished', 'retired'].includes(match.status) || !match.winner) return null;
   const team = match.teams.findIndex((players) => players.some((p) => p.id === id));
@@ -17,5 +17,5 @@ export function tournamentCalendar(tournament) {
   if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end < start) throw new Error('Invalid tournament dates');
   end.setUTCDate(end.getUTCDate() + 1);
   const compact = (date) => date.toISOString().slice(0, 10).replace(/-/g, '');
-  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//4M Padel//Pro Tour//EN', 'BEGIN:VEVENT', `UID:pro-${tournament.id}@4mpadel.co.za`, `DTSTAMP:${compact(start)}T000000Z`, `DTSTART;VALUE=DATE:${compact(start)}`, `DTEND;VALUE=DATE:${compact(end)}`, `SUMMARY:${escapeCalendar(tournament.name)}`, `LOCATION:${escapeCalendar(tournament.venue || tournament.location)}`, 'DESCRIPTION:Dates from Padel API. Check the event schedule for changes.', 'END:VEVENT', 'END:VCALENDAR', ''].join('\r\n');
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//4M Padel//Pro Tour//EN', 'BEGIN:VEVENT', `UID:pro-${tournament.id}@4mpadel.co.za`, `DTSTAMP:${compact(start)}T000000Z`, `DTSTART;VALUE=DATE:${compact(start)}`, `DTEND;VALUE=DATE:${compact(end)}`, `SUMMARY:${escapeCalendar(tournament.name)}`, `LOCATION:${escapeCalendar(tournament.venue || tournament.location)}`, `DESCRIPTION:Dates from ${tournament.source === 'FIP' ? 'the official FIP calendar' : 'Padel API'}. Check the event schedule for changes.`, 'END:VEVENT', 'END:VCALENDAR', ''].join('\r\n');
 }

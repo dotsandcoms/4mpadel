@@ -1,4 +1,4 @@
-const PUBLIC_EXACT = ['/reset-password', '/contact', '/rankings'];
+const PUBLIC_EXACT = ['/reset-password', '/contact', '/rankings', '/privacy-policy'];
 
 /** Routes accessible without signing in */
 export function isPublicRoute(pathname) {

@@ -36,6 +36,7 @@ import CoachRegistration from './pages/CoachRegistration';
 import Gallery from './pages/Gallery';
 import AlbumDetails from './pages/AlbumDetails';
 import Contact from './pages/Contact';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 import NotFound from './pages/NotFound';
 import ResetPassword from './pages/ResetPassword';
 import ClaimClubInvite from './pages/ClaimClubInvite';
@@ -162,6 +163,7 @@ function AppContent() {
           <Route path="/gallery" element={<Gallery />} />
           <Route path="/gallery/:slug" element={<AlbumDetails />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/results/:id" element={<TournamentDraw />} />
           <Route path="/draws/:id" element={<TournamentDraw />} />
           <Route path="/draws-preview/:id" element={<TournamentDraw />} />
