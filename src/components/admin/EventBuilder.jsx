@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
     X, Save, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Plus, Trash2, UploadCloud, Loader2,
-    Info, Layers, FileText, ImageIcon, Check, Eye, Copy, Pencil, ClipboardList, Shield, AlertTriangle,
+    Info, Layers, FileText, ImageIcon, Check, Eye, EyeOff, Copy, Pencil, ClipboardList, Shield, AlertTriangle,
     Bold, Italic, Underline, List, ListOrdered, Heading, UserPlus, RefreshCcw, ExternalLink, Repeat
 } from 'lucide-react';
 import CancelEventButton from './CancelEventButton';
@@ -14,6 +14,7 @@ import { useAdminPermissions } from '../../hooks/useAdminPermissions';
 import { getDefaultBackgroundForStatus } from '../../utils/imageUtils';
 import { buildRankedinTournamentUrl, downloadRankedinSkipReport, extractRankedinId } from '../../utils/rankedinLink';
 import { loadGoogleMaps } from '../../utils/googleMaps';
+import { generateAccessCode, getAccessCodeError, saveEventAccessCode } from '../../utils/eventAccessCode';
 import {
     isCalendarEventFinished,
     isRecentResultsAutoTier,
@@ -689,6 +690,8 @@ const blankForm = {
     // settings
     registration_opens_at: '',
     registration_closes_at: '',
+    require_access_code: false,
+    access_code: '',
     early_bird_ends_at: '',
     early_bird_fee: '',
     rankings_updated_at: '',
@@ -869,9 +872,14 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const [showPrizeBreakdown, setShowPrizeBreakdown] = useState(false);
     const [showEventDescription, setShowEventDescription] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [showAccessCode, setShowAccessCode] = useState(false);
+    const [accessCodeError, setAccessCodeError] = useState('');
+    const [savedAccessCode, setSavedAccessCode] = useState(null);
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
     /** Sibling calendar rows for the weekly series being edited (sorted by start_date). */
     const [seriesSiblings, setSeriesSiblings] = useState([]);
+    const hasExistingAccessCode = activeEvent?.registration_access === 'code'
+        && (!form.is_weekly || !seriesSiblings.some((event) => event.registration_access !== 'code'));
     const [uploadingCover, setUploadingCover] = useState(false);
     const [uploadingPoster, setUploadingPoster] = useState(false);
     const [uploadingOrgLogo, setUploadingOrgLogo] = useState(false);
@@ -1115,6 +1123,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     }, [isOpen, step, openPanels.venue, openPanels.identity]);
 
     useEffect(() => {
+        setShowAccessCode(false);
+        setAccessCodeError('');
+        setSavedAccessCode(null);
         if (!isOpen) {
             setWorkingEvent(null);
             setSeriesSiblings([]);
@@ -1244,6 +1255,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             end_date: ev.end_date ? ev.end_date.substring(0, 10) : '',
             registration_opens_at: toLocalInput(ev.registration_opens_at),
             registration_closes_at: toLocalInput(ev.registration_closes_at),
+            require_access_code: ev.registration_access === 'code',
+            access_code: '',
             early_bird_ends_at: toLocalInput(ev.early_bird_ends_at),
             early_bird_fee: ev.early_bird_fee != null && ev.early_bird_fee !== '' ? String(ev.early_bird_fee) : '',
             rankings_updated_at: toLocalInput(ev.rankings_updated_at),
@@ -1291,7 +1304,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (ev.is_weekly && ev.series_id) {
             const { data: siblings, error: seriesErr } = await supabase
                 .from('calendar')
-                .select('id, start_date, slug, event_name')
+                .select('id, start_date, slug, event_name, registration_access')
                 .eq('series_id', ev.series_id)
                 .eq('is_weekly', true)
                 .order('start_date', { ascending: true });
@@ -1905,7 +1918,44 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         );
     };
 
+    const accessCodeOptions = (protectedBefore = hasExistingAccessCode) => ({
+        enabled: form.require_access_code,
+        code: form.access_code,
+        protectedBefore,
+    });
+
+    const validateAccessCode = () => {
+        const error = getAccessCodeError(accessCodeOptions());
+        setAccessCodeError(error);
+        if (!error) return true;
+        toast.error(error);
+        setStep(2);
+        requestAnimationFrame(() => document.getElementById('create-event-access-code')?.focus());
+        return false;
+    };
+
+    const persistAccessCode = (eventId, protectedBefore = activeEvent?.registration_access === 'code') =>
+        saveEventAccessCode(supabase, eventId, accessCodeOptions(protectedBefore));
+
+    const rememberSavedAccessCode = () => {
+        if (!form.require_access_code) setSavedAccessCode(null);
+        else if (form.access_code.trim()) setSavedAccessCode(form.access_code.trim());
+        setForm((prev) => ({ ...prev, access_code: '' }));
+        setAccessCodeError('');
+    };
+
+    const copyAccessCode = async (code) => {
+        if (!code) return;
+        try {
+            await navigator.clipboard.writeText(code);
+            toast.success('Access code copied');
+        } catch {
+            toast.error('Unable to copy the access code. Select and copy it manually.');
+        }
+    };
+
     const validateDraft = () => {
+        if (!validateAccessCode()) return false;
         if (!form.event_name.trim()) { toast.error('Event name is required'); return false; }
         if (!form.start_date) { toast.error('Start date is required'); return false; }
         if (form.is_weekly) {
@@ -1967,6 +2017,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const getReviewIssues = () => {
         const errors = [];
         const warnings = [];
+        const codeError = getAccessCodeError(accessCodeOptions());
+        if (codeError) errors.push(codeError);
         if (!form.event_name?.trim()) errors.push('Event name is required');
         if (!form.start_date) errors.push('Start date is required');
         if (form.is_weekly) {
@@ -2052,6 +2104,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
 
     const next = () => {
         if (step === 1 && !validateBasics()) return;
+        if (step === 2 && !validateAccessCode()) return;
         if (step === 4 && !form.is_weekly && !validateDivisionsNamed()) return;
         if (step === 4 && !form.is_weekly && showPrizeBreakdown) syncPrizeBreakdownToDivisions();
         setStep((s) => {
@@ -2162,6 +2215,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         };
         // UI-only — never send to calendar table
         delete payload.weekly_count;
+        delete payload.require_access_code;
+        delete payload.access_code;
+        // Lock new registrations before saving the hash, including when the RPC fails.
+        if (!isEditing) payload.registration_access = form.require_access_code ? 'code' : 'public';
         // Never invent a series for normal events
         if (!isWeekly) {
             delete payload.series_id;
@@ -2387,6 +2444,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const persistWeeklySeriesUpdate = async (payload, editedEvent) => {
         const seriesId = payload.series_id || editedEvent.series_id || form.series_id;
         if (!seriesId) {
+            await persistAccessCode(editedEvent.id);
             const { error } = await supabase.from('calendar').update(payload).eq('id', editedEvent.id);
             if (error) throw error;
             return 1;
@@ -2396,7 +2454,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!siblings.length) {
             const { data, error } = await supabase
                 .from('calendar')
-                .select('id, start_date, slug')
+                .select('id, start_date, slug, registration_access')
                 .eq('series_id', seriesId)
                 .eq('is_weekly', true)
                 .order('start_date', { ascending: true });
@@ -2405,6 +2463,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             setSeriesSiblings(siblings);
         }
         if (!siblings.length) {
+            await persistAccessCode(editedEvent.id);
             const { error } = await supabase.from('calendar').update(payload).eq('id', editedEvent.id);
             if (error) throw error;
             return 1;
@@ -2417,6 +2476,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
 
         for (let j = 0; j < siblings.length; j += 1) {
             const sibling = siblings[j];
+            await persistAccessCode(sibling.id, sibling.registration_access === 'code');
             const weekOffsetDays = (j - editIdx) * 7;
             const occurrenceDate = addDaysToDate(form.start_date, weekOffsetDays);
             const instancePayload = {
@@ -2443,6 +2503,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 .eq('id', sibling.id);
             if (error) throw error;
         }
+        setSeriesSiblings(siblings.map((event) => ({
+            ...event, registration_access: form.require_access_code ? 'code' : 'public',
+        })));
         return siblings.length;
     };
 
@@ -2498,8 +2561,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                         slug: activeEvent.slug || payload.slug,
                         series_id: payload.series_id,
                         is_weekly: true,
+                        registration_access: form.require_access_code ? 'code' : 'public',
                         sanction_status: prev?.sanction_status || activeEvent?.sanction_status || 'approved',
                     }));
+                    rememberSavedAccessCode();
                     toast.success(
                         updatedCount > 1
                             ? `Updated all ${updatedCount} weekly events in this series`
@@ -2516,6 +2581,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                     if (!stayOpen) onClose?.();
                     return;
                 }
+                await persistAccessCode(eventId);
                 const { error } = await supabase.from('calendar').update(payload).eq('id', activeEvent.id);
                 if (error) throw error;
                 await persistDivisions(eventId);
@@ -2564,6 +2630,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                         .single();
                     if (error) throw error;
                     createdIds.push(data.id);
+                    await persistAccessCode(data.id, false);
                     if (divisionRows.length > 0) {
                         const { error: divErr } = await supabase
                             .from('tournament_divisions')
@@ -2579,7 +2646,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                     sanction_status: 'approved',
                     is_weekly: true,
                     series_id: seriesId,
+                    registration_access: form.require_access_code ? 'code' : 'public',
                 });
+                rememberSavedAccessCode();
                 await reloadDivisionsForEvent(eventId);
                 toast.success(`Created ${createdIds.length} weekly events`);
                 onSaved?.({
@@ -2599,6 +2668,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 const { data, error } = await supabase.from('calendar').insert([payload]).select('id').single();
                 if (error) throw error;
                 eventId = data.id;
+                await persistAccessCode(eventId, false);
                 await persistDivisions(eventId);
             }
 
@@ -2608,9 +2678,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 id: eventId,
                 event_name: payload.event_name,
                 slug: payload.slug,
+                registration_access: form.require_access_code ? 'code' : 'public',
                 sanction_status: prev?.sanction_status || activeEvent?.sanction_status
                     || (organisation ? 'approved' : undefined),
             }));
+            rememberSavedAccessCode();
             await reloadDivisionsForEvent(eventId);
 
             toast.success(
@@ -2633,6 +2705,17 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             setSaving(false);
         }
     };
+
+    const renderSavedAccessCode = () => (
+        <div className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4">
+            <label htmlFor="create-event-saved-access-code" className="mb-2 block text-xs font-bold text-amber-200">Access code · copy this now</label>
+            <div className="flex gap-2">
+                <input id="create-event-saved-access-code" readOnly value={savedAccessCode} className={`${inputClass} min-h-11 font-mono tracking-widest`} />
+                <button type="button" onClick={() => copyAccessCode(savedAccessCode)} aria-label="Copy saved access code" className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-amber-400/30 text-amber-200 hover:border-amber-300 focus-visible:outline-2 focus-visible:outline-padel-green"><Copy size={17} /></button>
+            </div>
+            <p className="mt-2 text-[11px] leading-5 text-amber-100/70">For security, the saved code cannot be displayed again after closing this editor. You can replace it later when editing the event.</p>
+        </div>
+    );
 
     const PanelHeader = ({ id, title }) => (
         <button
@@ -3406,6 +3489,64 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                 <p className="text-xs text-gray-400">
                                     Core setup rules for registration — set these before configuring divisions.
                                 </p>
+
+                                <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                                    <label className="flex cursor-pointer items-start gap-3">
+                                        <input
+                                            type="checkbox"
+                                            checked={form.require_access_code}
+                                            onChange={(e) => {
+                                                setField('require_access_code', e.target.checked);
+                                                setAccessCodeError('');
+                                            }}
+                                            className="mt-1 h-5 w-5 accent-padel-green focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-padel-green"
+                                        />
+                                        <span>
+                                            <span className="block text-sm font-bold text-white">Require an access code</span>
+                                            <span className="mt-1 block text-xs leading-relaxed text-gray-500">Only signed-in players with the code can unlock registration.</span>
+                                        </span>
+                                    </label>
+                                    {form.require_access_code && (
+                                        <div className="mt-4">
+                                            <label htmlFor="create-event-access-code" className={labelClass}>
+                                                {hasExistingAccessCode ? 'New access code (leave blank to keep the current code)' : 'Access code *'}
+                                            </label>
+                                            <div className="flex flex-col gap-2 sm:flex-row">
+                                                <div className="relative flex-1">
+                                                    <input
+                                                        id="create-event-access-code"
+                                                        type={showAccessCode ? 'text' : 'password'}
+                                                        value={form.access_code}
+                                                        onChange={(e) => {
+                                                            setField('access_code', e.target.value);
+                                                            setAccessCodeError('');
+                                                            setSavedAccessCode(null);
+                                                        }}
+                                                        minLength={6}
+                                                        maxLength={64}
+                                                        autoComplete="new-password"
+                                                        autoCapitalize="none"
+                                                        spellCheck={false}
+                                                        aria-invalid={!!accessCodeError}
+                                                        aria-describedby={`create-event-access-code-help${accessCodeError ? ' create-event-access-code-error' : ''}`}
+                                                        className={`${inputClass} min-h-11 pr-12 ${accessCodeError ? 'border-red-400' : ''}`}
+                                                    />
+                                                    <button type="button" onClick={() => setShowAccessCode((visible) => !visible)} aria-label={showAccessCode ? 'Hide access code' : 'Show access code'} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-lg text-gray-400 hover:text-white focus-visible:outline-2 focus-visible:outline-padel-green">
+                                                        {showAccessCode ? <EyeOff size={17} /> : <Eye size={17} />}
+                                                    </button>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button type="button" onClick={() => { setField('access_code', generateAccessCode()); setAccessCodeError(''); setSavedAccessCode(null); }} className="min-h-11 flex-1 rounded-xl border border-white/10 px-4 text-xs font-bold text-white hover:border-padel-green focus-visible:outline-2 focus-visible:outline-padel-green sm:flex-none">Generate</button>
+                                                    <button type="button" onClick={() => copyAccessCode(form.access_code)} disabled={!form.access_code.trim()} aria-label="Copy access code" className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-white/10 text-gray-300 hover:border-padel-green focus-visible:outline-2 focus-visible:outline-padel-green disabled:opacity-40"><Copy size={16} /></button>
+                                                </div>
+                                            </div>
+                                            {accessCodeError && <p id="create-event-access-code-error" role="alert" className="mt-2 text-xs text-red-400">{accessCodeError}</p>}
+                                            <p id="create-event-access-code-help" className="mt-2 text-[11px] leading-5 text-gray-500">Use 6–64 characters. The code is case-sensitive and cannot be viewed after closing this editor.</p>
+                                            {form.is_weekly && <p className="mt-1 text-[11px] leading-5 text-gray-500">Access-code changes apply to every weekly event in this series.</p>}
+                                            {savedAccessCode && renderSavedAccessCode()}
+                                        </div>
+                                    )}
+                                </div>
 
                                 {/* Registration Window */}
                                 <div className="space-y-2">
@@ -4920,6 +5061,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                     <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">Settings Summary</p>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
                                         <p className="text-gray-300"><span className="text-gray-500">Entry payment method:</span> {PAYMENT_METHODS.find((method) => method.value === form.payment_method)?.label || '—'}</p>
+                                        <p className="text-gray-300"><span className="text-gray-500">Entry access:</span> {form.require_access_code ? 'Access code required' : 'Public'}</p>
                                         <p className="text-gray-300"><span className="text-gray-500">Partner requirement:</span> {form.is_weekly ? 'Optional (player chooses)' : (form.partner_requirement || '—')}</p>
                                         <p className="text-gray-300"><span className="text-gray-500">Maximum teams / entries:</span> {form.max_teams_capacity || 'Unlimited'}</p>
                                         <p className="text-gray-300"><span className="text-gray-500">Player gifts:</span> {(form.player_gift_types || []).length ? form.player_gift_types.map((value) => PLAYER_GIFTS.find((gift) => gift.value === value)?.label || value).join(', ') : 'None'}</p>
@@ -4957,6 +5099,15 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                             <p className="mt-1 text-xs leading-relaxed text-amber-100/80">New registrations will be marked as pending payment. Event admins are responsible for checking the {form.payment_method === 'eft' ? 'bank account' : 'external provider'} and marking players as paid in Event Manager.</p>
                                         </div>
                                     </div>
+                                )}
+
+                                {form.require_access_code && (
+                                    savedAccessCode ? renderSavedAccessCode() : (
+                                        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+                                            <p className="text-sm font-bold text-amber-100">Save the access code securely</p>
+                                            <p className="mt-1 text-xs leading-relaxed text-amber-100/80">{hasExistingAccessCode && !form.access_code.trim() ? 'The current access code will be kept.' : 'You can copy the code here after saving. Once this editor closes, you can replace the code by editing the event.'}</p>
+                                        </div>
+                                    )
                                 )}
 
                                 <div className="rounded-xl border border-white/10 bg-black/20 p-4">

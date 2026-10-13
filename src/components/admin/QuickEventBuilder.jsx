@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { supabase } from '../../supabaseClient';
 import { useClubs } from '../../hooks/useClubs';
 import { attachPlacesAutocomplete } from '../../utils/googleMaps';
+import { generateAccessCode } from '../../utils/eventAccessCode';
 
 const STEPS = ['Event details', 'Event setup', 'Media & prizes', 'Additional info', 'Review & create'];
 const STEP_ICONS = [CalendarDays, SlidersHorizontal, ImageIcon, FileText, Eye];
@@ -60,13 +61,6 @@ const toLocalDateTimeInput = (value) => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '';
     return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-};
-
-const generateAccessCode = () => {
-    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    const bytes = new Uint8Array(8);
-    crypto.getRandomValues(bytes);
-    return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
 };
 
 const uploadImage = async (file, folder) => {
