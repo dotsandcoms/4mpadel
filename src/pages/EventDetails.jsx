@@ -6,6 +6,7 @@ import { supabase } from '../supabaseClient';
 import { fetchPublishedClubs } from '../utils/club';
 import { fetchAllRows } from '../utils/fetchAllRows';
 import { useRankedin } from '../hooks/useRankedin';
+import { publicRankedinResultsCache, requiresRankedinPublication } from '../utils/rankedinDrawPublication';
 import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, ChevronUp, FileText, User, Users, UserPlus, Trophy, AlertCircle, Heart, ChevronRight, Gift, Award, Layout, Circle, Check, Clock, Crown, Coins, Grid2x2, Plus, LockKeyhole } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import PaystackPop from '@paystack/inline-js';
@@ -2114,11 +2115,12 @@ const EventDetails = () => {
                 try {
                     // 1. Check DB Cache first — apply draw/results flags immediately so the Draws
                     // tab does not flash "Coming Soon" while slower Rankedin calls run.
-                    const { data: cacheRow } = await supabase
+                    const { data: rawCacheRow } = await supabase
                         .from('rankedin_results_cache')
                         .select('*')
                         .eq('event_id', event.id)
                         .maybeSingle();
+                    const cacheRow = publicRankedinResultsCache(rId, rawCacheRow);
 
                     if (cacheRow?.has_draw) {
                         setHasDraw(true);
@@ -5411,8 +5413,8 @@ const EventDetails = () => {
                                     ) : (
                                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-16 flex flex-col items-center text-center">
                                             <GitBranch className="w-12 h-12 text-gray-200 mb-4" />
-                                            <h3 className="text-base font-semibold text-slate-900 mb-2">Draws Coming Soon</h3>
-                                            <p className="text-sm text-gray-400">Draws will be released shortly before the tournament begins.</p>
+                                            <h3 className="text-base font-semibold text-slate-900 mb-2">{requiresRankedinPublication(event.rankedin_id || extractRankedinId(event.rankedin_url)) ? 'Draw not available' : 'Draws Coming Soon'}</h3>
+                                            {!requiresRankedinPublication(event.rankedin_id || extractRankedinId(event.rankedin_url)) && <p className="text-sm text-gray-400">Draws will be released shortly before the tournament begins.</p>}
                                         </div>
                                     )}
                                 </div>

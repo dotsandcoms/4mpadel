@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { normalizeRankedinMatchScore } from '../utils/rankedinMatchScore';
+import { publicRankedinClasses, publicRankedinMatches, requiresRankedinPublication } from '../utils/rankedinDrawPublication';
 import { SAPA_FALLBACK_RANKEDIN, fetchDefaultFederationRankedinConfig } from '../utils/federation';
 
 // Rankedin API Base URL
@@ -342,7 +343,7 @@ export const useRankedin = () => {
                 {},
                 1000 * 60 * 2 // 2 minutes cache
             );
-            return data || [];
+            return publicRankedinClasses(tournamentId, data);
         } catch (err) {
             console.error('Error fetching tournament classes:', err);
             setError(err.message);
@@ -533,7 +534,10 @@ export const useRankedin = () => {
             if (isFinished !== undefined) url += `&isFinished=${isFinished}`;
 
             const data = await fetchWithCache(url, {}, 1000 * 60 * 2); // 2 minutes cache
-            return data.Matches || [];
+            const classes = requiresRankedinPublication(tournamentId)
+                ? await getTournamentClasses(tournamentId)
+                : [];
+            return publicRankedinMatches(tournamentId, data, classes);
         } catch (err) {
             console.error('Error fetching tournament matches:', err);
             setError(err.message);
@@ -541,7 +545,7 @@ export const useRankedin = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [getTournamentClasses]);
 
     /**
      * Attempts to find winners for all classes in a tournament.
