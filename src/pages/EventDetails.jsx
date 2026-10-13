@@ -18,7 +18,7 @@ import {
     licenseQuote,
 } from '../utils/commerce';
 import ManualEventRegistration from '../components/ManualEventRegistration';
-import ManualRegistrationEntryCard from '../components/ManualRegistrationEntryCard';
+import ManualRegistrationEntryCard, { PaymentBadge } from '../components/ManualRegistrationEntryCard';
 import PlayerModal from '../components/PlayerModal';
 import { toast } from 'sonner';
 import { sendEmail } from '../utils/emails';
@@ -50,6 +50,7 @@ import TournamentProgressBar from '../components/TournamentProgressBar';
 import VideoModal from '../components/VideoModal';
 import EventMediaGallery from '../components/EventMediaGallery';
 import { divisionRankingSource, resolvePlayerRanking } from '../utils/playerRankingSelection';
+import { addPublicPlayerPaymentStatuses, publicPlayerPaymentLabel } from '../utils/publicPlayerPayment';
 
 const formatPlayerName = (fullName) => {
     if (!fullName) return '';
@@ -2303,6 +2304,7 @@ const EventDetails = () => {
             try {
                 let divisions = [];
                 let participantsMap = {};
+                let publicRegistrations = [];
 
                 // Manual events: divisions come only from tournament_divisions (never RankedIn).
                 // Weekly socials have no divisions — one flat entries list.
@@ -2316,6 +2318,8 @@ const EventDetails = () => {
                         .select('id, full_name, partner_name, payment_status, email_hash, partner_email_hash, registered_by_hash, created_at')
                         .eq('event_id', event.id)
                         .order('created_at', { ascending: true });
+
+                    publicRegistrations = localRegs || [];
 
                     const activeEmails = new Set(
                         (localRegs || [])
@@ -2340,11 +2344,11 @@ const EventDetails = () => {
                         }
                         if (partnerEmail) seenEmails.add(partnerEmail);
 
-                        const players = [{ Name: reg.full_name, Email: null }];
+                        const players = [{ Name: reg.full_name, Email: null, EmailHash: reg.email_hash, RegistrationId: reg.id }];
                         // Weekly: always show a named partner (including unpaid reserve flow).
                         if (reg.partner_name?.trim()) {
                             if (!players.some((p) => (p.Name || '').toLowerCase() === (reg.partner_name || '').toLowerCase())) {
-                                players.push({ Name: reg.partner_name, Email: null });
+                                players.push({ Name: reg.partner_name, Email: null, EmailHash: reg.partner_email_hash });
                             }
                         }
 
@@ -2360,8 +2364,6 @@ const EventDetails = () => {
                         });
                     });
 
-                    setPlayerDivisions(divisions);
-                    setParticipants(participantsMap);
                 } else if (event.is_manual) {
                     const { data: manualDivs } = await supabase
                         .from('tournament_divisions')
@@ -2382,6 +2384,8 @@ const EventDetails = () => {
                         .from('event_registrations_public')
                         .select('id, full_name, partner_name, division, division_id, payment_status, email_hash, partner_email_hash')
                         .eq('event_id', event.id);
+
+                    publicRegistrations = localRegs || [];
 
                     const activeEmailsByDiv = new Map();
                     (localRegs || []).forEach((reg) => {
@@ -2409,10 +2413,10 @@ const EventDetails = () => {
 
                         if (!existing) {
                             const activeEmails = activeEmailsByDiv.get(div.Id) || new Set();
-                            const players = [{ Name: reg.full_name, Email: null }];
+                            const players = [{ Name: reg.full_name, Email: null, EmailHash: reg.email_hash, RegistrationId: reg.id }];
                             const partnerEmail = (reg.partner_email_hash || '').toLowerCase();
                             if (reg.partner_name && (!partnerEmail || activeEmails.has(partnerEmail))) {
-                                players.push({ Name: reg.partner_name, Email: null });
+                                players.push({ Name: reg.partner_name, Email: null, EmailHash: reg.partner_email_hash });
                             }
                             participantsMap[div.Id].push({
                                 Participant: {
@@ -2430,8 +2434,6 @@ const EventDetails = () => {
                         if (!participantsMap[d.Id]) participantsMap[d.Id] = [];
                     });
 
-                    setPlayerDivisions(divisions);
-                    setParticipants(participantsMap);
                 } else {
                     const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
 
@@ -2452,22 +2454,27 @@ const EventDetails = () => {
                     // 2. Fetch from local event_registrations
                     const { data: localRegs } = await supabase
                         .from('event_registrations_public')
-                        .select('id, full_name, partner_name, division, payment_status, status')
+                        .select('id, full_name, partner_name, division, division_id, payment_status, status, email_hash, partner_email_hash')
                         .eq('event_id', event.id);
+
+                    publicRegistrations = localRegs || [];
 
                     if (localRegs && localRegs.length > 0) {
                         localRegs.forEach(reg => {
-                            if (reg.status === 'withdrawn' || reg.payment_status !== 'paid') {
+                            if (reg.status === 'withdrawn') {
                                 return;
                             }
 
+                            const divisionName = String(reg.division || '').trim();
+                            if (!divisionName) return;
+
                             // Find division by name, case-insensitive
-                            let div = divisions.find(d => d.Name.toLowerCase() === reg.division.toLowerCase());
+                            let div = divisions.find(d => d.Name.toLowerCase() === divisionName.toLowerCase());
 
                             // If it's a Rankedin event, only accept divisions that exist on Rankedin. 
                             // If it's a local-only event (!rId), allow creating new divisions from registrations.
                             if (!div && !rId) {
-                                div = { Id: `local_${reg.division.replace(/\s+/g, '_')}`, Name: reg.division };
+                                div = { Id: `local_${divisionName.replace(/\s+/g, '_')}`, Name: divisionName };
                                 divisions.push(div);
                             }
 
@@ -2487,9 +2494,9 @@ const EventDetails = () => {
                                 });
 
                                 if (!existingInRankedin) {
-                                    const players = [{ Name: reg.full_name, Email: null }];
+                                    const players = [{ Name: reg.full_name, Email: null, EmailHash: reg.email_hash, RegistrationId: reg.id }];
                                     if (reg.partner_name) {
-                                        players.push({ Name: reg.partner_name });
+                                        players.push({ Name: reg.partner_name, EmailHash: reg.partner_email_hash });
                                     }
 
                                     participantsMap[div.Id].push({
@@ -2504,9 +2511,15 @@ const EventDetails = () => {
                         });
                     }
 
-                    setPlayerDivisions(divisions);
-                    setParticipants(prev => ({ ...prev, ...participantsMap }));
                 }
+
+                for (const division of divisions) {
+                    participantsMap[division.Id] = addPublicPlayerPaymentStatuses(
+                        participantsMap[division.Id], publicRegistrations, division, { isWeekly: !!event.is_weekly },
+                    );
+                }
+                setPlayerDivisions(divisions);
+                setParticipants(prev => event.is_manual ? participantsMap : { ...prev, ...participantsMap });
 
                 // Gather all player names and Rankedin IDs for bulk database query
                 const names = new Set();
@@ -5190,6 +5203,9 @@ const EventDetails = () => {
                                                                                             <span className="text-sm font-bold text-slate-800 mt-1.5 text-center max-w-[96px] truncate group-hover:underline underline-offset-2">
                                                                                                 {pName}
                                                                                             </span>
+                                                                                            {publicPlayerPaymentLabel(player.PaymentStatus) && (
+                                                                                                <PaymentBadge paid={player.PaymentStatus === 'paid'} label={publicPlayerPaymentLabel(player.PaymentStatus)} compact className="mt-1.5" />
+                                                                                            )}
                                                                                         </button>
                                                                                     );
                                                                                 })}
@@ -5341,6 +5357,9 @@ const EventDetails = () => {
                                                                                                                 <span className="mt-1 bg-[#CCFF00] text-[#0a0a0a] text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm">
                                                                                                                     {pts.toLocaleString()}
                                                                                                                 </span>
+                                                                                                            )}
+                                                                                                            {publicPlayerPaymentLabel(player.PaymentStatus) && (
+                                                                                                                <PaymentBadge paid={player.PaymentStatus === 'paid'} label={publicPlayerPaymentLabel(player.PaymentStatus)} compact className="mt-1.5" />
                                                                                                             )}
                                                                                                         </button>
                                                                                                     );
