@@ -7,11 +7,13 @@
  *   (same flow as https://www.rankedin.com/en/tournament/autoadd/{id}?tournamentclassid=…)
  * Phase 3 — push tournament details (name, dates, location, regulations) via
  *   tournament/GetEditModelAsync → tournament/editasync
+ * Phase 4 — save team seeds from the same division points as the public 4M card.
  *
- * POST body: { eventId: number, rankedinId?: string, pushEntries?: boolean, pushDetails?: boolean }
+ * POST body: { eventId: number, rankedinId?: string, pushEntries?: boolean, pushDetails?: boolean, pushSeeds?: boolean }
  */
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { buildRankingSelection, rankingSelectionMatches, rankedinProfileIds, syncRankedinClassSeeds } from './ranking-sync.mjs';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -220,8 +222,9 @@ async function pushTournamentDetails(opts: {
   event: Record<string, unknown>;
   rankedinId: string;
   auth: RankedinAuth;
+  federationRankingId?: string | null;
 }): Promise<DetailsPushResult> {
-  const { event, rankedinId, auth } = opts;
+  const { event, rankedinId, auth, federationRankingId } = opts;
   const result: DetailsPushResult = {
     status: 'ok',
     updated: [],
@@ -249,6 +252,14 @@ async function pushTournamentDetails(opts: {
   }
 
   const model = await modelRes.json();
+  const selectionRes = await fetch(
+    `${API_BASE}/ranking/GetSelectedRankingsForEventAsync?id=${rankedinId}&type=${EVENT_TYPE_TOURNAMENT}&language=en`,
+    { headers: rankedinHeaders(auth, referer) },
+  );
+  if (!selectionRes.ok) {
+    throw new Error(`Could not read the existing RankedIn rankings (HTTP ${selectionRes.status}); tournament details were not saved`);
+  }
+  const rankingSelection = buildRankingSelection(await selectionRes.json(), federationRankingId);
   const offset = Number(model.UtcoffsetInMinutes ?? 120) || 120;
   const location = { ...(model.Location || {}) };
   const updated: string[] = [];
@@ -317,10 +328,12 @@ async function pushTournamentDetails(opts: {
     updated.push('Regulations');
   }
 
-  // Required by RankedIn editasync — omitting SelectedRankings returns Code: 1
-  if (!Array.isArray(model.SelectedRankings)) {
-    model.SelectedRankings = [];
-  }
+  // GetEditModelAsync does not include these. Preserve the separately loaded
+  // rankings and connect the approved federation's configured ranking.
+  model.SelectedRankings = rankingSelection.SelectedRankings;
+  model.SeedRankingId = rankingSelection.SeedRankingId;
+  if (rankingSelection.addedRanking) updated.push('SelectedRankings');
+  if (rankingSelection.changedSeedRanking) updated.push('SeedRankingId');
   model.IsEdit = true;
   model.Id = Number(rankedinId);
 
@@ -350,6 +363,14 @@ async function pushTournamentDetails(opts: {
     result.errors.push(`editasync failed (HTTP ${saveRes.status}): ${saveText.slice(0, 200)}`);
     result.message = result.errors[0];
     return result;
+  }
+
+  const verifyRankings = await fetch(
+    `${API_BASE}/ranking/GetSelectedRankingsForEventAsync?id=${rankedinId}&type=${EVENT_TYPE_TOURNAMENT}&language=en`,
+    { headers: rankedinHeaders(auth, referer) },
+  );
+  if (!verifyRankings.ok || !rankingSelectionMatches(await verifyRankings.json(), rankingSelection)) {
+    throw new Error('RankedIn did not retain the selected rankings after saving; review the tournament ranking settings');
   }
 
   result.updated = updated;
@@ -488,6 +509,7 @@ async function loadExistingClassPlayerIds(
 }
 
 type PushSkip = {
+  missingEmails?: string[];
   reason: string;
   division?: string;
   names?: string[];
@@ -519,7 +541,7 @@ type PushResult = {
 };
 
 async function pushPaidRegistrations(opts: {
-  supabaseAdmin: ReturnType<typeof createClient>;
+  supabaseAdmin: SupabaseClient;
   eventId: number;
   rankedinId: string;
   mapped: Array<{
@@ -936,6 +958,60 @@ async function pushPaidRegistrations(opts: {
   return result;
 }
 
+type SeedsPushResult = {
+  status: string;
+  updated: number;
+  errors: string[];
+  byDivision: Array<{ divisionName: string; rankedinClassId: string; status: string; updated: number; reason?: string }>;
+};
+
+async function pushTeamSeeds(opts: {
+  supabaseAdmin: SupabaseClient;
+  rankedinId: string;
+  auth: RankedinAuth;
+  mapped: Array<{ divisionId: string; divisionName: string; rankedinClassId: string }>;
+  divisions: Array<{ id: string; name: string; seeding_ranking_source?: string | null }>;
+}): Promise<SeedsPushResult> {
+  const { supabaseAdmin, rankedinId, auth, mapped, divisions } = opts;
+  const result: SeedsPushResult = { status: 'noop', updated: 0, errors: [], byDivision: [] };
+  for (const mappedDivision of mapped) {
+    const division = divisions.find((row) => row.id === mappedDivision.divisionId);
+    if (!division) continue;
+    try {
+      const synced = await syncRankedinClassSeeds({
+        apiBase: API_BASE, tournamentId: rankedinId, classId: mappedDivision.rankedinClassId,
+        headers: rankedinHeaders(auth), division,
+        loadProfiles: async (model: { Participants: unknown[] }) => {
+          const ids = rankedinProfileIds(model);
+          const profiles: Record<string, unknown>[] = [];
+          for (let offset = 0; offset < ids.length; offset += 100) {
+            const { data, error } = await supabaseAdmin.from('players_public')
+              .select('rankedin_id, points, rankings, preferred_ranking, active_ranking_label, rank_label, gender, category')
+              .in('rankedin_id', ids.slice(offset, offset + 100));
+            if (error) throw error;
+            profiles.push(...(data || []));
+          }
+          return profiles;
+        },
+      });
+      result.updated += synced.updated;
+      result.byDivision.push({ divisionName: division.name, rankedinClassId: mappedDivision.rankedinClassId,
+        status: synced.status, updated: synced.updated, reason: synced.reason });
+      log('info', 'Phase 4 division seeds', { divisionName: division.name, classId: mappedDivision.rankedinClassId,
+        status: synced.status, updated: synced.updated, reason: synced.reason, source: synced.source });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      result.errors.push(`${division.name}: ${message}`);
+      result.byDivision.push({ divisionName: division.name, rankedinClassId: mappedDivision.rankedinClassId,
+        status: 'error', updated: 0 });
+      log('error', 'Phase 4 seeds failed', { divisionName: division.name, error: message });
+    }
+  }
+  result.status = result.errors.length ? (result.updated ? 'partial' : 'error')
+    : result.updated ? 'ok' : 'noop';
+  return result;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -984,11 +1060,13 @@ serve(async (req) => {
     if (!eventId) throw new Error('eventId is required');
     const pushEntries = body.pushEntries !== false;
     const pushDetails = body.pushDetails !== false;
+    const pushSeeds = body.pushSeeds === true || (body.pushSeeds !== false && (pushEntries || pushDetails));
 
     log('info', 'Sync request received', {
       eventId,
       pushEntries,
       pushDetails,
+      pushSeeds,
       requestedBy: user.email || null,
       bodyRankedinId: body.rankedinId || null,
     });
@@ -996,7 +1074,7 @@ serve(async (req) => {
     const { data: event, error: eventError } = await supabaseAdmin
       .from('calendar')
       .select(
-        'id, event_name, slug, is_manual, rankedin_id, rankedin_url, start_date, end_date, venue, venues, city, address, description, sanctioning_details, rules_regs, registration_closes_at',
+        'id, event_name, slug, is_manual, rankedin_id, rankedin_url, start_date, end_date, venue, venues, city, address, description, sanctioning_details, rules_regs, registration_closes_at, federation_id, federation_sanction_status',
       )
       .eq('id', eventId)
       .maybeSingle();
@@ -1004,6 +1082,17 @@ serve(async (req) => {
     if (!event) throw new Error('Event not found');
     if (!event.is_manual) {
       throw new Error('Sync to RankedIn is only available for manual (4M-hosted) events');
+    }
+
+    let federationRankingId: string | null = null;
+    if (event.federation_id && event.federation_sanction_status === 'approved') {
+      const { data: federation, error: federationError } = await supabaseAdmin
+        .from('federations')
+        .select('rankedin_rankings_org_id')
+        .eq('id', event.federation_id)
+        .maybeSingle();
+      if (federationError) throw federationError;
+      federationRankingId = federation?.rankedin_rankings_org_id || null;
     }
 
     const rankedinId = extractRankedinId(body.rankedinId)
@@ -1064,7 +1153,7 @@ serve(async (req) => {
 
     const { data: divisions, error: divError } = await supabaseAdmin
       .from('tournament_divisions')
-      .select('id, name, rankedin_class_id, is_active, sort_order')
+      .select('id, name, rankedin_class_id, is_active, sort_order, seeding_ranking_source')
       .eq('event_id', eventId)
       .order('sort_order', { ascending: true });
     if (divError) throw divError;
@@ -1157,8 +1246,11 @@ serve(async (req) => {
         ? undefined
         : 'Set RANKEDIN_EMAIL and RANKEDIN_PASSWORD as Edge Function secrets to push tournament details.',
     };
+    let seedsPush: SeedsPushResult = {
+      status: pushSeeds ? 'not_configured' : 'skipped_by_request', updated: 0, errors: [], byDivision: [],
+    };
 
-    if ((pushEntries || pushDetails) && writePushAvailable) {
+    if ((pushEntries || pushDetails || pushSeeds) && writePushAvailable) {
       try {
         const auth = await loginRankedin(rankedinEmail, rankedinPassword);
 
@@ -1168,6 +1260,7 @@ serve(async (req) => {
               event: event as Record<string, unknown>,
               rankedinId,
               auth,
+              federationRankingId,
             });
           } catch (detailsErr) {
             const message = detailsErr instanceof Error ? detailsErr.message : String(detailsErr);
@@ -1212,6 +1305,9 @@ serve(async (req) => {
             message: 'pushEntries=false — class mapping + details only',
           };
         }
+        if (pushSeeds) {
+          seedsPush = await pushTeamSeeds({ supabaseAdmin, rankedinId, auth, mapped, divisions: localDivisions });
+        }
       } catch (pushErr) {
         const message = pushErr instanceof Error ? pushErr.message : String(pushErr);
         log('error', 'RankedIn write phase threw', {
@@ -1239,8 +1335,11 @@ serve(async (req) => {
             message,
           };
         }
+        if (pushSeeds && seedsPush.status === 'not_configured') {
+          seedsPush = { status: 'error', updated: 0, errors: [message], byDivision: [] };
+        }
       }
-    } else if ((pushEntries || pushDetails) && !writePushAvailable) {
+    } else if ((pushEntries || pushDetails || pushSeeds) && !writePushAvailable) {
       writePush.status = 'not_configured';
       detailsPush.status = 'not_configured';
       log('warn', 'Write phases skipped — RankedIn secrets not configured');
@@ -1257,6 +1356,9 @@ serve(async (req) => {
     }
 
     const nextSteps: string[] = [];
+    if (seedsPush.byDivision.some((division) => division.reason === 'existing_seeds')) {
+      nextSteps.push('Existing RankedIn seeds were preserved. Review those classes in the RankedIn Players step.');
+    }
     if (unmatchedLocal.length > 0) {
       nextSteps.push(
         `Create ${unmatchedLocal.length} missing class(es) on RankedIn: ${unmatchedLocal.map((d) => d.divisionName).join(', ')}`,
@@ -1273,7 +1375,7 @@ serve(async (req) => {
       nextSteps.push('Open RankedIn edit / players to verify synced details and entries');
     }
 
-    const phase = detailsPush.updated.length > 0
+    const phase = seedsPush.updated > 0 ? 4 : detailsPush.updated.length > 0
       ? 3
       : (writePush.pushed > 0 || writePush.status === 'noop' || writePush.status === 'ok' ? 2 : 1);
 
@@ -1294,6 +1396,7 @@ serve(async (req) => {
       },
       detailsPush,
       writePush,
+      seedsPush,
       nextSteps,
     };
 
@@ -1306,9 +1409,10 @@ serve(async (req) => {
       detailsUpdated: detailsPush.updated,
       writePushStatus: writePush.status,
       pushed: writePush.pushed,
+      seedsUpdated: seedsPush.updated,
       skipped: writePush.skipped.length,
       skipReasons: summarizeSkips(writePush.skipped),
-      errors: writePush.errors.length + detailsPush.errors.length,
+      errors: writePush.errors.length + detailsPush.errors.length + seedsPush.errors.length,
       durationMs: Date.now() - startedAt,
     });
 

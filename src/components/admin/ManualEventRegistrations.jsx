@@ -507,6 +507,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             const pushErrors = data.writePush?.errors || [];
             const detailsUpdated = data.detailsPush?.updated || [];
             const detailsErrors = data.detailsPush?.errors || [];
+            const seedsUpdated = data.seedsPush?.updated || 0;
+            const seedsErrors = data.seedsPush?.errors || [];
+            const seedsRetained = (data.seedsPush?.byDivision || []).some((d) => ['existing_seeds', 'draws_exist', 'tournament_locked'].includes(d.reason));
+            const seedsBit = seedsUpdated > 0
+                ? ` Seeds: ${seedsUpdated} team(s) updated.`
+                : (seedsRetained ? ' Existing RankedIn draws and seeds retained.' : '');
             const skipCounts = pushSkipped.reduce((acc, s) => {
                 const key = s.reason || 'other';
                 acc[key] = (acc[key] || 0) + 1;
@@ -515,11 +521,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             const skipSummary = Object.entries(skipCounts)
                 .map(([reason, count]) => `${count} ${reason}`)
                 .join(', ');
-            if ((pushErrors.length > 0 && pushed === 0) || (detailsErrors.length > 0 && detailsUpdated.length === 0 && data.detailsPush?.status === 'error')) {
+            if ((pushErrors.length > 0 && pushed === 0) || (detailsErrors.length > 0 && detailsUpdated.length === 0 && data.detailsPush?.status === 'error') || data.seedsPush?.status === 'error') {
                 toast.error(
-                    detailsErrors[0] || pushErrors[0] || 'Sync push failed',
+                    seedsErrors[0] || detailsErrors[0] || pushErrors[0] || 'Sync push failed',
                     { id: toastId, duration: 8000 },
                 );
+            } else if (seedsErrors.length > 0) {
+                toast.warning(`Entries synced, but some seeds could not be saved: ${seedsErrors[0]}`, { id: toastId, duration: 9000 });
             } else if (missing.length > 0) {
                 toast.warning(
                     `Mapped ${mappedCount}. Create on RankedIn: ${missing.map((d) => d.divisionName).join(', ')}`,
@@ -534,13 +542,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                         ? ` — pushed ${pushed} paid team(s)${pushSkipped.length ? ` (${skipSummary})` : ''}`
                         : (pushSkipped.length ? ` — no new teams (${skipSummary})` : ' — no paid doubles to push yet'))
                     : ' — set RankedIn secrets to push entries';
-                toast.success(`RankedIn #${data.rankedinId} — ${mappedCount} division(s) mapped${detailsBit}${pushBit}`, {
+                toast.success(`RankedIn #${data.rankedinId} — ${mappedCount} division(s) mapped${detailsBit}${pushBit}${seedsBit}`, {
                     id: toastId,
                     duration: 9000,
                 });
             }
             if (data.writePush || data.detailsPush) {
-                console.info('[sync-to-rankedin]', { writePush: data.writePush, detailsPush: data.detailsPush });
+                console.info('[sync-to-rankedin]', { writePush: data.writePush, detailsPush: data.detailsPush, seedsPush: data.seedsPush });
             }
             if (pushSkipped.length > 0) {
                 const rowCount = downloadRankedinSkipReport(pushSkipped, {
