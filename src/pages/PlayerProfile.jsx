@@ -627,7 +627,7 @@ const PlayerProfile = () => {
                     .order('created_at', { ascending: false })
                     .limit(50);
 
-                paymentsQuery = paymentsQuery.or(`player_id.eq.${pData.id},metadata->>email.ilike.${email}`);
+                paymentsQuery = paymentsQuery.or(`player_id.eq.${pData.id},metadata->>email.ilike.${email},metadata->>registrant_email.ilike.${email}`);
 
                 const { data: paymentsData, error } = await paymentsQuery;
                 if (error) throw error;
