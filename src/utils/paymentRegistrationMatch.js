@@ -541,17 +541,30 @@ export function getLatestProcessedEntryRefundAt(regId, refundByRegMap) {
  */
 export function hasBlockingProcessedRefund(reg, refundByRegMap, payments = null) {
     if (!reg?.id || !refundByRegMap) return false;
-    const latestRefundAt = getLatestProcessedEntryRefundAt(reg.id, refundByRegMap);
-    if (!latestRefundAt) return false;
+    const entryRefunds = (refundByRegMap.get(reg.id)?.rows || []).filter((row) => {
+        const meta = parseRefundMeta(row.metadata);
+        return String(row.status || '').toLowerCase() === 'processed'
+            && (!meta.cover_type || meta.cover_type === 'entry');
+    });
+    if (!entryRefunds.length) return false;
 
-    const refundMs = new Date(latestRefundAt).getTime();
-    const successPayments = (payments || []).filter((p) => String(p.status || '').toLowerCase() === 'success');
-
-    const laterEntryPayment = successPayments.find((payment) => {
-        if (isLicensePaymentRow(payment)) return false;
+    const laterEntryPayment = (payments || []).find((payment) => {
         if (!paymentMatchesRegistration(payment, reg)) return false;
+        if (payment.event_id != null && reg.event_id != null
+            && String(payment.event_id) !== String(reg.event_id)) return false;
         const paidAt = new Date(payment.created_at || 0).getTime();
-        return paidAt > refundMs;
+        return entryRefunds.every((refund) => {
+            // A delayed refund callback belongs to its original charge. A new,
+            // separate payment after withdrawal remains valid even when that
+            // callback arrives after the player has already paid again.
+            if (refund.payment_id && refund.payment_id === payment.id) return false;
+            if (refund.paystack_reference && refund.paystack_reference === payment.reference) return false;
+            const linked = refund.payment_id || refund.paystack_reference;
+            const refundAt = linked
+                ? refund.created_at || refund.processed_at
+                : refund.processed_at || refund.created_at;
+            return paidAt > new Date(refundAt || 0).getTime();
+        });
     });
 
     return !laterEntryPayment;
