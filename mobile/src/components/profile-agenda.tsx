@@ -37,10 +37,11 @@ import { sapaLabel, sapaTone } from '@/theme/sapa';
 import { lightBrand as brand, motion } from '@/theme/tokens';
 
 export const PROFILE_SECTIONS = [
-  { id: 'events', label: 'My Events', active: brand.accent, text: '#fff' },
-  { id: 'matches', label: 'My Matches', active: brand.accent, text: '#fff' },
-  { id: 'rankings', label: 'My Rankings', active: brand.accent, text: '#fff' },
-  { id: 'payments', label: 'Payments', active: brand.accent, text: '#fff' },
+  { id: 'events', label: 'Events', icon: { ios: 'calendar', android: 'calendar_today', web: 'calendar_today' } },
+  { id: 'matches', label: 'Matches', icon: { ios: 'tennis.racket', android: 'sports_tennis', web: 'sports_tennis' } },
+  { id: 'rankings', label: 'Rankings', icon: { ios: 'chart.bar.xaxis', android: 'bar_chart', web: 'bar_chart' } },
+  { id: 'payments', label: 'Payments', icon: { ios: 'creditcard', android: 'credit_card', web: 'credit_card' } },
+  { id: 'photos', label: 'Photos', icon: { ios: 'photo', android: 'image', web: 'image' } },
 ] as const;
 
 export type ProfileSection = (typeof PROFILE_SECTIONS)[number]['id'];
@@ -260,13 +261,10 @@ export function SectionSwitcher({
   onChange: (next: ProfileSection) => void;
 }) {
   return (
-    <ScrollView
-      horizontal
+    <View
       accessibilityRole="tablist"
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ paddingHorizontal: 20 }}>
-      <View className="flex-row rounded-2xl border border-court-edge bg-court-elevated p-1">
-        {PROFILE_SECTIONS.map((item) => {
+      style={{ marginHorizontal: 20, flexDirection: 'row', borderRadius: 14, borderWidth: 1, borderColor: brand.edge, backgroundColor: brand.elevated, padding: 3 }}>
+        {PROFILE_SECTIONS.map((item, index) => {
           const selected = section === item.id;
           const count = counts[item.id];
           const label = count != null ? `${item.label} (${count})` : item.label;
@@ -278,19 +276,20 @@ export function SectionSwitcher({
               accessibilityState={{ selected }}
               accessibilityLabel={label}
               android_ripple={RIPPLE}
-              className="min-h-11 justify-center rounded-xl px-3"
-              style={selected ? { backgroundColor: item.active } : undefined}>
+              className="active:opacity-70"
+              style={{ flex: 1, minHeight: 56, borderRadius: 11, paddingHorizontal: 2, paddingVertical: 9, alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: selected ? brand.accent : 'transparent' }}>
+              {index > 0 && !selected && section !== PROFILE_SECTIONS[index - 1].id ? <View style={{ position: 'absolute', left: 0, top: 9, bottom: 9, width: 1, backgroundColor: brand.surface }} /> : null}
+              <SymbolView name={item.icon} size={18} tintColor={selected ? '#FFFFFF' : brand.faint} />
               <Text
-                className="text-[9px] font-black uppercase tracking-widest"
-                style={{ color: selected ? item.text : 'rgba(22,37,31,0.7)' }}>
+                numberOfLines={1}
+                style={{ color: selected ? '#FFFFFF' : brand.muted, fontSize: 9, fontWeight: '700', letterSpacing: 0.3, textTransform: 'uppercase' }}>
                 {item.label}
-                {count != null ? ` (${count})` : ''}
               </Text>
+              {selected ? <View style={{ position: 'absolute', left: 8, right: 8, bottom: 4, height: 2, borderRadius: 1, backgroundColor: '#FFFFFF80' }} /> : null}
             </Pressable>
           );
         })}
-      </View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -657,7 +656,7 @@ export function ProfileSectionPager({
   refreshing,
   onRefresh,
   onOpenEvent,
-  eventsFooter,
+  photosContent,
   bottomPad,
 }: {
   width: number;
@@ -685,7 +684,7 @@ export function ProfileSectionPager({
   refreshing: boolean;
   onRefresh: () => void;
   onOpenEvent: (event: CalendarEvent, action?: 'register' | 'pay' | 'manage') => void;
-  eventsFooter: ReactNode;
+  photosContent: ReactNode;
   bottomPad: number;
 }) {
   const router = useRouter();
@@ -830,7 +829,6 @@ export function ProfileSectionPager({
                 />
               </View>
             }
-            footer={eventsFooter}
             empty={
               <EmptyBlock
                 title={eventView === 'upcoming' ? 'No upcoming events' : 'No completed events'}
@@ -985,6 +983,17 @@ export function ProfileSectionPager({
               }
             />
           )}
+        </PageEnter>
+      </View>
+
+      <View style={pageStyle}>
+        <PageEnter active={section === 'photos'}>
+          <ScrollView
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomPad + 24 }}>
+            {photosContent}
+          </ScrollView>
         </PageEnter>
       </View>
     </ScrollView>

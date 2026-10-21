@@ -1,6 +1,25 @@
 const test = require('node:test'), assert = require('node:assert/strict'), fs = require('node:fs'), ts = require('typescript'), vm = require('node:vm');
 function load(path) { const exports = {}; vm.runInNewContext(ts.transpileModule(fs.readFileSync(path,'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { exports, require: () => ({}) }); return exports; }
 const {entryBalance} = load('supabase/functions/native-entry-balance/balance.ts');
+const {paymentPresentation} = load('src/lib/payment-presentation.ts');
+test('a confirmed historical payment remains confirmed when itemised balance data is unavailable', () => {
+  const state = paymentPresentation('paid', { known: false, due: null });
+  assert.equal(state.confirmed, true); assert.equal(state.label, 'Paid & Confirmed'); assert.equal(state.due, null);
+  assert.equal(paymentPresentation('paid').confirmed, true);
+});
+test('only a verified positive balance supersedes the paid registration badge', () => {
+  assert.equal(paymentPresentation('paid', { known: true, due: 50 }).due, 50);
+  assert.equal(paymentPresentation('paid', { known: true, due: 50 }).confirmed, false);
+  assert.equal(paymentPresentation('paid', { known: false, due: 50 }).confirmed, true);
+  assert.equal(paymentPresentation('paid', { known: true, due: 0 }).confirmed, true);
+});
+test('pending, complimentary, refunded and missing statuses remain distinct', () => {
+  assert.equal(paymentPresentation('pending').confirmed, false);
+  assert.equal(paymentPresentation('comped').confirmed, true);
+  assert.equal(paymentPresentation('comped', { known: true, due: 600 }).confirmed, true);
+  assert.equal(paymentPresentation('refunded').label, 'Refunded');
+  assert.equal(paymentPresentation(null).label, 'Status unavailable');
+});
 const {resolveRefundableItems} = load('supabase/functions/paystack-refund/refund-engine.ts');
 const reg = { id:'r1',email:'me@example.com',division:'Open',payment_status:'paid' };
 const original = {id:'p1',amount:1,status:'success',reference:'original',metadata:{source:'manual_event',covers:[{type:'entry',email:reg.email,division:'Open'}],division_entry_fees:{Open:1}}};

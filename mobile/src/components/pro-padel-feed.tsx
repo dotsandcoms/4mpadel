@@ -1,17 +1,20 @@
 import { FollowedLocalMatches } from '@/components/followed-local-matches';
-import { addToDeviceCalendar } from '@/lib/device-calendar';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ProMatchStar } from '@/components/pro-match-star';
+import { addToCalendar } from '@/lib/device-calendar';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { ActivityIndicator, Alert, AppState, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { startForegroundTask } from '@/lib/foreground-task';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, usePathname, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import type { usePlayerHub } from '@/hooks/use-player-hub';
-import { homePlayerSelection, playerCountryFlag, playerRankLabel, proHubPlayer, type HubPlayer } from '@/lib/player-hub';
+import { hasRankingUpdate, homePlayerSelection, localPlayerCountryFlag, localRankingUpdates, playerCountryFlag, playerRankLabel, proHubPlayer, type HubPlayer } from '@/lib/player-hub';
 import type { ProPadelState } from '@/hooks/use-pro-padel';
 import { proDate, proRound, proStale, proStatus, selectProMatches, type ProTournament, type ProCategory, type ProFollow, type ProMatch, type ProPerson, type ProPlayer, type ProRankings } from '@/lib/pro-padel';
-import { fetchTournamentMatches, withLiveScores, type MatchDetails } from '@/lib/pro-padel-live';
+import { fetchLiveTournaments, fetchMatchDetails, fetchTournamentMatches, withLiveScores, type MatchDetails } from '@/lib/pro-padel-live';
+import { getMatchBookmarks, refreshMatchBookmarks, removeMatchBookmark, subscribeMatchBookmarks } from '@/lib/pro-match-bookmarks';
 import { lightBrand as brand } from '@/theme/tokens';
 
 type Filter = ProCategory | 'all';
@@ -37,26 +40,29 @@ function NextTourCard({ event, local = false, onOpen }: { event: ProTournament; 
   const add = async () => {
     if (adding) return;
     setAdding(true);
-    try { await addToDeviceCalendar({ title: event.name, startDate: event.startDate, endDate: event.endDate,
+    try { await addToCalendar({ title: event.name, startDate: event.startDate, endDate: event.endDate,
       location: [event.venue, event.location, event.country].filter(Boolean).join(' · ') }); }
     catch (error) { Alert.alert('Calendar unavailable', error instanceof Error ? error.message : 'Please try again.'); }
     finally { setAdding(false); }
   };
   return <View style={[s.tourHero, local && { backgroundColor: '#EAF0FF', borderColor: '#2449D830' }]}>
-    <View style={s.tourEyebrow}>
-      {!!event.level && <Text style={[s.tourLevel, local && { color: '#2449D8', borderColor: '#2449D8' }]}>{event.level.toUpperCase()}</Text>}
-      <Text style={[s.tourKicker, local && { color: '#2449D8' }]}>{local ? 'NEXT IN 4M' : 'NEXT STOP ON TOUR'}</Text>
-    </View>
-    <Pressable disabled={!onOpen} accessibilityRole={onOpen ? "button" : undefined} accessibilityLabel={onOpen ? `View ${event.name}` : undefined} onPress={onOpen} style={s.tourMain}>
-      <View style={{ flex: 1, gap: 12 }}>
-        <Text accessibilityRole="header" numberOfLines={3} ellipsizeMode="tail" style={s.tourTitle}>{playerCountryFlag(event.country)}{event.country ? ' ' : ''}{event.name}</Text>
-        <View style={s.tourMeta}><Ionicons name="location-outline" size={15} color="#52625A" /><Text numberOfLines={1} style={s.tourLocation}>{event.location || event.venue || 'Location to be announced'}</Text></View>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+      <View style={{ flex: 1, gap: 9 }}>
+        <View style={s.tourEyebrow}>
+          {!!event.country && <Text accessibilityLabel={country(event.country)} style={s.countryTag}>{playerCountryFlag(event.country)}</Text>}
+          {!!event.level && <Text style={[s.tourLevel, local && { color: '#2449D8', borderColor: '#2449D8' }]}>{event.level.toUpperCase()}</Text>}
+        </View>
+        <Text numberOfLines={2} style={[s.tourKicker, local && { color: '#2449D8' }]}>{local ? 'NEXT IN 4M' : 'NEXT STOP ON TOUR'}</Text>
       </View>
       <View style={[s.tourDate, local && { borderColor: '#2449D830' }]} accessible accessibilityLabel={proDate(event.startDate)}>
         <Text style={s.tourMonth}>{datePart({ month: 'short' }).toUpperCase()}</Text>
         <Text style={[s.tourDay, local && { color: '#2449D8' }]} maxFontSizeMultiplier={1.3}>{datePart({ day: '2-digit' })}</Text>
         <Text style={s.tourYear}>{datePart({ year: 'numeric' })}</Text>
       </View>
+    </View>
+    <Pressable disabled={!onOpen} accessibilityRole={onOpen ? "button" : undefined} accessibilityLabel={onOpen ? `View ${event.name}` : undefined} onPress={onOpen} style={{ gap: 12 }}>
+      <Text accessibilityRole="header" numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.75} ellipsizeMode="tail" textBreakStrategy="simple" lineBreakStrategyIOS="standard" style={s.tourTitle}>{event.name}</Text>
+      <View style={s.tourMeta}><Ionicons name="location-outline" size={15} color="#52625A" /><Text numberOfLines={1} style={s.tourLocation}>{event.location || event.venue || 'Location to be announced'}</Text></View>
     </Pressable>
     <View style={s.tourMeta}><Ionicons name="calendar-outline" size={16} color="#52625A" /><Text style={s.tourLocation}>{proDate(event.startDate)} – {proDate(event.endDate)}</Text></View>
     <Pressable accessibilityRole="button" accessibilityState={{ disabled: adding }} disabled={adding} onPress={() => void add()} style={[s.tourCalendar, local && { backgroundColor: '#2449D8' }, adding && { opacity: 0.65 }]}>
@@ -83,17 +89,18 @@ async function fetchTourPreview(id: number) {
 }
 
 function LiveTourCard({ event, matchesToday, liveCount, onOpen }: { event: ProTournament; matchesToday: number | null; liveCount: number; onOpen: () => void }) {
-  return <View style={s.liveTourCard}>
+  return <Pressable accessibilityRole="button" accessibilityLabel={`Explore ${event.name} tournament`} onPress={onOpen} style={s.liveTourCard}>
     {event.photoUrl && <Image source={{ uri: event.photoUrl }} contentFit="cover" style={s.liveArtwork} />}
     <View style={s.liveTourContent}>
-      <View style={s.liveBadges}><Text style={s.liveBadge}>● LIVE</Text>{event.level && <Text style={s.liveLevel}>{event.level.toUpperCase()}</Text>}</View>
+      <View style={s.liveBadges}><Text style={s.liveBadge}>{event.freshness?.stale ? 'SAVED UPDATE' : '● LIVE'}</Text>{event.level && <Text style={s.liveLevel}>{event.level.replace(/_/g, ' ').toUpperCase()}</Text>}</View>
+      {event.freshness?.stale && <Text style={{ color: '#FFFFFF', fontSize: 11 }}>Updated {proDate(event.freshness.updatedAt, true)} · Refresh paused</Text>}
       <View style={{ flex: 1 }} />
-      <Text accessibilityRole="header" numberOfLines={3} style={s.liveTourTitle}>{playerCountryFlag(event.country)}{event.country ? ' ' : ''}{event.name}</Text>
+      <Text accessibilityRole="header" numberOfLines={3} adjustsFontSizeToFit minimumFontScale={0.75} style={s.liveTourTitle}>{playerCountryFlag(event.country)}{event.country ? ' ' : ''}{event.name}</Text>
       <Text numberOfLines={1} style={s.liveTourPlace}>{event.location || event.venue || 'Location to be announced'}</Text>
-      <Text style={s.liveTourCount}>{matchesToday != null ? `${matchesToday} match${matchesToday === 1 ? '' : 'es'} today` : liveCount ? `${liveCount} match${liveCount === 1 ? '' : 'es'} live now` : 'Main draw in progress'}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={`View ${event.name} matches`} onPress={onOpen} style={s.liveTourAction}><Text style={s.liveTourActionText}>VIEW MATCHES</Text><Ionicons name="arrow-forward" size={18} color="#17200C" /></Pressable>
+      <Text style={s.liveTourCount}>{matchesToday != null ? `${matchesToday} match${matchesToday === 1 ? '' : 'es'} today` : liveCount ? `${liveCount} match${liveCount === 1 ? '' : 'es'} live now` : 'Tournament in progress'}</Text>
+      <View style={s.liveTourAction}><Text style={s.liveTourActionText}>VIEW TOURNAMENT</Text><Ionicons name="arrow-forward" size={18} color="#17200C" /></View>
     </View>
-  </View>;
+  </Pressable>;
 }
 
 function TourMatchPreview({ row, onOpen }: { row: MatchDetails; onOpen: () => void }) {
@@ -101,26 +108,74 @@ function TourMatchPreview({ row, onOpen }: { row: MatchDetails; onOpen: () => vo
   const live = match.status === 'live' || match.status === 'ongoing';
   const time = match.scheduleLabel || (match.scheduledAt && /(Z|[+-]\d{2}:\d{2})$/i.test(match.scheduledAt) ? proDate(match.scheduledAt, true) : 'Time to be confirmed');
   const scores = match.score.length ? match.score : row.liveScore?.sets || [];
-  return <Pressable accessibilityRole="button" accessibilityLabel={`${live ? 'Live' : 'Upcoming'} ${match.tournamentName} match: ${match.teams.map(team => team.map(person => person.name).join(' and ')).join(' versus ')}`} onPress={onOpen} style={s.liveMatchCard}>
-    <View style={s.liveMatchHeader}><Text style={live ? s.liveMatchStatus : s.nextMatchStatus}>{live ? '● LIVE' : 'UP NEXT'}</Text><Text numberOfLines={1} style={s.liveMatchCourt}>{match.court || (live ? proRound(match) : time)}</Text><Ionicons name="chevron-forward" size={16} color="#D5E4D8" /></View>
+  return <View style={s.liveMatchCard}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${live ? 'Live' : 'Upcoming'} ${match.tournamentName} match: ${match.teams.map(team => team.map(person => person.name).join(' and ')).join(' versus ')}`} onPress={onOpen} style={{ gap: 10 }}>
+    <View style={[s.liveMatchHeader, { minHeight: 44, paddingRight: 52 }]}><Text style={live ? s.liveMatchStatus : s.nextMatchStatus}>{row.freshness?.stale ? 'SAVED UPDATE' : live ? '● LIVE' : 'UP NEXT'}</Text><Text numberOfLines={1} style={s.liveMatchCourt}>{match.court || (live ? proRound(match) : time)}</Text></View>
     {match.teams.map((team, index) => <View key={index} style={s.liveMatchTeam}>
       <Text numberOfLines={2} style={s.liveMatchNames}>{team.length ? team.map(person => `${playerCountryFlag(person.nationality)}${person.nationality ? ' ' : ''}${person.name}`).join(' / ') : 'Players to be confirmed'}</Text>
       {live && scores.length > 0 && <Text style={s.liveMatchScore}>{scores.slice(0, 3).map(set => set[index] ?? '—').join('   ')}</Text>}
     </View>)}
     {live && row.liveScore?.points && <Text style={s.liveMatchTime}>Current point {row.liveScore.points}{row.liveScore.serving ? ` · ${row.liveScore.serving === 'team_1' ? 'Top team' : 'Bottom team'} serving` : ''}</Text>}
     {!live && <Text style={s.liveMatchTime}>{time}</Text>}
-  </Pressable>;
+    </Pressable>
+    <View style={{ position: 'absolute', top: 14, right: 14 }}><ProMatchStar row={row} dark /></View>
+  </View>;
 }
 
-type LocalUpcomingEvent = { id: number; event_name: string | null; start_date: string; end_date: string | null; city: string | null; venue: string | null; event_status: string | null };
-function IntegratedUpNext({ tournament, showLocal, message }: { tournament?: ProTournament | null; showLocal: boolean; message?: string }) {
+function TourMatchRail({ rows }: { rows: MatchDetails[] }) {
   const router = useRouter();
-  const [events, setEvents] = useState<LocalUpcomingEvent[]>([]), [loading, setLoading] = useState(false), [error, setError] = useState(''), [retry, setRetry] = useState(0);
-  const liveTour = tournament?.status === 'live' || tournament?.status === 'ongoing' ? tournament : null;
-  const [tourPreview, setTourPreview] = useState<{ id: number; rows: MatchDetails[]; complete: boolean } | null>(null);
+  const { width } = useWindowDimensions();
+  const [measuredWidth, setMeasuredWidth] = useState<number | null>(null);
+  const viewportWidth = measuredWidth ?? width - 32;
+  const cardWidth = Math.min(rows.length > 1 ? viewportWidth - 28 : viewportWidth, 420);
+  return <View onLayout={event => setMeasuredWidth(event.nativeEvent.layout.width)}>
+    <FlatList horizontal data={rows} keyExtractor={row => String(row.match.id)}
+      showsHorizontalScrollIndicator={false} decelerationRate="fast" snapToInterval={cardWidth + 12}
+      disableIntervalMomentum style={{ flexGrow: 0 }}
+      contentContainerStyle={{ paddingRight: viewportWidth - cardWidth }}
+      ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
+      renderItem={({ item }) => <View style={{ width: cardWidth }}>
+        <TourMatchPreview row={item} onOpen={() => router.push({ pathname: '/pro/match/[id]', params: { id: String(item.match.id), from: 'home' } })} />
+      </View>} />
+  </View>;
+}
+
+function LiveTournaments({ fallback }: { fallback?: ProTournament | null }) {
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const [measuredWidth, setMeasuredWidth] = useState<number | null>(null);
+  const [tournaments, setTournaments] = useState<ProTournament[] | null>(null);
+  const [loading, setLoading] = useState(true), [error, setError] = useState(false), [retry, setRetry] = useState(0);
+  const liveTours = tournaments ?? (fallback && ['live', 'ongoing'].includes(fallback.status || '') ? [fallback] : []);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const liveTour = liveTours.find(event => event.id === selectedId) ?? liveTours[0];
+  const selectedIndex = Math.max(0, liveTours.findIndex(event => event.id === liveTour?.id));
+  const rail = useRef<ScrollView>(null);
+  const tourIds = liveTours.map(event => event.id).join(':');
+  const viewportWidth = measuredWidth ?? width - 32;
+  const cardWidth = Math.min(liveTours.length > 1 ? viewportWidth - 28 : viewportWidth, 420);
+  const [tourPreviews, setTourPreviews] = useState<Record<number, { rows: MatchDetails[]; complete: boolean }>>({});
   const [tourPreviewError, setTourPreviewError] = useState(false);
+  useEffect(() => {
+    setSelectedId(null);
+    rail.current?.scrollTo({ x: 0, animated: false });
+  }, [tourIds]);
   useFocusEffect(useCallback(() => {
-    if (!liveTour) { setTourPreview(null); setTourPreviewError(false); return; }
+    let active = true, inFlight = false;
+    const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const next = await fetchLiveTournaments();
+        if (active) { setTournaments(next); setError(false); }
+      } catch { if (active) setError(true); }
+      finally { inFlight = false; if (active) setLoading(false); }
+    };
+    const stop = startForegroundTask(refresh, 60000);
+    return () => { active = false; stop(); };
+  }, [retry]));
+  useFocusEffect(useCallback(() => {
+    if (!liveTour) { setTourPreviewError(false); return; }
     setTourPreviewError(false);
     let active = true;
     let inFlight = false;
@@ -129,14 +184,122 @@ function IntegratedUpNext({ tournament, showLocal, message }: { tournament?: Pro
       inFlight = true;
       try {
         const next = await fetchTourPreview(liveTour.id);
-        if (active) { setTourPreview({ id: liveTour.id, ...next }); setTourPreviewError(false); }
+        if (active) { setTourPreviews(previous => ({ ...previous, [liveTour.id]: next })); setTourPreviewError(false); }
       } catch { if (active) setTourPreviewError(true); }
       finally { inFlight = false; }
     };
-    void refresh();
-    const timer = setInterval(() => { void refresh(); }, 60000);
-    return () => { active = false; clearInterval(timer); };
+    const stop = startForegroundTask(refresh, 60000);
+    return () => { active = false; stop(); };
   }, [liveTour?.id]));
+  const currentDay = matchDay(new Date().toISOString());
+  const tourCounts = (id: number) => {
+    const preview = tourPreviews[id];
+    const liveCount = preview?.rows.filter(row => ['live', 'ongoing'].includes(row.match.status)).length ?? 0;
+    const todayCount = preview?.complete ? preview.rows.filter(row => matchDay(row.match.scheduledAt || row.match.playedAt) === currentDay).length : 0;
+    return { matchesToday: todayCount > 0 ? todayCount : null, liveCount };
+  };
+  const liveRows = liveTour ? tourPreviews[liveTour.id]?.rows ?? [] : [];
+  const liveMatches = liveRows.filter(row => ['live', 'ongoing'].includes(row.match.status));
+  const nextMatches = liveRows.filter(row => {
+    const day = matchDay(row.match.scheduledAt);
+    return row.match.status === 'scheduled' && (!day || !currentDay || day >= currentDay);
+  }).sort((a, b) => (a.match.scheduledAt || '9999').localeCompare(b.match.scheduledAt || '9999'));
+  const previewMatches = [...liveMatches, ...nextMatches];
+  const selectTournament = (index: number) => {
+    setSelectedId(liveTours[index].id);
+    rail.current?.scrollTo({ x: index * (cardWidth + 12), animated: true });
+  };
+  if (!loading && !error && !liveTours.length) return null;
+  return <View style={{ gap: 12 }}>
+    <View style={s.sectionHeading}><Text style={s.sectionTitle}>Live now</Text>
+      {liveTours.length > 1 && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Previous live tournament" accessibilityState={{ disabled: selectedIndex === 0 }}
+          disabled={selectedIndex === 0} onPress={() => selectTournament(selectedIndex - 1)} style={[s.tourArrow, selectedIndex === 0 && { opacity: 0.4 }]}>
+          <Ionicons name="chevron-back" size={18} color={brand.accent} />
+        </Pressable>
+        <Text style={s.caption}>{selectedIndex + 1} of {liveTours.length}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Next live tournament" accessibilityState={{ disabled: selectedIndex === liveTours.length - 1 }}
+          disabled={selectedIndex === liveTours.length - 1} onPress={() => selectTournament(selectedIndex + 1)} style={[s.tourArrow, selectedIndex === liveTours.length - 1 && { opacity: 0.4 }]}>
+          <Ionicons name="chevron-forward" size={18} color={brand.accent} />
+        </Pressable>
+      </View>}
+    </View>
+    {loading && !liveTours.length && <ActivityIndicator color={brand.accent} />}
+    {!!liveTours.length && <View onLayout={event => setMeasuredWidth(event.nativeEvent.layout.width)}>
+      <ScrollView ref={rail} key={tourIds} horizontal showsHorizontalScrollIndicator={false} decelerationRate="fast"
+        snapToInterval={cardWidth + 12} disableIntervalMomentum
+        onContentSizeChange={() => rail.current?.scrollTo({ x: selectedIndex * (cardWidth + 12), animated: false })}
+        onMomentumScrollEnd={event => {
+          const index = Math.max(0, Math.min(liveTours.length - 1, Math.round(event.nativeEvent.contentOffset.x / (cardWidth + 12))));
+          setSelectedId(liveTours[index].id);
+        }}
+        contentContainerStyle={{ gap: 12, paddingRight: viewportWidth - cardWidth }}>
+        {liveTours.map(event => <View key={event.id} style={{ width: cardWidth }}>
+          <LiveTourCard event={event} {...tourCounts(event.id)} onOpen={() => router.push({ pathname: '/pro/tournament/[id]', params: { id: String(event.id) } })} />
+        </View>)}
+      </ScrollView>
+    </View>}
+    {error && <Message body="Live tournaments could not be refreshed." retry={() => setRetry(value => value + 1)} />}
+    {previewMatches.length > 0 && <TourMatchRail key={liveTour?.id} rows={previewMatches} />}
+    {liveTour && tourPreviews[liveTour.id]?.complete && !liveRows.length && <Text style={s.caption}>Fixtures and results will appear once published.</Text>}
+    {tourPreviewError && !liveRows.length && <Text style={s.tourNote}>Match updates are temporarily unavailable. View matches to retry.</Text>}
+  </View>;
+}
+
+function StarredMatches() {
+  const router = useRouter();
+  const bookmarks = useSyncExternalStore(subscribeMatchBookmarks, getMatchBookmarks);
+  const [details, setDetails] = useState<Record<number, MatchDetails>>({});
+  const { width } = useWindowDimensions();
+  const [viewport, setViewport] = useState(width - 40);
+  const cardWidth = Math.min(420, viewport - (bookmarks.size > 1 ? 28 : 0));
+  const ids = [...bookmarks.keys()].join(',');
+  useEffect(() => {
+    setDetails(previous => Object.fromEntries(Object.entries(previous).filter(([id]) => getMatchBookmarks().has(Number(id)))));
+  }, [ids]);
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    let refreshing = false;
+    void refreshMatchBookmarks(true).catch(() => {});
+    const refresh = async () => {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        const entries = [...getMatchBookmarks()];
+        for (const [id] of entries) {
+          if (!active || AppState.currentState !== 'active') return;
+          try { const row = await fetchMatchDetails(id); const scored = row ? (await withLiveScores([row]))[0] : null; if (active && scored) setDetails(previous => ({ ...previous, [id]: scored })); }
+          catch { /* Keep the saved match label when the score provider is unavailable. */ }
+          await new Promise(resolve => setTimeout(resolve, 2200));
+        }
+      } finally { refreshing = false; }
+    };
+    const stop = startForegroundTask(refresh, Math.max(60000, bookmarks.size * 2500));
+    return () => { active = false; stop(); };
+  }, [ids]));
+  if (!bookmarks.size) return null;
+  return <View style={{ gap: 12 }} onLayout={event => setViewport(event.nativeEvent.layout.width)}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}><Text style={s.sectionTitle}>Starred matches</Text><Text style={s.caption}>{bookmarks.size} saved</Text></View>
+    <FlatList horizontal data={[...bookmarks]} showsHorizontalScrollIndicator={false} keyExtractor={([id]) => String(id)} snapToInterval={cardWidth + 12} decelerationRate="fast" disableIntervalMomentum contentContainerStyle={{ gap: 12, paddingRight: viewport - cardWidth }} renderItem={({ item: [id, bookmark] }) => {
+      const row = details[id] || bookmark.row;
+      return <View style={{ width: cardWidth, padding: 17, backgroundColor: brand.elevated, borderWidth: 1, borderColor: brand.edge, borderRadius: 18 }}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Open starred match ${bookmark.name}`} onPress={() => router.push({ pathname: '/pro/match/[id]', params: { id: String(id), from: 'home' } })} style={{ gap: 12 }}>
+        <View style={{ minHeight: 44, paddingRight: 52, flexDirection: 'row', alignItems: 'center', gap: 8 }}><Text style={{ flex: 1, color: row?.match.status === 'live' ? '#BD3545' : brand.accent, fontWeight: '800', fontSize: 10, letterSpacing: 1 }}>{row ? row.match.status === 'live' || row.match.status === 'ongoing' ? '● LIVE NOW' : row.match.status === 'scheduled' ? 'UP NEXT' : 'RESULT' : 'SAVED MATCH'}</Text></View>
+        <Text style={{ color: brand.muted, fontSize: 11 }}>{row?.match.tournamentName || bookmark.tournamentName}</Text>
+        {(row ? row.match.teams.map(team => team.map(player => `${playerCountryFlag(player.nationality)} ${player.name}`).join(' / ') || 'Pair to be confirmed') : bookmark.name.split(' vs ')).map((name, index) => <View key={index} style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}><Text style={{ flex: 1, color: brand.premium, fontSize: 14, fontWeight: '700', lineHeight: 21 }}>{name}</Text>{(row ? row.match.score.length ? row.match.score : row.liveScore?.sets || [] : []).map((set, i) => <Text key={i} style={{ color: brand.accent, fontWeight: '800', fontSize: 16, minWidth: 17, textAlign: 'center' }}>{set[index] ?? '–'}</Text>)}</View>)}
+        <View style={{ borderTopWidth: 1, borderTopColor: brand.edge, paddingTop: 11, gap: 6 }}><Text style={{ color: brand.muted, fontSize: 11 }}>{row?.match.status === 'scheduled' ? row.match.scheduledAt ? proDate(row.match.scheduledAt, true) : 'Start time to be confirmed' : row ? `${proRound(row.match)}${row.match.court ? ` · ${row.match.court}` : ''}` : 'Tap for match details'}</Text><Text style={{ color: bookmark.notify ? brand.accent : brand.muted, fontSize: 10 }}>{row && row.match.status !== 'scheduled' ? 'Saved match' : bookmark.notify ? 'Start alert on' : 'Saved · start alert off'}</Text></View>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Remove starred match ${bookmark.name}`} onPress={() => { void removeMatchBookmark(id).catch(error => Alert.alert('Saved match', error.message)); }} style={{ position: 'absolute', top: 17, right: 17, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="star" color="#D39316" size={23} /></Pressable>
+      </View>;
+    }} />
+  </View>;
+}
+
+type LocalUpcomingEvent = { id: number; event_name: string | null; start_date: string; end_date: string | null; city: string | null; venue: string | null; event_status: string | null };
+function IntegratedUpNext({ tournament, showLocal, showInternational, message }: { tournament?: ProTournament | null; showLocal: boolean; showInternational: boolean; message?: string }) {
+  const router = useRouter();
+  const [events, setEvents] = useState<LocalUpcomingEvent[]>([]), [loading, setLoading] = useState(false), [error, setError] = useState(''), [retry, setRetry] = useState(0);
+  const liveTour = tournament && ['live', 'ongoing'].includes(tournament.status || '') ? tournament : null;
   useFocusEffect(useCallback(() => {
     if (!showLocal) return;
     let active = true;
@@ -158,26 +321,9 @@ function IntegratedUpNext({ tournament, showLocal, message }: { tournament?: Pro
     return () => { active = false; };
   }, [showLocal, retry]));
   const cards = [...(showLocal ? events.map(event => ({ key: `4m:${event.id}`, date: event.start_date, local: event })) : []), ...(tournament && !liveTour ? [{ key: `pro:${tournament.id}`, date: tournament.startDate, local: null }] : [])].sort((a, b) => a.date.localeCompare(b.date));
-  const activePreview = liveTour && tourPreview?.id === liveTour.id ? tourPreview : null;
-  const liveRows = activePreview?.rows ?? [];
-  const currentDay = matchDay(new Date().toISOString());
-  const todayCount = activePreview?.complete
-    ? liveRows.filter(row => matchDay(row.match.scheduledAt || row.match.playedAt) === currentDay).length : 0;
-  const matchesToday = todayCount > 0 ? todayCount : null;
-  const liveMatches = liveRows.filter(row => row.match.status === 'live' || row.match.status === 'ongoing');
-  const nextMatches = liveRows.filter(row => {
-    const day = matchDay(row.match.scheduledAt);
-    return row.match.status === 'scheduled' && (!day || !currentDay || day >= currentDay);
-  })
-    .sort((a, b) => (a.match.scheduledAt || '9999').localeCompare(b.match.scheduledAt || '9999'));
-  const previewMatches = [...liveMatches.slice(0, 1), ...nextMatches.slice(0, liveMatches.length ? 1 : 2)];
   return <View style={{ gap: 12 }}>
-    {liveTour && <>
-      <Text style={s.sectionTitle}>Live now</Text>
-      <LiveTourCard event={liveTour} matchesToday={matchesToday} liveCount={liveMatches.length} onOpen={() => router.push({ pathname: '/pro/live', params: { tournament: String(liveTour.id) } })} />
-      {previewMatches.map(row => <TourMatchPreview key={row.match.id} row={row} onOpen={() => router.push({ pathname: '/pro/match/[id]', params: { id: String(row.match.id), from: 'home' } })} />)}
-      {tourPreviewError && !liveRows.length && <Text style={s.tourNote}>Match updates are temporarily unavailable. View matches to retry.</Text>}
-    </>}
+    {showInternational && <LiveTournaments fallback={liveTour} />}
+    {showInternational && <StarredMatches />}
     {(cards.length > 0 || loading || error) && <Text style={s.sectionTitle}>Up next</Text>}
     {loading && <ActivityIndicator color={brand.accent} />}
     {!!error && <Message body={error} retry={() => setRetry(n => n + 1)} />}
@@ -278,14 +424,14 @@ export function MatchCard({ match, lookup, onPlayer, onOpenMatch }: { match: Pro
   </View>;
 }
 
-export function ProPadelFeed({ state, localState }: { state: ProPadelState; localState?: ReturnType<typeof usePlayerHub> }) {
+export function ProPadelFeed({ state, localState, showInternationalResults = true }: { state: ProPadelState; localState?: ReturnType<typeof usePlayerHub>; showInternationalResults?: boolean }) {
   const router = useRouter();
   const [view, setView] = useState<'for-you' | 'tour'>('for-you');
   const [filter, setFilter] = useState<Filter | '4m' | 'pro'>('all');
   const proFilter = filter === '4m' || filter === 'pro' ? 'all' : filter;
   const [count, setCount] = useState(6);
   const [resultsOpen, setResultsOpen] = useState(true);
-  const [fixturesOpen, setFixturesOpen] = useState(false);
+  const [rankingSource, setRankingSource] = useState<'4m' | 'pro'>(localState ? '4m' : 'pro');
   const [directory, setDirectory] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [matchOpen, setMatchOpen] = useState(false);
@@ -302,7 +448,6 @@ export function ProPadelFeed({ state, localState }: { state: ProPadelState; loca
   const personal = view === 'for-you';
   const ready = filter !== '4m' && (!personal || (!!state.userId && !state.followsLoading && !state.followsError && ids.length > 0));
   const results = selectProMatches(state.tour.data?.matches || [], personal ? ids : null, proFilter);
-  const upcoming = selectProMatches(state.fixtures.data?.matches || [], personal ? ids : null, proFilter, true);
   const rail = players.filter(p => (filter === 'all' || filter === 'pro' || p.category === filter) && (!personal || ids.includes(p.id)));
   const suggestions = players.filter(p => filter === 'all' || filter === 'pro' || p.category === filter);
   const localPlayers = (localState?.locals || []).filter(p => (filter === 'all' || filter === '4m' || filter === 'pro' && !!(p.fipPlayerId || p.fipProfileUrl) || p.gender === filter) && (!personal || localState!.isFollowing(p)));
@@ -321,7 +466,10 @@ export function ProPadelFeed({ state, localState }: { state: ProPadelState; loca
     .slice(0, 10);
   const proSuggestions = filter === '4m' ? [] : topTen(suggestions.filter(p => !verifiedFipIds.has(p.id)).map(proHubPlayer));
   const { players: visiblePlayers, showingFollowed } = homePlayerSelection(personal, hasFollows ? [...localPlayers, ...proCards] : [], [...localSuggestions, ...proSuggestions]);
-  const moves = rail.filter(p => Number.isFinite(p.rankChange) && p.rankChange !== 0 || Number.isFinite(p.pointsChange) && p.pointsChange !== 0).slice(0, 4);
+  const rankingGender = filter === 'men' || filter === 'women' ? filter : null;
+  const moves = players.filter(p => (!rankingGender || p.category === rankingGender) && (!personal || ids.includes(p.id)))
+    .filter(hasRankingUpdate).slice(0, 4);
+  const localRanks = localRankingUpdates(localState?.locals || [], rankingGender, personal && localState ? localState.isFollowing : null);
   const directoryPlayers = players.filter(p => (directoryFilter === 'all' || p.category === directoryFilter) &&
     (!onlyFollowing || ids.includes(p.id)) && `${p.name} ${country(p.nationality)}`.toLowerCase().includes(query.trim().toLowerCase()));
   const outsideEdition = state.follows.filter(p => !lookup.has(p.player_id));
@@ -381,7 +529,7 @@ export function ProPadelFeed({ state, localState }: { state: ProPadelState; loca
             <View style={{ width: 128, height: 128, borderRadius: 18, backgroundColor: player.source === '4m' ? '#2449D8' : brand.glass, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
               {player.photo ? <Image source={{ uri: player.photo }} style={{ width: 128, height: 128 }} contentFit="cover" /> : <Text style={{ color: player.source === '4m' ? '#FFF' : brand.accent, fontWeight: '700', fontSize: 32 }}>{player.name.split(' ').slice(0, 2).map(n => n[0]).join('')}</Text>}
             </View>
-            <Text numberOfLines={2} style={s.playerName}>{player.name}</Text>
+            <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8} textBreakStrategy="simple" lineBreakStrategyIOS="standard" style={s.playerName}>{player.name}</Text>
             <Text style={[s.caption, player.source === '4m' && { color: '#2449D8' }]}>{playerRankLabel(player)} · {player.gender === 'men' ? 'Men' : player.gender === 'women' ? 'Women' : 'Player'}</Text>
             {player.fipUnverified && <Text style={[s.caption, { color: '#2449D8', fontWeight: '700' }]}>Unverified link</Text>}
           </Pressable>
@@ -390,25 +538,29 @@ export function ProPadelFeed({ state, localState }: { state: ProPadelState; loca
       </ScrollView>
     </>}
     {personal && hasFollows && !visiblePlayers.length && !localState?.loading && !localState?.error && <View style={s.message}><Text style={s.body}>No players are available for this filter yet.</Text><Button label="Find players" onPress={openDirectory} /></View>}
-    <IntegratedUpNext showLocal={filter === 'all' || filter === '4m'} tournament={filter !== '4m' ? state.fixtures.data?.tournament : null} message={state.fixtures.data && !state.fixtures.data.drawPublished ? 'Draw coming soon · Player appearances will show once confirmed.' : undefined} />
-    {filter !== 'pro' && localState && !localState.loading && !localState.followLoading && !localState.followError && <FollowedLocalMatches players={localState.locals.filter(p => localState.ids.includes(p.id) && (filter === 'all' || filter === '4m' || p.gender === filter))} />}
-    {ready && <>
-      {state.fixtures.error && <Message body={state.fixtures.error} retry={retry} />}
-      {state.fixtures.data && <>
-        {upcoming.length ? <>
-          <MatchSectionToggle title="Upcoming matches" count={upcoming.length} expanded={fixturesOpen} onPress={() => setFixturesOpen(value => !value)} />
-          {fixturesOpen && upcoming.map(m => <MatchCard key={m.id} match={m} lookup={lookup} onPlayer={setSelectedId} />)}
-          </>
-          : !state.fixtures.data.tournament ? <Message title="The next stop is on its way" body="No upcoming event is listed yet. Check back after the next tour update." />
-            : state.fixtures.data.drawPublished ? <Text style={s.caption}>{personal ? 'No published fixtures for your players in this selection.' : 'No published fixtures in this selection.'}</Text> : null}
-      </>}
-      {moves.length > 0 && <><Text style={s.sectionTitle}>Ranking updates</Text>
+    <IntegratedUpNext showLocal={filter === 'all' || filter === '4m'} showInternational={filter !== '4m'} tournament={filter !== '4m' ? state.fixtures.data?.tournament : null} message={state.fixtures.data && !state.fixtures.data.drawPublished ? 'Draw coming soon · Player appearances will show once confirmed.' : undefined} />
+    {filter !== 'pro' && localState && !localState.loading && !localState.followLoading && !localState.followError && <FollowedLocalMatches directory={localState.locals} players={localState.locals.filter(p => localState.ids.includes(p.id) && (filter === 'all' || filter === '4m' || p.gender === filter))} />}
+    {(localState || moves.length > 0) && <View style={{ gap: 12 }}>
+      <View style={[s.sectionHeading, { gap: 10 }]}><Text style={[s.sectionTitle, { flex: 1 }]}>Ranking updates</Text>
+        {localState && <View style={{ flexDirection: 'row', backgroundColor: brand.surface, padding: 3, borderRadius: 12 }}>{(['4m', 'pro'] as const).map(source => <Pressable key={source} accessibilityRole="tab" accessibilityLabel={`${source === '4m' ? 'SAPA national' : 'FIP international'} ranking updates`} accessibilityState={{ selected: rankingSource === source }} onPress={() => setRankingSource(source)} style={{ minWidth: 56, minHeight: 44, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: rankingSource === source ? source === '4m' ? '#2449D8' : brand.accent : 'transparent' }}><Text style={{ fontSize: 12, fontWeight: '700', color: rankingSource === source ? '#FFFFFF' : brand.muted }}>{source === '4m' ? 'SAPA' : 'FIP'}</Text></Pressable>)}</View>}
+      </View>
+      {rankingSource === '4m' && localState ? <>
+        <Text style={s.caption}>SAPA national ranking changes</Text>
+        {localState.loading || personal && localState.followLoading ? <View style={s.loading}><ActivityIndicator color="#2449D8" /><Text style={s.body}>Loading local ranking changes…</Text></View> : personal && localState.followError ? <Message body="Your followed players could not be loaded." retry={() => { void localState.refresh(); }} /> : localState.error && !localRanks.length ? <Message body="Local rankings could not be loaded." retry={() => { void localState.refresh(); }} /> : localRanks.length ? <View style={s.movementList}>{localRanks.map(p => <Pressable key={p.key} accessibilityRole="button" accessibilityLabel={`View ${p.name}, SAPA rank ${p.rank}, ${p.rankChange > 0 ? `up ${p.rankChange}` : `down ${Math.abs(p.rankChange)}`}`} onPress={() => router.push({ pathname: '/players/[id]', params: { id: p.id } })} style={s.movement}>
+          <Portrait player={{ id: Number(p.id), name: p.name, nationality: null, photoUrl: p.photo }} size={40} />
+          <View style={{ flex: 1, gap: 4 }}><Text style={s.personName}>{localPlayerCountryFlag(p.nationality)}{localPlayerCountryFlag(p.nationality) ? ' ' : ''}{p.name}</Text><Text style={s.caption}>SAPA #{p.rank} · {p.gender === 'women' ? 'Women' : 'Men'}</Text></View>
+          <View style={{ alignItems: 'flex-end', gap: 4 }}><Text style={[s.movementValue, { color: p.rankChange > 0 ? '#226047' : brand.muted }]}>{p.rankChange > 0 ? `↑ ${p.rankChange}` : `↓ ${Math.abs(p.rankChange)}`}</Text><Text style={s.caption}>{number(p.points)} pts total</Text></View>
+        </Pressable>)}</View> : <Message title="No local ranking changes" body={personal ? 'No ranking changes for your followed players in the latest SAPA update.' : 'No national ranking changes in the latest SAPA update.'} />}
+      </> : <>
         {state.rankings.data && <RankingsUpdated rankings={state.rankings.data} />}
-        <View style={s.movementList}>{moves.map(p => <Pressable key={p.id} accessibilityRole="button" accessibilityLabel={`View ${p.name}`} onPress={() => setSelectedId(p.id)} style={s.movement}>
-          <Portrait key={p.id} player={p} size={40} /><View style={{ flex: 1, gap: 4 }}><Text style={s.personName}>{p.name}</Text><Text style={s.caption}>World #{p.rank} · {proDate(p.rankingDate)}</Text></View>
-          <View style={{ alignItems: 'flex-end', gap: 4 }}>{p.rankChange != null && <Text style={[s.movementValue, { color: p.rankChange > 0 ? '#226047' : brand.muted }]}>{p.rankChange > 0 ? '↑' : p.rankChange < 0 ? '↓' : '—'} {p.rankChange ? Math.abs(p.rankChange) : ''}</Text>}
-            {p.pointsChange != null && <Text style={s.caption}>{p.pointsChange > 0 ? '+' : ''}{number(p.pointsChange)} pts</Text>}</View>
-        </Pressable>)}</View></>}
+        {moves.length ? <View style={s.movementList}>{moves.map(p => <Pressable key={p.id} accessibilityRole="button" accessibilityLabel={`View ${p.name}`} onPress={() => setSelectedId(p.id)} style={s.movement}>
+          <Portrait key={p.id} player={p} size={40} /><View style={{ flex: 1, gap: 4 }}><Text style={s.personName}>{playerCountryFlag(p.nationality)}{p.nationality ? ' ' : ''}{p.name}</Text><Text style={s.caption}>World #{p.rank} · {proDate(p.rankingDate)}</Text></View>
+          <View style={{ alignItems: 'flex-end', gap: 4 }}>{p.rankChange != null && Number.isFinite(p.rankChange) && p.rankChange !== 0 && <Text style={[s.movementValue, { color: p.rankChange > 0 ? '#226047' : brand.muted }]}>{p.rankChange > 0 ? '↑' : '↓'} {Math.abs(p.rankChange)}</Text>}
+            {p.pointsChange != null && Number.isFinite(p.pointsChange) && p.pointsChange !== 0 && <Text style={s.caption}>{p.pointsChange > 0 ? '+' : ''}{number(p.pointsChange)} pts</Text>}</View>
+        </Pressable>)}</View> : state.loading && !state.rankings.data ? <ActivityIndicator color={brand.accent} /> : <Message title="No FIP ranking changes yet" body={personal ? 'Ranking changes from your followed FIP players will appear here.' : 'Changes will appear after the next official ranking update.'} />}
+      </>}
+    </View>}
+    {ready && showInternationalResults && <>
       <MatchSectionToggle title="Latest international results" count={results.length} expanded={resultsOpen} onPress={() => { setResultsOpen(value => !value); setCount(6); }} />
       {state.tour.error && <Message body={state.tour.error} retry={retry} />}
       {state.tour.data && <><Updated date={state.tour.data.updatedAt} coverage={state.tour.data.coverage} />
@@ -501,17 +653,19 @@ const s = StyleSheet.create({
   tourLevel: { color: brand.accent, borderWidth: 1, borderColor: brand.padel, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 4, fontSize: 11, fontWeight: '800' },
   tourKicker: { color: brand.accent, fontSize: 10, letterSpacing: 1.5, fontWeight: '800' },
   tourMain: { flexDirection: 'row', gap: 14, alignItems: 'center' },
-  tourTitle: { color: '#16251F', fontSize: 26, lineHeight: 31, minHeight: 93, fontWeight: '800', letterSpacing: -0.7 },
-  tourDate: { width: 84, paddingVertical: 12, alignItems: 'center', borderRadius: 12, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D3DFC6' },
+  tourTitle: { color: '#16251F', fontSize: 26, lineHeight: 31, fontWeight: '800', letterSpacing: -0.7 },
+  countryTag: { fontSize: 19, paddingHorizontal: 7, paddingVertical: 4, borderRadius: 7, backgroundColor: '#FFFFFF' },
+  tourDate: { width: 64, paddingVertical: 7, alignItems: 'center', borderRadius: 12, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D3DFC6' },
   tourMonth: { color: '#52625A', fontSize: 10, letterSpacing: 2, fontWeight: '700' },
-  tourDay: { color: '#386018', fontSize: 48, lineHeight: 55, fontWeight: '800', letterSpacing: -2, fontVariant: ['tabular-nums'] },
+  tourDay: { color: '#386018', fontSize: 32, lineHeight: 37, fontWeight: '800', letterSpacing: -1, fontVariant: ['tabular-nums'] },
   tourYear: { color: '#52625A', fontSize: 10, letterSpacing: 1 },
   tourMeta: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   tourLocation: { color: '#52625A', fontSize: 13, lineHeight: 19, flexShrink: 1 },
   tourCalendar: { minHeight: 48, backgroundColor: brand.padel, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 },
   tourCalendarText: { color: '#17200c', fontSize: 14, fontWeight: '700', flexShrink: 1 },
   tourNote: { color: '#52625A', fontSize: 12, lineHeight: 18, paddingHorizontal: 4 },
-  liveTourCard: { minHeight: 320, borderRadius: 20, overflow: 'hidden', backgroundColor: '#172E20' },
+  tourArrow: { width: 44, height: 44, borderRadius: 22, backgroundColor: brand.glass, alignItems: 'center', justifyContent: 'center' },
+  liveTourCard: { flexGrow: 1, minHeight: 320, borderRadius: 20, overflow: 'hidden', backgroundColor: '#172E20' },
   liveArtwork: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   liveTourContent: { flex: 1, minHeight: 320, padding: 18, gap: 10 },
   liveBadges: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -522,7 +676,7 @@ const s = StyleSheet.create({
   liveTourCount: { color: brand.padel, fontSize: 14, fontWeight: '800', marginTop: 4, textShadowColor: '#07140C', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6 },
   liveTourAction: { minHeight: 48, marginTop: 4, backgroundColor: brand.padel, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   liveTourActionText: { color: '#17200C', fontSize: 14, fontWeight: '800', letterSpacing: 0.6 },
-  liveMatchCard: { backgroundColor: '#17201C', borderRadius: 16, padding: 14, gap: 10 },
+  liveMatchCard: { flexGrow: 1, backgroundColor: '#17201C', borderRadius: 16, padding: 14, gap: 10 },
   liveMatchHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   liveMatchStatus: { color: '#FFFFFF', backgroundColor: '#ED4354', paddingHorizontal: 8, paddingVertical: 4, fontSize: 10, fontWeight: '800' },
   nextMatchStatus: { color: '#17200C', backgroundColor: brand.padel, paddingHorizontal: 8, paddingVertical: 4, fontSize: 10, fontWeight: '800' },

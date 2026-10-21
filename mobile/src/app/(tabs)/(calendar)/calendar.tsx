@@ -1,3 +1,5 @@
+import { trackEvent } from '@/lib/analytics';
+import { useAnalyticsSearch } from '@/hooks/use-analytics-search';
 import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -22,7 +24,7 @@ export default function CalendarScreen() {
     <WebsiteHeader />
     <View style={{ flexDirection: 'row', marginHorizontal: 20, marginVertical: 12, padding: 4, borderRadius: 28, backgroundColor: '#FFFFFF', gap: 4 }}>
       {(['sa', 'pro'] as const).map(value => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: pro === (value === 'pro') }}
-        onPress={() => router.setParams({ circuit: value })} style={{ flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 24, backgroundColor: pro === (value === 'pro') ? lime : 'transparent' }}>
+        onPress={() => { void trackEvent('feature_interaction', { feature: 'event_calendar', action: 'tab', selection: value }); router.setParams({ circuit: value }); }} style={{ flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 24, backgroundColor: pro === (value === 'pro') ? lime : 'transparent' }}>
         <Text style={{ fontSize: 13, fontWeight: '700', color: pro === (value === 'pro') ? '#000' : '#52625A' }}>{value === 'sa' ? 'South Africa' : 'Premier Padel & FIP'}</Text>
       </Pressable>)}
     </View>
@@ -57,6 +59,7 @@ function SouthAfricaCalendar() {
   }, []);
   useFocusEffect(useCallback(() => { void load(); return () => { request.current++; }; }, [load]));
   const rows = useMemo(() => filterEvents(events, filters, saved).filter(e => eventType === 'All' || (eventType === 'Leagues' ? e.is_league : !e.is_league)), [events, filters, saved, eventType]);
+  useAnalyticsSearch(filters.search, rows.length, 'events', !loading);
   const cities = useMemo(() => [...new Set(events.map(e => e.city).filter((s): s is string => !!s))].sort(), [events]);
   const toggleSaved = async (id: number) => {
     if (saving.current.has(id)) return;
@@ -74,10 +77,10 @@ function SouthAfricaCalendar() {
         <View style={{ paddingTop: 28, paddingBottom: 16 }}>
           <View style={{ marginLeft: 20, marginRight: 20 }}>
             <View style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 20, borderColor: '#CCFF0033', borderWidth: 1, backgroundColor: '#CCFF000d', paddingHorizontal: 10, paddingVertical: 5 }}>
-              <EventIcon name="calendar" size={12} /><Text style={{ fontSize: 10, fontWeight: '600', color: "#386018", letterSpacing: 1 }}>EVENTS SCHEDULE</Text>
+              <EventIcon name="calendar" size={12} /><Text style={{ fontSize: 10, fontWeight: '600', color: "#386018", letterSpacing: 1 }}>TOURNAMENTS</Text>
             </View>
-            <Text accessibilityRole="header" style={{ fontSize: 32, fontWeight: '700', lineHeight: 40, letterSpacing: -1.4, marginTop: 12 }}>Find your next match.</Text>
-            <Text style={{ fontSize: 14, lineHeight: 19, marginTop: 4 }}>Find and explore padel{ '\n' }events across South Africa.</Text>
+            <Text accessibilityRole="header" style={{ fontSize: 32, fontWeight: '700', lineHeight: 40, letterSpacing: -1.4, marginTop: 12 }}>Upcoming tournaments</Text>
+            <Text style={{ fontSize: 14, lineHeight: 19, marginTop: 4 }}>Find tournaments, enter and start earning ranking points.</Text>
             <View style={{ flexDirection: 'row', gap: 6, marginTop: 20 }}>
               <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 20, backgroundColor: '#FFFFFF', borderColor: '#16251f0d', borderWidth: 1, borderRadius: 30, height: 46 }}>
                 <EventIcon name="magnifyingglass" size={16} color="#6b7280" />
@@ -90,14 +93,24 @@ function SouthAfricaCalendar() {
           </View>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 32, gap: 8, paddingTop: 12, paddingBottom: 32 }}>
-          {['', 'Major', 'Super Gold', 'Gold', 'Silver', 'Bronze', 'FIP event'].map(tier => <Pressable key={tier} onPress={() => setFilters(f => ({ ...f, tier }))} accessibilityRole="button" accessibilityState={{ selected: filters.tier === tier }} hitSlop={{ top: 5, bottom: 5 }} style={{ flexDirection: 'row', gap: 6, alignItems: 'center', paddingHorizontal: 16, minHeight: 44, borderRadius: 20, borderWidth: 1, borderColor: filters.tier === tier ? lime : '#16251f1a', backgroundColor: filters.tier === tier ? lime : 'transparent' }}>
+          {['', 'Major', 'Super Gold', 'Gold', 'Silver', 'Bronze', 'FIP event'].map(tier => <Pressable key={tier} onPress={() => { void trackEvent('feature_interaction', { feature: 'event_calendar', action: 'filter', selection: tier ? tier.toLowerCase().replaceAll(' ', '_') : 'all_tiers' }); setFilters(f => ({ ...f, tier })); }} accessibilityRole="button" accessibilityState={{ selected: filters.tier === tier }} hitSlop={{ top: 5, bottom: 5 }} style={{ flexDirection: 'row', gap: 6, alignItems: 'center', paddingHorizontal: 16, minHeight: 44, borderRadius: 20, borderWidth: 1, borderColor: filters.tier === tier ? lime : '#16251f1a', backgroundColor: filters.tier === tier ? lime : 'transparent' }}>
             <EventIcon name={tier ? tier === 'FIP event' ? 'globe' : 'trophy' : 'calendar'} color={filters.tier === tier ? '#000' : sapaTone(tier).text} size={14} /><Text style={{ fontSize: 11, color: filters.tier === tier ? '#000' : '#52625A' }}>{tier === 'FIP event' ? 'FIP' : tier || 'All'}</Text>
           </Pressable>)}
         </ScrollView>
-        <View style={{ marginHorizontal: 20, marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={{ fontSize: 11, color: '#16251fcc', fontWeight: '600' }}>{filters.timing === 'past' ? 'PAST EVENTS' : filters.timing === 'saved' ? 'MY SCHEDULE' : 'UPCOMING EVENTS'}</Text>
-          <Text style={{ color: "#386018", backgroundColor: '#CCFF001a', borderColor: '#CCFF0033', borderWidth: 1, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3, fontSize: 10, fontWeight: '800' }}>{rows.length}</Text>
-          <Pressable accessibilityRole="button" accessibilityState={{ selected: filters.timing === 'saved' }} onPress={() => setFilters(f => ({ ...f, timing: f.timing === 'saved' ? 'upcoming' : 'saved' }))} hitSlop={10}><Text style={{ fontSize: 10, color: filters.timing === 'saved' ? lime : '#65726B' }}>♡ My Schedule</Text></Pressable>
+        <View style={{ marginHorizontal: 20, marginBottom: 16, gap: 10 }}>
+          <View style={{ flexDirection: 'row', padding: 4, gap: 4, borderRadius: 16, backgroundColor: '#E5EAE2' }}>
+            {(['upcoming', 'saved'] as const).map(timing => {
+              const selected = filters.timing === timing;
+              const label = timing === 'upcoming' ? 'Upcoming events' : 'My schedule';
+              return <Pressable key={timing} accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected }}
+                onPress={() => { void trackEvent('feature_interaction', { feature: 'event_calendar', action: 'filter', selection: timing }); setFilters(f => ({ ...f, timing })); }}
+                style={{ flex: 1, minHeight: 44, paddingHorizontal: 8, paddingVertical: 10, borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: selected ? '#16251F' : 'transparent' }}>
+                <Text style={{ color: selected ? '#FFFFFF' : '#52625A', fontSize: 12, fontWeight: '700', flexShrink: 1 }}>{label}</Text>
+                {selected && <Text style={{ color: '#FFFFFF', backgroundColor: '#FFFFFF26', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, fontSize: 10, fontWeight: '800' }}>{rows.length}</Text>}
+              </Pressable>;
+            })}
+          </View>
+          {filters.timing === 'past' && <Text style={{ color: '#52625A', fontSize: 11, fontWeight: '600' }}>PAST EVENTS · {rows.length}</Text>}
         </View>
         {!!error && <View style={{ margin: 16 }}><Notice title="Calendar unavailable" onRetry={load}>{error}</Notice></View>}
         {!!saveError && <View style={{ margin: 16 }}><Notice title="Schedule not updated">{saveError}</Notice></View>}
@@ -110,9 +123,9 @@ function SouthAfricaCalendar() {
         <View style={{ maxHeight: '85%', backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: insets.bottom + 24, gap: 20 }}>
           <Text style={{ fontSize: 20, fontWeight: '700' }}>Filters</Text>
           <ScrollView contentContainerStyle={{ gap: 18 }}>
-            <Text style={{ color: '#65726B', fontSize: 12 }}>EVENT TYPE</Text><View style={{ flexDirection: 'row', gap: 8 }}>{['All', 'Leagues', 'Tournaments'].map(value => <Chip key={value} label={value} selected={eventType === value} onPress={() => setEventType(value)} />)}</View>
-            <Text style={{ color: '#65726B', fontSize: 12 }}>WHEN</Text><View style={{ flexDirection: 'row', gap: 8 }}>{(['upcoming', 'past', 'saved'] as const).map(timing => <Chip key={timing} label={timing === 'saved' ? 'My Schedule' : timing === 'past' ? 'Past' : 'Upcoming'} selected={filters.timing === timing} onPress={() => setFilters(f => ({ ...f, timing }))} />)}</View>
-            <Text style={{ color: '#65726B', fontSize: 12 }}>CITY</Text><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{['', ...cities].map(city => <Chip key={city} label={city || 'All cities'} selected={filters.city === city} onPress={() => setFilters(f => ({ ...f, city }))} />)}</View>
+            <Text style={{ color: '#65726B', fontSize: 12 }}>EVENT TYPE</Text><View style={{ flexDirection: 'row', gap: 8 }}>{['All', 'Leagues', 'Tournaments'].map(value => <Chip key={value} label={value} selected={eventType === value} onPress={() => { void trackEvent('feature_interaction', { feature: 'event_calendar', action: 'filter', selection: value.toLowerCase() }); setEventType(value); }} />)}</View>
+            <Text style={{ color: '#65726B', fontSize: 12 }}>WHEN</Text><View style={{ flexDirection: 'row', gap: 8 }}>{(['upcoming', 'past', 'saved'] as const).map(timing => <Chip key={timing} label={timing === 'saved' ? 'My Schedule' : timing === 'past' ? 'Past' : 'Upcoming'} selected={filters.timing === timing} onPress={() => { void trackEvent('feature_interaction', { feature: 'event_calendar', action: 'filter', selection: timing }); setFilters(f => ({ ...f, timing })); }} />)}</View>
+            <Text style={{ color: '#65726B', fontSize: 12 }}>CITY</Text><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{['', ...cities].map(city => <Chip key={city} label={city || 'All cities'} selected={filters.city === city} onPress={() => { void trackEvent('feature_interaction', { feature: 'event_calendar', action: 'filter', selection: city ? 'specific_city' : 'all_cities' }); setFilters(f => ({ ...f, city })); }} />)}</View>
           </ScrollView>
           <View style={{ flexDirection: 'row', gap: 12 }}><Pressable onPress={() => { setFilters({ search: '', timing: 'upcoming', city: '', tier: '' }); setEventType('All'); }} style={{ padding: 14 }}><Text>Clear</Text></Pressable><Pressable onPress={() => setShowFilters(false)} style={{ flex: 1, backgroundColor: lime, padding: 14, alignItems: 'center', borderRadius: 12 }}><Text style={{ color: '#000', fontWeight: '700' }}>Show Results</Text></Pressable></View>
         </View>

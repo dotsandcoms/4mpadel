@@ -23,6 +23,33 @@ Primary: the user's existing 4M native product and tournament journey, rebuilt a
 ## Data boundary
 Existing Supabase bundles and Pro Padel adapters remain the source of truth. Full upstream API integration is a future task; this redesign retains follows, published fixtures/results, rankings, stale-data disclosures and retry behavior.
 
+### Media library and albums — October 2026
+
+Keep the existing 4M light palette and the user's requested three albums per row.
+The library uses square photography covers, a small album-stack detail, titles
+below the covers and quieter dates. Album pages have a cover header, photographer
+credit and a compact photo grid; the viewer has a counter and previous/next controls.
+
+| Decision | Source | Purpose |
+| --- | --- | --- |
+| Three equal columns with measured content width | User request and clipping screenshot | Keep every album inside the screen, including narrower containers. |
+| Fixed square covers using the existing album photography | Existing 4M media and Refero image guidance | Avoid inconsistent frames and preserve the event imagery. |
+| Three lines of title space, with muted dates | Existing product typography and the user's visibility feedback | Align rows and give long tournament names more room. |
+| A cover header, photography credit and explicit viewer controls | Native photo-library patterns and Refero touch guidance | Make albums clearer to browse and credit existing published content. |
+
+The native clipping regression came from Pressable style callbacks passing through
+NativeWind's native interop: the callback was flattened without its width styles.
+Album cards and photo tiles now use static TouchableOpacity styles, with explicit
+cover dimensions. Their widths follow the list's measured layout rather than
+assuming it fills the entire window. Title space also grows with system font size.
+
+Validation: TypeScript passes. Five regression tests exercise the installed native
+styling engine at 320, 390, 430 and 768pt widths and with enlarged text. Browser
+review of the actual component with native adapters covered real album imagery,
+equal rows at 320/390/430pt, a narrower parent container, featured/search/reset,
+album navigation and the photo viewer's previous/next/close controls. A physical
+device visual pass remains to be checked after reloading the updated app.
+
 ## Verification
 - TypeScript and all 50 existing tests pass, including checkout, registration navigation, partner search, rankings, feed adapters and companion schedules.
 - iOS and Android production JavaScript/Hermes bundles export successfully on Expo SDK 57.

@@ -1,6 +1,6 @@
 import { Chip } from '@/components/events/event-ui';
 import { EventIcon } from '@/components/events/website-ui';
-import { addToDeviceCalendar } from '@/lib/device-calendar';
+import { addToCalendar } from '@/lib/device-calendar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
@@ -21,6 +21,7 @@ const currentTourSeasons = (items: ProSeason[]) => items.filter(item => {
 const initialSeasons = currentTourSeasons([
   { id: 5, name: 'Premier Padel 2026', startDate: '', endDate: '', status: 'active' },
   { id: 6, name: 'Cupra FIP Tour 2026', startDate: '', endDate: '', status: 'active' },
+  { id: -1, name: 'FIP Promises 2026', startDate: '', endDate: '', status: 'active' },
 ]);
 const dateDay = (date: string) => date.slice(0, 10);
 const today = () => new Date().toISOString().slice(0, 10);
@@ -42,6 +43,8 @@ export function ProTourCalendar() {
   const bottom = useTabScenePadding();
   const insets = useSafeAreaInsets();
   const [showFilters, setShowFilters] = useState(false);
+  const [official, setOfficial] = useState<ProTournament[]>([]);
+  const [officialUpdated, setOfficialUpdated] = useState('');
   const [tour, setTour] = useState<ProTour | null>(null);
   const [seasons, setSeasons] = useState<ProSeason[]>(initialSeasons);
   const [seasonId, setSeasonId] = useState(initialSeasons[0]?.id ?? 0);
@@ -70,14 +73,15 @@ export function ProTourCalendar() {
   const load = useCallback(async () => {
     const id = ++request.current;
     setLoading(true);
-    const [tourResult, fixtureResult, seasonsResult] = await Promise.allSettled([fetchProSnapshot('tour'), fetchProSnapshot('fixtures'), fetchProSeasons()]);
+    const [tourResult, fixtureResult, seasonsResult, officialResult] = await Promise.allSettled([fetchProSnapshot('tour'), fetchProSnapshot('fixtures'), fetchProSeasons(), fetchProSnapshot('fip-calendar')]);
     if (id !== request.current) return;
     if (tourResult.status === 'fulfilled') { setTour(tourResult.value); setError(''); }
     else setError('Could not refresh the tour calendar. Please try again.');
     if (fixtureResult.status === 'fulfilled') { setFixtures(fixtureResult.value); setFixtureError(''); }
     else setFixtureError('Published fixtures could not refresh.');
+    if (officialResult.status === 'fulfilled') { setOfficial(officialResult.value.tournaments); setOfficialUpdated(officialResult.value.updatedAt); }
     if (seasonsResult.status === 'fulfilled') {
-      const currentSeasons = currentTourSeasons(seasonsResult.value);
+      const currentSeasons = [...currentTourSeasons(seasonsResult.value), initialSeasons.find(item => item.id === -1)!];
       setSeasons(currentSeasons);
       setSeasonId(selected => currentSeasons.some(item => item.id === selected) ? selected : currentSeasons[0]?.id ?? 0);
     }
@@ -93,6 +97,7 @@ export function ProTourCalendar() {
     let active = true;
     const version = ++seasonRequest.current;
     setSeasonEvents(null); setSeasonPage(0); setSeasonMore(false); setSeasonError(''); setSeasonLoading(true);
+    if (seasonId === -1) { setSeasonEvents(official.filter(event => event.level === 'fip_promises')); setSeasonLoading(false); return; }
     if (!seasonId) { setSeasonLoading(false); return; }
     void (async () => {
       let page = 1;
@@ -108,7 +113,7 @@ export function ProTourCalendar() {
     })().catch(e => { if (active && version === seasonRequest.current) setSeasonError(e instanceof Error ? e.message : 'Season could not be loaded.'); })
       .finally(() => { if (active && version === seasonRequest.current) setSeasonLoading(false); });
     return () => { active = false; seasonRequest.current++; };
-  }, [seasonId, seasonReload]);
+  }, [seasonId, seasonReload, official]);
   const loadMoreSeason = async () => {
     if (!seasonId || !seasonMore || seasonLoading || seasonPage >= 20) return;
     const version = seasonRequest.current;
@@ -122,7 +127,8 @@ export function ProTourCalendar() {
     finally { if (version === seasonRequest.current) setSeasonLoading(false); }
   };
   const season = seasons.find(item => item.id === seasonId);
-  const availableEvents = !season ? [] : seasonEvents ?? (seasonId === 5 ? tour?.tournaments || [] : []);
+  const providerEvents = seasonEvents ?? (tour?.tournaments || []).filter(event => seasonId === 5 ? premierLevels.includes(event.level || '') : !premierLevels.includes(event.level || ''));
+  const availableEvents = !season ? [] : seasonId === 6 ? [...providerEvents, ...official.filter(event => event.level === 'fip_bronze')] : providerEvents;
   const levels = seasonId === 5 ? premierLevels : ['', ...new Set(availableEvents.map(event => event.level?.toLowerCase()).filter((value): value is string => !!value))];
   const rows = useMemo(() => [...new Map(availableEvents.map(e => [e.id, e])).values()]
     .filter(e => (timing === 'past' ? finished(e) : !finished(e)) && (!level || e.level?.toLowerCase() === level)
@@ -135,6 +141,7 @@ export function ProTourCalendar() {
     if (!selected) return;
     let active = true;
     setAllMatches([]); setMatchesPage(0); setMatchesMore(false); setMatchesError(''); setMatchesLoading(true);
+    if (selected.matchesAvailable === false) { setMatchesLoading(false); return; }
     void fetchTournamentMatches(selected.id).then(result => {
       if (!active) return;
       setAllMatches(result.matches); setMatchesPage(1); setMatchesMore(result.hasMore);
@@ -178,12 +185,12 @@ export function ProTourCalendar() {
         </ScrollView>
         {!!seasonError && <Text style={{ color: brand.danger }}>{seasonError}{seasonId === 5 && !seasonEvents ? ' Showing the last published Premier Padel calendar.' : ''}</Text>}
         <Text style={{ color: brand.premium, fontSize: 11, fontWeight: '600', letterSpacing: 0.7 }}>{timing === 'past' ? 'PAST TOURNAMENTS' : 'UPCOMING TOURNAMENTS'}</Text>
-        <Text style={s.caption}>{rows.length} tournaments{seasonMore ? ' · More available' : ''}{seasonEvents ? ' · Live season directory' : tour && seasonId === 5 ? ` · Snapshot updated ${proDate(tour.updatedAt)}` : ''}</Text>
+        <Text style={s.caption}>{rows.length} tournaments{seasonMore ? ' · More available' : ''}{seasonId === -1 ? ` · Official FIP calendar · Updated ${proDate(officialUpdated)}` : seasonEvents ? ' · Shared season directory' : tour && seasonId === 5 ? ` · Snapshot updated ${proDate(tour.updatedAt)}` : ''}</Text>
         {!!error && <View style={{ gap: 8 }}><Text style={{ color: brand.danger }}>{error}</Text><Button label="Retry" onPress={() => void load()} /></View>}
       </View>}
       ListEmptyComponent={seasonLoading ? <ActivityIndicator color={brand.accent} style={{ margin: 30 }} /> : <View style={s.header}><Text style={s.body}>{seasonError ? 'This season is unavailable. Pull to retry.' : 'No tournaments match these filters in this season.'}</Text></View>}
       ListFooterComponent={seasonMore && !seasonLoading ? <View style={{ paddingHorizontal: 20, paddingBottom: 24 }}><Button label="Load more tournaments" onPress={() => { void loadMoreSeason(); }} /></View> : null}
-      renderItem={({ item }) => <Pressable accessibilityRole="button" accessibilityLabel={`View ${item.name}, ${proDate(item.startDate)}`} onPress={() => setSelected(item)} style={s.card}>
+      renderItem={({ item }) => <Pressable accessibilityRole="button" accessibilityLabel={`View ${item.name}, ${proDate(item.startDate)}`} onPress={() => item.matchesAvailable === false ? router.push({ pathname: '/pro/fip/[id]', params: { id: String(item.id) } }) : setSelected(item)} style={s.card}>
         <Artwork key={item.id} event={item} />
         <View style={{ flex: 1, gap: 7 }}>
           <Text style={s.kicker}>{levelName(item.level)}{finished(item) ? ' · Completed' : item.status === 'ongoing' || item.status === 'live' ? ' · In progress' : ''}</Text>
@@ -219,11 +226,12 @@ export function ProTourCalendar() {
           <Text style={s.date}>{proDate(selected.startDate)} – {proDate(selected.endDate)}</Text>
           <Text style={s.body}>{[selected.venue, selected.location, selected.country].filter(Boolean).join(' · ') || 'Venue to be confirmed'}</Text>
           <Button label="Add to calendar" selected onPress={() => {
-            void addToDeviceCalendar({ title: selected.name, startDate: selected.startDate, endDate: selected.endDate,
+            void addToCalendar({ title: selected.name, startDate: selected.startDate, endDate: selected.endDate,
               location: [selected.venue, selected.location, selected.country].filter(Boolean).join(' · '),
             }).catch(error => Alert.alert('Calendar unavailable', error instanceof Error ? error.message : 'Please try again.'));
           }} />
           <Text style={s.caption}>Tour information only. Entry registration is not available through 4M for this tournament.</Text>
+          {selected.matchesAvailable === false ? <><Text style={s.body}>Official FIP tournament information.</Text><Button label="Open event centre" onPress={() => { setSelected(null); router.push({ pathname: '/pro/fip/[id]', params: { id: String(selected.id) } }); }} /></> : <>
           <Text style={s.section}>Full published draw</Text>
           <Text style={s.caption}>Main draw and qualifying · Men and women · Tap Match details for points and stats.</Text>
           {matchesLoading && <ActivityIndicator color={brand.accent} />}
@@ -240,6 +248,7 @@ export function ProTourCalendar() {
           {tour && <Text style={s.caption}>{tour.coverage} · Updated {proDate(tour.updatedAt)}</Text>}
           {resultMatches.length ? resultMatches.map(m => <MatchCard key={m.id} match={m} lookup={lookup} onPlayer={() => {}} onOpenMatch={openMatch} />)
             : <Text style={s.body}>No results for this tournament in the current feed.</Text>}</>}
+          </>}
         </ScrollView>}
       </SafeAreaView></SafeAreaProvider>
     </Modal>

@@ -1,3 +1,23 @@
+// Direct players reads are restricted to the caller's own profile or super admins.
+// Use the existing limited registration lookup for event managers as well.
+export async function searchRegistrationPlayers(client, query, limit = 20) {
+    const search = (query || '').trim();
+    if (search.length < 2) return { data: [], error: null };
+    try {
+        const { data, error } = await client.rpc('find_registration_partner', { p_search: search });
+        if (error) return { data: [], error };
+        return {
+            data: (data || [])
+                .filter((player) => player.email)
+                .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                .slice(0, limit),
+            error: null,
+        };
+    } catch (error) {
+        return { data: [], error };
+    }
+}
+
 const normalizeEmail = (email) => (email || '').trim().toLowerCase();
 
 // Validate the entire entry before releasing withdrawn slots or inserting either teammate.

@@ -23,6 +23,7 @@ expo-env.d.ts
 
 # debug
 npm-debug.*
+firebase-debug.log
 yarn-debug.*
 yarn-error.*
 
@@ -46,3 +47,6 @@ example
 .env
 .env.*
 supabase/.temp/
+
+# Local store assets and build artifacts are not app source.
+release/

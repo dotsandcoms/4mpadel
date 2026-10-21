@@ -4,7 +4,7 @@ import { AppState } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { fetchProSnapshot, fetchProFollows, setProFollow, type ProFollow, type ProResource, type ProSnapshots } from '@/lib/pro-padel';
 
-type Resources = { [K in keyof ProSnapshots]: ProResource<ProSnapshots[K]> };
+type Resources = { [K in Exclude<keyof ProSnapshots, 'fip-calendar'>]: ProResource<ProSnapshots[K]> };
 const empty: Resources = { rankings: { data: null, error: null }, tour: { data: null, error: null }, fixtures: { data: null, error: null } };
 const labels = { rankings: 'World rankings', tour: 'Tour results', fixtures: 'Upcoming matches' };
 

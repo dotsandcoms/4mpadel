@@ -5,6 +5,7 @@
 export function resolveRegistrationLicenseCategory(email, eventId, player, eventPayments = []) {
     const norm = (email || '').toLowerCase().trim();
     if (!norm) return 'none';
+    if (player?.event_license?.event_id === Number(eventId)) return player.event_license.full ? 'full' : player.event_license.temporary ? 'temp' : 'none';
 
     for (const pay of eventPayments) {
         if (pay?.status && pay.status !== 'success') continue;
@@ -39,6 +40,13 @@ export function resolveRegistrationLicenseDisplay(email, eventId, player, eventP
     const norm = (email || '').toLowerCase().trim();
     if (!norm) {
         return { kind: 'none', label: 'Not on file', text: 'Not on file' };
+    }
+
+    if (player?.event_license?.event_id === Number(eventId)) {
+        const lic=player.event_license;
+        if(lic.full) return {kind:'full',label:`${lic.year} Full`,text:`${lic.year} Full`};
+        if(lic.temporary) return {kind:'temp',label:'Temporary',text:'Temporary · this event'};
+        return {kind:'none',label:'None',text:'None'};
     }
 
     for (const pay of eventPayments) {

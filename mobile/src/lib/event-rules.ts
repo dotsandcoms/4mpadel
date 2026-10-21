@@ -22,11 +22,23 @@ export function registrationState(event: EventDetail, division?: Division | null
 export function localDay(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
+
+export function registrationPaymentClosed(event: EventDetail, division?: Division | null, now = new Date()) {
+  if (event.allow_payments_after_close !== false) return false;
+  const closesAt = division?.entries_close_at || event.registration_closes_at;
+  return !!closesAt && new Date(closesAt).getTime() <= now.getTime();
+}
 export function formatMoney(value: number) {
   return `R ${value.toLocaleString('en-ZA', { minimumFractionDigits: Number.isInteger(value) ? 0 : 2, maximumFractionDigits: 2 })}`;
 }
 
 export type EventFilters = { search: string; timing: 'upcoming' | 'past' | 'saved'; city: string; tier: string };
+/** Upcoming events run nearest first; completed events run newest first. Undated events stay last. */
+export function compareEventDates(a: Pick<EventDetail, 'id' | 'start_date'>, b: Pick<EventDetail, 'id' | 'start_date'>, past = false) {
+  if (!a.start_date || !b.start_date) return a.start_date ? -1 : b.start_date ? 1 : a.id - b.id;
+  const order = a.start_date.localeCompare(b.start_date);
+  return (past ? -order : order) || a.id - b.id;
+}
 export function filterEvents(events: EventDetail[], filters: EventFilters, savedIds: number[], now = new Date()) {
   const today = localDay(now);
   const needle = filters.search.trim().toLowerCase();
@@ -40,8 +52,13 @@ export function filterEvents(events: EventDetail[], filters: EventFilters, saved
     return !needle || [event.event_name, event.city, event.venue, event.organiser_name, event.sapa_status,
       event.is_league ? 'league' : 'tournament'].some(value => value?.toLowerCase().includes(needle));
   }).sort((a, b) => {
-    const order = (a.start_date || '9999').localeCompare(b.start_date || '9999') || a.id - b.id;
-    return filters.timing === 'past' ? -order : order;
+    if (filters.timing === 'saved' && a.start_date && b.start_date) {
+      const aPast = (a.end_date || a.start_date).slice(0, 10) < today;
+      const bPast = (b.end_date || b.start_date).slice(0, 10) < today;
+      if (aPast !== bPast) return aPast ? 1 : -1;
+      return compareEventDates(a, b, aPast);
+    }
+    return compareEventDates(a, b, filters.timing === 'past');
   });
 }
 

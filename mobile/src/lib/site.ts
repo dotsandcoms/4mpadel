@@ -26,6 +26,17 @@ export async function openSitePath(path: string, options?: { forceBrowser?: bool
     router.push({ pathname: '/events/register', params: { id: payMatch[1], mode: 'pay' } });
     return;
   }
+  const drawMatch = /^\/(draws|native-draws|results)\/([^/?#]+)(?:[?#].*)?$/.exec(path);
+  if (drawMatch && !options?.forceBrowser) {
+    const query = new URL(siteUrl(path)).searchParams;
+    router.push({ pathname: '/events/[id]', params: {
+      id: decodeURIComponent(drawMatch[2]), tab: drawMatch[1] === 'results' ? 'Results' : 'Draws',
+      ...(drawMatch[1] === 'native-draws' ? { drawSource: 'native' } : {}),
+      ...(query.get('division') ? { division: query.get('division')! } : {}),
+      ...(query.get('match') ? { match: query.get('match')! } : {}),
+    } });
+    return;
+  }
   const match = /^\/calendar\/([^/?#]+)(?:[?#].*)?$/.exec(path);
   if (match && !options?.forceBrowser) {
     router.push({ pathname: '/events/[id]', params: { id: decodeURIComponent(match[1]) } });

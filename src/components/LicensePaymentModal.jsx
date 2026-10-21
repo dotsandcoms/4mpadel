@@ -1,461 +1,216 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, Calendar, Check, ChevronRight } from 'lucide-react';
-import PaystackPop from '@paystack/inline-js';
+import React, { useEffect, useRef, useState } from 'react';
+import { X } from 'lucide-react';
 import { supabase } from '../supabaseClient';
-import { toPaystackAmount, formatCurrency } from '../constants/fees';
-import { useRankedin } from '../hooks/useRankedin';
-import { PAYSTACK_PUBLIC_KEY, isPaystackConfigured } from '../utils/paystackConfig';
+import { licenseCheckout, licenseDate } from '../utils/licenses';
 import { fetchUpcomingCalendarEvents } from '../utils/calendarEvents';
-import { useCommerceConfig } from '../hooks/useCommerceConfig';
-import { commerceSnapshot, formatQuoteCaption } from '../utils/commerce';
-
-console.log('Paystack Config Check (Modal):', {
-    keyPrefix: PAYSTACK_PUBLIC_KEY ? PAYSTACK_PUBLIC_KEY.substring(0, 12) + '...' : 'MISSING',
-    keyLength: PAYSTACK_PUBLIC_KEY.length,
-    isLive: PAYSTACK_PUBLIC_KEY.startsWith('pk_live_'),
-    isTestMode: PAYSTACK_PUBLIC_KEY.startsWith('pk_test_'),
-});
-
-const handlePaymentComplete = async (onDone, onSuccessCallback, setError, closeModal, licenseType = 'full') => {
-    const { error: rpcError } = await supabase.rpc('mark_player_paid', { p_license_type: licenseType });
-    if (rpcError) {
-        setError('Payment received but failed to update profile. Please contact support.');
-    } else {
-        onSuccessCallback?.();
-        closeModal();
+import { defaultLicenseYear } from '../utils/commerce';
+import { formatCurrency } from '../constants/fees';
+export default function LicensePaymentModal({
+  isOpen,
+  onClose,
+  onPaymentSuccess,
+  onEditProfile,
+  initialEventId,
+  initialType = 'full',
+  beneficiaryPlayerId,
+  returnEventId
+}) {
+  const dialog = useRef(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const timer = setTimeout(() => dialog.current?.querySelector('button')?.focus(), 0);
+    const handle = e => {
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key === 'Tab') {
+        const items = dialog.current?.querySelectorAll('button:not(:disabled),select:not(:disabled),a[href]');
+        if (!items?.length) return;
+        const first = items[0],
+          last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', handle);
+    return () => {
+      clearTimeout(timer);
+      document.body.style.overflow = overflow;
+      document.removeEventListener('keydown', handle);
+      previous?.focus?.();
+    };
+  }, [isOpen, onClose]);
+  const [seasons, setSeasons] = useState([]),
+    [events, setEvents] = useState([]),
+    [year, setYear] = useState(defaultLicenseYear()),
+    [type, setType] = useState('full'),
+    [eventId, setEventId] = useState('');
+  const [quote, setQuote] = useState(null),
+    [attempt, setAttempt] = useState(null),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(''),
+    [profileIssue, setProfileIssue] = useState(null),
+    [key, setKey] = useState('');
+  function showError(failure) {
+    setError(failure.message);
+    setProfileIssue(failure.code === 'PROFILE_INCOMPLETE' ? { fields: failure.missingFields || [], url: failure.profileUrl || '/profile?edit=true' } : null);
+  }
+  useEffect(() => {
+    if (!isOpen) return;
+    let live = true;
+    setError('');
+    setProfileIssue(null);
+    (async () => {
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error('Sign in to buy a license.');
+      const k = `license-checkout-web:${user.id}`;
+      const [s, e] = await Promise.all([supabase.from('license_seasons').select('*').is('archived_at', null).order('year', {
+        ascending: false
+      }), fetchUpcomingCalendarEvents(supabase)]);
+      if (s.error) throw s.error;
+      if (!live) return;
+      setKey(k);
+      setSeasons(s.data || []);
+      setYear(previous => s.data?.some(season => season.year === previous) ? previous : s.data?.[0]?.year || defaultLicenseYear());
+      setEvents(e.filter(row => row.allow_temporary_license !== false));
+      setType(initialType);
+      setEventId(initialEventId || '');
+      const stored = localStorage.getItem(k);
+      if (stored) {
+        const a = JSON.parse(stored);
+        setAttempt(a);
+        setType(a.type);
+        setYear(a.year);
+        setEventId(a.eventId || '');
+      }
+    })().catch(e => {
+      if (live) showError(e);
+    });
+    return () => {
+      live = false;
+    };
+  }, [isOpen, initialEventId, initialType]);
+  useEffect(() => {
+    if (!isOpen || type === 'temporary' && !eventId) {
+      setQuote(null);
+      return;
     }
-    onDone();
-};
-
-const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSuccess }) => {
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-    const [showTempOptions, setShowTempOptions] = useState(false);
-    const { config: commerce, full: fullQuote, temp: tempQuote, licenseSalesOpen } = useCommerceConfig();
-
-    // Temporary License Addition
-    const [upcomingEvents, setUpcomingEvents] = useState([]);
-    const [selectedEventId, setSelectedEventId] = useState('');
-    const [eventsLoading, setEventsLoading] = useState(false);
-    const [existingLicenses, setExistingLicenses] = useState([]);
-    const [eventSearchQuery, setEventSearchQuery] = useState('');
-
-    const filteredEvents = upcomingEvents.filter(event =>
-        event.event_name?.toLowerCase().includes(eventSearchQuery.toLowerCase())
-    );
-
-    React.useEffect(() => {
-        if (isOpen) {
-            setEventSearchQuery('');
-            const fetchEventsAndLicenses = async () => {
-                setEventsLoading(true);
-                try {
-                    const events = await fetchUpcomingCalendarEvents(supabase);
-                    setUpcomingEvents(events);
-
-                    if (userEmail) {
-                        const { data: pData } = await supabase
-                            .from('players')
-                            .select('id')
-                            .ilike('email', userEmail)
-                            .maybeSingle();
-
-                        if (pData?.id) {
-                            const { data: licenses } = await supabase
-                                .from('temporary_licenses')
-                                .select('event_id')
-                                .eq('player_id', pData.id);
-
-                            if (licenses) {
-                                const eventIds = licenses.map(l => l.event_id?.toString()).filter(Boolean);
-                                setExistingLicenses(eventIds);
-                            }
-                        }
-                    }
-                } catch (e) {
-                    console.error("Failed to load events or licenses", e);
-                } finally {
-                    setEventsLoading(false);
-                }
-            };
-            fetchEventsAndLicenses();
-        }
-    }, [isOpen, userEmail]);
-
-
-    const getConfig = (quote) => {
-        let nameParams = {};
-        if (userName) {
-            const parts = userName.trim().split(' ');
-            nameParams.firstname = parts[0];
-            if (parts.length > 1) {
-                nameParams.lastname = parts.slice(1).join(' ');
-            }
-        }
-
-        const isTemp = quote.type === 'temporary';
-        const eventDetails = isTemp ? upcomingEvents.find(e => e.id?.toString() === selectedEventId.toString()) : null;
-
-        return {
-            reference: `${(new Date()).getTime()}-${quote.total}`,
-            email: userEmail || '',
-            amount: toPaystackAmount(quote.total),
-            key: PAYSTACK_PUBLIC_KEY,
-            currency: 'ZAR',
-            metadata: {
-                license_type: quote.type,
-                source: 'web_license_modal',
-                pricing: {
-                    base: quote.base,
-                    fee: quote.fee,
-                    percent: quote.percent,
-                    total: quote.total,
-                    fee_label: quote.feeLabel,
-                },
-                commerce: commerceSnapshot(commerce),
-                ...(isTemp && eventDetails ? {
-                    event_id: eventDetails.id,
-                    event_name: eventDetails.event_name
-                } : {})
-            },
-            ...nameParams
-        };
+    let live = true;
+    setQuote(null);
+    licenseCheckout({
+      action: 'quote',
+      licenseType: type,
+      licenseYear: Number(year),
+      eventId: Number(eventId),
+      beneficiaryPlayerId: attempt?.beneficiaryPlayerId || beneficiaryPlayerId
+    }).then(r => {
+      if (live) {
+        setQuote(r.quote);
+        setError('');
+        setProfileIssue(null);
+      }
+    }).catch(e => {
+      if (live) showError(e);
+    });
+    return () => {
+      live = false;
     };
-
-    const runPayment = (quote) => {
-        setError(null);
-
-        // Guard: Paystack requires a valid email address
-        if (!userEmail || !userEmail.includes('@')) {
-            setError('A valid email address is required to process payment. Please update your profile email.');
-            return;
-        }
-
-        if (quote.type === 'temporary' && selectedEventId) {
-            const hasLicense = existingLicenses.includes(selectedEventId.toString());
-            if (hasLicense) {
-                setError('You already have an active temporary license for this event.');
-                return;
-            }
-        }
-        setLoading(true);
-
-        try {
-            const paystackPop = new PaystackPop();
-
-            // NOTE: checkout() is NOT async — do NOT await it.
-            // It opens the Paystack popup and calls onSuccess/onCancel when done.
-            paystackPop.checkout({
-                ...getConfig(quote),
-                onSuccess: async () => {
-                    let successCallback = onPaymentSuccess;
-
-                    if (quote.type === 'temporary' && selectedEventId) {
-                        const eventDetails = upcomingEvents.find(e => e.id?.toString() === selectedEventId.toString());
-                        if (eventDetails) {
-                            try {
-                                const { data: { user } } = await supabase.auth.getUser();
-                                if (user) {
-                                    const { data: pData } = await supabase.from('players').select('id').ilike('email', userEmail).maybeSingle();
-                                    if (pData?.id) {
-                                        await supabase.from('temporary_licenses').insert({
-                                            player_id: pData.id,
-                                            event_id: eventDetails.id,
-                                            event_name: eventDetails.event_name || 'Calendar Event',
-                                            event_date: eventDetails.end_date || eventDetails.start_date
-                                        });
-                                    }
-                                }
-                            } catch (err) {
-                                console.error('Failed to record temporary license:', err);
-                            }
-                        }
-                    }
-
-                    await handlePaymentComplete(
-                        () => setLoading(false),
-                        successCallback,
-                        setError,
-                        onClose,
-                        quote.type
-                    );
-                },
-                onCancel: () => setLoading(false),
-                onError: (err) => {
-                    console.error('Paystack error:', err);
-                    setError('Payment failed. Please try again.');
-                    setLoading(false);
-                },
-            });
-        } catch (err) {
-            console.error('Failed to initialise Paystack:', err);
-            setError('Could not open payment window. Please try again.');
-            setLoading(false);
-        }
-    };
-
-
-    if (!isOpen) return null;
-
-    return (
-        <AnimatePresence>
-            <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4">
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-                    onClick={onClose}
-                />
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                    className="relative w-full max-w-md bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
-                >
-                    <button
-                        onClick={onClose}
-                        className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors z-10"
-                    >
-                        <X size={20} />
-                    </button>
-
-                    <div className="p-8">
-                        <h3 className="text-xl font-bold text-white mb-2">Get Your License</h3>
-                        <p className="text-gray-400 text-sm mb-6">
-                            Pay for a license to make your profile visible on the Players page and participate in SAPA tournaments.
-                        </p>
-
-                        {error && (
-                            <div className="mb-4 p-4 rounded-xl bg-red-500/10 text-red-500 border border-red-500/20 text-sm">
-                                {error}
-                            </div>
-                        )}
-
-                        {!licenseSalesOpen && (
-                            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-sm mb-4">
-                                License sales are closed. You can pay from your profile when a license type is turned back on.
-                            </div>
-                        )}
-
-                        <div className="space-y-3">
-                            {fullQuote.enabled && (
-                            <button
-                                type="button"
-                                onClick={() => runPayment(fullQuote)}
-                                disabled={loading || !isPaystackConfigured()}
-                                className="w-full flex items-center justify-between p-4 rounded-xl bg-padel-green/20 border border-padel-green/50 hover:bg-padel-green/30 transition-all group"
-                            >
-                                <div className="text-left">
-                                    <p className="text-white font-bold">Pay Now - Full License</p>
-                                    <p className="text-gray-400 text-xs">{formatQuoteCaption(fullQuote, formatCurrency)} • Profile visible on Players page</p>
-                                </div>
-                                <div className="bg-padel-green text-black font-black px-4 py-2 rounded-lg text-sm group-hover:scale-105 transition-transform">
-                                    {loading ? 'Processing...' : 'Pay'}
-                                </div>
-                            </button>
-                            )}
-
-                            {tempQuote.enabled && (
-                            <div className={`w-full flex-col rounded-xl transition-all ${
-                                showTempOptions 
-                                    ? 'bg-blue-500/[0.02] border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.05)]' 
-                                    : 'bg-white/5 border border-white/10 hover:border-white/20'
-                            }`}>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        if (showTempOptions) {
-                                            if (selectedEventId) {
-                                                runPayment(tempQuote);
-                                            }
-                                        } else {
-                                            setShowTempOptions(true);
-                                        }
-                                    }}
-                                    disabled={loading || !isPaystackConfigured() || (showTempOptions && (!selectedEventId || upcomingEvents.length === 0 || existingLicenses.includes(selectedEventId.toString())))}
-                                    className="w-full flex items-center justify-between p-4 hover:bg-white/10 transition-all group rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <div className="text-left">
-                                        <p className="text-white font-bold">Buy Temporary License</p>
-                                        <p className="text-gray-400 text-xs">{formatQuoteCaption(tempQuote, formatCurrency)}</p>
-                                    </div>
-                                    <div className={`font-black px-4 py-2 rounded-lg text-sm transition-transform ${
-                                        (!showTempOptions || (selectedEventId && upcomingEvents.length > 0 && !existingLicenses.includes(selectedEventId.toString()))) 
-                                            ? 'bg-blue-500 text-white hover:bg-blue-600 shadow-md shadow-blue-500/20 group-hover:scale-105' 
-                                            : 'bg-gray-500 text-black'
-                                    }`}>
-                                        {loading ? 'Processing...' : (
-                                            !showTempOptions ? 'Select Event' : 
-                                            (upcomingEvents.length === 0 ? 'Unavailable' : 
-                                             (selectedEventId ? 
-                                              (existingLicenses.includes(selectedEventId.toString()) ? 'Licensed' : 'Pay For Event') 
-                                              : 'Select Event'))
-                                        )}
-                                    </div>
-                                </button>
-
-                                {showTempOptions && (
-                                    <div className="p-4 border-t border-white/10 w-full animate-in fade-in slide-in-from-top-2 flex flex-col gap-3">
-                                        <div className="text-left">
-                                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Event Registration</label>
-                                            
-                                            {eventsLoading ? (
-                                                <div className="text-center py-6 bg-black/40 rounded-xl border border-white/5">
-                                                    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                                                    <span className="text-[10px] text-gray-500 mt-2 block font-medium animate-pulse">Loading upcoming events...</span>
-                                                </div>
-                                            ) : upcomingEvents?.length === 0 ? (
-                                                <p className="text-[10px] text-yellow-500 bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/20">
-                                                    No upcoming events found. You must wait for an event to be posted to buy a temporary license.
-                                                </p>
-                                            ) : selectedEventId ? (
-                                                // Selected Event Card View
-                                                (() => {
-                                                    const selectedEvent = upcomingEvents.find(e => e.id?.toString() === selectedEventId.toString());
-                                                    if (!selectedEvent) return null;
-                                                    
-                                                    return (
-                                                        <div className="bg-black/40 border border-blue-500/30 rounded-xl p-4 flex items-center justify-between gap-3 animate-in fade-in zoom-in-95 duration-200">
-                                                            <div className="flex-1 min-w-0">
-                                                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-[9px] font-bold text-blue-400 uppercase tracking-wide mb-1.5">
-                                                                    <Check size={10} className="stroke-[3]" /> Selected Event
-                                                                </span>
-                                                                <h4 className="text-white font-bold text-sm truncate">{selectedEvent.event_name}</h4>
-                                                                <p className="text-gray-400 text-[10px] mt-1 flex items-center gap-1">
-                                                                    <Calendar size={12} className="text-gray-500" />
-                                                                    {new Date(selectedEvent.start_date).toLocaleDateString(undefined, {
-                                                                        day: 'numeric',
-                                                                        month: 'short',
-                                                                        year: 'numeric'
-                                                                    })}
-                                                                    {selectedEvent.end_date && selectedEvent.end_date !== selectedEvent.start_date && (
-                                                                        <> - {new Date(selectedEvent.end_date).toLocaleDateString(undefined, {
-                                                                            day: 'numeric',
-                                                                            month: 'short',
-                                                                            year: 'numeric'
-                                                                        })}</>
-                                                                    )}
-                                                                </p>
-                                                            </div>
-                                                            
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setSelectedEventId('');
-                                                                }}
-                                                                className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-bold text-white transition-all cursor-pointer whitespace-nowrap self-center"
-                                                            >
-                                                                Change
-                                                                </button>
-                                                        </div>
-                                                    );
-                                                })()
-                                            ) : (
-                                                // Live Search Input and Autocomplete Selection List View
-                                                <div className="flex flex-col gap-2.5 animate-in fade-in slide-in-from-top-1 duration-200">
-                                                    <div className="relative">
-                                                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Type to search events..."
-                                                            value={eventSearchQuery}
-                                                            onChange={(e) => setEventSearchQuery(e.target.value)}
-                                                            className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white text-sm focus:border-blue-500 outline-none placeholder:text-gray-500 font-sans transition-colors"
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            autoFocus
-                                                        />
-                                                        {eventSearchQuery && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setEventSearchQuery('');
-                                                                }}
-                                                                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 bg-white/5 hover:bg-white/10 rounded text-gray-400 hover:text-white"
-                                                            >
-                                                                <X size={14} />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                    
-                                                    <div className="max-h-[160px] overflow-y-auto flex flex-col gap-1.5 pr-0.5 custom-scrollbar">
-                                                        {filteredEvents.length > 0 ? (
-                                                            filteredEvents.map((event, i) => {
-                                                                const hasLicense = existingLicenses.includes(event.id?.toString());
-                                                                return (
-                                                                    <button
-                                                                        key={event.id || i}
-                                                                        type="button"
-                                                                        disabled={hasLicense}
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            if (!hasLicense) {
-                                                                                setSelectedEventId(event.id.toString());
-                                                                            }
-                                                                        }}
-                                                                        className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all group ${
-                                                                            hasLicense
-                                                                                ? 'bg-white/[0.02] border-white/5 opacity-55 cursor-not-allowed'
-                                                                                : 'bg-black/30 border-white/5 hover:border-blue-500/30 hover:bg-blue-500/5 cursor-pointer'
-                                                                        }`}
-                                                                    >
-                                                                        <div className="min-w-0 flex-1 pr-3">
-                                                                            <p className={`font-bold text-xs truncate transition-colors ${hasLicense ? 'text-gray-500' : 'text-white group-hover:text-blue-400'}`}>
-                                                                                {event.event_name}
-                                                                            </p>
-                                                                            <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wider mt-0.5 flex items-center gap-1">
-                                                                                <Calendar size={10} className="text-gray-600" />
-                                                                                {new Date(event.start_date).toLocaleDateString(undefined, {
-                                                                                    day: 'numeric',
-                                                                                    month: 'short',
-                                                                                    year: 'numeric'
-                                                                                })}
-                                                                            </p>
-                                                                        </div>
-                                                                        
-                                                                        <div>
-                                                                            {hasLicense ? (
-                                                                                <span className="inline-flex text-[8px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20">
-                                                                                    LICENSED
-                                                                                </span>
-                                                                            ) : (
-                                                                                <span className="inline-flex items-center gap-0.5 text-[8px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 group-hover:bg-blue-500 group-hover:text-white transition-all">
-                                                                                    Select <ChevronRight size={10} />
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                    </button>
-                                                                );
-                                                            })
-                                                        ) : (
-                                                            <div className="py-6 text-center text-gray-500 bg-black/20 rounded-xl border border-white/5">
-                                                                <Search className="w-5 h-5 mx-auto mb-1.5 opacity-20 text-blue-500" />
-                                                                <p className="text-[10px] font-medium text-white/60">No matching events found</p>
-                                                                <p className="text-[8px] mt-0.5 text-gray-600">Try typing a different name</p>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                            )}
-                        </div>
-
-                        <p className="text-gray-500 text-xs mt-4 text-center">
-                            Only full license holders are displayed on the public Players page.
-                        </p>
-
-                    </div>
-                </motion.div>
-            </div>
-        </AnimatePresence>
-    );
-};
-
-export default LicensePaymentModal;
+  }, [isOpen, type, year, eventId, beneficiaryPlayerId, attempt?.beneficiaryPlayerId]);
+  async function verify() {
+    setBusy(true);
+    setError('');
+    try {
+      const r = await licenseCheckout({
+        action: 'verify',
+        reference: attempt.reference
+      });
+      if (!r.paid) throw new Error('Payment is not confirmed yet. Wait a moment and check again.');
+      localStorage.removeItem(key);
+      setAttempt(null);
+      await onPaymentSuccess?.();
+      onClose();
+    } catch (e) {
+      showError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function pay() {
+    setBusy(true);
+    setError('');
+    try {
+      const current = attempt || {
+        id: crypto.randomUUID(),
+        type,
+        year: Number(year),
+        eventId: Number(eventId) || null,
+        beneficiaryPlayerId,
+        returnEventId
+      };
+      localStorage.setItem(key, JSON.stringify(current));
+      setAttempt(current);
+      const r = await licenseCheckout({
+        action: 'checkout',
+        licenseType: current.type,
+        licenseYear: current.year,
+        eventId: current.eventId,
+        attemptId: current.id,
+        agreed: true,
+        acceptedTotal: quote.total,
+        channel: 'web',
+        beneficiaryPlayerId: current.beneficiaryPlayerId,
+        returnEventId: current.returnEventId
+      });
+      const url = new URL(r.authorizationUrl);
+      if (url.protocol !== 'https:' || url.hostname !== 'checkout.paystack.com') throw new Error('Unexpected payment address.');
+      const saved = {
+        ...current,
+        reference: r.reference,
+        url: url.href
+      };
+      localStorage.setItem(key, JSON.stringify(saved));
+      setAttempt(saved);
+      window.location.assign(url.href);
+    } catch (e) {
+      showError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (!isOpen) return null;
+  const renew = quote?.isRenewal === true;
+  return <div className="fixed inset-0 z-[1100] bg-black/80 flex items-center justify-center p-4" onClick={onClose}><section ref={dialog} role="dialog" aria-modal="true" aria-labelledby="license-checkout-title" className="relative max-w-md w-full max-h-[90vh] overflow-auto rounded-2xl bg-neutral-950 border border-white/15 p-6 text-white" onClick={e => e.stopPropagation()}>
+        <button type="button" aria-label="Close license checkout" className="absolute top-4 right-4 p-2" onClick={onClose}><X size={20} /></button><h2 id="license-checkout-title" className="text-xl font-bold pr-8">{quote?.forAnotherPlayer ? `License for ${quote.beneficiaryName}` : 'Your license'}</h2>
+        <p className="text-sm text-gray-400 mt-2">Choose annual coverage or a temporary license for one event.</p>
+        {error && <p role="alert" className="text-red-300 mt-4">{error}</p>}
+        {profileIssue && <div className="mt-3 text-sm"><p className="text-gray-300">Missing: {profileIssue.fields.join(', ') || 'player profile details'}.</p><a href={profileIssue.url} onClick={e => { if (onEditProfile && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) { e.preventDefault(); onEditProfile(); } }} className="mt-3 inline-flex min-h-11 items-center text-padel-green underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-padel-green">Edit profile</a></div>}
+        {quote?.licenseNumber && <p className="mt-4 text-xs text-gray-400">4M license number <span className="ml-2 font-mono text-white">{quote.licenseNumber}</span></p>}
+        <label className="block mt-5 text-sm">License type<select disabled={!!attempt || busy} value={type} onChange={e => {
+          setError('');
+          setType(e.target.value);
+        }} className="block w-full mt-2 p-3 rounded-lg bg-neutral-900 border border-white/20"><option value="full">Full annual license</option><option value="temporary">Temporary event license</option></select></label>
+        {type === 'full' ? <label className="block mt-4 text-sm">License year<select disabled={!!attempt || busy} value={year} onChange={e => setYear(Number(e.target.value))} className="block w-full mt-2 p-3 rounded-lg bg-neutral-900 border border-white/20">{seasons.map(s => <option key={s.year} value={s.year}>{s.year}{s.sales_open ? '' : ' · Sales closed'}</option>)}</select></label> : <label className="block mt-4 text-sm">Event<select disabled={!!attempt || busy} value={eventId} onChange={e => setEventId(e.target.value)} className="block w-full mt-2 p-3 rounded-lg bg-neutral-900 border border-white/20"><option value="">Select an event</option>{events.map(e => <option key={e.id} value={e.id}>{e.event_name}</option>)}</select></label>}
+        {quote && <div className="mt-5 border-y border-white/10 py-4 space-y-2"><p className="flex justify-between"><span>{type === 'full' ? renew ? 'Full license renewal' : 'New Full license' : 'Temporary license'}</span><span>{formatCurrency(quote.base)}</span></p>{quote.fee > 0 && <p className="flex justify-between"><span>{quote.feeLabel}</span><span>{formatCurrency(quote.fee)}</span></p>}<p className="flex justify-between font-bold"><span>Total</span><span>{formatCurrency(quote.total)}</span></p>{type === 'full' && quote.startsOn && <p className="text-sm text-gray-400">Valid {licenseDate(quote.startsOn)} – {licenseDate(quote.endsOn)}</p>}{quote.active && <p className="text-padel-green text-sm">{quote.coveredByFull ? 'The Full license already covers this event.' : quote.forAnotherPlayer ? 'This player already holds this license. Contact support if it has been revoked.' : 'You already hold this license. Contact support if it has been revoked.'}</p>}{!quote.enabled && !quote.active && <p className="text-amber-300 text-sm">Sales are closed for this license.</p>}</div>}
+        {attempt?.reference && <button type="button" disabled={busy} onClick={verify} className="w-full mt-4 p-3 rounded-xl border border-white/20">Check payment status</button>}
+        <button type="button" disabled={busy || !quote?.enabled || quote?.active || !key} onClick={pay} className="w-full mt-4 p-3 rounded-xl bg-padel-green text-black font-bold disabled:opacity-40">{busy ? 'Please wait…' : attempt ? 'Continue payment' : type === 'full' && renew ? `Renew for ${year}` : type === 'full' ? `Buy ${year} Full license` : 'Buy temporary license'}</button>
+        {attempt && <button type="button" disabled={busy} onClick={() => {
+        localStorage.removeItem(key);
+        setAttempt(null);
+        setError('');
+      }} className="w-full mt-3 text-xs text-gray-400 underline">Start a different checkout (check any payment already made first)</button>}
+        <p className="text-xs text-gray-400 mt-4">Pay securely with Paystack. Your license is issued after payment is verified.</p>
+    </section></div>;
+}

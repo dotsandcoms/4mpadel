@@ -45,9 +45,10 @@ export function CircleAction({ name, label, onPress, selected, disabled }: { nam
 export function Fade({ to = '#F5F6F3' }: { to?: string }) {
   return <View pointerEvents="none" style={{ position: 'absolute', inset: 0, experimental_backgroundImage: `linear-gradient(180deg, rgba(245,246,243,0.82) 0%, rgba(245,246,243,0.94) 45%, ${to} 100%)` } as ViewStyle} />;
 }
-export function Accordion({ title, icon, children, accessory, highlighted = false, pending = false, singleLineTitle = false }: { pending?: boolean; singleLineTitle?: boolean; highlighted?: boolean; title: string; icon: EventIconName; children: ReactNode; accessory?: ReactNode }) {
+export function Accordion({ title, icon, children, accessory, highlighted = false, pending = false, singleLineTitle = false, highlightColor }: { highlightColor?: string; pending?: boolean; singleLineTitle?: boolean; highlighted?: boolean; title: string; icon: EventIconName; children: ReactNode; accessory?: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const accent = useEventAccent();
+  const eventAccent = useEventAccent();
+  const accent = highlightColor || eventAccent;
   return <View style={{ backgroundColor: pending ? '#fff7ed' : '#fff', borderRadius: 16, borderWidth: 1, borderColor: pending ? '#fb923c' : highlighted ? accent : '#f3f4f6', boxShadow: highlighted ? `0px 2px 12px ${accent}30` : '0px 2px 3px rgba(0,0,0,0.12)', overflow: 'hidden' }}>
     <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: singleLineTitle ? 16 : 22 }}>
       <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: singleLineTitle ? 8 : 12, paddingLeft: singleLineTitle ? 16 : 24, paddingVertical: 16, minHeight: 64 }}>

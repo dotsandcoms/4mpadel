@@ -81,20 +81,8 @@ struct ScheduleTimeline: AppIntentTimelineProvider {
   // Widget views cannot load AsyncImage. Fetch and downsample before producing entries.
   private func loadArtwork(_ text: String?) async -> Data? {
     #if os(iOS)
-    guard let text, let url = URL(string: text), url.scheme == "https" else { return nil }
-    do {
-      let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 8)
-      let (data, response) = try await URLSession.shared.data(for: request)
-      guard let response = response as? HTTPURLResponse, response.statusCode == 200,
-        data.count <= 8_000_000,
-        let source = CGImageSourceCreateWithData(data as CFData, nil),
-        let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-          kCGImageSourceCreateThumbnailFromImageAlways: true,
-          kCGImageSourceThumbnailMaxPixelSize: 800,
-          kCGImageSourceCreateThumbnailWithTransform: true
-        ] as CFDictionary) else { return nil }
-      return UIImage(cgImage: thumbnail).jpegData(compressionQuality: 0.8)
-    } catch { return nil }
+    guard let thumbnail = await ScheduleArtwork.load(text, maxPixels: 800) else { return nil }
+    return UIImage(cgImage: thumbnail).jpegData(compressionQuality: 0.8)
     #else
     return nil
     #endif
@@ -134,7 +122,11 @@ struct ScheduleWidgetView: View {
       }
     }
     .privacySensitive()
+    #if os(watchOS)
+    .widgetURL(entry.next?.watchDestination ?? URL(string: "fourmpadel-watch://schedule"))
+    #else
     .widgetURL(entry.next?.destination ?? URL(string: "fourmpadel:///calendar"))
+    #endif
     .containerBackground(for: .widget) { widgetBackground }
   }
 

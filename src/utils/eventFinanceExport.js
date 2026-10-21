@@ -1,5 +1,7 @@
 import ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
+import FileSaver from 'file-saver';
+
+const { saveAs } = FileSaver;
 
 const MONEY_FMT = '"R"#,##0.00';
 
@@ -74,8 +76,9 @@ const addSectionTitle = (sheet, text) => {
     return row;
 };
 
-const addMetric = (sheet, label, value, { money = false, note = '' } = {}) => {
+const addMetric = (sheet, label, value, { money = false, note = '', bold = false } = {}) => {
     const row = sheet.addRow([label, value, note]);
+    if (bold) row.font = { bold: true };
     if (money && typeof value === 'number') {
         row.getCell(2).numFmt = MONEY_FMT;
     }
@@ -87,15 +90,17 @@ const addMetric = (sheet, label, value, { money = false, note = '' } = {}) => {
  * @param {{
  *   eventName: string,
  *   eventDate?: string|null,
- *   summary: Array<{ section?: string, label: string, value: string|number, money?: boolean, note?: string }>,
+ *   summary: Array<{ section?: string, label: string, value: string|number, money?: boolean, bold?: boolean, note?: string }>,
  *   lineItems: Array<object>,
  *   registrations: Array<object>,
  *   payments: Array<object>,
  *   refunds: Array<object>,
  *   reportType?: 'full'|'organiser',
+ *   activeRegistrationIds?: string[],
+ *   receiptReport?: { withdrawals: Array<object>, receipts: Array<object> },
  * }} payload
  */
-export async function downloadEventFinanceWorkbook(payload) {
+export function buildEventFinanceWorkbook(payload) {
     const {
         eventName,
         eventDate,
@@ -104,6 +109,8 @@ export async function downloadEventFinanceWorkbook(payload) {
         registrations = [],
         payments = [],
         refunds = [],
+        receiptReport = null,
+        activeRegistrationIds = null,
         reportType = 'full',
     } = payload;
 
@@ -120,14 +127,14 @@ export async function downloadEventFinanceWorkbook(payload) {
     wsSummary.addRow([]);
     wsSummary.addRow([
         isOrganiserReport
-            ? 'This report contains the event settlement summary and registration list. Registration payment-status cells are colour coded: green = paid, amber = pending, red = refunded, grey = withdrawn, blue = comped.'
+            ? 'Registrations lists current entries. Withdrawals shows previous payments and refunds separately. 4M receipts lists each Paystack entry receipt once, including external links. Withdrawal amounts are a breakdown of those receipts, not extra income. Club collections and licence fees are excluded from 4M receipts.'
             : 'How to read this file: Summary totals must match the Line items sheet. '
-                + 'The balance due from 4M is final entry sales less the 5% platform fee and interim payments. '
+                + 'The balance due from 4M is Paystack entry funds after refunds, plus any explicit confirmed settlement adjustment, less 5% of active entry fees and interim payments. Club / organiser collections are excluded. '
                 + 'License fees stay with 4M.',
     ]);
     wsSummary.mergeCells(`A${wsSummary.rowCount}:C${wsSummary.rowCount}`);
     wsSummary.getRow(wsSummary.rowCount).alignment = { wrapText: true };
-    wsSummary.getRow(wsSummary.rowCount).height = 42;
+    wsSummary.getRow(wsSummary.rowCount).height = isOrganiserReport ? 66 : 42;
     wsSummary.addRow([]);
 
     let currentSection = '';
@@ -139,7 +146,7 @@ export async function downloadEventFinanceWorkbook(payload) {
             const header = wsSummary.addRow(['Metric', 'Value', 'Notes']);
             styleHeader(header);
         }
-        addMetric(wsSummary, row.label, row.value, { money: row.money, note: row.note || '' });
+        addMetric(wsSummary, row.label, row.value, { money: row.money, bold: row.bold, note: row.note || '' });
     });
     autosize(wsSummary, 18, 70);
     wsSummary.getColumn(2).width = 22;
@@ -191,7 +198,9 @@ export async function downloadEventFinanceWorkbook(payload) {
         'Registration Status', 'Registered At', 'Payment Note',
     ];
     styleHeader(wsRegs.addRow(regHeaders));
-    registrations.forEach((r) => {
+    const exportedRegistrations = isOrganiserReport && activeRegistrationIds
+        ? registrations.filter(r => activeRegistrationIds.includes(r.registrationId)) : registrations;
+    exportedRegistrations.forEach((r) => {
         const row = wsRegs.addRow([
             r.name || '',
             r.email || '',
@@ -221,11 +230,80 @@ export async function downloadEventFinanceWorkbook(payload) {
     });
     wsRegs.autoFilter = {
         from: { row: 1, column: 1 },
-        to: { row: Math.max(1, registrations.length + 1), column: regHeaders.length },
+        to: { row: Math.max(1, exportedRegistrations.length + 1), column: regHeaders.length },
     };
     wsRegs.views = [{ state: 'frozen', ySplit: 1 }];
     autosize(wsRegs, 12, 36);
     wsRegs.getColumn(9).width = 15;
+
+    if (receiptReport) {
+        const addHistorySheet = (name, columns, rows) => {
+            const sheet = workbook.addWorksheet(name);
+            styleHeader(sheet.addRow(columns.map(c => c.label)));
+            sheet.getRow(1).height = 60;
+            rows.forEach(item => {
+                const row = sheet.addRow(columns.map(c => {
+                    if (c.date) return item[c.key] ? new Date(item[c.key]) : '';
+                    if (c.money) return item[c.key] === null ? '' : Number(item[c.key] || 0);
+                    return item[c.key] || '';
+                }));
+                columns.forEach((c, index) => {
+                    if (c.money) row.getCell(index + 1).numFmt = MONEY_FMT;
+                    if (c.date) row.getCell(index + 1).numFmt = 'dd mmm yyyy hh:mm';
+                    if (c.key === 'status') styleStatus(row.getCell(index + 1), item.status);
+                    if (c.key === 'retained' && item.retained !== null) {
+                        const col = key => row.getCell(columns.findIndex(column => column.key === key) + 1).address;
+                        row.getCell(index + 1).value = { formula: `${col('amount')}-${col('refunded')}-${col('reserved')}`, result: Number(item.retained || 0) };
+                    }
+                });
+            });
+            sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(1, rows.length + 1), column: columns.length } };
+            sheet.views = [{ state: 'frozen', ySplit: 1, xSplit: 1 }];
+            autosize(sheet, 14, 46);
+            columns.forEach((c, index) => {
+                if (c.money) sheet.getColumn(index + 1).width = 18;
+                if (c.date) sheet.getColumn(index + 1).width = 22;
+            });
+            if (rows.length) {
+                const totals = sheet.addRow(['Totals (detail)']);
+                styleHeader(totals);
+                columns.forEach((c, index) => {
+                    if (!c.money) return;
+                    const letter = sheet.getColumn(index + 1).letter;
+                    totals.getCell(index + 1).value = { formula: `SUM(${letter}2:${letter}${rows.length + 1})`, result: rows.reduce((s, r) => s + Number(r[c.key] || 0), 0) };
+                    totals.getCell(index + 1).numFmt = MONEY_FMT;
+                });
+            }
+        };
+        addHistorySheet('Withdrawals', [
+            { key: 'name', label: 'Withdrawn player' }, { key: 'email', label: 'Player email' },
+            { key: 'division', label: 'Withdrawn division' }, { key: 'status', label: 'Payment outcome' },
+            { key: 'payerName', label: 'Payer name (recorded)' }, { key: 'payerEmail', label: 'Payer email' },
+            { key: 'paidAt', label: 'Paid at', date: true }, { key: 'withdrawnAt', label: 'Withdrawn at', date: true },
+            { key: 'amount', label: 'Entry share received (ZAR)', money: true },
+            { key: 'refunded', label: 'Entry share refunded (ZAR)', money: true },
+            { key: 'reserved', label: 'Refund pending (ZAR)', money: true },
+            { key: 'retained', label: 'After refunds / reserve (ZAR)', money: true },
+            { key: 'applied', label: 'Of which reused for current entry (ZAR)', money: true },
+            { key: 'holder', label: 'Funds holder' }, { key: 'method', label: 'Payment method' },
+            { key: 'reference', label: 'Original receipt / confirmation' },
+            { key: 'refundedAt', label: 'Last refund date', date: true }, { key: 'refundReferences', label: 'Refund references' },
+            { key: 'note', label: 'Notes' },
+        ], receiptReport.withdrawals || []);
+        addHistorySheet('4M receipts', [
+            { key: 'payerName', label: 'Payer name (recorded)' }, { key: 'payerEmail', label: 'Payer email' },
+            { key: 'paidAt', label: 'Paid at', date: true }, { key: 'players', label: 'Players covered' },
+            { key: 'divisions', label: 'Original divisions' },
+            { key: 'amount', label: 'Entry fees received (ZAR)', money: true },
+            { key: 'refunded', label: 'Entry fees refunded (ZAR)', money: true },
+            { key: 'reserved', label: 'Refund pending (ZAR)', money: true },
+            { key: 'retained', label: 'Held after refunds / reserve (ZAR)', money: true },
+            { key: 'holder', label: 'Funds holder' }, { key: 'method', label: 'Payment method' },
+            { key: 'reference', label: 'Paystack receipt reference' },
+            { key: 'refundedAt', label: 'Last refund date', date: true }, { key: 'refundReferences', label: 'Refund references' },
+            { key: 'status', label: 'Receipt evidence' }, { key: 'note', label: 'Notes' },
+        ], receiptReport.receipts || []);
+    }
 
     if (reportType === 'full') {
     const wsPay = workbook.addWorksheet('Payments ledger');
@@ -297,10 +375,15 @@ export async function downloadEventFinanceWorkbook(payload) {
         });
     });
 
+    return workbook;
+}
+
+export async function downloadEventFinanceWorkbook(payload) {
+    const workbook = buildEventFinanceWorkbook(payload);
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     });
-    const reportSuffix = isOrganiserReport ? 'organiser-consolidated' : 'full-event-report';
-    saveAs(blob, `${slugify(eventName)}-${reportSuffix}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    const reportSuffix = payload.reportType === 'organiser' ? 'organiser-consolidated' : 'full-event-report';
+    saveAs(blob, `${slugify(payload.eventName)}-${reportSuffix}-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }

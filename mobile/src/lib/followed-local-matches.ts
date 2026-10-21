@@ -27,7 +27,7 @@ export async function fetchFollowedLocalFixtures(players: HubPlayer[]) {
     while (cursor < linked.length) {
       const player = linked[cursor++];
       try {
-        const data = await fetchPlayerMatches(player.rankedinId, { requireUpcoming: true });
+        const data = await fetchPlayerMatches(player.rankedinId, { requireUpcoming: true, includeHistory: false });
         rows.push({ player, matches: data.upcoming });
       } catch { failed++; }
     }

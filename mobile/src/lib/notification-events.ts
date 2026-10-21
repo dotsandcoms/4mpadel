@@ -33,6 +33,7 @@ export const NOTIFICATION_TYPES = [
   'match_reminder',
   'ranking_change',
   'club_announcement',
+  'pro_match_live',
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -67,6 +68,7 @@ export const NOTIFICATION_PATHS: Record<NotificationType, string> = {
   match_reminder: '/calendar',
   ranking_change: '/(tabs)/rankings',
   club_announcement: '/(tabs)/explore',
+  pro_match_live: '/pro/live',
 };
 
 export type PushCopyVars = {
@@ -92,6 +94,8 @@ export function pushCopy(
   const payer = vars.payerName || partner;
 
   switch (type) {
+    case 'pro_match_live':
+      return { title: 'Your starred match is live', body: `Play has started at ${event}.` };
     case 'registration_open':
       return { title: 'Registration open', body: `Open ${event} for the latest details.` };
     case 'early_bird_ending':

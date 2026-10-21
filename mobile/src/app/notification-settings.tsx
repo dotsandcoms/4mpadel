@@ -1,3 +1,4 @@
+import { trackEvent } from '@/lib/analytics';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Linking, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { SelectField } from '@/components/select-field';
@@ -43,7 +44,7 @@ export default function NotificationSettings() {
   async function save(key: NotificationToggle, value: boolean) {
     if (lock.current) return;
     lock.current = true; setBusy(key); setError('');
-    try { await saveNotificationPreference(key, value); setPrefs(current => ({ ...current, [key]: value })); }
+    try { await saveNotificationPreference(key, value); void trackEvent('notification_preference', { preference: key, enabled: value }); setPrefs(current => ({ ...current, [key]: value })); }
     catch { setError('Your change was not saved. Check your connection and try again.'); }
     finally { lock.current = false; setBusy(null); }
   }
@@ -52,7 +53,7 @@ export default function NotificationSettings() {
     const next = { ...prefs, [key]: Number(value), timezone: prefs.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone };
     if ((next.quiet_start ?? 22) === (next.quiet_end ?? 7)) { setError('Choose different start and end times for quiet hours.'); return; }
     lock.current = true; setBusy(key); setError('');
-    try { await saveNotificationTiming(next); setPrefs(next); }
+    try { await saveNotificationTiming(next); void trackEvent('notification_timing_changed', { timing_field: key }); setPrefs(next); }
     catch { setError('Your timing settings were not saved. Please try again.'); }
     finally { lock.current = false; setBusy(null); }
   }

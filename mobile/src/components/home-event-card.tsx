@@ -1,11 +1,12 @@
 import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState, type ComponentProps } from 'react';
+import { useState, type ComponentProps } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { MapPin } from '@/components/map-pin';
 import { PressableScale } from '@/components/pressable-scale';
 import { PulseDot } from '@/components/pulse-dot';
+import { useForegroundClock } from '@/hooks/use-foreground-clock';
 import {
   eventDayParts,
   eventLocation,
@@ -419,12 +420,7 @@ function CountdownBox({
   compact?: boolean;
   fullWidth?: boolean;
 }) {
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
+  const now = useForegroundClock();
 
   const diff = target - now;
   if (diff <= 0) return null;
@@ -485,12 +481,7 @@ function EventStartsCountdown({
 }
 
 function useMatchTiming(dateStr?: string | null) {
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 15000);
-    return () => clearInterval(id);
-  }, []);
+  const now = useForegroundClock(15000);
 
   return matchTiming(parseMatchDate(dateStr), dateStr, now);
 }
@@ -498,8 +489,7 @@ function useMatchTiming(dateStr?: string | null) {
 function RegCountdown({ opensAt, closesAt, accent }: {
   opensAt: string | null; closesAt: string | null; accent: string;
 }) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
+  const now = useForegroundClock();
   const opens = opensAt ? new Date(opensAt).getTime() : NaN;
   const closes = closesAt ? new Date(closesAt).getTime() : NaN;
   const opening = Number.isFinite(opens) && opens > now;

@@ -34,6 +34,8 @@ import {
   SA_REGIONS,
 } from '@/lib/registration';
 import { supabase } from '@/lib/supabase';
+import { changeProfilePhoto } from '@/lib/profile-photos';
+import { trackEvent } from '@/lib/analytics';
 import { COURT_SIDE_OPTIONS, PLAYING_HAND_OPTIONS, courtSideLabel, playingHandLabel } from '@/lib/player-preferences';
 import { lightBrand as brand } from '@/theme/tokens';
 
@@ -102,6 +104,8 @@ export default function EditProfileScreen() {
   const [clubs, setClubs] = useState<ClubRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [photoSaving, setPhotoSaving] = useState(false);
+  const photoBusy = useRef(false);
   const [form, setForm] = useState<Form>(EMPTY_FORM);
   const [initialForm, setInitialForm] = useState<Form>(EMPTY_FORM);
   const [expanded, setExpanded] = useState<Section | null>(null);
@@ -196,7 +200,7 @@ export default function EditProfileScreen() {
   }
 
   async function save() {
-    if (!player || saving) return;
+    if (!player || saving || photoBusy.current) return;
     const next = validate();
     if (Object.keys(next).length) {
       setErrors(next);
@@ -226,11 +230,30 @@ export default function EditProfileScreen() {
         court_side: form.courtSide || null,
         playing_hand: form.playingHand || null,
       });
+      void trackEvent('profile_updated', { photo_changed: false });
       goBack();
     } catch (err) {
       flash(err instanceof Error ? err.message : 'Unable to save. Try again.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function changePhoto() {
+    if (!player || saving || photoBusy.current) return;
+    photoBusy.current = true;
+    setPhotoSaving(true);
+    try {
+      const url = await changeProfilePhoto(player.id);
+      if (!url) return;
+      void trackEvent('profile_updated', { photo_changed: true });
+      setPlayer(current => current?.id === player.id ? { ...current, image_url: url } : current);
+      flash('Profile photo updated.', 'success');
+    } catch (err) {
+      flash(err instanceof Error ? err.message : 'Unable to update your photo. Please try again.');
+    } finally {
+      photoBusy.current = false;
+      setPhotoSaving(false);
     }
   }
 
@@ -286,15 +309,20 @@ export default function EditProfileScreen() {
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 28 }}>
-            <View style={{ padding: 18, borderRadius: 22, backgroundColor: brand.elevated, borderWidth: 1, borderColor: brand.edge, flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 24 }}>
+            <Pressable onPress={changePhoto} disabled={photoSaving || saving} accessibilityRole="button" accessibilityLabel={player.image_url ? 'Change profile photo' : 'Add profile photo'} accessibilityHint="Choose a photo from your library. It saves immediately." accessibilityState={{ busy: photoSaving, disabled: photoSaving || saving }} style={{ padding: 18, borderRadius: 22, backgroundColor: brand.elevated, borderWidth: 1, borderColor: brand.edge, flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 24 }}>
               <View style={{ width: 64, height: 64, borderRadius: 20, overflow: 'hidden', backgroundColor: brand.surface, borderWidth: 1, borderColor: brand.edge, alignItems: 'center', justifyContent: 'center' }}>
                 {player.image_url ? <Image source={{ uri: player.image_url }} style={{ width: 64, height: 64 }} contentFit="cover" accessibilityLabel={`${name} profile photo`} accessibilityIgnoresInvertColors /> : <Text style={{ color: brand.accent, fontSize: 28, fontWeight: '800' }}>{name.charAt(0)}</Text>}
+                {photoSaving && <View style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(255,255,255,0.7)', alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={brand.accent} /></View>}
               </View>
               <View style={{ flex: 1, gap: 4 }}>
                 <Text numberOfLines={2} style={{ color: brand.premium, fontSize: 18, lineHeight: 22, fontWeight: '800' }}>{name}</Text>
-                <Text style={{ color: brand.muted, fontSize: 13 }}>Your player profile</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="images-outline" size={16} color={brand.accent} />
+                  <Text style={{ color: brand.accent, fontSize: 13, fontWeight: '600' }}>{photoSaving ? 'Saving photo…' : player.image_url ? 'Change photo' : 'Add photo'}</Text>
+                </View>
+                <Text style={{ color: brand.muted, fontSize: 12 }}>Photo saves immediately</Text>
               </View>
-            </View>
+            </Pressable>
 
             <Text style={{ color: brand.muted, fontSize: 13, lineHeight: 19, marginBottom: 16 }}>Choose a section to update. Your current details stay easy to scan.</Text>
 
@@ -338,9 +366,9 @@ export default function EditProfileScreen() {
             <Text style={{ color: brand.muted, fontSize: 12, textAlign: 'center', marginBottom: 8 }}>Unsaved changes</Text>
             <PressableScale
               onPress={save}
-              disabled={saving}
+              disabled={saving || photoSaving}
               accessibilityRole="button"
-              accessibilityState={{ busy: saving, disabled: saving }}
+              accessibilityState={{ busy: saving, disabled: saving || photoSaving }}
               accessibilityLabel="Save changes"
               className="h-[52px] flex-row items-center justify-center rounded-[14px] bg-padel">
               {saving ? <ActivityIndicator color={brand.premium} style={{ marginRight: 8 }} /> : null}

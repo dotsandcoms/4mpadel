@@ -182,17 +182,12 @@ const SettingsManager = () => {
         setCommerceSaving(true);
         try {
             const { data: auth } = await supabase.auth.getUser();
-            const { error } = await supabase.from('commerce_config').upsert({
-                id: 'default',
-                full_license_enabled: draft.full_license_enabled,
-                full_license_price: draft.full_license_price,
-                temp_license_enabled: draft.temp_license_enabled,
-                temp_license_price: draft.temp_license_price,
+            const { error } = await supabase.from('commerce_config').update({
                 license_fee_percent: draft.license_fee_percent,
                 event_fee_percent: draft.event_fee_percent,
                 fee_label: draft.fee_label,
                 updated_by: auth?.user?.id || null,
-            });
+            }).eq('id', 'default');
             if (error) throw error;
             await refreshCommerce();
             showToast('License settings saved. Checkout will use these prices immediately.');
@@ -239,11 +234,11 @@ const SettingsManager = () => {
                 className="bg-[#1a1a1a]/50 backdrop-blur-md p-8 rounded-3xl border border-white/10"
             >
                 <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                    <CreditCard size={20} className="text-padel-green" /> Licenses and fees
+                    <CreditCard size={20} className="text-padel-green" /> Checkout fees
                 </h3>
                 <p className="text-gray-400 text-sm mb-6">
-                    Turn license types on or off and set the prices charged at event checkout.
-                    Players only see the types you have turned on.
+                    Manage shared percentage fees charged at checkout.
+
                 </p>
 
                 {commerceLoading ? (
@@ -253,51 +248,7 @@ const SettingsManager = () => {
                     </div>
                 ) : (
                     <div className="space-y-8">
-                        {!preview.full.enabled && !preview.temp.enabled && (
-                            <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200">
-                                <AlertCircle size={18} className="shrink-0 mt-0.5" />
-                                <p className="text-sm">
-                                    Both license types are off. Players with an existing license can still enter events.
-                                    Anyone who needs a new license cannot complete checkout until you turn a type back on.
-                                </p>
-                            </div>
-                        )}
-
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <div className="space-y-4">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Full license</p>
-                                <SwitchRow
-                                    checked={!!commerceDraft.full_license_enabled}
-                                    onChange={(next) => patchCommerce({ full_license_enabled: next })}
-                                    label="Sell full licenses"
-                                    description="Annual SAPA license. Shown at event checkout and on the player profile when this option is on."
-                                />
-                                <MoneyField
-                                    id="full-license-price"
-                                    label="Full license price"
-                                    value={commerceDraft.full_license_price}
-                                    onChange={(value) => patchCommerce({ full_license_price: value })}
-                                    hint="Published amount before any percentage fee."
-                                />
-                            </div>
-                            <div className="space-y-4">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Temporary license</p>
-                                <SwitchRow
-                                    checked={!!commerceDraft.temp_license_enabled}
-                                    onChange={(next) => patchCommerce({ temp_license_enabled: next })}
-                                    label="Sell temporary licenses"
-                                    description="Single-event license. Shown at event checkout when this option is on."
-                                />
-                                <MoneyField
-                                    id="temp-license-price"
-                                    label="Temporary license price"
-                                    value={commerceDraft.temp_license_price}
-                                    onChange={(value) => patchCommerce({ temp_license_price: value })}
-                                    hint="Published amount before any percentage fee."
-                                />
-                            </div>
-                        </div>
-
+                        <p className="text-sm text-gray-400">License prices and sales availability are managed in the <a href="/admin?tab=licenses" className="text-padel-green underline">Licenses module</a>.</p>
                         <div className="border-t border-white/10 pt-8 space-y-6">
                             <h4 className="text-white font-bold flex items-center gap-2">
                                 <Percent size={18} className="text-padel-green" /> Percentage fee
@@ -356,7 +307,7 @@ const SettingsManager = () => {
                                 className="bg-padel-green text-black px-8 py-3 rounded-xl font-bold hover:bg-white transition-all flex items-center gap-2 active:scale-[0.96] disabled:opacity-50"
                             >
                                 {commerceSaving ? <Loader className="animate-spin" size={20} /> : <Save size={20} />}
-                                Save license settings
+                                Save fee settings
                             </button>
                         </div>
                     </div>

@@ -10,6 +10,8 @@
     "packageJson": {
       "dependencies": [
         "npm:@bacons/apple-targets@5",
+        "npm:@config-plugins/react-native-blob-util@^14.0.2",
+        "npm:@config-plugins/react-native-pdf@^14.0.2",
         "npm:@expo/ui@~57.0.21",
         "npm:@expo/vector-icons@^15.0.2",
         "npm:@react-native-async-storage/async-storage@2.2.0",
@@ -49,7 +51,9 @@
         "npm:htmlparser2@12",
         "npm:nativewind@^4.2.6",
         "npm:react-dom@19.2.3",
+        "npm:react-native-blob-util@~0.25.1",
         "npm:react-native-gesture-handler@2.32",
+        "npm:react-native-pdf@^7.0.5",
         "npm:react-native-reanimated@4.5.1",
         "npm:react-native-safe-area-context@5.7",
         "npm:react-native-screens@4.26",

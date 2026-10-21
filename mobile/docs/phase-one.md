@@ -69,14 +69,30 @@ screen was visually verified on the iPhone simulator with its unpublished-draw s
 
 ## Native calendar export
 
-Pro Tour details and South African event details now use the OS event composer via
-`expo-calendar/legacy` (supported SDK 57 entry point). Dates and venue are prefilled;
-the user picks a calendar and saves. These are all-day tournament entries, with an
-exclusive end date so the last day is included. Android uses UTC all-day boundaries;
-iOS uses local date boundaries. This creates a calendar copy, not a live subscription.
-No calendar permission is requested on iOS 17+ or Android for the composer; older iOS
-requests calendar permission. Cancellation is not reported as a successful save.
-Physical-device save/cancel and calendar-account checks remain release validation.
+South African event details, Pro Tour details and Home's next-tour card share an
+`Add to calendar` provider choice. On iPhone the native action sheet offers Apple
+Calendar, Google Calendar and Cancel, matching the existing SelectField picker.
+Android offers Device calendar, Google Calendar and Cancel. Web previews open Google.
+
+Apple/device export uses the OS event composer via `expo-calendar/legacy` (supported
+SDK 57 entry point). Google uses its [documented prefilled event link](https://developers.google.com/workspace/calendar/api/concepts/inviting-attendees-to-events#provide_a_link_for_users_to_add_the_event).
+Users review the event, choose their calendar/account and save. Google does not require
+an Apple Calendar account or device calendar permission. Both routes carry the title,
+dates, venue and event link when available, with the existing note that dates may change.
+
+These are all-day tournament entries, with an exclusive end date so the last day is
+included. Google uses date-only ranges; Android uses UTC all-day boundaries; iOS uses
+local boundaries. These create calendar copies without ongoing subscription updates.
+No calendar permission is requested on iOS 17+ or Android for the device composer;
+older iOS requests permission only after choosing Apple Calendar. Cancellation never
+opens another provider. Repeated taps cannot stack pickers or native event forms.
+
+Verification: `scripts/test-device-calendar.cjs`, event, Pro Padel and FIP calendar
+tests (33 passing), plus TypeScript. Tests cover provider selection, cancellation,
+launch/permission errors, duplicate taps, Unicode and query encoding, invalid dates,
+multi-day ranges, time zones, DST, leap days and year boundaries. Physical-device
+save/cancel and Google-account checks remain release validation; this requires the
+next app build. The simulator service was unavailable during this check.
 
 ## Existing-entry payment
 

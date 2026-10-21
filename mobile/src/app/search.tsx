@@ -1,3 +1,4 @@
+import { useAnalyticsSearch } from '@/hooks/use-analytics-search';
 import { SymbolView } from 'expo-symbols';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -30,6 +31,8 @@ export default function SearchSheet() {
   }, []);
 
   const results = useMemo(() => filterSearchEvents(events, query), [events, query]);
+
+  useAnalyticsSearch(query, results.length, 'events');
 
   async function openEvent(event: CalendarEvent) {
     if (router.canDismiss()) router.dismiss();

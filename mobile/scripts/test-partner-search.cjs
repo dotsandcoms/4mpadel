@@ -52,8 +52,33 @@ test('typing debounces partner lookup, trims query and preserves event/self filt
   assert.equal(h.find('ScrollView')[0].props.style.maxHeight, 192);
   assert.equal(h.find('ScrollView')[0].props.nestedScrollEnabled, true);
   assert.equal(h.find('ScrollView')[0].props.keyboardShouldPersistTaps, 'handled');
-  h.find('Pressable')[0].props.onPress(); h.render();
+  const selection = h.find('Pressable')[0].props.onPress();
+  assert.equal(h.calls[1].name, 'player_license_eligibility');
+  assert.equal(JSON.stringify(h.calls[1].args), JSON.stringify({ p_player_id: 'brad', p_event_id: 524 }));
+  h.calls[1].resolve({ data: { full: false, temporary: false, full_price: 500 } });
+  await selection; h.render();
   assert.equal(h.props.value.partnerName, 'Brad'); assert.equal(h.timers.size, 0);
+  assert.equal(h.props.value.fullLicensePrice, 500);
+  assert.equal(h.props.value.activeLicence, false);
+});
+
+test('clearing a search cancels an in-flight partner licence selection', async () => {
+  const h = host(); h.type('Brad'); h.tick();
+  h.calls[0].resolve({ data: [{ id: 'brad', name: 'Brad', email: 'brad@example.com' }] }); await h.flush();
+  const selection = h.find('Pressable')[0].props.onPress();
+  h.type('');
+  h.calls[1].resolve({ data: { full: true, full_price: 500 } }); await selection;
+  assert.equal(h.props.value.partnerName, undefined);
+  assert.equal(h.find('Pressable').length, 0);
+});
+
+test('partner pricing errors remain visible without selecting the player', async () => {
+  const h = host(); h.type('Brad'); h.tick();
+  h.calls[0].resolve({ data: [{ id: 'brad', name: 'Brad', email: 'brad@example.com' }] }); await h.flush();
+  const selection = h.find('Pressable')[0].props.onPress();
+  h.calls[1].resolve({ data: null, error: { message: 'Unavailable' } }); await selection;
+  assert.equal(h.props.value.partnerName, undefined);
+  assert.match(JSON.stringify(h.render()), /Could not load this player’s licence pricing/);
 });
 
 test('out-of-order responses and cleared queries cannot repopulate stale results', async () => {

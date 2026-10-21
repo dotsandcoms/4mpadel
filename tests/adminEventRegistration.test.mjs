@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPendingRegistrations } from '../src/utils/adminEventRegistration.js';
+import { createPendingRegistrations, searchRegistrationPlayers } from '../src/utils/adminEventRegistration.js';
 
 function mockClient(rows = [], insertError = null) {
     const writes = [];
@@ -68,4 +68,38 @@ test('preserves single-player registration', async () => {
     const result = await createPendingRegistrations(client, [{ ...team[0], partner_email: null, partner_payment_status: null }]);
     assert.equal(result.data.length, 1);
     assert.equal(client.writes[0].insert[0].partner_email, null);
+});
+
+
+test('event manager search uses the registration RPC without reading the protected players table', async () => {
+    const client = {
+        from() { assert.fail('Event managers cannot search the players table directly'); },
+        async rpc(name, args) {
+            assert.equal(name, 'find_registration_partner');
+            assert.deepEqual(args, { p_search: 'Lee, van Vuren' });
+            return { data: [
+                { id: 2, name: 'Zoe', email: 'zoe@example.com', image_url: 'avatar.png' },
+                { id: 3, name: 'No account', email: null },
+                { id: 1, name: 'Amy', email: 'amy@example.com' },
+            ] };
+        },
+    };
+    const result = await searchRegistrationPlayers(client, '  Lee, van Vuren  ', 1);
+    assert.equal(result.error, null);
+    assert.deepEqual(result.data, [{ id: 1, name: 'Amy', email: 'amy@example.com' }]);
+});
+
+test('empty or short searches do not request the player directory', async () => {
+    const client = { rpc() { assert.fail('Should not search'); } };
+    for (const query of ['', ' a ', null]) {
+        assert.deepEqual(await searchRegistrationPlayers(client, query), { data: [], error: null });
+    }
+});
+
+test('search errors remain distinguishable from no matching players', async () => {
+    const error = new Error('Lookup unavailable');
+    for (const rpc of [async () => ({ data: null, error }), async () => { throw error; }]) {
+        assert.deepEqual(await searchRegistrationPlayers({ rpc }, 'Lee'), { data: [], error });
+    }
+    assert.deepEqual(await searchRegistrationPlayers({ rpc: async () => ({ data: null }) }, 'Lee'), { data: [], error: null });
 });

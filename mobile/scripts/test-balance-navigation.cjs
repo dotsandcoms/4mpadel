@@ -9,6 +9,7 @@ async function screen(returning = false, paid = true) {
   const states = [], effects = [], calls = [], browsers = [], routes = [];
   const quote = { eventId: 1, eventName: 'Test', registrationId: 'r1', division: 'Open', paid: 1, price: 1.5, due: .5, total: .5 };
   const modules = {
+    '@/lib/analytics': { trackEvent() {}, recordAnalyticsCheckout() {}, trackConfirmedPurchase() {} },
     react: { useState: initial => { const i = cursor++; if (!(i in states)) states[i] = initial; return [states[i], v => states[i] = v]; }, useRef: initial => { const i = cursor++; if (!(i in states)) states[i] = { current: initial }; return states[i]; }, useEffect: fn => { cursor++; if (!mounted) effects.push(fn); } },
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }), Fragment: 'Fragment' },
     'react-native': { ...Object.fromEntries(['ActivityIndicator', 'Pressable', 'ScrollView', 'Text', 'View'].map(x => [x, x])), Platform: { OS: 'ios' }, Linking: { addEventListener: () => ({ remove() {} }) } },

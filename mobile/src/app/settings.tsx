@@ -1,3 +1,5 @@
+import * as Application from 'expo-application';
+import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -10,6 +12,8 @@ import { lightBrand as brand } from '@/theme/tokens';
 type Account = { name: string | null; region: string | null; racket_brand: string | null; home_club: string | null; image_url: string | null; license_type: string | null };
 export default function SettingsScreen() {
   const router = useRouter();
+  const version = Application.nativeApplicationVersion ?? Constants.expoConfig?.version ?? 'Unavailable';
+  const build = Application.nativeBuildVersion;
   const [account, setAccount] = useState<Account | null>(null);
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(true);
@@ -55,6 +59,7 @@ export default function SettingsScreen() {
     {email && <SettingsGroup title="Preferences & security"><SettingsRow title="Notifications" detail="Player updates, events and reminders" icon="notifications-outline" onPress={() => router.push('/notification-settings')} /><SettingsRow title="Reset password" detail="Send a secure reset link to your account email" icon="lock-closed-outline" disabled={busy} onPress={() => Alert.alert('Reset password?', `Send a reset link to ${email}?`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Send link', onPress: () => void reset() }])} /></SettingsGroup>}
     <SettingsGroup title="Support"><SettingsRow title="Help & enquiries" detail="Get help with an entry, payment or your account" icon="chatbubble-ellipses-outline" onPress={() => router.push('/help')} /><SettingsRow title="How 4M works" detail="A quick guide to your padel community" icon="book-outline" onPress={() => router.push('/help?topic=guide')} /></SettingsGroup>
     <SettingsGroup title="Legal information"><SettingsRow title="Terms of use" icon="document-text-outline" onPress={() => openLegal('terms')} /><SettingsRow title="Privacy policy" icon="shield-checkmark-outline" onPress={() => openLegal('privacy')} /></SettingsGroup>
-    {email && <SettingsGroup title="Account actions"><SettingsRow title="Request account deletion" detail="Contact support to request removal of your account" icon="trash-outline" danger onPress={() => router.push('/help?topic=deletion')} /><SettingsRow title="Log out" icon="log-out-outline" danger disabled={busy} onPress={() => Alert.alert('Log out of 4M Padel?', undefined, [{ text: 'Cancel', style: 'cancel' }, { text: 'Log out', onPress: () => void logout() }])} /></SettingsGroup>}
+    {email && <SettingsGroup title="Account actions"><SettingsRow title="Delete account" detail="Permanently remove your account and personal profile" icon="trash-outline" danger onPress={() => router.push('/delete-account')} /><SettingsRow title="Log out" icon="log-out-outline" danger disabled={busy} onPress={() => Alert.alert('Log out of 4M Padel?', undefined, [{ text: 'Cancel', style: 'cancel' }, { text: 'Log out', onPress: () => void logout() }])} /></SettingsGroup>}
+    <Text selectable style={{ color: brand.muted, fontSize: 12, lineHeight: 18, textAlign: 'center', marginTop: 24 }}>App version {version}{build ? ` (${build})` : ''}</Text>
   </SettingsPage>;
 }

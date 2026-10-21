@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { authErrorMessage } from '../utils/authErrors';
 import AdminSidebar from '../components/admin/AdminSidebar';
 import DashboardHome from '../components/admin/DashboardHome';
 import PlayerManager from '../components/admin/PlayerManager';
+import LicenseManager from '../components/admin/LicenseManager';
 import BlogManager from '../components/admin/BlogManager';
 import CalendarManager from '../components/admin/CalendarManager';
 import GalleryManager from '../components/admin/GalleryManager';
@@ -11,6 +13,7 @@ import CoachManager from '../components/admin/CoachManager';
 import SettingsManager from '../components/admin/SettingsManager';
 import AdminManager from '../components/admin/AdminManager';
 import EventManagement from '../components/admin/EventManagement';
+import TournamentManager from '../components/admin/tournament/TournamentManager';
 import EmailBroadcastManager from '../components/admin/EmailBroadcastManager';
 import OrganisationManager from '../components/admin/OrganisationManager';
 import FederationManager from '../components/admin/FederationManager';
@@ -55,6 +58,34 @@ const Admin = () => {
     // Pending organisation applications (events are managed directly by their organisations)
     const [orgBadgeCount, setOrgBadgeCount] = useState(0);
     const [clubBadgeCount, setClubBadgeCount] = useState(0);
+    const [coachBadgeCount, setCoachBadgeCount] = useState(0);
+
+    useEffect(() => {
+        const canSeeCoaches = permissions?.role === 'super_admin'
+            || (permissions?.allowed_tabs || []).includes('coaches');
+        if (!canSeeCoaches) return;
+
+        let cancelled = false;
+        const fetchCoachBadgeCount = async () => {
+            try {
+                const { count, error } = await supabase
+                    .from('coach_applications')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('status', 'pending');
+                if (error) throw error;
+                if (!cancelled) setCoachBadgeCount(count || 0);
+            } catch (err) {
+                console.error('Failed to fetch coach badge count:', err);
+            }
+        };
+
+        fetchCoachBadgeCount();
+        const interval = setInterval(fetchCoachBadgeCount, 30000);
+        return () => {
+            cancelled = true;
+            clearInterval(interval);
+        };
+    }, [permissions]);
 
     useEffect(() => {
         const hasOrganisationMembership = Boolean(permissions?.orgs?.length || permissions?.org?.id);
@@ -154,13 +185,17 @@ const Admin = () => {
     const handleLogin = async (e) => {
         e.preventDefault();
         setLoginLoading(true);
-        const { error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-        });
-
-        if (error) alert(error.message);
-        setLoginLoading(false);
+        try {
+            const { error } = await supabase.auth.signInWithPassword({
+                email: email.trim(),
+                password,
+            });
+            if (error) throw error;
+        } catch (error) {
+            alert(authErrorMessage(error));
+        } finally {
+            setLoginLoading(false);
+        }
     };
 
     const handleLogout = async () => {
@@ -170,7 +205,7 @@ const Admin = () => {
 
     useEffect(() => {
         if (!permissionsLoading && permissions && !hasPermission(activeTab)) {
-            const allTabs = ['dashboard', 'federations', 'organisations', 'clubs', 'players', 'coaches', 'calendar', 'event-mgmt', 'gallery', 'email-broadcast', 'finance', 'blog', 'settings', 'admin-mgmt'];
+            const allTabs = ['dashboard', 'federations', 'organisations', 'clubs', 'players', 'licenses', 'coaches', 'calendar', 'event-mgmt', 'tournament-mgmt', 'gallery', 'email-broadcast', 'finance', 'blog', 'settings', 'admin-mgmt'];
             const firstAllowed = allTabs.find(tab => hasPermission(tab));
             if (firstAllowed) {
                 setActiveTab(firstAllowed);
@@ -351,7 +386,7 @@ const Admin = () => {
                 permissions={permissions}
                 player={player}
                 session={session}
-                badgeCounts={{ organisations: orgBadgeCount, clubs: clubBadgeCount }}
+                badgeCounts={{ organisations: orgBadgeCount, clubs: clubBadgeCount, coaches: coachBadgeCount }}
             />
 
             <main className={`flex-1 transition-all duration-300 ${isDesktopCollapsed ? 'lg:ml-20' : 'lg:ml-64'} p-4 md:p-8 lg:p-12 overflow-y-auto min-h-screen lg:h-screen bg-gradient-to-br from-black to-[#0a0a0a]`}>
@@ -464,15 +499,16 @@ const Admin = () => {
                                             onViewChange={setOrgPortalView}
                                         />
                                     )}
-                                    {activeTab === 'players' && <PlayerManager />}
+                                    {activeTab === 'players' && <PlayerManager canManageLicenses={hasPermission('licenses')} />}
                                     {activeTab === 'blog' && <BlogManager />}
                                     {activeTab === 'calendar' && <CalendarManager />}
+                                    {activeTab === 'tournament-mgmt' && <TournamentManager canBuildEvents={permissions?.role === 'super_admin'} />}
                                     {activeTab === 'event-mgmt' && <EventManagement allowedEvents={permissions?.module_permissions?.['event-mgmt']?.allowedEvents || []} />}
                                     {activeTab === 'gallery' && (
                                         <GalleryManager permissions={permissions} />
                                     )}
                                     {activeTab === 'coaches' && (
-                                        <CoachManager />
+                                        <CoachManager onPendingCountChange={setCoachBadgeCount} />
                                     )}
                                     {activeTab === 'finance' && (
                                         <FinanceManager />
@@ -483,6 +519,7 @@ const Admin = () => {
                                     {activeTab === 'admin-mgmt' && (
                                         <AdminManager />
                                     )}
+                                    {activeTab === 'licenses' && hasPermission('licenses') && <LicenseManager />}
                                     {activeTab === 'settings' && <SettingsManager />}
                                 </>
                             )}

@@ -50,10 +50,10 @@ Deno.serve(async req => {
     if (!event || event.is_visible === false || ![null, undefined, 'approved'].includes(event.sanction_status)) fail('This event is not available.');
     if (!event.is_manual) fail('This event uses RankedIn registration. Please register with the event organiser.');
     if (event.event_status === 'cancelled') fail('This event has been cancelled.');
-    if (event.registration_opens_at && new Date(event.registration_opens_at).getTime() > Date.now()) fail('Registration has not opened yet.');
-    if (event.registration_closes_at && new Date(event.registration_closes_at).getTime() <= Date.now()) fail('Registration has closed.');
+    if (!payOnly && event.registration_opens_at && new Date(event.registration_opens_at).getTime() > Date.now()) fail('Registration has not opened yet.');
+    if (!payOnly && event.registration_closes_at && new Date(event.registration_closes_at).getTime() <= Date.now()) fail('Registration has closed.');
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg' }).format(new Date());
-    if (String(event.end_date || event.start_date || '9999').slice(0, 10) < today) fail('This event has finished.');
+    if (!payOnly && String(event.end_date || event.start_date || '9999').slice(0, 10) < today) fail('This event has finished.');
     if (!payOnly && event.registration_access === 'code') {
       if (!input.accessGrantId || !await checked(client.rpc('event_access_grant_valid', { p_event_id: eventId, p_grant_id: input.accessGrantId }))) fail('Enter the event access code before registering.');
     }
@@ -73,24 +73,37 @@ Deno.serve(async req => {
     const divisions = event.is_weekly ? [{ id: null, name: 'Open', entry_fee: event.entry_fee, license_required: false }]
       : (await checked(client.from('tournament_divisions').select('*').eq('event_id', eventId).eq('is_active', true).in('id', Array.isArray(divisionIds) ? divisionIds : []))).filter((d: any) => divisionIds.includes(d.id));
     if (!divisions.length || (!event.is_weekly && divisions.length !== new Set(divisionIds).size)) fail('Choose valid active divisions.');
-    for (const d of divisions) if (d.entries_close_at && new Date(d.entries_close_at).getTime() <= Date.now()) fail(`${d.name}: entries have closed.`);
-    const hasLicence = (profile.license_type === 'full' && profile.paid_registration)
-      || profile.temporary_licenses?.some((l: any) => Number(l.event_id) === eventId || String(l.event_date || '').slice(0, 10) >= String(event.end_date || event.start_date || today).slice(0, 10));
+    for (const d of divisions) if (!payOnly && d.entries_close_at && new Date(d.entries_close_at).getTime() <= Date.now()) fail(`${d.name}: entries have closed.`);
+    if (payOnly && event.allow_payments_after_close === false) {
+      for (const d of divisions) {
+        const closesAt = d.entries_close_at || event.registration_closes_at;
+        if (closesAt && new Date(closesAt).getTime() <= Date.now()) fail('Payments have closed. Contact the organiser about your outstanding entry fees.');
+      }
+    }
+    const eligibility = await checked(client.rpc('player_license_eligibility', { p_player_id: profile.id, p_event_id: eventId }));
+    const hasLicence = eligibility?.full || eligibility?.temporary;
     const commerce = await checked(client.from('commerce_config').select('*').eq('id', 'default').maybeSingle());
     if (!commerce) fail('Pricing is unavailable. Please try again.');
+    const licenseYear = Number(eligibility?.purchase_year || String(event.start_date).slice(0,4));
+    const season = await checked(client.from('license_seasons').select('*').eq('year',licenseYear).maybeSingle());
+    commerce.full_license_enabled = season?.sales_open === true;
+    commerce.full_license_price = season?.price;
+
     const licenceCovers: any[] = [], licenceItems: any[] = [];
-    const requireLicence = (personEmail: string, name: string, active: boolean, choice: string | undefined) => {
+    const requireLicence = async (personEmail: string, name: string, active: boolean, choice: string | undefined, personId?: number) => {
       if (active || licenceCovers.some(c => c.email === personEmail)) return;
       if (!['full', 'temporary'].includes(choice || '')) fail(`Select a SAPA licence for ${name} before entering this division.`);
       const full = choice === 'full';
       if (full ? commerce.full_license_enabled !== true : commerce.temp_license_enabled !== true || event.allow_temporary_license === false) fail('That SAPA licence is not available for this event.');
-      const price = Number(full ? commerce.full_license_price : commerce.temp_license_price);
+      const personQuote = full ? await checked(client.rpc('full_license_quote', { p_player_id: personId, p_year: licenseYear })) : null;
+      if (full && (!personId || !personQuote?.sales_open)) fail('Full licence pricing is unavailable for this player.');
+      const price = Number(full ? personQuote.price : commerce.temp_license_price);
       if (!Number.isFinite(price) || price < 0) fail('Licence pricing is unavailable.');
       const amount = money(price + money(price * Math.min(100, Math.max(0, Number(commerce.license_fee_percent) || 0)) / 100));
-      licenceCovers.push({ type: 'license', email: personEmail, license: choice });
+      licenceCovers.push({ type: 'license', email: personEmail, license: choice, license_year: full ? licenseYear : null, event_id: eventId, license_amount: amount });
       licenceItems.push({ label: `${full ? 'Annual' : 'Temporary'} SAPA license — ${name}`, amount });
     };
-    if (divisions.some((d: any) => d.license_required && (!payOnly || ((selectionFor(d.id)?.payForSelf ?? input.payForSelf) !== false && payable.some((r: any) => r.division_id === d.id && unpaid(r.payment_status)))))) requireLicence(email, profile.name, !!hasLicence, input.licenseChoice);
+    if (divisions.some((d: any) => d.license_required && (!payOnly || ((selectionFor(d.id)?.payForSelf ?? input.payForSelf) !== false && payable.some((r: any) => r.division_id === d.id && unpaid(r.payment_status)))))) await requireLicence(email, profile.name, !!hasLicence, input.licenseChoice, profile.id);
     const matching = await checked(client.rpc('get_event_registrations_for_matching', { p_event_id: eventId }));
     const active = (matching || []).filter((r: any) => r.status !== 'withdrawn');
     const sizes = ['Youth XS', 'Youth S', 'Youth M', 'Youth L', 'Youth XL', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
@@ -161,7 +174,7 @@ Deno.serve(async req => {
           if (unpaid(other.payment_status) && fee > 0) {
             const partners = await checked(client.rpc('find_registration_partner', { p_email: otherEmail, p_event_id: eventId }));
             const partnerProfile = partners?.find((p: any) => norm(p.email) === otherEmail);
-            if (d.license_required) requireLicence(otherEmail, partnerProfile?.name || other.full_name, !!((partnerProfile?.license_type === 'full' && partnerProfile.paid_registration) || partnerProfile?.has_temp_license_for_event), selection?.licenseChoice);
+            if (d.license_required) await requireLicence(otherEmail, partnerProfile?.name || other.full_name, !!((partnerProfile?.license_type === 'full' && partnerProfile.paid_registration) || partnerProfile?.has_temp_license_for_event), selection?.licenseChoice, partnerProfile?.id);
             base += fee; covers.push({ type: 'entry', email: otherEmail, division: d.name, event_id: eventId });
             lineItems.push({ label: `${d.name} — ${other.full_name || selfReg.partner_name}`, amount: fee });
           }
@@ -179,7 +192,7 @@ Deno.serve(async req => {
       if (partnerReg?.partner_email && norm(partnerReg.partner_email) !== email) fail(`${partner.name} already has a partner in ${d.name}.`);
       const paidSelf = selfReg?.payment_status === 'paid';
       const paidPartner = partnerReg?.payment_status === 'paid';
-      if (partner && payForPartner && !paidPartner && d.license_required) requireLicence(partnerEmail, partner.name, !!((partner.license_type === 'full' && partner.paid_registration) || partner.has_temp_license_for_event), selection?.licenseChoice);
+      if (partner && payForPartner && !paidPartner && d.license_required) await requireLicence(partnerEmail, partner.name, !!((partner.license_type === 'full' && partner.paid_registration) || partner.has_temp_license_for_event), selection?.licenseChoice, partner.id);
       const entryRow = (person: any, other: any, existing: any, paid: boolean) => ({
         event_id: eventId, division_id: d.id, division: d.name, full_name: person.name,
         email: norm(person.email), phone: person.contact_number || null, partner_name: other?.name || null,
@@ -234,6 +247,11 @@ Deno.serve(async req => {
     if (!/^[a-f0-9-]{36}$/i.test(input.attemptId || '')) fail('Start a new checkout attempt.');
     if (method === 'free' && total > 0) fail('The organiser must correct this event’s free-entry pricing before registration.');
     if (licenceCovers.length && method !== 'platform') fail('SAPA licences require online payment. Purchase your licence before using the organiser’s payment method.');
+    // Allocate capped division places before any gateway charge. The RPC leaves
+    // unpaid entries available for payment retries or withdrawal after cancellation.
+    if (method === 'platform' && total > 0 && rows.length) {
+      await checked(client.rpc('reserve_event_registration_places', { p_rows: rows, p_solo_links: soloLinks }));
+    }
     if (payOnly && method !== 'platform') {
       if (rows.length) await checked(client.from('event_registrations').upsert(rows, { onConflict: 'event_id,email,division' }).select('id'));
       return json({ registered: true, paymentPending: total > 0, quote });

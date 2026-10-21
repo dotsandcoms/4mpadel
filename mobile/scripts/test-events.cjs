@@ -9,7 +9,7 @@ function load(path) {
   vm.runInNewContext(code, { module, exports: module.exports, require, Date, Intl, Number, Set, Error });
   return module.exports;
 }
-const { entryFee, isEarlyBirdActive, registrationState, filterEvents, plainText } = load('src/lib/event-rules.ts');
+const { entryFee, isEarlyBirdActive, registrationState, registrationPaymentClosed, filterEvents, plainText } = load('src/lib/event-rules.ts');
 const { joinedOne } = load('src/lib/query-result.ts');
 const now = new Date('2026-09-07T10:00:00+02:00');
 const base = { id: 1, event_name: 'Cape Town Open', city: 'Cape Town', venue: 'City courts', start_date: '2026-09-09', end_date: '2026-09-11', entry_fee: 300 };
@@ -34,6 +34,30 @@ test('calendar includes multi-day ongoing events and filters combined fields', (
   assert.equal(filterEvents(events, { search: '', timing: 'saved', city: '', tier: '' }, [1], now)[0].id, 1);
   assert.equal(filterEvents([{ ...base, event_status: 'cancelled' }], { search: '', timing: 'saved', city: '', tier: '' }, [1], now).length, 0);
 });
+test('upcoming schedule runs from the nearest October event to the November event', () => {
+  const events = ['2026-11-13', '2026-10-30', '2026-10-22', '2026-10-16', '2026-10-09']
+    .map((day, index) => ({ ...base, id: index + 1, start_date: day, end_date: day }));
+  const today = new Date('2026-10-08T10:00:00+02:00');
+  for (const timing of ['upcoming', 'saved']) {
+    const ordered = filterEvents(events, { search: '', timing, city: '', tier: '' }, events.map(event => event.id), today);
+    assert.deepEqual(Array.from(ordered, event => event.start_date), ['2026-10-09', '2026-10-16', '2026-10-22', '2026-10-30', '2026-11-13']);
+  }
+  assert.equal(events[0].start_date, '2026-11-13');
+});
+test('saved schedules put ongoing and upcoming events before completed events and undated events', () => {
+  const events = [
+    { ...base, id: 1, start_date: '2026-10-03', end_date: '2026-10-03' },
+    { ...base, id: 2, start_date: '2026-11-13', end_date: '2026-11-13' },
+    { ...base, id: 3, start_date: '2026-07-24', end_date: '2026-07-26' },
+    { ...base, id: 4, start_date: '2026-10-07', end_date: '2026-10-09' },
+    { ...base, id: 5, start_date: null, end_date: null },
+    { ...base, id: 6, start_date: '2026-10-09', end_date: '2026-10-11' },
+  ];
+  const ordered = filterEvents(events, { search: '', timing: 'saved', city: '', tier: '' }, events.map(event => event.id), new Date('2026-10-08T10:00:00+02:00'));
+  assert.deepEqual(Array.from(ordered, event => event.id), [4, 6, 2, 1, 3, 5]);
+  const past = filterEvents(events, { search: '', timing: 'past', city: '', tier: '' }, [], new Date('2026-10-08T10:00:00+02:00'));
+  assert.deepEqual(Array.from(past, event => event.id), [1, 3]);
+});
 test('joins handle PostgREST object, array and missing results', () => {
   const row = { id: 7 };
   assert.equal(joinedOne(row), row);
@@ -50,6 +74,25 @@ const teamCode = ts.transpileModule(fs.readFileSync('src/lib/event-teams.ts', 'u
 const teamModule = { exports: {} };
 vm.runInNewContext(teamCode, { module: teamModule, exports: teamModule.exports, require: () => rankingResolver, Map, Set });
 const { buildEventTeams } = teamModule.exports;
+test('each player keeps their own payment status and never inherits a paid partner status', () => {
+  const division = { id: 'open', name: 'Open' };
+  const entries = [
+    { id: 'a', division_id: 'open', full_name: 'Player A', email_hash: 'a', partner_name: 'Player B', partner_email_hash: 'b', payment_status: 'paid' },
+    { id: 'b', division_id: 'open', full_name: 'Player B', email_hash: 'b', partner_name: 'Player A', partner_email_hash: 'a', payment_status: 'pending' },
+    { id: 'old', division_id: 'open', full_name: 'Player B', email_hash: 'b', payment_status: 'paid', status: 'withdrawn' },
+    { id: 'other', division_id: 'other', full_name: 'Player B', email_hash: 'b', payment_status: 'paid' },
+  ];
+  const players = buildEventTeams([division], entries, [])[0].teams[0].players;
+  assert.deepEqual(Array.from(players, p => [p.name, p.paymentStatus]), [['Player A', 'paid'], ['Player B', 'pending']]);
+});
+test('ambiguous partner identity does not borrow another player’s payment status', () => {
+  const entries = [
+    { id: 'a', division_id: 'open', full_name: 'Player A', partner_name: 'Sam', payment_status: 'paid' },
+    { id: 'b', division_id: 'open', full_name: 'Sam', payment_status: 'paid' },
+    { id: 'c', division_id: 'open', full_name: 'Sam', payment_status: 'pending' },
+  ];
+  assert.equal(buildEventTeams([{ id: 'open', name: 'Open' }], entries, [])[0].teams[0].players[1].paymentStatus, null);
+});
 test('teams combine mirrored entries, exclude withdrawn partners, and stay within their division', () => {
   const divisions = [{ id: 'open', name: 'Open' }, { id: '40', name: '40+' }];
   const entries = [
@@ -78,4 +121,13 @@ test('event player rows link only an unambiguous public profile', () => {
   const teams = buildEventTeams([division], entries, profiles)[0].teams;
   assert.equal(teams.find(team => team.players[0].name === 'Adam').players[0].id, '12');
   assert.equal(teams.find(team => team.players[0].name === 'Sam').players[0].id, null);
+});
+
+
+test('payment availability follows the organiser switch and effective division deadline', () => {
+  const event = { ...base, registration_closes_at: '2026-09-06', allow_payments_after_close: false };
+  assert.equal(registrationPaymentClosed(event, null, now), true);
+  assert.equal(registrationPaymentClosed({ ...event, allow_payments_after_close: true }, null, now), false);
+  assert.equal(registrationPaymentClosed(event, { entries_close_at: '2026-09-08' }, now), false);
+  assert.equal(registrationPaymentClosed(event, { entries_close_at: now.toISOString() }, now), true);
 });

@@ -10,9 +10,11 @@ import { entryFee, formatMoney, registrationState } from '@/lib/event-rules';
 export type PartnerChoice = {
   partnerEmail?: string; partnerName?: string; partnerId?: string;
   image_url?: string; level?: string; payForPartner?: boolean; activeLicence?: boolean;
+  fullLicensePrice?: number;
   licenseChoice?: 'temporary' | 'full'; tshirtSize?: string; tshirtLogoUrl?: string; tshirtSponsorName?: string;
 };
-export type LicenceOption = { type: 'temporary' | 'full'; amount: number };
+export type LicenceOption = { type: 'temporary' | 'full'; amount: number; feePercent?: number };
+export const partnerLicenceOptions = (options: LicenceOption[], partner?: PartnerChoice) => options.map(option => { if (option.type !== 'full' || partner?.fullLicensePrice == null) return option; const base = partner.fullLicensePrice; return { ...option, amount: Math.round((base + Math.round(base * Number(option.feePercent || 0)) / 100) * 100) / 100 }; });
 export function Choices({ value, onChange, options }: { value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) {
   return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{options.map(o => <Chip key={o.value} label={o.label} selected={value === o.value} onPress={() => onChange(o.value)} />)}</View>;
 }
@@ -59,7 +61,7 @@ function DivisionOption({ event, division: d, selected, registered, value, onTog
         <TextInput accessibilityLabel={`${d.name} partner Playtomic level`} keyboardType="decimal-pad" value={value.level || ''} onChangeText={level => onChange({ ...value, level })} placeholder="—" placeholderTextColor={brand.faint} style={{ color: brand.premium, borderWidth: 1, borderColor: brand.edge, padding: 12, borderRadius: 10 }} /></>}
         {partnerAlreadyPaid ? <Text style={{ color: brand.accent, fontSize: 12 }}>Your partner has already paid.</Text> : <Choices value={value.payForPartner === false ? 'partner' : 'self'} onChange={v => onChange({ ...value, payForPartner: v === 'self' })} options={lockEntry ? [{ value: 'self', label: 'I pay for both' }, { value: 'partner', label: 'Partner pays for themselves' }] : [{ value: 'self', label: 'I pay' }, { value: 'partner', label: 'Partner pays' }]} />}
         {!partnerAlreadyPaid && value.payForPartner === false && <Text style={{ color: brand.muted, fontSize: 12, lineHeight: 18 }}>Your partner will need to complete their own payment.</Text>}
-        {d.license_required && value.payForPartner !== false && !value.activeLicence && <LicencePicker name={value.partnerName} value={value.licenseChoice} onChange={licenseChoice => onChange({ ...value, licenseChoice })} options={licences} />}
+        {d.license_required && value.payForPartner !== false && !value.activeLicence && <LicencePicker name={value.partnerName} value={value.licenseChoice} onChange={licenseChoice => onChange({ ...value, licenseChoice })} options={partnerLicenceOptions(licences, value)} />}
         {d.license_required && value.activeLicence && <Text style={{ color: brand.accent, fontSize: 12 }}>✓ Partner has an active SAPA licence</Text>}
       </>}
     </>}
@@ -197,11 +199,20 @@ function PartnerSearch({ value, onChange, profileId, eventId, divisionId, divisi
       {results.length > 0 && <View style={{ borderWidth: 1, borderColor: brand.edge, borderRadius: 12, overflow: 'hidden', backgroundColor: brand.elevated }}>
         <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={{ maxHeight: 192 }} showsVerticalScrollIndicator>
           {results.map((p, index) => <Pressable key={p.id || p.email} accessibilityRole="button" accessibilityLabel={`Select ${p.name}${p.isSoloEntry ? ', Solo entry' : ''}${p.unavailable ? `, ${p.unavailableMessage}` : ''}`} accessibilityState={{ disabled: busy || p.unavailable }} disabled={busy || p.unavailable}
-            onPress={() => {
+            onPress={async () => {
               if (p.unavailable || busy) return;
-              seq.current++; setSearching(false);
-              onChange({ partnerId: p.id, partnerEmail: p.email, partnerName: p.name, image_url: p.image_url, level: p.level || '', payForPartner: true, activeLicence: !!((p.license_type === 'full' && p.paid_registration) || p.has_temp_license_for_event) });
-              setResults([]); Keyboard.dismiss();
+              const selectionRequest = ++seq.current; setSearching(true);
+              try {
+                const { data: eligibility, error: pricingError } = await supabase.rpc('player_license_eligibility', { p_player_id: p.id, p_event_id: eventId });
+                if (selectionRequest !== seq.current) return;
+                if (pricingError) throw pricingError;
+                onChange({ partnerId: p.id, partnerEmail: p.email, partnerName: p.name, image_url: p.image_url, level: p.level || '', payForPartner: true, activeLicence: !!(eligibility?.full || eligibility?.temporary), fullLicensePrice: eligibility?.full_price == null ? undefined : Number(eligibility.full_price) });
+                setResults([]); Keyboard.dismiss();
+              } catch {
+                if (selectionRequest === seq.current) setError('Could not load this player’s licence pricing. Please try again.');
+              } finally {
+                if (selectionRequest === seq.current) { seq.current++; setSearching(false); }
+              }
             }}
             style={{ borderTopWidth: index ? 1 : 0, borderTopColor: brand.edge }}>
             <View style={{ minHeight: 56, paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 12 }}>

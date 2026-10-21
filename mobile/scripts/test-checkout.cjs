@@ -7,7 +7,7 @@ const source = ts.transpileModule(fs.readFileSync('supabase/functions/native-eve
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 function server(overrides = {}) {
-  let handler, writes = [], emails = [], gatewayCalls = [];
+  let handler, writes = [], emails = [], gatewayCalls = [], rpcCalls = [];
   const tables = {
     calendar: { id: 1, is_manual: true, is_visible: true, sanction_status: 'approved', event_name: 'Test event', start_date: '2099-01-01', end_date: '2099-01-02', payment_method: 'platform' },
     players: { id: 3, name: 'Test player', email: 'player@example.com', contact_number: '0123456789', license_type: 'none', temporary_licenses: [] },
@@ -16,7 +16,10 @@ function server(overrides = {}) {
   };
   const client = {
     auth: { getUser: async () => ({ data: { user: overrides.user === null ? null : { id: 'user-123456', email: 'player@example.com', ...overrides.user } } }) },
-    rpc: (name, args) => Promise.resolve({ data: overrides.rpc ? overrides.rpc(name, args) : [], error: null }),
+    rpc: (name, args) => {
+      rpcCalls.push({ name, args });
+      return Promise.resolve({ data: overrides.rpc ? overrides.rpc(name, args) : [], error: name === 'reserve_event_registration_places' ? overrides.capacityError || null : null });
+    },
     from: table => {
       const query = { then: (resolve, reject) => Promise.resolve({ data: tables[table], error: null }).then(resolve, reject) };
       for (const method of ['select', 'eq', 'ilike', 'neq', 'in', 'maybeSingle']) query[method] = () => query;
@@ -26,7 +29,7 @@ function server(overrides = {}) {
   };
   vm.runInNewContext(source, { exports: {}, require: () => ({ createClient: () => client }),
     Deno: { env: { get: name => name === 'PUSH_TEST_RECIPIENTS' ? overrides.testRecipients : 'test' }, serve: fn => { handler = fn; } },
-    Response, Request, URL, Date, Intl, Number, Set, Error, JSON, AbortSignal,
+    Response, Request, URL, Date: overrides.now ? class extends Date { constructor(...args) { super(...(args.length ? args : [overrides.now])); } static now() { return new Date(overrides.now).getTime(); } } : Date, Intl, Number, Set, Error, JSON, AbortSignal,
     fetch: async (url, options) => {
       if (url === 'https://api.paystack.co/transaction/initialize' && overrides.gateway) { gatewayCalls.push(JSON.parse(options.body)); return Response.json({ status: true, data: { authorization_url: 'https://checkout.paystack.com/test' } }); }
       if (!url.endsWith('/functions/v1/send-email')) throw new Error('Tests must not contact a payment gateway');
@@ -34,7 +37,7 @@ function server(overrides = {}) {
       return Response.json(overrides.emailFailure ? { error: 'provider unavailable' } : { success: true }, { status: overrides.emailFailure ? 500 : 200 });
     },
   });
-  return { writes, emails, gatewayCalls, get: url => handler(new Request(url)), call: async input => {
+  return { writes, emails, gatewayCalls, rpcCalls, get: url => handler(new Request(url)), call: async input => {
     const response = await handler(new Request('https://example.test', { method: 'POST', headers: { Authorization: 'Bearer test' }, body: JSON.stringify({ action: 'quote', eventId: 1, divisionIds: ['division-1'], ...input }) }));
     return { status: response.status, body: await response.json() };
   } };
@@ -291,4 +294,76 @@ test('adding a partner to a paid solo entry charges only the new partner', async
   assert.equal(body.quote.entries[0].paymentStatus, 'paid');
   assert.equal(body.quote.entries[0].playerCount, 1);
   assert.equal(app.writes.length, 0);
+});
+
+test('a full division stops native checkout before creating a payment or calling Paystack', async () => {
+  const app = server({ gateway: true, capacityError: new Error('Open is full (maximum 24 teams).') });
+  const result = await app.call({ action: 'checkout', agreed: true, acceptedTotal: 367.5, attemptId: '11111111-1111-1111-1111-111111111111' });
+  assert.equal(result.status, 400);
+  assert.match(result.body.error, /is full/);
+  assert.equal(app.writes.length, 0);
+  assert.equal(app.gatewayCalls.length, 0);
+  assert.equal(app.rpcCalls.filter(call => call.name === 'reserve_event_registration_places').length, 1);
+});
+
+test('native payment starts only after its pending registration places are reserved', async () => {
+  const app = server({ gateway: true });
+  const result = await app.call({ action: 'checkout', agreed: true, acceptedTotal: 367.5, attemptId: '11111111-1111-1111-1111-111111111111' });
+  assert.equal(result.status, 200);
+  const reservation = app.rpcCalls.find(call => call.name === 'reserve_event_registration_places');
+  assert.equal(reservation.args.p_rows[0].payment_status, 'pending');
+  assert.equal(reservation.args.p_rows[0].division, 'Open');
+  assert.equal(app.gatewayCalls.length, 1);
+});
+
+test('closed event and division still accept payment for existing active entries only', async () => {
+  const entry = { id: 'self-entry', email: 'player@example.com', full_name: 'Test player', division_id: 'division-1', division: 'Open', payment_status: 'pending', status: 'registered' };
+  const closed = { calendar: { id: 1, is_manual: true, start_date: '2020-01-01', end_date: '2020-01-02', registration_closes_at: '2020-01-01', payment_method: 'platform' },
+    tournament_divisions: [{ id: 'division-1', name: 'Open', entry_fee: 350, entries_close_at: '2020-01-01' }], event_registrations: [entry] };
+  const app = server({ gateway: true, tables: closed });
+  const result = await app.call({ mode: 'pay', action: 'checkout', agreed: true, acceptedTotal: 367.5, attemptId: '11111111-1111-1111-1111-111111111111', partnerEmail: 'unregistered@example.com' });
+  assert.equal(result.status, 200);
+  assert.equal(app.gatewayCalls.length, 1);
+  assert.equal(app.gatewayCalls[0].metadata.covers.length, 1);
+  assert.equal(app.gatewayCalls[0].metadata.covers[0].email, entry.email);
+  assert.ok(app.gatewayCalls[0].metadata.registration_rows.every(r => r.email === entry.email));
+  for (const registrations of [[], [{ ...entry, status: 'withdrawn' }], [{ ...entry, email: 'other@example.com' }]]) {
+    const absent = server({ gateway: true, tables: { ...closed, event_registrations: registrations } });
+    assert.equal((await absent.call({ mode: 'pay' })).status, 400);
+    assert.equal(absent.gatewayCalls.length, 0);
+  }
+  const newcomer = server({ tables: closed });
+  assert.equal((await newcomer.call({})).status, 400);
+  assert.equal(newcomer.writes.length, 0);
+});
+
+test('current profile flags do not qualify a player for a different event year', async()=>{const app=server({tables:{players:{id:3,name:'Prior holder',email:'player@example.com',contact_number:'0123',license_type:'full',paid_registration:true},tournament_divisions:[{id:'division-1',name:'Open',entry_fee:350,license_required:true}]},rpc:name=>name==='player_license_eligibility'?{year:2027,full:false,temporary:false}:[]});const r=await app.call({});assert.equal(r.status,400);assert.match(r.body.error,/Select a SAPA licence/);});
+test('prepaid future coverage qualifies for its event even before the profile Full flag changes',async()=>{const app=server({tables:{tournament_divisions:[{id:'division-1',name:'Open',entry_fee:350,license_required:true}]},rpc:name=>name==='player_license_eligibility'?{year:2027,full:true,temporary:false}:[]});const r=await app.call({});assert.equal(r.status,200);assert.equal(r.body.quote.total,367.5);});
+test('a 2026 event sells immediately-valid 2027 Full licenses with individual renewal prices',async()=>{
+  const partner={id:4,name:'Previous Full holder',email:'partner@example.com',license_type:'none',paid_registration:false};
+  const app=server({now:'2026-10-15T10:00:00Z',tables:{calendar:{id:1,is_manual:true,start_date:'2026-11-01',end_date:'2026-11-02',payment_method:'platform'},license_seasons:{year:2027,price:650,renewal_price:500,sales_open:true},tournament_divisions:[{id:'division-1',name:'Open',entry_fee:350,license_required:true}],commerce_config:{event_fee_percent:5,license_fee_percent:0,temp_license_enabled:true,temp_license_price:120}},rpc:(name,args)=>name==='player_license_eligibility'?{year:2026,full:false,temporary:false,purchase_year:2027}:name==='find_registration_partner'?[partner]:name==='full_license_quote'?{price:args.p_player_id===4?500:650,sales_open:true}:[]});
+  const r=await app.call({licenseChoice:'full',selections:[{divisionId:'division-1',partnerEmail:partner.email,payForPartner:true,licenseChoice:'full'}]});
+  assert.equal(r.status,200);assert.equal(r.body.quote.licenseTotal,1150);assert.equal(r.body.quote.total,1885);
+});
+
+
+test('late-payment switch blocks closed event and division checkout before writes or charges', async () => {
+  const entry = { id: 'existing', email: 'player@example.com', full_name: 'Test player', division_id: 'division-1', division: 'Open', payment_status: 'pending', status: 'registered' };
+  for (const [eventClose, divisionClose] of [['2000-01-01', null], ['2099-01-01', '2000-01-01']]) {
+    const app = server({ gateway: true, tables: { calendar: { id: 1, is_manual: true, registration_closes_at: eventClose, allow_payments_after_close: false }, tournament_divisions: [{ id: 'division-1', name: 'Open', entry_fee: 350, entries_close_at: divisionClose }], event_registrations: [entry] } });
+    for (const action of ['quote', 'checkout']) {
+      const response = await app.call({ mode: 'pay', action, agreed: true, acceptedTotal: 367.5, attemptId: '11111111-1111-1111-1111-111111111111' });
+      assert.equal(response.status, 400);
+      assert.match(response.body.error, /Payments have closed/);
+    }
+    assert.equal(app.writes.length, 0);
+    assert.equal(app.gatewayCalls.length, 0);
+  }
+});
+test('late-payment switch leaves pre-deadline payments and a later division override available', async () => {
+  const entry = { id: 'existing', email: 'player@example.com', full_name: 'Test player', division_id: 'division-1', division: 'Open', payment_status: 'pending', status: 'registered' };
+  for (const [eventClose, divisionClose] of [['2099-01-01', null], ['2000-01-01', '2099-01-01']]) {
+    const app = server({ tables: { calendar: { id: 1, is_manual: true, registration_closes_at: eventClose, allow_payments_after_close: false }, tournament_divisions: [{ id: 'division-1', name: 'Open', entry_fee: 350, entries_close_at: divisionClose }], event_registrations: [entry] } });
+    assert.equal((await app.call({ mode: 'pay' })).status, 200);
+  }
 });

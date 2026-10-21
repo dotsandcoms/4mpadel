@@ -11,7 +11,7 @@ function load(options = {}) {
   for (const method of ['insert', 'delete', 'eq', 'select', 'order']) query[method] = (...args) => { calls.push([method, ...args]); return query; };
   query.then = (resolve, reject) => Promise.resolve(options.result || { data: [{ player_id: 66 }], error: null }).then(resolve, reject);
   const code = ts.transpileModule(fs.readFileSync('src/lib/pro-padel.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-  vm.runInNewContext(code, { module, exports: module.exports, require: () => ({ supabase: {
+  vm.runInNewContext(code, { module, exports: module.exports, require: name => name === './analytics' ? { trackEvent() {} } : ({ supabase: {
     from: table => { calls.push(['from', table]); return query; },
     storage: { from: bucket => ({ getPublicUrl: file => ({ data: { publicUrl: `https://example.test/${bucket}/${file}` } }) }) },
   } }), fetch: options.fetch, AbortController, setTimeout, clearTimeout, Intl, Date });

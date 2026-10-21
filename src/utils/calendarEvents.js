@@ -15,7 +15,7 @@ export function filterUpcomingEvents(events) {
 export async function fetchUpcomingCalendarEvents(supabase) {
     const { data, error } = await supabase
         .from('calendar')
-        .select('id, event_name, start_date, end_date')
+        .select('id, event_name, start_date, end_date, allow_temporary_license')
         .neq('is_visible', false)
         .order('start_date', { ascending: true });
 

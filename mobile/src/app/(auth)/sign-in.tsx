@@ -1,3 +1,4 @@
+import { trackEvent } from '@/lib/analytics';
 import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -127,6 +128,7 @@ export default function SignInScreen() {
       router.replace(await destinationAfterAuth(data.session));
     } catch (e: any) {
       if (e instanceof AuthCancelled) return;
+      void trackEvent('action_error', { feature: 'authentication' });
       hapticError();
       if (kind === 'email' && mode === 'signin' && isInvalidCredentials(e)) {
         const msg = 'Email or password is incorrect. Try again or reset your password.';

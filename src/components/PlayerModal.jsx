@@ -1,9 +1,11 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useRankedin } from '../hooks/useRankedin';
+import useLivePlayerRankings from '../hooks/useLivePlayerRankings';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Trophy, MapPin, Instagram, Download, Share2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as htmlToImage from 'html-to-image';
 import { jsPDF } from 'jspdf';
+import { PlayerPreferenceDetails } from './PlayerPreferences';
 
 const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) => {
     const cardRef = useRef(null);
@@ -12,6 +14,7 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
     const [isLightboxOpen, setIsLightboxOpen] = useState(false);
     const [lightboxImageIdx, setLightboxImageIdx] = useState(0);
     const [activeTab, setActiveTab] = useState('info');
+    const { rankings: liveRankings, error: rankingRefreshError } = useLivePlayerRankings(player, activeTab === 'rankings');
 
     const [matchHistory, setMatchHistory] = useState({ upcoming: [], history: [] });
     const [loadingMatches, setLoadingMatches] = useState(false);
@@ -134,7 +137,7 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
         }
     }
 
-    let safeRankings = Array.isArray(player.rankings) ? player.rankings : [];
+    let safeRankings = Array.isArray(liveRankings) ? liveRankings : [];
     safeRankings = safeRankings.filter(r => {
         const org = r.org?.toUpperCase() || '';
         return org.includes('SAPA') || org.includes('BROLL') || org.includes('SA GRAND');
@@ -335,6 +338,7 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                                 <div className={`${activeTab === 'info' ? 'block animate-in fade-in duration-300' : 'hidden'} space-y-6 md:space-y-8`}>
                                         {/* Tactile Information Panel Grid */}
                                         <div className="grid grid-cols-2 gap-3.5 shrink-0">
+                                            <PlayerPreferenceDetails player={player} compact />
                                             <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col gap-0.5 hover:border-white/20 transition-all duration-300">
                                                 <span className="text-[9px] uppercase font-black text-padel-green tracking-widest leading-none mb-1">Category / Division</span>
                                                 <span className="text-sm font-extrabold text-white truncate">{player.category || 'Open Division'}</span>
@@ -417,6 +421,7 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                                 </div>
 
                                 <div className={`${activeTab === 'rankings' ? 'block animate-in fade-in duration-300' : 'hidden'} space-y-6 md:space-y-8`}>
+                                        {rankingRefreshError && <p role="alert" className="text-xs text-amber-300">Some rankings could not refresh. Showing saved results. Reopen Rankings to retry.</p>}
                                         {/* Organizational Rankings (Interactive Accordions) */}
                                         {safeRankings && safeRankings.length > 0 ? (
                                             <div className="space-y-4">

@@ -166,12 +166,7 @@ const Hero = () => {
         || eventsLoading;
 
     useEffect(() => {
-        // Get initial session
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-        });
-
-        // Listen for auth changes
+        // INITIAL_SESSION supplies the saved session as well as subsequent changes.
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             setSession(session);
         });

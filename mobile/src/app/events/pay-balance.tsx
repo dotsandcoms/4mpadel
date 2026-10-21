@@ -1,3 +1,4 @@
+import { recordAnalyticsCheckout, trackConfirmedPurchase, trackEvent } from '@/lib/analytics';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -26,14 +27,17 @@ export default function EntryBalanceScreen() {
   const run = async (fn: () => Promise<void>) => {
     if (lock.current) return;
     lock.current = true; setBusy(true); setMessage('');
-    try { await fn(); } catch (e) { setMessage(e instanceof Error ? e.message : 'Please try again.'); }
+    try { await fn(); } catch (e) { void trackEvent('action_error', { feature: 'entry_balance' }); setMessage(e instanceof Error ? e.message : 'Please try again.'); }
     finally { lock.current = false; setBusy(false); }
   };
   const verify = async (ref = reference || params.reference) => {
     if (!ref) return;
     const result = await call('confirm', { reference: ref });
-    if (result.paid) setComplete(result);
-    else setMessage(result.message || 'Payment is still processing. Check again shortly.');
+    if (result.paid) {
+      void trackConfirmedPurchase(ref, 'entry_balance');
+      setComplete(result);
+    }
+    else { void trackEvent('checkout_outcome', { item_category: 'entry_balance', status: 'unconfirmed' }); setMessage(result.message || 'Payment is still processing. Check again shortly.'); }
   };
   const load = () => run(async () => {
     if (params.reference) { setReference(params.reference); await verify(params.reference); return; }
@@ -54,6 +58,7 @@ export default function EntryBalanceScreen() {
       const result = await call('checkout', { acceptedTotal: quote?.total });
       if (!result.reference || !result.authorizationUrl) throw new Error('Checkout is not ready. Check payment status before trying again.');
       ref = result.reference; url = result.authorizationUrl;
+      void recordAnalyticsCheckout(ref, 'entry_balance', result.quote.total);
       setQuote(result.quote); setReference(ref); setCheckoutUrl(url);
     }
     if (!url.startsWith('https://checkout.paystack.com/')) throw new Error('Invalid payment destination.');

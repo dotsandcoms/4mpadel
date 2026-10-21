@@ -1,3 +1,4 @@
+import { eventLicense } from '../utils/licenses';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -27,9 +28,11 @@ import { isPaystackConfigured, isPaystackTestMode } from '../utils/paystackConfi
 import { buildPaystackCheckoutConfig, isInAppBrowser } from '../utils/paystackCheckout';
 import PartnerProfileInvite from './PartnerProfileInvite';
 import ManualRegistrationEntryCard from './ManualRegistrationEntryCard';
+import ReplacePartnerDialog from './ReplacePartnerDialog';
+import { usePaidPartnerReplacements } from '../hooks/usePaidPartnerReplacements';
 import { useMembersOnly } from '../context/MembersOnlyContext';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
-import { isRegistrationClosed } from '../utils/registrationClose';
+import { isRegistrationClosed, isRegistrationPaymentClosed } from '../utils/registrationClose';
 import { resolvePartnerPaid } from '../utils/partnerPaymentStatus';
 import { isEarlyBirdActive, resolveDivisionEntryFee } from '../utils/eventEntryFee';
 import {
@@ -43,6 +46,8 @@ import {
     weeklySpotsRemaining,
 } from '../utils/weeklyRegistration';
 import { addEventToSchedule } from '../utils/playerSchedule';
+import { countDivisionPlaces, divisionTeamLimit, reserveDivisionPlaces } from '../utils/divisionCapacity';
+import { registrationMatchesDivision } from '../utils/registrationDivision';
 
 const STEPS = [
     { id: 1, label: 'Profile' },
@@ -394,7 +399,7 @@ const ProgressBar = ({ step, theme, steps = STEPS }) => (
 const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null, fourMPlayers = {}, onStatusChange, onParticipantsChange, registrationActionsRef, highlightClassName = '', accessGrantId = null, onAccessRequired = null }) => {
     const navigate = useNavigate();
     const { promptMembersOnly } = useMembersOnly();
-    const { config: commerce } = useCommerceConfig();
+    const { config: commerce } = useCommerceConfig(Number(String(event.start_date || '').slice(0, 4)) || 2026);
     const eventPaymentMethod = event?.payment_method || (event?.allow_payments === false ? 'free' : 'platform');
     const usesManualEntryPayment = eventPaymentMethod === 'eft' || eventPaymentMethod === 'external';
     const manualPaymentLabel = eventPaymentMethod === 'eft' ? 'EFT' : 'external payment';
@@ -410,6 +415,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const [withdrawing, setWithdrawing] = useState(false);
     const [withdrawAll, setWithdrawAll] = useState(false);
     const [removePartnerTarget, setRemovePartnerTarget] = useState(null);
+    const [replacePartnerTarget, setReplacePartnerTarget] = useState(null);
+    const { replacements, refresh: refreshReplacements } = usePaidPartnerReplacements(event.id, !!userEmail);
     const [removingPartner, setRemovingPartner] = useState(false);
     const [switchMode, setSwitchMode] = useState(false);
     const [switchWholeTeam, setSwitchWholeTeam] = useState(false);
@@ -507,53 +514,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const resolveLicense = useCallback(async (player, eventId) => {
         if (!player) return { active: false, label: 'No active license' };
 
-        const lt = String(player.license_type || 'none').toLowerCase();
-
-        if (lt === 'full') {
-            return { active: true, label: 'Annual SAPA License Active' };
-        }
-
-        if (lt === 'temporary') {
-            const hasEmbeddedForEvent = player.temporary_licenses?.some((lic) => lic.event_id === eventId);
-            if (hasEmbeddedForEvent) {
-                return { active: true, label: 'Temporary SAPA License Active' };
-            }
-
-            const { data: tempLic } = await supabase
-                .from('temporary_licenses')
-                .select('id, event_date')
-                .eq('player_id', player.id)
-                .eq('event_id', eventId)
-                .maybeSingle();
-            if (tempLic) {
-                return { active: true, label: 'Temporary SAPA License Active' };
-            }
-
-            const { data: latestTemp } = await supabase
-                .from('temporary_licenses')
-                .select('id, event_date, event_id')
-                .eq('player_id', player.id)
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-
-            if (latestTemp?.event_date) {
-                const eventDate = new Date(latestTemp.event_date);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                if (eventDate >= today && latestTemp.event_id === eventId) {
-                    return { active: true, label: 'Temporary SAPA License Active' };
-                }
-            }
-
-            return { active: false, label: 'No active license for this event' };
-        }
-
-        if (player.paid_registration === true) {
-            return { active: true, label: 'SAPA License Active' };
-        }
-
-        return { active: false, label: 'No active license' };
+        return eventLicense(player.id, eventId);
     }, []);
 
     const loadDivisions = useCallback(async () => {
@@ -793,6 +754,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     );
 
     const hasPendingPayment = pendingPaymentRegs.length > 0;
+    const canPayPending = pendingPaymentRegs.some((reg) => !isRegistrationPaymentClosed(divisions.find((d) => d.id === reg.division_id), event));
+    const paymentsClosed = pendingPaymentRegs.some((reg) => isRegistrationPaymentClosed(divisions.find((d) => d.id === reg.division_id), event));
     const hasRegistrations = confirmedRegs.length > 0;
     const allRegistrationsPaid = hasRegistrations && confirmedRegs.every((reg) => {
         if (reg.payment_status === 'paid') return true;
@@ -842,7 +805,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 : null;
             return {
                 id: reg.id,
-                division: reg.division,
+                division: div?.name || reg.division,
                 divisionId: reg.division_id,
                 partnerName: resolvedPartnerName,
                 partnerEmail: resolvedPartnerEmail,
@@ -861,11 +824,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 statusClassName: isPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
                 partnerStatusClassName: partnerPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
                 canAddPartner,
+                canReplacePartner: !regClosed && replacements.some((item) => item.owner_registration_id === reg.id),
                 isBookingOwner: !reversePartnerReg && !wasAddedByPartner,
                 canWithdraw: reg.status !== 'withdrawn' && !regClosed,
             };
         }),
-        [myRegs, divisions, divisionRegs, userEmail, event, isWeeklyEvent],
+        [myRegs, divisions, divisionRegs, userEmail, event, isWeeklyEvent, replacements],
     );
 
     const panelEntries = registrationEntries;
@@ -918,7 +882,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const pendingSelf = myRegs.filter((reg) => {
             if (reg.payment_status === 'paid') return false;
             const div = divisions.find((d) => d.id === reg.division_id);
-            return div && resolveDivisionEntryFee(div, event) > 0;
+            return div && resolveDivisionEntryFee(div, event) > 0 && !isRegistrationPaymentClosed(div, event);
         });
         if (pendingSelf.length === 0) return false;
 
@@ -933,7 +897,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const pendingPartner = (partnerRows || []).filter((reg) => {
             if (reg.payment_status === 'paid') return false;
             const div = divisions.find((d) => d.id === reg.division_id);
-            return div && resolveDivisionEntryFee(div, event) > 0;
+            return div && resolveDivisionEntryFee(div, event) > 0 && !isRegistrationPaymentClosed(div, event);
         });
 
         const hasPartnerEntry = pendingSelf.some((r) => r.partner_name || r.partner_email) || pendingPartner.length > 0;
@@ -963,16 +927,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
         setSelected(next);
         return true;
-    }, [myRegs, divisions, event.id, userEmail]);
+    }, [myRegs, divisions, event, userEmail]);
 
     const openPayWizard = useCallback(async () => {
         if (!userEmail) { promptMembersOnly(); return; }
-        if (event?.registration_closes_at && new Date(event.registration_closes_at).getTime() < Date.now()) {
-            toast.error('Registration has closed — payment is no longer available for this event.');
-            return;
-        }
         const restored = await restoreSelectedFromPending();
-        if (!restored) { toast.error('No outstanding payment found'); return; }
+        if (!restored) { toast.error(paymentsClosed ? 'Payments have closed. Contact the organiser.' : 'No outstanding payment found'); return; }
         setWizardMode('payOnly');
         setAddPartnerTarget(null);
         paymentRetryRef.current = true;
@@ -984,7 +944,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         await loadProfile();
         setWizardStep(4);
         setShowWizard(true);
-    }, [userEmail, restoreSelectedFromPending, loadProfile, promptMembersOnly, event?.registration_closes_at]);
+    }, [userEmail, restoreSelectedFromPending, loadProfile, promptMembersOnly, paymentsClosed]);
 
     const openAddPartnerWizard = useCallback(async (reg) => {
         if (!userEmail) { promptMembersOnly(); return; }
@@ -1038,6 +998,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     useEffect(() => {
         onStatusChange?.({
             hasPendingPayment,
+            canPayPending,
+            paymentsClosed,
             hasRegistrations,
             allRegistrationsPaid,
             hasAnyRegistration,
@@ -1096,6 +1058,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     }
                     setRemovePartnerTarget(reg);
                 },
+                openReplacePartner: (regId) => {
+                    const entry = registrationEntries.find((item) => item.id === regId);
+                    const reg = myRegs.find((item) => item.id === regId);
+                    if (reg && entry?.canReplacePartner) setReplacePartnerTarget(reg);
+                },
                 openManageEntry: () => {
                     setDivisionsBlockOpen(true);
                     requestAnimationFrame(() => {
@@ -1118,6 +1085,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
     }, [
         hasPendingPayment,
+        canPayPending,
+        paymentsClosed,
         hasRegistrations,
         allRegistrationsPaid,
         hasAnyRegistration,
@@ -1325,30 +1294,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const resolvePartnerLicense = useCallback(async (player) => {
         if (!player) return { active: false, label: 'No active license' };
 
-        const lt = String(player.license_type || 'none').toLowerCase();
-
-        if (lt === 'full') {
-            return { active: true, label: 'Annual SAPA License Active' };
-        }
-
-        if (lt === 'temporary') {
-            const { data: tempLic } = await supabase
-                .from('temporary_licenses')
-                .select('id')
-                .eq('player_id', player.id)
-                .eq('event_id', event.id)
-                .maybeSingle();
-            if (tempLic) {
-                return { active: true, label: 'Temporary SAPA License Active' };
-            }
-            return { active: false, label: 'No active license for this event' };
-        }
-
-        if (player.paid_registration === true) {
-            return { active: true, label: 'SAPA License Active' };
-        }
-
-        return { active: false, label: 'No active license' };
+        return eventLicense(player.id, event.id);
     }, [event.id]);
 
     const clearPartner = () => {
@@ -1780,6 +1726,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     }, [isWeeklyEvent, registeredWeekIds]);
 
     const collectTshirtSize = !!event?.collect_tshirt_size;
+    const allowTshirtLogoUpload = collectTshirtSize && !!event?.allow_tshirt_logo_upload;
+    const allowTshirtSponsorName = collectTshirtSize && !!event?.allow_tshirt_sponsor_name;
 
     const selfTshirtChart = useMemo(
         () => resolveTshirtChart(displayProfile || profile, selectedDivisions),
@@ -1833,7 +1781,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const showPartnerLicenseOptions = showPartnerLicenseWarning;
 
-    const licenseFee = (choice) => licenseQuote(choice === 'full' ? 'full' : 'temporary', commerce).total;
+    const personLicenseQuote = (choice, partnerId) => { const info = partnerId ? getPartnerLicenseInfo(partnerId) : licenseInfo; return licenseQuote(choice === 'full' ? 'full' : 'temporary', { ...commerce, full_license_price: info.fullPrice ?? commerce.full_license_price }); };
+    const licenseFee = (choice, partnerId) => personLicenseQuote(choice, partnerId).total;
     const allowTemporaryLicense = event?.allow_temporary_license !== false;
     const licenseTypes = useMemo(
         () => availableLicenseTypes(commerce, { allowTemporary: allowTemporaryLicense }),
@@ -1952,7 +1901,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             let t = eventEntryQuote(entryBase, commerce).total;
             if (buyLicenseSelf) t += licenseFee(licenseSelfChoice);
             for (const purchase of partnerLicensePurchases) {
-                t += licenseFee(purchase.choice);
+                t += licenseFee(purchase.choice, purchase.partnerId);
             }
             return t;
         }
@@ -1966,10 +1915,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         let t = eventEntryQuote(entryBase, commerce).total;
         if (buyLicenseSelf) t += licenseFee(licenseSelfChoice);
         for (const purchase of partnerLicensePurchases) {
-            t += licenseFee(purchase.choice);
+            t += licenseFee(purchase.choice, purchase.partnerId);
         }
         return t;
-    }, [isWeeklyEvent, selectedWeeks, weeklyEntryMode, selectedDivisions, selected, myRegs, divisionRegs, buyLicenseSelf, licenseSelfChoice, partnerLicensePurchases, userEmail, event, commerce]);
+    }, [isWeeklyEvent, selectedWeeks, weeklyEntryMode, selectedDivisions, selected, myRegs, divisionRegs, buyLicenseSelf, licenseSelfChoice, partnerLicensePurchases, userEmail, event, commerce, licenseInfo, partnerLicenseCache]);
 
     const total = subtotal;
 
@@ -2021,7 +1970,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         label: purchase.choice === 'full'
                             ? `Partner annual license — ${purchase.partnerName}`
                             : `Partner temporary license — ${purchase.partnerName}`,
-                        amount: licenseFee(purchase.choice),
+                        amount: licenseFee(purchase.choice, purchase.partnerId),
                     });
                 }
                 const entryBase = players.reduce((sum, player) => sum + player.total, 0);
@@ -2086,7 +2035,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 label: purchase.choice === 'full'
                     ? `Partner annual license — ${purchase.partnerName}`
                     : `Partner temporary license — ${purchase.partnerName}`,
-                amount: licenseFee(purchase.choice),
+                amount: licenseFee(purchase.choice, purchase.partnerId),
             });
         }
 
@@ -2103,15 +2052,15 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     }, [
         isWeeklyEvent, selectedWeeks, weeklyEntryMode, selectedDivisions, selected, myRegs, divisionRegs,
         buyLicenseSelf, licenseSelfChoice, partnerLicenseCache, partnerLicensePurchases,
-        profile?.name, displayProfile?.name, event, commerce,
+        profile?.name, displayProfile?.name, event, commerce, licenseInfo,
     ]);
 
     const reviewPaySummary = useMemo(() => {
         const selfName = displayProfile?.name || profile?.name || 'You';
 
         const licenseLines = [];
-        const pushLicenseLine = (choice, label) => {
-            const quote = licenseQuote(choice === 'full' ? 'full' : 'temporary', commerce);
+        const pushLicenseLine = (choice, label, partnerId) => {
+            const quote = personLicenseQuote(choice, partnerId);
             licenseLines.push({
                 label,
                 base: quote.base,
@@ -2131,6 +2080,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 purchase.choice === 'full'
                     ? `${purchase.partnerName} annual SAPA license`
                     : `${purchase.partnerName} temporary SAPA license`,
+                purchase.partnerId,
             );
         }
         const licensesBase = licenseLines.reduce((sum, line) => sum + line.base, 0);
@@ -2225,7 +2175,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     }, [
         isWeeklyEvent, selectedWeeks, weeklyEntryMode, selectedDivisions, selected, myRegs, divisionRegs,
         buyLicenseSelf, licenseSelfChoice, hasLicense, anySelectedRequiresLicense, partnerLicenseCache,
-        partnerLicensePurchases, profile?.name, displayProfile?.name, profileImageUrl, event, commerce,
+        partnerLicensePurchases, profile?.name, displayProfile?.name, profileImageUrl, event, commerce, licenseInfo,
     ]);
 
     const lineItems = useMemo(() => {
@@ -2373,8 +2323,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 payForPartner: weeklyEntryMode === 'partner' && !!sel?.payForPartner,
                 paymentStatus: markPaid ? 'paid' : 'pending',
                 tshirtSize: tshirtSize || null,
-                tshirtSponsorName: (tshirtSponsorName || '').trim() || null,
-                tshirtLogoUrl: tshirtLogoUrl || null,
+                tshirtSponsorName: allowTshirtSponsorName ? (tshirtSponsorName || '').trim() || null : null,
+                tshirtLogoUrl: allowTshirtLogoUpload ? (tshirtLogoUrl || null) : null,
             });
             built.rows = (built.rows || []).map((row) => ({
                 ...row,
@@ -2383,11 +2333,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             }));
             if (isReserve) return { ...built, covers: [] };
             const covers = [...(built.covers || [])];
-            if (buyLicenseSelf) covers.push({ email: userEmail, type: 'license', license: licenseSelfChoice });
+            if (buyLicenseSelf) covers.push({ email: userEmail, type: 'license', license_year: commerce.license_year, license: licenseSelfChoice });
             for (const purchase of partnerLicensePurchases) {
                 covers.push({
                     email: purchase.partnerEmail,
                     type: 'license',
+                    license_year: commerce.license_year,
                     license: purchase.choice,
                 });
             }
@@ -2426,8 +2377,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 status: 'registered',
                 registered_by: existingSelfReg?.registered_by || userEmail,
                 tshirt_size: tshirtSize || existingSelfReg?.tshirt_size || null,
-                tshirt_sponsor_name: (tshirtSponsorName || existingSelfReg?.tshirt_sponsor_name || '').trim() || null,
-                tshirt_logo_url: tshirtLogoUrl || existingSelfReg?.tshirt_logo_url || null,
+                tshirt_sponsor_name: ((allowTshirtSponsorName ? tshirtSponsorName : '') || existingSelfReg?.tshirt_sponsor_name || '').trim() || null,
+                tshirt_logo_url: (allowTshirtLogoUpload ? tshirtLogoUrl : null) || existingSelfReg?.tshirt_logo_url || null,
             });
             if (selfPays && fee > 0) covers.push({ email: userEmail, division: d.name, type: 'entry' });
 
@@ -2468,7 +2419,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             covers.push({ email: soloReg.email, division: d.name, type: 'entry' });
                         }
                     }
-                } else {
+                } else if (wizardMode !== 'payOnly') {
                     const partnerEmailKey = String(sel.partnerEmail).toLowerCase();
                     rows.push({
                         event_id: event.id,
@@ -2484,18 +2435,19 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         status: 'registered',
                         registered_by: userEmail,
                         tshirt_size: partnerTshirtSizes[partnerEmailKey] || null,
-                        tshirt_sponsor_name: (partnerTshirtSponsors[partnerEmailKey] || '').trim() || null,
-                        tshirt_logo_url: partnerTshirtLogos[partnerEmailKey] || null,
+                        tshirt_sponsor_name: allowTshirtSponsorName ? (partnerTshirtSponsors[partnerEmailKey] || '').trim() || null : null,
+                        tshirt_logo_url: allowTshirtLogoUpload ? (partnerTshirtLogos[partnerEmailKey] || null) : null,
                     });
                     if (partnerPays && fee > 0) covers.push({ email: sel.partnerEmail, division: d.name, type: 'entry' });
                 }
             }
         }
-        if (buyLicenseSelf) covers.push({ email: userEmail, type: 'license', license: licenseSelfChoice });
+        if (buyLicenseSelf) covers.push({ email: userEmail, type: 'license', license_year: commerce.license_year, license: licenseSelfChoice });
         for (const purchase of partnerLicensePurchases) {
             covers.push({
                 email: purchase.partnerEmail,
                 type: 'license',
+                    license_year: commerce.license_year,
                 license: purchase.choice,
             });
         }
@@ -2575,6 +2527,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         tshirtSize,
         tshirtSponsorName,
         tshirtLogoUrl,
+        allowTshirtLogoUpload,
+        allowTshirtSponsorName,
         partnerTshirtSizes,
         partnerTshirtSponsors,
         partnerTshirtLogos,
@@ -2585,6 +2539,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         allowWeeklyReserve,
         divisions,
         commerce,
+        wizardMode,
+        accessGrantId,
     ]);
 
     const persistRegistrations = async (rows, soloLinks = [], covers = []) => {
@@ -2771,10 +2727,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             },
             onCancel: () => {
                 setProcessing(false);
-                toast.info('Payment cancelled. You have not been registered.');
+                toast.info('Payment cancelled. Any reserved entry remains unpaid. You can retry payment or withdraw it.');
+                loadMyRegs();
+                loadDivisionRegs();
             },
         });
-    }, [userEmail, event.id, event.event_name, profile?.name, displayProfile?.name, handlePaymentSuccess]);
+    }, [userEmail, event.id, event.event_name, profile?.name, displayProfile?.name, handlePaymentSuccess, loadMyRegs, loadDivisionRegs]);
 
     const expireAbandonedCheckouts = useCallback(async () => {
         const cutoff = new Date(Date.now() - ABANDONED_CHECKOUT_AFTER_MS).toISOString();
@@ -2792,6 +2750,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const insertProcessingPayment = useCallback(async (payload) => {
         await expireAbandonedCheckouts();
+        await reserveDivisionPlaces(supabase, (payload.rows || []).map((row) => ({
+            ...row,
+            ...(accessGrantId ? { access_grant_id: accessGrantId } : {}),
+        })), payload.soloLinks || []);
         const metadata = {
             ...(payload.paymentMetadata || {}),
             // RLS ownership keys — must match auth JWT email for insert policy.
@@ -2810,7 +2772,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             is_test: isPaystackTestMode,
             metadata,
         }]);
-    }, [event.id, profile?.id, userEmail, expireAbandonedCheckouts]);
+    }, [event.id, profile?.id, userEmail, expireAbandonedCheckouts, accessGrantId]);
 
     useEffect(() => {
         if (
@@ -2852,7 +2814,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     },
                     onCancel: () => {
                         setProcessing(false);
-                        toast.info('Payment cancelled. You have not been registered.');
+                        toast.info('Payment cancelled. Any reserved entry remains unpaid. You can retry payment or withdraw it.');
+                        loadMyRegs();
+                        loadDivisionRegs();
                     },
                 });
                 if (!cancelled) {
@@ -2883,6 +2847,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         displayProfile?.name,
         buildManualPaymentPayload,
         handlePaymentSuccess,
+        loadMyRegs,
+        loadDivisionRegs,
         allowWeeklyReserve,
         weeklyCheckoutIntent,
     ]);
@@ -2919,8 +2885,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
         setProcessing(true);
         try {
+            await reserveDivisionPlaces(supabase, meta.registration_rows || [], meta.solo_link_updates || []);
             toast.info('Complete your payment to confirm registration');
             await launchPaystackCheckout(reference, Number(payment.amount));
+        } catch (err) {
+            toast.error(err.message || 'Unable to reserve your place.');
         } finally {
             setProcessing(false);
         }
@@ -2951,6 +2920,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const handleRegister = async () => {
         if (!userEmail) { toast.error('Please log in to register'); return; }
+        if (selectedDivisions.some((division) => isRegistrationPaymentClosed(division, event))) {
+            toast.error('Payments have closed. Contact the organiser.');
+            return;
+        }
         if (event?.registration_access === 'code' && !accessGrantId) {
             setShowWizard(false);
             onAccessRequired?.();
@@ -3898,6 +3871,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 const closed = isClosed(d, event);
                                 const reged = registeredDivisionIds.has(d.id);
                                 const sel = selected[d.id];
+                                const teamLimit = !event.is_quick_event ? divisionTeamLimit(d) : null;
+                                const usedPlaces = teamLimit == null ? null : countDivisionPlaces(divisionRegs.filter((r) => registrationMatchesDivision(r, d, divisions)));
                                 const addPartnerLocked = wizardMode === 'addPartner';
                                 const isSelected = addPartnerLocked ? true : !!sel;
                                 const isExpanded = addPartnerLocked ? true : (isSelected && expandedDivisions[d.id] !== false);
@@ -3962,6 +3937,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                         {d.name}
                                                     </p>
                                                     <DivisionDetails division={d} event={event} className="text-[11px] text-slate-600 font-normal leading-snug mt-1 rich-text max-w-none" />
+                                                    {teamLimit != null && (
+                                                        <p className="text-[11px] text-slate-600 mt-1">
+                                                            {usedPlaces}/{teamLimit} team places reserved · {usedPlaces >= teamLimit ? 'Full — you can still join an existing solo entry' : `${teamLimit - usedPlaces} available`}
+                                                        </p>
+                                                    )}
                                                     {reged && (
                                                         <p className="text-[10px] text-emerald-600 font-normal mt-0.5">
                                                             {enteredByName ? `Entered by ${enteredByName}` : 'Already entered'}
@@ -4117,8 +4097,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                             </div>
                                                             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-6">
                                                                 {[
-                                                                    licenseTypes.includes('temporary') && ['temporary', `Temporary SAPA license (${fmtRWhole(licenseFee('temporary'))})`],
-                                                                    licenseTypes.includes('full') && ['full', `Annual SAPA license (${fmtRWhole(licenseFee('full'))})`],
+                                                                    licenseTypes.includes('temporary') && ['temporary', `Temporary SAPA license (${fmtRWhole(licenseFee('temporary', sel.partnerId))})`],
+                                                                    licenseTypes.includes('full') && ['full', `Annual SAPA license (${fmtRWhole(licenseFee('full', sel.partnerId))})`],
                                                                 ].filter(Boolean).map(([val, label]) => (
                                                                     <label key={val} className="flex items-center gap-2 text-xs text-slate-900 cursor-pointer font-normal whitespace-nowrap">
                                                                         <input
@@ -4141,7 +4121,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                             <Check size={16} className="shrink-0 mt-0.5 text-emerald-600" />
                                                             <p>
                                                                 SAPA license already selected for {sel.partnerName}
-                                                                {' '}({eventPartnerLicenseChoice === 'full' ? `annual — ${fmtRWhole(licenseFee('full'))}` : `temporary — ${fmtRWhole(licenseFee('temporary'))}`}).
+                                                                {' '}({eventPartnerLicenseChoice === 'full' ? `annual — ${fmtRWhole(licenseFee('full', sel.partnerId))}` : `temporary — ${fmtRWhole(licenseFee('temporary', sel.partnerId))}`}).
                                                                 {' '}One license covers all divisions for this event.
                                                             </p>
                                                         </div>
@@ -4477,8 +4457,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     </p>
                                     <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 overflow-hidden">
                                         {[
-                                            licenseTypes.includes('full') && ['annual', `Add annual SAPA license for partner — ${fmtRWhole(licenseFee('full'))}`],
-                                            licenseTypes.includes('temporary') && ['temporary', `Add temporary SAPA license for partner — ${fmtRWhole(licenseFee('temporary'))}`],
+                                            licenseTypes.includes('full') && ['annual', `Add annual SAPA license for partner — ${fmtRWhole(licenseFee('full', primaryPartner.partnerProfile?.id))}`],
+                                            licenseTypes.includes('temporary') && ['temporary', `Add temporary SAPA license for partner — ${fmtRWhole(licenseFee('temporary', primaryPartner.partnerProfile?.id))}`],
                                             ['none', 'Do not add now — notify partner to complete later'],
                                         ].filter(Boolean).map(([val, label]) => (
                                             <label key={val} className="flex items-center gap-2 px-2.5 py-2 cursor-pointer hover:bg-gray-50 min-h-0">
@@ -4723,7 +4703,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 <CardBody className="space-y-4">
                                     <p className="text-[11px] text-slate-600 font-normal leading-snug">
                                         This event gifts a T-shirt to entrants. Select the correct size chart for each player.
-                                        Optionally add a sponsor name and/or logo for the shirt.
+                                        {allowTshirtSponsorName && ' You can also add an optional sponsor name.'}
+                                        {allowTshirtLogoUpload && ' Logo uploads are optional.'}
                                     </p>
                                     {needsSelfTshirt && (
                                         <div className="space-y-3">
@@ -4743,76 +4724,80 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                     ))}
                                                 </select>
                                             </div>
-                                            <div>
-                                                <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
-                                                    Sponsor name <span className="font-normal text-slate-500">(optional)</span>
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={tshirtSponsorName}
-                                                    onChange={(e) => setTshirtSponsorName(e.target.value)}
-                                                    placeholder="e.g. NOX"
-                                                    maxLength={80}
-                                                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
-                                                    Logo <span className="font-normal text-slate-500">(optional)</span>
-                                                </label>
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-14 h-14 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
-                                                        {tshirtLogoUrl ? (
-                                                            <img src={tshirtLogoUrl} alt="T-shirt logo" className="w-full h-full object-contain" />
-                                                        ) : (
-                                                            <ImageIcon className="w-5 h-5 text-slate-400" />
-                                                        )}
-                                                    </div>
-                                                    <div className="flex-1 min-w-0 space-y-1.5">
-                                                        <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">
-                                                            {tshirtLogoUploading ? (
-                                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            {allowTshirtSponsorName && (
+                                                <div>
+                                                    <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
+                                                        Sponsor name <span className="font-normal text-slate-500">(optional)</span>
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={tshirtSponsorName}
+                                                        onChange={(e) => setTshirtSponsorName(e.target.value)}
+                                                        placeholder="e.g. NOX"
+                                                        maxLength={80}
+                                                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0"
+                                                    />
+                                                </div>
+                                            )}
+                                            {allowTshirtLogoUpload && (
+                                                <div>
+                                                    <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
+                                                        Logo <span className="font-normal text-slate-500">(optional)</span>
+                                                    </label>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-14 h-14 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
+                                                            {tshirtLogoUrl ? (
+                                                                <img src={tshirtLogoUrl} alt="T-shirt logo" className="w-full h-full object-contain" />
                                                             ) : (
-                                                                <Upload className="w-3.5 h-3.5" />
+                                                                <ImageIcon className="w-5 h-5 text-slate-400" />
                                                             )}
-                                                            {tshirtLogoUploading ? 'Uploading…' : (tshirtLogoUrl ? 'Replace logo' : 'Upload logo')}
-                                                            <input
-                                                                type="file"
-                                                                accept="image/*"
-                                                                className="hidden"
-                                                                disabled={tshirtLogoUploading}
-                                                                onChange={async (e) => {
-                                                                    const file = e.target.files?.[0];
-                                                                    e.target.value = '';
-                                                                    if (!file) return;
-                                                                    setTshirtLogoUploading(true);
-                                                                    try {
-                                                                        const url = await uploadTshirtLogo(file, {
-                                                                            eventId: event.id,
-                                                                            emailKey: userEmail || 'self',
-                                                                        });
-                                                                        setTshirtLogoUrl(url);
-                                                                        toast.success('Logo uploaded');
-                                                                    } catch (err) {
-                                                                        toast.error(err.message || 'Logo upload failed');
-                                                                    } finally {
-                                                                        setTshirtLogoUploading(false);
-                                                                    }
-                                                                }}
-                                                            />
-                                                        </label>
-                                                        {tshirtLogoUrl && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setTshirtLogoUrl('')}
-                                                                className="block text-[11px] text-slate-500 underline hover:text-slate-800"
-                                                            >
-                                                                Remove logo
-                                                            </button>
-                                                        )}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0 space-y-1.5">
+                                                            <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">
+                                                                {tshirtLogoUploading ? (
+                                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                                ) : (
+                                                                    <Upload className="w-3.5 h-3.5" />
+                                                                )}
+                                                                {tshirtLogoUploading ? 'Uploading…' : (tshirtLogoUrl ? 'Replace logo' : 'Upload logo')}
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    className="hidden"
+                                                                    disabled={tshirtLogoUploading}
+                                                                    onChange={async (e) => {
+                                                                        const file = e.target.files?.[0];
+                                                                        e.target.value = '';
+                                                                        if (!file) return;
+                                                                        setTshirtLogoUploading(true);
+                                                                        try {
+                                                                            const url = await uploadTshirtLogo(file, {
+                                                                                eventId: event.id,
+                                                                                emailKey: userEmail || 'self',
+                                                                            });
+                                                                            setTshirtLogoUrl(url);
+                                                                            toast.success('Logo uploaded');
+                                                                        } catch (err) {
+                                                                            toast.error(err.message || 'Logo upload failed');
+                                                                        } finally {
+                                                                            setTshirtLogoUploading(false);
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            </label>
+                                                            {tshirtLogoUrl && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setTshirtLogoUrl('')}
+                                                                    className="block text-[11px] text-slate-500 underline hover:text-slate-800"
+                                                                >
+                                                                    Remove logo
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
+                                            )}
                                         </div>
                                     )}
                                     {partnersNeedingTshirt.map((partner) => {
@@ -4840,81 +4825,85 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                         ))}
                                                     </select>
                                                 </div>
-                                                <div>
-                                                    <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
-                                                        Sponsor name for {partner.name}{' '}
-                                                        <span className="font-normal text-slate-500">(optional)</span>
-                                                    </label>
-                                                    <input
-                                                        type="text"
-                                                        value={partnerTshirtSponsors[key] || ''}
-                                                        onChange={(e) => setPartnerTshirtSponsors((prev) => ({
-                                                            ...prev,
-                                                            [key]: e.target.value,
-                                                        }))}
-                                                        placeholder="e.g. NOX"
-                                                        maxLength={80}
-                                                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
-                                                        Logo for {partner.name}{' '}
-                                                        <span className="font-normal text-slate-500">(optional)</span>
-                                                    </label>
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-14 h-14 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
-                                                            {partnerLogo ? (
-                                                                <img src={partnerLogo} alt="" className="w-full h-full object-contain" />
-                                                            ) : (
-                                                                <ImageIcon className="w-5 h-5 text-slate-400" />
-                                                            )}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0 space-y-1.5">
-                                                            <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">
-                                                                {partnerUploading ? (
-                                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                {allowTshirtSponsorName && (
+                                                    <div>
+                                                        <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
+                                                            Sponsor name for {partner.name}{' '}
+                                                            <span className="font-normal text-slate-500">(optional)</span>
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={partnerTshirtSponsors[key] || ''}
+                                                            onChange={(e) => setPartnerTshirtSponsors((prev) => ({
+                                                                ...prev,
+                                                                [key]: e.target.value,
+                                                            }))}
+                                                            placeholder="e.g. NOX"
+                                                            maxLength={80}
+                                                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-offset-0"
+                                                        />
+                                                    </div>
+                                                )}
+                                                {allowTshirtLogoUpload && (
+                                                    <div>
+                                                        <label className="block text-[11px] font-semibold text-slate-800 mb-1.5">
+                                                            Logo for {partner.name}{' '}
+                                                            <span className="font-normal text-slate-500">(optional)</span>
+                                                        </label>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-14 h-14 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center shrink-0">
+                                                                {partnerLogo ? (
+                                                                    <img src={partnerLogo} alt="" className="w-full h-full object-contain" />
                                                                 ) : (
-                                                                    <Upload className="w-3.5 h-3.5" />
+                                                                    <ImageIcon className="w-5 h-5 text-slate-400" />
                                                                 )}
-                                                                {partnerUploading ? 'Uploading…' : (partnerLogo ? 'Replace logo' : 'Upload logo')}
-                                                                <input
-                                                                    type="file"
-                                                                    accept="image/*"
-                                                                    className="hidden"
-                                                                    disabled={partnerUploading}
-                                                                    onChange={async (e) => {
-                                                                        const file = e.target.files?.[0];
-                                                                        e.target.value = '';
-                                                                        if (!file) return;
-                                                                        setPartnerTshirtLogoUploading((prev) => ({ ...prev, [key]: true }));
-                                                                        try {
-                                                                            const url = await uploadTshirtLogo(file, {
-                                                                                eventId: event.id,
-                                                                                emailKey: key,
-                                                                            });
-                                                                            setPartnerTshirtLogos((prev) => ({ ...prev, [key]: url }));
-                                                                            toast.success(`Logo uploaded for ${partner.name}`);
-                                                                        } catch (err) {
-                                                                            toast.error(err.message || 'Logo upload failed');
-                                                                        } finally {
-                                                                            setPartnerTshirtLogoUploading((prev) => ({ ...prev, [key]: false }));
-                                                                        }
-                                                                    }}
-                                                                />
-                                                            </label>
-                                                            {partnerLogo && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setPartnerTshirtLogos((prev) => ({ ...prev, [key]: '' }))}
-                                                                    className="block text-[11px] text-slate-500 underline hover:text-slate-800"
-                                                                >
-                                                                    Remove logo
-                                                                </button>
-                                                            )}
+                                                            </div>
+                                                            <div className="flex-1 min-w-0 space-y-1.5">
+                                                                <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 cursor-pointer hover:bg-slate-50">
+                                                                    {partnerUploading ? (
+                                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                                    ) : (
+                                                                        <Upload className="w-3.5 h-3.5" />
+                                                                    )}
+                                                                    {partnerUploading ? 'Uploading…' : (partnerLogo ? 'Replace logo' : 'Upload logo')}
+                                                                    <input
+                                                                        type="file"
+                                                                        accept="image/*"
+                                                                        className="hidden"
+                                                                        disabled={partnerUploading}
+                                                                        onChange={async (e) => {
+                                                                            const file = e.target.files?.[0];
+                                                                            e.target.value = '';
+                                                                            if (!file) return;
+                                                                            setPartnerTshirtLogoUploading((prev) => ({ ...prev, [key]: true }));
+                                                                            try {
+                                                                                const url = await uploadTshirtLogo(file, {
+                                                                                    eventId: event.id,
+                                                                                    emailKey: key,
+                                                                                });
+                                                                                setPartnerTshirtLogos((prev) => ({ ...prev, [key]: url }));
+                                                                                toast.success(`Logo uploaded for ${partner.name}`);
+                                                                            } catch (err) {
+                                                                                toast.error(err.message || 'Logo upload failed');
+                                                                            } finally {
+                                                                                setPartnerTshirtLogoUploading((prev) => ({ ...prev, [key]: false }));
+                                                                            }
+                                                                        }}
+                                                                    />
+                                                                </label>
+                                                                {partnerLogo && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setPartnerTshirtLogos((prev) => ({ ...prev, [key]: '' }))}
+                                                                        className="block text-[11px] text-slate-500 underline hover:text-slate-800"
+                                                                    >
+                                                                        Remove logo
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
+                                                )}
                                             </div>
                                         );
                                     })}
@@ -5302,7 +5291,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 <div className="flex items-start gap-2.5 mb-4 p-3 rounded-xl bg-amber-50/80 border border-amber-100">
                                     <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                                     <p className="text-xs text-amber-900 leading-relaxed">
-                                        {hasRegistrations
+                                        {!canPayPending && paymentsClosed
+                                            ? 'Payments have closed. Contact the organiser about your outstanding entry fees.'
+                                            : hasRegistrations
                                             ? 'You have an outstanding payment to complete your registration.'
                                             : 'Complete your payment to secure your spot.'}
                                     </p>
@@ -5342,6 +5333,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                             onWithdraw={reg && entry.canWithdraw ? () => { setWithdrawAll(false); setSwitchMode(false); setSwitchTargetDivId(''); setWithdrawTarget(reg); } : undefined}
                                             onSwitch={reg && entry.canWithdraw && !isWeeklyEvent ? () => { setWithdrawAll(false); setSwitchMode(true); setSwitchWholeTeam(false); setSwitchTargetDivId(''); setWithdrawTarget(reg); } : undefined}
                                             onRemovePartner={reg && entry.canWithdraw ? () => setRemovePartnerTarget(reg) : undefined}
+                                            onReplacePartner={reg && entry.canReplacePartner ? () => setReplacePartnerTarget(reg) : undefined}
                                             withdrawLabel={entry.wasAddedByPartner && !entry.isPaid ? 'Decline' : 'Withdraw'}
                                         />
                                     );
@@ -5352,14 +5344,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 <p className="text-xs text-slate-500 mb-4 -mt-2">You can add a partner to any solo entry at any time.</p>
                             )}
                             <div className="flex flex-col gap-2.5 pt-1">
-                                {hasPendingPayment && !(event?.registration_closes_at && new Date(event.registration_closes_at).getTime() < Date.now()) && (
+                                {canPayPending && (
                                     <PrimaryBtn onClick={openPayWizard}>
                                         Pay Entry <CreditCard className="w-4 h-4" />
                                     </PrimaryBtn>
                                 )}
-                                {hasPendingPayment && event?.registration_closes_at && new Date(event.registration_closes_at).getTime() < Date.now() && (
+                                {canPayPending && event.allow_payments_after_close !== false && registrationFullyClosed && (
                                     <p className="text-xs text-amber-700 text-center leading-relaxed">
-                                        Registration has closed. Unpaid entries may be removed from the draw.
+                                        Registration has closed. You can still pay for your existing entries.
                                     </p>
                                 )}
                                 {canAddDivision && (
@@ -5518,6 +5510,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             </AnimatePresence>
 
             {/* Withdraw confirmation */}
+            {replacePartnerTarget && (
+                <ReplacePartnerDialog owner={replacePartnerTarget} onClose={() => setReplacePartnerTarget(null)}
+                    onReplaced={() => { loadMyRegs(); loadDivisionRegs(); refreshReplacements(); }} />
+            )}
             <AnimatePresence>
                 {withdrawTarget && (
                     <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4">

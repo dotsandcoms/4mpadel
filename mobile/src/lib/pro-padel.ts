@@ -1,3 +1,4 @@
+import { trackEvent } from './analytics';
 import { supabase } from '@/lib/supabase';
 
 export type ProCategory = 'men' | 'women';
@@ -15,13 +16,14 @@ export type ProMatch = {
   teams: ProPerson[][]; score: (string | number | null)[][];
   scheduledAt?: string | null; scheduleLabel?: string | null; court?: string | null;
 };
-export type ProTournament = { id: number; name: string; startDate: string; endDate: string; location: string | null; photoUrl: string | null; level?: string | null; status?: string | null; country?: string | null; venue?: string | null };
+export type ProTournament = { id: number; name: string; startDate: string; endDate: string; location: string | null; photoUrl: string | null; level?: string | null; status?: string | null; country?: string | null; venue?: string | null; address?: string | null; timezone?: string | null; courtType?: string | null; prize?: { amount: number; currency: string } | null; freshness?: { stale: boolean; updatedAt: string }; sourceUrl?: string; source?: string; matchesAvailable?: boolean };
 type Snapshot = { version: 1; updatedAt: string };
 export type ProRankings = Snapshot & { limit: number; categories: Record<ProCategory, { players: ProPlayer[]; editionDate?: string | null; previousEdition?: boolean }> };
 export type ProTour = Snapshot & { coverage: string; matches: ProMatch[]; tournaments: ProTournament[] };
 export type ProFixtures = Snapshot & { coverage: string; matches: ProMatch[]; drawPublished: boolean; tournament: ProTournament | null };
 export type ProFollow = { player_id: number; player_name: string; category: ProCategory };
-export type ProSnapshots = { rankings: ProRankings; tour: ProTour; fixtures: ProFixtures };
+export type FipCalendar = Snapshot & { sourceUrl?: string; tournaments: ProTournament[] };
+export type ProSnapshots = { rankings: ProRankings; tour: ProTour; fixtures: ProFixtures; 'fip-calendar': FipCalendar };
 export type ProResource<T> = { data: T | null; error: string | null };
 
 const isObject = (v: unknown): v is Record<string, any> => !!v && typeof v === 'object';
@@ -36,7 +38,9 @@ const match = (v: unknown) => isObject(v) && Number.isSafeInteger(v.id) && categ
 /** Validate public snapshots, never contact the credentialed provider from a device. */
 export function parseProSnapshot<K extends keyof ProSnapshots>(kind: K, value: unknown): ProSnapshots[K] {
   if (!isObject(value) || value.version !== 1 || !dated(value.updatedAt)) throw new Error('Invalid international padel snapshot');
-  if (kind === 'rankings') {
+  if (kind === 'fip-calendar') {
+    if (!Array.isArray(value.tournaments) || !value.tournaments.every((event: any) => Number.isSafeInteger(event.id) && event.id < 0 && typeof event.name === 'string' && dated(event.startDate) && dated(event.endDate) && /^https:\/\/www\.padelfip\.com\/events\//.test(event.sourceUrl || '') && event.matchesAvailable === false)) throw new Error('Invalid official FIP calendar');
+  } else if (kind === 'rankings') {
     if (!isObject(value.categories) || !['men', 'women'].every(c =>
       Array.isArray(value.categories[c]?.players) && value.categories[c].players.every((p: unknown) =>
         person(p) && isObject(p) && p.category === c && Number.isInteger(p.rank) && p.rank > 0))) throw new Error('Invalid rankings');
@@ -75,6 +79,7 @@ export async function setProFollow(userId: string, player: ProFollow, following:
   // A duplicate means another device already followed this player.
   if (error && !(following && error.code === '23505')) throw error;
   if (following && !error && !data?.length) throw new Error('Follow was not saved');
+  if (!error) void trackEvent('player_follow', { content_type: 'pro_player', enabled: following });
 }
 
 export function selectProMatches(matches: ProMatch[], ids: number[] | null, filter: ProCategory | 'all' = 'all', upcoming = false) {

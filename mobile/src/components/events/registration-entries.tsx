@@ -5,11 +5,13 @@ import { Accordion, EventIcon, EventText as Text, useEventAccent } from './websi
 import { PlayerAvatar } from './event-teams';
 import type { Division, EventDetail, EventRegistration } from '@/lib/events';
 import type { RankedPlayer } from '@/lib/event-teams';
-import { formatMoney, registrationState } from '@/lib/event-rules';
+import { formatMoney, registrationState, registrationPaymentClosed } from '@/lib/event-rules';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { lightBrand as brand } from '@/theme/tokens';
+import { paymentPresentation } from '@/lib/payment-presentation';
+import { PaymentStatus } from './payment-status';
 export function RegistrationEntries({ event, divisions, registrations, profiles, onManage, onRefresh, manageRequested, onManageOpened }: { manageRequested?: boolean; onManageOpened?: () => void; event: EventDetail; divisions: Division[]; registrations: EventRegistration[]; profiles: RankedPlayer[]; onManage: (mode?: 'pay') => void; onRefresh: () => Promise<void> }) {
   const router = useRouter();
   const [managing, setManaging] = useState(false);
@@ -20,12 +22,13 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
   const [target, setTarget] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const paid = (r: EventRegistration) => (r.payment_status === 'paid' && !(Number(r.balance?.due) > 0)) || Number(divisions.find(d => d.id === r.division_id)?.entry_fee) === 0;
-  const statusLabel = (r: EventRegistration) => Number(r.balance?.due) > 0 ? `${formatMoney(r.balance!.due!)} outstanding` : r.payment_status === 'paid' && !r.balance?.known ? 'Payment recorded · balance unverified' : paid(r) ? 'Paid & Confirmed' : 'Payment Pending';
+  const freeEntry = (r: EventRegistration) => { const fee = divisions.find(d => d.id === r.division_id)?.entry_fee ?? event.entry_fee; return fee != null && Number(fee) === 0; };
+  const paid = (r: EventRegistration) => paymentPresentation(r.payment_status, r.balance, freeEntry(r)).confirmed;
+  const statusLabel = (r: EventRegistration) => { const state = paymentPresentation(r.payment_status, r.balance, freeEntry(r)); return state.due != null ? `${formatMoney(state.due)} outstanding` : state.label; };
   const payBalance = (r: EventRegistration) => { setManaging(false); router.push({ pathname: '/events/pay-balance', params: { registrationId: r.id } }); };
   const addPartner = (r: EventRegistration) => { setManaging(false); router.push({ pathname: '/events/register', params: { id: String(event.id), mode: 'add-partner', entry: r.id } }); };
   const payDivision = (r: EventRegistration) => { setManaging(false); router.push({ pathname: '/events/register', params: { id: String(event.id), mode: 'pay', entry: r.id } }); };
-  const pending = registrations.some(r => !paid(r));
+  const pending = registrations.some(r => !paid(r) || !!r.partner_email && paymentPresentation(r.partner_payment_status, null, freeEntry(r)).tone === 'pending');
   const available = divisions.filter(d => d.id !== action?.entry.division_id && !registrations.some(r => r.division_id === d.id) && registrationState(event, d) === 'open');
   const targetDivision = available.find(d => d.id === target);
   const topUp = action?.kind === 'switch_division' && paid(action.entry) && targetDivision && Number(targetDivision.entry_fee || 0) > Number(divisions.find(d => d.id === action.entry.division_id)?.entry_fee || 0);
@@ -47,23 +50,26 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
     finally { setBusy(false); }
   };
   return <>
-    <Accordion highlighted pending={pending} singleLineTitle icon="trophy" title={`You are Registered for this Event${registrations.length > 1 ? ` (${registrations.length} divisions)` : ''}`}>
+    <Accordion highlighted highlightColor={pending ? '#D97706' : '#16A34A'} pending={pending} singleLineTitle icon="trophy" title={`You are Registered for this Event${registrations.length > 1 ? ` (${registrations.length} divisions)` : ''}`}>
       {pending && <View style={{ borderRadius: 12, padding: 12, backgroundColor: '#fffbebcc', borderWidth: 1, borderColor: '#fef3c7', flexDirection: 'row', alignItems: 'center', gap: 10 }}><EventIcon name="exclamationmark.circle" color="#d97706" size={16} /><Text style={{ color: '#78350f', fontSize: 12, lineHeight: 18, flex: 1 }}>{registrations.some(paid) ? 'You have an outstanding payment to complete your registration.' : 'Complete your payment to secure your spot.'}</Text></View>}
       <Text style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Your entries</Text>
       {registrations.map(r => <View key={r.id} style={{ borderRadius: 12, borderColor: '#e2e8f0', borderWidth: 1, backgroundColor: pending ? '#ffedd5' : '#f8fafc80', padding: 14 }}>
         <Text style={{ color: '#94a3b8', fontSize: 10 }}>DIVISION</Text><Text style={{ color: '#0f172a', fontSize: 14, fontWeight: '400', marginTop: 4 }}>{r.division}</Text>
         <View style={{ height: 1, backgroundColor: '#e2e8f0', marginVertical: 12 }} />
-        <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-          <View style={{ flex: 1, flexDirection: 'row', gap: 10, alignItems: 'center' }}><PlayerAvatar player={{ name: r.full_name, image: image(r.full_name) }} size={36} /><View style={{ flex: 1 }}><Text style={{ fontSize: 10, color: '#94a3b8' }}>PLAYER</Text><Text style={{ color: '#0f172a', fontSize: 14, marginTop: 2 }} numberOfLines={2}>{r.full_name}</Text></View></View>
+        <View style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+          <View style={{ flex: 1, minWidth: 0, gap: 10 }}><View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', minHeight: 48 }}><PlayerAvatar player={{ name: r.full_name, image: image(r.full_name) }} size={36} /><View style={{ flex: 1 }}><Text style={{ fontSize: 10, color: '#94a3b8' }}>PLAYER</Text><Text style={{ color: '#0f172a', fontSize: 14, marginTop: 2 }} numberOfLines={2}>{r.full_name}</Text></View></View><PaymentStatus status={r.payment_status} balance={r.balance} free={freeEntry(r)} /></View>
+          <View style={{ flex: 1, minWidth: 0, gap: 10 }}>
           <Pressable accessibilityRole="button" accessibilityLabel={r.partner_email ? `Manage partner ${r.partner_name || ''}` : 'Add partner to entry'} accessibilityState={{ disabled: registrationState(event, divisions.find(d => d.id === r.division_id)) !== 'open' || r.registered_by?.toLowerCase() !== r.email.toLowerCase() }} disabled={registrationState(event, divisions.find(d => d.id === r.division_id)) !== 'open' || r.registered_by?.toLowerCase() !== r.email.toLowerCase()} onPress={() => r.partner_email ? setManaging(true) : router.push({ pathname: '/events/register', params: { id: String(event.id), mode: 'add-partner', entry: r.id } })} style={{ flex: 1, flexDirection: 'row', gap: 10, alignItems: 'center', minHeight: 48 }}>
             {r.partner_email ? <PlayerAvatar player={{ name: r.partner_name || 'Partner', image: image(r.partner_name || '') }} size={36} /> : <View style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, borderStyle: 'dashed', borderColor: accent, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }}><EventIcon name="plus" color={accent} size={20} /></View>}
             <View style={{ flex: 1 }}><Text style={{ fontSize: 10, color: '#94a3b8' }}>PARTNER</Text><Text style={{ color: r.partner_email ? '#0f172a' : accent, fontSize: 14, marginTop: 2 }} numberOfLines={2}>{r.partner_name || 'Add partner'}</Text></View>
           </Pressable>
+          {!!r.partner_email && <PaymentStatus status={r.partner_payment_status} free={freeEntry(r)} />}
+          </View>
         </View>
-        <Text style={{ alignSelf: 'flex-start', fontSize: 10, color: paid(r) ? '#047857' : '#b45309', backgroundColor: paid(r) ? '#ecfdf5' : '#fffbeb', borderColor: paid(r) ? '#a7f3d0' : '#fde68a', borderWidth: 1, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3, marginTop: 12 }}>{statusLabel(r)}</Text>
         {registrationState(event, divisions.find(d => d.id === r.division_id)) === 'open' && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}><Outline label="⇄  Switch division" color="#7c3aed" onPress={() => begin('switch_division', r)} /><Outline label="Withdraw" color="#ef4444" onPress={() => begin('withdraw', r)} /></View>}
         {registrationState(event, divisions.find(d => d.id === r.division_id)) !== 'open' && <Text style={{ color: '#64748b', fontSize: 12, lineHeight: 18, marginTop: 10 }}>Self-service withdrawal closed with registration. Contact the organiser for entry changes.</Text>}
       </View>)}
+      {pending && registrations.some(r => !registrationPaymentClosed(event, divisions.find(d => d.id === r.division_id))) && registrationState(event) !== 'open' && event.event_status !== 'cancelled' && <Pressable accessibilityRole="button" accessibilityLabel="Pay existing entries" onPress={() => setManaging(true)} style={{ minHeight: 52, borderRadius: 12, backgroundColor: brand.accent, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 16 }}><EventIcon name="creditcard" color="#fff" size={18} /><Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>Pay existing entries</Text></Pressable>}
       {registrationState(event) === 'open' && <Pressable accessibilityRole="button" accessibilityLabel="Register another division" onPress={() => onManage()} style={{ minHeight: 52, borderRadius: 12, backgroundColor: brand.accent, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 16 }}><EventIcon name="plus" color="#fff" size={18} /><Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>Register another division</Text></Pressable>}
     </Accordion>
     <Modal visible={managing || !!action} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { if (!busy) { setAction(null); setManaging(false); } }}>
@@ -79,6 +85,7 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
           </View>
           {registrations.map((r, index) => {
             const editable = registrationState(event, divisions.find(d => d.id === r.division_id)) === 'open';
+            const paymentClosed = registrationPaymentClosed(event, divisions.find(d => d.id === r.division_id));
             const ownsBooking = r.registered_by?.toLowerCase() === r.email.toLowerCase();
             const balanceDue = Number(r.balance?.due || 0);
             return <View key={r.id} style={{ backgroundColor: brand.elevated, borderWidth: 1, borderColor: brand.edge, borderRadius: 22, overflow: 'hidden' }}>
@@ -89,12 +96,12 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
                   <Text style={{ color: brand.premium, fontSize: 22, fontWeight: '800', letterSpacing: -0.4 }}>{r.division}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <View style={{ flex: 1, minWidth: 0, alignItems: 'center', gap: 6 }}><PlayerAvatar player={{ name: r.full_name, image: image(r.full_name) }} size={44} /><Text style={{ color: brand.faint, fontSize: 10, fontWeight: '700', letterSpacing: 0.8 }}>PLAYER</Text><Text style={{ color: brand.premium, fontSize: 13, fontWeight: '700', textAlign: 'center' }} numberOfLines={2}>{r.full_name}</Text></View>
+                  <View style={{ flex: 1, minWidth: 0, alignItems: 'center', gap: 6 }}><PlayerAvatar player={{ name: r.full_name, image: image(r.full_name) }} size={44} /><Text style={{ color: brand.faint, fontSize: 10, fontWeight: '700', letterSpacing: 0.8 }}>PLAYER</Text><Text style={{ color: brand.premium, fontSize: 13, fontWeight: '700', textAlign: 'center' }} numberOfLines={2}>{r.full_name}</Text><PaymentStatus status={r.payment_status} balance={r.balance} free={freeEntry(r)} /></View>
                   <View style={{ alignSelf: 'center', width: 18, height: 1, backgroundColor: brand.edge }} />
                   <Pressable accessibilityRole="button" accessibilityLabel={r.partner_email ? `Partner ${r.partner_name || ''}` : 'Add partner to this division'} accessibilityState={{ disabled: !!r.partner_email || !editable || !ownsBooking }} disabled={!!r.partner_email || !editable || !ownsBooking} onPress={() => addPartner(r)} style={{ flex: 1, minWidth: 0, alignItems: 'center', gap: 6, minHeight: 86 }}>
                     {r.partner_email ? <PlayerAvatar player={{ name: r.partner_name || 'Partner', image: image(r.partner_name || '') }} size={44} /> : <View style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderStyle: 'dashed', borderColor: brand.faint, alignItems: 'center', justifyContent: 'center', backgroundColor: brand.page }}><EventIcon name="plus" size={18} color={brand.faint} /></View>}
                     <Text style={{ color: brand.faint, fontSize: 10, fontWeight: '700', letterSpacing: 0.8 }}>PARTNER</Text>
-                    <Text style={{ color: r.partner_name ? brand.premium : brand.muted, fontSize: 13, fontWeight: r.partner_name ? '700' : '400', textAlign: 'center' }} numberOfLines={2}>{r.partner_name || 'No partner yet'}</Text>
+                    <Text style={{ color: r.partner_name ? brand.premium : brand.muted, fontSize: 13, fontWeight: r.partner_name ? '700' : '400', textAlign: 'center' }} numberOfLines={2}>{r.partner_name || 'No partner yet'}</Text>{!!r.partner_email && <PaymentStatus status={r.partner_payment_status} free={freeEntry(r)} />}
                   </Pressable>
                 </View>
                 <View style={{ borderRadius: 15, backgroundColor: paid(r) ? '#EEF4E9' : '#FFF4E5', padding: 14, gap: 6 }}>
@@ -104,7 +111,8 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
                 </View>
                 {!!r.tshirt_size && <Text style={{ color: brand.muted, fontSize: 12 }}>T-shirt size · {r.tshirt_size}</Text>}
                 {r.payment_status === 'paid' && balanceDue > 0 && <ManageActionRow label={`Pay balance · ${formatMoney(balanceDue)}`} icon="card-outline" tone="primary" onPress={() => payBalance(r)} />}
-                {editable && (r.payment_status !== 'paid' || (r.partner_email && r.partner_payment_status !== 'paid')) && <ManageActionRow label={`Pay ${r.division} only`} icon="card-outline" tone="primary" onPress={() => payDivision(r)} />}
+                {!paymentClosed && (r.payment_status !== 'paid' || (r.partner_email && r.partner_payment_status !== 'paid')) && <ManageActionRow label={`Pay ${r.division} only`} icon="card-outline" tone="primary" onPress={() => payDivision(r)} />}
+                {paymentClosed && <Text style={{ color: brand.muted, fontSize: 13, lineHeight: 20 }}>Payments have closed. Contact the organiser about your outstanding entry fees.</Text>}
                 {!editable ? <Text style={{ color: brand.muted, fontSize: 13, lineHeight: 20 }}>Registration is closed. Contact the organiser for entry changes.</Text> : <View style={{ borderTopWidth: 1, borderTopColor: brand.edge, paddingTop: 8 }}>
                   {r.partner_email ? ownsBooking ? <ManageActionRow label="Remove partner" icon="person-remove-outline" tone="danger" onPress={() => begin('remove_partner', r)} /> : <Text style={{ color: brand.muted, fontSize: 13, lineHeight: 20, paddingVertical: 12 }}>The booking owner manages partner changes.</Text> : <ManageActionRow label="Add partner" icon="person-add-outline" tone="secondary" onPress={() => addPartner(r)} />}
                   <ManageActionRow label="Switch division" icon="swap-horizontal" onPress={() => begin('switch_division', r)} />

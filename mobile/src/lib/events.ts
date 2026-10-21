@@ -1,7 +1,10 @@
+import { trackEvent } from './analytics';
 import { supabase } from './supabase';
 import { featuredBackgroundSource, type CalendarEvent } from './home';
+import { loadEventDrawStatus } from './event-draws';
 
 export type EventDetail = CalendarEvent & {
+  rankedin_id?: string | null;
   collect_tshirt_size?: boolean; allow_tshirt_logo_upload?: boolean; allow_tshirt_sponsor_name?: boolean;
   image?: string | null;
   event_dates?: string | null;
@@ -23,6 +26,7 @@ export type EventDetail = CalendarEvent & {
   sanctioning_details?: string | null;
   withdrawal_substitution?: string | null;
   youtube_playlist_url?: string | null;
+  media_gallery_urls?: string[] | null;
   gallery_album_id?: string | null;
   max_players?: number | null;
   default_match_format?: string | null;
@@ -43,6 +47,7 @@ export type EventDetail = CalendarEvent & {
   organiser_email?: string | null;
   contact_details?: string | null;
   payment_method?: string | null;
+  allow_payments_after_close?: boolean;
   payment_instructions?: string | null;
   payment_bank_name?: string | null;
   payment_account_name?: string | null;
@@ -157,6 +162,7 @@ export async function setEventScheduled(eventId: number, saved: boolean) {
     const { error } = await supabase.from('player_schedule_events').delete()
       .ilike('user_email', email).eq('event_id', eventId);
     if (error) throw error;
+    void trackEvent('schedule_change', { enabled: false });
     return;
   }
   const { data: existing, error: lookupError } = await supabase.from('player_schedule_events')
@@ -166,6 +172,7 @@ export async function setEventScheduled(eventId: number, saved: boolean) {
   const { error } = await supabase.from('player_schedule_events')
     .insert({ user_email: email, event_id: eventId });
   if (error && error.code !== '23505') throw error;
+  if (!error) void trackEvent('schedule_change', { enabled: true });
 }
 
 export async function fetchMyEventRegistrations(eventId: number, email: string) {
@@ -175,13 +182,13 @@ export async function fetchMyEventRegistrations(eventId: number, email: string) 
   return data as EventRegistration[];
 }
 
-export type PublicEntry = { id: string; full_name: string; partner_name: string | null; division: string; division_id: string | null; email_hash?: string; partner_email_hash?: string; registered_by_hash?: string; status?: string };
+export type PublicEntry = { id: string; full_name: string; partner_name: string | null; division: string; division_id: string | null; email_hash?: string; partner_email_hash?: string; registered_by_hash?: string; status?: string; payment_status?: string | null };
 export type EventOrganisation = { name: string; logo_url: string | null; slug: string | null };
 export async function fetchPublicEntries(eventId: number): Promise<PublicEntry[]> {
   const entries: PublicEntry[] = [];
   for (let offset = 0; ; offset += 500) {
     const { data, error } = await supabase.from('event_registrations_public')
-      .select('id, full_name, partner_name, division, division_id, email_hash, partner_email_hash, registered_by_hash, status').eq('event_id', eventId).range(offset, offset + 499);
+      .select('id, full_name, partner_name, division, division_id, email_hash, partner_email_hash, registered_by_hash, status, payment_status').eq('event_id', eventId).range(offset, offset + 499);
     if (error) throw error;
     entries.push(...data as PublicEntry[]);
     if (data.length < 500) return entries;
@@ -193,18 +200,8 @@ export async function fetchEventOrganisation(id?: string | null): Promise<EventO
   if (error) throw error;
   return data;
 }
-export async function fetchDrawStatus(event: EventDetail) {
-  if (event.is_manual) {
-    const { data, error } = await supabase.from('draws').select('id, status').eq('event_id', event.id).in('status', ['published', 'in_progress', 'completed']);
-    if (error) throw error;
-    const started = data.length ? await supabase.from('draw_matches').select('id', { count: 'exact', head: true }).in('draw_id', data.map(row => row.id)).in('status', ['in_progress', 'completed', 'walkover', 'retired']) : { count: 0, error: null };
-    if (started.error) throw started.error;
-    return { hasDraw: data.length > 0, hasResults: data.some(row => row.status === 'completed'), isFinished: data.length > 0 && data.every(row => row.status === 'completed'), isLive: (started.count ?? 0) > 0 };
-
-  }
-  const { data, error } = await supabase.from('rankedin_results_cache').select('has_draw, has_results').eq('event_id', event.id).maybeSingle();
-  if (error) throw error;
-  return { hasDraw: !!data?.has_draw, hasResults: !!data?.has_results, isFinished: false, isLive: false };
+export async function fetchDrawStatus(event: EventDetail, preferNative = false) {
+  return loadEventDrawStatus(supabase, event, preferNative);
 }
 
 /** Same precedence as website imageUtils.getEventImage. */
@@ -218,7 +215,7 @@ export async function fetchEventPlayerRankings(): Promise<import('./event-teams'
   const players: import('./event-teams').RankedPlayer[] = [];
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await supabase.from('players_public')
-      .select('id, name, image_url, rankedin_id, rankings, points, rank_label, preferred_ranking, active_ranking_label, category, gender')
+      .select('id, name, image_url, nationality, rankedin_id, rankings, points, rank_label, preferred_ranking, active_ranking_label, category, gender')
       .order('id').range(offset, offset + 999);
     if (error) throw error;
     players.push(...data);

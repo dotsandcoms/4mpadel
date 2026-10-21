@@ -14,7 +14,7 @@ Following combines local and professional favourites with namespaced identities.
 
 ## Backend
 
-Applied `supabase/migrations/20260929090000_local_player_follows.sql` to the linked project. Own-account read/insert/delete policies protect local follows; insert requires an approved public player. No public follower counts or notification delivery changes were introduced.
+Applied `supabase/migrations/20260929090000_local_player_follows.sql` to the linked project. Own-account read/insert/delete policies protect local follows; insert requires an approved public player. Notification delivery is unchanged.
 
 Deployed `supabase/functions/player-search/index.ts`. The function validates the signed-in account, validates search inputs, uses a fixed upstream origin and keeps the provider credential server-side. It uses bounded per-instance caching, a request gate, timeout and friendly provider-limit errors. The provider's API quota still applies; cache/rate limiting is per function instance, not a global quota coordinator.
 
@@ -28,3 +28,11 @@ Deployed `supabase/functions/player-search/index.ts`. The function validates the
 - Existing production follow preferences were not modified during database verification.
 
 Physical-device installation remains a separate next build. This change does not alter the Bradley-only push test restriction.
+
+## Profile follower counts — 20 October 2026
+
+Approved local player profiles and the account's own Profile header show the follower total beneath the player's name, using the existing light-theme typography. Zero and singular counts display as `0 followers` and `1 follower`. Counts refresh on focus, pull-to-refresh and successful follow/unfollow actions. Failed or superseded reads never become a false zero or another player's count.
+
+Applied `20261020091314_player_follower_counts.sql` to the linked 4M project. The public `get_player_follower_count` RPC uses invoker rights and reads an intentionally owner-rights aggregate in the unexposed `profile_social` schema. It returns only a total for approved players, including to guests. Follow identities retain their existing owner-only RLS; the aggregate view contains only player IDs and counts. A player-ID index supports the lookup.
+
+Validation: player-hub, public-player, profile-login and photo regression tests passed, as did TypeScript. `tests/player-followers.sql` passed against the linked backend and rolled back all fixtures. It checks multiple followers, guest totals, zero counts, hidden profiles, owner-only follow reads and immediate count changes after following/unfollowing. No new security-advisor findings were introduced. The profile display requires the next app build.

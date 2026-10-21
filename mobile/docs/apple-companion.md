@@ -10,6 +10,8 @@ Watch visual reference: the existing native 4M event screen and bundled calendar
 own the dark surfaces, padel photography and lime actions. Compact date tiles make
 the agenda scannable; red marks payment pending, muted blue-grey marks saved events.
 List titles are capped at three lines, with full event titles in the detail view.
+Agenda cards and event details put the title, date/time, venue and court before artwork
+so the schedule is readable at a glance.
 Cards use each event's custom image, poster or image URL (in that order), synced from
 the phone. Graphics fit without cropping poster text or sponsors. Shared 4M artwork
 is the fallback for missing/loading/failed images. Remote graphics need connectivity.
@@ -18,6 +20,9 @@ is the fallback for missing/loading/failed images. Remote graphics need connecti
 - Saved event / Registered / Entry paid / Payment pending are distinct states.
 - Watch app has a remembered Matches / Events selector, the next few items in that
   category and a refresh-from-iPhone control. Events are saved/entered personal events.
+- Before an explicit category choice, the Watch automatically shows the category of
+  the next upcoming item. Initial empty data does not lock the app into Matches.
+  An explicit choice remains remembered even if that category has no upcoming items.
 - Event titles in the Watch agenda open a native event card with the synced title,
   date/time, city, venue and entry status. Venue links open Apple Maps. Detail cards
   respond to schedule changes/sign-out; registration and payment remain on iPhone.
@@ -30,6 +35,12 @@ is the fallback for missing/loading/failed images. Remote graphics need connecti
 - Each widget can be configured to show Matches, Events, or Matches & events via
   Edit Widget → Show. Separate widget instances can use different choices. This also
   applies to Watch widgets; the Watch app's selector remains independent.
+- Watch complication/Smart Stack taps select the corresponding category and open
+  that exact event's native detail card. Match taps open Matches. Missing events show
+  the unavailable state until refreshed. Links use `fourmpadel-watch://schedule` with
+  encoded `kind` and `id` parameters; iPhone widgets keep their existing phone routes.
+  A complication selection applies to the current app session without replacing the
+  user's remembered manual category choice.
 - Registration, licence purchase and payments remain on the phone.
 - iPhone widgets show a date-based LIVE tag while an event is underway, and a native
   ticking countdown to registration opening/closing or a known start time. Timeline
@@ -57,6 +68,10 @@ The same group name does NOT share storage across devices: WatchConnectivity doe
 Refresh on Watch requests the last phone snapshot, not a new backend fetch. Open Home
 on the phone to fetch a fresh schedule. There is no standalone watch login or backend
 polling/background fetch in Phase 1.
+Refresh ignores duplicate taps and finishes on a valid reply (including an older or
+signed-out snapshot), an empty/invalid reply, a connection error, or a 15-second timeout.
+Failures retain the last schedule and give retry guidance; late errors cannot overwrite
+a successful sync or a newer refresh.
 
 Sign-out/account changes clear the phone snapshot and queue the cleared Watch state.
 An offline Watch can retain its previous snapshot until the next delivery; the UI shows
@@ -85,6 +100,16 @@ and app files was saved locally at `/tmp/4m-ios-before-companion.tgz` for this s
 Watch app/widget minimum: watchOS 10. iPhone widget minimum: iOS 17.
 App Group: `group.com.fourmpadel.app.schedule`.
 Bundle IDs: `com.fourmpadel.app.watchkitapp`, `.watchkitapp.nextup`, `.nextup`.
+
+Native refresh regression checks (on a Mac with Xcode):
+
+```sh
+xcrun swiftc -module-cache-path /tmp/4m-watch-module-cache targets/_shared/Schedule.swift targets/watch/WatchRefreshState.swift scripts/test-watch-refresh.swift -o /tmp/4m-watch-refresh-tests
+/tmp/4m-watch-refresh-tests
+xcrun swiftc -module-cache-path /tmp/4m-watch-module-cache targets/_shared/Schedule.swift targets/watch/WatchNavigation.swift scripts/test-watch-navigation.swift -o /tmp/4m-watch-navigation-tests
+/tmp/4m-watch-navigation-tests
+node scripts/test-companion.cjs
+```
 
 ## Release work still required
 

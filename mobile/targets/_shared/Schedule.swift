@@ -1,4 +1,8 @@
 import Foundation
+#if canImport(ImageIO)
+import ImageIO
+import CoreGraphics
+#endif
 
 struct ScheduleItem: Codable, Identifiable {
   let id: String
@@ -34,6 +38,11 @@ struct ScheduleItem: Codable, Identifiable {
     return nil
   }
   var destination: URL { URL(string: "fourmpadel://" + path) ?? URL(string: "fourmpadel:///calendar")! }
+  var watchDestination: URL {
+    var components = URLComponents(string: "fourmpadel-watch://schedule")!
+    components.queryItems = [URLQueryItem(name: "kind", value: kind), URLQueryItem(name: "id", value: id)]
+    return components.url!
+  }
   var mapsDestination: URL? {
     let name = venue.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !name.isEmpty else { return nil }
@@ -72,17 +81,66 @@ struct ScheduleSnapshot: Codable {
 enum ScheduleStore {
   static let group = "group.com.fourmpadel.app.schedule"
   static let key = "schedule-v1"
+  static func decode(_ text: String) -> ScheduleSnapshot? {
+    guard let data = text.data(using: .utf8),
+      let value = try? JSONDecoder().decode(ScheduleSnapshot.self, from: data),
+      value.version == 1 else { return nil }
+    return value
+  }
   static func read() -> ScheduleSnapshot {
     guard let text = UserDefaults(suiteName: group)?.string(forKey: key),
-      let data = text.data(using: .utf8), let value = try? JSONDecoder().decode(ScheduleSnapshot.self, from: data),
-      value.version == 1 else { return .empty }
+      let value = decode(text) else { return .empty }
     return value
   }
   @discardableResult static func save(_ text: String) -> Bool {
-    guard let data = text.data(using: .utf8), let value = try? JSONDecoder().decode(ScheduleSnapshot.self, from: data), value.version == 1 else { return false }
+    guard let value = decode(text) else { return false }
     // Ignore an older in-flight update that arrives after a newer account/sign-out snapshot.
     if value.updatedAt < read().updatedAt { return false }
+    if UserDefaults(suiteName: group)?.string(forKey: key) == text { return false }
     UserDefaults(suiteName: group)?.set(text, forKey: key)
     return true
   }
 }
+
+#if canImport(ImageIO)
+/** Cache only thumbnails; large posters never become full-resolution bitmaps. */
+enum ScheduleArtwork {
+  private static let session: URLSession = {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.timeoutIntervalForRequest = 8
+    configuration.timeoutIntervalForResource = 12
+    configuration.httpShouldSetCookies = false
+    configuration.httpMaximumConnectionsPerHost = 3
+    return URLSession(configuration: configuration)
+  }()
+  private static let cache: NSCache<NSString, CGImage> = {
+    let cache = NSCache<NSString, CGImage>()
+    cache.countLimit = 12
+    cache.totalCostLimit = 6 * 1024 * 1024
+    return cache
+  }()
+  static func load(_ text: String?, maxPixels: Int) async -> CGImage? {
+    guard let text, let url = URL(string: text), url.scheme == "https" else { return nil }
+    let key = "\(text)|\(maxPixels)" as NSString
+    if let saved = cache.object(forKey: key) { return saved }
+    do {
+      let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 8)
+      let (file, response) = try await session.download(for: request)
+      defer { try? FileManager.default.removeItem(at: file) }
+      try Task.checkCancellation()
+      guard let response = response as? HTTPURLResponse, response.statusCode == 200,
+        response.url?.scheme == "https",
+        let size = try file.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 8_000_000,
+        let source = CGImageSourceCreateWithURL(file as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
+        let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+          kCGImageSourceCreateThumbnailFromImageAlways: true,
+          kCGImageSourceThumbnailMaxPixelSize: maxPixels,
+          kCGImageSourceCreateThumbnailWithTransform: true,
+          kCGImageSourceShouldCacheImmediately: true
+        ] as CFDictionary) else { return nil }
+      cache.setObject(image, forKey: key, cost: image.bytesPerRow * image.height)
+      return image
+    } catch { return nil }
+  }
+}
+#endif

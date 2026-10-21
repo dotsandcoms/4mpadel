@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react';
+import { fetchRankedinPointSnapshot } from '../utils/rankedinResults';
 import { supabase } from '../supabaseClient';
 import { normalizeRankedinMatchScore } from '../utils/rankedinMatchScore';
+import { publicRankedinClasses, publicRankedinMatches, requiresRankedinPublication } from '../utils/rankedinDrawPublication';
 import { SAPA_FALLBACK_RANKEDIN, fetchDefaultFederationRankedinConfig } from '../utils/federation';
 
 // Rankedin API Base URL
@@ -147,6 +149,9 @@ const fetchWithCache = async (url, options = {}, cacheDurationMs = 1000 * 60 * 6
     // RankedIn can briefly return empty leaderboards during its weekly rollover.
     // Never let those responses replace or mask a populated leaderboard for six hours.
     const isLeaderboard = /\/ranking\/getrankingsasync\?/i.test(url);
+    // Older clients can republish a previous ranking edition into the legacy
+    // cache. Isolate this reader and bypass upstream HTTP caches on live refresh.
+    const cacheKey = isLeaderboard ? `${url}&_4m_cache_version=2` : url;
     // Rankings can change throughout the day, independently of the scheduled sync.
     const maxCacheAgeMs = isLeaderboard ? Math.min(cacheDurationMs, 5 * 60 * 1000) : cacheDurationMs;
     const isUsablePayload = (payload) => !isLeaderboard || (
@@ -159,7 +164,7 @@ const fetchWithCache = async (url, options = {}, cacheDurationMs = 1000 * 60 * 6
             const { data, error } = await supabase
                 .from('rankedin_cache')
                 .select('payload, updated_at')
-                .eq('url', url)
+                .eq('url', cacheKey)
                 .maybeSingle();
 
             if (data && isUsablePayload(data.payload)) {
@@ -177,7 +182,8 @@ const fetchWithCache = async (url, options = {}, cacheDurationMs = 1000 * 60 * 6
 
     // 2. Fetch live from RankedIn API
     try {
-        const response = await fetchWithTimeout(url, options);
+        const liveUrl = isLeaderboard ? `${url}&_4m_refresh=${Date.now()}` : url;
+        const response = await fetchWithTimeout(liveUrl, options);
         if (!response.ok) throw new Error(`Rankedin API status ${response.status}`);
         const data = await response.json();
         if (!isUsablePayload(data)) {
@@ -187,7 +193,7 @@ const fetchWithCache = async (url, options = {}, cacheDurationMs = 1000 * 60 * 6
         // 3. Save to Supabase cache asynchronously so we don't block the client
         supabase
             .from('rankedin_cache')
-            .upsert({ url, payload: data, updated_at: new Date().toISOString() }, { onConflict: 'url' })
+            .upsert({ url: cacheKey, payload: data, updated_at: new Date().toISOString() }, { onConflict: 'url' })
             .then(({ error }) => {
                 if (error) console.error("Cache write error:", error.message);
             });
@@ -201,7 +207,7 @@ const fetchWithCache = async (url, options = {}, cacheDurationMs = 1000 * 60 * 6
             const { data } = await supabase
                 .from('rankedin_cache')
                 .select('payload')
-                .eq('url', url)
+                .eq('url', cacheKey)
                 .maybeSingle();
 
             if (data && data.payload && isUsablePayload(data.payload)) {
@@ -342,7 +348,7 @@ export const useRankedin = () => {
                 {},
                 1000 * 60 * 2 // 2 minutes cache
             );
-            return data || [];
+            return publicRankedinClasses(tournamentId, data);
         } catch (err) {
             console.error('Error fetching tournament classes:', err);
             setError(err.message);
@@ -533,7 +539,10 @@ export const useRankedin = () => {
             if (isFinished !== undefined) url += `&isFinished=${isFinished}`;
 
             const data = await fetchWithCache(url, {}, 1000 * 60 * 2); // 2 minutes cache
-            return data.Matches || [];
+            const classes = requiresRankedinPublication(tournamentId)
+                ? await getTournamentClasses(tournamentId)
+                : [];
+            return publicRankedinMatches(tournamentId, data, classes);
         } catch (err) {
             console.error('Error fetching tournament matches:', err);
             setError(err.message);
@@ -541,7 +550,7 @@ export const useRankedin = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [getTournamentClasses]);
 
     /**
      * Attempts to find winners for all classes in a tournament.
@@ -1101,27 +1110,7 @@ export const useRankedin = () => {
      * @returns {Promise<Array<{ date: string, name: string, class: string, place: string, event_type: string, points: number }>>}
      */
     const getParticipantPointsDetails = useCallback(async (rankingParticipantId, ageGroup, showAll = false) => {
-        if (!rankingParticipantId || !ageGroup) return [];
-        const take = 100;
-        const rows = [];
-        for (let skip = 0; ; skip += take) {
-            const url = `${API_BASE}/ranking/getparticipantpointsdetailsasync?id=${rankingParticipantId}&agegroup=${ageGroup}&weekfromnow=0&showAll=${showAll ? 'true' : 'false'}&language=en&skip=${skip}&take=${take}`;
-            const data = await fetchWithCache(url, {}, 1000 * 60 * 10);
-            const page = data?.ParticipantWithPoints?.EventPoints?.Payload || [];
-            rows.push(...page);
-            if (page.length < take) break;
-        }
-        return rows.map((ep) => {
-            const eventType = ep.EventPoint?.EventType;
-            return {
-                date: ep.EventPoint?.Date || '',
-                name: ep.EventName || ep.EventPoint?.EventName?.split('|')[0]?.trim() || '',
-                class: ep.EventPoint?.EventName?.split('| Class:')[1]?.trim() || '',
-                place: ep.EventPoint?.Standing || '',
-                event_type: eventType === 3 ? 'team league' : 'tournament',
-                points: ep.EventPoint?.Points ? parseFloat(ep.EventPoint.Points) : 0,
-            };
-        });
+        return (await fetchRankedinPointSnapshot(rankingParticipantId, ageGroup, showAll)).details;
     }, []);
 
     return {

@@ -1,0 +1,33 @@
+create extension if not exists pgcrypto;
+do $$begin if not exists(select 1 from pg_roles where rolname='anon') then create role anon; create role authenticated; create role service_role bypassrls;end if;end $$;
+create schema auth;
+create table auth.users(id uuid primary key);
+insert into auth.users values('00000000-0000-0000-0000-000000000001');
+create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('test.uid',true),'')::uuid$$;
+create function auth.email() returns text language sql stable as $$select nullif(current_setting('test.email',true),'')$$;
+create function auth.role() returns text language sql stable as $$select nullif(current_setting('test.role',true),'')$$;
+create table public.players(id bigint primary key,name text,email text,license_type text,paid_registration boolean);
+create table public.admin_sidebar_permissions(email text,role text,allowed_tabs text[]);
+create function public.is_super_admin(text) returns boolean language sql as $$ select $1='admin@test.test' $$;
+create schema private;
+-- Existing RLS helper: license migrations must preserve its read permission.
+create function private.managed_event_player_emails() returns setof text language sql stable security definer set search_path='' as $$select email from public.players where public.is_super_admin(auth.email())$$;
+grant usage on schema private to authenticated;
+grant execute on function private.managed_event_player_emails() to authenticated;
+alter table public.players enable row level security;
+create policy "Read player profiles" on public.players for select to authenticated using(email=auth.email() or email in(select private.managed_event_player_emails()));
+grant select on public.players to authenticated;
+create function public.mark_player_paid(text) returns void language sql as $$ select $$;
+create function public.grant_partner_full_license(bigint) returns void language sql as $$ select $$;
+create table public.calendar(id bigint primary key,event_name text,start_date date,end_date date);
+create table public.payments(id uuid primary key default gen_random_uuid(),player_id bigint references public.players(id),event_id bigint,amount numeric,currency text,status text,payment_type text,payment_method text,reference text unique,is_test boolean,metadata jsonb default '{}',created_at timestamptz default now());
+create table public.temporary_licenses(id uuid primary key default gen_random_uuid(),player_id bigint references public.players(id),event_id bigint,event_name varchar,event_date timestamptz,created_at timestamptz default now());
+create table public.native_license_checkouts(reference text primary key,user_id uuid,player_id bigint,amount numeric,pricing jsonb,authorization_url text,created_at timestamptz default now());
+create table public.commerce_config(id text primary key,temp_license_price numeric,temp_license_enabled boolean,updated_at timestamptz,updated_by uuid,license_fee_percent numeric default 0);
+insert into public.players values(1,'Full holder','full@test.test','full',true),(2,'Temp holder','temp@test.test','temporary',true),(3,'New player','new@test.test','none',false);
+insert into public.calendar values(10,'2026 event','2026-11-01','2026-11-03'),(11,'2027 event','2027-02-01','2027-02-03');
+insert into public.temporary_licenses(player_id,event_id,event_name,event_date) values(2,10,'2026 event','2026-11-03');
+insert into public.commerce_config(id,temp_license_price,temp_license_enabled,updated_at,updated_by) values('default',120,true,now(),null);
+
+create table public.event_registrations(id uuid primary key default gen_random_uuid(),email text);
+create table public.payment_refunds(id uuid primary key default gen_random_uuid(),payment_id uuid,event_registration_id uuid,amount numeric,status text,metadata jsonb default '{}');

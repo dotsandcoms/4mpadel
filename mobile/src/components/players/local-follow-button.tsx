@@ -5,7 +5,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { fetchLocalFollows, setLocalFollow } from '@/lib/player-hub';
 
-export function LocalFollowButton({ playerId, name, iconOnly = false, onSignIn }: { playerId: string; name: string; iconOnly?: boolean; onSignIn?: () => void }) {
+export function LocalFollowButton({ playerId, name, iconOnly = false, onSignIn, onFollowChange }: { playerId: string; name: string; iconOnly?: boolean; onSignIn?: () => void; onFollowChange?: () => void }) {
   const router = useRouter();
   const [following, setFollowing] = useState(false), [busy, setBusy] = useState(true), [error, setError] = useState('');
   const owner = useRef<string | null>(null), epoch = useRef(0), lock = useRef(false);
@@ -34,7 +34,7 @@ export function LocalFollowButton({ playerId, name, iconOnly = false, onSignIn }
     if (!owner.current) { onSignIn?.(); router.push('/(auth)/sign-in'); return; }
     const id = owner.current, version = ++epoch.current, next = !following;
     lock.current = true; setBusy(true);
-    try { await setLocalFollow(id, playerId, next); if (epoch.current === version) setFollowing(next); }
+    try { await setLocalFollow(id, playerId, next); if (epoch.current === version) { setFollowing(next); onFollowChange?.(); } }
     catch { if (epoch.current === version) setError('Could not save your follow. Reopen this profile to retry.'); }
     finally { lock.current = false; if (epoch.current === version) setBusy(false); }
   };

@@ -1,3 +1,4 @@
+import { trackEvent } from '@/lib/analytics';
 import { SponsorField } from '@/components/sponsor-field';
 import { parseSponsors, serializeSponsors } from '@/lib/sponsors';
 import { SymbolView } from 'expo-symbols';
@@ -43,6 +44,7 @@ import {
   type PlayerDraft,
 } from '@/lib/profile';
 import { openLegal } from '@/lib/legal';
+import { COURT_SIDE_OPTIONS, PLAYING_HAND_OPTIONS, courtSideLabel, playingHandLabel } from '@/lib/player-preferences';
 import {
   CATEGORIES,
   GENDERS,
@@ -110,6 +112,8 @@ export default function CompleteProfileScreen() {
   const [category, setCategory] = useState('');
   const [clubId, setClubId] = useState('');
   const [customClub, setCustomClub] = useState('');
+  const [courtSide, setCourtSide] = useState('');
+  const [playingHand, setPlayingHand] = useState('');
   const [bio, setBio] = useState('');
   const [instagramLink, setInstagramLink] = useState('');
   const [sponsors, setSponsors] = useState('');
@@ -130,6 +134,8 @@ export default function CompleteProfileScreen() {
       category,
       clubId,
       customClub,
+      courtSide,
+      playingHand,
       bio,
       instagramLink,
       sponsors: serializeSponsors([...parseSponsors(sponsors), ...parseSponsors(sponsorInput)]),
@@ -144,6 +150,8 @@ export default function CompleteProfileScreen() {
     clubId,
     contactNumber,
     customClub,
+    courtSide,
+    playingHand,
     customRacketBrand,
     email,
     firstName,
@@ -180,6 +188,8 @@ export default function CompleteProfileScreen() {
           setCategory((v) => v || saved.category || '');
           setClubId((v) => v || saved.clubId || '');
           setCustomClub((v) => v || saved.customClub || '');
+          setCourtSide((v) => v || (courtSideLabel(saved.courtSide) ? saved.courtSide! : ''));
+          setPlayingHand((v) => v || (playingHandLabel(saved.playingHand) ? saved.playingHand! : ''));
           setBio((v) => v || saved.bio || '');
           setInstagramLink((v) => v || saved.instagramLink || '');
           setSponsors((v) => v || saved.sponsors || '');
@@ -310,18 +320,21 @@ export default function CompleteProfileScreen() {
       return;
     }
     setSavingStep(true);
-    await saveProfileDraft(draft());
-    if (!reduced) {
-      await new Promise((resolve) => setTimeout(resolve, 520));
+    try {
+      await saveProfileDraft(draft());
+      if (!reduced) await new Promise((resolve) => setTimeout(resolve, 520));
+      setHasStepped(true);
+      setStep(2);
+    } catch {
+      setFormError('Your draft could not be saved securely. Please try again.');
+    } finally {
+      setSavingStep(false);
     }
-    setHasStepped(true);
-    setStep(2);
-    setSavingStep(false);
   }
 
   async function saveAndExit() {
-    await saveProfileDraft(draft());
-    await signOut();
+    try { await saveProfileDraft(draft()); await signOut(); }
+    catch { setFormError('Your draft could not be saved securely. Please try again before signing out.'); }
   }
 
   async function finish() {
@@ -338,6 +351,7 @@ export default function CompleteProfileScreen() {
     setBusy(true);
     try {
       await createPlayerProfile(draft(), clubs);
+      void trackEvent('profile_completed');
       await clearProfileDraft(email);
       router.replace('/(tabs)');
     } catch (e: any) {
@@ -616,6 +630,22 @@ export default function CompleteProfileScreen() {
                     autoCorrect
                   />
                 ) : null}
+
+                <SectionLabel>Playing preferences (optional)</SectionLabel>
+                <SelectField
+                  label="Court side"
+                  value={courtSide}
+                  valid={!!courtSide}
+                  options={COURT_SIDE_OPTIONS}
+                  onChange={setCourtSide}
+                />
+                <SelectField
+                  label="Playing hand"
+                  value={playingHand}
+                  valid={!!playingHand}
+                  options={PLAYING_HAND_OPTIONS}
+                  onChange={setPlayingHand}
+                />
 
                 <SectionLabel>About your game</SectionLabel>
                 <LiquidField

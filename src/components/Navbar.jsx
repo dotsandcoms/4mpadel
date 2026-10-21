@@ -170,10 +170,6 @@ const Navbar = ({ isDark = false, accentColor }) => {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
-
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -253,6 +249,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
     { name: 'Home', href: '/' },
     { name: 'Players', href: '/players' },
     { name: 'Rankings', href: '/rankings' },
+    { name: 'Pro Padel', href: '/pro' },
     { name: 'Calendar', href: '/calendar' },
     { name: 'Media', href: '/gallery' },
     {

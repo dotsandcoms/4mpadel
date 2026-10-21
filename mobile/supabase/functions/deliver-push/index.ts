@@ -1,5 +1,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { deliveryDecision, retryDelay } from './policy.ts';
+import { refreshProMatchAlerts } from './pro-match-alerts.ts';
+import { refreshFollowingActivity } from './following-activity.ts';
+import { createPadelFetch } from '../_shared/padel-api.ts';
 
 const client = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 async function checked<T>(request: PromiseLike<{ data: T; error: unknown }>): Promise<T> {
@@ -25,6 +28,9 @@ Deno.serve(async request => {
   if (!secret || request.headers.get('Authorization') !== `Bearer ${secret}`) return new Response('Unauthorized', { status: 401 });
   if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
   try {
+    const providerFetch = createPadelFetch(client);
+    // A provider outage must not block the existing tournament notification queue.
+    await refreshProMatchAlerts(client, Deno.env.get('PADEL_API_TOKEN'), providerFetch).catch(() => console.warn('Pro match alert refresh failed'));
     await checked(client.rpc('refresh_tournament_notifications'));
     const jobs = await checked(client.rpc('claim_push_deliveries', { p_recipient_emails: null }));
     let processed = 0;
@@ -43,6 +49,9 @@ Deno.serve(async request => {
             if (receipt.details?.error === 'DeviceNotRegistered' && token) await checked(client.from('player_push_tokens').delete().eq('id', token.id).eq('token', token.token).eq('email', token.email));
           }
           processed++; return;
+        }
+        if (outbox.type === 'pro_match_live' && !await checked(client.rpc('pro_match_alert_is_active', { p_outbox: outbox.id }))) {
+          await finish({ status: 'skipped', error: 'Match alert removed or expired' }); processed++; return;
         }
         // Stored player email casing may differ; use a security-definer exact-normalized lookup.
         const context = await checked(client.rpc('push_delivery_context', { p_outbox: outbox.id }));
@@ -78,6 +87,7 @@ Deno.serve(async request => {
     for (let i = 0; i < (jobs?.length ?? 0); i += 5) {
       await Promise.all(jobs!.slice(i, i + 5).map(processJob));
     }
+    await refreshFollowingActivity(client, Deno.env.get('PADEL_API_TOKEN'), providerFetch).catch(() => console.warn('Following activity refresh failed'));
     return Response.json({ processed });
   } catch {
     return Response.json({ error: 'Push worker failed; inspect delivery state before retrying.' }, { status: 500 });

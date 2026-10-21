@@ -18,6 +18,7 @@ function server(options = {}) {
   };
   const client = {
     auth: { getUser: async () => ({ data: { user: options.noUser ? null : { id: 'u1', email: 'me@example.com' } } }) },
+    rpc: async name => { assert.equal(name, 'assert_event_registration_payments_open'); return { data: null, error: null }; },
     from(table) {
       let filters = [], op, payload, single = false;
       const q = {

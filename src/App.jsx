@@ -9,6 +9,7 @@ import Players from './pages/Players';
 import Calendar from './pages/Calendar';
 import EventDetails from './pages/EventDetails';
 import Rankings from './pages/Rankings';
+const ProPadel = React.lazy(() => import('./pages/ProPadel'));
 import Broll from './pages/Broll';
 import Ladies from './pages/Ladies';
 import Juniors from './pages/Juniors';
@@ -35,6 +36,7 @@ import CoachRegistration from './pages/CoachRegistration';
 import Gallery from './pages/Gallery';
 import AlbumDetails from './pages/AlbumDetails';
 import Contact from './pages/Contact';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 import NotFound from './pages/NotFound';
 import ResetPassword from './pages/ResetPassword';
 import ClaimClubInvite from './pages/ClaimClubInvite';
@@ -53,6 +55,10 @@ import { MembersOnlyProvider } from './context/MembersOnlyContext';
 
 import { requiresAuth } from './utils/routeAccess';
 
+// The Draw Lab is deliberately absent from production builds. It has no
+// Supabase dependency and persists simulations only in this browser.
+const DrawLab = import.meta.env.DEV ? React.lazy(() => import('./pages/DrawLab')) : null;
+
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -61,16 +67,11 @@ function AppContent() {
   const [membersOnlyPrompt, setMembersOnlyPrompt] = React.useState(false);
 
   useEffect(() => {
-    // Initial session check
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    // Listen for auth state changes to handle magic links, recovery links, etc.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // INITIAL_SESSION also supplies the saved session without a separate lock request.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('App: Auth Event:', event);
       setSession(session);
+      setLoading(false);
 
       // SIGNED_IN can happen via magic link OR normal login
       // INITIAL_SESSION occurs on page load if a session already exists
@@ -133,10 +134,15 @@ function AppContent() {
           <Route path="/" element={<Home />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/admin" element={<Admin />} />
+          {import.meta.env.DEV && <Route path="/admin/draw-lab" element={<React.Suspense fallback={<div className="min-h-screen bg-black p-8 text-white">Loading Draw Lab…</div>}><DrawLab /></React.Suspense>} />}
           <Route path="/players" element={<Players />} /> {/* Added route for Players */}
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/calendar/:slug" element={<EventDetails />} />
           <Route path="/rankings" element={<Rankings />} />
+          <Route path="/pro" element={<React.Suspense fallback={<div className="p-24 text-center">Loading Pro Padel…</div>}><ProPadel /></React.Suspense>} />
+          <Route path="/pro/:section" element={<React.Suspense fallback={<div className="p-24 text-center">Loading Pro Padel…</div>}><ProPadel /></React.Suspense>} />
+          <Route path="/pro/players/:id" element={<React.Suspense fallback={<div className="p-24 text-center">Loading player…</div>}><ProPadel /></React.Suspense>} />
+          <Route path="/pro/players/:id/:slug" element={<React.Suspense fallback={<div className="p-24 text-center">Loading player…</div>}><ProPadel /></React.Suspense>} />
           <Route path="/organisations" element={<Organisations />} />
           <Route path="/organisations/:slug" element={<OrganisationPage />} />
           <Route path="/federations" element={<Federations />} />
@@ -157,6 +163,7 @@ function AppContent() {
           <Route path="/gallery" element={<Gallery />} />
           <Route path="/gallery/:slug" element={<AlbumDetails />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/results/:id" element={<TournamentDraw />} />
           <Route path="/draws/:id" element={<TournamentDraw />} />
           <Route path="/draws-preview/:id" element={<TournamentDraw />} />

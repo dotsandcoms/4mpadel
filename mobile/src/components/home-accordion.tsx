@@ -23,6 +23,7 @@ type Props = {
   open: boolean;
   onToggle: () => void;
   badges?: Badge[];
+  showBadgesWhenOpen?: boolean;
   children: ReactNode;
 };
 
@@ -30,7 +31,7 @@ type Props = {
  * Website home accordion: uppercase label, count pills when collapsed,
  * chevron points trailing when closed and down when open.
  */
-export function HomeAccordion({ title, titleCount, countColor, open, onToggle, badges, children }: Props) {
+export function HomeAccordion({ title, titleCount, countColor, open, onToggle, badges, showBadgesWhenOpen = false, children }: Props) {
   const reduced = useReducedMotion();
   const rot = useSharedValue(open ? 0 : -90);
 
@@ -61,7 +62,7 @@ export function HomeAccordion({ title, titleCount, countColor, open, onToggle, b
           {titleCount != null && <Text style={{ color: countColor }}> ({titleCount})</Text>}
         </Text>
         <View className="flex-row items-center">
-          {!open && badges?.length
+          {(!open || showBadgesWhenOpen) && badges?.length
             ? badges.map((badge) => (
                 <View
                   key={badge.label}

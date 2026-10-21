@@ -27,6 +27,7 @@ type Props = {
   placeholder?: string;
   error?: string;
   searchable?: boolean;
+  disabled?: boolean;
   valid?: boolean;
   badge?: string;
   emptyLabel?: string;
@@ -50,6 +51,7 @@ export function SelectField({
   placeholder = 'Select',
   error,
   searchable,
+  disabled = false,
   valid,
   badge,
   emptyLabel = 'No matches.',
@@ -79,6 +81,7 @@ export function SelectField({
   }
 
   function openPicker() {
+    if (disabled) return;
     if (searchable) {
       setOpen(true);
       return;
@@ -108,16 +111,18 @@ export function SelectField({
         {label}
       </Text>
       <Pressable
+        disabled={disabled}
         onPress={openPicker}
         accessibilityRole="button"
         accessibilityLabel={label}
         accessibilityValue={{ text: selected?.label ?? placeholder }}
-        accessibilityState={{ expanded: open }}
+        accessibilityState={{ expanded: open, disabled }}
         className="h-[52px] flex-row items-center rounded-[14px] bg-court-elevated px-3.5"
         style={{
           gap: 8,
           borderWidth: 2,
           borderColor: invalid ? brand.danger : selected ? brand.accent : brand.edge,
+          opacity: disabled ? 0.5 : 1,
         }}>
         {badge ? (
           <View

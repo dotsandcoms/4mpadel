@@ -1,12 +1,13 @@
+import { trackEvent } from '@/lib/analytics';
 import { requestPushPermission } from '@/lib/notifications';
 import { EventNotificationBell } from '@/components/events/follow-tournament';
-import { TournamentMatches } from '@/components/events/tournament-matches';
-import { addToDeviceCalendar } from '@/lib/device-calendar';
+import { TournamentDraw } from '@/components/events/tournament-draw';
+import { addToCalendar } from '@/lib/device-calendar';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Linking, Modal, Pressable, RefreshControl, ScrollView, Share, View } from 'react-native';
+import { ActivityIndicator, AppState, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, Share, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
 import { Notice } from '@/components/events/event-ui';
@@ -17,18 +18,22 @@ import { fetchEntryBalances, currentEmail, fetchEventPlayerRankings, fetchDivisi
 import { entryFee, formatMoney, plainText, registrationState } from '@/lib/event-rules';
 import { eventLocation, eventWebUrl, formatEventRange } from '@/lib/home';
 import { openSitePath } from '@/lib/site';
+import { type EventDrawStatus } from '@/lib/event-draws';
 import { buildEventTeams, type RankedPlayer } from '@/lib/event-teams';
 import { TeamDivisionCard, TopSeedRows } from '@/components/events/event-teams';
 import { EventRichText } from '@/components/events/event-rich-text';
 import { EventLocation } from '@/components/events/event-location';
+import { eventMapLocation, openEventDirections } from '@/lib/event-map';
 import { TournamentDetails, PrizeMoney, EventWeatherSection } from '@/components/events/event-content';
 import { EventInformation } from '@/components/events/event-information';
+import { EventActivity } from '@/components/events/event-activity';
+import { EventMedia } from '@/components/events/event-media';
 import { RegistrationEntries } from '@/components/events/registration-entries';
 import { lightSapaTone as sapaTone } from '@/theme/sapa';
 
 export default function EventScreen() { return <EventContent />; }
 function EventContent() {
-  const { id, division, match, tab: initialTab } = useLocalSearchParams<{ id: string; division?: string; match?: string; tab?: string }>();
+  const { id, division, match, tab: initialTab, drawSource } = useLocalSearchParams<{ id: string; division?: string; match?: string; tab?: string; drawSource?: string }>();
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const divisionId = division && uuid.test(division) ? division : undefined;
   const matchId = match && uuid.test(match) ? match : undefined;
@@ -41,7 +46,8 @@ function EventContent() {
   const [entries, setEntries] = useState<PublicEntry[]>([]);
   const [profiles, setProfiles] = useState<RankedPlayer[]>([]);
   const [organisation, setOrganisation] = useState<EventOrganisation | null>(null);
-  const [drawStatus, setDrawStatus] = useState({ hasDraw: false, hasResults: false, isFinished: false, isLive: false });
+  const [drawStatus, setDrawStatus] = useState<EventDrawStatus>({ source: 'none', hasDraw: false, hasResults: false, isFinished: false, isLive: false });
+  const [drawError, setDrawError] = useState('');
   const [publicError, setPublicError] = useState('');
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -53,22 +59,23 @@ function EventContent() {
   const [posterOpen, setPosterOpen] = useState(false);
   const [selectedVenue, setSelectedVenue] = useState('');
   const [tab, setTab] = useState('Overview');
-  useEffect(() => { setTab(initialTab === 'Results' ? 'Results' : initialTab === 'Draws' || matchId || divisionId ? 'Draws' : 'Overview'); }, [id, initialTab, matchId, divisionId]);
+  useEffect(() => { setTab(['Overview', 'Activity', 'Players', 'Draws', 'Results', 'Media'].includes(initialTab || '') ? initialTab! : matchId || divisionId ? 'Draws' : 'Overview'); }, [id, initialTab, matchId, divisionId]);
   const [gender, setGender] = useState('Men');
   const request = useRef(0);
   const load = useCallback(async () => {
     const current = ++request.current;
-    setLoading(true); setError(''); setActionError(''); setAccountError(''); setPublicError('');
+    setLoading(true); setError(''); setActionError(''); setAccountError(''); setPublicError(''); setDrawError('');
     try {
       const row = await fetchEvent(id);
       const divs = row.is_manual && !row.is_weekly ? await fetchDivisions(row.id) : [];
       if (current !== request.current) return;
       setEvent(row); setDivisions(divs);
-      const publicResults = await Promise.allSettled([row.is_manual ? fetchPublicEntries(row.id) : Promise.resolve([]), fetchEventOrganisation(row.organisation_id), fetchDrawStatus(row), fetchEventPlayerRankings()]);
+      const publicResults = await Promise.allSettled([row.is_manual ? fetchPublicEntries(row.id) : Promise.resolve([]), fetchEventOrganisation(row.organisation_id), fetchDrawStatus(row, !!(divisionId || matchId || drawSource === 'native')), fetchEventPlayerRankings()]);
       if (current !== request.current) return;
       if (publicResults[0].status === 'fulfilled') setEntries(publicResults[0].value);
       if (publicResults[1].status === 'fulfilled') setOrganisation(publicResults[1].value);
       if (publicResults[2].status === 'fulfilled') setDrawStatus(publicResults[2].value);
+      else setDrawError('Published draws could not load. Pull down to retry.');
       if (publicResults[3].status === 'fulfilled') setProfiles(publicResults[3].value);
       if (publicResults.some(result => result.status === 'rejected')) setPublicError('Some event information could not load. Pull down to retry.');
       try {
@@ -84,12 +91,13 @@ function EventContent() {
       } catch { if (current === request.current) setAccountError('Could not refresh your schedule and entries. Pull down to retry.'); }
     } catch (e) { if (current === request.current) setError(e instanceof Error ? e.message : 'Could not load this event.'); }
     finally { if (current === request.current) setLoading(false); }
-  }, [id]);
+  }, [id, divisionId, matchId, drawSource]);
   useFocusEffect(useCallback(() => {
     void load();
     const sub = AppState.addEventListener('change', state => { if (state === 'active') void load(); });
     return () => { request.current++; sub.remove(); };
   }, [load]));
+  useEffect(() => { if (event?.id) void trackEvent('content_view', { content_type: 'events', content_id: `event:${event.id}` }); }, [event?.id]);
   const runAction = async (action: () => Promise<unknown>) => {
     setActionError('');
     try { await action(); } catch (e) { setActionError(e instanceof Error ? e.message : 'Could not complete that action. Please try again.'); }
@@ -103,10 +111,10 @@ function EventContent() {
   const back = () => router.canGoBack() ? router.back() : router.replace('/calendar');
   const register = (mode?: 'pay') => {
     if (!event) return;
-    if (registrationState(event) !== 'open') { setActionError('Registration is not open for this event. An access code cannot override the registration dates.'); return; }
+    if (mode !== 'pay' && registrationState(event) !== 'open') { setActionError('Registration is not open for this event. An access code cannot override the registration dates.'); return; }
     router.push({ pathname: '/events/register', params: { id: String(event.id), ...(mode ? { mode } : {}) } });
   };
-  const directions = () => event && runAction(() => Linking.openURL(`https://maps.google.com/?q=${encodeURIComponent([selectedVenue || event.venues?.[0] || event.venue, event.city].filter(Boolean).join(' '))}`));
+  const directions = () => event && runAction(async () => { await openEventDirections(eventMapLocation(event, selectedVenue).query, Platform.OS, Linking.openURL); void trackEvent('feature_interaction', { feature: 'event_details', action: 'directions_open' }); });
   const state = event ? registrationState(event) : 'closed';
   const count = event?.is_manual ? event.is_weekly ? entries.filter(r => r.status !== 'withdrawn' && (!r.registered_by_hash || !r.email_hash || r.email_hash === r.registered_by_hash)).length : entries.length : event?.registered_players || 0;
   const fees = event ? divisions.map(d => entryFee(event, d)).filter(f => f > 0) : [];
@@ -130,8 +138,8 @@ function EventContent() {
           <CircleAction name="arrow.left" label="Back to calendar" onPress={back} />
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <EventNotificationBell eventId={event.id} eventName={event.event_name || 'Tournament'} circle />
-            <CircleAction name="calendar" label="Add to calendar" onPress={() => void runAction(() => addToDeviceCalendar({ title: event.event_name || "Padel event", startDate: event.start_date || "", endDate: event.end_date, location: eventLocation(event), url: eventWebUrl(event) }))} />
-            <CircleAction name="square.and.arrow.up" label="Share event" onPress={() => void runAction(() => Share.share({ message: `${event.event_name}\n${eventWebUrl(event)}`, url: eventWebUrl(event) }))} />
+            <CircleAction name="calendar" label="Add to calendar" onPress={() => void runAction(() => addToCalendar({ title: event.event_name || "Padel event", startDate: event.start_date || "", endDate: event.end_date, location: eventLocation(event), url: eventWebUrl(event) }))} />
+            <CircleAction name="square.and.arrow.up" label="Share event" onPress={() => void runAction(() => Share.share({ message: `${event.event_name}\n${eventWebUrl(event)}`, url: eventWebUrl(event) }).then(result => { if (result.action === Share.sharedAction) void trackEvent('share', { content_type: 'events', method: 'native' }); }))} />
             <CircleAction name={saved ? 'checkmark' : 'plus'} label={saved ? 'Remove from My Schedule' : 'Add to My Schedule'} onPress={toggleSaved} selected={saved} disabled={saving || !!accountError} />
           </View>
         </View>
@@ -160,7 +168,7 @@ function EventContent() {
         </View>
       </View> : <View style={{ backgroundColor: '#F5F6F3', padding: 30 }}>{loading ? <ActivityIndicator color={accent} /> : <Notice title="Event unavailable" onRetry={load}>{error}</Notice>}</View>}
       {event && <View><View style={{ flexDirection: 'row', backgroundColor: '#fff', paddingHorizontal: 16, borderBottomColor: '#e5e7eb', borderBottomWidth: 1 }}>
-        {['Overview', 'Players', 'Draws', 'Results', 'Media'].map(label => <Pressable key={label} accessibilityRole="tab" accessibilityState={{ selected: label === tab }} onPress={() => setTab(label)} style={{ flex: 1, paddingVertical: 16, borderBottomWidth: 2, borderBottomColor: label === tab ? '#0a0a0a' : 'transparent', alignItems: 'center' }}><Text style={{ color: label === tab ? '#0a0a0a' : '#65726B', fontSize: 14, fontWeight: label === tab ? '500' : '400' }}>{label}</Text></Pressable>)}
+        {['Overview', 'Activity', 'Players', 'Draws', 'Results', 'Media'].map(label => <Pressable key={label} accessibilityRole="tab" accessibilityState={{ selected: label === tab }} onPress={() => { void trackEvent('feature_interaction', { feature: 'event_details', action: 'tab', selection: label.toLowerCase() }); setTab(label); }} style={{ flex: 1, paddingVertical: 16, borderBottomWidth: 2, borderBottomColor: label === tab ? '#0a0a0a' : 'transparent', alignItems: 'center' }}><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ color: label === tab ? '#0a0a0a' : '#65726B', fontSize: 12, fontWeight: label === tab ? '500' : '400' }}>{label}</Text></Pressable>)}
       </View></View>}
       {event && <View style={{ paddingHorizontal: 16, paddingTop: 24, gap: 24, backgroundColor: '#f9fafb', minHeight: 300 }}>
         {tab === 'Overview' && <>
@@ -176,7 +184,7 @@ function EventContent() {
           {!!(event.courts || event.balls || event.draw_released || event.cut_off_times || event.tournament_director || event.referees) && <Accordion title="Tournament Details" icon="rectangle.split.2x2"><TournamentDetails event={event} /></Accordion>}
           {!!event.description && <Accordion title="About This Event" icon="doc.text"><EventRichText html={event.description} /></Accordion>}
           {!!(event.contact_details || event.organiser_phone || event.organiser_email) && <Accordion title="Contact" icon="phone">{!!event.contact_details && <Text style={{ color: '#334155', fontSize: 14, lineHeight: 20 }}>{event.contact_details}</Text>}{[{ value: event.organiser_phone, icon: 'phone' as const, url: `tel:${event.organiser_phone}` }, { value: event.organiser_email, icon: 'envelope' as const, url: `mailto:${event.organiser_email}` }].filter(item => item.value).map(item => <Pressable key={item.icon} accessibilityRole="link" onPress={() => void runAction(() => Linking.openURL(item.url))} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}><EventIcon name={item.icon} color="#64748b" /><Text style={{ color: '#1e293b', fontSize: 14, flexShrink: 1 }}>{item.value}</Text></Pressable>)}</Accordion>}
-          <Accordion title="Location" icon="mappin.and.ellipse" accessory={<Pressable accessibilityRole="button" onPress={directions} hitSlop={8} style={{ backgroundColor: accent, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}><Text style={{ fontSize: 10, color: '#fff' }}>DIRECTIONS</Text></Pressable>}><EventLocation event={event} selectedVenue={selectedVenue} onSelectVenue={setSelectedVenue} /></Accordion>
+          <Accordion title="Location" icon="mappin.and.ellipse" accessory={<Pressable accessibilityRole="button" onPress={directions} hitSlop={8} style={{ backgroundColor: accent, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 }}><Text style={{ fontSize: 10, color: '#fff' }}>DIRECTIONS</Text></Pressable>}><EventLocation event={event} selectedVenue={selectedVenue} onSelectVenue={setSelectedVenue} onDirections={directions} /></Accordion>
           {!!event.points_breakdown && <Accordion title="Points Breakdown" icon="trophy"><EventRichText html={event.points_breakdown} /></Accordion>}
           <PrizeMoney event={event} />
           {!!event.rules_regs && <Accordion title="Rules & Regulations" icon="doc.text"><EventRichText html={event.rules_regs} /></Accordion>}
@@ -188,10 +196,12 @@ function EventContent() {
         </>}
         {tab === 'Players' && <>{publicError ? <LightEmpty title="Players could not load" text={publicError} /> : !event.is_manual ? <LightButton label="View entry list on website" onPress={() => void runAction(() => openSitePath(`/calendar/${event.slug || event.id}?tab=players`, { forceBrowser: true }))} /> : teams.length ? teams.map(group => <TeamDivisionCard key={group.division.id} group={group} />) : <LightEmpty title="No players yet" text="Registered players will appear here." />}</>}
         {(tab === 'Draws' || tab === 'Results') && <>
-          {event.is_manual && <TournamentMatches eventId={event.id} divisionId={divisionId} matchId={matchId} showPoints={tab === 'Results'} />}
-          {publicError ? <LightEmpty title="Tournament information unavailable" text={publicError} /> : (tab === 'Draws' ? drawStatus.hasDraw : drawStatus.hasResults) ? <><LightEmpty title={tab === 'Draws' ? 'Tournament Draws' : 'Tournament Results'} text="View live brackets and match results." /><LightButton label="View published draws and results" onPress={() => void runAction(() => openSitePath(`/draws/${event.slug || event.id}`, { forceBrowser: true }))} /></> : <LightEmpty icon={tab === 'Draws' ? 'point.3.connected.trianglepath.dotted' : 'trophy'} title={tab === 'Draws' ? 'Draws Coming Soon' : 'No Results Yet'} text={tab === 'Draws' ? 'Draws will be released shortly before the tournament begins.' : 'Tournament results will appear here once matches are completed.'} />}
+          {loading ? <ActivityIndicator accessibilityLabel="Loading published draws" color={accent} /> : drawError ? <LightEmpty title="Tournament draws unavailable" text={drawError} /> : <>
+            {drawStatus.source !== 'none' ? <TournamentDraw event={event} source={drawStatus.source} directory={profiles} divisionId={divisionId} matchId={matchId} results={tab === 'Results'} refreshKey={request.current} /> : <LightEmpty icon={tab === 'Draws' ? 'point.3.connected.trianglepath.dotted' : 'trophy'} title={tab === 'Draws' ? 'Draws Coming Soon' : 'No Results Yet'} text={tab === 'Draws' ? 'Draws will be released shortly before the tournament begins.' : 'Tournament results will appear here once matches are completed.'} />}
+          </>}
         </>}
-        {tab === 'Media' && <>{event.youtube_playlist_url ? <><LightEmpty icon="play.rectangle" title="Event Highlights" text="Watch the event videos." /><LightButton label="Watch highlights" onPress={() => void runAction(() => Linking.openURL(event.youtube_playlist_url!))} /></> : event.gallery_album_id ? <LightButton label="View event gallery" onPress={() => void runAction(() => openSitePath(`/calendar/${event.slug || event.id}?tab=media`, { forceBrowser: true }))} /> : <LightEmpty icon="camera" title="No Media Yet" text="Media will be added after the event." />}</>}
+        {tab === 'Media' && <EventMedia key={event.id} event={event} onAction={runAction} />}
+        {tab === 'Activity' && <EventActivity eventId={event.id} refreshKey={request.current} />}
 
       </View>}
     </ScrollView>

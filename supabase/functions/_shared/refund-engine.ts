@@ -215,6 +215,7 @@ export function resolveRefundableItems(
 
     // --- Entry fee: refund once ---
     const entryPayments = successPayments
+        .filter(p => parseMeta(p.metadata).source !== 'native_entry_balance')
         .filter((p) =>
             coversOf(p).some(
                 (c) =>
@@ -241,6 +242,17 @@ export function resolveRefundableItems(
         });
         drawnByPayment.set(p.id, roundRands((drawnByPayment.get(p.id) || 0) + amount));
         break; // entry refunded once
+    }
+
+    // Verified balance adjustments are additional entry payments, not duplicate
+    // original checkouts. Refund each once to its own original payment reference.
+    for (const payment of successPayments) {
+        const meta = parseMeta(payment.metadata);
+        if (meta.source !== 'native_entry_balance' || meta.verified_balance !== true || meta.registration_id !== registration.id) continue;
+        const amount = remainingOf(payment);
+        if (amount <= 0) continue;
+        items.push({ payment_id: payment.id, reference: resolvePaystackGatewayReference(payment), refund_amount_rands: amount, cover_type: 'entry', already_refunded_rands: drawnByPayment.get(payment.id) || 0, is_test: paymentTestMode(payment) });
+        drawnByPayment.set(payment.id, roundRands((drawnByPayment.get(payment.id) || 0) + amount));
     }
 
     // --- Temporary license: refund once, only if this is the player's last
@@ -387,7 +399,7 @@ export async function transferBookingOwnership(
 // ----------------------------------------------------------------------------
 
 /**
- * Delete the temporary license for (player, event) and, if the player has no
+ * Revoke the temporary license for (player, event), preserving purchase history, and, if the player has no
  * other temporary license remaining and no full annual license, reset their
  * profile licence status back to "none".
  *
@@ -411,7 +423,7 @@ export async function cancelEventTempLicense(
 
     await supabaseAdmin
         .from('temporary_licenses')
-        .delete()
+        .update({ revoked_at: new Date().toISOString() })
         .eq('player_id', player.id)
         .eq('event_id', eventId);
 
@@ -454,39 +466,12 @@ export async function switchRegistrationDivision(
     const oldDivision = String(reg.division || '');
     const regEmail = normEmail(reg.email);
 
-    // 1. Unlink partner relationships in the OLD division (solo move).
-    if (reg.partner_email) {
-        await supabaseAdmin
-            .from('event_registrations')
-            .update({ partner_name: null, partner_email: null, partner_payment_status: null })
-            .eq('event_id', reg.event_id)
-            .eq('division', oldDivision)
-            .ilike('email', reg.partner_email)
-            .eq('status', 'registered');
-    }
-    await supabaseAdmin
-        .from('event_registrations')
-        .update({ partner_name: null, partner_email: null, partner_payment_status: null })
-        .eq('event_id', reg.event_id)
-        .eq('division', oldDivision)
-        .ilike('partner_email', reg.email)
-        .eq('status', 'registered');
-
-    // 2. Move the registration row to the new division (solo, partner cleared).
-    //    Reset registered_by to the player themselves: the moved entry is now a
-    //    fresh solo self-entry, not an invite. Leaving the old inviter here makes
-    //    it look perpetually "added by partner" and falsely blocks re-pairing.
-    const { error } = await supabaseAdmin
-        .from('event_registrations')
-        .update({
-            division_id: target.id,
-            division: target.name,
-            partner_name: null,
-            partner_email: null,
-            partner_payment_status: null,
-            registered_by: reg.email,
-        })
-        .eq('id', reg.id);
+    // Capacity and partner changes commit together, or the original entry stays intact.
+    const { error } = await supabaseAdmin.rpc('move_registration_division', {
+        p_registration_ids: [reg.id],
+        p_target_division_id: target.id,
+        p_reset_payment: false,
+    });
     if (error) throw error;
 
     // 3. Rewrite the original payment's entry cover from old -> new division.

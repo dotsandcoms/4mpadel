@@ -55,7 +55,7 @@ export default function TabsLayout() {
               }
             },
           })}>
-          <NativeTabs.Trigger.Label>Tournaments</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>Events</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf="calendar" md="calendar_month" />
         </NativeTabs.Trigger>
 

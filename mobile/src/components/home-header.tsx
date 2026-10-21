@@ -15,6 +15,7 @@ import Animated, {
 
 import { MenuButton } from '@/components/app-drawer';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
+import { useScreenActive } from '@/hooks/use-screen-active';
 import { hapticLight } from '@/lib/haptics';
 import { lightBrand as brand } from '@/theme/tokens';
 
@@ -76,11 +77,12 @@ export function NotificationBell({
   ringing: boolean;
 }) {
   const reduced = useReducedMotion();
+  const active = useScreenActive();
   const rotate = useSharedValue(0);
   const ping = useSharedValue(0);
 
   useEffect(() => {
-    if (!ringing || reduced) {
+    if (!ringing || reduced || !active) {
       cancelAnimation(rotate);
       cancelAnimation(ping);
       rotate.value = 0;
@@ -114,7 +116,7 @@ export function NotificationBell({
       cancelAnimation(rotate);
       cancelAnimation(ping);
     };
-  }, [ping, reduced, ringing, rotate]);
+  }, [ping, reduced, ringing, rotate, active]);
 
   const bellStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotate.value}deg` }],

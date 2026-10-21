@@ -16,6 +16,7 @@ import WebSocket from 'ws';
 import * as dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { fetchCountedResults, findResultRanking, pointsDetailsUrl } from './lib/rankedin-results.mjs';
 import { findPreferredRanking, rankedInAgeGroupLabel, rankingRowKey } from '../src/utils/playerRankingSelection.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -80,24 +81,6 @@ async function fetchList({ orgId, type, age }) {
     return rows;
 }
 
-async function fetchDetails(rankingParticipantId, ageGroup) {
-    const url = `https://api.rankedin.com/v1/ranking/getparticipantpointsdetailsasync?id=${rankingParticipantId}&agegroup=${ageGroup}&weekfromnow=0&showAll=false&language=en&skip=0&take=100`;
-    try {
-        const res = await fetch(url);
-        if (!res.ok) return [];
-        const json = await res.json();
-        return (json?.ParticipantWithPoints?.EventPoints?.Payload || []).map((ep) => ({
-            date: ep.EventPoint?.Date || '',
-            name: ep.EventName || ep.EventPoint?.EventName?.split('|')[0]?.trim() || '',
-            class: ep.EventPoint?.EventName?.split('| Class:')[1]?.trim() || '',
-            place: ep.EventPoint?.Standing || '',
-            event_type: ep.EventPoint?.EventType === 4 ? 'tournament' : 'friendly',
-            points: ep.EventPoint?.Points ? parseFloat(ep.EventPoint.Points) : 0,
-        }));
-    } catch {
-        return [];
-    }
-}
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -195,7 +178,16 @@ async function run() {
                 // Preserve the points breakdown shown on profiles for both
                 // Main and age-band rankings (Over 35/40/45/50/55).
                 const wantDetails = !skipDetails;
-                const details = wantDetails && m.rpId ? await fetchDetails(m.rpId, m.list.age) : [];
+                const previous = findResultRanking(player.rankings, m.list);
+                // A failed provider request leaves this player's saved snapshot
+                // intact and is reported as a failure at the end of the job.
+                const details = wantDetails ? await fetchCountedResults(m.rpId, m.list.age) : previous?.details || [];
+                if (!dryRun && wantDetails) {
+                    const { error } = await supabase.from('rankedin_cache').delete().in('url', [
+                        pointsDetailsUrl(m.rpId, m.list.age, false), pointsDetailsUrl(m.rpId, m.list.age, true),
+                    ]);
+                    if (error) throw error;
+                }
                 if (wantDetails) await sleep(40);
                 rankings.push({
                     rank: m.rank,
@@ -204,10 +196,12 @@ async function run() {
                     points: m.points,
                     match_type: m.list.match,
                     ranking_id: m.list.orgId,
+                    ranking_participant_id: m.rpId,
                     ranking_type: m.list.type,
                     age_group_id: m.list.age,
                     ranking_date: m.rankingDate,
                     synced_at: new Date().toISOString(),
+                    results_synced_at: wantDetails ? new Date().toISOString() : previous?.results_synced_at || previous?.synced_at || null,
                     details,
                 });
             }
@@ -252,6 +246,7 @@ async function run() {
     }
 
     console.log(`\nDone. Updated ${ok}, not on lists ${miss}, failed ${fail}.`);
+    if (fail) process.exitCode = 1;
 }
 
 run().catch((err) => {

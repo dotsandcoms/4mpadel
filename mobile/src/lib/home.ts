@@ -451,6 +451,18 @@ async function fetchHappeningNow(): Promise<CalendarEvent[]> {
   }
 }
 
+/** Show up to five featured events, with spotlight events first. */
+export function selectSpotlightEvents(featured: CalendarEvent[]): CalendarEvent[] {
+  const byDate = (a: CalendarEvent, b: CalendarEvent) => (a.start_date || '').localeCompare(b.start_date || '');
+  const curated = featured.filter(event => event.featured_event || event.is_spotlight)
+    .sort((a, b) => Number(!!b.is_spotlight) - Number(!!a.is_spotlight) || byDate(a, b));
+  const unique = new Map<number, CalendarEvent>();
+  for (const event of curated) {
+    if (!unique.has(event.id)) unique.set(event.id, event);
+  }
+  return [...unique.values()].slice(0, 5);
+}
+
 async function fetchFeatured(): Promise<CalendarEvent[]> {
   try {
     const today = isoDate(new Date());
@@ -461,17 +473,12 @@ async function fetchFeatured(): Promise<CalendarEvent[]> {
       .or('sanction_status.eq.approved,sanction_status.is.null')
       .gte('start_date', today)
       .neq('is_visible', false)
+      .order('is_spotlight', { ascending: false, nullsFirst: false })
       .order('start_date', { ascending: true })
-      .limit(10);
-
+      .limit(5);
     if (error || !data) return [];
-    const rows = await enrichManualCounts(data as CalendarEvent[]);
-    const spotlight = rows.findIndex((event) => event.is_spotlight);
-    if (spotlight > 0) {
-      const [pin] = rows.splice(spotlight, 1);
-      rows.unshift(pin);
-    }
-    return rows;
+    const rows = selectSpotlightEvents(data as CalendarEvent[]);
+    return await enrichManualCounts(rows);
   } catch {
     return [];
   }

@@ -2,7 +2,7 @@
   "expo": {
     "name": "FourM Padel",
     "slug": "4m-padel",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "fourmpadel",
@@ -11,6 +11,7 @@
     "primaryColor": "#CCFF00",
     "ios": {
       "bundleIdentifier": "com.fourmpadel.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "appleTeamId": "52RX6X5X2T",
       "supportsTablet": false,
       "entitlements": {
@@ -58,7 +59,11 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": true
+      "predictiveBackGestureEnabled": true,
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "com.google.android.gms.permission.AD_ID"
+      ]
     },
     "web": {
       "output": "static",
@@ -70,11 +75,22 @@
         "expo-build-properties",
         {
           "ios": {
-            "enableSceneSupport": true
+            "enableSceneSupport": true,
+            "useFrameworks": "dynamic"
           }
         }
       ],
       "expo-router",
+      "@react-native-firebase/app",
+      [
+        "@react-native-firebase/analytics",
+        {
+          "ios": {
+            "withoutAdIdSupport": true,
+            "googleAppMeasurementOnDeviceConversion": false
+          }
+        }
+      ],
       "expo-secure-store",
       "expo-apple-authentication",
       [
@@ -109,6 +125,16 @@
         }
       ],
       "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow 4M Padel to choose photos for your profile picture and player gallery.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "@config-plugins/react-native-blob-util",
+      "@config-plugins/react-native-pdf",
       "expo-maps",
       "expo-web-browser"
     ],

@@ -1,9 +1,11 @@
+import { compareEventDates } from '@/lib/event-rules';
 import { SymbolView } from 'expo-symbols';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Observe } from 'expo-observe';
-import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
 import {
   AppState,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -36,7 +38,10 @@ import {
 } from '@/components/home-event-card';
 import { HomeHeader } from '@/components/home-header';
 import { ObserveReady } from '@/components/observe-ready';
+import { FollowingPreview } from '@/components/following-feed';
+import { useFollowingFeed } from '@/hooks/use-following-feed';
 import { ProPadelFeed } from '@/components/pro-padel-feed';
+import { OfficialFipFeed } from '@/components/official-fip-feed';
 import { usePlayerHub } from '@/hooks/use-player-hub';
 import { makeCompanionSchedule } from '@/lib/companion-schedule';
 import { publishCompanionSchedule } from '@/lib/companion';
@@ -74,6 +79,7 @@ type OpenMap = {
 
 export default function HomeScreen() {
   const playerHub = usePlayerHub();
+  const following = useFollowingFeed('all', 3);
   const proPadel = playerHub.pro;
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -152,12 +158,6 @@ export default function HomeScreen() {
   }, [load]));
 
   useEffect(() => {
-    if (bundle.pending.length > 0) {
-      setOpen((current) => (current.pending ? current : { ...current, pending: true }));
-    }
-  }, [bundle.pending.length]);
-
-  useEffect(() => {
     if (loading || scheduleKindTouched.current) return;
     setScheduleKind(bundle.upcomingMatches.length > 0 ? 'matches' : 'events');
   }, [loading, bundle.upcomingMatches.length]);
@@ -174,7 +174,8 @@ export default function HomeScreen() {
     };
   }, []);
 
-  const schedule = schedulePast ? bundle.pastSchedule : bundle.upcomingSchedule;
+  const schedule = useMemo(() => [...(schedulePast ? bundle.pastSchedule : bundle.upcomingSchedule)]
+    .sort((a, b) => compareEventDates(a, b, schedulePast)), [schedulePast, bundle.pastSchedule, bundle.upcomingSchedule]);
   const matches = schedulePast ? bundle.pastMatches : bundle.upcomingMatches;
 
   async function openEvent(event: CalendarEvent) {
@@ -218,15 +219,16 @@ export default function HomeScreen() {
       <ScrollView
         className="flex-1 bg-court-page"
         contentContainerStyle={{
-          paddingBottom: tabPad,
+          paddingBottom: Platform.OS === 'ios' ? 16 : tabPad,
         }}
+        contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={refreshing || proPadel.loading}
             onRefresh={() => {
               setRefreshing(true);
-              void Promise.all([load(true), playerHub.refresh()]);
+              void Promise.all([load(true), playerHub.refresh(), following.refresh()]);
             }}
             tintColor={brand.accent}
           />
@@ -274,7 +276,6 @@ export default function HomeScreen() {
           {bundle.pending.length ? (
             <HomeAccordion
               title="Complete your entry"
-              titleCount={bundle.pending.length}
               countColor={brand.danger}
               open={open.pending}
               onToggle={() => toggle('pending')}
@@ -472,7 +473,10 @@ export default function HomeScreen() {
             )}
           </HomeAccordion>
 
-          <ProPadelFeed state={proPadel} localState={playerHub} />
+          <FollowingPreview state={following} />
+
+          <ProPadelFeed state={proPadel} localState={playerHub} showInternationalResults={false} />
+          <OfficialFipFeed />
 
         </FadeUp>
 
@@ -495,10 +499,11 @@ function EventSlide({
   const rail = useRef<ScrollView>(null);
   const ids = events.map(event => event.id).join(',');
   const cardWidth = events.length > 1 ? Math.min(340, width * 0.86) : width;
+  const step = cardWidth + 12;
   useEffect(() => { rail.current?.scrollTo({ x: 0, animated: false }); }, [ids, width]);
   return <View onLayout={event => setWidth(event.nativeEvent.layout.width)}>
     {width > 0 && <ScrollView ref={rail} horizontal showsHorizontalScrollIndicator={false}
-      decelerationRate="fast" snapToInterval={cardWidth + 12} snapToAlignment="start"
+      decelerationRate="fast" snapToInterval={step} snapToAlignment="start"
       disableIntervalMomentum directionalLockEnabled
       contentContainerStyle={{ gap: 12, paddingRight: Math.max(0, width - cardWidth) }}>
       {events.map(event => <View key={event.id} style={{ width: cardWidth }}>

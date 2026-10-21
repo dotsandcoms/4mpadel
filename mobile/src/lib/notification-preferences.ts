@@ -27,6 +27,7 @@ export const NOTIFICATION_GROUPS: { title: string; items: { key: NotificationTog
     { key: 'ranking_change', label: 'Ranking points', detail: 'Awarded or corrected points and published ranking changes.' },
   ] },
   { title: 'Your matches', items: [
+    { key: 'pro_match_live', label: 'Starred international matches', detail: 'When an international match you star goes live.' },
     { key: 'schedule_published', label: 'Schedule published', detail: 'Your confirmed court and match time.' },
     { key: 'schedule_changed', label: 'Schedule changes', detail: 'Changes to your court or time, including cancellations.' },
     { key: 'match_reminder', label: 'Match reminders', detail: 'A reminder before each scheduled match.' },

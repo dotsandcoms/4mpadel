@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import { Search, ChevronDown, Check } from 'lucide-react';
 
 const SearchableSelect = ({ 
@@ -7,6 +7,8 @@ const SearchableSelect = ({
     value, 
     onChange, 
     placeholder = "Select an option",
+    ariaLabel,
+    searchPlaceholder = "Search...",
     icon: Icon,
     className = ""
 }) => {
@@ -55,6 +57,8 @@ const SearchableSelect = ({
             
             <button
                 type="button"
+                aria-label={ariaLabel}
+                aria-expanded={isOpen}
                 onClick={() => setIsOpen(!isOpen)}
                 className={`w-full bg-white/[0.03] backdrop-blur-md border border-white/10 ${Icon ? 'pl-11 md:pl-12' : 'pl-4'} pr-10 py-3 md:py-4 text-left text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold text-xs md:text-sm rounded-xl md:rounded-2xl`}
             >
@@ -71,7 +75,7 @@ const SearchableSelect = ({
 
             <AnimatePresence>
                 {isOpen && (
-                    <motion.div
+                    <Motion.div
                         initial={{ opacity: 0, y: -10, scaleY: 0.95 }}
                         animate={{ opacity: 1, y: 0, scaleY: 1 }}
                         exit={{ opacity: 0, y: -10, scaleY: 0.95 }}
@@ -84,7 +88,8 @@ const SearchableSelect = ({
                                 <input
                                     ref={searchInputRef}
                                     type="text"
-                                    placeholder="Search..."
+                                    placeholder={searchPlaceholder}
+                                    aria-label={ariaLabel ? `Search ${ariaLabel.toLowerCase()}` : "Search options"}
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     className="w-full bg-black/30 border border-white/10 rounded-lg pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:border-padel-green/50 placeholder:text-gray-600"
@@ -116,7 +121,7 @@ const SearchableSelect = ({
                                 ))
                             )}
                         </div>
-                    </motion.div>
+                    </Motion.div>
                 )}
             </AnimatePresence>
         </div>

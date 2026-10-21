@@ -2,15 +2,21 @@ name: Interday Rankings Sync
 
 on:
   schedule:
-    - cron: '0 */6 * * *' # Runs every 6 hours
+    - cron: '17 * * * *' # SAPA Main hourly; actual starts depend on GitHub scheduling
+    - cron: '0 */6 * * *' # Broader category discovery every six hours
   workflow_dispatch: # Allows manual trigger from GitHub UI
 
 permissions:
   contents: read
 
+concurrency:
+  group: interday-rankings-sync
+  cancel-in-progress: false
+
 jobs:
   sync_rankings:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -21,10 +27,13 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm install @supabase/supabase-js dotenv --no-save
+        run: npm install @supabase/supabase-js dotenv ws --no-save
+
+      - name: Check rankings snapshot regressions
+        run: node --test tests/rankedinResultsSync.test.mjs
 
       - name: Run Rankings Sync
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.VITE_SUPABASE_SERVICE_ROLE_KEY }}
-        run: node scripts/syncRankedinRankings.js
+        run: node scripts/syncRankedinRankings.js ${{ github.event.schedule == '17 * * * *' && '--main-only' || '' }}

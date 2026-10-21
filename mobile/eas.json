@@ -10,7 +10,8 @@
         "buildType": "apk"
       },
       "environment": "preview",
-      "uploadSourceMaps": true
+      "uploadSourceMaps": true,
+      "node": "24.22.0"
     },
     "simulator": {
       "extends": "preview",
@@ -19,8 +20,25 @@
       }
     },
     "production": {
+      "distribution": "store",
+      "environment": "production",
       "autoIncrement": true,
-      "uploadSourceMaps": true
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "uploadSourceMaps": true,
+      "node": "24.22.0"
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      },
+      "ios": {
+        "ascAppId": "6820909181"
+      }
     }
   }
 }

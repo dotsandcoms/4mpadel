@@ -5,7 +5,9 @@ import MapKit
 
 final class WatchSchedule: NSObject, ObservableObject, WCSessionDelegate {
   @Published var snapshot = ScheduleStore.read()
-  @Published var message = ""
+  @Published private var refreshState = WatchRefreshState()
+  var message: String { refreshState.message }
+  var isRefreshing: Bool { refreshState.isRefreshing }
   override init() {
     super.init()
     if WCSession.isSupported() {
@@ -13,25 +15,30 @@ final class WatchSchedule: NSObject, ObservableObject, WCSessionDelegate {
       WCSession.default.activate()
     }
   }
-  private func receive(_ context: [String: Any]) {
-    guard let text = context[ScheduleStore.key] as? String else { return }
+  private func receive(_ context: [String: Any], replyingTo requestID: UUID? = nil) {
     DispatchQueue.main.async {
+      guard let text = context[ScheduleStore.key] as? String,
+        ScheduleStore.decode(text) != nil else {
+        if let requestID { self.refreshState.finish(requestID, outcome: .emptyReply) }
+        return
+      }
       if ScheduleStore.save(text) {
         self.snapshot = ScheduleStore.read()
-        self.message = ""
         WidgetCenter.shared.reloadTimelines(ofKind: "FourMWatchNextUp")
       }
+      // A valid older reply also completes refresh; keep the newer stored snapshot.
+      self.refreshState.receivedSnapshot()
     }
   }
   func refresh() {
-    guard WCSession.default.activationState == .activated, WCSession.default.isReachable else {
-      message = "Open 4M on your iPhone to refresh."
-      return
-    }
-    message = "Checking iPhone…"
-    WCSession.default.sendMessage(["request": "schedule"], replyHandler: { self.receive($0) }, errorHandler: { _ in
-      DispatchQueue.main.async { self.message = "Couldn’t reach iPhone. Showing the last sync." }
+    guard let requestID = refreshState.begin(canReachPhone:
+      WCSession.default.activationState == .activated && WCSession.default.isReachable) else { return }
+    WCSession.default.sendMessage(["request": "schedule"], replyHandler: { self.receive($0, replyingTo: requestID) }, errorHandler: { _ in
+      DispatchQueue.main.async { self.refreshState.finish(requestID, outcome: .unavailable) }
     })
+    DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in
+      self?.refreshState.finish(requestID, outcome: .unavailable)
+    }
   }
   func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
     receive(session.receivedApplicationContext)
@@ -43,23 +50,27 @@ final class WatchSchedule: NSObject, ObservableObject, WCSessionDelegate {
 @main
 struct FourMWatchApp: App {
   @StateObject private var schedule = WatchSchedule()
-  @AppStorage("schedule-category") private var category = "match"
+  @AppStorage("schedule-category") private var preferredCategory = ""
+  @State private var linkedCategory: String?
+  @State private var navigationPath: [WatchDestination] = []
   @Environment(\.scenePhase) private var scenePhase
   private let lime = Color(red: 0.8, green: 1, blue: 0)
   var body: some Scene {
     WindowGroup {
-      NavigationStack {
-        TimelineView(.periodic(from: .now, by: 60)) { context in
+      NavigationStack(path: $navigationPath) {
+        TimelineView(.animation(minimumInterval: 60, paused: scenePhase != .active)) { context in
+          let category = WatchScheduleRoute.category(preference: linkedCategory ?? preferredCategory,
+            snapshot: schedule.snapshot, at: context.date)
           let items = schedule.snapshot.upcoming(at: context.date).filter { $0.kind == category }
           ScrollView {
             VStack(alignment: .leading, spacing: 14) {
               HStack(spacing: 6) {
-                categoryButton("Matches", kind: "match")
-                categoryButton("Events", kind: "event")
+                categoryButton("Matches", kind: "match", selected: category)
+                categoryButton("Events", kind: "event", selected: category)
               }
               if let next = items.first {
                 scheduleLink(next, featured: true)
-                if !next.venue.isEmpty { WatchVenueButton(item: next) }
+                if !next.venue.isEmpty { WatchVenueButton(item: next, concise: true) }
                 if items.count > 1 {
                   HStack {
                     Text("COMING UP").font(.system(size: 10, weight: .bold)).tracking(1.2)
@@ -90,44 +101,54 @@ struct FourMWatchApp: App {
               }
               if !schedule.message.isEmpty { Text(schedule.message).font(.caption2).foregroundStyle(.secondary) }
               Button(action: schedule.refresh) {
-                Label("Refresh", systemImage: "arrow.clockwise")
+                Label(schedule.isRefreshing ? "Refreshing…" : "Refresh", systemImage: "arrow.clockwise")
                   .font(.caption.bold()).lineLimit(1)
                   .frame(maxWidth: .infinity, minHeight: 44)
                   .background(lime.opacity(0.18), in: Capsule())
-              }.buttonStyle(.plain).foregroundStyle(lime)
+              }.buttonStyle(.plain).foregroundStyle(lime).disabled(schedule.isRefreshing)
                 .accessibilityLabel("Refresh schedule from iPhone")
               Text("Entries & payments\non iPhone").font(.caption2).foregroundStyle(.secondary)
               }.multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
                 .padding(.bottom, 24)
             }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8)
-          }.navigationTitle("Next up").navigationBarTitleDisplayMode(.inline)
+          }.id(category).navigationTitle("Next up").navigationBarTitleDisplayMode(.inline)
+        }
+        .navigationDestination(for: WatchDestination.self) { destination in
+          switch destination {
+          case .event(let id): WatchEventCard(schedule: schedule, eventID: id)
+          }
         }
       }.tint(lime).onChange(of: scenePhase) { _, phase in if phase == .active { schedule.refresh() } }
+        .onOpenURL { url in
+          guard let route = WatchScheduleRoute(url: url) else { return }
+          linkedCategory = route.category
+          navigationPath = route.destination.map { [$0] } ?? []
+        }
     }
   }
 
   @ViewBuilder private func scheduleLink(_ item: ScheduleItem, featured: Bool) -> some View {
     if item.kind == "event" {
-      NavigationLink {
-        WatchEventCard(schedule: schedule, eventID: item.id)
-      } label: {
+      NavigationLink(value: WatchDestination.event(item.id)) {
         WatchScheduleCard(item: item, featured: featured)
-      }.buttonStyle(.plain).accessibilityLabel("View event: \(item.title), \(item.when), \(item.status)")
+      }.buttonStyle(.plain)
+        .accessibilityLabel((["View event: " + item.title, item.when, item.venue, item.court, item.status]
+          .filter { !$0.isEmpty }).joined(separator: ", "))
     } else {
       WatchScheduleCard(item: item, featured: featured)
     }
   }
 
-  private func categoryButton(_ title: String, kind: String) -> some View {
-    Button { category = kind } label: {
+  private func categoryButton(_ title: String, kind: String, selected: String) -> some View {
+    Button { preferredCategory = kind; linkedCategory = nil } label: {
       Text(title).font(.caption.bold())
         .frame(maxWidth: .infinity, minHeight: 44)
-        .foregroundStyle(category == kind ? Color.black : Color.white)
-        .background(category == kind ? lime : Color.white.opacity(0.12), in: Capsule())
+        .foregroundStyle(selected == kind ? Color.black : Color.white)
+        .background(selected == kind ? lime : Color.white.opacity(0.12), in: Capsule())
     }
     .buttonStyle(.plain)
-    .accessibilityAddTraits(category == kind ? .isSelected : [])
+    .accessibilityAddTraits(selected == kind ? .isSelected : [])
   }
 }
 
@@ -141,11 +162,8 @@ private struct WatchEventCard: View {
       VStack(alignment: .leading, spacing: 14) {
         if schedule.snapshot.signedIn,
            let event = schedule.snapshot.items.first(where: { $0.id == eventID && $0.kind == "event" }) {
-          WatchHero(item: event)
-          WatchLiveBadge(item: event)
           Text(event.title).font(.system(.headline, design: .rounded, weight: .bold))
             .fixedSize(horizontal: false, vertical: true)
-          WatchStatus(item: event)
           HStack(spacing: 10) {
             WatchDateTile(item: event)
             VStack(alignment: .leading, spacing: 4) {
@@ -154,6 +172,8 @@ private struct WatchEventCard: View {
             }
           }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
             .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+          WatchStatus(item: event)
+          WatchLiveBadge(item: event)
           VStack(alignment: .leading, spacing: 4) {
             Text("VENUE").font(.system(size: 9, weight: .bold)).tracking(1.3).foregroundStyle(.secondary)
             if !event.venue.isEmpty { WatchVenueButton(item: event) }
@@ -161,6 +181,7 @@ private struct WatchEventCard: View {
             if !event.subtitle.isEmpty { Text(event.subtitle).font(.caption2).foregroundStyle(.secondary) }
           }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
             .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+          WatchHero(item: event)
           Text("Manage your entry and payments in 4M on iPhone.")
             .font(.caption2).foregroundStyle(.secondary)
           Text("Synced \(schedule.snapshot.updated.formatted(date: .abbreviated, time: .shortened))")
@@ -176,6 +197,7 @@ private struct WatchEventCard: View {
 
 private struct WatchVenueButton: View {
   let item: ScheduleItem
+  var concise = false
   @State private var searching = false
   @State private var failure: String?
   private let lime = Color(red: 0.8, green: 1, blue: 0)
@@ -188,7 +210,7 @@ private struct WatchVenueButton: View {
         HStack(spacing: 6) {
           if searching { ProgressView().controlSize(.mini) }
           else { Image(systemName: "mappin.and.ellipse") }
-          Text(searching ? "Finding venue…" : item.venue)
+          Text(searching ? "Finding venue…" : concise ? "Open venue in Maps" : item.venue)
             .fixedSize(horizontal: false, vertical: true)
           Spacer(minLength: 0)
           Image(systemName: "arrow.up.right").font(.caption2)
@@ -272,20 +294,24 @@ private struct WatchStatus: View {
 private struct WatchHero: View {
   let item: ScheduleItem
   var compact = false
+  @State private var artwork: CGImage?
+  @Environment(\.scenePhase) private var scenePhase
   var body: some View {
     Group {
-      if let text = item.imageUrl, let url = URL(string: text), url.scheme == "https" {
-        AsyncImage(url: url) { phase in
-          if let image = phase.image {
+      if let artwork {
             // Event posters contain text and sponsor marks: preserve the full graphic.
-            image.resizable().scaledToFit()
+            Image(decorative: artwork, scale: 1).resizable().scaledToFit()
               .frame(maxWidth: .infinity).frame(height: compact ? 100 : 145)
               .background(Color.black)
-          } else { fallback }
-        }
       } else { fallback }
     }.clipShape(RoundedRectangle(cornerRadius: 16))
       .accessibilityLabel("Event graphic for \(item.title)")
+      .task(id: scenePhase == .active ? item.imageUrl : nil) {
+        guard scenePhase == .active else { return }
+        artwork = nil
+        let image = await ScheduleArtwork.load(item.imageUrl, maxPixels: 600)
+        if !Task.isCancelled { artwork = image }
+      }
   }
   private var fallback: some View {
     ZStack(alignment: .bottomLeading) {
@@ -307,17 +333,12 @@ private struct WatchScheduleCard: View {
   let featured: Bool
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      if featured || item.kind == "event" { WatchHero(item: item, compact: !featured) }
-      VStack(alignment: .leading, spacing: 9) {
-        WatchLiveBadge(item: item)
+      VStack(alignment: .leading, spacing: 7) {
         if featured {
-          TimelineView(.periodic(from: .now, by: 60)) { context in
-            Text(item.kind == "event" ? (item.isLive(at: context.date) ? "CURRENT EVENT" : "NEXT EVENT") : "NEXT MATCH")
-              .font(.system(size: 9, weight: .bold)).tracking(1)
-          }.foregroundStyle(watchLime)
-          Text(item.datePart("EEE d MMM")).font(.caption2.bold()).foregroundStyle(watchLime)
           Text(item.title).font(.system(size: 15, weight: .bold, design: .rounded))
             .lineLimit(3).frame(maxWidth: .infinity, alignment: .leading)
+          Text(item.allDay ? item.datePart("EEE d MMM") : item.when).font(.caption2.bold()).foregroundStyle(watchLime)
+            .fixedSize(horizontal: false, vertical: true)
         } else {
           HStack(alignment: .top, spacing: 9) {
             WatchDateTile(item: item)
@@ -325,13 +346,19 @@ private struct WatchScheduleCard: View {
               .lineLimit(3).frame(maxWidth: .infinity, alignment: .leading)
           }
         }
-        WatchEventTiming(item: item)
         if !item.court.isEmpty { Label(item.court, systemImage: "sportscourt").font(.caption2) }
+        if !item.venue.isEmpty {
+          Label(item.venue, systemImage: "mappin.and.ellipse")
+            .font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+        }
+        WatchEventTiming(item: item)
         if item.kind == "match" && !item.subtitle.isEmpty {
           Text(item.subtitle).font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         WatchStatus(item: item)
+        WatchLiveBadge(item: item)
       }.padding(10)
+      if featured || item.kind == "event" { WatchHero(item: item, compact: !featured) }
     }.frame(maxWidth: .infinity, alignment: .leading)
       .background(Color(white: 0.075), in: RoundedRectangle(cornerRadius: 16))
       .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.08), lineWidth: 0.5))
@@ -340,8 +367,9 @@ private struct WatchScheduleCard: View {
 
 private struct WatchLiveBadge: View {
   let item: ScheduleItem
+  @Environment(\.scenePhase) private var scenePhase
   var body: some View {
-    TimelineView(.periodic(from: .now, by: 60)) { context in
+    TimelineView(.animation(minimumInterval: 60, paused: scenePhase != .active)) { context in
       if item.isLive(at: context.date) {
         HStack(spacing: 5) {
           Circle().fill(.orange).frame(width: 5, height: 5)
@@ -356,8 +384,9 @@ private struct WatchLiveBadge: View {
 
 private struct WatchEventTiming: View {
   let item: ScheduleItem
+  @Environment(\.scenePhase) private var scenePhase
   var body: some View {
-    TimelineView(.periodic(from: .now, by: 60)) { context in
+    TimelineView(.animation(minimumInterval: 60, paused: scenePhase != .active)) { context in
       if item.isLive(at: context.date) {
         Text("Tournament underway").font(.caption2).foregroundStyle(.orange)
       } else if let countdown = item.countdown(at: context.date) {

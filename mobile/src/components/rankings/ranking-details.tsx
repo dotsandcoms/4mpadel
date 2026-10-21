@@ -1,19 +1,25 @@
+import { trackEvent } from '@/lib/analytics';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, Share, View } from 'react-native';
 import { LocalFollowButton } from '@/components/players/local-follow-button';
+import { TrophyBreakdown } from './trophy-breakdown';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EventText as Text, EventIcon } from '@/components/events/website-ui';
-import { fetchTournamentWins, fetchPoints, type TrophyGroup, type PointResult, type RankingPlayer } from '@/lib/rankings';
+import { fetchTournamentWins, type TrophyGroup, type PointResult, type RankingPlayer } from '@/lib/rankings';
+import { fetchPlayerTournamentResults } from '@/lib/player-results';
 import { lightSapaTone as sapaTone } from '@/theme/sapa';
+import { useForegroundClock } from '@/hooks/use-foreground-clock';
 export function RankingDetails({player,age,onClose}:{player:RankingPlayer;age:number;onClose:()=>void}){
  const router=useRouter();const safe=useSafeAreaInsets();const [tab,setTab]=useState('Ranking Overview');const [best,setBest]=useState(true);const [all,setAll]=useState<PointResult[]>([]);const [counted,setCounted]=useState<PointResult[]>([]);const [loading,setLoading]=useState(true);const [error,setError]=useState('');const [retry,setRetry]=useState(0);
- useEffect(()=>{let active=true;setLoading(true);setError('');Promise.all([fetchPoints(player.participantId,age,false),fetchPoints(player.participantId,age,true)]).then(([a,b])=>{if(active){setCounted(a.sort((a,b)=>b.points-a.points));setAll(b);}}).catch(()=>{if(active)setError('Could not load ranking details. Tap to retry.');}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};},[player.participantId,age,retry]);
+ const refreshKey=useForegroundClock(5*60*1000);
+ useEffect(()=>{let active=true;setLoading(true);setError('');fetchPlayerTournamentResults({ranking_participant_id:player.participantId,age_group_id:age}).then(results=>{if(active){setCounted(results.counted);setAll(results.all);}}).catch(()=>{if(active)setError('Could not load ranking details. Tap to retry.');}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};},[player.participantId,age,retry,refreshKey]);
  const [selectedTrophy,setSelectedTrophy]=useState<string|null>(null);
  const [wins,setWins]=useState<TrophyGroup[]>([]);
- useEffect(()=>{let active=true;fetchTournamentWins(player).then(rows=>{if(active)setWins(rows);}).catch(()=>{});return()=>{active=false;};},[player]);
- const share=()=>{void Share.share({message:`${player.name} — #${player.rank}, ${player.points.toLocaleString()} points`,url:player.profile?.id?`https://4mpadel.co.za/players?id=${player.profile.id}`:'https://4mpadel.co.za/rankings'}).catch(()=>{});};
+ const [winsError,setWinsError]=useState(false);
+ useEffect(()=>{let active=true;setWinsError(false);fetchTournamentWins(player).then(rows=>{if(active)setWins(rows);}).catch(()=>{if(active)setWinsError(true);});return()=>{active=false;};},[player,retry,refreshKey]);
+ const share=()=>{void Share.share({message:`${player.name} — #${player.rank}, ${player.points.toLocaleString()} points`,url:player.profile?.id?`https://4mpadel.co.za/players?id=${player.profile.id}`:'https://4mpadel.co.za/rankings'}).then(result => { if (result.action === Share.sharedAction) void trackEvent('share', { content_type: 'local_player', method: 'native' }); }).catch(()=>{});};
  return <Modal visible animationType="slide" onRequestClose={onClose}><View style={{flex:1,backgroundColor:'#F5F6F3',paddingTop:safe.top,paddingBottom:safe.bottom}}>
  <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',padding:16,borderBottomWidth:1,borderColor:'#16251f10'}}><Pressable accessibilityLabel="Close ranking details" onPress={onClose} style={{minWidth:44,minHeight:44,alignItems:'center',justifyContent:'center'}}><EventIcon name="arrow.left" color="#16251F" size={24}/></Pressable><Text style={{fontSize:13,letterSpacing:1}}>RANKING DETAILS</Text><Pressable accessibilityLabel="Share ranking" onPress={share} style={{minWidth:44,minHeight:44,alignItems:'center',justifyContent:'center'}}><EventIcon name="square.and.arrow.up" color="#16251F" size={20}/></Pressable></View>
  <View style={{padding:24,flexDirection:'row',gap:16,alignItems:'center'}}><Avatar player={player} size={80}/><View style={{flex:1,gap:5}}><Text style={{fontSize:20}}>{player.name.toUpperCase()}</Text>{!!player.profile?.nationality&&<Text style={{color:'#65726B',fontSize:12}}>{player.profile.nationality}</Text>}{!!player.profile?.home_club&&<Text style={{color:'#65726B',fontSize:12}}>{player.profile.home_club}</Text>}</View></View>
@@ -23,7 +29,7 @@ export function RankingDetails({player,age,onClose}:{player:RankingPlayer;age:nu
  </View>}
  <View style={{flexDirection:'row',paddingHorizontal:24,gap:24,borderBottomWidth:1,borderColor:'#16251f18'}}>{['Ranking Overview','Tournament Results'].map(t=><Pressable key={t} onPress={()=>setTab(t)} accessibilityRole="tab" accessibilityState={{selected:tab===t}} style={{flex:1,minHeight:44,justifyContent:'center',paddingBottom:14,borderBottomWidth:2,borderColor:tab===t?'#2449D8':'transparent'}}><Text style={{fontSize:11,color:tab===t?'#2449D8':'#65726B',textTransform:'uppercase'}}>{t}</Text></Pressable>)}</View>
  <ScrollView key={tab} contentContainerStyle={{padding:20,gap:20}}>{loading?<ActivityIndicator color="#386018"/>:error?<Pressable onPress={()=>setRetry(x=>x+1)}><Text>{error}</Text></Pressable>:tab==='Ranking Overview'?<>
- {!!wins.length && <View style={{ gap: 12 }}>
+ {winsError ? <Pressable accessibilityRole="button" onPress={()=>setRetry(x=>x+1)} style={{minHeight:44,justifyContent:'center'}}><Text>Could not refresh trophies. Tap to retry.</Text></Pressable> : !!wins.length && <View style={{ gap: 12 }}>
    <Text style={{ fontSize: 10, color: '#65726B', letterSpacing: 1 }}>TOURNAMENT WINS</Text>
    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
      {[...wins].sort((a,b) => ['Major','Super Gold','Gold','Silver','Bronze','Other'].indexOf(a.tier) - ['Major','Super Gold','Gold','Silver','Bronze','Other'].indexOf(b.tier)).map(w => {
@@ -56,33 +62,7 @@ export function RankingDetails({player,age,onClose}:{player:RankingPlayer;age:nu
    </View>)}
    {!all.length && <Text style={{ color: '#65726B', fontSize: 13 }}>No tournament results available.</Text>}
  </View>}</ScrollView>
- <Modal visible={selectedTrophy !== null} animationType="slide" presentationStyle="pageSheet" allowSwipeDismissal onRequestClose={() => setSelectedTrophy(null)}>
-   <View style={{ flex: 1, backgroundColor: '#F5F6F3' }}>
-     <View style={{ alignSelf: 'center', width: 36, height: 5, borderRadius: 3, backgroundColor: '#666', marginTop: 10 }} />
-     <ScrollView contentInsetAdjustmentBehavior="never" contentContainerStyle={{ padding: 20, paddingBottom: safe.bottom + 24, gap: 16 }}>
-       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-         <Text accessibilityRole="header" style={{ flex: 1, fontSize: 18 }}>Trophy breakdown</Text>
-         <Pressable accessibilityRole="button" accessibilityLabel="Close trophy breakdown" hitSlop={12} onPress={() => setSelectedTrophy(null)}><Text style={{ fontSize: 24, color: '#65726B' }}>×</Text></Pressable>
-       </View>
-       <Text style={{ fontSize: 12, color: '#65726B' }}>{player.name}</Text>
-   {wins.filter(w => w.tier === selectedTrophy).map(group => <View key={group.tier} style={{ gap: 10, padding: 14, borderRadius: 14, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: `${sapaTone(group.tier).fill}33` }}>
-     <Text style={{ fontSize: 13, color: sapaTone(group.tier).fill }}>{group.tier} · {group.count} {group.count === 1 ? 'tournament won' : 'tournaments won'}</Text>
-     {group.events.map((event, index) => <View key={`${event.date}-${event.name}`} style={{ gap: 6, paddingTop: 10, borderTopWidth: 1, borderColor: '#16251f12' }}>
-       <Text style={{ fontSize: 10, color: '#65726B' }}>{event.date || 'Date unavailable'}</Text>
-       <Text style={{ fontSize: 13, lineHeight: 18 }}>{event.name}</Text>
-       {event.results.map((result, i) => <View key={i} style={{ gap: 5 }}>
-         <Text style={{ fontSize: 11, lineHeight: 16, color: '#65726B' }}>{result.class || 'Division not supplied'}</Text>
-         {!!result.rankingLabel && <Text style={{ fontSize: 10, color: '#828b9a' }}>{result.rankingLabel}</Text>}
-         <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 8 }}>
-           <Text style={{ fontSize: 11, color: sapaTone(group.tier).fill }}>1st place · Winner</Text>
-           <Text style={{ fontSize: 11 }}>{Number(result.points || 0).toLocaleString(undefined, { maximumFractionDigits: 3 })} points</Text>
-         </View>
-       </View>)}
-     </View>)}
-   </View>)}
-     </ScrollView>
-   </View>
- </Modal>
+ <TrophyBreakdown playerName={player.name} groups={wins} selectedTier={selectedTrophy} onClose={() => setSelectedTrophy(null)} />
  </View></Modal>;
 }
 export function Avatar({player,size}:{player:RankingPlayer;size:number}){return <View style={{width:size,height:size,borderRadius:size/2,backgroundColor:'#16251f10',overflow:'hidden',alignItems:'center',justifyContent:'center'}}>{player.profile?.image_url?<Image source={{uri:player.profile.image_url}} style={{width:'100%',height:'100%'}}/>:<EventIcon name="person" size={size*.5} color="#65726B"/>}</View>;}

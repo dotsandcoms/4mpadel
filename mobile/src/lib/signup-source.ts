@@ -1,3 +1,4 @@
+import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
@@ -52,8 +53,8 @@ export function collectSignupDevice(): SignupDevice {
     osVersion: Device.osVersion,
     deviceType: DEVICE_TYPE[Device.deviceType ?? 0] ?? 'unknown',
     isDevice: Device.isDevice,
-    appVersion: Constants.nativeAppVersion ?? Constants.expoConfig?.version ?? null,
-    build: Constants.nativeBuildVersion ?? null,
+    appVersion: Application.nativeApplicationVersion ?? Constants.expoConfig?.version ?? null,
+    build: Application.nativeBuildVersion ?? null,
     recordedAt: new Date().toISOString(),
   };
 }

@@ -1,16 +1,23 @@
+import { trackEvent } from '@/lib/analytics';
 import { MatchCard } from '@/components/pro-padel-feed';
+import { ProTournamentScreen } from '@/components/pro-tournament-screen';
 import { playerCountryFlag, searchProPlayers } from '@/lib/player-hub';
 import { fetchLiveMatches, fetchMatchDetails, fetchTournamentDetails, fetchTournamentMatches, withLiveScores, type MatchDetails } from '@/lib/pro-padel-live';
 import { fetchProSnapshot, proDate, proRound, type ProPlayer, type ProTournament } from '@/lib/pro-padel';
 import { lightBrand as b } from '@/theme/tokens';
+import { startForegroundTask } from '@/lib/foreground-task';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const profileCache = new Map<number, ProPlayer | null>();
+function cacheProfile(id: number, profile: ProPlayer | null) {
+  profileCache.set(id, profile);
+  if (profileCache.size > 120) profileCache.delete(profileCache.keys().next().value!);
+}
 type MatchFilter = 'all' | 'live' | 'upcoming' | 'results';
 const isLive = (status: string) => status === 'live' || status === 'ongoing';
 const isUpcoming = (status: string) => status === 'scheduled';
@@ -52,6 +59,12 @@ function TourMatchCard({ row, onOpen }: { row: MatchDetails; onOpen: () => void 
 }
 
 export default function LiveProTourScreen() {
+  const { tournament } = useLocalSearchParams<{ tournament?: string }>();
+  const id = Number(tournament);
+  return Number.isSafeInteger(id) && id > 0 ? <ProTournamentScreen key={id} id={id} /> : <LiveMatchesScreen />;
+}
+
+function LiveMatchesScreen() {
   const router = useRouter();
   const { tournament } = useLocalSearchParams<{ tournament?: string }>();
   const tournamentId = Number(tournament);
@@ -109,9 +122,8 @@ export default function LiveProTourScreen() {
     finally { if (current === request.current) setLoading(false); }
   }, [eventMode, tournamentId]);
   useFocusEffect(useCallback(() => {
-    void load();
-    const timer = setInterval(() => { void load(); }, 60000);
-    return () => { request.current++; clearInterval(timer); };
+    const stop = startForegroundTask(load, 60000);
+    return () => { request.current++; stop(); };
   }, [eventMode, load]));
   useEffect(() => {
     if (eventMode) return;
@@ -132,21 +144,21 @@ export default function LiveProTourScreen() {
           const ranked = rankings.categories.men.players.find(row => row.id === player.id)
             || rankings.categories.women.players.find(row => row.id === player.id);
           if (ranked?.photoUrl?.startsWith('https://')) {
-            profileCache.set(player.id, ranked);
+            cacheProfile(player.id, ranked);
             found.set(player.id, ranked);
           }
         }
         setLookup(new Map(found));
       } catch { /* The player directory can still supply portraits. */ }
       for (const player of players) {
-        if (!active) return;
+        if (!active || AppState.currentState !== 'active') return;
         if (profileCache.has(player.id)) continue;
         await new Promise(resolve => setTimeout(resolve, 800));
-        if (!active) return;
+        if (!active || AppState.currentState !== 'active') return;
         try {
           const result = await searchProPlayers('', 'all', 1, player.id);
           const profile = result.players.find(row => row.id === player.id) || null;
-          profileCache.set(player.id, profile);
+          cacheProfile(player.id, profile);
           if (profile) { found.set(player.id, profile); setLookup(new Map(found)); }
         } catch { /* Keep initials for unavailable profiles. */ }
       }
@@ -175,22 +187,22 @@ export default function LiveProTourScreen() {
     {eventMode && !complete && <Text style={{ color: b.danger, fontSize: 12 }}>Some match pages could not be loaded. Refresh to try again.</Text>}
     {eventMode && rows.length > 0 && <>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 7 }}>
-        {(['all', 'live', 'upcoming', 'results'] as const).map(value => <Chip key={value} label={value === 'all' ? `All ${rows.length}` : `${value[0].toUpperCase()}${value.slice(1)} ${counts[value]}`} selected={status === value} onPress={() => setStatus(value)} />)}
+        {(['all', 'live', 'upcoming', 'results'] as const).map(value => <Chip key={value} label={value === 'all' ? `All ${rows.length}` : `${value[0].toUpperCase()}${value.slice(1)} ${counts[value]}`} selected={status === value} onPress={() => { void trackEvent('feature_interaction', { feature: 'pro_live', action: 'filter', selection: value }); setStatus(value); }} />)}
       </ScrollView>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 7 }}>
-        {(['all', 'men', 'women'] as const).map(value => <Chip key={value} label={value === 'all' ? 'All categories' : value === 'men' ? 'Men' : 'Women'} selected={category === value} onPress={() => setCategory(value)} />)}
+        {(['all', 'men', 'women'] as const).map(value => <Chip key={value} label={value === 'all' ? 'All categories' : value === 'men' ? 'Men' : 'Women'} selected={category === value} onPress={() => { void trackEvent('feature_interaction', { feature: 'pro_live', action: 'filter', selection: value }); setCategory(value); }} />)}
       </ScrollView>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 7 }}>
         <Chip label="All days" selected={day === 'all'} onPress={() => setDay('all')} />
-        {days.map(value => <Chip key={value} label={labelDate(value)} selected={day === value} onPress={() => setDay(value)} />)}
+        {days.map(value => <Chip key={value} label={labelDate(value)} selected={day === value} onPress={() => { void trackEvent('feature_interaction', { feature: 'pro_live', action: 'filter', selection: 'specific_day' }); setDay(value); }} />)}
       </ScrollView>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 7 }}>
         <Chip label="All rounds" selected={round === 'all'} onPress={() => setRound('all')} />
-        {rounds.map(value => <Chip key={value} label={value} selected={round === value} onPress={() => setRound(value)} />)}
+        {rounds.map(value => <Chip key={value} label={value} selected={round === value} onPress={() => { void trackEvent('feature_interaction', { feature: 'pro_live', action: 'filter', selection: 'specific_round' }); setRound(value); }} />)}
       </ScrollView>
       <Text style={{ color: b.premium, fontWeight: '800', fontSize: 18 }}>{filtered.length} {filtered.length === 1 ? 'match' : 'matches'}</Text>
     </>}
-    {!loading && !error && (eventMode ? !filtered.length : !count) && <View style={{ backgroundColor: b.elevated, borderColor: b.edge, borderWidth: 1, borderRadius: 20, padding: 22, gap: 7 }}><Text style={{ color: b.premium, fontSize: 18, fontWeight: '700' }}>{eventMode ? 'No matches for these filters' : 'No matches live right now'}</Text><Text style={{ color: b.muted, lineHeight: 20 }}>{eventMode ? 'Try another day, category or round.' : 'Check back when play starts. The tour calendar has upcoming fixtures.'}</Text></View>}
+    {!loading && !error && (eventMode ? !filtered.length : !count) && <View style={{ backgroundColor: b.elevated, borderColor: b.edge, borderWidth: 1, borderRadius: 20, padding: 22, gap: 7 }}><Text style={{ color: b.premium, fontSize: 18, fontWeight: '700' }}>{eventMode ? rows.length ? 'No matches for these filters' : 'Matches not available yet' : 'No matches live right now'}</Text><Text style={{ color: b.muted, lineHeight: 20 }}>{eventMode ? rows.length ? 'Try another day, category or round.' : 'Fixtures and results will appear here once published.' : 'Check back when play starts. The tour calendar has upcoming fixtures.'}</Text></View>}
     {!eventMode && count > rows.length && <Text style={{ color: b.muted, fontSize: 12 }}>{count} live matches · showing details for {rows.length} available matches</Text>}
   </View>;
   return <SafeAreaView style={{ flex: 1, backgroundColor: b.page }} edges={['top']}>

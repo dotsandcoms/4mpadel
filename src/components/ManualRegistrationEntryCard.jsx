@@ -1,13 +1,13 @@
 import React from 'react';
 import { ArrowRightLeft, Check, User, UserPlus } from 'lucide-react';
 
-const PaymentBadge = ({ paid, label }) => (
+export const PaymentBadge = ({ paid, label, compact = false, className = '' }) => (
     <span
-        className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap ${
+        className={`inline-flex items-center justify-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${compact ? 'max-w-[80px] sm:max-w-none whitespace-normal sm:whitespace-nowrap text-center leading-tight min-h-6' : 'whitespace-nowrap'} ${
             paid
                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                 : 'bg-amber-50 text-amber-800 border-amber-200'
-        }`}
+        } ${className}`}
     >
         {paid && <Check size={10} strokeWidth={2.5} className="shrink-0" />}
         {label}
@@ -68,6 +68,7 @@ const ManualRegistrationEntryCard = ({
     onWithdraw,
     onSwitch,
     onRemovePartner,
+    onReplacePartner,
     withdrawLabel = 'Withdraw',
     showActions = false,
     hideDivision = false,
@@ -142,6 +143,12 @@ const ManualRegistrationEntryCard = ({
                             paid={partnerPaid}
                             label={partnerLabel}
                         />
+                        {showActions && onReplacePartner && entry.canReplacePartner && (
+                            <button type="button" onClick={onReplacePartner}
+                                className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-emerald-200 text-emerald-700 bg-white hover:bg-emerald-50 focus-visible:outline-2 focus-visible:outline-emerald-500">
+                                <ArrowRightLeft size={13} /> Replace partner · Free
+                            </button>
+                        )}
                         {showActions && onRemovePartner && entry.isBookingOwner && entry.canWithdraw && (
                             <button
                                 type="button"

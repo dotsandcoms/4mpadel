@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
-import { Pressable, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withTiming, type SharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -66,19 +66,19 @@ export default function OnboardingScreen() {
   const reduced = useReducedMotion();
   const [index, setIndex] = useState(0);
   const indexRef = useRef(0);
+  const scrollRef = useRef<ScrollView>(null);
   indexRef.current = index;
 
   const direction = useSharedValue(1);
-  const transitionUntil = useRef(0);
   const leaving = useRef(false);
   const goTo = useCallback((next: number) => {
-    if (next < 0 || next >= SLIDES.length || next === indexRef.current || Date.now() < transitionUntil.current) return;
+    if (leaving.current || next < 0 || next >= SLIDES.length || next === indexRef.current) return;
     direction.value = next > indexRef.current ? 1 : -1;
-    transitionUntil.current = Date.now() + (reduced ? 0 : 650);
     indexRef.current = next;
     setIndex(next);
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
     hapticLight();
-  }, [direction, reduced]);
+  }, [direction]);
   const step = useCallback((dir: 1 | -1) => goTo(indexRef.current + dir), [goTo]);
 
   const pan = useMemo(
@@ -94,11 +94,12 @@ export default function OnboardingScreen() {
   );
 
   const leave = useCallback(
-    async (intent: 'signin' | 'signup') => {
+    (intent: 'signin' | 'signup') => {
       if (leaving.current) return;
       leaving.current = true;
       hapticMedium();
-      await markOnboardingSeen();
+      // Remember the introduction in the background. Storage must never block navigation.
+      void markOnboardingSeen();
       router.replace(
         intent === 'signup' ? '/(auth)/sign-in?intent=signup' : '/(auth)/sign-in'
       );
@@ -107,10 +108,9 @@ export default function OnboardingScreen() {
   );
 
   const advance = useCallback(() => {
-    if (Date.now() < transitionUntil.current) return;
-    if (index < SLIDES.length - 1) step(1);
+    if (indexRef.current < SLIDES.length - 1) step(1);
     else leave('signup');
-  }, [index, step, leave]);
+  }, [step, leave]);
 
   const isLast = index === SLIDES.length - 1;
   const slide = SLIDES[index];
@@ -130,16 +130,14 @@ export default function OnboardingScreen() {
             accessibilityLabel="4M Padel"
           />
         </View>
-        {!isLast ? (
-          <Pressable
-            onPress={() => leave('signin')}
-            hitSlop={14}
-            accessibilityRole="button"
-            accessibilityLabel="Skip onboarding"
-            className="min-h-11 justify-center">
-            <Text className="text-[15px] font-semibold text-court-muted">Skip</Text>
-          </Pressable>
-        ) : null}
+        <Pressable
+          onPress={() => leave('signin')}
+          hitSlop={14}
+          accessibilityRole="button"
+          accessibilityLabel="Skip onboarding"
+          className="min-h-11 justify-center">
+          <Text className="text-[15px] font-semibold text-court-muted">Skip</Text>
+        </Pressable>
       </View>
 
       <GestureDetector gesture={pan}>
@@ -157,20 +155,27 @@ export default function OnboardingScreen() {
             if (e.nativeEvent.actionName === 'increment') step(1);
             if (e.nativeEvent.actionName === 'decrement') step(-1);
           }}>
-          <View className="flex-1 justify-center px-7">
-            <OnboardingMotion key={`preview-${index}`} direction={direction} reduced={reduced} illustration>{slide.preview}</OnboardingMotion>
-          </View>
-          <View className="px-7 pb-2" style={{ minHeight: 222 }}>
-            <OnboardingMotion key={`eyebrow-${index}`} direction={direction} reduced={reduced} delay={80}>
-              <Text className="mb-3 text-xs font-bold uppercase text-court-accent" style={{ letterSpacing: 2 }}>{slide.eyebrow}</Text>
-            </OnboardingMotion>
-            <OnboardingMotion key={`title-${index}`} direction={direction} reduced={reduced} delay={130}>
-              <Text accessibilityRole="header" className="mb-4 font-extrabold text-court-ink" style={{ fontSize: 34, lineHeight: 39 }}>{slide.title}</Text>
-            </OnboardingMotion>
-            <OnboardingMotion key={`body-${index}`} direction={direction} reduced={reduced} delay={180}>
-              <Text className="text-court-muted" style={{ fontSize: 17, lineHeight: 26, maxWidth: 340 }}>{slide.body}</Text>
-            </OnboardingMotion>
-          </View>
+          <ScrollView
+            ref={scrollRef}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ flexGrow: 1 }}
+            showsVerticalScrollIndicator={false}
+            bounces={false}>
+            <View className="justify-center px-7" style={{ flexGrow: 1, paddingVertical: 16 }}>
+              <OnboardingMotion key={`preview-${index}`} direction={direction} reduced={reduced} illustration>{slide.preview}</OnboardingMotion>
+            </View>
+            <View className="px-7 pb-2" style={{ minHeight: 222 }}>
+              <OnboardingMotion key={`eyebrow-${index}`} direction={direction} reduced={reduced} delay={80}>
+                <Text className="mb-3 text-xs font-bold uppercase text-court-accent" style={{ letterSpacing: 2 }}>{slide.eyebrow}</Text>
+              </OnboardingMotion>
+              <OnboardingMotion key={`title-${index}`} direction={direction} reduced={reduced} delay={130}>
+                <Text accessibilityRole="header" className="mb-4 font-extrabold text-court-ink" style={{ fontSize: 34, lineHeight: 39 }}>{slide.title}</Text>
+              </OnboardingMotion>
+              <OnboardingMotion key={`body-${index}`} direction={direction} reduced={reduced} delay={180}>
+                <Text className="text-court-muted" style={{ fontSize: 17, lineHeight: 26, maxWidth: 340 }}>{slide.body}</Text>
+              </OnboardingMotion>
+            </View>
+          </ScrollView>
         </View>
       </GestureDetector>
 

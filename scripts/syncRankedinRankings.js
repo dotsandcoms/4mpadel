@@ -3,6 +3,9 @@ import WebSocket from 'ws';
 import * as dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { rankedInAgeGroupLabel } from '../src/utils/playerRankingSelection.js';
+import { fetchCountedResults, findResultRanking, needsResultsRefresh, mergeResultRanking, pointsDetailsUrl } from './lib/rankedin-results.mjs';
+let syncFailures = 0;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
@@ -149,6 +152,7 @@ async function syncCategory(rankingId, type, ageGroup, categoryName) {
             }, { onConflict: 'url' });
 
         if (cacheError) {
+            syncFailures++;
             console.error(`Failed to cache rankings in DB:`, cacheError.message);
         } else {
             console.log(`✓ Cached raw rankings in Supabase: ${url}`);
@@ -170,7 +174,7 @@ async function syncCategory(rankingId, type, ageGroup, categoryName) {
             if (rankedinId) {
                 const { data: idMatch } = await supabase
                     .from('players')
-                    .select('id, name, preferred_ranking, rankedin_id')
+                    .select('id, name, preferred_ranking, rankedin_id, rankings')
                     .eq('rankedin_id', rankedinId.toString())
                     .eq('approved', true)
                     .maybeSingle();
@@ -185,7 +189,7 @@ async function syncCategory(rankingId, type, ageGroup, categoryName) {
                 const nameParts = name.split(/\s+/).filter(Boolean);
                 let query = supabase
                     .from('players')
-                    .select('id, name, preferred_ranking, rankedin_id')
+                    .select('id, name, preferred_ranking, rankedin_id, rankings')
                     .eq('approved', true);
                 
                 // Add an ilike for each part of the name
@@ -218,7 +222,42 @@ async function syncCategory(rankingId, type, ageGroup, categoryName) {
                     continue;
                 }
 
+                const orgName = { 15809: 'SAPA ranking', 16317: 'Broll Pro Tour', 16482: 'SA Grand Tour' }[rankingId];
+                const ageLabel = rankedInAgeGroupLabel(ageGroup, type);
+                const meta = { orgId: rankingId, orgName, age: ageGroup, type, ageLabel };
+                const previous = findResultRanking(playerToUpdate.rankings, meta);
+                const participant = p.Participant?.Id || p.ParticipantPoints?.RankingParticipantId;
+                let snapshot;
+                try {
+                    const refresh = needsResultsRefresh(previous, p);
+                    const details = refresh ? await fetchCountedResults(participant, ageGroup) : previous.details;
+                    const now = new Date().toISOString();
+                    snapshot = {
+                        ...previous, org: orgName, age_group: ageLabel,
+                        match_type: previous?.match_type || (type === 4 ? 'Women-Doubles' : 'Men-Doubles'),
+                        rank: String(rank), points: String(points), ranking_id: rankingId,
+                        ranking_type: type, age_group_id: ageGroup, ranking_participant_id: participant,
+                        ranking_date: p.ParticipantPoints?.RankingDate || null, synced_at: now,
+                        results_synced_at: refresh ? now : previous.results_synced_at || previous.synced_at,
+                        details,
+                    };
+                    if (refresh) {
+                        // Expire both editions together; readers must not combine
+                        // a newly refreshed headline with a previous cached Best 8.
+                        const { error } = await supabase.from('rankedin_cache').delete().in('url', [
+                            pointsDetailsUrl(participant, ageGroup, false),
+                            pointsDetailsUrl(participant, ageGroup, true),
+                        ]);
+                        if (error) throw error;
+                    }
+                } catch (error) {
+                    syncFailures++;
+                    console.error(`Failed to refresh results for ${name}:`, error.message);
+                    continue; // Keep headline and saved results at the previous edition.
+                }
+
                 const updateData = {
+                    rankings: mergeResultRanking(playerToUpdate.rankings, previous, snapshot),
                     points: points,
                     rank_label: rank.toString(),
                     rankedin_id: rankedinId ? rankedinId.toString() : null
@@ -233,6 +272,7 @@ async function syncCategory(rankingId, type, ageGroup, categoryName) {
                     .eq('id', playerToUpdate.id);
 
                 if (updateError) {
+                    syncFailures++;
                     console.error(`Failed to update ${name}:`, updateError.message);
                 } else {
                     updateCount++;
@@ -243,6 +283,7 @@ async function syncCategory(rankingId, type, ageGroup, categoryName) {
         }
         console.log(`Results for ${categoryName} (ID: ${rankingId}): ${updateCount} updated, ${skipCount} skipped/not preferred.`);
     } catch (err) {
+        syncFailures++;
         console.error(`Error syncing ${categoryName}:`, err.message);
     }
 }
@@ -289,4 +330,4 @@ async function run() {
 }
 
 
-run();
+run().then(() => { if (syncFailures) process.exitCode = 1; }).catch(error => { console.error(error); process.exitCode = 1; });

@@ -1,42 +1,23 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createPadelFetch } from '../_shared/padel-api.ts';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info' };
 const cache = new Map<string, { until: number; value: unknown }>();
 const pending = new Map<string, Promise<unknown>>();
 const attempts = new Map<string, number[]>();
 const tournaments = new Map<number, { until: number; value: unknown }>();
-const playerCountries = new Map<number, { until: number; value: string | null }>();
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 const id = (value: unknown) => Number.isSafeInteger(Number(value)) && Number(value) > 0 && Number(value) <= 2147483647;
 const pairId = (value: unknown) => typeof value === 'string' && /^([1-9]\d*)-([1-9]\d*)$/.test(value) && value.split('-').every(id);
 
-async function withPlayerCountries(rows: Record<string, any>[], token: string) {
-  const players = new Map<number, string>();
-  for (const row of rows) for (const team of ['team_1', 'team_2']) {
-    for (const player of Array.isArray(row.players?.[team]) ? row.players[team] : []) {
-      if (id(player?.id) && typeof player.name === 'string' && player.name.trim()) players.set(Number(player.id), player.name.trim());
-    }
-  }
-  const now = Date.now();
-  const missing = [...players].filter(([playerId]) => (playerCountries.get(playerId)?.until || 0) <= now);
-  const groups = Array.from({ length: Math.ceil(missing.length / 20) }, (_, index) => missing.slice(index * 20, (index + 1) * 20));
-  await Promise.all(groups.map(async group => {
-    const url = new URL('https://padelapi.org/api/players');
-    url.searchParams.set('name', group.map(([, name]) => name).join(','));
-    url.searchParams.set('per_page', '100');
-    try {
-      const response = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, signal: AbortSignal.timeout(8000) });
-      if (!response.ok) return;
-      const value = await response.json();
-      const found = new Map<number, string>((Array.isArray(value?.data) ? value.data : [])
-        .filter((player: any) => id(player?.id) && typeof player.nationality === 'string' && /^[A-Z]{2}$/.test(player.nationality))
-        .map((player: any) => [Number(player.id), player.nationality]));
-      for (const [playerId] of group) playerCountries.set(playerId, { value: found.get(playerId) || null, until: now + 1800000 });
-    } catch { /* Match results remain available when a country lookup fails. */ }
-  }));
-  if (playerCountries.size > 4000) playerCountries.clear();
+async function withPlayerCountries(rows: Record<string, any>[], _token: string, client: any) {
+  // Country enrichment reads our player index; displaying a match never searches the provider.
+  const ids = [...new Set(rows.flatMap(row => ['team_1', 'team_2'].flatMap(team =>
+    (Array.isArray(row.players?.[team]) ? row.players[team] : []).map((player: any) => Number(player.id)))))] as number[];
+  const { data } = await client.rpc('cached_padel_players', { p_ids: ids.filter(value => id(value)) });
+  const countries = new Map<number, string>((Array.isArray(data) ? data : []).filter((player: any) => /^[A-Z]{2}$/.test(player.nationality || '')).map((player: any) => [Number(player.id), player.nationality]));
   return rows.map(row => ({ ...row, players: row.players ? Object.fromEntries(['team_1', 'team_2'].map(team => [team,
-    Array.isArray(row.players[team]) ? row.players[team].map((player: any) => ({ ...player, nationality: playerCountries.get(Number(player?.id))?.value || player.nationality || null })) : []])) : row.players }));
+    Array.isArray(row.players[team]) ? row.players[team].map((player: any) => ({ ...player, nationality: player.nationality || countries.get(Number(player.id)) || null })) : []])) : row.players }));
 }
 
 const plainText = (html: string) => html.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#39;|&#x27;/gi, "'").replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();
@@ -53,8 +34,8 @@ Deno.serve(async req => {
     const kind = input?.kind;
     const page = Number(input?.page ?? 1);
     const isPair = ['pair-stats', 'pair-matches'].includes(kind);
-    if (!['live', 'match', 'stats', 'points', 'head-to-head', 'prediction', 'player', 'player-coach', 'player-stats', 'player-matches', 'player-pairs', 'player-rankings', 'pair-stats', 'pair-matches', 'tournament', 'tournament-matches', 'seasons', 'season-tournaments'].includes(kind) ||
-      (!['live', 'seasons'].includes(kind) && !(isPair ? pairId(input?.id) : id(input?.id))) || !Number.isSafeInteger(page) || page < 1 || page > 20) return json({ error: 'Invalid request.' }, 400);
+    if (!['live', 'live-tournaments', 'match', 'stats', 'points', 'head-to-head', 'prediction', 'player', 'player-coach', 'player-stats', 'player-matches', 'player-pairs', 'player-rankings', 'pair-stats', 'pair-matches', 'tournament', 'tournament-matches', 'seasons', 'season-tournaments'].includes(kind) ||
+      (!['live', 'live-tournaments', 'seasons'].includes(kind) && !(isPair ? pairId(input?.id) : id(input?.id))) || !Number.isSafeInteger(page) || page < 1 || page > 20) return json({ error: 'Invalid request.' }, 400);
     const year = input?.year == null ? null : Number(input.year);
     if (['player-matches', 'pair-matches'].includes(kind) && year !== null && (!Number.isSafeInteger(year) || year < 2006 || year > new Date().getUTCFullYear() + 1)) return json({ error: 'Invalid year.' }, 400);
     if (kind === 'prediction' && (!Array.isArray(input.team_1) || !Array.isArray(input.team_2) ||
@@ -63,7 +44,7 @@ Deno.serve(async req => {
       !/^\d{4}-\d{2}-\d{2}$/.test(input.played_at || ''))) return json({ error: 'Invalid prediction request.' }, 400);
     const numericResourceId = Number(input?.id);
     const resourceId = isPair ? String(input.id) : numericResourceId;
-    const key = `${kind}:${['live', 'seasons'].includes(kind) ? '' : resourceId}:${['tournament-matches', 'season-tournaments', 'player-matches', 'pair-matches', 'player-pairs'].includes(kind) ? `${page}:${['player-matches', 'pair-matches'].includes(kind) ? year ?? 'all' : ''}` : kind === 'prediction' ? [...input.team_1, ...input.team_2, input.played_at].join(':') : ''}`;
+    const key = `${kind}:${['live', 'live-tournaments', 'seasons'].includes(kind) ? '' : resourceId}:${['live-tournaments', 'tournament-matches', 'season-tournaments', 'player-matches', 'pair-matches', 'player-pairs'].includes(kind) ? `${page}:${['player-matches', 'pair-matches'].includes(kind) ? year ?? 'all' : ''}` : kind === 'prediction' ? [...input.team_1, ...input.team_2, input.played_at].join(':') : ''}`;
     const cached = cache.get(key);
     if (cached && cached.until > Date.now()) return json(cached.value);
     // Allow a live-list burst and match detail tabs, but stop rapid manual reload loops.
@@ -73,11 +54,21 @@ Deno.serve(async req => {
     if (attempts.size > 2000) attempts.clear();
     const token = Deno.env.get('PADEL_API_TOKEN');
     if (!token) return json({ error: 'International tour details are temporarily unavailable.' }, 503);
+    const providerClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const sharedFetch = createPadelFetch(providerClient);
+    const freshness = { stale: false, updatedAt: '', reason: '' };
+    const providerFetch: typeof fetch = async (input, init) => {
+      const response = await sharedFetch(input, init);
+      const stamp = response.headers.get('x-4m-fetched-at');
+      if (stamp && (!freshness.updatedAt || stamp < freshness.updatedAt)) freshness.updatedAt = stamp;
+      if (response.headers.get('x-4m-cache') === 'stale') { freshness.stale = true; freshness.reason = response.headers.get('x-4m-cache-reason') || 'refresh_paused'; }
+      return response;
+    };
     if (kind === 'player-coach') {
       const playerKey = `player:${resourceId}:`;
       let player = cache.get(playerKey)?.value as { name?: string } | undefined;
       if (!player?.name) {
-        const response = await fetch(`https://padelapi.org/api/players/${resourceId}`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, signal: AbortSignal.timeout(10000) });
+        const response = await providerFetch(`https://padelapi.org/api/players/${resourceId}`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, signal: AbortSignal.timeout(10000) });
         if (!response.ok) return json({ coaches: [], sourceUrl: null });
         player = await response.json();
       }
@@ -86,7 +77,7 @@ Deno.serve(async req => {
       if (!slug) return json({ coaches: [], sourceUrl: null });
       const sourceUrl = `https://www.padelfip.com/player/${slug}/`;
       try {
-        const response = await fetch(sourceUrl, { headers: { 'User-Agent': '4M Padel/1.0' }, signal: AbortSignal.timeout(10000) });
+        const response = await providerFetch(sourceUrl, { headers: { 'User-Agent': '4M Padel/1.0' }, signal: AbortSignal.timeout(10000) });
         if (!response.ok || new URL(response.url).hostname !== 'www.padelfip.com') return json({ coaches: [], sourceUrl: null });
         const html = await response.text();
         const title = plainText(html.match(/<title>([\s\S]*?)<\/title>/i)?.[1] || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -101,6 +92,7 @@ Deno.serve(async req => {
     }
     let path = '';
     if (kind === 'live') path = 'live';
+    if (kind === 'live-tournaments') path = 'tournaments';
     if (kind === 'match') path = `matches/${resourceId}`;
     if (kind === 'stats') path = `matches/${resourceId}/stats`;
     if (kind === 'points') path = `matches/${resourceId}/live`;
@@ -118,6 +110,13 @@ Deno.serve(async req => {
     if (kind === 'seasons') path = 'seasons';
     if (kind === 'season-tournaments') path = `seasons/${resourceId}/tournaments`;
     const url = new URL(`https://padelapi.org/api/${path}`);
+    if (kind === 'live-tournaments') {
+      // The provider has no status filter. Fetch the current event window across every circuit.
+      const day = (offset: number) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
+      url.searchParams.set('after_date', day(-30)); url.searchParams.set('before_date', day(30));
+      url.searchParams.set('sort_by', 'start_date'); url.searchParams.set('order_by', 'desc');
+      url.searchParams.set('page', String(page)); url.searchParams.set('per_page', '50');
+    }
     if (kind === 'tournament-matches') { url.searchParams.set('page', String(page)); url.searchParams.set('per_page', '50'); url.searchParams.set('draw', 'all'); }
     if (kind === 'player-matches' || kind === 'pair-matches') {
       url.searchParams.set('page', String(page)); url.searchParams.set('per_page', '20'); url.searchParams.set('draw', 'all');
@@ -129,7 +128,7 @@ Deno.serve(async req => {
     if (kind === 'head-to-head') url.searchParams.set('per_page', '50');
     if (kind === 'live') url.searchParams.set('per_page', '50');
     const request = pending.get(key) ?? (async () => {
-      const response = await fetch(url, { method: kind === 'prediction' ? 'POST' : 'GET',
+      const response = await providerFetch(url, { method: kind === 'prediction' ? 'POST' : 'GET',
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', ...(kind === 'prediction' ? { 'Content-Type': 'application/json' } : {}) },
         ...(kind === 'prediction' ? { body: JSON.stringify({ team_1: input.team_1, team_2: input.team_2, played_at: input.played_at }) } : {}),
         redirect: 'follow', signal: AbortSignal.timeout(12000) });
@@ -152,7 +151,7 @@ Deno.serve(async req => {
         if (tournamentId) {
           let tournament = tournaments.get(tournamentId);
           if (!tournament || tournament.until <= Date.now()) {
-            const detail = await fetch(`https://padelapi.org/api/tournaments/${tournamentId}`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, redirect: 'follow', signal: AbortSignal.timeout(12000) });
+            const detail = await providerFetch(`https://padelapi.org/api/tournaments/${tournamentId}`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, redirect: 'follow', signal: AbortSignal.timeout(12000) });
             if (detail.ok) {
               tournament = { value: await detail.json(), until: Date.now() + 600000 };
               tournaments.set(tournamentId, tournament);
@@ -166,7 +165,7 @@ Deno.serve(async req => {
         }
       }
       if ((kind === 'player-matches' || kind === 'pair-matches') && Array.isArray(value.data)) {
-        const withCountries = withPlayerCountries(value.data, token);
+        const withCountries = withPlayerCountries(value.data, token, providerClient);
         const tournamentId = (row: any) => {
           const linked = typeof row?.connections?.tournament === 'string' ? /^\/api\/tournaments\/(\d+)$/.exec(row.connections.tournament) : null;
           return linked ? Number(linked[1]) : null;
@@ -175,7 +174,7 @@ Deno.serve(async req => {
         await Promise.all(ids.map(async tournamentId => {
           if ((tournaments.get(tournamentId)?.until || 0) > Date.now()) return;
           try {
-            const detail = await fetch(`https://padelapi.org/api/tournaments/${tournamentId}`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, redirect: 'follow', signal: AbortSignal.timeout(8000) });
+            const detail = await providerFetch(`https://padelapi.org/api/tournaments/${tournamentId}`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, redirect: 'follow', signal: AbortSignal.timeout(8000) });
             if (!detail.ok) return;
             const tournament = await detail.json();
             if (tournament?.id !== tournamentId || typeof tournament.name !== 'string') return;
@@ -189,9 +188,10 @@ Deno.serve(async req => {
           return tournament && tournament.until > Date.now() ? { ...row, tournament: tournament.value } : row;
         }) };
       }
-      if (kind === 'match') value = (await withPlayerCountries([value], token))[0];
-      if (kind === 'tournament-matches' && Array.isArray(value.data)) value = { ...value, data: await withPlayerCountries(value.data, token) };
-      const ttl = ['live', 'tournament-matches'].includes(kind) ? 45000 : ['tournament', 'seasons', 'season-tournaments', 'head-to-head', 'prediction', 'player', 'player-stats', 'player-pairs', 'player-rankings', 'pair-stats'].includes(kind) ? 600000 : ['player-matches', 'pair-matches'].includes(kind) ? 180000 : kind === 'match' ? 30000 : 45000;
+      if (kind === 'match') value = (await withPlayerCountries([value], token, providerClient))[0];
+      if (kind === 'tournament-matches' && Array.isArray(value.data)) value = { ...value, data: await withPlayerCountries(value.data, token, providerClient) };
+      value = Array.isArray(value) ? { data: value, _freshness: freshness } : { ...value, _freshness: freshness };
+      const ttl = kind === 'live-tournaments' ? 300000 : ['live', 'tournament-matches'].includes(kind) ? 45000 : ['tournament', 'seasons', 'season-tournaments', 'head-to-head', 'prediction', 'player', 'player-stats', 'player-pairs', 'player-rankings', 'pair-stats'].includes(kind) ? 600000 : ['player-matches', 'pair-matches'].includes(kind) ? 180000 : kind === 'match' ? 30000 : 45000;
       if (cache.size >= 200) cache.delete(cache.keys().next().value!);
       cache.set(key, { value, until: Date.now() + ttl });
       return value;

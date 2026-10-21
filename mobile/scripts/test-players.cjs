@@ -16,6 +16,58 @@ test('court side and playing hand labels match the profile selections', () => {
  assert.equal(preferences.playingHandLabel('left'), 'Left-handed');
  assert.equal(preferences.playingHandLabel(null), null);
 });
+
+function signupPreferences({ updateError = null, updatedRow = { id: 42 } } = {}) {
+ const requests = [], updates = [], storage = new Map();
+ const api = load('src/lib/profile.ts', {
+  '@/lib/player-preferences': preferences,
+  '@/lib/sponsors': {}, './matches': {}, '@/theme/tokens': {},
+  '@/lib/welcome-email': { queueWelcomeEmail: async () => requests.push(['welcome']) },
+  './signup-source': { resolveSignupSource: () => 'mobile', collectSignupDevice: () => 'ios' },
+  './profile-draft-storage': { saveDraftText: async (key, value) => storage.set(key, value), loadDraftText: async key => storage.get(key) ?? null, clearDraftText: async key => storage.delete(key) },
+  './supabase': { supabase: {
+   rpc: async (name, payload) => { requests.push([name, payload]); return { error: null }; },
+   auth: { getUser: async () => ({ data: { user: { user_metadata: {} } } }) },
+   from(table) {
+    assert.equal(table, 'players');
+    const q = { update(value) { updates.push(value); return q; }, eq(key, value) { assert.equal(key, 'email'); assert.equal(value, 'player@example.com'); return q; }, select() { return q; }, maybeSingle: async () => ({ data: updatedRow, error: updateError }) };
+    return q;
+   },
+  } },
+ });
+ const draft = { firstName: 'Test', lastName: 'Player', email: 'player@example.com', contactNumber: '0123456789', gender: 'Male', nationality: 'South Africa', idNumber: 'test', region: 'Gauteng', category: 'Men', clubId: '', customClub: '', bio: 'Padel player', instagramLink: '', sponsors: '', racketBrand: 'Adidas', customRacketBrand: '' };
+ return { api, draft, requests, updates };
+}
+test('registration persists selected playing preferences and restores them from the account draft', async () => {
+ const h = signupPreferences();
+ const draft = { ...h.draft, courtSide: 'either', playingHand: 'left' };
+ await h.api.saveProfileDraft(draft);
+ const restored = await h.api.loadProfileDraft(draft.email);
+ assert.equal(restored.courtSide, 'either'); assert.equal(restored.playingHand, 'left');
+ assert.equal(h.api.draftHasProgress({ playingHand: 'left' }), true);
+ await h.api.createPlayerProfile(restored, []);
+ assert.equal(h.requests[0][0], 'create_player_profile');
+ assert.deepEqual({ ...h.updates[0] }, { court_side: 'either', playing_hand: 'left' });
+ assert.equal(h.requests[1][0], 'welcome');
+});
+test('registration keeps optional preferences unset for older drafts and saves either field independently', async () => {
+ const old = signupPreferences();
+ await old.api.createPlayerProfile(old.draft, []);
+ assert.equal(old.updates.length, 0);
+ const hand = signupPreferences();
+ await hand.api.createPlayerProfile({ ...hand.draft, playingHand: 'right' }, []);
+ assert.deepEqual({ ...hand.updates[0] }, { playing_hand: 'right' });
+});
+test('registration rejects invalid preferences before creating a profile and reports unsaved selections', async () => {
+ const invalid = signupPreferences();
+ await assert.rejects(invalid.api.createPlayerProfile({ ...invalid.draft, playingHand: 'both' }, []), /valid playing hand/);
+ assert.equal(invalid.requests.length, 0);
+ for (const options of [{ updateError: new Error('offline') }, { updatedRow: null }]) {
+  const failed = signupPreferences(options);
+  await assert.rejects(failed.api.createPlayerProfile({ ...failed.draft, courtSide: 'left' }, []), /preferences could not be saved/);
+  assert.ok(!failed.requests.some(([name]) => name === 'welcome'));
+ }
+});
 test('directory filters combine name, category and club without confusing list positions with rank', () => {
  const rows = [{ id:'1', name:'Brad Elin', category:'Men', home_club:'KCC' }, { id:'2', name:'Brad Other', category:'Men', home_club:'City' }, {id:'3', name:'Sarah', category:'Women', home_club:'KCC'}];
  assert.deepEqual(Array.from(players.filterPlayers(rows, ' BRAD ', 'Men', 'KCC'), x=>x.id), ['1']);

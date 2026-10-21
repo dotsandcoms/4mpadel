@@ -1,0 +1,1862 @@
+{
+  "classes": [
+    {
+      "Id": 177841,
+      "Name": "Men 35+",
+      "ShowDraws": true,
+      "IsPublished": true,
+      "TournamentDraws": [
+        {
+          "Id": 644956,
+          "Name": "Elimination",
+          "Stage": 0,
+          "Strength": 0
+        }
+      ]
+    },
+    {
+      "Id": 177842,
+      "Name": "Men 45+",
+      "ShowDraws": true,
+      "IsPublished": true,
+      "TournamentDraws": [
+        {
+          "Id": 644960,
+          "Name": "Elimination",
+          "Stage": 0,
+          "Strength": 0
+        }
+      ]
+    },
+    {
+      "Id": 177843,
+      "Name": "Men 55+",
+      "ShowDraws": false,
+      "IsPublished": true,
+      "TournamentDraws": []
+    },
+    {
+      "Id": 177844,
+      "Name": "Ladies 50+",
+      "ShowDraws": false,
+      "IsPublished": true,
+      "TournamentDraws": []
+    }
+  ],
+  "draw": [
+    {
+      "BaseType": "Elimination",
+      "Elimination": {
+        "PlacesStartPos": 1,
+        "PlacesEndPos": 8,
+        "DrawCells": [
+          {
+            "MatchId": 6931897,
+            "Round": 1,
+            "MaxRound": 3,
+            "MatchOrder": 1,
+            "Date": "2026-10-10T10:00:00",
+            "CourtName": "Century Crt 2",
+            "IsPublished": true,
+            "MatchViewModel": {
+              "Score": null,
+              "HasScore": false,
+              "IsPlayed": false,
+              "HasCancellation": false,
+              "HasDetailedScore": false,
+              "CancellationStatus": null,
+              "TotalDurationInMinutes": null,
+              "IsFirstParticipantWinner": null
+            },
+            "ChallengerParticipant": {
+              "Seed": "1",
+              "FirstPlayer": {
+                "Name": "Brett Hilarides",
+                "RankedinId": "R000342302",
+                "CountryShort": "za",
+                "PlayerUrl": "/en/player/R000342302/brett-hilarides"
+              },
+              "SecondPlayer": {
+                "Name": "Jason Blakey-Milner",
+                "RankedinId": "R000341999",
+                "CountryShort": "za",
+                "PlayerUrl": "/en/player/R000341999/jason-blakey-milner"
+              },
+              "EventParticipantId": 6492552
+            },
+            "ChallengedParticipant": {
+              "Seed": "8",
+              "FirstPlayer": {
+                "Name": "Mike Coni",
+                "RankedinId": "R000380133",
+                "CountryShort": "za",
+                "PlayerUrl": "/en/player/R000380133/mike-coni"
+              },
+              "SecondPlayer": {
+                "Name": "Nicol Crous",
+                "RankedinId": "R000379244",
+                "CountryShort": "za",
+                "PlayerUrl": "/en/player/R000379244/nicol-crous"
+              },
+              "EventParticipantId": 6492556
+            }
+          },
+          {
+            "MatchId": 6931898,
+            "Round": 1,
+            "MaxRound": 3,
+            "MatchOrder": 2,
+            "Date": "2026-10-10T10:00:00",
+            "CourtName": "Century Crt 3",
+            "IsPublished": true,
+            "MatchViewModel": {
+              "Score": null,
+              "HasScore": false,
+              "IsPlayed": false,
+              "HasCancellation": false,
+              "HasDetailedScore": false,
+              "CancellationStatus": null,
+              "TotalDurationInMinutes": null,
+              "IsFirstParticipantWinner": null
+            },
+            "ChallengerParticipant": {
+              "Seed": "5",
+              "FirstPlayer": {
+                "Name": "Brian Gradner",
+                "RankedinId": "R000341728",
+                "CountryShort": "za",
+                "PlayerUrl": "/en/player/R000341728/brian-gradner"
+              },
+              "SecondPlayer": {
+                "Name": "Frederick Rickers",
+                "RankedinId": "R000352597",
+                "CountryShort": "za",
+                "PlayerUrl": "/en/player/R000352597/frederick-rickers"
+              },
+              "EventParticipantId": 6492555
+            },
+            "ChallengedParticipant": {
+              "Seed": "4",
+              "FirstPlayer": {
+                "Name": "Botha Pretorius",
+                "RankedinId": "R000362227",
+                "CountryShort": "za",
+                "PlayerUrl": "/en/player/R000362227/botha-pretorius"
+              },
+              "SecondPlayer": {
+                "Name": "DJ Broeksma",
+                "RankedinId": "R000357610",
+                "CountryShort": "za",
+                "PlayerUrl": "/en/player/R000357610/dj-broeksma"
+              },
+              "EventParticipantId": 6492551
+            }
+          },
+          {
+            "MatchId": 6931899,
+            "Round": 1,
+            "MaxRound": 3,
+            "MatchOrder": 3,
+            "Date": "2026-10-10T10:00:00",
+            "CourtName": "Century Crt 4",
+            "IsPublished": true,
+            "MatchViewModel": {
+              "Score": null,
+              "HasScore": false,
+              "IsPlayed": false,
+              "HasCancellation": false,
+              "HasDetailedScore": false,
+              "CancellationStatus": null,
+              "TotalDurationInMinutes": null,
+              "IsFirstParticipantWinner": null
+            },
+            "ChallengerParticipant": {
+              "Seed": "3",
+              "FirstPlayer": {
+                "Name": "Ockie Oosthuizen",
+                "RankedinId": "R000258081",
+                "CountryShort": "za",
+                "PlayerUrl": "/en/player/R000258081/ockie-oosthuizen"
+              },
+              "SecondPlayer": {
+                "Name": "Scott Whysall",
+                "RankedinId": "R000258086",
+                "CountryShort": "za",
+                "PlayerUrl": "/en/player/R000258086/scott-whysall"
+              },
+              "EventParticipantId": 6492557
+            },
+            "ChallengedParticipant": {
+              "Seed": "6",
+              "FirstPlayer": {
+                "Name": "Imraan Fakier",
+                "RankedinId": "R000352928",
+                "CountryShort": "za",
+                "PlayerUrl": "/en/player/R000352928/imraan-fakier"
+              },
+              "SecondPlayer": {
+                "Name": "Masood Van Der Schyff",
+                "RankedinId": "R000362589",
+                "CountryShort": "za",
+                "PlayerUrl": "/en/player/R000362589/masood-van-der-schyff"
+              },
+              "EventParticipantId": 6492553
+            }
+          },
+          {
+            "MatchId": 6931900,
+            "Round": 1,
+            "MaxRound": 3,
+            "MatchOrder": 4,
+            "Date": "2026-10-10T10:00:00",
+            "CourtName": "Century Crt 1",
+            "IsPublished": true,
+            "MatchViewModel": {
+              "Score": null,
+              "HasScore": false,
+              "IsPlayed": false,
+              "HasCancellation": false,
+              "HasDetailedScore": false,
+              "CancellationStatus": null,
+              "TotalDurationInMinutes": null,
+              "IsFirstParticipantWinner": null
+            },
+            "ChallengerParticipant": {
+              "Seed": "7",
+              "FirstPlayer": {
+                "Name": "Stefano Aracena",
+                "RankedinId": "R000354296",
+                "CountryShort": "za",
+                "PlayerUrl": "/en/player/R000354296/stefano-aracena"
+              },
+              "SecondPlayer": {
+                "Name": "Shannon de Saint Pern",
+                "RankedinId": "F003529636",
+                "CountryShort": "rin",
+                "PlayerUrl": "/en/player/F003529636/shannon-de-saint-pern"
+              },
+              "EventParticipantId": 6492558
+            },
+            "ChallengedParticipant": {
+              "Seed": "2",
+              "FirstPlayer": {
+                "Name": "Martin Redelinghuys",
+                "RankedinId": "R000341757",
+                "CountryShort": "za",
+                "PlayerUrl": "/en/player/R000341757/martin-redelinghuys"
+              },
+              "SecondPlayer": {
+                "Name": "James Munro",
+                "RankedinId": "R000342223",
+                "CountryShort": "za",
+                "PlayerUrl": "/en/player/R000342223/james-munro"
+              },
+              "EventParticipantId": 6492554
+            }
+          },
+          {
+            "MatchId": 6931901,
+            "Round": 2,
+            "MaxRound": 3,
+            "MatchOrder": 1,
+            "Date": "2026-10-10T13:00:00",
+            "CourtName": "Century Crt 3",
+            "IsPublished": true,
+            "MatchViewModel": {
+              "Score": null,
+              "HasScore": false,
+              "IsPlayed": false,
+              "HasCancellation": false,
+              "HasDetailedScore": false,
+              "CancellationStatus": null,
+              "TotalDurationInMinutes": null,
+              "IsFirstParticipantWinner": null
+            },
+            "ChallengerParticipant": {
+              "Seed": "",
+              "FirstPlayer": {
+                "Name": "Pending",
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "SecondPlayer": {
+                "Name": null,
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "EventParticipantId": 0
+            },
+            "ChallengedParticipant": {
+              "Seed": "",
+              "FirstPlayer": {
+                "Name": "Pending",
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "SecondPlayer": {
+                "Name": null,
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "EventParticipantId": 0
+            }
+          },
+          {
+            "MatchId": 6931902,
+            "Round": 2,
+            "MaxRound": 3,
+            "MatchOrder": 2,
+            "Date": "2026-10-10T14:30:00",
+            "CourtName": "Century Crt 3",
+            "IsPublished": true,
+            "MatchViewModel": {
+              "Score": null,
+              "HasScore": false,
+              "IsPlayed": false,
+              "HasCancellation": false,
+              "HasDetailedScore": false,
+              "CancellationStatus": null,
+              "TotalDurationInMinutes": null,
+              "IsFirstParticipantWinner": null
+            },
+            "ChallengerParticipant": {
+              "Seed": "",
+              "FirstPlayer": {
+                "Name": "Pending",
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "SecondPlayer": {
+                "Name": null,
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "EventParticipantId": 0
+            },
+            "ChallengedParticipant": {
+              "Seed": "",
+              "FirstPlayer": {
+                "Name": "Pending",
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "SecondPlayer": {
+                "Name": null,
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "EventParticipantId": 0
+            }
+          },
+          {
+            "MatchId": 6931903,
+            "Round": 3,
+            "MaxRound": 3,
+            "MatchOrder": 1,
+            "Date": "2026-10-11T12:00:00",
+            "CourtName": "Century Crt 3",
+            "IsPublished": true,
+            "MatchViewModel": {
+              "Score": null,
+              "HasScore": false,
+              "IsPlayed": false,
+              "HasCancellation": false,
+              "HasDetailedScore": false,
+              "CancellationStatus": null,
+              "TotalDurationInMinutes": null,
+              "IsFirstParticipantWinner": null
+            },
+            "ChallengerParticipant": {
+              "Seed": "",
+              "FirstPlayer": {
+                "Name": "Pending",
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "SecondPlayer": {
+                "Name": null,
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "EventParticipantId": 0
+            },
+            "ChallengedParticipant": {
+              "Seed": "",
+              "FirstPlayer": {
+                "Name": "Pending",
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "SecondPlayer": {
+                "Name": null,
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "EventParticipantId": 0
+            }
+          }
+        ]
+      }
+    },
+    {
+      "BaseType": "Elimination",
+      "Elimination": {
+        "PlacesStartPos": 3,
+        "PlacesEndPos": 4,
+        "DrawCells": [
+          {
+            "MatchId": 6931907,
+            "Round": 1,
+            "MaxRound": 1,
+            "MatchOrder": 1,
+            "Date": "2026-10-11T13:30:00",
+            "CourtName": "Century Crt 4",
+            "IsPublished": true,
+            "MatchViewModel": {
+              "Score": null,
+              "HasScore": false,
+              "IsPlayed": false,
+              "HasCancellation": false,
+              "HasDetailedScore": false,
+              "CancellationStatus": null,
+              "TotalDurationInMinutes": null,
+              "IsFirstParticipantWinner": null
+            },
+            "ChallengerParticipant": {
+              "Seed": "",
+              "FirstPlayer": {
+                "Name": "Pending",
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "SecondPlayer": {
+                "Name": null,
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "EventParticipantId": 0
+            },
+            "ChallengedParticipant": {
+              "Seed": "",
+              "FirstPlayer": {
+                "Name": "Pending",
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "SecondPlayer": {
+                "Name": null,
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "EventParticipantId": 0
+            }
+          }
+        ]
+      }
+    },
+    {
+      "BaseType": "Elimination",
+      "Elimination": {
+        "PlacesStartPos": 5,
+        "PlacesEndPos": 8,
+        "DrawCells": [
+          {
+            "MatchId": 6931904,
+            "Round": 1,
+            "MaxRound": 2,
+            "MatchOrder": 1,
+            "Date": "2026-10-10T14:30:00",
+            "CourtName": "Century Crt 5",
+            "IsPublished": true,
+            "MatchViewModel": {
+              "Score": null,
+              "HasScore": false,
+              "IsPlayed": false,
+              "HasCancellation": false,
+              "HasDetailedScore": false,
+              "CancellationStatus": null,
+              "TotalDurationInMinutes": null,
+              "IsFirstParticipantWinner": null
+            },
+            "ChallengerParticipant": {
+              "Seed": "",
+              "FirstPlayer": {
+                "Name": "Pending",
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "SecondPlayer": {
+                "Name": null,
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "EventParticipantId": 0
+            },
+            "ChallengedParticipant": {
+              "Seed": "",
+              "FirstPlayer": {
+                "Name": "Pending",
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "SecondPlayer": {
+                "Name": null,
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "EventParticipantId": 0
+            }
+          },
+          {
+            "MatchId": 6931905,
+            "Round": 1,
+            "MaxRound": 2,
+            "MatchOrder": 2,
+            "Date": "2026-10-10T14:30:00",
+            "CourtName": "Century Crt 1",
+            "IsPublished": true,
+            "MatchViewModel": {
+              "Score": null,
+              "HasScore": false,
+              "IsPlayed": false,
+              "HasCancellation": false,
+              "HasDetailedScore": false,
+              "CancellationStatus": null,
+              "TotalDurationInMinutes": null,
+              "IsFirstParticipantWinner": null
+            },
+            "ChallengerParticipant": {
+              "Seed": "",
+              "FirstPlayer": {
+                "Name": "Pending",
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "SecondPlayer": {
+                "Name": null,
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "EventParticipantId": 0
+            },
+            "ChallengedParticipant": {
+              "Seed": "",
+              "FirstPlayer": {
+                "Name": "Pending",
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "SecondPlayer": {
+                "Name": null,
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "EventParticipantId": 0
+            }
+          },
+          {
+            "MatchId": 6931906,
+            "Round": 2,
+            "MaxRound": 2,
+            "MatchOrder": 1,
+            "Date": "2026-10-11T13:30:00",
+            "CourtName": "Century Crt 1",
+            "IsPublished": true,
+            "MatchViewModel": {
+              "Score": null,
+              "HasScore": false,
+              "IsPlayed": false,
+              "HasCancellation": false,
+              "HasDetailedScore": false,
+              "CancellationStatus": null,
+              "TotalDurationInMinutes": null,
+              "IsFirstParticipantWinner": null
+            },
+            "ChallengerParticipant": {
+              "Seed": "",
+              "FirstPlayer": {
+                "Name": "Pending",
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "SecondPlayer": {
+                "Name": null,
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "EventParticipantId": 0
+            },
+            "ChallengedParticipant": {
+              "Seed": "",
+              "FirstPlayer": {
+                "Name": "Pending",
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "SecondPlayer": {
+                "Name": null,
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "EventParticipantId": 0
+            }
+          }
+        ]
+      }
+    },
+    {
+      "BaseType": "Elimination",
+      "Elimination": {
+        "PlacesStartPos": 7,
+        "PlacesEndPos": 8,
+        "DrawCells": [
+          {
+            "MatchId": 6931908,
+            "Round": 1,
+            "MaxRound": 1,
+            "MatchOrder": 1,
+            "Date": "2026-10-11T10:30:00",
+            "CourtName": "Century Crt 5",
+            "IsPublished": true,
+            "MatchViewModel": {
+              "Score": null,
+              "HasScore": false,
+              "IsPlayed": false,
+              "HasCancellation": false,
+              "HasDetailedScore": false,
+              "CancellationStatus": null,
+              "TotalDurationInMinutes": null,
+              "IsFirstParticipantWinner": null
+            },
+            "ChallengerParticipant": {
+              "Seed": "",
+              "FirstPlayer": {
+                "Name": "Pending",
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "SecondPlayer": {
+                "Name": null,
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "EventParticipantId": 0
+            },
+            "ChallengedParticipant": {
+              "Seed": "",
+              "FirstPlayer": {
+                "Name": "Pending",
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "SecondPlayer": {
+                "Name": null,
+                "RankedinId": null,
+                "CountryShort": null,
+                "PlayerUrl": ""
+              },
+              "EventParticipantId": 0
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "roundRobin": {
+    "BaseType": "RoundRobin",
+    "RoundRobin": {
+      "Name": "RoundRobin",
+      "Standings": [
+        {
+          "ParticipantId": 5824449,
+          "Standing": 1,
+          "Played": 5,
+          "Wins": 5,
+          "Losses": 0,
+          "MatchPoints": 15,
+          "DoublesPlayer1Model": {
+            "Name": "Edwin de Villiers",
+            "RankedinId": null,
+            "CountryShort": null,
+            "PlayerUrl": "/en/player/R000271762/edwin-de-villiers"
+          },
+          "DoublesPlayer2Model": {
+            "Name": "Eduard van der Walt",
+            "RankedinId": null,
+            "CountryShort": null,
+            "PlayerUrl": "/en/player/F003021918/eduard-van-der-walt"
+          }
+        },
+        {
+          "ParticipantId": 5824451,
+          "Standing": 2,
+          "Played": 5,
+          "Wins": 4,
+          "Losses": 1,
+          "MatchPoints": 12,
+          "DoublesPlayer1Model": {
+            "Name": "Nicolas Rajah",
+            "RankedinId": null,
+            "CountryShort": null,
+            "PlayerUrl": "/en/player/R000351264/nicolas-rajah"
+          },
+          "DoublesPlayer2Model": {
+            "Name": "Oryan Paul",
+            "RankedinId": null,
+            "CountryShort": null,
+            "PlayerUrl": "/en/player/F003021922/oryan-paul"
+          }
+        },
+        {
+          "ParticipantId": 5824452,
+          "Standing": 3,
+          "Played": 5,
+          "Wins": 3,
+          "Losses": 2,
+          "MatchPoints": 9,
+          "DoublesPlayer1Model": {
+            "Name": "Raees Rassool",
+            "RankedinId": null,
+            "CountryShort": null,
+            "PlayerUrl": "/en/player/R000351637/raees-rassool"
+          },
+          "DoublesPlayer2Model": {
+            "Name": "Bertus Luus",
+            "RankedinId": null,
+            "CountryShort": null,
+            "PlayerUrl": "/en/player/F003021924/bertus-luus"
+          }
+        },
+        {
+          "ParticipantId": 5824450,
+          "Standing": 4,
+          "Played": 5,
+          "Wins": 2,
+          "Losses": 3,
+          "MatchPoints": 6,
+          "DoublesPlayer1Model": {
+            "Name": "Shane Rajah",
+            "RankedinId": null,
+            "CountryShort": null,
+            "PlayerUrl": "/en/player/R000350634/shane-rajah"
+          },
+          "DoublesPlayer2Model": {
+            "Name": "Grant Hewitt",
+            "RankedinId": null,
+            "CountryShort": null,
+            "PlayerUrl": "/en/player/F003021920/grant-hewitt"
+          }
+        },
+        {
+          "ParticipantId": 5824453,
+          "Standing": 5,
+          "Played": 5,
+          "Wins": 1,
+          "Losses": 4,
+          "MatchPoints": 3,
+          "DoublesPlayer1Model": {
+            "Name": "Alessio Cronje",
+            "RankedinId": null,
+            "CountryShort": null,
+            "PlayerUrl": "/en/player/R000351665/alessio-cronje"
+          },
+          "DoublesPlayer2Model": {
+            "Name": "Lohan van der Zwaard",
+            "RankedinId": null,
+            "CountryShort": null,
+            "PlayerUrl": "/en/player/F003021926/lohan-van-der-zwaard"
+          }
+        },
+        {
+          "ParticipantId": 5824454,
+          "Standing": 6,
+          "Played": 5,
+          "Wins": 0,
+          "Losses": 5,
+          "MatchPoints": 0,
+          "DoublesPlayer1Model": {
+            "Name": "Ammie Rootman",
+            "RankedinId": null,
+            "CountryShort": null,
+            "PlayerUrl": "/en/player/F003021928/ammie-rootman"
+          },
+          "DoublesPlayer2Model": {
+            "Name": "Cade Classen",
+            "RankedinId": null,
+            "CountryShort": null,
+            "PlayerUrl": "/en/player/F003021929/cade-classen"
+          }
+        }
+      ],
+      "Pool": [
+        [
+          {
+            "ParticipantCell": null,
+            "MatchCell": null
+          },
+          {
+            "ParticipantCell": {
+              "Seed": null,
+              "Players": [
+                {
+                  "Name": "Nicolas Rajah",
+                  "RankedinId": "R000351264",
+                  "CountryShort": "za"
+                },
+                {
+                  "Name": "Oryan Paul",
+                  "RankedinId": "F003021922",
+                  "CountryShort": "rin"
+                }
+              ]
+            },
+            "MatchCell": null
+          },
+          {
+            "ParticipantCell": {
+              "Seed": null,
+              "Players": [
+                {
+                  "Name": "Edwin de Villiers",
+                  "RankedinId": "R000271762",
+                  "CountryShort": "za"
+                },
+                {
+                  "Name": "Eduard van der Walt",
+                  "RankedinId": "F003021918",
+                  "CountryShort": "rin"
+                }
+              ]
+            },
+            "MatchCell": null
+          },
+          {
+            "ParticipantCell": {
+              "Seed": null,
+              "Players": [
+                {
+                  "Name": "Ammie Rootman",
+                  "RankedinId": "F003021928",
+                  "CountryShort": "rin"
+                },
+                {
+                  "Name": "Cade Classen",
+                  "RankedinId": "F003021929",
+                  "CountryShort": "rin"
+                }
+              ]
+            },
+            "MatchCell": null
+          },
+          {
+            "ParticipantCell": {
+              "Seed": null,
+              "Players": [
+                {
+                  "Name": "Alessio Cronje",
+                  "RankedinId": "R000351665",
+                  "CountryShort": "za"
+                },
+                {
+                  "Name": "Lohan van der Zwaard",
+                  "RankedinId": "F003021926",
+                  "CountryShort": "rin"
+                }
+              ]
+            },
+            "MatchCell": null
+          },
+          {
+            "ParticipantCell": {
+              "Seed": null,
+              "Players": [
+                {
+                  "Name": "Raees Rassool",
+                  "RankedinId": "R000351637",
+                  "CountryShort": "za"
+                },
+                {
+                  "Name": "Bertus Luus",
+                  "RankedinId": "F003021924",
+                  "CountryShort": "rin"
+                }
+              ]
+            },
+            "MatchCell": null
+          },
+          {
+            "ParticipantCell": {
+              "Seed": null,
+              "Players": [
+                {
+                  "Name": "Shane Rajah",
+                  "RankedinId": "R000350634",
+                  "CountryShort": "za"
+                },
+                {
+                  "Name": "Grant Hewitt",
+                  "RankedinId": "F003021920",
+                  "CountryShort": "rin"
+                }
+              ]
+            },
+            "MatchCell": null
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": null
+          }
+        ],
+        [
+          {
+            "ParticipantCell": {
+              "Seed": "",
+              "Players": [
+                {
+                  "Name": "Nicolas Rajah",
+                  "RankedinId": "R000351264",
+                  "CountryShort": "za"
+                },
+                {
+                  "Name": "Oryan Paul",
+                  "RankedinId": "F003021922",
+                  "CountryShort": "rin"
+                }
+              ]
+            },
+            "MatchCell": null
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": null
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193661,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 2,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": false
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": false
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193658,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 4,
+                  "SecondParticipantScore": 0,
+                  "IsFirstParticipantWinner": true
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": true
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193655,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 4,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": true
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193652,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 4,
+                  "SecondParticipantScore": 3,
+                  "IsFirstParticipantWinner": true
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": true
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193649,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 4,
+                  "SecondParticipantScore": 2,
+                  "IsFirstParticipantWinner": true
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": true
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": null
+          }
+        ],
+        [
+          {
+            "ParticipantCell": {
+              "Seed": "",
+              "Players": [
+                {
+                  "Name": "Edwin de Villiers",
+                  "RankedinId": "R000271762",
+                  "CountryShort": "za"
+                },
+                {
+                  "Name": "Eduard van der Walt",
+                  "RankedinId": "F003021918",
+                  "CountryShort": "rin"
+                }
+              ]
+            },
+            "MatchCell": null
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193661,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 4,
+                  "SecondParticipantScore": 2,
+                  "IsFirstParticipantWinner": true
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": true
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": null
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193654,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 4,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": true
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193659,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 4,
+                  "SecondParticipantScore": 0,
+                  "IsFirstParticipantWinner": true
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": true
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193650,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 4,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": true
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193657,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 4,
+                  "SecondParticipantScore": 2,
+                  "IsFirstParticipantWinner": true
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": true
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": null
+          }
+        ],
+        [
+          {
+            "ParticipantCell": {
+              "Seed": "",
+              "Players": [
+                {
+                  "Name": "Ammie Rootman",
+                  "RankedinId": "F003021928",
+                  "CountryShort": "rin"
+                },
+                {
+                  "Name": "Cade Classen",
+                  "RankedinId": "F003021929",
+                  "CountryShort": "rin"
+                }
+              ]
+            },
+            "MatchCell": null
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193658,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 0,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": false
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": false
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193654,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 1,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": false
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": false
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": null
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193651,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 2,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": false
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": false
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193656,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 1,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": false
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": false
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193662,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 1,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": false
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": false
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": null
+          }
+        ],
+        [
+          {
+            "ParticipantCell": {
+              "Seed": "",
+              "Players": [
+                {
+                  "Name": "Alessio Cronje",
+                  "RankedinId": "R000351665",
+                  "CountryShort": "za"
+                },
+                {
+                  "Name": "Lohan van der Zwaard",
+                  "RankedinId": "F003021926",
+                  "CountryShort": "rin"
+                }
+              ]
+            },
+            "MatchCell": null
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193655,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 1,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": false
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": false
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193659,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 0,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": false
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": false
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193651,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 4,
+                  "SecondParticipantScore": 2,
+                  "IsFirstParticipantWinner": true
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": true
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": null
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193663,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 2,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": false
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": false
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193653,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 3,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": false
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": false
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": null
+          }
+        ],
+        [
+          {
+            "ParticipantCell": {
+              "Seed": "",
+              "Players": [
+                {
+                  "Name": "Raees Rassool",
+                  "RankedinId": "R000351637",
+                  "CountryShort": "za"
+                },
+                {
+                  "Name": "Bertus Luus",
+                  "RankedinId": "F003021924",
+                  "CountryShort": "rin"
+                }
+              ]
+            },
+            "MatchCell": null
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193652,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 3,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": false
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": false
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193650,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 1,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": false
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": false
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193656,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 4,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": true
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193663,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 4,
+                  "SecondParticipantScore": 2,
+                  "IsFirstParticipantWinner": true
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": true
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": null
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193660,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 4,
+                  "SecondParticipantScore": 2,
+                  "IsFirstParticipantWinner": true
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": true
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": null
+          }
+        ],
+        [
+          {
+            "ParticipantCell": {
+              "Seed": "",
+              "Players": [
+                {
+                  "Name": "Shane Rajah",
+                  "RankedinId": "R000350634",
+                  "CountryShort": "za"
+                },
+                {
+                  "Name": "Grant Hewitt",
+                  "RankedinId": "F003021920",
+                  "CountryShort": "rin"
+                }
+              ]
+            },
+            "MatchCell": null
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193649,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 2,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": false
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": false
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193657,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 2,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": false
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": false
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193662,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 4,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": true
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193653,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 4,
+                  "SecondParticipantScore": 3,
+                  "IsFirstParticipantWinner": true
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": true
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": {
+              "MatchId": 6193660,
+              "Date": "0001-01-01T00:00:00",
+              "ShowDate": false,
+              "IsPublished": true,
+              "MatchResults": {
+                "Score": {
+                  "LoserTiebreak": null,
+                  "DetailedScoring": [],
+                  "FirstParticipantScore": 2,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": false
+                },
+                "HasScore": true,
+                "IsPlayed": true,
+                "HasCancellation": false,
+                "HasDetailedScore": false,
+                "CancellationStatus": null,
+                "TotalDurationInMinutes": null,
+                "IsFirstParticipantWinner": false
+              }
+            }
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": null
+          },
+          {
+            "ParticipantCell": null,
+            "MatchCell": null
+          }
+        ]
+      ]
+    }
+  }
+}

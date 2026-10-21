@@ -6,7 +6,7 @@ export const HELP_TOPICS = [
   { id: 'problem', title: 'Report a problem', icon: 'bug-outline', answer: 'Tell us which screen you were on, what you expected to happen and what happened instead. You can attach a screenshot in your email app.' },
   { id: 'other', title: 'Something else', icon: 'chatbubble-ellipses-outline', answer: 'Tell the 4M team what you need help with. Please include enough detail for us to understand your enquiry.' },
   { id: 'guide', title: 'How 4M works', icon: 'book-outline', answer: 'Discover tournaments and enter with your partner. Track entries and payments from your profile. In Players, explore local 4M players and international pros, build your follow list, browse rankings and follow the tours. Add events to your calendar and choose your notifications in settings.' },
-  { id: 'deletion', title: 'Request account deletion', icon: 'trash-outline', answer: 'You can ask the 4M team to delete your account. Sending a request does not immediately delete your profile. The team will confirm the steps with you and explain how any outstanding entries or records are handled.' },
+  { id: 'deletion', title: 'Delete your account', icon: 'trash-outline', answer: 'Open Account & settings, choose Delete account and confirm your choice. Your login, profile and personal photos will be removed. Limited payment and tournament records may be retained for recordkeeping. Deletion does not automatically refund fees.' },
 ] as const;
 export type HelpTopic = (typeof HELP_TOPICS)[number]['id'];
 export function supportEmailUrl({ topic, message, context, name, email }: { topic: string; message: string; context?: string; name?: string; email?: string }) {

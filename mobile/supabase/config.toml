@@ -25,4 +25,20 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.pro-padel-explore]
+verify_jwt = true
+
+[functions.pro-padel-provider]
+# Server-only gateway authenticates the existing private provider credential.
 verify_jwt = false
+
+[functions.tournament-draws]
+# Validates the app's existing access token with Auth.getUser in the handler.
+verify_jwt = false
+
+[functions.fip-tournament]
+# Authentication is verified with auth.getUser inside the handler.
+verify_jwt = false
+
+[functions.delete-account]
+# Also verifies the token with Auth.getUser before using its authoritative ID.
+verify_jwt = true

@@ -1,6 +1,6 @@
+import { trackEvent } from './analytics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { AppState, Platform } from 'react-native';
 
@@ -51,10 +51,10 @@ function appVersion(): string | null {
 export { pathFromNotificationData } from './notification-routing';
 import { pathFromNotificationData } from './notification-routing';
 
-// SDK 57 supports Android emulators with Google Play services. Token fetching
-// still fails safely on emulator images without FCM support.
+// SDK 57 supports iOS simulators and Android emulators with Google Play services.
+// Unsupported simulator configurations still fail safely while acquiring a token.
 function canRegisterPush(): boolean {
-  return Platform.OS !== 'web' && (Device.isDevice || Platform.OS === 'android');
+  return Platform.OS !== 'web';
 }
 
 export async function getPushPermissionStatus(): Promise<Notifications.PermissionStatus | 'unavailable'> {
@@ -113,9 +113,10 @@ export async function requestPushPermission(): Promise<boolean> {
       },
     });
     status = next.status;
+    void trackEvent('notification_permission', { permission: status });
   }
   if (status !== 'granted') return false;
-  if (!canRegisterPush()) return true;
+  if (!canRegisterPush()) return false;
   return registerCurrentToken();
 }
 
@@ -202,7 +203,7 @@ export function addNotificationResponseListener(
   const sub = Notifications.addNotificationResponseReceivedListener((response) => {
     const data = response.notification.request.content.data as Record<string, unknown> | undefined;
     const path = pathFromNotificationData(data);
-    if (path) onPath(path);
+    if (path) { void trackEvent('notification_open'); onPath(path); }
   });
   return sub;
 }
@@ -212,6 +213,7 @@ export function consumeInitialNotificationPath(): string | null {
   const response = Notifications.getLastNotificationResponse();
   if (!response) return null;
   const path = pathFromNotificationData(response.notification.request.content.data);
+  if (path) void trackEvent('notification_open');
   Notifications.clearLastNotificationResponse();
   return path;
 }

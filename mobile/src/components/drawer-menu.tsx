@@ -46,6 +46,11 @@ const NAV: NavItem[] = [
     dest: { kind: 'tab', href: '/' },
   },
   {
+    name: 'Following',
+    icon: { ios: 'heart.text.square', android: 'feed', web: 'feed' },
+    dest: { kind: 'tab', href: '/following' },
+  },
+  {
     name: 'Players',
     icon: { ios: 'person.2', android: 'group', web: 'group' },
     dest: { kind: 'tab', href: '/rankings?view=Discover' },

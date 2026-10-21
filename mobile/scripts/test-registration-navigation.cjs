@@ -3,6 +3,10 @@ const assert = require('node:assert/strict');
 const ts = require('typescript');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const eventRules = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/event-rules.ts', 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText, { exports: eventRules });
 
 // Render the actual screen with an in-memory hook host and read-only API fixtures.
 // This checks its button handlers and conditional branches without a native device.
@@ -13,6 +17,7 @@ async function screen(mode, eventOptions = {}, savedCheckout = null, quoteError 
     useState(initial) { const i = cursor++; if (!(i in values)) values[i] = typeof initial === 'function' ? initial() : initial; return [values[i], v => { values[i] = typeof v === 'function' ? v(values[i]) : v; }]; },
     useRef(initial) { const i = cursor++; if (!(i in values)) values[i] = { current: initial }; return values[i]; },
     useEffect(fn) { cursor++; if (!mounted) effects.push(fn); },
+    useCallback(fn) { cursor++; return fn; },
   };
   const event = { id: 524, event_name: 'Legends', is_manual: true, start_date: '2099-10-02', ...eventOptions };
   const divisions = [{ id: 'men40', name: "Men's 40+", entry_fee: 600 }];
@@ -21,6 +26,7 @@ async function screen(mode, eventOptions = {}, savedCheckout = null, quoteError 
   const router = Object.fromEntries(['back', 'push', 'replace', 'dismissTo'].map(k => [k, v => navigation.push([k, v])])); router.canGoBack = () => true;
   const native = Object.fromEntries(['ActivityIndicator', 'Pressable', 'ScrollView', 'Switch', 'Text', 'TextInput', 'View'].map(k => [k, k]));
   const modules = {
+    '@/lib/analytics': { trackEvent() {}, recordAnalyticsCheckout() {}, trackConfirmedPurchase() {} },
     '@/components/events/entry-saved-banner': { EntrySavedBanner: 'EntrySavedBanner' },
     '@/components/toast': { Toast: 'Toast' },
     '@/components/events/tshirt-size-picker': { SizePicker: 'SizePicker' },
@@ -29,7 +35,8 @@ async function screen(mode, eventOptions = {}, savedCheckout = null, quoteError 
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }), Fragment: 'Fragment' },
     'react-native': { ...native, Platform: { OS: 'ios' }, Linking: { addEventListener: () => ({ remove() {} }) } },
     '@/lib/payment-return': { parsePaymentReturn: () => null },
-    'expo-router': { useLocalSearchParams: () => ({ id: '524', mode, entry: 'reg1' }), useRouter: () => router },
+    'expo-router': { useLocalSearchParams: () => ({ id: '524', mode, entry: 'reg1' }), useRouter: () => router, useFocusEffect: hooks.useEffect },
+    '@/lib/foreground-task': { startForegroundTask: () => () => {} },
     'expo-image': { Image: 'Image' }, '@expo/vector-icons': { Ionicons: 'Ionicons' },
     'expo-crypto': { randomUUID: () => 'test-attempt' },
     'expo-web-browser': {}, 'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 20, bottom: 20 }) },
@@ -38,7 +45,7 @@ async function screen(mode, eventOptions = {}, savedCheckout = null, quoteError 
     '@/components/events/registration-options': { Choices: 'Choices', DivisionOptions: 'DivisionOptions', LicencePicker: 'LicencePicker' },
     '@/lib/home': { formatEventRange: () => '2–4 Oct' },
     '@/lib/events': { fetchEvent: async () => event, fetchDivisions: async () => divisions, currentEmail: async () => 'mark@example.com', fetchMyEventRegistrations: async () => mode === 'add-partner' ? [{ id: 'reg1', division_id: 'men40', tshirt_size: 'L', payment_status: 'paid' }] : mode === 'pay' ? [{ id: 'reg1', division_id: 'men40', partner_email: partner.email, partner_name: partner.name }] : [], eventImage: () => 1 },
-    '@/lib/event-rules': { formatMoney: n => `R ${n}`, entryFee: () => 600, registrationState: event => event.registration_closes_at && new Date(event.registration_closes_at) <= new Date() ? 'closed' : 'open' },
+    '@/lib/event-rules': { ...eventRules, formatMoney: n => `R ${n}`, entryFee: () => 600, registrationState: event => event.registration_closes_at && new Date(event.registration_closes_at) <= new Date() ? 'closed' : 'open' },
     '@/lib/event-checkout': { invokeCheckout: async input => { requests.push(input); if (quoteError && !input.tshirtSize) throw new Error(quoteError); return { quote }; } },
     '@/lib/site': {}, '@/theme/tokens': { brand: {}, lightBrand: {} },
     '@/lib/notifications': { requestPushPermission: async () => true },
@@ -76,6 +83,16 @@ test('existing-entry payment opens the existing division step and Back returns t
   assert.equal(app.requests.at(-1).selections[0].payForSelf, true);
   assert.equal(app.requests.at(-1).selections[0].payForPartner, false);
   assert.equal(app.navigation.length, 0);
+});
+
+test('closed registration still opens existing-entry payment review', async () => {
+  const app = await screen('pay', { registration_closes_at: '2000-01-01' });
+  assert.equal(app.find('Notice', p => p.title === 'Registration closed'), undefined);
+  app.find('ActionButton', p => p.label === 'Continue to Review & Pay').props.onPress();
+  await app.flush();
+  assert.ok(app.find('ActionButton', p => p.label === 'Pay & Complete Registration'));
+  assert.equal(app.requests.at(-1).mode, 'pay');
+  assert.equal(app.find('DivisionOptions'), undefined);
 });
 test('paying only a partner selects only their fee for review', async () => {
   const app = await screen('pay');

@@ -1,0 +1,56 @@
+begin;
+do $$
+declare own uuid; own_email text; other uuid; actor bigint; actor_two bigint; event bigint; prefix text:=gen_random_uuid()::text; result jsonb; first jsonb; second jsonb; one uuid; time timestamptz:=now()-interval '1 hour'; baseline bigint; profile_key text;
+begin
+  select f.user_id,u.email into own,own_email from local_player_follows f join auth.users u on u.id=f.user_id limit 1;
+  select id into other from auth.users where id<>own limit 1;
+  select id into actor from players where approved=true limit 1;
+  select id into actor_two from players where approved=true and id<>actor limit 1;
+  select id into event from calendar where is_visible=true and coalesce(registration_access,'public')='public' limit 1;
+  if own is null or other is null or actor_two is null or event is null then raise exception 'Test fixtures unavailable'; end if;
+  delete from local_player_follows where user_id in (own,other);
+  delete from pro_player_follows where user_id in (own,other);
+  delete from pro_match_bookmarks where user_id in (own,other);
+  delete from event_notification_follows where email in (lower(own_email),(select lower(email) from auth.users where id=other));
+  insert into local_player_follows(user_id,player_id) values(own,actor),(own,actor_two);
+  perform set_config('request.jwt.claims',jsonb_build_object('sub',own,'email',own_email,'role','authenticated')::text,true);
+  perform record_following_activity(jsonb_build_object('event_key',prefix||':shared','kind','result','local_player_ids',jsonb_build_array(actor),'title','Test shared result','path','/players/'||actor,'occurred_at',time));
+  perform record_following_activity(jsonb_build_object('event_key',prefix||':shared','kind','result','local_player_ids',jsonb_build_array(actor_two),'title','Test shared result','path','/players/'||actor,'occurred_at',time));
+  if (select count(*) from following_activity where event_key=prefix||':shared')<>1 or not (select local_player_ids@>array[actor,actor_two] from following_activity where event_key=prefix||':shared') then raise exception 'Duplicate shared match'; end if;
+  select count(*) into baseline from following_activity;
+  perform record_following_activity(jsonb_build_object('event_key',prefix||':event','kind','tournament','event_id',event,'title','Test event update','path','/events/'||event,'payload',jsonb_build_object('update_type','draw'),'occurred_at',now()-interval '1 second'));
+  if exists(select 1 from jsonb_array_elements(get_following_feed()->'items') x where x->>'title'='Test event update') then raise exception 'Unsubscribed event exposed'; end if;
+  insert into event_notification_follows(event_id,email,following) values(event,lower(own_email),true);
+  -- Feed delivery does not inspect notification preferences or push tokens.
+  if not exists(select 1 from jsonb_array_elements(get_following_feed()->'items') x where x->>'title'='Test event update') then raise exception 'Subscribed event missing'; end if;
+  update calendar set is_visible=false where id=event;
+  if exists(select 1 from jsonb_array_elements(get_following_feed()->'items') x where x->>'title'='Test event update') then raise exception 'Hidden event exposed'; end if;
+  update calendar set is_visible=true where id=event;
+  select get_following_feed('matches',50) into result;
+  if not exists(select 1 from jsonb_array_elements(result->'items') x where x->>'title'='Test shared result') then raise exception 'Followed match missing'; end if;
+  if exists(select 1 from jsonb_array_elements(result->'items') x where x->>'kind'<>'result' and x->>'kind' not in ('match_live','match_schedule')) then raise exception 'Match filter mismatch'; end if;
+  first:=get_following_feed('all',1);
+  second:=get_following_feed('all',1,(first->'items'->0->>'occurred_at')::timestamptz,(first->'items'->0->>'id')::uuid);
+  if first->'items'->0->>'id'=second->'items'->0->>'id' then raise exception 'Cursor repeats first row'; end if;
+  insert into pro_match_bookmarks(user_id,match_id,bookmarked,notify_enabled,metadata,expires_at)
+    values(own,2147483000,true,false,'{}',now()+interval '1 day');
+  perform record_following_activity(jsonb_build_object('event_key',prefix||':star','kind','match_live','pro_match_id',2147483000,'title','Test starred match started','path','/pro/match/2147483000','occurred_at',now()-interval '1 second'));
+  if not exists(select 1 from jsonb_array_elements(get_following_feed('matches')->'items') x where x->>'title'='Test starred match started') then raise exception 'Starred activity disappeared with push off'; end if;
+  if exists(select 1 from jsonb_array_elements(get_following_feed('players')->'items') x where x->>'title'='Test starred match started') then raise exception 'Unfollowed starred players leaked into player filter'; end if;
+  update pro_match_bookmarks set bookmarked=false where user_id=own and match_id=2147483000;
+  if exists(select 1 from jsonb_array_elements(get_following_feed('matches')->'items') x where x->>'title'='Test starred match started') then raise exception 'Unstar did not hide match-only activity'; end if;
+  perform set_config('request.jwt.claims',jsonb_build_object('sub',other,'email',(select email from auth.users where id=other),'role','authenticated')::text,true);
+  if jsonb_array_length(get_following_feed()->'items')<>0 then raise exception 'Cross-account feed exposed'; end if;
+  perform set_config('request.jwt.claims',jsonb_build_object('sub',own,'email',own_email,'role','authenticated')::text,true);
+  delete from local_player_follows where user_id=own;
+  if exists(select 1 from jsonb_array_elements(get_following_feed()->'items') x where x->>'title'='Test shared result') then raise exception 'Unfollow did not hide activity'; end if;
+  update players set bio=coalesce(bio,'')||' test' where id=actor;
+  update players set bio=coalesce(bio,'')||' second' where id=actor;
+  profile_key:='profile:'||actor||':'||(now() at time zone 'UTC')::date;
+  if (select count(*) from following_activity where event_key=profile_key)<>1 then raise exception 'Profile edits did not group'; end if;
+  if has_table_privilege('anon','public.following_activity','SELECT') or has_table_privilege('authenticated','public.following_activity','INSERT') or has_function_privilege('authenticated','public.record_following_activity(jsonb)','EXECUTE') then raise exception 'Client can read or forge shared activity'; end if;
+  perform set_config('request.jwt.claims','{}',true);
+  begin perform get_following_feed(); raise exception 'Anonymous feed allowed'; exception when others then if sqlerrm='Anonymous feed allowed' then raise; end if; end;
+end $$;
+rollback;
+select 'PASS: deduplication, subscription membership, hidden events, filters, cursor, cross-account isolation, unfollow, daily profile grouping, starred matches with push off, unstar and client privilege checks' result;

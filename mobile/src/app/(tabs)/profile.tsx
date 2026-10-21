@@ -1,9 +1,11 @@
+import { PlayerLicenseCard } from '@/components/player-license-card';
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Observe } from 'expo-observe';
 import { SymbolView } from 'expo-symbols';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   Text,
@@ -47,6 +49,7 @@ import {
   type RankingRow,
 } from '@/lib/profile';
 import { openSitePath } from '@/lib/site';
+import { addGalleryPhoto, MAX_PLAYER_GALLERY_PHOTOS } from '@/lib/profile-photos';
 import { supabase } from '@/lib/supabase';
 import { lightBrand as brand } from '@/theme/tokens';
 
@@ -77,10 +80,13 @@ export default function ProfileScreen() {
   const [matchView, setMatchView] = useState<AgendaFilter>('upcoming');
   const [eventScope, setEventScope] = useState<EventScope>('all');
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const [galleryBusy, setGalleryBusy] = useState(false);
+  const galleryMutation = useRef(false);
   const [selectedRanking, setSelectedRanking] = useState<RankingRow | null>(null);
   const [toast, setToast] = useState<{ id: number; message: string; kind: ToastKind } | null>(null);
   const toastSeq = useRef(0);
   const [statsPlayId, setStatsPlayId] = useState(0);
+  const [followerRefreshKey, setFollowerRefreshKey] = useState(0);
   const loadId = useRef(0);
   const statsPlayerId = useRef<number | null>(null);
 
@@ -92,6 +98,7 @@ export default function ProfileScreen() {
 
   const load = useCallback(async (soft?: boolean) => {
     const currentLoad = ++loadId.current;
+    setFollowerRefreshKey(value => value + 1);
     if (!soft) setLoading(true);
     try {
       const { data } = await supabase.auth.getUser();
@@ -131,7 +138,8 @@ export default function ProfileScreen() {
         }
       });
       if (currentLoad !== loadId.current) return;
-      setBundle(next);
+      // Stats can finish after a photo save; retain the current player fields.
+      setBundle(current => ({ ...next, player: current.player?.id === next.player?.id ? current.player : next.player }));
       statsPlayerId.current = next.player?.id ?? null;
       setStatsReady(true);
       const ranks = rankingsOf(next.player);
@@ -179,6 +187,7 @@ export default function ProfileScreen() {
     matches: upcomingMatches.length + pastMatches.length,
     rankings: rankings.length,
     payments: transactions.length,
+    photos: gallery.length,
   };
 
   function goSection(next: ProfileSection, source: 'tap' | 'swipe' = 'tap') {
@@ -200,17 +209,41 @@ export default function ProfileScreen() {
   }
 
   async function removeGalleryImage(index: number) {
-    if (!player) return;
+    if (!player || galleryMutation.current) return;
+    galleryMutation.current = true;
+    setGalleryBusy(true);
     const next = gallery.filter((_, i) => i !== index);
     try {
       await updateGallery(player.id, next);
       setBundle((current) =>
-        current.player
+        current.player?.id === player.id
           ? { ...current, player: { ...current.player, additional_images: next } }
           : current
       );
     } catch (err) {
       flash(err instanceof Error ? err.message : 'Unable to remove photo.');
+    } finally {
+      galleryMutation.current = false;
+      setGalleryBusy(false);
+    }
+  }
+
+  async function addGalleryImage() {
+    if (!player || galleryMutation.current || gallery.length >= MAX_PLAYER_GALLERY_PHOTOS) return;
+    galleryMutation.current = true;
+    setGalleryBusy(true);
+    try {
+      const next = await addGalleryPhoto(player.id);
+      if (!next) return;
+      setBundle(current => current.player?.id === player.id
+        ? { ...current, player: { ...current.player, additional_images: next } }
+        : current);
+      flash('Photo added to your gallery.', 'success');
+    } catch (err) {
+      flash(err instanceof Error ? err.message : 'Unable to add photo. Please try again.');
+    } finally {
+      galleryMutation.current = false;
+      setGalleryBusy(false);
     }
   }
 
@@ -271,33 +304,17 @@ export default function ProfileScreen() {
                 playId={statsPlayId}
                 fipLinked={fipLinked}
                 statsReady={statsReady}
+                followerRefreshKey={followerRefreshKey}
               />
             </FadeUp>
-            {(player.license_type || 'none').toLowerCase() !== 'full' ? (
-              <FadeUp className="mt-3">
-                <LicenseCallout licenseType={player.license_type} tempLicense={bundle.tempLicense} />
-                <PressableScale
-                  onPress={() => router.push('/license')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Manage your SAPA licence"
-                  className="mt-3 h-[44px] items-center justify-center rounded-xl bg-padel">
-                  <Text className="text-[10px] font-black uppercase tracking-widest text-page">
-                    {(player.license_type || '').toLowerCase() === 'temporary'
-                      ? 'Upgrade to Full License'
-                      : 'Pay Now - Full License'}
-                  </Text>
-                </PressableScale>
-              </FadeUp>
-            ) : null}
+            <PlayerLicenseCard />
             {statsReady ? (
               <FadeUp className="mt-3">
                 <ProfileStatsCard stats={bundle.stats} skillRating={player.skill_rating} playId={statsPlayId} />
               </FadeUp>
             ) : (
-              <View className="mt-3 h-[148px] rounded-2xl border border-court-edge bg-court-elevated p-4" accessibilityLabel="Loading match statistics">
+              <View className="mt-3 h-[48px] justify-center rounded-2xl border border-court-edge bg-court-elevated p-4" accessibilityLabel="Loading match statistics">
                 <View className="h-4 w-32 rounded bg-court-surface" />
-                <View className="mt-5 h-4 w-full rounded bg-court-surface" />
-                <View className="mt-5 h-4 w-40 rounded bg-court-surface" />
               </View>
             )}
           </View>
@@ -340,14 +357,14 @@ export default function ProfileScreen() {
                 }}
                 onOpenEvent={openEvent}
                 bottomPad={tabPad}
-                eventsFooter={
-                  <>
-                    <GalleryBlock
-                      gallery={gallery}
-                      onOpen={setLightbox}
-                      onRemove={removeGalleryImage}
-                    />
-                  </>
+                photosContent={
+                  <GalleryBlock
+                    gallery={gallery}
+                    onOpen={setLightbox}
+                    onRemove={removeGalleryImage}
+                    onAdd={addGalleryImage}
+                    busy={galleryBusy}
+                  />
                 }
               />
             ) : null}
@@ -380,10 +397,14 @@ function GalleryBlock({
   gallery,
   onOpen,
   onRemove,
+  onAdd,
+  busy,
 }: {
   gallery: string[];
   onOpen: (url: string) => void;
   onRemove: (index: number) => void;
+  onAdd: () => void;
+  busy: boolean;
 }) {
   return (
     <View className="mt-4 rounded-3xl border border-court-edge bg-court-elevated p-5">
@@ -393,7 +414,7 @@ function GalleryBlock({
           Player Gallery
         </Text>
         <View className="ml-2 rounded-full border border-court-edge bg-court-surface px-2 py-0.5">
-          <Text className="text-xs font-semibold text-court-muted">{gallery.length} / 5</Text>
+          <Text className="text-xs font-semibold text-court-muted">{gallery.length} / {MAX_PLAYER_GALLERY_PHOTOS}</Text>
         </View>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ gap: 12 }}>
@@ -413,6 +434,8 @@ function GalleryBlock({
               onPress={() => onRemove(index)}
               accessibilityRole="button"
               accessibilityLabel={`Remove gallery photo ${index + 1}`}
+              disabled={busy}
+              accessibilityState={{ disabled: busy }}
               hitSlop={6}
               className="absolute items-center justify-center rounded-full bg-red-500/80"
               style={{ top: 4, right: 4, width: 18, height: 18 }}>
@@ -420,13 +443,16 @@ function GalleryBlock({
             </Pressable>
           </View>
         ))}
-        {gallery.length < 5 ? (
+        {gallery.length < MAX_PLAYER_GALLERY_PHOTOS ? (
           <Pressable
-            onPress={() => openSitePath('/profile')}
+            onPress={onAdd}
+            disabled={busy}
             accessibilityRole="button"
-            accessibilityLabel="Add gallery photo on 4M Padel"
+            accessibilityLabel="Add gallery photo"
+            accessibilityHint="Choose a photo from your library"
+            accessibilityState={{ busy, disabled: busy }}
             className="h-[72px] w-[72px] items-center justify-center rounded-2xl border border-dashed border-court-edge bg-court-surface">
-            <SymbolView name="plus" size={18} tintColor={brand.faint} />
+            {busy ? <ActivityIndicator color={brand.accent} /> : <SymbolView name="plus" size={18} tintColor={brand.faint} />}
           </Pressable>
         ) : null}
       </ScrollView>

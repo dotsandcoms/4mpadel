@@ -3,6 +3,12 @@ const assert = require('node:assert/strict');
 const ts = require('typescript');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const eventRules = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/event-rules.ts', 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText, { exports: eventRules });
+const paymentModule = { exports: {} };
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/payment-presentation.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { module: paymentModule, exports: paymentModule.exports });
 function screen(partner = true, open = true, higher = false, balance = undefined, registrations = undefined) {
   let cursor = 0;
   const state = [], routes = [], calls = [], manageCalls = [];
@@ -13,9 +19,11 @@ function screen(partner = true, open = true, higher = false, balance = undefined
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
     './website-ui': { Accordion: 'Accordion', EventIcon: 'Icon', EventText: 'Text', useEventAccent: () => '#d4ff00' },
     './event-teams': { PlayerAvatar: 'Avatar' },
+    './payment-status': { PaymentStatus: 'PaymentStatus' },
+    '@/lib/payment-presentation': paymentModule.exports,
     '@expo/vector-icons': { Ionicons: 'Ionicons' },
     '@/theme/tokens': { lightBrand: { page: '#F5F6F3', elevated: '#fff', surface: '#eee', premium: '#16251F', muted: '#52625A', faint: '#65726B', accent: '#386018', edge: '#DCE2DA', padel: '#CCFF00', danger: '#B7352D' } },
-    '@/lib/event-rules': { formatMoney: n => `R ${n}`, entryFee: (_event, division) => division?.entry_fee || 100, registrationState: () => open ? 'open' : 'closed' },
+    '@/lib/event-rules': { ...eventRules, formatMoney: n => `R ${n}`, entryFee: (_event, division) => division?.entry_fee || 100, registrationState: () => open ? 'open' : 'closed' },
     'expo-router': { useRouter: () => ({ push: value => routes.push(value) }) },
     '@/lib/supabase': { supabase: { functions: { invoke: async (...args) => { calls.push(args); return { data: {} }; } } } },
   };
@@ -73,6 +81,16 @@ test('closed entry remains viewable without partner mutations', () => {
   const app = screen(true, false);
   assert.equal(app.find(n => n.props?.accessibilityLabel === 'Manage partner Partner').props.disabled, true);
   assert.equal(app.find(n => n.props?.label === 'Manage partners / entry details'), undefined);
+});
+
+test('closed unpaid entry keeps payment available without allowing new entries or partner edits', () => {
+  const app = screen(false, false, false, undefined, [{ id: 'r1', division_id: 'd1', division: 'Open', full_name: 'Brad', email: 'brad@test.test', registered_by: 'brad@test.test', payment_status: 'pending' }]);
+  assert.equal(app.find(n => n.props?.accessibilityLabel === 'Register another division'), undefined);
+  app.find(n => n.props?.accessibilityLabel === 'Pay existing entries').props.onPress();
+  assert.equal(app.find(n => n.props?.label === 'Add partner'), undefined);
+  app.find(n => n.props?.label === 'Pay Open only').props.onPress();
+  assert.equal(app.routes[0].params.mode, 'pay');
+  assert.equal(app.routes[0].params.entry, 'r1');
 });
 
 test('higher-priced switch routes to native payment review', async () => {

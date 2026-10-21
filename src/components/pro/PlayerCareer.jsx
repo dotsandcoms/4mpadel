@@ -1,0 +1,12 @@
+import React from 'react';
+import useProExplore from '../../hooks/useProExplore';
+import { formatDate, formatNumber } from '../../utils/proPadelView';
+export default function PlayerCareer({ player }) {
+  const state = useProExplore('player-stats', { id: player.id });
+  const stats = state.data?.stats;
+  return <section className="pro-career"><p className="pro-eyebrow">THE BIGGER PICTURE</p><h3>Career &amp; performance</h3>{state.loading ? <p role="status">Loading player statistics…</p> : state.error ? <div role="alert"><p>{state.error}</p><button className="pro-button" onClick={state.retry}>Retry statistics</button></div> : !stats ? <p className="pro-coverage">Statistics are not available for this player.</p> : <>
+    <p className="pro-coverage">Main draw only · {stats.coverage === 'full' ? 'Complete provider history' : stats.coverage === 'partial' ? 'Complete-draw period; earlier finals excluded from performance' : stats.coverage === 'finals_only' ? 'Finals-only performance coverage' : 'No performance matches'}{stats.performanceSince && ` · Since ${formatDate(stats.performanceSince)}`}. Titles and finals span the provider’s full recorded history.</p>
+    <div className="pro-modal-stats"><div><span>Titles</span><strong>{formatNumber(stats.titles)}</strong><small>{formatNumber(stats.finals)} finals reached</small></div><div><span>Win rate</span><strong>{stats.win_percentage == null ? '—' : `${stats.win_percentage}%`}</strong><small>{formatNumber(stats.matches_played)} recorded matches</small></div><div><span>Wins / losses</span><strong>{formatNumber(stats.matches_won)} / {stats.matches_played != null && stats.matches_won != null ? formatNumber(stats.matches_played-stats.matches_won) : '—'}</strong><small>Within performance coverage</small></div></div>
+    <dl className="pro-career-details">{[['Sets won / lost', `${formatNumber(stats.sets_won)} / ${formatNumber(stats.sets_lost)}`],['Games won / lost',`${formatNumber(stats.games_won)} / ${formatNumber(stats.games_lost)}`],['Average sets per match',formatNumber(stats.avg_sets_per_match)],['Average games per match',formatNumber(stats.avg_games_per_match)],['Semi-finals reached',formatNumber(stats.semifinals)],['Elo rating',formatNumber(player.elo)]].map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><p className="pro-coverage">Elo measures playing strength; official ranking points determine world ranking.</p>
+  </>}</section>;
+}

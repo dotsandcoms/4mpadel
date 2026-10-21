@@ -5,7 +5,7 @@ import { lightBrand as brand } from '@/theme/tokens';
 import { type PlayerMatch, isMatchWinner } from '@/lib/matches';
 
 export default function MatchResultSheet() {
-  const { match: raw } = useLocalSearchParams<{ match?: string }>();
+  const { match: raw, context } = useLocalSearchParams<{ match?: string; context?: string }>();
   const router = useRouter();
   let match: PlayerMatch | null = null;
   try {
@@ -20,7 +20,7 @@ export default function MatchResultSheet() {
   ];
   const setWins = [scores.filter(s => Number(s.Score1) > Number(s.Score2)).length, scores.filter(s => Number(s.Score2) > Number(s.Score1)).length];
   const winners = [info?.Challenger?.IsWinner ?? setWins[0] > setWins[1], info?.Challenged?.IsWinner ?? setWins[1] > setWins[0]];
-  const victory = match ? isMatchWinner(match) : undefined;
+  const victory = match && context !== 'following' ? isMatchWinner(match) : undefined;
   const location = info?.Venue || info?.Location;
   return <ScrollView style={{ flex: 1 }} contentInsetAdjustmentBehavior="never" contentContainerStyle={{ padding: 16, paddingTop: 24, paddingBottom: 36 }}>
     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>

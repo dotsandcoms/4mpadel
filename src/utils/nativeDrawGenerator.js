@@ -1,3 +1,4 @@
+import { addBackplates } from './drawBackplates.js';
 /**
  * Pure native-draw generation helpers.  They deliberately have no Supabase or
  * UI dependency, which makes a generated draft easy to preview and edit before
@@ -33,7 +34,7 @@ export const seededSlotOrder = (drawSize) => {
     return order;
 };
 
-const entrySort = (entries, seedingMethod, random, seededPercentage = 100) => {
+const entrySort = (entries, seedingMethod, random, seededPercentage = 100, seededCount = null) => {
     const active = entries.filter((entry) => entry.status !== 'withdrawn');
     if (seedingMethod === 'random') return shuffled(active, random);
     const ranked = [...active].sort((a, b) => {
@@ -45,6 +46,13 @@ const entrySort = (entries, seedingMethod, random, seededPercentage = 100) => {
         if (aValue !== bValue) return bValue - aValue;
         return String(a.team_name || '').localeCompare(String(b.team_name || ''));
     });
+    if (seededCount !== null) {
+        if (!Number.isInteger(seededCount) || seededCount < 0 || seededCount > ranked.length) throw new Error('Choose a seeded-team count between zero and the number of teams.');
+        const seeded = ranked.slice(0, seededCount).map((entry,index)=>({...entry,seed_number:index+1}));
+        const grouped = seeded.slice(0,2);
+        for(let start=2;start<seededCount;start*=2) grouped.push(...shuffled(seeded.slice(start,Math.min(start*2,seededCount)),random));
+        return [...grouped,...shuffled(ranked.slice(seededCount).map(entry=>({...entry,seed_number:null})),random)];
+    }
     if (seedingMethod === 'manual') return ranked;
 
     const percentage = Math.min(100, Math.max(0, Number(seededPercentage) || 0));
@@ -73,16 +81,19 @@ const knockoutRoundLabel = (roundNumber, totalRounds) => {
 export const generateKnockoutDraft = (entries, {
     seedingMethod = 'manual',
     seededPercentage = 100,
+    seededCount = null,
     placementPlayoff = 'none',
+    plateMode = 'none',
     random = Math.random,
 } = {}) => {
-    const orderedEntries = entrySort(entries, seedingMethod, random, seededPercentage).map((entry, index) => ({
+    const orderedEntries = entrySort(entries, seedingMethod, random, seededPercentage, seededCount).map((entry, index) => ({
         ...entry,
-        seed_number: index + 1,
+        seed_number: seededCount === null ? index + 1 : entry.seed_number,
     }));
     if (orderedEntries.length < 2) throw new Error('At least two active entries are required');
 
     const drawSize = nextPowerOfTwo(orderedEntries.length);
+    if (placementPlayoff === 'top8' && drawSize < 8) throw new Error('Top 8 placement requires an 8-slot elimination draw or larger. Choose Top 4 for a smaller draw.');
     const seedOrder = seededSlotOrder(drawSize);
     const slots = seedOrder.map((seed) => orderedEntries[seed - 1] || null);
     const matches = [];
@@ -127,7 +138,7 @@ export const generateKnockoutDraft = (entries, {
     }));
 
     const placementMatches = [];
-    if (placementPlayoff === 'top4' && totalRounds >= 2) {
+    if (['top4', 'top8'].includes(placementPlayoff) && totalRounds >= 2) {
         const semifinalRound = totalRounds - 1;
         const semifinalMatches = knockoutMatches
             .filter((match) => match.round_number === semifinalRound)
@@ -159,23 +170,23 @@ export const generateKnockoutDraft = (entries, {
         }
     }
 
-    return {
+    return addBackplates({
         draw_size: drawSize,
         total_rounds: totalRounds,
         entries: orderedEntries,
         seeded_percentage: Math.min(100, Math.max(0, Number(seededPercentage) || 0)),
         placement_playoff: placementPlayoff,
         matches: [...knockoutMatches, ...placementMatches],
-    };
+    }, plateMode);
 };
 
 /** Assigns teams to groups in a seeded snake: A/B/C then C/B/A, repeatedly. */
-export const allocateSnakeGroups = (entries, groupCount, { seedingMethod = 'manual', seededPercentage = 100, random = Math.random } = {}) => {
+export const allocateSnakeGroups = (entries, groupCount, { seedingMethod = 'manual', seededPercentage = 100, seededCount = null, random = Math.random } = {}) => {
     const count = Number(groupCount);
     if (!Number.isInteger(count) || count < 1) throw new Error('At least one group is required');
-    const ordered = entrySort(entries, seedingMethod, random, seededPercentage).map((entry, index) => ({
+    const ordered = entrySort(entries, seedingMethod, random, seededPercentage, seededCount).map((entry, index) => ({
         ...entry,
-        seed_number: index + 1,
+        seed_number: seededCount === null ? index + 1 : entry.seed_number,
     }));
     if (ordered.length < count) throw new Error('There must be at least one entry per group');
     const groups = Array.from({ length: count }, (_, index) => ({

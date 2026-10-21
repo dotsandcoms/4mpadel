@@ -58,6 +58,7 @@ Deno.serve(async req => {
       return json({ paid: true, eventId, balance });
     }
     if (!event.is_manual || event.event_status === 'cancelled' || reg.status === 'withdrawn') fail('This entry is not available for payment.');
+    await checked(admin.rpc('assert_event_registration_payments_open', { p_rows: [{ event_id: eventId, division_id: reg.division_id, division: reg.division }] }));
     const balance = balanceFor(reg);
     if (!balance.known) fail('The original entry payment needs reconciliation. Contact the organiser; do not pay the full entry fee again.');
     const quote = { ...balance, eventId, eventName: event.event_name, total: balance.due };

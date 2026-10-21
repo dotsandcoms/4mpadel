@@ -9,12 +9,13 @@ import { fetchHomeBundle } from '@/lib/home';
 import { fetchProfileTransactions } from '@/lib/profile';
 import { supabase } from '@/lib/supabase';
 import { HELP_TOPICS, SUPPORT_EMAIL, supportEmailUrl } from '@/lib/support';
+import { trackEvent } from '@/lib/analytics';
 import { lightBrand as brand } from '@/theme/tokens';
 export default function HelpScreen() {
   const params = useLocalSearchParams<{ topic?: string }>();
   const router = useRouter();
   const [topic, setTopic] = useState<string>(params.topic || '');
-  const [writing, setWriting] = useState(params.topic === 'deletion');
+  const [writing, setWriting] = useState(false);
   const [message, setMessage] = useState('');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -26,6 +27,9 @@ export default function HelpScreen() {
   const [opening, setOpening] = useState(false);
   const [handoff, setHandoff] = useState(false);
   const selected = HELP_TOPICS.find(item => item.id === topic);
+  useEffect(() => {
+    if (params.topic === 'deletion') router.replace('/delete-account');
+  }, [params.topic, router]);
   useEffect(() => {
     let active = true;
     setContext(''); setOptions([]); setLoadError(''); setLoading(true);
@@ -56,11 +60,14 @@ export default function HelpScreen() {
     })().catch(() => { if (active) setLoadError('Could not load your account details. You can retry or type the reference in your message.'); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [topic, attempt]);
-  function choose(id: string) { setTopic(id); setWriting(id === 'deletion'); setHandoff(false); }
+  function choose(id: string) {
+    if (id === 'deletion') { router.push('/delete-account'); return; }
+    setTopic(id); setWriting(false); setHandoff(false);
+  }
   async function openEmail() {
     if (opening || !selected || !message.trim()) return;
     setOpening(true);
-    try { await Linking.openURL(supportEmailUrl({ topic: selected.title, message, context, name, email })); setHandoff(true); }
+    try { await Linking.openURL(supportEmailUrl({ topic: selected.title, message, context, name, email })); void trackEvent('support_opened', { content_type: 'support' }); setHandoff(true); }
     catch { Alert.alert('Could not open your email app', `Please email ${SUPPORT_EMAIL}. Your message is still here, so you can copy it below.`); }
     finally { setOpening(false); }
   }

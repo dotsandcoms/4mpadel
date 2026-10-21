@@ -1,11 +1,11 @@
 import { watchWelcomeEmailRetries } from '@/lib/welcome-email';
 import 'react-native-gesture-handler';
 import type { Session } from '@supabase/supabase-js';
-import { DefaultTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
+import { DefaultTheme, Stack, ThemeProvider, usePathname, useRouter, useSegments } from 'expo-router';
 import { Observe, ObserveRoot } from 'expo-observe';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 import { Notice } from '@/components/events/event-ui';
 import { StartupRevealedContext } from '@/components/observe-ready';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -24,6 +24,10 @@ import { recordAppDevice } from '@/lib/signup-source';
 import { supabase } from '@/lib/supabase';
 import { lightBrand } from '@/theme/tokens';
 import { setCompanionAccount } from '@/lib/companion';
+import { watchAuthRefresh } from '@/lib/foreground-task';
+import { migrateLegacyDrafts } from '@/lib/profile-draft-storage';
+import { withStartupDeadline } from '@/lib/startup';
+import { initializeAnalytics, setAnalyticsUser, trackScreen } from '@/lib/analytics';
 
 SplashScreen.preventAutoHideAsync();
 Observe.configure({
@@ -47,7 +51,7 @@ Observe.configure({
  *
  * The overlay stays up until three things are true:
  *   - the animation has run its course (so it never truncates mid-motion),
- *   - onboarding state and the Supabase session have resolved, and
+ *   - onboarding state has resolved, plus the saved session for returning users, and
  *   - the router has replaced onto that destination.
  * Expo Router's default screen is Home, so clearing the splash any earlier
  * flashes the tabs for a frame. The fade then lands on the real first screen.
@@ -55,6 +59,7 @@ Observe.configure({
 function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
+  const pathname = usePathname();
   const isAuth = segments[0] === '(auth)';
   const recoveryRoute = useRef(false);
   recoveryRoute.current = segments[0] === 'reset-password';
@@ -70,7 +75,17 @@ function RootLayout() {
   const settled = useRef(false);
   const [pendingPushPath, setPendingPushPath] = useState<string | null>(null);
 
+  useEffect(() => { void initializeAnalytics().catch(() => {}); }, []);
+  useEffect(() => {
+    if (revealed) void trackScreen(segments.join('/'));
+  }, [pathname, revealed]);
+
   useEffect(() => watchWelcomeEmailRetries(), []);
+  useEffect(() => Platform.OS === 'web' ? undefined : watchAuthRefresh(supabase.auth), []);
+  useEffect(() => {
+    // Draft upgrades are independent of sign-in. A failed upgrade retains the old draft.
+    void migrateLegacyDrafts().catch(() => Observe.reportError(new Error('Profile draft migration failed')));
+  }, []);
 
   const onSplashFinish = useCallback(() => setAnimDone(true), []);
 
@@ -78,7 +93,7 @@ function RootLayout() {
     // Replay the introduction in development; production keeps first-launch onboarding.
     if (__DEV__ || !seen) return '/(auth)/onboarding' as const;
     if (!session) return '/(auth)/sign-in' as const;
-    return destinationAfterAuth(session);
+    return withStartupDeadline(destinationAfterAuth(session));
   }, []);
 
   useEffect(() => {
@@ -86,15 +101,23 @@ function RootLayout() {
 
     (async () => {
       try {
-      const [seen, { data, error: sessionError }] = await Promise.all([
-        hasSeenOnboarding(),
-        supabase.auth.getSession(),
-      ]);
+      const seen = await withStartupDeadline(hasSeenOnboarding());
+      if (cancelled) return;
+      seenRef.current = seen;
+      // A fresh install can show the introduction without opening the keystore
+      // or refreshing a previous account. Auth restores independently and its
+      // subscription supplies the session when it becomes available.
+      if (__DEV__ || !seen) {
+        settled.current = true;
+        setDataReady(true);
+        return;
+      }
+      const { data, error: sessionError } = await withStartupDeadline(supabase.auth.getSession());
       if (cancelled) return;
       if (sessionError) throw sessionError;
       void setCompanionAccount(data.session?.user.id ?? null);
+      void setAnalyticsUser(data.session?.user.id ?? null);
 
-      seenRef.current = seen;
       sessionRef.current = data.session;
       settled.current = true;
       setDataReady(true);
@@ -112,6 +135,7 @@ function RootLayout() {
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       void setCompanionAccount(session?.user.id ?? null);
+      void setAnalyticsUser(session?.user.id ?? null);
       if (!settled.current) return;
       sessionRef.current = session;
       if (event === 'SIGNED_OUT') router.replace('/(auth)/sign-in');
@@ -249,13 +273,13 @@ function RootLayout() {
       </Stack>
       {showSplash ? <AnimatedSplash onFinish={onSplashFinish} /> : null}
       {bootError && <View style={{ position: 'absolute', inset: 0, backgroundColor: brand.page, justifyContent: 'center', padding: 24 }}>
-        <Notice title="Could not restore your session" onRetry={() => {
+        <Notice title="Could not finish opening the app" onRetry={() => {
           settled.current = false;
           setBootError(false);
           setDataReady(false);
           setRevealed(false);
           setBootAttempt(value => value + 1);
-        }}>We couldn’t access your saved sign-in. Please try again. If this continues, close and reopen the app.</Notice>
+        }}>Check your connection and try again.</Notice>
       </View>}
     </ThemeProvider>
     </StartupRevealedContext.Provider>

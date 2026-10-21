@@ -7,7 +7,8 @@ export type PointFeed = { coverage: 'full' | 'partial' | 'tracking' | null; stat
 export type MatchStats = Record<string, unknown>;
 export type LiveMatch = { id: number; status: string; coverage: string | null };
 export type LiveScoreSummary = { sets: [string | null, string | null][]; points: string | null; serving: string | null; coverage: string | null };
-export type MatchDetails = { match: ProMatch; scoreText: string | null; duration: string | null; startedAt: string | null; updatedAt: string | null; draw: string | null; watchability: number | null; seeds: [string | null, string | null]; liveScore?: LiveScoreSummary | null };
+export type ProviderFreshness = { stale: boolean; updatedAt: string; reason?: string };
+export type MatchDetails = { freshness?: ProviderFreshness; match: ProMatch; scoreText: string | null; duration: string | null; startedAt: string | null; updatedAt: string | null; draw: string | null; watchability: number | null; seeds: [string | null, string | null]; liveScore?: LiveScoreSummary | null; tournament?: ProTournament | null };
 export type HeadToHead = { matches: MatchDetails[]; total: number; complete: boolean };
 export type MatchPrediction = { team1: number; team2: number; eloDiff: number | null };
 export type PlayerStats = { matchesPlayed: number | null; matchesWon: number | null; winPercentage: number | null; titles: number | null; finals: number | null; semifinals: number | null; setsWon: number | null; setsLost: number | null; gamesWon: number | null; gamesLost: number | null; bestRound: number | null; coverage: string | null; since: string | null };
@@ -21,6 +22,17 @@ const text = (v: unknown): string | null => typeof v === 'string' && v.trim() &&
 const finiteNumber = (v: unknown): number | null => v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null;
 const positiveId = (v: unknown) => Number.isSafeInteger(v) && Number(v) > 0;
 const person = (v: unknown): ProPerson | null => object(v) && positiveId(v.id) && text(v.name) ? { id: v.id, name: text(v.name)!, nationality: /^[A-Z]{2}$/.test(v.nationality || '') ? v.nationality : null } : null;
+
+export function parseProviderTournament(value: unknown): ProTournament | null {
+  if (!object(value) || !positiveId(value.id) || !text(value.name)) return null;
+  const amount = finiteNumber(value.prize?.amount);
+  const currency = text(value.prize?.currency);
+  return { id: value.id, name: text(value.name)!, startDate: text(value.start_date) || '', endDate: text(value.end_date) || '',
+    level: text(value.level), status: text(value.status), location: text(value.location), country: text(value.country),
+    venue: text(value.venue?.name), address: text(value.venue?.address), timezone: text(value.timezone), courtType: text(value.court_type),
+    prize: amount != null && amount >= 0 && currency && /^[A-Z]{3}$/.test(currency) ? { amount, currency } : null,
+    photoUrl: /^https:\/\//.test(value.photo_url || '') ? value.photo_url : null };
+}
 
 export function recentMatchForm(matches: MatchDetails[], playerId: number): boolean[] {
   return matches.filter(({ match }) => ['finished', 'retired'].includes(match.status) && !!match.winner && match.teams.some(team => team.some(player => player.id === playerId)))
@@ -57,7 +69,8 @@ export function parseProviderMatch(raw: unknown): MatchDetails | null {
   const scoreText = text(raw.score) || (score.length ? score.map(([first, second]) => first != null && second != null ? `${first}-${second}` : '').filter(Boolean).join(', ') : null);
   return { match, scoreText, duration: text(raw.duration), startedAt: text(raw.started_time), updatedAt: text(raw.updated_at), draw: text(raw.draw),
     watchability: Number.isFinite(raw.watchability) && raw.watchability >= 0 && raw.watchability <= 100 ? raw.watchability : null,
-    seeds: [text(seed.team_1), text(seed.team_2)] };
+    freshness: object(raw._freshness) ? raw._freshness as ProviderFreshness : undefined,
+    seeds: [text(seed.team_1), text(seed.team_2)], tournament: parseProviderTournament(tournament) };
 }
 
 export async function fetchLiveMatches(): Promise<LiveMatch[]> {
@@ -113,7 +126,7 @@ export async function fetchHeadToHead(id: number): Promise<HeadToHead | null> {
   const value = await invoke('head-to-head', id);
   if (value?.unavailable) return null;
   if (!Array.isArray(value?.data)) throw new Error('Head-to-head history could not be loaded.');
-  const matches = value.data.map(parseProviderMatch).filter(Boolean) as MatchDetails[];
+  const matches = value.data.map((row: any) => parseProviderMatch({ ...row, _freshness: value._freshness })).filter(Boolean) as MatchDetails[];
   return { matches, total: Number(value.meta?.total) || matches.length, complete: Number(value.meta?.last_page) === 1 };
 }
 
@@ -158,7 +171,7 @@ export async function fetchPlayerMatches(id: number, page = 1, year?: number): P
   const value = await invoke('player-matches', id, page, year ? { year } : undefined);
   if (value?.unavailable) return { matches: [], hasMore: false, total: 0 };
   if (!Array.isArray(value?.data)) throw new Error('Player match history could not be loaded.');
-  const matches = value.data.map(parseProviderMatch).filter(Boolean) as MatchDetails[];
+  const matches = value.data.map((row: any) => parseProviderMatch({ ...row, _freshness: value._freshness })).filter(Boolean) as MatchDetails[];
   return { matches, hasMore: Number(value.meta?.last_page) > page, total: Number(value.meta?.total) || matches.length };
 }
 
@@ -192,7 +205,7 @@ export async function fetchPairMatches(pairId: string, page = 1, year?: number):
   const value = await invoke('pair-matches', pairId, page, year ? { year } : undefined);
   if (value?.unavailable) return { matches: [], hasMore: false, total: 0 };
   if (!Array.isArray(value?.data)) throw new Error('Pair match history could not be loaded.');
-  const matches = value.data.map(parseProviderMatch).filter(Boolean) as MatchDetails[];
+  const matches = value.data.map((row: any) => parseProviderMatch({ ...row, _freshness: value._freshness })).filter(Boolean) as MatchDetails[];
   return { matches, hasMore: Number(value.meta?.last_page) > page, total: Number(value.meta?.total) || matches.length };
 }
 
@@ -211,17 +224,50 @@ export async function fetchTournamentDetails(id: number): Promise<ProTournament 
   const value = await invoke('tournament', id);
   if (value?.unavailable) return null;
   if (!object(value) || value.id !== id || !text(value.name)) throw new Error('Tournament details could not be loaded.');
-  return { id, name: text(value.name)!, startDate: text(value.start_date) || '', endDate: text(value.end_date) || '',
-    level: text(value.level), status: text(value.status), location: text(value.location), country: text(value.country),
-    venue: text(value.venue?.name), photoUrl: /^https:\/\//.test(value.photo_url || '') ? value.photo_url : null };
+  return parseProviderTournament(value);
+}
+
+export async function fetchLiveTournaments(): Promise<ProTournament[]> {
+  const tournaments = new Map<number, ProTournament>();
+  for (let page = 1; page <= 20; page++) {
+    const value = await invoke('live-tournaments', undefined, page);
+    if (!Array.isArray(value?.data)) throw new Error('Live tournaments could not be loaded.');
+    for (const row of value.data) {
+      if (!object(row) || !positiveId(row.id) || !text(row.name) || !['live', 'ongoing'].includes(row.status)) continue;
+      tournaments.set(row.id, { id: row.id, name: text(row.name)!, startDate: text(row.start_date) || '', endDate: text(row.end_date) || '',
+        level: text(row.level), status: text(row.status), location: text(row.location), country: text(row.country), freshness: value._freshness,
+        venue: text(row.venue?.name), photoUrl: /^https:\/\//.test(row.photo_url || '') ? row.photo_url : null });
+    }
+    if (!(Number(value.meta?.last_page) > page)) {
+      const premier = (event: ProTournament) => ['major', 'p1', 'p2', 'finals'].includes(event.level || '') ? 0 : 1;
+      return [...tournaments.values()].sort((a, b) => premier(a) - premier(b) || a.startDate.localeCompare(b.startDate) || a.name.localeCompare(b.name));
+    }
+  }
+  throw new Error('The complete live tournament list could not be loaded.');
 }
 
 export async function fetchTournamentMatches(id: number, page = 1): Promise<{ matches: MatchDetails[]; hasMore: boolean; total: number; lastPage: number }> {
   const value = await invoke('tournament-matches', id, page);
   if (value?.unavailable) return { matches: [], hasMore: false, total: 0, lastPage: 1 };
   if (!Array.isArray(value?.data)) throw new Error('Tournament matches could not be loaded.');
-  const matches = value.data.map(parseProviderMatch).filter(Boolean) as MatchDetails[];
+  const matches = value.data.map((row: any) => parseProviderMatch({ ...row, _freshness: value._freshness })).filter(Boolean) as MatchDetails[];
   return { matches, hasMore: Number(value.meta?.last_page) > page, total: Number(value.meta?.total) || matches.length, lastPage: Number(value.meta?.last_page) || 1 };
+}
+
+/** Load both draws before computing category totals or round filters. Retain usable pages on a partial failure. */
+export async function fetchTournamentDraw(id: number): Promise<{ matches: MatchDetails[]; total: number; complete: boolean }> {
+  const first = await fetchTournamentMatches(id);
+  const matches = [...first.matches];
+  let complete = first.lastPage <= 20;
+  for (let start = 2; start <= Math.min(first.lastPage, 20); start += 3) {
+    const pages = await Promise.allSettled(Array.from({ length: Math.min(3, first.lastPage - start + 1, 21 - start) }, (_, index) => fetchTournamentMatches(id, start + index)));
+    for (const page of pages) {
+      if (page.status === 'fulfilled') matches.push(...page.value.matches);
+      else complete = false;
+    }
+  }
+  const unique = [...new Map(matches.map(row => [row.match.id, row])).values()];
+  return { matches: await withLiveScores(unique), total: first.total, complete: complete && unique.length === first.total };
 }
 
 export type ProSeason = { id: number; name: string; startDate: string; endDate: string; status: string };
@@ -239,7 +285,7 @@ export async function fetchSeasonTournaments(id: number, page = 1): Promise<{ to
   return {
     tournaments: value.data.filter((row: any) => object(row) && positiveId(row.id) && text(row.name) && text(row.start_date) && text(row.end_date))
       .map((row: any) => ({ id: row.id, name: text(row.name)!, startDate: text(row.start_date)!, endDate: text(row.end_date)!,
-        level: text(row.level), status: text(row.status), location: text(row.location), country: text(row.country),
+        level: text(row.level), status: text(row.status), location: text(row.location), country: text(row.country), freshness: value._freshness,
         venue: text(row.venue?.name), photoUrl: /^https:\/\//.test(row.photo_url || '') ? row.photo_url : null })),
     hasMore: Number(value.meta?.last_page) > page,
   };

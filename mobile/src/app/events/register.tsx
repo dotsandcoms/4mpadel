@@ -1,8 +1,9 @@
+import { recordAnalyticsCheckout, trackConfirmedPurchase, trackEvent } from '@/lib/analytics';
 import { EntrySavedBanner } from '@/components/events/entry-saved-banner';
 import { Toast } from '@/components/toast';
 import { SizePicker } from '@/components/events/tshirt-size-picker';
 import { SponsorDetails } from '@/components/events/sponsor-details';
-import { Choices, DivisionOptions, LicencePicker, type LicenceOption, type PartnerChoice } from '@/components/events/registration-options';
+import { Choices, DivisionOptions, LicencePicker, partnerLicenceOptions, type LicenceOption, type PartnerChoice } from '@/components/events/registration-options';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { eventImage } from '@/lib/events';
@@ -10,14 +11,15 @@ import { formatEventRange } from '@/lib/home';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { startForegroundTask } from '@/lib/foreground-task';
 import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActionButton, Notice } from '@/components/events/event-ui';
 import { confirmCheckout, invokeCheckout, type CheckoutInput, type Quote } from '@/lib/event-checkout';
 import { currentEmail, fetchDivisions, fetchEvent, fetchMyEventRegistrations, setEventScheduled, type Division, type EventDetail } from '@/lib/events';
-import { entryFee, formatMoney, registrationState } from '@/lib/event-rules';
+import { entryFee, formatMoney, registrationState, registrationPaymentClosed } from '@/lib/event-rules';
 import { openSitePath } from '@/lib/site';
 import { supabase } from '@/lib/supabase';
 import { parsePaymentReturn } from '@/lib/payment-return';
@@ -38,7 +40,7 @@ function RegistrationFlow() {
     return () => listener.remove();
   }, []);
   const [now, setNow] = useState(() => new Date());
-  useEffect(() => { const timer = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(timer); }, []);
+  useFocusEffect(useCallback(() => startForegroundTask(() => setNow(new Date()), 1000), []));
   const [registrationEdited, setRegistrationEdited] = useState(false);
   const payOnly = mode === 'pay' && !registrationEdited;
   const router = useRouter();
@@ -93,6 +95,7 @@ function RegistrationFlow() {
   const [checkoutStarted, setCheckoutStarted] = useState(false);
   const showPaymentStatus = !!reference && (!payOnly || checkoutStarted || payment_return === '1');
   const [done, setDone] = useState(false);
+  useEffect(() => { if (!loading && event && !done) void trackEvent('registration_step', { step, flow: payOnly ? 'pay' : 'register', item_count: selected.length }); }, [loading, event?.id, step, payOnly, done]);
   const [paymentPending, setPaymentPending] = useState(false);
   const [partnerPayAccepted, setPartnerPayAccepted] = useState(false);
   const attempt = useRef(Crypto.randomUUID());
@@ -116,16 +119,22 @@ function RegistrationFlow() {
         const { data: player, error: profileError } = await supabase.from('players').select('id,name,email,contact_number,license_type,paid_registration,points,image_url,rankedin_id,temporary_licenses(event_id,event_date)').ilike('email', email).maybeSingle();
         if (profileError) throw profileError;
         setProfile(player);
-        setHasLicence(!!((player?.license_type === 'full' && player?.paid_registration) || player?.temporary_licenses?.some((l: any) => Number(l.event_id) === row.id || String(l.event_date || '').slice(0, 10) >= String(row.end_date || row.start_date).slice(0, 10))));
+        const { data: eligibility, error: licenseError } = await supabase.rpc('player_license_eligibility', { p_player_id: player?.id, p_event_id: row.id });
+        if (licenseError) throw licenseError;
+        setHasLicence(!!(eligibility?.full || eligibility?.temporary));
         if (player?.rankedin_id) setRankedinAccount(true);
         const { data: commerce, error: pricingError } = await supabase.from('commerce_config').select('*').eq('id', 'default').maybeSingle();
         if (pricingError) throw pricingError;
+        const { data: season, error: seasonError } = await supabase.from('license_seasons').select('*').eq('year', eligibility?.purchase_year || Number(String(row.start_date).slice(0,4))).maybeSingle();
+        if (seasonError) throw seasonError;
+        if (commerce) { commerce.full_license_enabled = season?.sales_open === true; commerce.full_license_price = eligibility?.full_price ?? season?.price; }
+
         const options: LicenceOption[] = [];
         for (const type of ['temporary', 'full'] as const) {
           const prefix = type === 'full' ? 'full' : 'temp';
           if (commerce?.[`${prefix}_license_enabled`] && (type === 'full' || (row as any).allow_temporary_license !== false)) {
             const base = Number(commerce[`${prefix}_license_price`]);
-            options.push({ type, amount: Math.round((base + Math.round(base * Number(commerce.license_fee_percent || 0)) / 100) * 100) / 100 });
+            options.push({ type, feePercent: Number(commerce.license_fee_percent || 0), amount: Math.round((base + Math.round(base * Number(commerce.license_fee_percent || 0)) / 100) * 100) / 100 });
           }
         }
         setLicences(options);
@@ -164,7 +173,9 @@ function RegistrationFlow() {
           if (!entry.divisionId) continue;
           const { data: found } = entry.partnerEmail ? await supabase.rpc('find_registration_partner', { p_email: entry.partnerEmail, p_event_id: row.id }) : { data: [] };
           const p = found?.find((p: any) => p.email?.toLowerCase() === entry.partnerEmail?.toLowerCase());
-          restored[entry.divisionId] = { partnerEmail: entry.partnerEmail, partnerName: entry.partnerName || undefined, tshirtLogoUrl: entry.partnerTshirtLogoUrl, tshirtSponsorName: entry.partnerTshirtSponsorName, partnerId: p?.id, image_url: p?.image_url, activeLicence: !!((p?.license_type === 'full' && p?.paid_registration) || p?.has_temp_license_for_event), payForPartner: entry.partnerEmail && entry.partnerPaymentStatus !== 'paid' ? restoredPartnerPayment ?? true : false };
+          const { data: partnerEligibility, error: partnerPricingError } = p?.id ? await supabase.rpc('player_license_eligibility', { p_player_id: p.id, p_event_id: row.id }) : { data: null, error: null };
+          if (partnerPricingError) throw partnerPricingError;
+          restored[entry.divisionId] = { fullLicensePrice: partnerEligibility?.full_price == null ? undefined : Number(partnerEligibility.full_price), partnerEmail: entry.partnerEmail, partnerName: entry.partnerName || undefined, tshirtLogoUrl: entry.partnerTshirtLogoUrl, tshirtSponsorName: entry.partnerTshirtSponsorName, partnerId: p?.id, image_url: p?.image_url, activeLicence: !!(partnerEligibility?.full || partnerEligibility?.temporary), payForPartner: entry.partnerEmail && entry.partnerPaymentStatus !== 'paid' ? restoredPartnerPayment ?? true : false };
         }
         setPartners(restored);
         if (entry && !(result.quote.entries || []).some(item => item.id === entry)) throw new Error('This entry is no longer available for payment. Return to the event and refresh.');
@@ -182,11 +193,12 @@ function RegistrationFlow() {
   const run = async (action: () => Promise<void>) => {
     if (submitted.current) return;
     submitted.current = true; setBusy(true); setError(''); setErrorToast(null);
-    try { await action(); } catch (e) { showError(e instanceof Error ? e.message : 'Could not complete that action.'); }
+    try { await action(); } catch (e) { void trackEvent('action_error', { feature: 'registration' }); showError(e instanceof Error ? e.message : 'Could not complete that action.'); }
     finally { submitted.current = false; setBusy(false); }
   };
   const [showSavedBanner, setShowSavedBanner] = useState(false);
   const finish = async (pending: boolean) => {
+    void trackEvent('registration_complete', { payment_state: pending ? 'pending' : 'paid', item_count: quote?.entries?.length ?? selected.length });
     setShowSavedBanner(true);
     scroll.current?.scrollTo({ y: 0, animated: true });
     setPaymentPending(pending); setDone(true); setReference(null);
@@ -200,6 +212,7 @@ function RegistrationFlow() {
     const email = await currentEmail();
     const entries = email ? await fetchMyEventRegistrations(Number(id), email) : [];
     if (!entries.length || (payOnly ? !quote?.entries?.length || !quote.entries.every(item => entries.some(r => r.id === item.id && (!item.payForSelf || r.payment_status === 'paid') && (!item.payForPartner || r.partner_payment_status === 'paid'))) : !entries.some(r => r.payment_status === 'paid'))) throw new Error('Your payment is being processed. Wait a moment and check again.');
+    void trackConfirmedPurchase(reference, 'event_registration');
     await finish(false);
   });
   useEffect(() => {
@@ -220,15 +233,18 @@ function RegistrationFlow() {
     if (!result.authorizationUrl || !result.reference) throw new Error('Checkout could not be opened. Please try again.');
     const url = new URL(result.authorizationUrl);
     if (url.protocol !== 'https:' || url.hostname !== 'checkout.paystack.com') throw new Error('The payment provider returned an unexpected checkout address.');
+    void recordAnalyticsCheckout(result.reference, 'event_registration', result.quote.total);
     setCheckoutStarted(true);
     setReference(result.reference);
     setCheckoutUrl(result.authorizationUrl);
     if (storageKey.current) await AsyncStorage.setItem(storageKey.current, JSON.stringify({ reference: result.reference, url: result.authorizationUrl, payForPartner, selected, paymentChoices, quote: result.quote }));
-    await WebBrowser.openBrowserAsync(result.authorizationUrl, { controlsColor: brand.padel });
+    const browser = await WebBrowser.openBrowserAsync(result.authorizationUrl, { controlsColor: brand.padel });
+    void trackEvent('checkout_outcome', { item_category: 'event_registration', status: browser.type === 'opened' ? 'opened' : 'browser_returned' });
     setReturnedFromCheckout(true);
   });
   const back = () => {
     if (busy) return;
+    if (!done && (showPaymentStatus || step === 1 || payOnly && step === 2)) void trackEvent('checkout_exit', { step, flow: payOnly ? 'pay' : 'register' });
     if (!done && !showPaymentStatus && payOnly && step === 2) {
       router.replace({ pathname: '/events/[id]', params: { id: String(event?.id || id) } });
     } else if (!done && !showPaymentStatus && step > 1) {
@@ -305,7 +321,10 @@ function RegistrationFlow() {
         <ActionButton label="Check payment status" secondary={!!checkoutUrl && !returnedFromCheckout} busy={busy} onPress={verify} />
         <ActionButton label="Return to event" secondary disabled={busy} onPress={() => router.back()} />
         <Text style={{ color: brand.faint, fontSize: 12 }}>Reference: {reference}</Text>
-      </> : event && !loading && availability !== 'open' ? <>
+      </> : event && !loading && payOnly && selected.length > 0 && selected.every(id => registrationPaymentClosed(event, divisions.find(d => d.id === id))) ? <>
+        <Notice title="Payments closed">Payments have closed. Contact the organiser about your outstanding entry fees.</Notice>
+        <ActionButton label="Return to event" onPress={() => router.replace({ pathname: '/events/[id]', params: { id } })} />
+      </> : event && !loading && availability !== 'open' && (!payOnly || availability === 'cancelled') ? <>
         <Notice title={availability === 'not-open' ? 'Registration has not opened yet' : availability === 'cancelled' ? 'Event cancelled' : availability === 'finished' ? 'Event finished' : 'Registration closed'}>
           Entries are not available for this event. An access code does not override the registration dates.
         </Notice>
@@ -421,7 +440,7 @@ function RegistrationFlow() {
                 {item.paymentStatus === 'paid' && <Text style={{ color: brand.muted }}>Your entry is paid</Text>}
                 {item.partnerName && item.partnerPaymentStatus === 'paid' && <Text style={{ color: brand.muted }}>Your partner’s entry is paid</Text>}
                 {divisions.find(d => d.id === item.divisionId)?.license_required && choice.self && !hasLicence && <LicencePicker name="You" value={licenseChoice} onChange={setLicenseChoice} options={licences} />}
-                {divisions.find(d => d.id === item.divisionId)?.license_required && choice.partner && !partners[key]?.activeLicence && <LicencePicker name={item.partnerName || 'Your partner'} value={partners[key]?.licenseChoice} onChange={licenseChoice => setPartners(current => ({ ...current, [key]: { ...current[key], licenseChoice } }))} options={licences} />}
+                {divisions.find(d => d.id === item.divisionId)?.license_required && choice.partner && !partners[key]?.activeLicence && <LicencePicker name={item.partnerName || 'Your partner'} value={partners[key]?.licenseChoice} onChange={licenseChoice => setPartners(current => ({ ...current, [key]: { ...current[key], licenseChoice } }))} options={partnerLicenceOptions(licences, partners[key])} />}
               </View>;
             })}
             {needsPartnerPaymentAcknowledgment && <PartnerPaymentRequirement checked={partnerPayAccepted} onPress={() => setPartnerPayAccepted(value => !value)} />}

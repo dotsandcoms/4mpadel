@@ -13,6 +13,7 @@ import Animated, {
 
 import { FadeUp } from '@/components/fade-up';
 import { IdentityBadge } from '@/components/home-player-card';
+import { PlayerFollowerCount } from '@/components/players/player-follower-count';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import {
   formatPoints,
@@ -23,6 +24,7 @@ import {
   type TempLicense,
 } from '@/lib/profile';
 import { courtSideLabel, playingHandLabel } from '@/lib/player-preferences';
+import { hapticLight } from '@/lib/haptics';
 import { lightBrand as brand, motion } from '@/theme/tokens';
 
 const COUNT_MS = 800;
@@ -80,6 +82,7 @@ type HeroProps = {
   playId?: number;
   fipLinked?: boolean;
   statsReady?: boolean;
+  followerRefreshKey?: number;
 };
 
 function rankNumber(label?: string | null) {
@@ -89,7 +92,7 @@ function rankNumber(label?: string | null) {
 }
 
 /** Profile identity card with the same badges and SAPA career heading as Home. */
-export function ProfileHero({ player, stats, playId = 0, fipLinked = false, statsReady = true }: HeroProps) {
+export function ProfileHero({ player, stats, playId = 0, fipLinked = false, statsReady = true, followerRefreshKey = 0 }: HeroProps) {
   const license = licenseBadge(player.license_type);
   const name = player.name?.trim() || 'Player';
   const rankN = rankNumber(player.rank_label);
@@ -143,6 +146,7 @@ export function ProfileHero({ player, stats, playId = 0, fipLinked = false, stat
             numberOfLines={2}>
             {name}
           </Text>
+          <PlayerFollowerCount playerId={String(player.id)} refreshKey={followerRefreshKey} />
           {(side || hand) && <Text style={{ color: brand.muted, fontSize: 12, lineHeight: 17 }} numberOfLines={2}>{[side && `${side} court`, hand].filter(Boolean).join(' · ')}</Text>}
 
         </View>
@@ -170,6 +174,7 @@ export function ProfileStatsCard({
   skillRating?: PlayerRow['skill_rating'];
   playId?: number;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const ratioTarget = Math.min(100, Math.max(0, stats.winRatio));
   const played = useCountTo(stats.played, 0, playId);
   const wins = useCountTo(stats.wins, 0, playId);
@@ -181,45 +186,61 @@ export function ProfileStatsCard({
     width: (trackW.value * ratio.sv.value) / 100,
   }));
   return (
-    <View className="rounded-2xl border border-court-edge bg-court-elevated p-4">
-      <View className="flex-row" style={{ gap: 8 }}>
-        <MiniStat label="Matches" value={String(played.shown)} />
-        <MiniStat label="Won" value={String(wins.shown)} labelColor={brand.accent} />
-        <MiniStat label="Lost" value={String(losses.shown)} labelColor={brand.danger} />
-        {skillRating != null && Number.isFinite(Number(skillRating)) ? (
-          <MiniStat label="Skill" value={String(skillRating)} labelColor={brand.premium} highlight />
-        ) : null}
-      </View>
-
-      <View className="mt-4 flex-row items-center justify-between">
-        <Text className="text-xs font-semibold text-court-muted">Last 5 matches</Text>
-        {stats.lastFive.length ? (
-          <View accessible accessibilityLabel={`Last 5 matches: ${stats.lastFive.map(mark => mark === 'W' ? 'win' : 'loss').join(', ')}`} className="flex-row" style={{ gap: 6 }}>
-            {stats.lastFive.map((mark, index) => (
-              <FadeUp key={`${playId}-${mark}-${index}`} delay={index * motion.stagger}>
-                <View className="h-6 w-6 items-center justify-center rounded-full" style={{ backgroundColor: mark === 'W' ? brand.glass : '#FBECEB' }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: mark === 'W' ? brand.accent : brand.danger }}>{mark}</Text>
-                </View>
-              </FadeUp>
-            ))}
+    <View className="overflow-hidden rounded-2xl border border-court-edge bg-court-elevated">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${expanded ? 'Hide' : 'Show'} stats and performance`}
+        accessibilityState={{ expanded }}
+        onPress={() => { hapticLight(); setExpanded(value => !value); }}
+        className="active:opacity-70"
+        style={{ minHeight: 48, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <SymbolView name={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }} size={16} tintColor={brand.faint} />
+        <Text style={{ flex: 1, color: brand.muted, fontSize: 10, fontWeight: '800', letterSpacing: 0.8 }}>STATS & PERFORMANCE</Text>
+        <Text style={{ color: brand.premium, fontSize: 12, fontWeight: '600' }}>{expanded ? 'Hide' : 'Show'}</Text>
+        <SymbolView name={{ ios: expanded ? 'chevron.up' : 'chevron.down', android: expanded ? 'expand_less' : 'expand_more', web: expanded ? 'expand_less' : 'expand_more' }} size={13} tintColor={brand.muted} />
+      </Pressable>
+      {expanded ? (
+        <View style={{ paddingHorizontal: 14, paddingBottom: 16 }}>
+          <View className="flex-row" style={{ gap: 8 }}>
+            <MiniStat label="Matches" value={String(played.shown)} />
+            <MiniStat label="Won" value={String(wins.shown)} labelColor={brand.accent} />
+            <MiniStat label="Lost" value={String(losses.shown)} labelColor={brand.danger} />
+            {skillRating != null && Number.isFinite(Number(skillRating)) ? (
+              <MiniStat label="Skill" value={String(skillRating)} labelColor={brand.premium} highlight />
+            ) : null}
           </View>
-        ) : <Text className="text-xs text-court-faint">No matches yet</Text>}
-      </View>
 
-      <View className="mt-4">
-        <View className="mb-2 flex-row items-center justify-between">
-          <Text className="text-xs font-semibold text-court-muted">Win ratio</Text>
-          <Text className="text-sm font-bold text-court-ink" style={{ fontVariant: ['tabular-nums'] }}>{ratio.shown.toFixed(1)}%</Text>
+          <View className="mt-4 flex-row items-center justify-between">
+            <Text className="text-xs font-semibold text-court-muted">Last 5 matches</Text>
+            {stats.lastFive.length ? (
+              <View accessible accessibilityLabel={`Last 5 matches: ${stats.lastFive.map(mark => mark === 'W' ? 'win' : 'loss').join(', ')}`} className="flex-row" style={{ gap: 6 }}>
+                {stats.lastFive.map((mark, index) => (
+                  <FadeUp key={`${playId}-${mark}-${index}`} delay={index * motion.stagger}>
+                    <View className="h-6 w-6 items-center justify-center rounded-full" style={{ backgroundColor: mark === 'W' ? brand.glass : '#FBECEB' }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: mark === 'W' ? brand.accent : brand.danger }}>{mark}</Text>
+                    </View>
+                  </FadeUp>
+                ))}
+              </View>
+            ) : <Text className="text-xs text-court-faint">No matches yet</Text>}
+          </View>
+
+          <View className="mt-4">
+            <View className="mb-2 flex-row items-center justify-between">
+              <Text className="text-xs font-semibold text-court-muted">Win ratio</Text>
+              <Text className="text-sm font-bold text-court-ink" style={{ fontVariant: ['tabular-nums'] }}>{ratio.shown.toFixed(1)}%</Text>
+            </View>
+            <View
+              accessibilityRole="progressbar"
+              accessibilityLabel="Win ratio"
+              accessibilityValue={{ min: 0, max: 100, now: Math.round(ratioTarget) }}
+              className="h-2 w-full overflow-hidden rounded-full bg-court-surface"
+              onLayout={event => { trackW.value = event.nativeEvent.layout.width; }}>
+              <Animated.View className="h-full rounded-full" style={[{ backgroundColor: brand.accent }, fillStyle]} />
+            </View>
+          </View>
         </View>
-        <View
-          accessibilityRole="progressbar"
-          accessibilityLabel="Win ratio"
-          accessibilityValue={{ min: 0, max: 100, now: Math.round(ratioTarget) }}
-          className="h-2 w-full overflow-hidden rounded-full bg-court-surface"
-          onLayout={event => { trackW.value = event.nativeEvent.layout.width; }}>
-          <Animated.View className="h-full rounded-full" style={[{ backgroundColor: brand.accent }, fillStyle]} />
-        </View>
-      </View>
+      ) : null}
     </View>
   );
 }

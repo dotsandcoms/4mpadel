@@ -364,6 +364,7 @@ const Players = () => {
             <h2 className="text-gray-300 text-[11px] sm:text-sm font-black uppercase tracking-widest">
               All Players
             </h2>
+            <span role="img" aria-label="South Africa" className="inline-flex h-11 w-14 shrink-0 items-center justify-center rounded-xl bg-white text-3xl leading-none">🇿🇦</span>
           </div>
 
           <div className="flex flex-col gap-2.5 sm:gap-3 w-full">

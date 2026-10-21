@@ -1,4 +1,10 @@
 
+[functions.pro-padel-sync]
+enabled = true
+verify_jwt = false
+import_map = "./functions/pro-padel-sync/deno.json"
+entrypoint = "./functions/pro-padel-sync/index.ts"
+
 [functions.paystack-transactions]
 enabled = true
 verify_jwt = true

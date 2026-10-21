@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { unregisterPushToken } from './notifications';
 import { collectSignupDevice, deviceSignupSource, recordAppDevice } from './signup-source';
 import { supabase } from './supabase';
+import { trackEvent } from './analytics';
 
 /**
  * Native sign-in.
@@ -72,7 +73,8 @@ export async function signInWithApple() {
     token: credential.identityToken,
   });
   if (error) throw error;
-  await stampSignupSource(data.user);
+  await stampSignupSource(data.user, 'apple');
+  void trackEvent('login', { method: 'apple' });
   await recordAppDevice();
 
   /**
@@ -114,7 +116,8 @@ export async function signInWithGoogle() {
     token: idToken,
   });
   if (error) throw error;
-  await stampSignupSource(data.user);
+  await stampSignupSource(data.user, 'google');
+  void trackEvent('login', { method: 'google' });
   await recordAppDevice();
 
   return data;
@@ -127,6 +130,7 @@ export async function signInWithEmail(email: string, password: string) {
   });
   if (error) throw error;
   await recordAppDevice();
+  void trackEvent('login', { method: 'password' });
   return data;
 }
 
@@ -156,6 +160,7 @@ export async function signUpWithEmail(email: string, password: string) {
     }
     throw error;
   }
+  if (data.user && data.user.identities?.length !== 0) void trackEvent('sign_up', { method: 'password' });
   return data;
 }
 
@@ -164,17 +169,19 @@ export async function signUpWithEmail(email: string, password: string) {
  * already have a source (or are pre-app, which we treat as web).
  */
 async function stampSignupSource(
-  user: { created_at?: string; user_metadata?: Record<string, unknown> } | null
+  user: { created_at?: string; user_metadata?: Record<string, unknown> } | null,
+  method: 'apple' | 'google'
 ) {
   if (!user || user.user_metadata?.signup_source) return;
   const created = user.created_at ? new Date(user.created_at).getTime() : 0;
   if (!created || Date.now() - created > 120_000) return;
-  await supabase.auth.updateUser({
+  const result = await supabase.auth.updateUser({
     data: {
       signup_source: deviceSignupSource(),
       signup_device: collectSignupDevice(),
     },
   });
+  if (!result.error) void trackEvent('sign_up', { method });
 }
 
 export async function sendPasswordReset(email: string) {
@@ -193,4 +200,5 @@ export async function signOut() {
   }
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
+  void trackEvent('logout');
 }

@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "sync:paystack-edge": "node scripts/sync-paystack-edge.mjs"
+    "sync:paystack-edge": "node scripts/sync-paystack-edge.mjs",
+    "dev:tournament": "vite --config sandbox/tournament-manager/vite.config.mjs"
   },
   "dependencies": {
     "@burkcorp/reactmath": "file:reactmath-package",
@@ -37,6 +38,7 @@
     "react-is": "^19.2.4",
     "react-router-dom": "^7.13.0",
     "recharts": "^3.7.0",
+    "sharp": "^0.35.4",
     "sonner": "^2.0.7",
     "tailwindcss": "^4.1.18",
     "ws": "^8.18.0",

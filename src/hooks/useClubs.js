@@ -6,11 +6,14 @@ import { supabase } from '../supabaseClient';
  * Includes basic location fields so event setup can prefill an address after
  * an organiser selects a host club.
  */
-export function useClubs() {
+export function useClubs(enabled = true) {
     const [clubs, setClubs] = useState([]);
-    const [loadingClubs, setLoadingClubs] = useState(true);
+    const [loadingClubs, setLoadingClubs] = useState(enabled);
 
     useEffect(() => {
+        if (!enabled) return;
+        let active = true;
+        const controller = new AbortController();
         const fetchClubs = async () => {
             setLoadingClubs(true);
             try {
@@ -18,21 +21,24 @@ export function useClubs() {
                     .from('clubs')
                     .select('id, name, address, city')
                     .not('status', 'in', '(pending,rejected,in_review)')
-                    .order('name');
+                    .order('name')
+                    .abortSignal(controller.signal);
+                if (!active) return;
                 if (error) {
                     console.error("Error fetching clubs:", error);
                 } else {
                     setClubs(data || []);
                 }
             } catch (err) {
-                console.error("Failed to fetch clubs:", err);
+                if (active) console.error("Failed to fetch clubs:", err);
             } finally {
-                setLoadingClubs(false);
+                if (active) setLoadingClubs(false);
             }
         };
 
         fetchClubs();
-    }, []);
+        return () => { active = false; controller.abort(); };
+    }, [enabled]);
 
-    return { clubs, loadingClubs, loading: loadingClubs };
+    return { clubs, loadingClubs: enabled && loadingClubs, loading: enabled && loadingClubs };
 }

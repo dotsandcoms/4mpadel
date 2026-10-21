@@ -1,3 +1,5 @@
+import { calculateEventSettlement, loadEventCashVerification } from '../../utils/eventSettlement';
+import { hydrateEventLicenses } from '../../utils/licenses';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -12,10 +14,10 @@ import ExcelJS from 'exceljs';
 import logo4m from '../../assets/logo_4m_lowercase.png';
 import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
 import { fetchAllRows } from '../../utils/fetchAllRows';
+import { loadManagedEventCompletions, managedEventStage, partitionManagedEvents, setManagedEventCompleted } from '../../utils/eventManagementCompletion';
 import {
     findPaymentForRegistration,
     getRegistrationEntryFeePaid,
-    hasBlockingProcessedRefund,
     isEntryFeeRefund,
     isCompedEntryPayment,
     isLicensePaymentRow,
@@ -29,6 +31,7 @@ import ManualEventRegistrations from './ManualEventRegistrations';
 import EventBuilder from './EventBuilder';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
+const EMPTY_ALLOWED_EVENTS = Object.freeze([]);
 
 const registrationCloseState = (value) => {
     if (!value) return { value: '—', label: 'Not set', tone: 'text-gray-600' };
@@ -42,28 +45,6 @@ const registrationCloseState = (value) => {
     if (days === 0) return { value: 'Today', label: '', tone: 'text-amber-300' };
     if (days === 1) return { value: '1', label: 'Day', tone: 'text-padel-green' };
     return { value: String(days), label: 'Days', tone: 'text-padel-green' };
-};
-
-const isPaystackEntryPayment = (participant, allPayments, refundByRegMap = null) => {
-    const reg = participant?._reg || {
-        id: participant?.id,
-        email: participant?.email,
-        division: participant?.class_name,
-        payment_status: participant?.is_paid ? 'paid' : 'pending',
-        payment_method: participant?.registration_payment_method,
-        status: participant?.status,
-    };
-    if (!participant?.is_paid) return false;
-    if (reg && !registrationCountsAsPaid(reg, refundByRegMap, allPayments)) return false;
-
-    const successPayments = (allPayments || []).filter((p) => p.status === 'success');
-    if (registrationHasPaystackEntryPayment(reg, successPayments)) return true;
-
-    const payment = participant?.actual_payment;
-    if (payment?.status === 'success' && String(payment.payment_method || '').toLowerCase() === 'paystack' && !isLicensePaymentRow(payment)) {
-        return true;
-    }
-    return false;
 };
 
 const getParticipantEntryFee = (p, event) => {
@@ -93,16 +74,19 @@ const getParticipantPaidAmount = (p) => {
 
 const isWithdrawnRegistration = (reg) => String(reg?.status || '').toLowerCase() === 'withdrawn';
 
-const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) => {
+const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementModule = false }) => {
     const [events, setEvents] = useState([]);
     const [selectedEventId, setSelectedEventId] = useState(null);
     const [viewMode, setViewMode] = useState('list'); // 'list' | 'dashboard' | 'table'
     const [localParticipants, setLocalParticipants] = useState([]);
     const [systemProfiles, setSystemProfiles] = useState([]);
     const [loading, setLoading] = useState({ events: true, matching: false, syncing: false });
+    const [eventLoadError, setEventLoadError] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [eventSearch, setEventSearch] = useState('');
     const [showCompleted, setShowCompleted] = useState(false);
+    const [completionBusyId, setCompletionBusyId] = useState(null);
+    const [completionLoadError, setCompletionLoadError] = useState('');
     const [isEventBuilderOpen, setIsEventBuilderOpen] = useState(false);
     const [editingCalendarEvent, setEditingCalendarEvent] = useState(null);
     const [loadingEventEditorId, setLoadingEventEditorId] = useState(null);
@@ -118,6 +102,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
     const [updatingWhatsApp, setUpdatingWhatsApp] = useState(null);
     const [refunds, setRefunds] = useState([]);
     const [eventPayments, setEventPayments] = useState([]);
+    const [cashVerification, setCashVerification] = useState(null);
 
     const { getTournamentPlayerTabs, getTournamentParticipants } = useRankedin();
 
@@ -206,19 +191,8 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         ].some((value) => String(value || '').toLowerCase().includes(query)));
     }, [events, eventSearch, allowedEvents, isEventManagementModule]);
 
-    // Split the managed list into upcoming and completed (past) events so the
-    // completed ones can live in a collapsible section underneath. "Completed"
-    // is determined by start date being before today.
-    const { upcomingEvents, pastEvents } = useMemo(() => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const up = [];
-        const past = [];
-        filteredEvents.forEach(e => {
-            (new Date(e.start_date) >= today ? up : past).push(e);
-        });
-        return { upcomingEvents: up, pastEvents: past };
-    }, [filteredEvents]);
+    // Dates describe the event; only an explicit manager action completes it.
+    const { activeEvents, completedEvents } = useMemo(() => partitionManagedEvents(filteredEvents), [filteredEvents]);
 
     const playerEntryCounts = useMemo(() => {
         const counts = {};
@@ -295,87 +269,44 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         };
     }, [localParticipants, selectedEvent, totalCollected, getResolvedLicenseType, eventPayments]);
 
-    const financialSummary = useMemo(() => {
-        if (!selectedEvent) {
-            return {
-                paid4M: 0, paidClub: 0, compedEntries: 0, collected4M: 0, entryFeesRefunded: 0,
-                entryFeeBalance: 0, licenseRevenue4M: 0, commission: 0, interimPaid: 0, dueToOrg: 0,
-            };
+    const financialSummary = useMemo(() => calculateEventSettlement({
+        event: selectedEvent || {}, payments: eventPayments, refunds, verification: cashVerification,
+        registrations: localParticipants.map(p => p._reg || { id: p.id, email: p.email, division: p.class_name, payment_status: p.is_paid ? 'paid' : 'pending', payment_method: p.registration_payment_method, status: p.status }),
+        entryFeeForRegistration: reg => {
+            const p = localParticipants.find(p => (p._reg?.id || p.id) === reg.id);
+            return getParticipantEntryFee(p || {}, selectedEvent);
+        },
+    }), [localParticipants, selectedEvent, eventPayments, refunds, cashVerification]);
+
+    useEffect(() => {
+        let cancelled = false;
+        setCashVerification(null);
+        if (selectedEventId && !(isEventManagementModule && selectedEvent?.is_manual)) {
+            loadEventCashVerification(supabase, selectedEventId).then(result => { if (!cancelled) setCashVerification(result); });
         }
-
-        let paid4M = 0;
-        let paidClub = 0;
-        let compedEntries = 0;
-        let grossCollected4M = 0;
-
-        localParticipants.forEach((p) => {
-            const reg = p._reg || {
-                id: p.id,
-                email: p.email,
-                division: p.class_name,
-                payment_status: p.is_paid ? 'paid' : 'pending',
-                payment_method: p.registration_payment_method,
-                status: p.status,
-            };
-            const successPayments = (eventPayments || []).filter((pay) => pay.status === 'success');
-            const hasPaystackRecord = registrationHasPaystackEntryPayment(reg, successPayments)
-                || (String(p.registration_payment_method || '').toLowerCase() === 'paystack' && Number(p.is_paid) === 1);
-
-            if (hasPaystackRecord) {
-                grossCollected4M += getParticipantEntryFee(p, selectedEvent);
-            }
-
-            if (p._isManualReg && p._reg && !registrationCountsAsPaid(p._reg, refundByReg, eventPayments)) return;
-            if (!p.is_paid) return;
-
-            if (registrationIsCompedEntry(reg, eventPayments) || isCompedEntryPayment(p.actual_payment)) {
-                compedEntries++;
-                return;
-            }
-
-            if (isPaystackEntryPayment(p, eventPayments, refundByReg)) {
-                paid4M++;
-            } else {
-                paidClub++;
-            }
-        });
-
-        const licenseRevenue4M = (eventPayments || [])
-            .filter((p) => p.status === 'success' && String(p.payment_method || '').toLowerCase() !== 'manual')
-            .filter((p) => isLicensePaymentRow(p))
-            .reduce((sum, p) => sum + Number(p.amount || 0), 0);
-
-        // Entry-fee refunds only — license refunds stay with 4M.
-        const entryFeesRefunded = totalRefunded;
-        const entryFeeBalance = Math.max(0, grossCollected4M - entryFeesRefunded);
-        const commission = grossCollected4M * 0.05;
-        const interimPaid = (Array.isArray(selectedEvent?.organiser_interim_payments)
-            ? selectedEvent.organiser_interim_payments
-            : []
-        ).reduce((sum, p) => sum + Math.max(0, Number(p.amount || 0)), 0);
-        const dueToOrg = Math.max(0, entryFeeBalance - commission - interimPaid);
-
-        return {
-            paid4M,
-            paidClub,
-            compedEntries,
-            collected4M: grossCollected4M,
-            entryFeesRefunded,
-            entryFeeBalance,
-            licenseRevenue4M,
-            commission,
-            interimPaid,
-            dueToOrg,
-        };
-    }, [localParticipants, selectedEvent, eventPayments, refundByReg, totalRefunded]);
+        return () => { cancelled = true; };
+    }, [selectedEventId, eventPayments, isEventManagementModule, selectedEvent?.is_manual]);
 
     const fetchInitialData = useCallback(async () => {
             setLoading(prev => ({ ...prev, events: true }));
+            setEventLoadError('');
+            setCompletionLoadError('');
             try {
-                const { data: eData } = await supabase
+                const { data: eData, error: eError } = await supabase
                     .from('calendar')
-                    .select('id, event_name, start_date, end_date, registration_closes_at, rankedin_id, rankedin_url, entry_fee, category_fees, early_bird_fee, early_bird_ends_at, finance_managed, is_manual, allow_payments, slug, venue, venues, event_status, organisation_id, club_id, organiser_interim_payments, organiser_name, organiser_email, organisations:organisation_id(id, name, slug), clubs:club_id(id, name, short_name, slug)')
+                    .select('id, event_name, start_date, end_date, registration_closes_at, rankedin_id, rankedin_url, entry_fee, category_fees, early_bird_fee, early_bird_ends_at, finance_managed, is_manual, allow_payments, slug, venue, venues, event_status, organisation_id, club_id, organiser_interim_payments, organiser_settlement_confirmation, organiser_name, organiser_email, organisations:organisation_id(id, name, slug), clubs:club_id(id, name, short_name, slug)')
                     .order('start_date', { ascending: false });
+                if (eError) throw eError;
+
+                let completionByEvent = new Map();
+                if (isEventManagementModule) {
+                    try {
+                        completionByEvent = await loadManagedEventCompletions(supabase);
+                    } catch (error) {
+                        setCompletionLoadError('Could not load completion status. Please retry before changing the event list.');
+                        throw error;
+                    }
+                }
 
                 const pData = await fetchAllRows(() => supabase
                     .from('players')
@@ -386,6 +317,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 const tempLicenses = await fetchAllRows(() => supabase
                     .from('temporary_licenses')
                     .select('event_id, player_id')
+                    .is('revoked_at', null)
                     .order('id', { ascending: true }));
 
                 const playerLicenses = {};
@@ -413,6 +345,10 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     from += step;
                 }
 
+                const eventLicenses = new Map();
+                const idsByEvent = new Map();
+                allParts.forEach(p=>{if(!p.profile_id)return;const ids=idsByEvent.get(p.event_id)||new Set();ids.add(p.profile_id);idsByEvent.set(p.event_id,ids);});
+                await Promise.all([...idsByEvent].map(async([eventId,ids])=>{const profiles=await hydrateEventLicenses([...ids].map(id=>({id})),eventId);profiles.forEach(p=>eventLicenses.set(`${eventId}:${p.id}`,p.event_license));}));
                 // Aggregate stats
                 const statsByEvent = {};
                 allParts.forEach(p => {
@@ -436,10 +372,10 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         
                         let lic = 'none';
                         if (p.profile_id) {
-                            if (playerLicenses[p.profile_id] === 'full') {
+                            if (eventLicenses.get(`${p.event_id}:${p.profile_id}`)?.full) {
                                 lic = 'full';
                             } else {
-                                const hasTemp = tempLicenses.some(t => t.event_id === p.event_id && t.player_id === p.profile_id);
+                                const hasTemp = eventLicenses.get(`${p.event_id}:${p.profile_id}`)?.temporary;
                                 if (hasTemp) lic = 'temp';
                             }
                         }
@@ -469,6 +405,9 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         )
                         : [];
                     const manualPlayersByEmail = buildPlayersByEmailMap(manualPlayers);
+                    const manualEligibility = new Map();
+                    await Promise.all([...new Set((manualRegs||[]).map(r=>r.event_id))].map(async eid=>{const ids=new Set((manualRegs||[]).filter(r=>r.event_id===eid).map(r=>manualPlayersByEmail.get((r.email||'').toLowerCase().trim())?.id).filter(Boolean));const profiles=await hydrateEventLicenses([...ids].map(id=>({id})),eid);profiles.forEach(p=>manualEligibility.set(`${eid}:${p.id}`,p.event_license));}));
+
 
                     const { data: manualPayments } = await supabase
                         .from('payments')
@@ -516,7 +455,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                 const lic = resolveRegistrationLicenseCategory(
                                     profileKey,
                                     eid,
-                                    player,
+                                    player ? {...player,event_license:manualEligibility.get(`${eid}:${player.id}`)} : null,
                                     paymentsByEvent[eid] || [],
                                 );
                                 es.licenses[lic]++;
@@ -564,17 +503,36 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     };
                 });
 
-                setEvents(eventsWithStats);
+                setEvents(eventsWithStats.map((event) => ({ ...event, management_completed_at: completionByEvent.get(Number(event.id)) || null })));
             } catch (err) {
                 console.error("Fetch initial error", err);
+                setEventLoadError(err.message || 'Could not load event data.');
             } finally {
                 setLoading(prev => ({ ...prev, events: false }));
             }
-    }, []);
+    }, [isEventManagementModule]);
 
     useEffect(() => {
         fetchInitialData();
     }, [fetchInitialData]);
+
+    const changeEventCompletion = async (event) => {
+        if (completionBusyId !== null) return;
+        const completing = !event.management_completed_at;
+        setCompletionBusyId(event.id);
+        try {
+            const result = await setManagedEventCompleted(supabase, event, completing);
+            setEvents((current) => current.map((row) => row.id === event.id
+                ? { ...row, management_completed_at: result.completed_at } : row));
+            toast.success(completing ? `${event.event_name} moved to Completed Events` : `${event.event_name} returned to the main list`);
+        } catch (error) {
+            toast.error(error.message || 'Could not change completion status.', {
+                action: { label: 'Refresh', onClick: fetchInitialData },
+            });
+        } finally {
+            setCompletionBusyId(null);
+        }
+    };
 
     // 2. Fetch Local Participants for Selected Event
     const fetchParticipants = useCallback(async (eventId) => {
@@ -675,7 +633,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 // Try to link players profiles by email
                 const emails = [...new Set(mapped.map(m => m.email).filter(Boolean))];
                 if (emails.length > 0) {
-                    const profiles = await fetchPlayersByEmails(supabase, emails);
+                    const profiles = await hydrateEventLicenses(await fetchPlayersByEmails(supabase, emails), selectedEventId);
                     const profileByEmail = buildPlayersByEmailMap(profiles);
 
                     mapped.forEach(m => {
@@ -831,7 +789,9 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             });
 
             setEventPayments(payData || []);
-            setLocalParticipants(enriched);
+            const hydratedProfiles = await hydrateEventLicenses(enriched.map(row=>row.players).filter(Boolean), selectedEventId);
+            const hydratedById = new Map(hydratedProfiles.map(p=>[p.id,p]));
+            setLocalParticipants(enriched.map(row=>({...row,players:hydratedById.get(row.players?.id)||row.players})));
         } catch (err) {
             console.error("Fetch participants error:", err);
             toast.error("Failed to load local participants");
@@ -1459,13 +1419,15 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
     const eventListColCount = 9;
 
     // Single source of truth for an event list row, reused by the upcoming list
-    // and the completed (past) collapsible section.
+    // and the manually completed collapsible section.
     const renderEventRow = (e) => {
         const isSelected = selectedEventId === e.id;
         const eventDate = new Date(e.start_date);
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const isUpcoming = eventDate >= today;
+        const managementStage = managedEventStage(e);
+        const isCompleted = Boolean(e.management_completed_at);
         const closeState = registrationCloseState(e.registration_closes_at);
         const organisationName = e.organisations?.name || e.organiser_name || '—';
         const selectedVenues = (Array.isArray(e.venues) ? e.venues : [])
@@ -1492,8 +1454,8 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         <p className={`text-[11px] font-bold text-white group-hover:text-padel-green`}>
                             {eventDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                         </p>
-                        <span className={`text-[8px] font-black uppercase tracking-widest ${isUpcoming ? 'text-padel-green/60' : 'text-gray-600'}`}>
-                            {isUpcoming ? 'Upcoming' : 'Completed'}
+                        <span className={`mt-1 max-w-[86px] whitespace-normal text-[8px] leading-snug font-black uppercase tracking-wide ${isUpcoming ? 'text-padel-green/60' : 'text-gray-600'}`}>
+                            {isEventManagementModule ? managementStage : isUpcoming ? 'Upcoming' : 'Completed'}
                         </span>
                     </div>
                 </td>
@@ -1591,7 +1553,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     )}
                 </td>
                 <td className="px-2 py-2.5 text-right whitespace-nowrap">
-                    <div className="flex items-center justify-end gap-1">
+                    <div className="flex flex-wrap items-center justify-end gap-1">
                         {e.id && (
                             <button
                                 type="button"
@@ -1644,6 +1606,16 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             <Trash2 size={15} strokeWidth={1.8} />
                         </button>
                         )}
+                        {isEventManagementModule && (
+                            <button type="button"
+                                onClick={(event) => { event.stopPropagation(); changeEventCompletion(e); }}
+                                disabled={completionBusyId !== null || loading.events || Boolean(completionLoadError)}
+                                aria-label={`${isCompleted ? 'Reopen' : 'Mark as completed'}: ${e.event_name}`}
+                                className="mt-1 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-padel-green/25 bg-padel-green/5 px-2 py-1.5 text-[9px] font-bold text-padel-green hover:bg-padel-green hover:text-black focus-visible:outline-2 focus-visible:outline-padel-green disabled:cursor-wait disabled:opacity-50">
+                                {completionBusyId === e.id ? <Loader2 size={12} className="animate-spin" /> : isCompleted ? <RefreshCcw size={12} /> : <CheckCircle size={12} />}
+                                {isCompleted ? 'Reopen' : 'Mark as completed'}
+                            </button>
+                        )}
                     </div>
                 </td>
             </tr>
@@ -1663,7 +1635,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         </div>
                         <div>
                             <h3 className="text-xl font-bold text-white uppercase tracking-tight italic">Event Finance Manager</h3>
-                            <p className="text-gray-400 text-xs font-medium uppercase tracking-widest">{events.length} system events tracked</p>
+                            <p className="text-gray-400 text-xs font-medium uppercase tracking-widest">{loading.events ? 'Loading events…' : eventLoadError ? 'Event data unavailable' : `${events.length} system events tracked`}</p>
                         </div>
                     </div>
                     
@@ -1672,7 +1644,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
                             <input
                                 type="text"
-                                placeholder="Search through 98+ events..."
+                                placeholder="Search events..."
                                 value={eventSearch}
                                 onChange={(e) => setEventSearch(e.target.value)}
                                 className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-3.5 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-600"
@@ -1689,10 +1661,21 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     </div>
                 </div>
 
+                {eventLoadError && !completionLoadError && <div role="alert" className="mb-5 rounded-xl border border-red-400/30 p-4 text-red-200 flex flex-wrap items-center justify-between gap-3">
+                    <p>Could not load event data. {eventLoadError}</p>
+                    <button type="button" onClick={fetchInitialData} disabled={loading.events} className="border border-red-300/40 rounded-lg px-3 py-2 text-sm disabled:opacity-50">Retry</button>
+                </div>}
+
+                {completionLoadError && <div role="alert" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-400/30 p-4 text-red-200">
+                    <p>{completionLoadError}</p>
+                    <button type="button" onClick={fetchInitialData} disabled={loading.events} className="rounded-lg border border-red-300/40 px-3 py-2 text-sm disabled:opacity-50">Retry</button>
+                </div>}
+                {isEventManagementModule && <p className="mb-4 text-xs text-gray-400">Events stay in this list until you mark them as completed. Completed events can be reopened at any time.</p>}
+
                 {/* High-Density Event List */}
                 <div className="bg-black/20 rounded-2xl border border-white/5 overflow-hidden">
                     <div className="max-h-[720px] overflow-auto no-scrollbar">
-                        <table className="w-full min-w-[1096px] table-fixed text-left border-collapse">
+                        <table className="w-full min-w-[1152px] table-fixed text-left border-collapse">
                             <colgroup>
                                 <col className="w-[110px]" />
                                 <col className="w-[175px]" />
@@ -1702,7 +1685,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                 <col className="w-[68px]" />
                                 <col className="w-[140px]" />
                                 <col className="w-[134px]" />
-                                <col className="w-[144px]" />
+                                <col className="w-[200px]" />
                             </colgroup>
                             <thead className="sticky top-0 bg-[#1a1a1a] text-[10px] font-black uppercase text-gray-500 border-b border-white/5 z-10">
                                 <tr>
@@ -1718,12 +1701,12 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
-                                {(isEventManagementModule ? upcomingEvents : filteredEvents).length > 0 ? (
-                                    (isEventManagementModule ? upcomingEvents : filteredEvents).map(renderEventRow)
+                                {(loading.events || completionLoadError) ? <tr><td colSpan={eventListColCount} className="px-6 py-10 text-center text-gray-400">{completionLoadError || 'Loading events…'}</td></tr> : (isEventManagementModule ? activeEvents : filteredEvents).length > 0 ? (
+                                    (isEventManagementModule ? activeEvents : filteredEvents).map(renderEventRow)
                                 ) : (
                                     <tr>
                                         <td colSpan={eventListColCount} className="px-6 py-10 text-center text-[11px] font-bold text-gray-600 uppercase tracking-widest">
-                                            {isEventManagementModule ? 'No upcoming events' : 'No events found'}
+                                            {eventLoadError ? 'Event data could not be loaded. Use Retry above.' : isEventManagementModule ? 'No active events' : 'No events found'}
                                         </td>
                                     </tr>
                                 )}
@@ -1732,8 +1715,8 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     </div>
                 </div>
 
-                {/* Completed (past) events - collapsible, Event Manager only */}
-                {isEventManagementModule && pastEvents.length > 0 && (
+                {/* Manually completed events - Event Manager only */}
+                {isEventManagementModule && !completionLoadError && completedEvents.length > 0 && (
                     <div className="mt-4 bg-black/20 rounded-2xl border border-white/5 overflow-hidden">
                         <button
                             onClick={() => setShowCompleted(s => !s)}
@@ -1742,13 +1725,13 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             <span className="flex items-center gap-3 text-[11px] font-black uppercase tracking-widest text-gray-400">
                                 <CheckCircle size={15} className="text-padel-green/70" />
                                 Completed Events
-                                <span className="px-2 py-0.5 rounded-full bg-white/10 text-gray-300">{pastEvents.length}</span>
+                                <span className="px-2 py-0.5 rounded-full bg-white/10 text-gray-300">{completedEvents.length}</span>
                             </span>
                             <ChevronDown size={18} className={`text-gray-500 transition-transform ${(showCompleted || eventSearch) ? 'rotate-180' : ''}`} />
                         </button>
                         {(showCompleted || eventSearch) && (
                             <div className="max-h-[320px] overflow-y-auto no-scrollbar border-t border-white/5">
-                                <table className="w-full min-w-[1096px] table-fixed text-left border-collapse">
+                                <table className="w-full min-w-[1152px] table-fixed text-left border-collapse">
                                     <colgroup>
                                         <col className="w-[110px]" />
                                         <col className="w-[175px]" />
@@ -1758,10 +1741,10 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                         <col className="w-[68px]" />
                                         <col className="w-[140px]" />
                                         <col className="w-[134px]" />
-                                        <col className="w-[144px]" />
+                                        <col className="w-[200px]" />
                                     </colgroup>
                                     <tbody className="divide-y divide-white/5">
-                                        {pastEvents.map(renderEventRow)}
+                                        {completedEvents.map(renderEventRow)}
                                     </tbody>
                                 </table>
                             </div>
@@ -1973,7 +1956,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                 <span className="text-xl font-black text-white">{financialSummary.paid4M}</span>
                             </div>
                             <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
-                                <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Entry Payments (Manual)</p>
+                                <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Entries paid to club / organiser</p>
                                 <span className="text-xl font-black text-white">{financialSummary.paidClub}</span>
                             </div>
                             <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
@@ -2007,7 +1990,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             </div>
                             <div className="flex items-center justify-between gap-4 text-sm border-t border-white/10 pt-3">
                                 <span className="text-gray-300 font-semibold">Balance of entry fee funds</span>
-                                <span className="font-black text-white">{fmtR(financialSummary.entryFeeBalance)}</span>
+                                <span className="font-black text-white">{fmtR(financialSummary.netHeld4M)}</span>
                             </div>
                             <div className="flex items-center justify-between gap-4 text-sm">
                                 <span className="text-red-400">Platform fees @ 5%</span>
@@ -2028,7 +2011,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Amount due to organiser</p>
                                 <span className="text-3xl font-black text-padel-green">{fmtR(financialSummary.dueToOrg)}</span>
                                 <p className="text-[9px] text-gray-500 mt-1">
-                                    (Entry collected − Entry refunds) − 5% commission
+                                    4M funds after refunds − 5% of active entry fees
                                     {financialSummary.interimPaid > 0 ? ` − interim paid (${fmtR(financialSummary.interimPaid)})` : ''}
                                     {' · '}licenses stay with 4M
                                 </p>

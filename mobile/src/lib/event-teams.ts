@@ -1,7 +1,7 @@
 import type { Division, PublicEntry } from './events';
 import { resolvePlayerRanking } from './website/player-ranking-selection';
 export type RankedPlayer = { id?: string | number; name: string; image_url?: string | null; rankedin_id?: string | null; points?: number | null; [key: string]: unknown };
-export type TeamPlayer = { id: string | null; name: string; image: string | null; points: number };
+export type TeamPlayer = { id: string | null; name: string; image: string | null; points: number; paymentStatus?: string | null };
 export type EventTeam = { id: string; players: TeamPlayer[]; total: number; seed: number | null };
 export type TeamDivision = { division: Division; teams: EventTeam[] };
 /** EventDetails.jsx's manual participants: combine mirrored partner entries only within a division. */
@@ -25,7 +25,9 @@ export function buildEventTeams(divisions: Division[], entries: PublicEntry[], p
       const players = names.map(name => {
         seen.add(name.toLowerCase());
         const profile = profileMap.get(name.toLowerCase().trim());
-        return { id: profile?.id && !ambiguousNames.has(name.toLowerCase().trim()) ? String(profile.id) : null, name, image: profile?.image_url || null, points: resolvePlayerRanking(profile, division.seeding_ranking_source || 'active').points || 0 };
+        const counterparts = rows.filter(e => row.partner_email_hash ? e.email_hash?.toLowerCase() === row.partner_email_hash.toLowerCase() : e.full_name.toLowerCase().trim() === name.toLowerCase().trim());
+        const registration = name === row.full_name ? row : counterparts.length === 1 ? counterparts[0] : null;
+        return { id: profile?.id && !ambiguousNames.has(name.toLowerCase().trim()) ? String(profile.id) : null, name, image: profile?.image_url || null, points: resolvePlayerRanking(profile, division.seeding_ranking_source || 'active').points || 0, paymentStatus: registration?.payment_status ?? null };
       });
       teams.push({ id: row.id, players, total: players.reduce((sum, p) => sum + p.points, 0), seed: null });
     }

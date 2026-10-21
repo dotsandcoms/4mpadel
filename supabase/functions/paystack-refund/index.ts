@@ -591,34 +591,17 @@ async function handleSwitchDivision(
             if (conflict) return json(400, { error: `${player.full_name || player.email} is already entered in that division` });
         }
 
-        for (const player of moving) {
-            const { error: parkError } = await supabaseAdmin
-                .from('event_registrations')
-                .update({ division: `__moving__/${player.id}`, division_id: null })
-                .eq('id', player.id);
-            if (parkError) throw parkError;
-        }
+        const { error: moveError } = await supabaseAdmin.rpc('move_registration_division', {
+            p_registration_ids: moving.map((player) => player.id),
+            p_target_division_id: targetDiv.id,
+            p_reset_payment: true,
+        });
+        if (moveError) throw moveError;
 
         for (const player of moving) {
             const teamMate = moving.find((candidate) => candidate.id !== player.id)!;
             const owesMore = newFee > oldFee && player.payment_status === 'paid';
             const newStatus = owesMore ? 'pending' : player.payment_status;
-            const teamMateOwesMore = newFee > oldFee && teamMate.payment_status === 'paid';
-            const teamMateNewStatus = teamMateOwesMore ? 'pending' : teamMate.payment_status;
-            const { error: moveError } = await supabaseAdmin
-                .from('event_registrations')
-                .update({
-                    division_id: targetDiv.id,
-                    division: targetDiv.name,
-                    registered_by: player.email,
-                    payment_status: newStatus,
-                    partner_name: teamMate.full_name,
-                    partner_email: teamMate.email,
-                    partner_payment_status: teamMateNewStatus,
-                })
-                .eq('id', player.id);
-            if (moveError) throw moveError;
-
             await supabaseAdmin.rpc('reassign_tournament_participant_division', {
                 p_event_id: eventId,
                 p_email: player.email,

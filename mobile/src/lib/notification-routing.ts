@@ -6,6 +6,8 @@ export function pathFromNotificationData(data: Record<string, unknown> | undefin
   if (typeof path === 'string') {
     if (Object.values(NOTIFICATION_PATHS).includes(path)) return path;
     if (path === '/(tabs)/calendar') return '/calendar';
+    const proMatch = /^\/pro\/match\/([1-9]\d*)$/.exec(path);
+    if (proMatch && Number(proMatch[1]) <= 2147483647) return path;
     const event = /^\/events\/([1-9]\d*)(?:\?(.+))?$/.exec(path);
     if (event) {
       const query = new URLSearchParams(event[2] ?? '');

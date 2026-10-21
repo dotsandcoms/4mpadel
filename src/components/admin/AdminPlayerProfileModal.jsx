@@ -1,3 +1,4 @@
+import { hydrateEventLicenses } from '../../utils/licenses';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
     X, Loader2, Mail, Phone, MapPin, Trophy, CreditCard, User, ExternalLink, Link2, CheckCircle,
@@ -5,6 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { resolveRegistrationLicenseDisplay } from '../../utils/registrationLicense';
+import { courtSideLabel, playingHandLabel } from '../../utils/playerPreferences';
 
 const fmtPayment = (status) => {
     const key = String(status || 'pending').toLowerCase();
@@ -87,7 +89,7 @@ const AdminPlayerProfileModal = ({
                     .from('players')
                     .select(`
                         id, name, email, contact_number, image_url, points, rank_label,
-                        category, level, age_group, gender, region, home_club, nationality,
+                        category, level, age_group, gender, region, home_club, nationality, court_side, playing_hand,
                         license_type, paid_registration, rankedin_id, bio, approved, account_type,
                         temporary_licenses(id, event_id, event_date, created_at)
                     `);
@@ -104,7 +106,8 @@ const AdminPlayerProfileModal = ({
 
                 const { data, error: fetchError } = await query.maybeSingle();
                 if (fetchError) throw fetchError;
-                if (!cancelled) setPlayer(data || null);
+                const enriched = data && eventId ? (await hydrateEventLicenses([data], eventId))[0] : data;
+                if (!cancelled) setPlayer(enriched || null);
             } catch (err) {
                 if (!cancelled) {
                     setError(err.message || 'Failed to load profile');
@@ -238,6 +241,8 @@ const AdminPlayerProfileModal = ({
                                             <InfoChip icon={MapPin} label="Region" value={player?.region} />
                                             <InfoChip icon={MapPin} label="Club" value={player?.home_club} />
                                             <InfoChip icon={MapPin} label="Nationality" value={player?.nationality} />
+                                            <InfoChip icon={User} label="Playing hand" value={playingHandLabel(player?.playing_hand)} />
+                                            <InfoChip icon={Users} label="Court side" value={courtSideLabel(player?.court_side)} />
                                             <InfoChip icon={CreditCard} label="Rankedin" value={player?.rankedin_id} />
                                             {player?.level && <InfoChip icon={Trophy} label="Level" value={player.level} />}
                                             {player?.age_group && <InfoChip icon={Calendar} label="Age" value={player.age_group} />}

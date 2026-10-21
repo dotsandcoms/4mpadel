@@ -42,7 +42,7 @@ const StatCard = ({ title, value, subtext, icon: Icon, color = 'padel-green', de
     );
 };
 
-const CoachManager = () => {
+const CoachManager = ({ onPendingCountChange }) => {
     const [applications, setApplications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -69,6 +69,7 @@ const CoachManager = () => {
 
             if (error) throw error;
             setApplications(data || []);
+            onPendingCountChange?.((data || []).filter(app => app.status === 'pending').length);
         } catch (error) {
             console.error('Error fetching applications:', error);
             toast.error('Failed to load coach applications');
