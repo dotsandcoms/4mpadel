@@ -11,6 +11,7 @@
  */
 
 export const NOTIFICATION_TYPES = [
+  'admin_broadcast',
   'partner_assigned',
   'partner_entry_paid',
   'partner_invite',
@@ -27,6 +28,7 @@ export const NOTIFICATION_TYPES = [
 ];
 
 export const NOTIFICATION_PATHS = {
+  admin_broadcast: '/calendar',
   partner_assigned: '/(tabs)/calendar',
   partner_entry_paid: '/(tabs)/calendar',
   partner_invite: '/(tabs)/calendar',
@@ -52,6 +54,8 @@ export function pushCopy(type, vars = {}) {
   const payer = vars.payerName || partner;
 
   switch (type) {
+    case 'admin_broadcast':
+      return { title: '4M Padel update', body: 'You have a new message from 4M Padel.' };
     case 'partner_entry_paid':
       return {
         title: 'You’ve been entered',
