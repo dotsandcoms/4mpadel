@@ -110,7 +110,7 @@ data are denied. IDFA, IDFV, Android advertising ID and SSAID collection are
 disabled; the Android AD_ID permission is blocked. There is no advertising
 integration or App Tracking Transparency prompt. The current app does not expose
 an analytics opt-out control. Store privacy/data-safety declarations must describe
-the analytics actually shipped when this held release is published.
+the analytics actually shipped in each release.
 
 SDK/network failures are caught outside business logic. They cannot turn a
 successful payment, save, login or navigation into an app error. Web builds use a
@@ -140,8 +140,8 @@ Expo launch usage.
   stream. Use mocked tests for purchase behavior; do not make production charges
   merely to generate test analytics.
 
-No store upload or submission is authorised until the user finishes both
-simulator walkthroughs.
+On 21 October 2026, the user authorised production builds and submissions for
+both stores after simulator testing. Release notes: “Bug Fixes and overall improvements”.
 
 References: [Expo SDK 57](https://docs.expo.dev/versions/v57.0.0/),
 [Expo Firebase guide](https://docs.expo.dev/guides/using-firebase/),

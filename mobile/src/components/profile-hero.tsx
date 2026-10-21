@@ -83,6 +83,7 @@ type HeroProps = {
   fipLinked?: boolean;
   statsReady?: boolean;
   followerRefreshKey?: number;
+  onFollowersPress?: () => void;
 };
 
 function rankNumber(label?: string | null) {
@@ -92,7 +93,7 @@ function rankNumber(label?: string | null) {
 }
 
 /** Profile identity card with the same badges and SAPA career heading as Home. */
-export function ProfileHero({ player, stats, playId = 0, fipLinked = false, statsReady = true, followerRefreshKey = 0 }: HeroProps) {
+export function ProfileHero({ player, stats, playId = 0, fipLinked = false, statsReady = true, followerRefreshKey = 0, onFollowersPress }: HeroProps) {
   const license = licenseBadge(player.license_type);
   const name = player.name?.trim() || 'Player';
   const rankN = rankNumber(player.rank_label);
@@ -146,7 +147,7 @@ export function ProfileHero({ player, stats, playId = 0, fipLinked = false, stat
             numberOfLines={2}>
             {name}
           </Text>
-          <PlayerFollowerCount playerId={String(player.id)} refreshKey={followerRefreshKey} />
+          <PlayerFollowerCount playerId={String(player.id)} refreshKey={followerRefreshKey} onPress={onFollowersPress} />
           {(side || hand) && <Text style={{ color: brand.muted, fontSize: 12, lineHeight: 17 }} numberOfLines={2}>{[side && `${side} court`, hand].filter(Boolean).join(' · ')}</Text>}
 
         </View>

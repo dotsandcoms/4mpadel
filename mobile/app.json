@@ -2,7 +2,7 @@
   "expo": {
     "name": "FourM Padel",
     "slug": "4m-padel",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "fourmpadel",

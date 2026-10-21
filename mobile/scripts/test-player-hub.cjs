@@ -179,7 +179,7 @@ function followerComponent() {
    useCallback(fn, deps) { const key = JSON.stringify(deps); return { fn, key }; },
   },
   'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }), Fragment: 'Fragment' },
-  'react-native': { Text: 'Text' }, '@/theme/tokens': { lightBrand: {} },
+  'react-native': { Text: 'Text', Pressable: 'Pressable' }, '@/theme/tokens': { lightBrand: {} },
   'expo-router': { useFocusEffect(callback) { if (callback.key !== dependencyKey) { dependencyKey = callback.key; effect = callback.fn; cleanup?.(); cleanup = effect(); } } },
   '@/lib/player-hub': { fetchLocalFollowerCount: id => new Promise((resolve, reject) => requests.push({ id, resolve, reject })) },
  };
@@ -187,7 +187,7 @@ function followerComponent() {
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/components/players/player-follower-count.tsx', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText, { exports, require: name => modules[name] });
  return {
   requests,
-  render(playerId = '407', refreshKey = 0) { cursor = 0; return exports.PlayerFollowerCount({ playerId, refreshKey }); },
+  render(playerId = '407', refreshKey = 0, onPress) { cursor = 0; return exports.PlayerFollowerCount({ playerId, refreshKey, onPress }); },
   refocus() { cleanup?.(); cleanup = effect(); },
   flush: () => new Promise(resolve => setImmediate(resolve)),
  };
@@ -214,6 +214,13 @@ test('late requests cannot show another player’s count or replace a newer refr
 test('an unavailable count leaves the profile readable without claiming zero followers', async () => {
  const h = followerComponent(); h.render(); h.requests[0].reject(new Error('offline')); await h.flush();
  assert.equal(h.render().props.accessibilityLabel, 'Follower count unavailable');
+});
+test('the account follower count exposes an accessible button and opens the list when pressed', async () => {
+ const h = followerComponent(); let opened = 0; const onPress = () => opened++;
+ h.render('407', 0, onPress); h.requests[0].resolve(2); await h.flush();
+ const button = h.render('407', 0, onPress);
+ assert.equal(button.type, 'Pressable'); assert.equal(button.props.accessibilityRole, 'button');
+ assert.equal(button.props.accessibilityLabel, '2 followers'); button.props.onPress(); assert.equal(opened, 1);
 });
 test('the follow control refreshes the count after successful follows and unfollows, and preserves it on failure', async () => {
  const values = []; let cursor = 0, mounted = false, changed = 0, fail = false;

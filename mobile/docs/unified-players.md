@@ -36,3 +36,26 @@ Approved local player profiles and the account's own Profile header show the fol
 Applied `20261020091314_player_follower_counts.sql` to the linked 4M project. The public `get_player_follower_count` RPC uses invoker rights and reads an intentionally owner-rights aggregate in the unexposed `profile_social` schema. It returns only a total for approved players, including to guests. Follow identities retain their existing owner-only RLS; the aggregate view contains only player IDs and counts. A player-ID index supports the lookup.
 
 Validation: player-hub, public-player, profile-login and photo regression tests passed, as did TypeScript. `tests/player-followers.sql` passed against the linked backend and rolled back all fixtures. It checks multiple followers, guest totals, zero counts, hidden profiles, owner-only follow reads and immediate count changes after following/unfollowing. No new security-advisor findings were introduced. The profile display requires the next app build.
+
+### Your follower list
+
+The follower count on the account's own Profile is a button. It opens `/followers`
+with profile photos, player names and optional home clubs. Tapping a row opens the
+existing `/players/[id]` profile; Back returns to the list. Missing photos use
+initials. The list supports refresh, paging, retry and zero-follower states on iOS
+and Android. Public profile totals remain text and do not expose another player's
+private follower list.
+
+`get_my_player_followers` verifies the signed-in account owns the requested player
+using the authoritative Auth record. Its invoker wrapper calls a helper in the
+unexposed `profile_social` schema. It returns only approved public profile IDs,
+names, photos and clubs; no emails or Auth IDs. Existing follow-table RLS remains
+unchanged. Followers without public profiles remain counted, with an explanation
+when the visible list is shorter than the total. Signing out or changing accounts
+clears loaded names and invalidates pending reads.
+
+Applied migration `20261021091413_player_follower_lists.sql` to the linked backend.
+`tests/player-follower-lists.sql` passed in a disposable local PostgreSQL database;
+its fixtures never ran against production. New client tests cover pagination,
+errors, session changes, stale responses, photo fallback and profile navigation.
+The native app feature requires the updated app; store releases remain on hold.

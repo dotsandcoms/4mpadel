@@ -1,10 +1,10 @@
 import { useCallback, useState } from 'react';
-import { Text } from 'react-native';
+import { Pressable, Text } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { fetchLocalFollowerCount } from '@/lib/player-hub';
 import { lightBrand as b } from '@/theme/tokens';
 
-export function PlayerFollowerCount({ playerId, refreshKey = 0 }: { playerId: string; refreshKey?: number }) {
+export function PlayerFollowerCount({ playerId, refreshKey = 0, onPress }: { playerId: string; refreshKey?: number; onPress?: () => void }) {
   const [state, setState] = useState<{ id: string; count: number | null; error: boolean }>({ id: playerId, count: null, error: false });
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -20,7 +20,9 @@ export function PlayerFollowerCount({ playerId, refreshKey = 0 }: { playerId: st
   const count = state.id === playerId ? state.count : null;
   const unavailable = state.id === playerId && state.error;
   const label = count === 1 ? 'follower' : 'followers';
-  return <Text accessibilityLiveRegion="polite" accessibilityLabel={count !== null ? `${count} ${label}` : unavailable ? 'Follower count unavailable' : 'Loading follower count'} style={{ color: b.muted, fontSize: 13, lineHeight: 20 }}>
+  const accessibilityLabel = count !== null ? `${count} ${label}` : unavailable ? 'Follower count unavailable' : 'Loading follower count';
+  const content = <Text accessibilityLiveRegion="polite" accessibilityLabel={onPress ? undefined : accessibilityLabel} style={{ color: b.muted, fontSize: 13, lineHeight: 20 }}>
     {unavailable ? 'Followers unavailable' : <><Text style={{ color: b.premium, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{count === null ? '…' : count.toLocaleString('en-ZA')}</Text> {label}</>}
   </Text>;
+  return onPress ? <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} accessibilityHint="View people following you" onPress={onPress} style={{ minHeight: 44, minWidth: 44, alignSelf: 'flex-start', justifyContent: 'center' }}>{content}</Pressable> : content;
 }

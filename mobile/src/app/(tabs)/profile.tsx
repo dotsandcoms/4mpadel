@@ -305,6 +305,7 @@ export default function ProfileScreen() {
                 fipLinked={fipLinked}
                 statsReady={statsReady}
                 followerRefreshKey={followerRefreshKey}
+                onFollowersPress={() => router.push({ pathname: '/followers', params: { playerId: String(player.id) } })}
               />
             </FadeUp>
             <PlayerLicenseCard />
