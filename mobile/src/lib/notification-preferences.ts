@@ -4,6 +4,9 @@ import type { NotificationType } from './notification-events';
 export type NotificationToggle = NotificationType | 'push_enabled' | 'followed_events' | 'quiet_hours_enabled';
 export type NotificationPreferences = Partial<Record<NotificationToggle, boolean>> & { reminder_minutes?: number; quiet_start?: number; quiet_end?: number; timezone?: string };
 export const NOTIFICATION_GROUPS: { title: string; items: { key: NotificationToggle; label: string; detail: string }[] }[] = [
+  { title: '4M Padel updates', items: [
+    { key: 'admin_broadcast', label: 'Announcements', detail: 'Messages and event updates sent by the 4M Padel team.' },
+  ] },
   { title: 'Your account and entries', items: [
     { key: 'registration_complete', label: 'Account registration', detail: 'Confirmation when your player profile is created.' },
     { key: 'event_registration', label: 'Tournament entries', detail: 'Confirmation when you enter a tournament.' },

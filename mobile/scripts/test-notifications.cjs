@@ -47,6 +47,14 @@ test('every event has a route and nonempty notification copy', () => {
     assert.ok(copy.title && copy.body, type);
   }
 });
+test('admin broadcasts open their destination and respect the announcement preference', () => {
+  assert.equal(native.pathFromNotificationData({ type: 'admin_broadcast' }), '/calendar');
+  assert.equal(native.pathFromNotificationData({ type: 'admin_broadcast', path: '/events/101' }), '/events/101');
+  const broadcast = { ...outbox, type: 'admin_broadcast' };
+  assert.equal(policy.deliveryDecision(broadcast, token, {}, now), null);
+  assert.match(policy.deliveryDecision(broadcast, token, { admin_broadcast: false }, now), /Disabled/);
+  assert.match(policy.deliveryDecision(broadcast, token, { push_enabled: false }, now), /Disabled/);
+});
 test('sign-out waits for token deregistration instead of silently retaining delivery', async () => {
   let signedOut = false;
   const auth = moduleAt('src/lib/auth.ts', {

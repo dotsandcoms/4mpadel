@@ -16,7 +16,7 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDe
         { id: 'event-mgmt', label: 'Event Manager', icon: Trophy },
         { id: 'tournament-mgmt', label: 'Tournament Manager', icon: Trophy },
         { id: 'gallery', label: 'Gallery', icon: ImageIcon },
-        { id: 'email-broadcast', label: 'Email Broadcast', icon: Mail },
+        { id: 'email-broadcast', label: 'Broadcasts', icon: Mail },
         { id: 'finance', label: 'Finance', icon: DollarSign },
         { id: 'blog', label: 'Blog', icon: FileText },
         { id: 'settings', label: 'Settings', icon: Settings },

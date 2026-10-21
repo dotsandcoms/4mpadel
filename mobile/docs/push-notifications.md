@@ -4,6 +4,16 @@ The mobile app uses native iOS/Android notification permissions and React Native
 
 ## Implemented events
 
+### Admin broadcasts
+
+The website admin's **Broadcasts → Push notifications** composer can combine individual players and multiple event entrant lists, with payment/partner filters and recipient exclusions. Partners from single-row team entries are included. Withdrawn entrants are excluded from event lists; RankedIn lists are only included without payment/partner filters. Individual selections bypass event filters. Recipients are deduplicated by normalised email.
+
+Apply the shared `supabase/migrations/20261021101301_admin_push_broadcasts.sql` migration before deploying this admin update. It requires the existing mobile delivery/tournament notification migrations and adds no scheduled jobs. `admin_broadcast` messages use the existing `deliver-push` worker, quiet hours and player preferences. The next mobile release adds **4M Padel updates → Announcements** to notification settings; existing installations already support these messages through their explicit app paths and global push preference. This migration was applied to the shared production project on 21 October 2026; its filename matches the recorded remote version.
+
+Preview reports recipients with available Expo devices, disabled push, or no registered app device. Send re-resolves the audience and rejects a changed preview. Only reachable recipients are queued for device delivery; all selected recipients receive an inbox entry. An immutable request ID protects retries from duplicate messages. Recent broadcasts show live outbox delivery totals. A provider acknowledgement is not an open/read receipt. No new Edge Function deployment or Expo credentials are needed.
+
+Use **Send test to me** for an explicit device test from the admin interface. It targets only the signed-in admin's matching player profile and requires enabled notifications on that account. Do not send test notifications to real event lists. The SQL integration checks in `tests/pushBroadcast.sql` run against a disposable local PostgreSQL instance; the mobile notification suite is `node scripts/test-notifications.cjs` from `mobile/`.
+
 Database changes enqueue notifications for profile creation, new/reactivated entries, entry by a partner (including single-row organiser teams), partner links/removal, withdrawals for both players, payment confirmation, refunds, division changes, event/division cancellation and published draws. Repeated saves of the same state do not enqueue another event. Reciprocal registration inserts notify each player once about their entry.
 
 Calendar cancellation is recorded after the existing refund flow withdraws entries. Its audience therefore includes all players who entered the event, including withdrawn entries, so cancellation cannot silently miss them. Withdrawal and refund confirmations may precede the cancellation update. This does not change the existing refund workflow.

@@ -5,6 +5,7 @@
  */
 
 export const NOTIFICATION_TYPES = [
+  'admin_broadcast',
   'registration_open',
   'early_bird_ending',
   'registration_closing',
@@ -40,6 +41,7 @@ export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
 /** Default in-app path when the sender does not supply one. */
 export const NOTIFICATION_PATHS: Record<NotificationType, string> = {
+  admin_broadcast: '/calendar',
   registration_open: '/calendar',
   early_bird_ending: '/calendar',
   registration_closing: '/calendar',
@@ -94,6 +96,8 @@ export function pushCopy(
   const payer = vars.payerName || partner;
 
   switch (type) {
+    case 'admin_broadcast':
+      return { title: '4M Padel update', body: 'You have a new message from 4M Padel.' };
     case 'pro_match_live':
       return { title: 'Your starred match is live', body: `Play has started at ${event}.` };
     case 'registration_open':

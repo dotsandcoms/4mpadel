@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../supabaseClient';
 import { toast } from 'sonner';
-import { Mail, Users, UserPlus, Send, AlertCircle, Loader, CheckCircle, Search, Bold, Italic, Underline, List, ListOrdered, Link as LinkIcon, RemoveFormatting, X } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Bell, Mail, Users, UserPlus, Send, AlertCircle, Loader, CheckCircle, Search, Bold, Italic, Underline, List, ListOrdered, Link as LinkIcon, RemoveFormatting, X } from 'lucide-react';
+import PushBroadcastManager from './PushBroadcastManager';
 
 const parseEmailList = (text) =>
     (text || '')
@@ -54,7 +54,7 @@ const CustomWysiwyg = ({ value, onChange }) => {
     );
 };
 
-const EmailBroadcastManager = () => {
+const EmailComposer = ({ onBusyChange }) => {
     const [events, setEvents] = useState([]);
     const [selectedEvents, setSelectedEvents] = useState([]);
     const [loadingEvents, setLoadingEvents] = useState(true);
@@ -76,6 +76,8 @@ const EmailBroadcastManager = () => {
     const [manualEmailsText, setManualEmailsText] = useState('');
 
     const [excludedEmails, setExcludedEmails] = useState([]);
+
+    useEffect(() => { onBusyChange(isSending || isTesting); }, [isSending, isTesting, onBusyChange]);
 
     const filtersActive = paymentFilter !== 'all' || partnerFilter !== 'all';
 
@@ -298,16 +300,6 @@ const EmailBroadcastManager = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-black text-white uppercase tracking-tight">Email Broadcast</h1>
-                    <p className="text-gray-400 mt-1">Send bulk emails to tournament participants</p>
-                </div>
-                <div className="w-12 h-12 bg-padel-green/10 rounded-xl flex items-center justify-center">
-                    <Mail className="w-6 h-6 text-padel-green" />
-                </div>
-            </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
                 {/* LEFT COLUMN: Configuration */}
@@ -590,4 +582,19 @@ const EmailBroadcastManager = () => {
     );
 };
 
-export default EmailBroadcastManager;
+export default function EmailBroadcastManager() {
+    const [channel, setChannel] = useState('email');
+    const [emailBusy, setEmailBusy] = useState(false);
+    const [pushBusy, setPushBusy] = useState(false);
+    return <div className="space-y-6">
+        <div>
+            <h1 className="text-3xl font-black text-white uppercase tracking-tight">Broadcasts</h1>
+            <p className="text-gray-400 mt-1">Reach your players by email or app notification.</p>
+        </div>
+        <div role="group" aria-label="Broadcast channel" className="inline-flex rounded-xl border border-white/10 bg-black/40 p-1 gap-1">
+            {[{ id: 'email', label: 'Email', icon: <Mail size={16} /> }, { id: 'push', label: 'Push notifications', icon: <Bell size={16} /> }].map(({ id, label, icon }) => <button key={id} type="button" aria-pressed={channel === id} disabled={emailBusy || pushBusy} onClick={() => setChannel(id)} className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-colors focus-visible:outline-2 focus-visible:outline-padel-green disabled:opacity-50 ${channel === id ? 'bg-padel-green text-black' : 'text-gray-400 hover:text-white'}`}>{icon}{label}</button>)}
+        </div>
+        <div hidden={channel !== 'email'}><EmailComposer onBusyChange={setEmailBusy} /></div>
+        <div hidden={channel !== 'push'}><PushBroadcastManager onBusyChange={setPushBusy} /></div>
+    </div>;
+}

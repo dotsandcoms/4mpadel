@@ -42,7 +42,7 @@ const AdminManager = () => {
         { id: 'calendar', label: 'Calendar' },
         { id: 'event-mgmt', label: 'Event Management' },
         { id: 'gallery', label: 'Gallery' },
-        { id: 'email-broadcast', label: 'Email Broadcast' },
+        { id: 'email-broadcast', label: 'Broadcasts (email & push)' },
         { id: 'finance', label: 'Finance' },
         { id: 'blog', label: 'Blog' },
         { id: 'settings', label: 'Settings' }
