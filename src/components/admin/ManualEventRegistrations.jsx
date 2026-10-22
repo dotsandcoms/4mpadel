@@ -732,7 +732,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         setAddPlayerSearch('');
         setAddPlayerResults([]);
         setAddPlayerSelected(null);
-        setAddPlayerDivision(divisions[0]?.name || '');
+        setAddPlayerDivision('');
         setAddPlayerNote('');
         setAddPlayerBusy(false);
     };
@@ -4544,16 +4544,19 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                     </React.Fragment>;
                                 })}
 
-                                <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">Division</label>
+                                <label htmlFor="add-player-division" className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">Division</label>
                                 {divisions.length === 0 ? (
                                     <p className="text-xs text-amber-400 mb-3">No divisions found for this event.</p>
                                 ) : (
                                     <select
+                                        id="add-player-division"
+                                        required
                                         value={addPlayerDivision}
                                         onChange={(e) => setAddPlayerDivision(e.target.value)}
                                         disabled={addPlayerBusy}
                                         className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-padel-green/50 mb-3"
                                     >
+                                        <option value="" disabled>Select a division</option>
                                         {divisions.map((d) => (
                                             <option key={d.id || d.name} value={d.name}>
                                                 {d.name}{d.entry_fee != null ? ` · ${fmtR(d.entry_fee)}` : ''}
@@ -4565,7 +4568,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                 <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
                                     <p className="text-[11px] font-bold uppercase tracking-wider text-amber-400">Entry status</p>
                                     <p className="text-sm text-white font-semibold mt-0.5">
-                                        Pending payment · {fmtR(divFee(addPlayerDivision) * (addTeam ? 2 : 1))} due{addTeam ? ` (${fmtR(divFee(addPlayerDivision))} per player)` : ''}
+                                        {addPlayerDivision
+                                            ? <>Pending payment · {fmtR(divFee(addPlayerDivision) * (addTeam ? 2 : 1))} due{addTeam ? ` (${fmtR(divFee(addPlayerDivision))} per player)` : ''}</>
+                                            : 'Select a division to see the entry fee.'}
                                     </p>
                                     <p className="text-[11px] text-gray-400 mt-1">
                                         After adding, use Mark paid on their row (comp is an option there) if needed.
