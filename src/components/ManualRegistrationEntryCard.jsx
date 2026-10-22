@@ -148,7 +148,7 @@ const ManualRegistrationEntryCard = ({
                                 onClick={onRemovePartner}
                                 className="mt-2 text-xs font-semibold px-4 py-1.5 rounded-lg border border-red-200 text-red-600 bg-white hover:bg-red-50 transition-colors"
                             >
-                                Remove partner
+                                {partnerPaid ? 'Remove partner' : 'Cancel pending entry'}
                             </button>
                         )}
                     </div>

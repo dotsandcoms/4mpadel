@@ -40,7 +40,7 @@ import sapaLogo from '../assets/sapa-logo.svg';
 import { getEventImage } from '../utils/imageUtils';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
 import { isRegistrationClosed } from '../utils/registrationClose';
-import { resolvePartnerPaid } from '../utils/partnerPaymentStatus';
+import { isPartnerBookingOwner, resolvePartnerPaid } from '../utils/partnerPaymentStatus';
 import { isEarlyBirdActive, resolveDivisionEntryFee } from '../utils/eventEntryFee';
 import {
     countWeeklyEntries,
@@ -1627,7 +1627,7 @@ const EventDetails = () => {
                 partnerPaid,
                 wasAddedByPartner,
                 addedByName,
-                isBookingOwner: !wasAddedByPartner,
+                isBookingOwner: isPartnerBookingOwner(reg, manualUserEmail),
                 canWithdraw,
                 partnerPaymentLabel: !hasPartner
                     ? null
