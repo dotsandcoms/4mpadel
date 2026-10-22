@@ -8,6 +8,7 @@ import VideoModal from './VideoModal';
 import { getYoutubeEmbedUrl } from '../utils/youtube';
 import { getEventImage, getDefaultEventBackground } from '../utils/imageUtils';
 import CommunityCtaBanner from './CommunityCtaBanner';
+import { fetchEventEntryCounts } from '../utils/calendarEvents';
 import {
     promoteFinishedTiersToRecentResults,
     isCalendarEventFinished,
@@ -1600,24 +1601,10 @@ const FeaturedSections = ({ session = null }) => {
                     let enrichedData = data;
                     const manualEventIds = data.filter(e => e.is_manual).map(e => e.id);
                     if (manualEventIds.length > 0) {
-                        const { data: regs } = await supabase
-                            .from('event_registrations_public')
-                            .select('event_id, full_name, partner_name')
-                            .in('event_id', manualEventIds);
-
-                        if (regs) {
-                            const counts = {};
-                            regs.forEach(reg => {
-                                if (!counts[reg.event_id]) counts[reg.event_id] = 0;
-                                counts[reg.event_id]++;
-                            });
-
-                            enrichedData = data.map(event =>
-                                event.is_manual
-                                    ? { ...event, registered_players: counts[event.id] || 0 }
-                                    : event
-                            );
-                        }
+                        const counts = await fetchEventEntryCounts(supabase, manualEventIds);
+                        enrichedData = data.map(event => event.is_manual
+                            ? { ...event, registered_players: counts[event.id] || 0 }
+                            : event);
                     }
 
                     // Sort the spotlight event to the front

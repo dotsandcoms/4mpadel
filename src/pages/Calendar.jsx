@@ -8,6 +8,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import { useMembersOnly } from '../context/MembersOnlyContext';
 import { toast } from 'sonner';
+import { fetchEventEntryCounts } from '../utils/calendarEvents';
 import {
     fetchScheduledEventIds,
     toggleEventOnSchedule,
@@ -700,28 +701,10 @@ const Calendar = () => {
             // Calculate dynamic registration counts for manual events
             const manualEventIds = eventsData.filter(e => e.is_manual).map(e => e.id);
             if (manualEventIds.length > 0) {
-                const { data: regs } = await supabase
-                    .from('event_registrations_public')
-                    .select('event_id, full_name, partner_name')
-                    .in('event_id', manualEventIds);
-
-                if (regs) {
-                    const counts = {};
-                    regs.forEach(reg => {
-                        if (!counts[reg.event_id]) counts[reg.event_id] = 0;
-                        counts[reg.event_id]++;
-                    });
-
-                    eventsData = eventsData.map(event => {
-                        if (event.is_manual) {
-                            return {
-                                ...event,
-                                registered_players: counts[event.id] || 0
-                            };
-                        }
-                        return event;
-                    });
-                }
+                const counts = await fetchEventEntryCounts(supabase, manualEventIds);
+                eventsData = eventsData.map(event => event.is_manual
+                    ? { ...event, registered_players: counts[event.id] || 0 }
+                    : event);
             }
 
             setEvents(eventsData);

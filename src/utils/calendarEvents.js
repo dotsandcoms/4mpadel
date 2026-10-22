@@ -1,3 +1,26 @@
+import { fetchAllRows } from './fetchAllRows.js';
+
+/** Count active player entries, including pending payments, without the API row cap. */
+export async function fetchEventEntryCounts(supabase, eventIds) {
+    const ids = [...new Set(eventIds)];
+    const counts = {};
+
+    for (let start = 0; start < ids.length; start += 100) {
+        const batch = ids.slice(start, start + 100);
+        const registrations = await fetchAllRows(() => supabase
+            .from('event_registrations_public')
+            .select('id, event_id')
+            .in('event_id', batch)
+            .order('id', { ascending: true }), 500);
+
+        for (const registration of registrations) {
+            counts[registration.event_id] = (counts[registration.event_id] || 0) + 1;
+        }
+    }
+
+    return counts;
+}
+
 /** Upcoming = visible events whose end date (or start date) is today or later. */
 export function filterUpcomingEvents(events) {
     const startOfToday = new Date();
