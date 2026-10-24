@@ -181,8 +181,6 @@ export default function EditProfileScreen() {
 
   function validate(): Errors {
     const next: Errors = {};
-    if (!filled(form.contactNumber)) next.contactNumber = 'Enter a mobile number.';
-    if (!form.region) next.region = 'Select a region.';
     if (!form.category) next.category = 'Select a category.';
     if (!form.clubId) next.clubId = 'Select a home club.';
     if (form.clubId === 'Other' && !filled(form.customClub)) next.customClub = 'Enter your club name.';
@@ -219,8 +217,8 @@ export default function EditProfileScreen() {
       const racket =
         form.racketBrand === 'Other' ? form.customRacketBrand.trim() : form.racketBrand;
       await updatePlayerDetails(player.id, {
-        contact_number: form.contactNumber.trim(),
-        region: form.region,
+        contact_number: form.contactNumber.trim() || null,
+        region: form.region.trim() || null,
         category: form.category,
         home_club: homeClub,
         club_id: form.clubId && form.clubId !== 'Other' ? form.clubId : null,
@@ -333,8 +331,8 @@ export default function EditProfileScreen() {
               detail={[form.contactNumber, clubName, courtSideLabel(form.courtSide) && `${courtSideLabel(form.courtSide)} court`, playingHandLabel(form.playingHand)].filter(Boolean).join(' · ')}
               expanded={expanded === 'essentials'}
               onPress={() => setExpanded(expanded === 'essentials' ? null : 'essentials')}>
-              <LiquidField label="Mobile number" icon="phone.fill" value={form.contactNumber} error={errors.contactNumber} invalid={!!errors.contactNumber} valid={filled(form.contactNumber) && !errors.contactNumber} onChangeText={(value) => patch('contactNumber', value)} keyboardType="phone-pad" autoComplete="tel" textContentType="telephoneNumber" />
-              <SelectField label="Region" value={form.region} error={errors.region} valid={!!form.region && !errors.region} badge={regionBadge} options={SA_REGIONS.map((region) => ({ label: region, value: region }))} onChange={(value) => patch('region', value)} />
+              <LiquidField label="Mobile number (optional)" icon="phone.fill" value={form.contactNumber} error={errors.contactNumber} invalid={!!errors.contactNumber} valid={filled(form.contactNumber) && !errors.contactNumber} onChangeText={(value) => patch('contactNumber', value)} keyboardType="phone-pad" autoComplete="tel" textContentType="telephoneNumber" />
+              <SelectField label="Region (optional)" value={form.region} error={errors.region} valid={!!form.region && !errors.region} badge={regionBadge} options={[{ label: 'Prefer not to say', value: '' }, ...SA_REGIONS.map((region) => ({ label: region, value: region }))]} onChange={(value) => patch('region', value)} />
               <SelectField label="Category" value={form.category} error={errors.category} valid={!!form.category && !errors.category} options={categoryOptions} onChange={(value) => patch('category', value)} />
               <SelectField label="Court side" value={form.courtSide} valid={!!form.courtSide} options={COURT_SIDE_OPTIONS} onChange={(value) => patch('courtSide', value)} />
               <SelectField label="Playing hand" value={form.playingHand} valid={!!form.playingHand} options={PLAYING_HAND_OPTIONS} onChange={(value) => patch('playingHand', value)} />

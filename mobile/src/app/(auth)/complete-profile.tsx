@@ -234,14 +234,7 @@ export default function CompleteProfileScreen() {
   const clubName =
     clubId === 'Other' ? customClub.trim() : clubs.find((c) => c.id === clubId)?.name ?? '';
 
-  const step1Complete =
-    filled(firstName) &&
-    filled(lastName) &&
-    filled(idNumber) &&
-    filled(contactNumber) &&
-    !!gender &&
-    filled(nationality) &&
-    !!region;
+  const step1Complete = filled(firstName) && filled(lastName);
 
   const clubReady = !!clubId && (clubId !== 'Other' || filled(customClub));
   const racketReady = !!racketBrand && (racketBrand !== 'Other' || filled(customRacketBrand));
@@ -250,12 +243,7 @@ export default function CompleteProfileScreen() {
   const completionChecks = [
     filled(firstName),
     filled(lastName),
-    filled(idNumber),
     !!email,
-    filled(contactNumber),
-    !!gender,
-    filled(nationality),
-    !!region,
     !!category,
     clubReady,
     filled(bio),
@@ -279,11 +267,6 @@ export default function CompleteProfileScreen() {
     const next: Errors = {};
     if (!filled(firstName)) next.firstName = 'Enter your first name.';
     if (!filled(lastName)) next.lastName = 'Enter your surname.';
-    if (!filled(idNumber)) next.idNumber = 'Enter an ID or passport number.';
-    if (!filled(contactNumber)) next.contactNumber = 'Enter a mobile number.';
-    if (!gender) next.gender = 'Select a gender.';
-    if (!filled(nationality)) next.nationality = 'Select a nationality.';
-    if (!region) next.region = 'Select a region.';
     return next;
   }
 
@@ -304,8 +287,6 @@ export default function CompleteProfileScreen() {
   function focusFirst(next: Errors) {
     if (next.firstName) firstNameRef.current?.focus();
     else if (next.lastName) lastNameRef.current?.focus();
-    else if (next.idNumber) idRef.current?.focus();
-    else if (next.contactNumber) mobileRef.current?.focus();
     else if (next.bio) bioRef.current?.focus();
   }
 
@@ -450,6 +431,7 @@ export default function CompleteProfileScreen() {
                 </Text>
                 <Text className="mb-6 text-court-muted" style={{ fontSize: 16, lineHeight: 24 }}>
                   Use the same name as your RankedIn profile so we can match your results.
+                  {'\n'}ID / passport, mobile number, gender, nationality and region are optional.
                 </Text>
 
                 <SectionLabel first>Identity</SectionLabel>
@@ -495,7 +477,7 @@ export default function CompleteProfileScreen() {
                 </View>
                 <LiquidField
                   ref={idRef}
-                  label="ID / passport"
+                  label="ID / passport (optional)"
                   value={idNumber}
                   error={errors.idNumber}
                   invalid={!!errors.idNumber}
@@ -513,7 +495,7 @@ export default function CompleteProfileScreen() {
                 {email ? <VerifiedEmail email={email} /> : null}
                 <LiquidField
                   ref={mobileRef}
-                  label="Mobile number"
+                  label="Mobile number (optional)"
                   icon="phone.fill"
                   value={contactNumber}
                   error={errors.contactNumber}
@@ -532,11 +514,11 @@ export default function CompleteProfileScreen() {
                 <View className="flex-row" style={{ gap: 12 }}>
                   <View className="flex-1">
                     <SelectField
-                      label="Gender"
+                      label="Gender (optional)"
                       value={gender}
                       error={errors.gender}
                       valid={!!gender && !errors.gender}
-                      options={GENDERS.map((g) => ({ label: g, value: g }))}
+                      options={[{ label: 'Prefer not to say', value: '' }, ...GENDERS.map((g) => ({ label: g, value: g }))]}
                       onChange={(v) => {
                         setGender(v);
                         clearError('gender');
@@ -545,12 +527,12 @@ export default function CompleteProfileScreen() {
                   </View>
                   <View className="flex-1">
                     <SelectField
-                      label="Nationality"
+                      label="Nationality (optional)"
                       value={nationality}
                       error={errors.nationality}
                       valid={filled(nationality) && !errors.nationality}
                       badge={nationalityBadge}
-                      options={nationalityOptions}
+                      options={[{ label: 'Prefer not to say', value: '' }, ...nationalityOptions]}
                       onChange={(v) => {
                         setNationality(v);
                         clearError('nationality');
@@ -559,12 +541,12 @@ export default function CompleteProfileScreen() {
                   </View>
                 </View>
                 <SelectField
-                  label="Region"
+                  label="Region (optional)"
                   value={region}
                   error={errors.region}
                   valid={!!region && !errors.region}
                   badge={regionBadge}
-                  options={SA_REGIONS.map((r) => ({ label: r, value: r }))}
+                  options={[{ label: 'Prefer not to say', value: '' }, ...SA_REGIONS.map((r) => ({ label: r, value: r }))]}
                   onChange={(v) => {
                     setRegion(v);
                     clearError('region');

@@ -92,15 +92,15 @@ export async function createPlayerProfile(draft: PlayerDraft, clubs: ClubRow[]) 
   const payload = {
     p_email: draft.email.trim().toLowerCase(),
     p_name: `${draft.firstName} ${draft.lastName}`.replace(/\s+/g, ' ').trim(),
-    p_contact: draft.contactNumber.trim(),
+    p_contact: draft.contactNumber.trim() || null,
     p_category: draft.category || 'Unranked',
-    p_gender: draft.gender,
-    p_nationality: draft.nationality.trim(),
-    p_id_number: draft.idNumber.trim(),
+    p_gender: draft.gender.trim() || null,
+    p_nationality: draft.nationality.trim() || null,
+    p_id_number: draft.idNumber.trim() || null,
     p_bio: draft.bio.trim(),
     p_home_club: homeClub,
     p_sponsors: draft.sponsors.trim() || null,
-    p_region: draft.region,
+    p_region: draft.region.trim() || null,
     p_instagram_link: draft.instagramLink.trim() || null,
     p_paid_registration: false,
     p_license_type: 'none',
@@ -281,8 +281,8 @@ export type ProfileBundle = {
 };
 
 export type PlayerDetailsUpdate = {
-  contact_number: string;
-  region: string;
+  contact_number: string | null;
+  region: string | null;
   category: string;
   home_club: string;
   club_id: string | null;
