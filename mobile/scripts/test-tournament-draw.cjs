@@ -4,6 +4,7 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/tournament-draw.t
 const { publishedDrawChoices, rankedinDrawSections, nativeDrawSections, drawMatchWhen } = mod.exports;
 const fixture = require('./fixtures/tournament-draw.json');
 const completedFixture = require('./fixtures/tournament-draw-results.json');
+const adidasFixture = require('./fixtures/tournament-draw-adidas.json');
 const directory = [{ id: 454, name: 'Brett Hilarides', rankedin_id: 'R000342302', image_url: 'https://test.invalid/brett.jpg' }];
 
 test('Growthpoint exposes only published Men 35+ and Men 45+ draws', () => {
@@ -20,6 +21,34 @@ test('real Growthpoint bracket includes all 12 matches and all four placement se
   assert.equal(match.one.players[1].name, 'Jason Blakey-Milner'); assert.equal(match.one.players[1].photo, null);
   assert.equal(match.one.players[0].country, 'ZA'); assert.equal(match.court, 'Century Crt 2');
   assert.match(drawMatchWhen(match.start), /10:00 SAST$/); assert.equal(JSON.stringify(fixture.draw), before);
+});
+test('published adidas knockout draws retain matches whose cell publication flag is false', () => {
+  assert.ok(publishedDrawChoices(adidasFixture.classes).some(c => c.classId === '178811'));
+  const cells = adidasFixture.knockout.flatMap(b => b.Elimination.DrawData.flat()).filter(c => c?.MatchId);
+  assert.ok(cells.every(c => c.IsPublished === false));
+  const before = JSON.stringify(adidasFixture.knockout);
+  const sections = rankedinDrawSections(adidasFixture.knockout);
+  const matches = sections.flatMap(s => s.rounds.flatMap(r => r.matches));
+  assert.equal(sections.length, 4);
+  assert.equal(matches.length, new Set(cells.map(c => c.MatchId)).size);
+  assert.equal(matches.length, 60);
+  const played = matches.find(m => m.id === '6983376');
+  assert.equal(played.one.players[0].name, 'Adam Safieddine');
+  assert.equal(played.two.players[0].name, 'Ali Kadhim Jaafar');
+  assert.equal(played.completed, true);
+  assert.equal(played.winner, 2);
+  assert.deepEqual(Array.from(played.scores, s => Array.from(s)), [[4, 6], [3, 6]]);
+  assert.equal(played.start, null, 'match publication must not override schedule visibility');
+  assert.equal(JSON.stringify(adidasFixture.knockout), before);
+});
+test('published adidas group stages retain all 15 mirrored pool fixtures', () => {
+  const cells = adidasFixture.roundRobin.RoundRobin.Pool.flat().map(c => c.MatchCell).filter(c => c?.MatchId);
+  assert.ok(cells.every(c => c.IsPublished === false));
+  const section = rankedinDrawSections([adidasFixture.roundRobin])[0];
+  assert.equal(section.rounds[0].matches.length, 15);
+  assert.equal(new Set(section.rounds[0].matches.map(m => m.id)).size, 15);
+  assert.equal(section.standings.length, 6);
+  assert.ok(section.rounds[0].matches.every(m => m.one.players.length === 2 && m.two.players.length === 2));
 });
 test('detailed sets, totals, winners and cancellation states retain their meaning', () => {
   const base = fixture.draw[0].Elimination.DrawCells[0];

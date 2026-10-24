@@ -82,7 +82,7 @@ function groupedRounds(matches: DrawMatch[], playoff: string | false = false): D
       matches: matches.filter(m => m.round === n).sort((a, b) => a.order - b.order) };
   });
 }
-/** Includes placement draws and deduplicates repeated bracket cells without mutating the provider snapshot. */
+/** Parses a published class/stage snapshot, including placement draws and repeated bracket cells. */
 export function rankedinDrawSections(payload: unknown, directory: RankedPlayer[] = []): DrawSection[] {
   return rows(payload).flatMap<DrawSection>((b, index) => {
     if (b.BaseType === 'Elimination' && b.Elimination) {
@@ -91,7 +91,9 @@ export function rankedinDrawSections(payload: unknown, directory: RankedPlayer[]
       const unique = new Map<string, DrawMatch>();
       for (const raw of cells) {
         const cell = raw.MatchCell || raw;
-        if (cell.MatchId && cell.IsPublished !== false) unique.set(String(cell.MatchId), rankedinMatch(cell, directory));
+        // Class/stage visibility is checked before loading this snapshot. RankedIn
+        // can leave every cell's IsPublished false even in a public, played draw.
+        if (cell.MatchId) unique.set(String(cell.MatchId), rankedinMatch(cell, directory));
       }
       const placement = Number(draw.PlacesStartPos || 1) > 1;
       const name = placement ? draw.PlacesStartPos === 3 && draw.PlacesEndPos === 4 ? '3rd place playoff' : `Places ${draw.PlacesStartPos}–${draw.PlacesEndPos}` : draw.IsQualification ? 'Qualifying draw' : 'Main draw';
@@ -101,7 +103,7 @@ export function rankedinDrawSections(payload: unknown, directory: RankedPlayer[]
     const pool = b.RoundRobin, grid = Array.isArray(pool.Pool) ? pool.Pool : [];
     const unique = new Map<string, DrawMatch>();
     grid.forEach((row: Row[], i: number) => row.forEach((cell, j) => {
-      if (cell?.MatchCell?.MatchId && cell.MatchCell.IsPublished !== false) {
+      if (cell?.MatchCell?.MatchId) {
         const id = String(cell.MatchCell.MatchId);
         if (!unique.has(id)) unique.set(id, rankedinMatch(cell.MatchCell, directory, grid[i]?.[0]?.ParticipantCell, grid[0]?.[j]?.ParticipantCell));
       }
