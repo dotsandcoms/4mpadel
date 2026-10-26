@@ -8,7 +8,7 @@ import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { fetchCommerceConfig, licenseQuote } from './commerce.ts';
 
 export type ManualRegistrationRow = Record<string, unknown>;
-export type ManualPaymentCover = { type: string; email: string; division?: string; license?: string };
+export type ManualPaymentCover = { type: string; email: string; division?: string; license?: string; event_id?: string | number };
 export type SoloLinkUpdate = {
     id: string;
     email: string;
@@ -83,12 +83,41 @@ export async function persistManualEventRegistrations(
         ? (meta.solo_link_updates as SoloLinkUpdate[])
         : [];
 
-    const { data: savedRows, error } = await supabaseAdmin
-        .from('event_registrations')
-        .upsert(toUpsert, { onConflict: 'event_id,email,division' })
-        .select('*');
-
-    if (error) throw error;
+    const savedRows: ManualRegistrationRow[] = [];
+    for (const row of toUpsert) {
+        const { data: candidates, error: lookupError } = await supabaseAdmin
+            .from('event_registrations')
+            .select('*')
+            .eq('event_id', row.event_id)
+            .ilike('email', String(row.email));
+        if (lookupError) throw lookupError;
+        const active = (candidates || []).filter((candidate) => candidate.status !== 'withdrawn');
+        // Division IDs survive renames. Reuse the original entry and invitation
+        // token instead of inserting another row under the new display name.
+        const existing = active.find((candidate) => row.division_id && candidate.division_id === row.division_id)
+            || active.find((candidate) => (!row.division_id || !candidate.division_id) && candidate.division === row.division);
+        const values = { ...row };
+        delete values.id;
+        if (existing?.payment_status === 'paid') {
+            values.payment_status = 'paid';
+            values.payment_method = existing.payment_method;
+            // Keep the label used by an earlier receipt when this checkout did
+            // not pay for that entry (e.g. an already-paid partner).
+            const covered = entryCoverSet.has(`${String(row.email).toLowerCase()}|${row.division}`);
+            if (!covered) values.division = existing.division;
+        }
+        if (existing?.partner_payment_status === 'paid') values.partner_payment_status = 'paid';
+        if (!existing && active.some((candidate) => candidate.division === row.division)) {
+            throw new Error('An existing entry with this name belongs to a different division');
+        }
+        const query = existing
+            ? supabaseAdmin.from('event_registrations').update(values).eq('id', existing.id)
+            : supabaseAdmin.from('event_registrations').upsert(values, { onConflict: 'event_id,email,division' });
+        const { data: saved, error: saveError } = await query.select('*');
+        if (saveError) throw saveError;
+        if (!saved?.length) throw new Error('Registration persistence did not save an entry');
+        savedRows.push(...saved);
+    }
 
     for (const link of soloLinks) {
         const updates: Record<string, unknown> = {
@@ -107,12 +136,44 @@ export async function persistManualEventRegistrations(
         if (linkError) throw linkError;
     }
 
-    await supabaseAdmin
+    const { error: metadataError } = await supabaseAdmin
         .from('payments')
         .update({ metadata: { ...meta, registrations_persisted: true } })
         .eq('id', payment.id as string);
+    if (metadataError) throw metadataError;
 
     return { savedRows: savedRows || [], persisted: true };
+}
+
+/** Apply covers and partner mirrors using the stable division identity. */
+export async function markManualEventEntryCoversPaid(
+    supabaseAdmin: SupabaseClient,
+    payment: Record<string, unknown>,
+    meta: Record<string, unknown>,
+    covers: ManualPaymentCover[],
+): Promise<void> {
+    const snapshots = Array.isArray(meta.registration_rows) ? meta.registration_rows as ManualRegistrationRow[] : [];
+    for (const cover of covers.filter((item) => item.type === 'entry')) {
+        const snapshot = snapshots.find((row) => String(row.email).toLowerCase() === cover.email.toLowerCase()
+            && row.division === cover.division
+            && (cover.event_id == null || String(row.event_id) === String(cover.event_id)));
+        const eventId = cover.event_id ?? snapshot?.event_id ?? meta.event_id ?? payment.event_id;
+        const divisionId = snapshot?.division_id || snapshots.find((row) => row.division === cover.division
+            && String(row.event_id) === String(eventId))?.division_id;
+        for (const [emailColumn, values] of [
+            ['email', { payment_status: 'paid', payment_method: 'paystack' }],
+            ['partner_email', { partner_payment_status: 'paid' }],
+        ] as const) {
+            let query = supabaseAdmin.from('event_registrations').update(values)
+                .eq('event_id', eventId).ilike(emailColumn, cover.email).neq('status', 'withdrawn');
+            query = divisionId ? query.eq('division_id', divisionId) : query.eq('division', cover.division);
+            const { data: updated, error } = await query.select('id');
+            if (error) throw error;
+            if (emailColumn === 'email' && !updated?.length) {
+                throw new Error('The paid entry cover did not match an active registration');
+            }
+        }
+    }
 }
 
 /**

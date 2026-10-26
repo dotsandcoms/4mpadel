@@ -5,6 +5,7 @@ import Animated, {
   Easing,
   FadeIn,
   FadeInDown,
+  FadeInUp,
   FadeOut,
   FadeOutUp,
   cancelAnimation,
@@ -15,13 +16,14 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
-import { brand, motion } from '@/theme/tokens';
+import { lightBrand as brand, motion } from '@/theme/tokens';
 
 export type ToastKind = 'error' | 'success';
 
 type Props = {
   message: string | null;
   kind?: ToastKind;
+  fromTop?: boolean;
   onDismiss: () => void;
 };
 
@@ -36,12 +38,12 @@ const easeOut = Easing.bezier(0, 0, 0, 1);
  * Floating status chip. Field errors stay on the field; this repeats them
  * above the keyboard. Soft enter, shorter exit. Dismiss does not steal focus.
  */
-export function Toast({ message, kind = 'error', onDismiss }: Props) {
+export function Toast({ message, kind = 'error', fromTop = false, onDismiss }: Props) {
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
   const drain = useSharedValue(1);
   const error = kind === 'error';
-  const accent = error ? brand.danger : brand.padel;
+  const accent = error ? brand.danger : brand.accent;
 
   useEffect(() => {
     if (!message) {
@@ -70,7 +72,7 @@ export function Toast({ message, kind = 'error', onDismiss }: Props) {
 
   const enter = reduced
     ? FadeIn.duration(motion.duration.fast)
-    : FadeInDown.duration(motion.duration.enter).easing(easeOut);
+    : (fromTop ? FadeInUp : FadeInDown).duration(motion.duration.enter).easing(easeOut);
   const exit = reduced
     ? FadeOut.duration(motion.duration.instant)
     : FadeOutUp.duration(motion.duration.fast).easing(easeOut);
@@ -90,7 +92,7 @@ export function Toast({ message, kind = 'error', onDismiss }: Props) {
         pointerEvents: 'box-none',
       }}>
       <View
-        className="overflow-hidden rounded-[18px] bg-surface"
+        className="overflow-hidden rounded-[18px] bg-court-surface"
         style={{
           borderWidth: 1,
           borderColor: brand.edge,
@@ -113,7 +115,7 @@ export function Toast({ message, kind = 'error', onDismiss }: Props) {
             />
           </View>
 
-          <Text className="mx-3 flex-1 text-[14px] font-medium leading-5 text-premium">
+          <Text className="mx-3 flex-1 text-[14px] font-medium leading-5 text-court-ink">
             {message}
           </Text>
 

@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { parseMetadata, verifyPaystackWebhookSignature } from './paystack.ts';
-import { persistManualEventRegistrations, recordLicensePaymentSplit } from './manual-event-payment.ts';
+import { persistManualEventRegistrations, recordLicensePaymentSplit, markManualEventEntryCoversPaid } from './manual-event-payment.ts';
 import { fetchCommerceConfig, matchLicenseTypeByAmount } from './commerce.ts';
 
 async function sendEmailViaEdge(payload: {
@@ -54,6 +54,11 @@ async function finalizeManualEventPayment(
         .select('id');
     if (claimError) throw claimError;
     if (!claimed || claimed.length === 0) {
+        // Re-run the canonical finalizer after verified delivery even if a
+        // browser or another callback already marked the ledger successful.
+        // Email/registration side effects remain claimed only once.
+        const { error: finalizeError } = await supabaseAdmin.from('payments').update({ status: 'success' }).eq('id', paymentId);
+        if (finalizeError) throw finalizeError;
         return { processed: false, alreadyProcessed: true };
     }
 
@@ -65,48 +70,9 @@ async function finalizeManualEventPayment(
         covers,
     );
 
-    for (const c of covers.filter((c) => c.type === 'entry')) {
-        await supabaseAdmin
-            .from('event_registrations')
-            .update({ payment_status: 'paid' })
-            .eq('event_id', eventId)
-            .eq('division', c.division)
-            .ilike('email', c.email);
-        await supabaseAdmin
-            .from('event_registrations')
-            .update({ partner_payment_status: 'paid' })
-            .eq('event_id', eventId)
-            .eq('division', c.division)
-            .ilike('partner_email', c.email);
-    }
+    await markManualEventEntryCoversPaid(supabaseAdmin, payment, meta, covers);
 
-    for (const c of covers.filter((c) => c.type === 'license')) {
-        const isFull = c.license === 'full';
-        const { data: player } = await supabaseAdmin
-            .from('players')
-            .select('id')
-            .ilike('email', c.email)
-            .maybeSingle();
-        if (player) {
-            await supabaseAdmin
-                .from('players')
-                .update({ license_type: isFull ? 'full' : 'temporary', paid_registration: true })
-                .eq('id', player.id);
-            if (!isFull) {
-                const { data: ev } = await supabaseAdmin
-                    .from('calendar')
-                    .select('event_name, end_date, start_date')
-                    .eq('id', eventId)
-                    .maybeSingle();
-                await supabaseAdmin.from('temporary_licenses').insert([{
-                    player_id: player.id,
-                    event_id: eventId,
-                    event_name: ev?.event_name || (meta.event_name as string) || '',
-                    event_date: ev?.end_date || ev?.start_date || null,
-                }]);
-            }
-        }
-    }
+    // Annual and temporary licenses are finalized atomically by the verified payment ledger trigger.
 
     // Split a bundled license into its own ledger row so it shows as a separate
     // entry in the User Ledger and reconciles per type. Idempotent.
@@ -264,11 +230,14 @@ async function finalizeWebLicensePayment(
     const eventName = (meta.event_name as string) || null;
     const isTest = String(data.domain || '').toLowerCase() === 'test' || meta.is_test === true;
 
-    const { data: player } = await supabaseAdmin
+    let { data: player } = await supabaseAdmin
         .from('players')
         .select('id')
         .ilike('email', email)
         .maybeSingle();
+
+    const { data: licenseCheckout } = await supabaseAdmin.from('native_license_checkouts').select('player_id').eq('reference', clientRef).maybeSingle();
+    if (licenseCheckout) player = { id: licenseCheckout.player_id };
 
     // 1) Ledger row — idempotent on `reference`. Mirrors the admin Paystack-sync
     //    shape: payment_type 'membership' for full, 'temp_license' for temporary.
@@ -295,36 +264,7 @@ async function finalizeWebLicensePayment(
         }, { onConflict: 'reference' });
     if (payErr) throw payErr;
 
-    // 2) Apply the license to the profile (same effect as mark_player_paid).
-    if (player) {
-        await supabaseAdmin
-            .from('players')
-            .update({ license_type: isFull ? 'full' : 'temporary', paid_registration: true })
-            .eq('id', player.id);
-
-        // 3) Temporary license record — only if missing (browser may have inserted it).
-        if (!isFull && eventId) {
-            const { data: existingLic } = await supabaseAdmin
-                .from('temporary_licenses')
-                .select('id')
-                .eq('player_id', player.id)
-                .eq('event_id', eventId)
-                .maybeSingle();
-            if (!existingLic) {
-                const { data: ev } = await supabaseAdmin
-                    .from('calendar')
-                    .select('event_name, end_date, start_date')
-                    .eq('id', eventId)
-                    .maybeSingle();
-                await supabaseAdmin.from('temporary_licenses').insert([{
-                    player_id: player.id,
-                    event_id: eventId,
-                    event_name: ev?.event_name || eventName || 'Calendar Event',
-                    event_date: ev?.end_date || ev?.start_date || null,
-                }]);
-            }
-        }
-    }
+    // Canonical license issuance and profile projections are owned by the payment ledger trigger.
 
     return { processed: true, licenseType: isFull ? 'full' : 'temporary', playerFound: !!player };
 }

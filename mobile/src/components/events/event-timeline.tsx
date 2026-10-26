@@ -1,0 +1,100 @@
+import { useEffect, useState } from 'react';
+import { Pressable, ScrollView, View, useWindowDimensions, type ViewStyle } from 'react-native';
+import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import { EventText as Text, EventIcon, useEventAccent, type EventIconName } from './website-ui';
+import type { EventDetail } from '@/lib/events';
+import { isEarlyBirdActive } from '@/lib/event-rules';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
+import { useForegroundClock } from '@/hooks/use-foreground-clock';
+import { useScreenActive } from '@/hooks/use-screen-active';
+const panel = { borderRadius: 16, borderColor: '#DCE2DA', borderWidth: 1, backgroundColor: '#FFFFFF' };
+
+function ActiveStageIcon({ icon, accent }: { icon: EventIconName; accent: string }) {
+  const reduced = useReducedMotion();
+  const active = useScreenActive();
+  const pulse = useSharedValue(0);
+  useEffect(() => {
+    if (reduced || !active) { cancelAnimation(pulse); pulse.value = 0; return; }
+    pulse.value = 0;
+    pulse.value = withRepeat(withTiming(1, { duration: 1800, easing: Easing.out(Easing.quad) }), -1, false);
+    return () => cancelAnimation(pulse);
+  }, [pulse, reduced, active]);
+  const halo = useAnimatedStyle(() => ({ opacity: 0.65 * (1 - pulse.value), transform: [{ scale: 1 + 0.4 * pulse.value }] }));
+  return <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: accent }, halo]} />
+    <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#386018', alignItems: 'center', justifyContent: 'center' }}><EventIcon name={icon} size={16} color="#FFFFFF" /></View>
+  </View>;
+}
+export function RegistrationCountdown({ event, onRegister, label }: { event: EventDetail; onRegister: () => void; label: string | null }) {
+  const accent = useEventAccent();
+  const now = useForegroundClock();
+  const { width } = useWindowDimensions();
+  const opening = !!event.registration_opens_at && new Date(event.registration_opens_at).getTime() > now;
+  const raw = opening ? event.registration_opens_at : event.registration_closes_at;
+  const end = raw ? new Date(raw) : null;
+  const diff = end ? Math.max(0, end.getTime() - now) : 0;
+  if (!end && !label) return null;
+  const values = [Math.floor(diff / 86400000), Math.floor(diff / 3600000) % 24, Math.floor(diff / 60000) % 60, Math.floor(diff / 1000) % 60];
+  const compact = width < 420;
+  const dateLabel = end ? `${end.getDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'][end.getMonth()]}, ${end.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}` : '';
+  const managing = label === 'Manage Entry';
+  return <View style={{ ...panel, marginTop: 8, paddingHorizontal: 12, paddingVertical: 12, minHeight: 60, flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+    <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: compact ? 7 : 8 }}>
+      <View style={{ width: compact ? 32 : 36, height: compact ? 32 : 36, borderRadius: 18, borderWidth: 1, borderColor: `${accent}66`, backgroundColor: `${accent}20`, alignItems: 'center', justifyContent: 'center' }}><EventIcon name="clock" size={16} /></View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ color: '#65726B', fontSize: 9, fontWeight: '600', letterSpacing: 0.3 }}>{`REGISTRATION ${opening ? 'OPENS' : end && diff === 0 ? 'CLOSED' : end ? 'CLOSES' : 'OPEN'}`}</Text>
+        {end && <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={{ color: "#386018", fontSize: 12, fontWeight: '700', marginTop: 2 }}>{dateLabel}</Text>}
+      </View>
+    </View>
+    {diff > 0 && <View style={{ flexDirection: 'row', gap: compact ? 4 : 6, flexShrink: 0 }}>
+      {values.map((n, i) => <View key={i} style={{ minWidth: compact ? 20 : 24, alignItems: 'center' }}>
+        <Text style={{ fontSize: compact ? 14 : 16, lineHeight: compact ? 17 : 19, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{String(n).padStart(2, '0')}</Text>
+        <Text style={{ fontSize: compact ? 7 : 8, lineHeight: 10, color: '#65726B', marginTop: 3 }}>{['DAYS', 'HRS', 'MINS', 'SECS'][i]}</Text>
+      </View>)}
+    </View>}
+    {label && <Pressable accessibilityRole="button" onPress={onRegister} hitSlop={{ top: 8, bottom: 8, left: 3, right: 3 }} style={managing ? { flexShrink: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: compact ? 9 : 12, paddingVertical: 8, borderRadius: 12, borderColor: '#B9CDB0', borderWidth: 1, backgroundColor: '#F0F6EA' } : { flexShrink: 0, minHeight: 44, justifyContent: 'center', paddingHorizontal: compact ? 10 : 12, paddingVertical: 8, borderRadius: 24, borderColor: accent, borderWidth: 1, backgroundColor: accent, boxShadow: `0px 1px 6px ${accent}59`, experimental_backgroundImage: `linear-gradient(145deg, ${accent} 0%, ${accent} 50%, ${accent}cc 100%)` } as ViewStyle}><Text style={{ color: managing ? '#244A16' : '#000', fontSize: compact ? 10 : 11, fontWeight: '700' }}>{managing ? 'Manage entry' : label.toUpperCase()}</Text>{managing && <EventIcon name="chevron.right" size={12} color="#244A16" />}</Pressable>}
+  </View>;
+}
+/** Dates and step ordering mirror website TournamentProgressBar. */
+export function EventTimeline({ event, hasDraw }: { event: EventDetail; hasDraw: boolean }) {
+  const accent = useEventAccent();
+  const now = useForegroundClock(60000);
+  const [showDateNote, setShowDateNote] = useState(false);
+  const { width } = useWindowDimensions();
+  const parse = (raw?: string | null) => raw ? new Date(raw.includes('T') ? raw : `${raw.slice(0, 10)}T00:00:00`).getTime() : 0;
+  const opens = parse(event.registration_opens_at), closes = parse(event.registration_closes_at), early = parse(event.early_bird_ends_at);
+  const start = parse(event.start_date), end = parse(event.end_date || event.start_date) + 86400000 - 1;
+  const steps: { label: string; at: number; until?: number; icon: EventIconName; time?: boolean; published?: boolean }[] = [
+    ...(opens ? [{ label: 'Registration Open', at: opens, until: closes || undefined, icon: 'person.2' as const }] : []),
+    ...(early && event.early_bird_fee != null ? [{ label: 'Early Bird Entries', at: opens || 1, until: early, icon: 'bolt' as const, time: true }] : []),
+    ...(closes ? [{ label: 'Registration Closed', at: closes, icon: 'person.crop.circle.badge.xmark' as const, time: true }] : []),
+    ...(event.draw_released ? [{ label: 'Draw Published', at: parse(event.draw_released), icon: 'list.bullet.rectangle' as const, published: hasDraw }] : []),
+    ...(start ? [{ label: 'Tournament Live', at: start, until: end, icon: 'circle.inset.filled' as const }, { label: 'Tournament Finished', at: end, icon: 'trophy' as const }] : []),
+    ...(event.rankings_updated_at ? [{ label: 'Rankings Updated', at: parse(event.rankings_updated_at), icon: 'chart.bar' as const }] : []),
+  ];
+  let active = -1;
+  steps.forEach((step, i) => { if (now >= step.at || (step.label === 'Draw Published' && hasDraw)) active = i; });
+  const windowIndex = steps.findIndex(s => s.until && now >= s.at && now <= s.until);
+  if (windowIndex >= 0) active = windowIndex;
+  if (isEarlyBirdActive(event, new Date(now))) { const index = steps.findIndex(s => s.label === 'Early Bird Entries'); if (index >= 0 && now >= steps[index].at) active = index; }
+  if (!steps.length) return null;
+  return <View style={{ ...panel, marginTop: 12, paddingHorizontal: 12, paddingVertical: 16 }}>
+    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 16 }}><EventIcon name="bolt" size={14} /><Text style={{ flex: 1, fontSize: 10, letterSpacing: 0.4 }}>TOURNAMENT PROGRESS</Text><Pressable accessibilityRole="button" accessibilityLabel="Dates and times are subject to change" accessibilityState={{ expanded: showDateNote }} onPress={() => setShowDateNote(!showDateNote)} hitSlop={10}><EventIcon name="info.circle" size={16} color="#65726B" /></Pressable></View>
+    {showDateNote && <Text style={{ fontSize: 11, color: '#65726B', marginBottom: 8 }}>Dates and times are subject to change</Text>}
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, paddingVertical: 10 }}>
+      {steps.map((step, i) => {
+        const live = i === active && (!step.until || now <= step.until);
+        const showLive = live && ['Registration Open', 'Early Bird Entries', 'Tournament Live'].includes(step.label);
+        const done = i < active || !!step.published || (!!step.until && now > step.until);
+        const color = live || done ? '#386018' : '#65726B';
+        const dateLabel = step.label === 'Early Bird Entries' && now > (step.until || 0) ? 'ENDED' : step.label === 'Tournament Live' ? `${new Date(start).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${new Date(end).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`.toUpperCase().replace(/\bSEP\b/g, 'SEPT') : step.label === 'Registration Open' ? '' : new Date(step.until && step.label === 'Early Bird Entries' ? step.until : step.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(step.time ? { hour: '2-digit', minute: '2-digit' } : {}) }).toUpperCase().replace(/\bSEP\b/g, 'SEPT').replace(' AT ', ' · ');
+        return <View key={step.label} style={{ width: (width - 66) / steps.length, alignItems: 'center', paddingHorizontal: 4 }}>
+          {i < steps.length - 1 && <View style={{ position: 'absolute', top: 30, left: '70%', width: '60%', height: 1, backgroundColor: done ? accent : '#65726B' }} />}
+          {live ? <ActiveStageIcon icon={step.icon} accent={accent} /> : <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}><View style={{ width: 32, height: 32, borderRadius: 16, borderColor: color, borderWidth: 1, backgroundColor: '#EDF0EB', alignItems: 'center', justifyContent: 'center' }}><EventIcon name={step.icon} size={14} color={color} /></View></View>}
+          <Text style={{ color: live ? '#173909' : color, fontSize: live ? 10 : 9, lineHeight: live ? 14 : 12, textAlign: 'center', fontWeight: live ? '800' : '600', marginTop: 8, ...(live ? { backgroundColor: '#EAF5D9', borderRadius: 6, paddingHorizontal: 4, paddingVertical: 2 } : {}) }}>{step.label}</Text>
+          {showLive ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 9, backgroundColor: '#386018' }}><View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: accent }} /><Text style={{ color: '#FFFFFF', fontSize: 8, fontWeight: '800', letterSpacing: 0.5 }}>LIVE</Text></View> : <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={{ color, fontSize: 8, lineHeight: 12, textAlign: 'center', marginTop: 4 }}>{dateLabel}</Text>}
+        </View>;
+      })}
+    </ScrollView>
+  </View>;
+}

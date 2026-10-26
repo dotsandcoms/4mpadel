@@ -1,6 +1,7 @@
-import { FlashList } from '@shopify/flash-list';
+import { useRouter } from 'expo-router';
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useMemo, useRef, type ReactNode, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -33,13 +34,14 @@ import {
 } from '@/lib/matches';
 import type { ProfileTransaction, RankingRow } from '@/lib/profile';
 import { sapaLabel, sapaTone } from '@/theme/sapa';
-import { brand, motion } from '@/theme/tokens';
+import { lightBrand as brand, motion } from '@/theme/tokens';
 
 export const PROFILE_SECTIONS = [
-  { id: 'events', label: 'My Events', active: '#A855F7', text: '#fff' },
-  { id: 'matches', label: 'My Matches', active: '#F97316', text: '#fff' },
-  { id: 'rankings', label: 'My Rankings', active: '#EAB308', text: '#0a0a0a' },
-  { id: 'payments', label: 'Payments', active: '#3B82F6', text: '#fff' },
+  { id: 'events', label: 'Events', icon: { ios: 'calendar', android: 'calendar_today', web: 'calendar_today' } },
+  { id: 'matches', label: 'Matches', icon: { ios: 'tennis.racket', android: 'sports_tennis', web: 'sports_tennis' } },
+  { id: 'rankings', label: 'Rankings', icon: { ios: 'chart.bar.xaxis', android: 'bar_chart', web: 'bar_chart' } },
+  { id: 'payments', label: 'Payments', icon: { ios: 'creditcard', android: 'credit_card', web: 'credit_card' } },
+  { id: 'photos', label: 'Photos', icon: { ios: 'photo', android: 'image', web: 'image' } },
 ] as const;
 
 export type ProfileSection = (typeof PROFILE_SECTIONS)[number]['id'];
@@ -55,27 +57,27 @@ const ease = Easing.bezier(
 
 const RIPPLE = { color: 'rgba(204,255,0,0.16)' };
 
-type MonthGroup<T> = { label: string; items: T[] };
+type MonthGroup<T> = { label: string; sort?: number; items: T[] };
 
 function monthLabel(date: Date) {
   return new Intl.DateTimeFormat('en-GB', { month: 'long' }).format(date).toUpperCase();
 }
 
-function groupByMonth<T>(items: T[], dateOf: (item: T) => Date | null): MonthGroup<T>[] {
+function groupByMonth<T>(items: T[], dateOf: (item: T) => Date | null, upcoming = false): MonthGroup<T>[] {
   const buckets = new Map<string, { label: string; sort: number; items: T[] }>();
   const undated: T[] = [];
   for (const item of items) {
     const date = dateOf(item);
-    if (!date || date.getTime() === 0) {
+    if (!date || !Number.isFinite(date.getTime()) || date.getTime() === 0) {
       undated.push(item);
       continue;
     }
     const key = `${date.getFullYear()}-${date.getMonth()}`;
     const current = buckets.get(key);
     if (current) current.items.push(item);
-    else buckets.set(key, { label: monthLabel(date), sort: date.getFullYear() * 100 + date.getMonth(), items: [item] });
+    else buckets.set(key, { label: `${monthLabel(date)}${date.getFullYear() === new Date().getFullYear() ? '' : ` ${date.getFullYear()}`}`, sort: date.getFullYear() * 100 + date.getMonth(), items: [item] });
   }
-  const groups = [...buckets.values()].sort((a, b) => a.sort - b.sort);
+  const groups = [...buckets.values()].sort((a, b) => upcoming ? a.sort - b.sort : b.sort - a.sort);
   if (undated.length) groups.push({ label: 'UNSCHEDULED', sort: 0, items: undated });
   return groups;
 }
@@ -122,7 +124,7 @@ function clubLine(event: CalendarEvent) {
 }
 
 function contrastOnFill(fill: string) {
-  return fill === '#CCFF00' || fill === '#EAB308' || fill === '#F59E0B' ? '#0a0a0a' : '#ffffff';
+  return fill === '#CCFF00' || fill === '#F59E0B' ? '#0a0a0a' : '#ffffff';
 }
 
 type AgendaTag = { label: string; color: string; border: string; bg: string };
@@ -137,7 +139,7 @@ function eventTags(event: CalendarEvent, pending: boolean): AgendaTag[] {
   if (event.fromSchedule) {
     tags.push({
       label: 'On Schedule',
-      color: brand.padel,
+      color: brand.accent,
       border: 'rgba(204,255,0,0.2)',
       bg: 'rgba(204,255,0,0.1)',
     });
@@ -145,7 +147,7 @@ function eventTags(event: CalendarEvent, pending: boolean): AgendaTag[] {
   if (event.isPaid) {
     tags.push({
       label: 'Paid',
-      color: brand.padel,
+      color: brand.accent,
       border: 'rgba(204,255,0,0.2)',
       bg: 'rgba(204,255,0,0.1)',
     });
@@ -198,7 +200,11 @@ function railParts(date: Date | null) {
 type AgendaRowModel = {
   id: string;
   kind: 'month' | 'row';
+  payment?: ProfileTransaction;
   month?: string;
+  monthKey?: string;
+  monthSort?: number;
+  recordCount?: number;
   day?: string;
   weekday?: string;
   title?: string;
@@ -218,13 +224,16 @@ function flattenGroups<T>(
 ): AgendaRowModel[] {
   const rows: AgendaRowModel[] = [];
   groups.forEach((group) => {
-    rows.push({ id: `month-${group.label}`, kind: 'month', month: group.label });
+    const monthKey = `month-${group.sort ?? group.label}`;
+    rows.push({ id: monthKey, kind: 'month', month: group.label, monthKey, monthSort: group.sort, recordCount: group.items.length });
     group.items.forEach((item, index) => {
       const next = toRow(item, index);
       const parts = railParts(next.date);
       rows.push({
         id: next.id,
         kind: 'row',
+        payment: next.payment,
+        monthKey,
         day: parts.day,
         weekday: parts.weekday,
         title: next.title,
@@ -252,13 +261,10 @@ export function SectionSwitcher({
   onChange: (next: ProfileSection) => void;
 }) {
   return (
-    <ScrollView
-      horizontal
+    <View
       accessibilityRole="tablist"
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ paddingHorizontal: 20 }}>
-      <View className="flex-row rounded-2xl border border-white/10 bg-[#0a0a0a]/70 p-1">
-        {PROFILE_SECTIONS.map((item) => {
+      style={{ marginHorizontal: 20, flexDirection: 'row', borderRadius: 14, borderWidth: 1, borderColor: brand.edge, backgroundColor: brand.elevated, padding: 3 }}>
+        {PROFILE_SECTIONS.map((item, index) => {
           const selected = section === item.id;
           const count = counts[item.id];
           const label = count != null ? `${item.label} (${count})` : item.label;
@@ -270,19 +276,20 @@ export function SectionSwitcher({
               accessibilityState={{ selected }}
               accessibilityLabel={label}
               android_ripple={RIPPLE}
-              className="min-h-11 justify-center rounded-xl px-3"
-              style={selected ? { backgroundColor: item.active } : undefined}>
+              className="active:opacity-70"
+              style={{ flex: 1, minHeight: 56, borderRadius: 11, paddingHorizontal: 2, paddingVertical: 9, alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: selected ? brand.accent : 'transparent' }}>
+              {index > 0 && !selected && section !== PROFILE_SECTIONS[index - 1].id ? <View style={{ position: 'absolute', left: 0, top: 9, bottom: 9, width: 1, backgroundColor: brand.surface }} /> : null}
+              <SymbolView name={item.icon} size={18} tintColor={selected ? '#FFFFFF' : brand.faint} />
               <Text
-                className="text-[9px] font-black uppercase tracking-widest"
-                style={{ color: selected ? item.text : 'rgba(255,255,255,0.7)' }}>
+                numberOfLines={1}
+                style={{ color: selected ? '#FFFFFF' : brand.muted, fontSize: 9, fontWeight: '700', letterSpacing: 0.3, textTransform: 'uppercase' }}>
                 {item.label}
-                {count != null ? ` (${count})` : ''}
               </Text>
+              {selected ? <View style={{ position: 'absolute', left: 8, right: 8, bottom: 4, height: 2, borderRadius: 1, backgroundColor: '#FFFFFF80' }} /> : null}
             </Pressable>
           );
         })}
-      </View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -291,7 +298,7 @@ export function SegmentedControl({
   onChange,
   upcomingCount,
   completedCount,
-  active = '#A855F7',
+  active = brand.accent,
   activeText = '#fff',
 }: {
   value: AgendaFilter;
@@ -309,8 +316,8 @@ export function SegmentedControl({
   return (
     <View
       accessibilityRole="tablist"
-      className="flex-row self-start rounded-xl bg-white/[0.03] p-1"
-      style={{ borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
+      className="flex-row self-start rounded-xl bg-court-surface p-1"
+      style={{ borderWidth: 1, borderColor: 'rgba(22,37,31,0.1)' }}>
       {items.map((item) => {
         const selected = value === item.key;
         return (
@@ -325,7 +332,7 @@ export function SegmentedControl({
             style={selected ? { backgroundColor: active } : undefined}>
             <Text
               className="text-[9px] font-black uppercase tracking-wider"
-              style={{ color: selected ? activeText : 'rgba(255,255,255,0.7)' }}>
+              style={{ color: selected ? activeText : 'rgba(22,37,31,0.7)' }}>
               {item.label}
             </Text>
           </Pressable>
@@ -352,7 +359,7 @@ function FilterMenu({
       accessibilityLabel={`Filter, ${label}. Tap to change.`}
       android_ripple={RIPPLE}
       className="min-h-11 flex-row items-center px-1">
-      <Text className="text-[12px] font-bold text-muted">{label}</Text>
+      <Text className="text-[12px] font-bold text-court-muted">{label}</Text>
       <View className="ml-1">
         <SymbolView name="chevron.down" size={12} tintColor={brand.muted} />
       </View>
@@ -360,14 +367,50 @@ function FilterMenu({
   );
 }
 
-function AgendaMonth({ label }: { label: string }) {
+function AgendaMonth({ label, count, expanded, onPress }: { label: string; count: number; expanded: boolean; onPress: () => void }) {
   return (
-    <Text
-      accessibilityRole="header"
-      className="px-5 pb-2 pt-5 text-[11px] font-extrabold tracking-[0.18em] text-faint">
-      {label}
-    </Text>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${label}, ${count} ${count === 1 ? 'record' : 'records'}`}
+      accessibilityState={{ expanded }}
+      onPress={onPress}
+      style={{ minHeight: 52, paddingHorizontal: 20, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <Text style={{ flex: 1, color: brand.muted, fontSize: 11, fontWeight: '400', letterSpacing: 1.5 }}>{label}</Text>
+      <Text style={{ color: brand.muted, fontSize: 11, fontWeight: '400' }}>{count}</Text>
+      <SymbolView name={expanded ? 'chevron.down' : 'chevron.right'} size={12} tintColor={brand.muted} />
+    </Pressable>
   );
+}
+
+function PaymentCard({ item }: { item: AgendaRowModel }) {
+  const payment = item.payment!;
+  const status = payment.status.toLowerCase();
+  const refund = payment.kind === 'refund' || status.includes('refund');
+  const failed = /failed|declined|rejected/.test(status);
+  const abandoned = /abandoned|cancelled|canceled/.test(status);
+  const pending = /pending|processing|queued|requested/.test(status);
+  const success = /success|paid|completed|processed/.test(status);
+  const color = failed ? '#F87171' : abandoned ? '#9CA3AF' : refund ? '#FB923C' : pending ? '#FBBF24' : success ? '#60A5FA' : '#9CA3AF';
+  return <View style={{ paddingHorizontal: 20, paddingBottom: 7 }}>
+    <View style={{ flexDirection: 'row', gap: 9, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: refund ? '#FB923C33' : '#16251f14', backgroundColor: '#FFFFFF' }}>
+      <View style={{ width: 26, alignItems: 'center', gap: 5, paddingTop: 3 }}>
+        <Text style={{ fontSize: 16, color, fontWeight: '400' }}>{item.day}</Text>
+        <Text style={{ fontSize: 8, color: '#828b9a', letterSpacing: 0.5 }}>{item.weekday}</Text>
+      </View>
+      <View style={{ flex: 1, gap: 4 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+          <View style={{ borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, backgroundColor: `${color}18`, borderWidth: 1, borderColor: `${color}33` }}>
+            <Text style={{ color, fontSize: 9, fontWeight: '400' }}>{payment.status.toUpperCase()}</Text>
+          </View>
+          {payment.kind === 'refund' && !status.includes('refund') && <Text style={{ fontSize: 9, color: '#FB923C' }}>REFUND</Text>}
+          <Text style={{ marginLeft: 'auto', fontSize: 13, fontWeight: '400', color, fontVariant: ['tabular-nums'] }}>{payment.amount}</Text>
+        </View>
+        <Text style={{ fontSize: 12, lineHeight: 16, fontWeight: '400', color: '#16251F' }}>{payment.event_name || item.title}</Text>
+        <Text style={{ fontSize: 10, lineHeight: 13, color: '#65726B' }}>{payment.kind === 'refund' ? payment.reason || 'Refund' : item.subtitle}</Text>
+        {!!payment.refundedTotal && status !== 'refunded' && <Text style={{ fontSize: 10, color: '#FB923C' }}>Refunded: {payment.refundedTotal.toLocaleString('en-ZA', { style: 'currency', currency: 'ZAR' })}</Text>}
+      </View>
+    </View>
+  </View>;
 }
 
 function AgendaRow({
@@ -405,14 +448,14 @@ function AgendaRow({
         .filter(Boolean)
         .join(', ')}
       className="px-5">
-      <View className="min-h-[72px] flex-row items-center border-b border-white/5 py-3">
+      <View className="min-h-[72px] flex-row items-center border-b border-court-edge py-3">
         <View className="w-11 items-start">
           <Text
-            className="text-[15px] font-extrabold leading-none text-padel"
+            className="text-[15px] font-extrabold leading-none text-court-accent"
             style={{ fontVariant: ['tabular-nums'] }}>
             {day || '–'}
           </Text>
-          <Text className="mt-1 text-[9px] font-bold uppercase tracking-widest text-faint">
+          <Text className="mt-1 text-[9px] font-bold uppercase tracking-widest text-court-faint">
             {weekday}
           </Text>
         </View>
@@ -434,7 +477,7 @@ function AgendaRow({
               ))}
             </View>
           ) : null}
-          <Text numberOfLines={1} className="text-[13px] font-extrabold uppercase text-premium">
+          <Text numberOfLines={1} className="text-[13px] font-extrabold uppercase text-court-ink">
             {title}
           </Text>
           {subtitle ? (
@@ -442,13 +485,16 @@ function AgendaRow({
               {pin ? <MapPin size={9} color="#6B7280" /> : null}
               <Text
                 numberOfLines={1}
-                className={`text-[8px] font-bold uppercase tracking-wider text-faint ${pin ? 'ml-1' : ''}`}>
+                className={`text-[8px] font-bold uppercase tracking-wider text-court-faint ${pin ? 'ml-1' : ''}`}>
                 {subtitle}
               </Text>
             </View>
           ) : null}
           {status ? (
-            <Text numberOfLines={1} className="mt-0.5 text-[11px] text-white/45">
+            <Text
+              numberOfLines={1}
+              className="mt-0.5 text-[11px] text-court-muted"
+              style={status.endsWith(' pts') ? { color: '#526CA3', fontWeight: '600' } : undefined}>
               {status}
             </Text>
           ) : null}
@@ -467,7 +513,7 @@ function AgendaRow({
             </Text>
           </PressableScale>
         ) : onPress ? (
-          <SymbolView name="chevron.right" size={14} tintColor="rgba(255,255,255,0.35)" />
+          <SymbolView name="chevron.right" size={14} tintColor="rgba(22,37,31,0.35)" />
         ) : null}
       </View>
     </PressableScale>
@@ -509,6 +555,7 @@ function PageEnter({ active, children }: { active: boolean; children: ReactNode 
 function AgendaList({
   data,
   extraData,
+  resetKey,
   header,
   footer,
   empty,
@@ -518,6 +565,7 @@ function AgendaList({
 }: {
   data: AgendaRowModel[];
   extraData?: unknown;
+  resetKey?: string;
   header?: ReactNode;
   footer?: ReactNode;
   empty: ReactNode;
@@ -525,16 +573,37 @@ function AgendaList({
   onRefresh: () => void;
   bottomPad: number;
 }) {
+  const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({});
+  const listRef = useRef<FlashListRef<AgendaRowModel>>(null);
+  useEffect(() => {
+    if (resetKey === undefined) return;
+    setExpandedMonths({});
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [resetKey]);
+  const months = data.filter(row => row.kind === 'month');
+  const now = new Date();
+  const currentMonth = now.getFullYear() * 100 + now.getMonth();
+  const dated = months.filter(row => (row.monthSort ?? 0) > 0);
+  // Prefer the current month; histories open their latest available month.
+  // An upcoming-only list opens its first scheduled month.
+  const defaultMonth = dated.find(row => row.monthSort === currentMonth)
+    ?? [...dated].filter(row => row.monthSort! < currentMonth).sort((a, b) => b.monthSort! - a.monthSort!)[0]
+    ?? [...dated].sort((a, b) => a.monthSort! - b.monthSort!)[0]
+    ?? months[0];
+  const isExpanded = (key: string) => expandedMonths[key] ?? key === defaultMonth?.id;
+  const visibleRows = data.filter(row => row.kind === 'month' || !row.monthKey || isExpanded(row.monthKey));
+  const toggleMonth = (key: string) => setExpandedMonths(previous => ({ ...previous, [key]: !isExpanded(key) }));
   return (
     <FlashList
-      data={data}
-      extraData={extraData}
+      ref={listRef}
+      data={visibleRows}
+      extraData={{ extraData, expandedMonths }}
       keyExtractor={(item) => item.id}
       renderItem={({ item }) =>
         item.kind === 'month' ? (
-          <AgendaMonth label={item.month || ''} />
+          <AgendaMonth label={item.month || ''} count={item.recordCount || 0} expanded={isExpanded(item.id)} onPress={() => toggleMonth(item.id)} />
         ) : (
-          <AgendaRow
+          item.payment ? <PaymentCard item={item} /> : <AgendaRow
             day={item.day}
             weekday={item.weekday}
             title={item.title || ''}
@@ -587,7 +656,7 @@ export function ProfileSectionPager({
   refreshing,
   onRefresh,
   onOpenEvent,
-  eventsFooter,
+  photosContent,
   bottomPad,
 }: {
   width: number;
@@ -615,9 +684,10 @@ export function ProfileSectionPager({
   refreshing: boolean;
   onRefresh: () => void;
   onOpenEvent: (event: CalendarEvent, action?: 'register' | 'pay' | 'manage') => void;
-  eventsFooter: ReactNode;
+  photosContent: ReactNode;
   bottomPad: number;
 }) {
+  const router = useRouter();
   const events = eventView === 'upcoming' ? upcomingEvents : completedEvents;
   const past = eventView === 'completed';
   const visibleEvents =
@@ -629,7 +699,7 @@ export function ProfileSectionPager({
   const eventRows = useMemo(
     () =>
       flattenGroups(
-        groupByMonth(visibleEvents, (event) => parseDay(event.start_date)),
+        groupByMonth(visibleEvents, (event) => parseDay(event.start_date), !past),
         (event) => {
           const pending = pendingEventIds.has(event.id);
           const action = eventActionLabel(event, past);
@@ -660,10 +730,11 @@ export function ProfileSectionPager({
           date: parseLooseDate(match.Info?.EventStartDate || match.Info?.Date),
           title: matchTitle(match),
           subtitle: matchSubtitle(match),
-          status: matchStatus(match),
+          status: matchView === 'completed' && !match.Score?.Score?.length ? 'Result not available' : matchStatus(match),
+          onPress: matchView === 'completed' ? () => router.push({ pathname: '/match-result', params: { match: JSON.stringify(match) } }) : undefined,
         })
       ),
-    [matches]
+    [matches, matchView, router]
   );
 
   const rankingRows = useMemo(() => {
@@ -702,6 +773,7 @@ export function ProfileSectionPager({
           const refund = row.kind === 'refund';
           return {
             id: `pay-${row.kind}-${row.id}-${index}`,
+            payment: row,
             date: row.sortDate ? new Date(row.sortDate) : parseLooseDate(row.date),
             title: refund ? row.reason || 'Refund' : row.event_name || 'License fee',
             subtitle: String(row.payment_type || row.kind).replace(/_/g, ' '),
@@ -743,7 +815,7 @@ export function ProfileSectionPager({
             header={
               <View className="px-5 pt-4">
                 <View className="mb-3 flex-row items-center justify-between">
-                  <Text className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-300">
+                  <Text className="text-[10px] font-black uppercase tracking-[0.2em] text-court-muted">
                     My tournaments
                   </Text>
                   <FilterMenu value={eventScope} onChange={onEventScope} />
@@ -753,11 +825,10 @@ export function ProfileSectionPager({
                   onChange={onEventView}
                   upcomingCount={upcomingEvents.length}
                   completedCount={completedEvents.length}
-                  active="#A855F7"
+                  active={brand.accent}
                 />
               </View>
             }
-            footer={eventsFooter}
             empty={
               <EmptyBlock
                 title={eventView === 'upcoming' ? 'No upcoming events' : 'No completed events'}
@@ -782,7 +853,7 @@ export function ProfileSectionPager({
             bottomPad={bottomPad}
             header={
               <View className="px-5 pt-4">
-                <Text className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-gray-300">
+                <Text className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-court-muted">
                   My matches
                 </Text>
                 <SegmentedControl
@@ -790,7 +861,7 @@ export function ProfileSectionPager({
                   onChange={onMatchView}
                   upcomingCount={upcomingMatches.length}
                   completedCount={completedMatches.length}
-                  active="#F97316"
+                  active={brand.accent}
                 />
               </View>
             }
@@ -812,13 +883,14 @@ export function ProfileSectionPager({
         <PageEnter active={section === 'rankings'}>
           <AgendaList
             data={rankingRows}
+            resetKey={selectedRanking ? rankingKey(selectedRanking) : 'rankings'}
             extraData={selectedRanking?.org}
             refreshing={refreshing}
             onRefresh={onRefresh}
             bottomPad={bottomPad}
             header={
               <View className="px-5 pt-4">
-                <Text className="mb-3 text-[16px] font-bold text-premium">My rankings</Text>
+                <Text className="mb-3 text-[11px] font-normal text-court-ink">RANKINGS POINTS BREAKDOWN</Text>
                 {rankings.length ? (
                   <ScrollView
                     horizontal
@@ -837,15 +909,15 @@ export function ProfileSectionPager({
                           accessibilityState={{ selected: Boolean(active) }}
                           accessibilityLabel={`${row.org || 'SAPA'}, ${row.age_group || 'Open'}`}
                           android_ripple={RIPPLE}
-                          className="min-h-11 justify-center rounded-xl px-3"
+                          className="min-h-9 justify-center rounded-xl px-3"
                           style={{
-                            backgroundColor: active ? '#EAB308' : 'rgba(255,255,255,0.02)',
+                            backgroundColor: active ? brand.accent : 'rgba(22,37,31,0.02)',
                             borderWidth: 1,
-                            borderColor: active ? '#EAB308' : 'rgba(255,255,255,0.1)',
+                            borderColor: active ? brand.accent : 'rgba(22,37,31,0.1)',
                           }}>
                           <Text
-                            className="text-[8px] font-black uppercase tracking-widest"
-                            style={{ color: active ? '#000' : 'rgba(255,255,255,0.7)' }}>
+                            className="text-[8px] font-normal uppercase tracking-widest"
+                            style={{ color: active ? '#fff' : 'rgba(22,37,31,0.7)' }}>
                             {row.org || 'SAPA'} ({row.age_group || 'Open'})
                           </Text>
                         </Pressable>
@@ -854,10 +926,21 @@ export function ProfileSectionPager({
                   </ScrollView>
                 ) : null}
                 {selectedRanking ? (
-                  <Text className="pb-1 text-[12px] text-muted">
-                    #{selectedRanking.rank} · {selectedRanking.points ?? '—'} pts ·{' '}
-                    {selectedRanking.match_type || 'Open'}
-                  </Text>
+                  <>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, marginBottom: 18 }}>
+                      {[
+                        { label: 'STANDING', value: selectedRanking.rank != null ? `#${selectedRanking.rank}` : '—', color: brand.premium },
+                        { label: 'POINTS', value: String(selectedRanking.points ?? '—'), color: '#16251F' },
+                        { label: 'TYPE', value: (selectedRanking.match_type || 'Open').toUpperCase(), color: '#52625A' },
+                      ].map(({ label, value, color }) => (
+                        <View key={label} style={{ flex: 1, minHeight: 66, paddingHorizontal: 8, paddingVertical: 10, borderRadius: 16, borderWidth: 1, borderColor: '#16251f18', backgroundColor: '#16251f05', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                          <Text style={{ fontSize: 8, letterSpacing: 1, color: '#828b9a', fontWeight: '400' }}>{label}</Text>
+                          <Text style={{ fontSize: label === 'TYPE' ? 9 : 20, color, textAlign: 'center', fontWeight: '400' }}>{value}</Text>
+                        </View>
+                      ))}
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#828b9a', marginBottom: 4 }}>DETAILED BREAKDOWN</Text>
+                  </>
                 ) : null}
               </View>
             }
@@ -875,7 +958,7 @@ export function ProfileSectionPager({
         <PageEnter active={section === 'payments'}>
           {txLoading && !transactions.length ? (
             <View className="flex-1 items-center justify-center">
-              <Text className="text-[12px] font-bold uppercase tracking-widest text-faint">
+              <Text className="text-[12px] font-bold uppercase tracking-widest text-court-faint">
                 Loading payments
               </Text>
             </View>
@@ -888,8 +971,8 @@ export function ProfileSectionPager({
               bottomPad={bottomPad}
               header={
                 <View className="px-5 pt-4">
-                  <Text className="mb-1 text-[16px] font-bold text-premium">Payments</Text>
-                  <Text className="text-[12px] text-muted">License fees, entries, and refunds.</Text>
+                  <Text className="mb-1 text-[16px] font-bold text-court-ink">Payments</Text>
+                  <Text className="text-[12px] text-court-muted">License fees, entries, and refunds.</Text>
                 </View>
               }
               empty={
@@ -900,6 +983,17 @@ export function ProfileSectionPager({
               }
             />
           )}
+        </PageEnter>
+      </View>
+
+      <View style={pageStyle}>
+        <PageEnter active={section === 'photos'}>
+          <ScrollView
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomPad + 24 }}>
+            {photosContent}
+          </ScrollView>
         </PageEnter>
       </View>
     </ScrollView>

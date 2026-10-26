@@ -2,7 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Share2, Trophy } from 'lucide-react';
 import { supabase } from '../supabaseClient';
-import { useRankedin } from '../hooks/useRankedin';
+import { fetchRankedinPointSnapshot, fetchTrophyHistories, countTournamentWins } from '../utils/rankedinResults';
+import useVisibleRefresh from '../hooks/useVisibleRefresh';
 
 const AGE_GROUP_FROM_LABEL = (label) => {
   const text = String(label || '').toUpperCase();
@@ -36,25 +37,39 @@ const resolveRankingParticipantId = (player, playerRecord) => {
 };
 
 const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, categoryLabel, ageGroup }) => {
-  const { getParticipantPointsDetails } = useRankedin();
+  const [refresh, retry] = useVisibleRefresh();
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' or 'tournaments'
   const [showBest8, setShowBest8] = useState(true);
-  const [calendarEvents, setCalendarEvents] = useState([]);
+  const [calendarEvents, setCalendarEvents] = useState(null);
+  const [calendarError, setCalendarError] = useState(false);
   const [countedDetails, setCountedDetails] = useState(null);
   const [allDetails, setAllDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState('');
+  const [detailsSnapshot, setDetailsSnapshot] = useState(null);
+  const [trophyHistories, setTrophyHistories] = useState(null);
+  const [trophyError, setTrophyError] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     const fetchCalendar = async () => {
+      setCalendarError(false);
       try {
-        const { data } = await supabase.from('calendar').select('event_name, sapa_status');
-        if (data) setCalendarEvents(data);
-      } catch (err) {
-        console.error('Error fetching calendar:', err);
+        const events = [];
+        for (let start = 0; ; start += 1000) {
+          const { data, error } = await supabase.from('calendar').select('event_name, sapa_status, rankedin_id').order('id').range(start, start + 999);
+          if (error) throw error;
+          events.push(...(data || []));
+          if (!data || data.length < 1000) break;
+        }
+        if (!cancelled) setCalendarEvents(events);
+      } catch {
+        if (!cancelled) { setCalendarEvents(null); setCalendarError(true); }
       }
     };
     fetchCalendar();
-  }, []);
+    return () => { cancelled = true; };
+  }, [refresh]);
 
   const rankingParticipantId = resolveRankingParticipantId(player, playerRecord);
   const resolvedAgeGroup = ageGroup || player?.ageGroup || AGE_GROUP_FROM_LABEL(categoryLabel);
@@ -63,72 +78,39 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
     if (!rankingParticipantId || !resolvedAgeGroup) return undefined;
     let cancelled = false;
     const load = async () => {
-      setDetailsLoading(true);
+      setDetailsLoading(true); setDetailsError(''); setCountedDetails(null); setAllDetails(null); setDetailsSnapshot(null);
       try {
         const [counted, all] = await Promise.all([
-          getParticipantPointsDetails(rankingParticipantId, resolvedAgeGroup, false),
-          getParticipantPointsDetails(rankingParticipantId, resolvedAgeGroup, true),
+          fetchRankedinPointSnapshot(rankingParticipantId, resolvedAgeGroup, false),
+          fetchRankedinPointSnapshot(rankingParticipantId, resolvedAgeGroup, true),
         ]);
         if (!cancelled) {
-          setCountedDetails(counted);
-          setAllDetails(all);
+          setCountedDetails(counted.details);
+          setAllDetails(all.details);
+          setDetailsSnapshot(counted);
         }
       } catch (err) {
         console.error('Error fetching ranking points:', err);
+        if (!cancelled) setDetailsError('Could not refresh results. Best 8 shows saved results; All is unavailable.');
       } finally {
         if (!cancelled) setDetailsLoading(false);
       }
     };
     load();
     return () => { cancelled = true; };
-  }, [rankingParticipantId, resolvedAgeGroup, getParticipantPointsDetails]);
+  }, [rankingParticipantId, resolvedAgeGroup, refresh]);
 
-  const uniqueWins = useMemo(() => {
-    if (!playerRecord?.rankings || !Array.isArray(playerRecord.rankings)) return {};
-    const winsMap = new Map();
+  useEffect(() => {
+    let cancelled = false;
+    setTrophyError(false); setTrophyHistories(null);
+    fetchTrophyHistories(playerRecord?.rankings, playerRecord?.rankedin_id)
+      .then(rows => { if (!cancelled) setTrophyHistories(rows); })
+      .catch(() => { if (!cancelled) setTrophyError(true); });
+    return () => { cancelled = true; };
+  }, [playerRecord?.rankings, playerRecord?.rankedin_id, refresh]);
 
-    playerRecord.rankings.forEach(ranking => {
-      if (ranking.details && Array.isArray(ranking.details)) {
-        ranking.details.forEach(tourney => {
-          if (String(tourney.place) === '1') {
-            const key = `${tourney.date}-${tourney.name}`;
-            if (!winsMap.has(key)) {
-              winsMap.set(key, tourney.name);
-            }
-          }
-        });
-      }
-    });
-
-    const counts = { Major: 0, 'Super Gold': 0, Gold: 0, Silver: 0, Bronze: 0, Other: 0 };
-
-    const normalize = (str) => (str || '').toLowerCase().trim();
-
-    winsMap.forEach((name) => {
-      const tourneyName = normalize(name);
-      const calEvent = calendarEvents.find(e => normalize(e.event_name) === tourneyName);
-
-      let statusStr = '';
-      if (calEvent && calEvent.sapa_status) {
-         statusStr = calEvent.sapa_status.toUpperCase();
-      } else {
-         statusStr = name.toUpperCase();
-      }
-
-      if (statusStr.includes('MAJOR')) counts.Major++;
-      else if (statusStr.includes('SUPER GOLD') || statusStr === 'S GOLD') counts['Super Gold']++;
-      else if (statusStr.includes('GOLD')) counts.Gold++;
-      else if (statusStr.includes('SILVER')) counts.Silver++;
-      else if (statusStr.includes('BRONZE')) counts.Bronze++;
-      else counts.Other++;
-    });
-
-    Object.keys(counts).forEach(k => {
-      if (counts[k] === 0) delete counts[k];
-    });
-
-    return counts;
-  }, [playerRecord, calendarEvents]);
+  const uniqueWins = useMemo(() => calendarEvents && trophyHistories
+    ? countTournamentWins(trophyHistories, calendarEvents) : {}, [trophyHistories, calendarEvents]);
 
   if (!playerRecord) return null;
 
@@ -190,17 +172,15 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
   }
 
   // Fallback to live Rankings-list values when local rankings JSON is missing/corrupt
-  const displayRank = rankingData?.rank || player.rawRank || player.rank?.replace?.(/[^\d]/g, '');
-  const displayPoints = rankingData?.points || player.points;
+  const displayRank = detailsSnapshot?.rank ?? player.rawRank ?? rankingData?.rank ?? player.rank?.replace?.(/[^\d]/g, '');
+  const displayPoints = detailsSnapshot?.points ?? player.points ?? rankingData?.points;
   const storedDetails = rankingData?.details || [];
   const countedList = countedDetails !== null ? countedDetails : storedDetails;
   const waitingForAll = !showBest8 && detailsLoading && allDetails === null;
-  const allList = allDetails !== null ? allDetails : storedDetails;
+  const allList = allDetails ?? [];
   const details = showBest8 ? countedList : allList;
 
-  const displayDetails = showBest8
-    ? [...countedList].sort((a, b) => Number(b.points) - Number(a.points))
-    : allList;
+  const displayDetails = details;
 
   const getTierColor = (tier) => {
     switch (tier) {
@@ -321,11 +301,14 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
             </button>
           </div>
 
+          {detailsError && <div role="alert" className="px-6 pt-4 text-xs text-amber-300">{detailsError} <button type="button" onClick={retry} className="underline">Retry results</button></div>}
+
           {/* Tab Content */}
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 nice-scrollbar">
             {activeTab === 'overview' && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
                 {/* Tournament Wins Badges (Centered above stats) */}
+                {(trophyError || calendarError) && <button type="button" onClick={retry} className="text-xs text-amber-300">Could not refresh trophies. Retry</button>}
                 {Object.keys(uniqueWins).length > 0 && (
                   <div className="flex flex-col items-center justify-center gap-2 pt-2">
                     <span className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Tournament Wins</span>
@@ -353,7 +336,7 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
                   </div>
                   <div className="bg-[#151b29] rounded-2xl p-4 flex flex-col items-center justify-center text-center border border-white/5">
                     <span className="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-1">Tournaments</span>
-                    <span className="text-xl font-bold text-white">{waitingForAll ? '…' : (details?.length || 0)}</span>
+                    <span className="text-xl font-bold text-white">{allDetails === null ? '…' : allDetails.length}</span>
                   </div>
                 </div>
 
@@ -386,6 +369,7 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
                         <div key={`${item.date}-${item.name}-${idx}`} className={`flex justify-between items-center gap-3 p-4 border-b border-white/5 last:border-0 ${!hasPoints && !showBest8 ? 'opacity-70' : ''}`}>
                           <div className="min-w-0 flex-1 pr-2">
                             <span className="text-sm font-medium text-gray-300 truncate block">{item.name}</span>
+                            {item.date && <span className="mt-1 block text-[10px] text-gray-400">{item.date}</span>}
                             {!showBest8 && (
                               <span className={`mt-1 inline-block text-[9px] font-black italic uppercase px-2 py-0.5 rounded ${isLeague ? 'bg-slate-600 text-white' : 'bg-[#7C3AED] text-white'}`}>
                                 {isLeague ? 'Team league' : 'Tournament'}

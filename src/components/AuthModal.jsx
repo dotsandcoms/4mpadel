@@ -7,6 +7,7 @@ import { useClubs } from '../hooks/useClubs';
 import SearchableSelect from './SearchableSelect';
 import { Trophy } from 'lucide-react';
 import { collectWebSignupDevice } from '../utils/signupDevice';
+import { authErrorMessage } from '../utils/authErrors';
 import RegisterOrganisationForm from './RegisterOrganisationForm';
 import RegisterCoachForm from './RegisterCoachForm';
 import ClubCreateWizard from './clubs/ClubCreateWizard';
@@ -95,7 +96,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
     const [racketBrand, setRacketBrand] = useState('');
     const [customRacketBrand, setCustomRacketBrand] = useState('');
     const [registerType, setRegisterType] = useState(null);
-    const { clubs } = useClubs();
+    const { clubs } = useClubs(isOpen && activeTab === 'register' && registerType === 'profile');
 
     useEffect(() => {
         if (isOpen) {
@@ -177,17 +178,18 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
         setLoading(true);
         setMessage(null);
 
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-        });
-
-        if (error) {
-            showMessage(error.message, 'error');
-        } else {
+        try {
+            const { error } = await supabase.auth.signInWithPassword({
+                email: email.trim(),
+                password,
+            });
+            if (error) throw error;
             showMessage('Successfully logged in!', 'success');
+        } catch (error) {
+            showMessage(authErrorMessage(error), 'error');
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const handleForgotPassword = async (e) => {

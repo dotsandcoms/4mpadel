@@ -163,6 +163,9 @@ async function reconcileLicense(
         player = data ?? null;
     }
 
+    const { data: licenseCheckout } = await admin.from('native_license_checkouts').select('player_id').eq('reference', clientRef).maybeSingle();
+    if (licenseCheckout) player = { id: licenseCheckout.player_id };
+
     // 1) Ledger row — idempotent on `reference` (the Paystack transaction id).
     const { error: payErr } = await admin
         .from('payments')
@@ -188,37 +191,7 @@ async function reconcileLicense(
         }, { onConflict: 'reference' });
     if (payErr) throw payErr;
 
-    // 2) Apply the license to the profile (same effect as mark_player_paid).
-    //    Matters most for Apple Pay, where onSuccess may never have fired.
-    if (player) {
-        await admin
-            .from('players')
-            .update({ license_type: isFull ? 'full' : 'temporary', paid_registration: true })
-            .eq('id', player.id);
-
-        // 3) Temporary license record — only if we know the event and it's missing.
-        if (!isFull && eventId) {
-            const { data: existingLic } = await admin
-                .from('temporary_licenses')
-                .select('id')
-                .eq('player_id', player.id)
-                .eq('event_id', eventId)
-                .maybeSingle();
-            if (!existingLic) {
-                const { data: ev } = await admin
-                    .from('calendar')
-                    .select('event_name, end_date, start_date')
-                    .eq('id', eventId)
-                    .maybeSingle();
-                await admin.from('temporary_licenses').insert([{
-                    player_id: player.id,
-                    event_id: eventId,
-                    event_name: ev?.event_name || eventName || 'Calendar Event',
-                    event_date: ev?.end_date || ev?.start_date || null,
-                }]);
-            }
-        }
-    }
+    // Reconciled ledger records use the same canonical license finalizer as webhooks and verification.
 
     return { reference, licenseType: isFull ? 'full' : 'temporary', playerFound: !!player };
 }
@@ -315,6 +288,9 @@ serve(async (req: Request) => {
                 const id = String(trx.id);
                 try {
                     if (await licenseRowExists(admin, id)) {
+                        // Verified replays also repair an existing ledger row's
+                        // missing coverage through the idempotent DB finalizer.
+                        if (!dryRun) await reconcileLicense(admin, trx, meta, isTest);
                         summary.already_present++;
                         continue;
                     }

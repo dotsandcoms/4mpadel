@@ -20,14 +20,14 @@ export function Screen({ title, eyebrow, children }: ScreenProps) {
   const tabPad = useTabScenePadding();
 
   return (
-    <View className="flex-1 bg-page">
+    <View className="flex-1 bg-court-page">
       <View
         className="flex-row items-center justify-end px-3"
         style={{ paddingTop: insets.top + 4, minHeight: insets.top + 48 }}>
         <MenuButton />
       </View>
       <ScrollView
-        className="flex-1 bg-page"
+        className="flex-1 bg-court-page"
         contentContainerStyle={{
           paddingTop: 8,
           paddingBottom: tabPad,
@@ -35,11 +35,11 @@ export function Screen({ title, eyebrow, children }: ScreenProps) {
         }}
         contentInsetAdjustmentBehavior="automatic">
         {eyebrow ? (
-          <Text className="mb-1 text-xs font-bold uppercase tracking-widest text-padel">
+          <Text className="mb-1 text-xs font-bold uppercase tracking-widest text-court-accent">
             {eyebrow}
           </Text>
         ) : null}
-        <Text className="mb-6 text-4xl font-extrabold text-premium">{title}</Text>
+        <Text className="mb-6 text-4xl font-extrabold text-court-ink">{title}</Text>
         {children}
       </ScrollView>
     </View>
@@ -52,8 +52,8 @@ export function Screen({ title, eyebrow, children }: ScreenProps) {
  */
 export function Placeholder({ label }: { label: string }) {
   return (
-    <View className="rounded-2xl border border-edge bg-surface p-6">
-      <Text className="text-base leading-6 text-muted">{label}</Text>
+    <View className="rounded-2xl border border-court-edge bg-court-surface p-6">
+      <Text className="text-base leading-6 text-court-muted">{label}</Text>
     </View>
   );
 }

@@ -39,9 +39,8 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 /**
- * SecureStore has a 2048-byte value limit on iOS and rejects some key
- * characters. Supabase session payloads sit well under that, but we fail
- * loudly rather than silently losing a session if that ever changes.
+ * SecureStore rejects some key characters. Large values can fail on the
+ * underlying OS; let errors surface rather than silently losing a session.
  */
 const SecureStorageAdapter = {
   getItem: (key: string) => SecureStore.getItemAsync(key),
@@ -54,7 +53,8 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     // SecureStore is unavailable on the web target; fall back to the default.
     storage: Platform.OS === 'web' ? undefined : SecureStorageAdapter,
     flowType: 'pkce',
-    autoRefreshToken: true,
+    // Native refresh is managed by app visibility at the root layout.
+    autoRefreshToken: Platform.OS === 'web',
     persistSession: true,
     detectSessionInUrl: false,
   },

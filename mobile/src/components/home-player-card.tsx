@@ -3,27 +3,26 @@ import { SymbolView } from 'expo-symbols';
 import { Text, View } from 'react-native';
 
 import { PressableScale } from '@/components/pressable-scale';
-import { PulseDot } from '@/components/pulse-dot';
 import { firstNameOf, greetingForNow, type HomePlayer } from '@/lib/home';
-import { brand } from '@/theme/tokens';
+import { lightBrand as brand } from '@/theme/tokens';
 
-const RANK_GOLD = '#EAB308';
 
 type Props = {
   player: HomePlayer | null;
   loading: boolean;
+  fipLinked: boolean;
   onPress: () => void;
 };
 
 export function HomeGreeting({ player }: { player: HomePlayer | null }) {
   const first = firstNameOf(player?.name);
   return (
-    <Text className="mb-3 text-[16px] font-bold text-premium">
+    <Text className="mb-3 text-[22px] font-bold text-court-ink">
       {greetingForNow()}
       {first ? (
         <>
           {', '}
-          <Text className="text-padel">{first}</Text>
+          <Text className="text-court-accent">{first}</Text>
         </>
       ) : null}
       <Text accessibilityElementsHidden> 👋</Text>
@@ -31,16 +30,16 @@ export function HomeGreeting({ player }: { player: HomePlayer | null }) {
   );
 }
 
-export function HomePlayerCard({ player, loading, onPress }: Props) {
+export function HomePlayerCard({ player, loading, fipLinked, onPress }: Props) {
   if (loading && !player) {
     return (
-      <View className="rounded-2xl border border-edge bg-page/70 p-3.5">
+      <View className="rounded-2xl border border-court-edge bg-court-page/70 p-3.5">
         <View className="flex-row items-center">
-          <View className="h-20 w-20 rounded-full bg-elevated" />
+          <View className="h-20 w-20 rounded-full bg-court-elevated" />
           <View className="ml-4 flex-1">
-            <View className="h-3 w-24 rounded bg-elevated" />
-            <View className="mt-2.5 h-5 w-40 rounded bg-elevated" />
-            <View className="mt-3 h-4 w-full rounded bg-elevated" />
+            <View className="h-3 w-24 rounded bg-court-elevated" />
+            <View className="mt-2.5 h-5 w-40 rounded bg-court-elevated" />
+            <View className="mt-3 h-4 w-full rounded bg-court-elevated" />
           </View>
         </View>
       </View>
@@ -55,21 +54,27 @@ export function HomePlayerCard({ player, loading, onPress }: Props) {
     player.points !== undefined && player.points !== null
       ? Number(player.points).toLocaleString('en-ZA')
       : '—';
+  const movement = player.rankingChange;
+  const hasMovement = movement != null && Number.isFinite(movement) && rank !== '—';
+  const movementLabel = hasMovement
+    ? movement > 0 ? `Up ${movement} places` : movement < 0 ? `Down ${Math.abs(movement)} places` : 'Ranking unchanged'
+    : '';
   const record = player.winLoss || '—';
   const license = licenseCopy(player.license_type);
+  const sapaProfile = rank !== '—' || player.license_type?.toLowerCase() === 'full';
 
   return (
     <PressableScale
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`View profile, ${player.name || 'player'}. Rank ${rank}, ${points} points, record ${record}.`}
-      className="rounded-2xl border border-edge bg-[#0a0a0a]/70 p-3.5">
+      accessibilityLabel={`View profile, ${player.name || 'player'}. Rank ${rank}${movementLabel ? `, ${movementLabel}` : ''}, ${points} points, record ${record}${license ? `. ${license.label}` : ''}.`}
+      className="rounded-2xl border border-court-edge bg-court-elevated p-4">
       <View className="flex-row items-stretch">
-        <View className="h-20 w-20 items-center justify-center self-center overflow-hidden rounded-full border-2 border-edge bg-elevated">
+        <View className="h-16 w-16 items-center justify-center self-center overflow-hidden rounded-full border-2 border-court-edge bg-court-elevated">
           {player.image_url ? (
             <Image
               source={{ uri: player.image_url }}
-              style={{ width: 80, height: 80 }}
+              style={{ width: 64, height: 64 }}
               contentFit="cover"
               accessibilityIgnoresInvertColors
             />
@@ -78,48 +83,45 @@ export function HomePlayerCard({ player, loading, onPress }: Props) {
           )}
         </View>
 
-        <View className="ml-4 min-w-0 flex-1">
-          {license ? (
-            <View
-              className="mb-1.5 flex-row items-center self-start rounded-full border px-2 py-0.5"
-              style={{
-                borderColor: license.border,
-                backgroundColor: license.bg,
-              }}>
-              {license.pulse ? <PulseDot color={brand.padel} size={6} /> : null}
-              <Text
-                className="text-[8px] font-black uppercase tracking-wider"
-                style={{
-                  color: license.color,
-                  marginLeft: license.pulse ? 6 : 0,
-                }}>
-                {license.label}
-              </Text>
-            </View>
-          ) : null}
+        <View className="ml-3 min-w-0 flex-1 justify-center">
+          <View className="mb-1.5 flex-row flex-wrap items-center" style={{ gap: 6 }}>
+            {sapaProfile ? <IdentityBadge label="SAPA" color={brand.accent} border={brand.edge} background={brand.glass} /> : null}
+            <IdentityBadge label="4M" color="#8D610C" border="#EFDCAA" background="#FFF7E5" />
+            {fipLinked ? <IdentityBadge label="FIP" color="#2449D8" border="#CAD8FF" background="#EEF3FF" /> : null}
+            {license && !sapaProfile ? <IdentityBadge label={license.label} color={license.color} border={license.border} background={license.bg} /> : null}
+          </View>
 
           <Text
             numberOfLines={1}
-            className="text-[17px] font-extrabold uppercase tracking-tight text-premium"
+            className="text-[17px] font-extrabold uppercase tracking-tight text-court-ink"
             style={{ lineHeight: 20 }}>
             {player.name || 'Player'}
           </Text>
-
-          <View className="mt-2 flex-row items-stretch">
-            <Stat value={rank} label="Rank" color={RANK_GOLD} lead />
-            <View className="w-px self-stretch bg-edge" />
-            <Stat value={points} label="Points" color={brand.padel} />
-            <View className="w-px self-stretch bg-edge" />
-            <Stat value={record} label="W-L" color={brand.premium} />
-          </View>
         </View>
 
         <View className="ml-1 justify-center">
           <SymbolView name="chevron.right" size={16} tintColor={brand.faint} />
         </View>
       </View>
+      <View className="mt-4 rounded-xl bg-court-surface px-3 py-3">
+        <Text className="mb-2 text-[11px] font-bold text-court-muted">SAPA Career</Text>
+        <View className="flex-row items-stretch">
+          <Stat value={rank} label="Rank" color={brand.premium} lead movement={hasMovement ? movement : undefined} />
+          <View className="w-px self-stretch bg-court-edge" />
+          <Stat value={points} label="Points" color={brand.accent} />
+          <View className="w-px self-stretch bg-court-edge" />
+          <Stat value={record} label="Wins–losses" color={brand.premium} />
+        </View>
+      </View>
     </PressableScale>
   );
+}
+
+export function IdentityBadge({ label, color, border, background }: { label: string; color: string; border: string; background: string }) {
+  return <View className="flex-row items-center rounded-full border px-2 py-0.5" style={{ borderColor: border, backgroundColor: background, gap: 4 }}>
+    <SymbolView name={{ ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' }} size={11} tintColor={color} />
+    <Text className="text-[9px] font-bold tracking-wider" style={{ color }}>{label}</Text>
+  </View>;
 }
 
 function Stat({
@@ -127,20 +129,27 @@ function Stat({
   label,
   color,
   lead,
+  movement,
 }: {
   value: string;
   label: string;
   color: string;
   lead?: boolean;
+  movement?: number;
 }) {
   return (
     <View className={`min-w-0 flex-1 ${lead ? 'pr-2.5' : 'px-2.5'}`}>
       <Text
-        className="text-[16px] font-extrabold"
+        className="text-[20px] font-bold"
         style={{ color, fontVariant: ['tabular-nums'] }}>
         {value}
       </Text>
-      <Text className="mt-0.5 text-[8px] font-black uppercase tracking-widest text-faint">
+      {movement !== undefined ? (
+        <Text style={{ marginTop: 2, fontSize: 12, fontWeight: '700', color: movement > 0 ? brand.accent : movement < 0 ? brand.danger : brand.faint, fontVariant: ['tabular-nums'] }}>
+          {movement > 0 ? `▲ ${movement}` : movement < 0 ? `▼ ${Math.abs(movement)}` : '—'}
+        </Text>
+      ) : null}
+      <Text className="mt-0.5 text-[9px] font-semibold uppercase tracking-wider text-court-faint">
         {label}
       </Text>
     </View>
@@ -152,10 +161,10 @@ function licenseCopy(type?: string | null) {
   if (!key) return null;
   if (key === 'full') {
     return {
-      label: 'Full License Player',
-      color: brand.padel,
-      border: 'rgba(204,255,0,0.3)',
-      bg: 'rgba(204,255,0,0.1)',
+      label: 'SAPA Registered',
+      color: brand.accent,
+      border: brand.edge,
+      bg: brand.glass,
       pulse: true,
     };
   }
@@ -172,8 +181,8 @@ function licenseCopy(type?: string | null) {
     return {
       label: 'No License',
       color: brand.faint,
-      border: 'rgba(255,255,255,0.1)',
-      bg: 'rgba(255,255,255,0.05)',
+      border: 'rgba(22,37,31,0.1)',
+      bg: 'rgba(22,37,31,0.05)',
       pulse: false,
     };
   }

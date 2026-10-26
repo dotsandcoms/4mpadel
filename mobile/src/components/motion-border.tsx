@@ -11,6 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
+import { useScreenActive } from '@/hooks/use-screen-active';
 import { brand } from '@/theme/tokens';
 
 const GLOW = require('@/assets/images/motion-border-glow.png');
@@ -30,11 +31,12 @@ type Props = {
 export function MotionBorder({ children }: Props) {
   'use no memo';
   const reduced = useReducedMotion();
+  const active = useScreenActive();
   const spin = useSharedValue(0);
   const [box, setBox] = useState({ w: 0, h: 0 });
 
   useEffect(() => {
-    if (reduced) {
+    if (reduced || !active) {
       cancelAnimation(spin);
       spin.value = 0;
       return;
@@ -46,7 +48,7 @@ export function MotionBorder({ children }: Props) {
       false
     );
     return () => cancelAnimation(spin);
-  }, [reduced, spin]);
+  }, [reduced, spin, active]);
 
   const rotate = useAnimatedStyle(() => ({
     transform: [{ rotate: `${spin.value * 360}deg` }],

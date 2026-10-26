@@ -1,23 +1,24 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withTiming, type SharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { FadeUp } from '@/components/fade-up';
-import { LimeRule } from '@/components/lime-rule';
 import {
   EventsPreview,
+  TournamentFollowPreview,
+  WorldPadelPreview,
   PartnerPreview,
   RankingPreview,
 } from '@/components/onboarding-previews';
 import { PressableScale } from '@/components/pressable-scale';
+import { ObserveReady } from '@/components/observe-ready';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
 import { markOnboardingSeen } from '@/lib/onboarding';
-import { brand, motion } from '@/theme/tokens';
+import { lightBrand as brand, motion } from '@/theme/tokens';
 
 type Slide = {
   eyebrow: string;
@@ -28,10 +29,22 @@ type Slide = {
 
 const SLIDES: Slide[] = [
   {
-    eyebrow: 'Find your next event',
-    title: 'South African padel,\nin one place.',
-    body: 'Browse sanctioned tournaments and leagues, then enter without leaving the app.',
+    eyebrow: 'Ready to compete',
+    title: 'Find your event.\nBring your game.',
+    body: 'Explore South African tournaments and leagues, choose your competition and secure your place.',
     preview: <EventsPreview />,
+  },
+  {
+    eyebrow: 'Your players. One community.',
+    title: 'Local heroes.\nGlobal stars.',
+    body: 'Follow local 4M players and international pros. Discover tournaments, rankings and results in one place.',
+    preview: <WorldPadelPreview />,
+  },
+  {
+    eyebrow: 'Never miss a moment',
+    title: 'Follow the action.\nStay in the know.',
+    body: 'Follow a tournament for live push alerts when registration opens, draws are published and match or event details change.',
+    preview: <TournamentFollowPreview />,
   },
   {
     eyebrow: 'Play together',
@@ -40,9 +53,9 @@ const SLIDES: Slide[] = [
     preview: <PartnerPreview />,
   },
   {
-    eyebrow: 'Your game',
-    title: 'Know exactly\nwhere you stand.',
-    body: 'Follow your national ranking and match history, updated after every result.',
+    eyebrow: 'Your padel journey',
+    title: 'Every match is part\nof your story.',
+    body: 'Keep your results, match history and national ranking together in one place.',
     preview: <RankingPreview />,
   },
 ];
@@ -53,20 +66,20 @@ export default function OnboardingScreen() {
   const reduced = useReducedMotion();
   const [index, setIndex] = useState(0);
   const indexRef = useRef(0);
+  const scrollRef = useRef<ScrollView>(null);
   indexRef.current = index;
 
-  const step = useCallback((dir: 1 | -1) => {
-    const next = indexRef.current + dir;
-    if (next < 0 || next >= SLIDES.length) return;
-    setIndex(next);
-    hapticLight();
-  }, []);
-
+  const direction = useSharedValue(1);
+  const leaving = useRef(false);
   const goTo = useCallback((next: number) => {
-    if (next === indexRef.current) return;
+    if (leaving.current || next < 0 || next >= SLIDES.length || next === indexRef.current) return;
+    direction.value = next > indexRef.current ? 1 : -1;
+    indexRef.current = next;
     setIndex(next);
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
     hapticLight();
-  }, []);
+  }, [direction]);
+  const step = useCallback((dir: 1 | -1) => goTo(indexRef.current + dir), [goTo]);
 
   const pan = useMemo(
     () =>
@@ -74,16 +87,19 @@ export default function OnboardingScreen() {
         .activeOffsetX([-24, 24])
         .failOffsetY([-20, 20])
         .onEnd((e) => {
-          if (e.translationX < -48) runOnJS(step)(1);
-          else if (e.translationX > 48) runOnJS(step)(-1);
+          if ((e.translationX < -48 || e.velocityX < -500)) runOnJS(step)(1);
+          else if ((e.translationX > 48 || e.velocityX > 500)) runOnJS(step)(-1);
         }),
     [step]
   );
 
   const leave = useCallback(
-    async (intent: 'signin' | 'signup') => {
+    (intent: 'signin' | 'signup') => {
+      if (leaving.current) return;
+      leaving.current = true;
       hapticMedium();
-      await markOnboardingSeen();
+      // Remember the introduction in the background. Storage must never block navigation.
+      void markOnboardingSeen();
       router.replace(
         intent === 'signup' ? '/(auth)/sign-in?intent=signup' : '/(auth)/sign-in'
       );
@@ -92,42 +108,42 @@ export default function OnboardingScreen() {
   );
 
   const advance = useCallback(() => {
-    if (index < SLIDES.length - 1) step(1);
+    if (indexRef.current < SLIDES.length - 1) step(1);
     else leave('signup');
-  }, [index, step, leave]);
+  }, [step, leave]);
 
   const isLast = index === SLIDES.length - 1;
   const slide = SLIDES[index];
 
   return (
     <GestureHandlerRootView
-      className="flex-1 bg-page"
+      className="flex-1 bg-court-page"
       style={{ flex: 1, backgroundColor: brand.page, paddingTop: insets.top }}>
-      <View className="h-14 flex-row items-center justify-between px-7">
-        <View className="items-start">
+      <ObserveReady />
+      <View className="h-20 flex-row items-center justify-between px-7">
+        <View className="items-start self-start py-2" style={{ flex: 1 }}>
           <Image
             source={require('@/assets/images/4m-logo.png')}
-            style={{ width: 62, height: 46 }}
+            style={{ width: 68, height: 51 }}
+            tintColor={brand.premium}
             contentFit="contain"
             accessibilityLabel="4M Padel"
           />
-          <LimeRule width={36} style={{ marginTop: 8 }} />
         </View>
-        {!isLast ? (
-          <Pressable
-            onPress={() => leave('signin')}
-            hitSlop={14}
-            accessibilityRole="button"
-            accessibilityLabel="Skip onboarding"
-            className="min-h-11 justify-center">
-            <Text className="text-[15px] font-semibold text-muted">Skip</Text>
-          </Pressable>
-        ) : null}
+        <Pressable
+          onPress={() => leave('signin')}
+          hitSlop={14}
+          accessibilityRole="button"
+          accessibilityLabel="Skip onboarding"
+          className="min-h-11 justify-center">
+          <Text className="text-[15px] font-semibold text-court-muted">Skip</Text>
+        </Pressable>
       </View>
 
       <GestureDetector gesture={pan}>
         <View
           className="flex-1"
+          style={{ overflow: 'hidden' }}
           accessibilityRole="adjustable"
           accessibilityLabel={`Onboarding, slide ${index + 1} of ${SLIDES.length}`}
           accessibilityValue={{ min: 1, max: SLIDES.length, now: index + 1 }}
@@ -139,27 +155,27 @@ export default function OnboardingScreen() {
             if (e.nativeEvent.actionName === 'increment') step(1);
             if (e.nativeEvent.actionName === 'decrement') step(-1);
           }}>
-          <View className="flex-1 justify-center px-7">
-            <FadeUp key={`preview-${index}`}>{slide.preview}</FadeUp>
-          </View>
-          <View className="px-7 pb-2">
-            <FadeUp key={`copy-${index}`} delay={80}>
-              <Text
-                className="mb-3 text-xs font-bold uppercase text-padel"
-                style={{ letterSpacing: 2 }}>
-                {slide.eyebrow}
-              </Text>
-              <Text
-                accessibilityRole="header"
-                className="mb-4 font-extrabold text-premium"
-                style={{ fontSize: 34, lineHeight: 39 }}>
-                {slide.title}
-              </Text>
-              <Text className="text-muted" style={{ fontSize: 17, lineHeight: 26, maxWidth: 320 }}>
-                {slide.body}
-              </Text>
-            </FadeUp>
-          </View>
+          <ScrollView
+            ref={scrollRef}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ flexGrow: 1 }}
+            showsVerticalScrollIndicator={false}
+            bounces={false}>
+            <View className="justify-center px-7" style={{ flexGrow: 1, paddingVertical: 16 }}>
+              <OnboardingMotion key={`preview-${index}`} direction={direction} reduced={reduced} illustration>{slide.preview}</OnboardingMotion>
+            </View>
+            <View className="px-7 pb-2" style={{ minHeight: 222 }}>
+              <OnboardingMotion key={`eyebrow-${index}`} direction={direction} reduced={reduced} delay={80}>
+                <Text className="mb-3 text-xs font-bold uppercase text-court-accent" style={{ letterSpacing: 2 }}>{slide.eyebrow}</Text>
+              </OnboardingMotion>
+              <OnboardingMotion key={`title-${index}`} direction={direction} reduced={reduced} delay={130}>
+                <Text accessibilityRole="header" className="mb-4 font-extrabold text-court-ink" style={{ fontSize: 34, lineHeight: 39 }}>{slide.title}</Text>
+              </OnboardingMotion>
+              <OnboardingMotion key={`body-${index}`} direction={direction} reduced={reduced} delay={180}>
+                <Text className="text-court-muted" style={{ fontSize: 17, lineHeight: 26, maxWidth: 340 }}>{slide.body}</Text>
+              </OnboardingMotion>
+            </View>
+          </ScrollView>
         </View>
       </GestureDetector>
 
@@ -186,7 +202,7 @@ export default function OnboardingScreen() {
           accessibilityRole="button"
           accessibilityLabel={isLast ? 'Build my player profile' : 'Next'}
           className="h-14 items-center justify-center rounded-2xl bg-padel">
-          <Text className="text-base font-bold text-page">
+          <Text className="text-base font-bold text-court-ink">
             {isLast ? 'Build my player profile' : 'Next'}
           </Text>
         </PressableScale>
@@ -198,9 +214,9 @@ export default function OnboardingScreen() {
             accessibilityRole="button"
             accessibilityLabel="Sign in"
             className="mt-4 min-h-11 items-center justify-center">
-            <Text className="text-[14px] text-muted">
+            <Text className="text-[14px] text-court-muted">
               Already have an account?{' '}
-              <Text className="font-semibold text-padel">Sign in</Text>
+              <Text className="font-semibold text-court-accent">Sign in</Text>
             </Text>
           </Pressable>
         ) : (
@@ -243,7 +259,36 @@ function Dot({
       accessibilityLabel={label}
       accessibilityState={{ selected: active }}
       className="justify-center py-2">
-      <Animated.View style={style} className="h-2 rounded-full bg-padel" />
+      <Animated.View style={[style, { height: 8, borderRadius: 4, backgroundColor: brand.accent }]} />
     </Pressable>
   );
+}
+
+/** Separate layers keep artwork and copy moving together without replacing the whole screen. */
+function OnboardingMotion({ children, direction, reduced, delay = 0, illustration = false }: {
+  children: ReactNode; direction: SharedValue<number>; reduced: boolean; delay?: number; illustration?: boolean;
+}) {
+  const { width } = useWindowDimensions();
+  const entering = useMemo(() => () => {
+    'worklet';
+    const distance = reduced ? 0 : width * (illustration ? 0.8 : 0.22) * direction.value;
+    return {
+      initialValues: { opacity: reduced ? 1 : 0, transform: [{ translateX: distance }] },
+      animations: {
+        opacity: withDelay(reduced ? 0 : delay, withTiming(1, { duration: reduced ? 0 : 300 })),
+        transform: [{ translateX: withDelay(reduced ? 0 : delay, withTiming(0, { duration: reduced ? 0 : 460, easing: Easing.out(Easing.cubic) })) }],
+      },
+    };
+  }, [width, illustration, direction, reduced, delay]);
+  const exiting = useMemo(() => () => {
+    'worklet';
+    return {
+      initialValues: { opacity: 1, transform: [{ translateX: 0 }] },
+      animations: {
+        opacity: withTiming(0, { duration: reduced ? 0 : 160 }),
+        transform: [{ translateX: withTiming(reduced ? 0 : -direction.value * width * (illustration ? 0.45 : 0.12), { duration: reduced ? 0 : 240, easing: Easing.in(Easing.cubic) }) }],
+      },
+    };
+  }, [width, illustration, direction, reduced]);
+  return <Animated.View entering={entering} exiting={exiting}>{children}</Animated.View>;
 }

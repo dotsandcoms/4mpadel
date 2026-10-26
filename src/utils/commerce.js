@@ -6,9 +6,12 @@
 import { supabase } from '../supabaseClient';
 import { FEES } from '../constants/fees';
 
+export const defaultLicenseYear = () => Math.max(2027, Number(new Intl.DateTimeFormat('en', { year: 'numeric', timeZone: 'Africa/Johannesburg' }).format(new Date())));
+
 export const COMMERCE_DEFAULTS = {
-    full_license_enabled: true,
-    full_license_price: FEES.FULL_LICENSE,
+    full_license_enabled: false,
+    full_license_price: 650,
+    renewal_license_price: 500,
     temp_license_enabled: true,
     temp_license_price: FEES.TEMPORARY_LICENSE,
     license_fee_percent: 0,
@@ -42,11 +45,13 @@ export function normalizeCommerce(row) {
     return {
         full_license_enabled: toBoolean(src.full_license_enabled, COMMERCE_DEFAULTS.full_license_enabled),
         full_license_price: Math.max(0, toNumber(src.full_license_price, COMMERCE_DEFAULTS.full_license_price)),
+        renewal_license_price: Math.max(0, toNumber(src.renewal_license_price, 500)),
         temp_license_enabled: toBoolean(src.temp_license_enabled, COMMERCE_DEFAULTS.temp_license_enabled),
         temp_license_price: Math.max(0, toNumber(src.temp_license_price, COMMERCE_DEFAULTS.temp_license_price)),
         license_fee_percent: Math.min(100, Math.max(0, toNumber(src.license_fee_percent, COMMERCE_DEFAULTS.license_fee_percent))),
         event_fee_percent: Math.min(100, Math.max(0, toNumber(src.event_fee_percent, COMMERCE_DEFAULTS.event_fee_percent))),
         fee_label: feeLabel || COMMERCE_DEFAULTS.fee_label,
+        license_year: Number(src.license_year || 2027),
         updated_at: src.updated_at || null,
         updated_by: src.updated_by || null,
     };
@@ -156,23 +161,30 @@ export function commerceSnapshot(config) {
     return {
         full_license_enabled: commerce.full_license_enabled,
         full_license_price: commerce.full_license_price,
+        renewal_license_price: commerce.renewal_license_price,
         temp_license_enabled: commerce.temp_license_enabled,
         temp_license_price: commerce.temp_license_price,
         license_fee_percent: commerce.license_fee_percent,
         event_fee_percent: commerce.event_fee_percent,
         fee_label: commerce.fee_label,
+        license_year: commerce.license_year,
         captured_at: new Date().toISOString(),
     };
 }
 
-export async function fetchCommerceConfig(client = supabase) {
+export async function fetchCommerceConfig(client = supabase, licenseYear = defaultLicenseYear()) {
     const { data, error } = await client
         .from('commerce_config')
         .select('*')
         .eq('id', 'default')
         .maybeSingle();
     if (error) throw error;
-    return normalizeCommerce(data);
+    const { data: years, error: seasonError } = await client.from('license_seasons').select('*').is('archived_at', null).order('year');
+    if (seasonError) throw seasonError;
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg' }).format(new Date());
+    const season = (years || []).find(s => s.year >= licenseYear && s.sales_open && String(s.coverage_starts_on).slice(0, 4) <= String(licenseYear))
+        || (years || []).find(s => s.year === licenseYear);
+    return normalizeCommerce({ ...data, license_year: season?.year || licenseYear, full_license_enabled: season?.sales_open === true && season.year >= Number(today.slice(0, 4)), full_license_price: season?.price ?? 650, renewal_license_price: season?.renewal_price ?? 500 });
 }
 
 /**
@@ -183,7 +195,7 @@ export function knownLicenseTotals(config) {
     const full = licenseQuote('full', config).total;
     const temp = licenseQuote('temporary', config).total;
     return {
-        full: Array.from(new Set([full, FEES.FULL_LICENSE].map(roundMoney))),
+        full: Array.from(new Set([full, applyPercentFee(normalizeCommerce(config).renewal_license_price, normalizeCommerce(config).license_fee_percent).total, FEES.FULL_LICENSE].map(roundMoney))),
         temp: Array.from(new Set([temp, FEES.TEMPORARY_LICENSE].map(roundMoney))),
     };
 }

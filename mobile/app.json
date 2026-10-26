@@ -1,19 +1,27 @@
 {
   "expo": {
-    "name": "4M Padel",
+    "name": "FourM Padel",
     "slug": "4m-padel",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "fourmpadel",
-    "userInterfaceStyle": "dark",
-    "backgroundColor": "#0a0a0a",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F5F6F3",
     "primaryColor": "#CCFF00",
     "ios": {
       "bundleIdentifier": "com.fourmpadel.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "appleTeamId": "52RX6X5X2T",
       "supportsTablet": false,
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.fourmpadel.app.schedule"
+        ]
+      },
       "infoPlist": {
-        "UIStatusBarStyle": "UIStatusBarStyleLightContent",
+        "CFBundleDisplayName": "4M Padel",
+        "UIStatusBarStyle": "UIStatusBarStyleDefault",
         "NSFaceIDUsageDescription": "Use Face ID to sign in to 4M Padel without entering your password.",
         "UIBackgroundModes": [
           "remote-notification"
@@ -23,16 +31,28 @@
             "CFBundleURLSchemes": [
               "com.googleusercontent.apps.777893152228-fgqp4i3hj3qqe3qlcssstn8t5pfkv9hq"
             ]
+          },
+          {
+            "CFBundleURLSchemes": [
+              "fourmpadel",
+              "com.fourmpadel.app"
+            ]
           }
-        ]
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "com.fourmpadel.app",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "POST_NOTIFICATIONS",
         "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
+        "VIBRATE",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#0a0a0a",
@@ -40,14 +60,37 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": true,
-      "edgeToEdgeEnabled": true
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "com.google.android.gms.permission.AD_ID"
+      ]
     },
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/with-display-name",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true,
+            "useFrameworks": "dynamic"
+          }
+        }
+      ],
       "expo-router",
+      "@react-native-firebase/app",
+      [
+        "@react-native-firebase/analytics",
+        {
+          "ios": {
+            "withoutAdIdSupport": true,
+            "googleAppMeasurementOnDeviceConversion": false
+          }
+        }
+      ],
       "expo-secure-store",
       "expo-apple-authentication",
       [
@@ -67,14 +110,79 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0a0a0a"
+          "backgroundColor": "#F5F6F3",
+          "image": "./assets/images/icon.png"
         }
       ],
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      "@bacons/apple-targets",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow 4M Padel to add tournaments to your calendar.",
+          "writeOnlyAccess": true,
+          "writeOnlyCalendarPermission": "Allow 4M Padel to add tournaments to your calendar."
+        }
+      ],
+      "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow 4M Padel to choose photos for your profile picture and player gallery.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "@config-plugins/react-native-blob-util",
+      "@config-plugins/react-native-pdf",
+      "expo-maps",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "bundleIdentifier": "com.fourmpadel.app.nextup",
+                  "targetName": "FourMWidget",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.fourmpadel.app.schedule"
+                    ]
+                  }
+                },
+                {
+                  "bundleIdentifier": "com.fourmpadel.app.watchkitapp.nextup",
+                  "targetName": "FourMWatchWidget",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.fourmpadel.app.schedule"
+                    ]
+                  }
+                },
+                {
+                  "bundleIdentifier": "com.fourmpadel.app.watchkitapp",
+                  "targetName": "FourMWatch",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.fourmpadel.app.schedule"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "projectId": "3ed962c3-654a-4a9c-8586-3ee01cd6cb10"
+      }
+    },
+    "owner": "fourm-padel"
   }
 }

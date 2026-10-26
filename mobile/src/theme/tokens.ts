@@ -77,3 +77,21 @@ export function padelGlow(offsetY: number, blur: number, alpha: number): string 
   if (a <= 0) return 'none';
   return `0px ${offsetY}px ${blur}px rgba(204, 255, 0, ${a})`;
 }
+
+/** V2 application surfaces. V1 tokens above remain dedicated to onboarding/auth. */
+export const lightBrand = {
+  ...brand,
+  page: '#F5F6F3',
+  elevated: '#FFFFFF',
+  surface: '#EDF0EB',
+  panel: '#E5EAE2',
+  premium: '#16251F',
+  muted: '#52625A',
+  faint: '#65726B',
+  label: '#34473D',
+  placeholder: '#65726B',
+  danger: '#B7352D',
+  edge: '#DCE2DA',
+  glass: '#EAF0E5',
+  accent: '#386018',
+} as const;

@@ -7,14 +7,15 @@ import { motion } from '@/theme/tokens';
 type Props = {
   children: ReactNode;
   delay?: number;
+  from?: 'top' | 'bottom';
   className?: string;
 };
 
 /**
- * Cross-fade plus a short rise. Used for staged reveals (onboarding cards and
+ * Cross-fade plus a short vertical entrance (from below by default). Used for staged reveals (onboarding cards and
  * copy). Reduce Motion keeps the fade and drops the travel.
  */
-export function FadeUp({ children, delay = 0, className }: Props) {
+export function FadeUp({ children, delay = 0, from = 'bottom', className }: Props) {
   const reduced = useReducedMotion();
   const duration = motion.duration.enter;
   const entering = useMemo(
@@ -30,7 +31,7 @@ export function FadeUp({ children, delay = 0, className }: Props) {
         };
       }
       return {
-        initialValues: { opacity: 0, transform: [{ translateY: 12 }] },
+        initialValues: { opacity: 0, transform: [{ translateY: from === 'top' ? -12 : 12 }] },
         animations: {
           opacity: withDelay(delay, withTiming(1, { duration, easing })),
           transform: [
@@ -39,7 +40,7 @@ export function FadeUp({ children, delay = 0, className }: Props) {
         },
       };
     },
-    [delay, duration, reduced]
+    [delay, duration, from, reduced]
   );
 
   return (

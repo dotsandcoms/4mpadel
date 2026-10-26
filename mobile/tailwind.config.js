@@ -8,6 +8,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        court: { page: '#F5F6F3', elevated: '#FFFFFF', surface: '#EDF0EB', panel: '#E5EAE2', ink: '#16251F', muted: '#52625A', faint: '#65726B', edge: '#DCE2DA', accent: '#386018', danger: '#B7352D', glass: '#EAF0E5' },
         // Electric lime — the single brand accent. Use sparingly.
         padel: '#CCFF00',
         // Near-black surface ramp, darkest to lightest.

@@ -1,3 +1,4 @@
+import { useAnalyticsSearch } from '@/hooks/use-analytics-search';
 import { SymbolView } from 'expo-symbols';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -12,7 +13,7 @@ import {
   type CalendarEvent,
 } from '@/lib/home';
 import { openSitePath } from '@/lib/site';
-import { brand } from '@/theme/tokens';
+import { lightBrand as brand } from '@/theme/tokens';
 
 export default function SearchSheet() {
   const router = useRouter();
@@ -31,6 +32,8 @@ export default function SearchSheet() {
 
   const results = useMemo(() => filterSearchEvents(events, query), [events, query]);
 
+  useAnalyticsSearch(query, results.length, 'events');
+
   async function openEvent(event: CalendarEvent) {
     if (router.canDismiss()) router.dismiss();
     else router.back();
@@ -40,7 +43,7 @@ export default function SearchSheet() {
   return (
     <>
       <SheetHeader title="Search events">
-        <View className="mx-5 mt-1 flex-row items-center rounded-[14px] border border-edge bg-elevated px-3.5">
+        <View className="mx-5 mt-1 flex-row items-center rounded-[14px] border border-court-edge bg-court-elevated px-3.5">
           <SymbolView name="magnifyingglass" size={16} tintColor={brand.placeholder} />
           <TextInput
             value={query}
@@ -51,19 +54,19 @@ export default function SearchSheet() {
             autoCorrect={false}
             autoCapitalize="none"
             returnKeyType="search"
-            className="ml-2 h-[48px] flex-1 text-[16px] text-premium"
+            className="ml-2 h-[48px] flex-1 text-[16px] text-court-ink"
             accessibilityLabel="Search events"
           />
         </View>
       </SheetHeader>
 
       <ScrollView
-        className="flex-1 bg-page"
+        className="flex-1 bg-court-page"
         keyboardShouldPersistTaps="handled"
         automaticallyAdjustKeyboardInsets
         contentContainerStyle={{ paddingTop: 8, paddingBottom: 28 }}>
         {query.trim() && results.length === 0 ? (
-          <Text className="px-5 pt-6 text-[14px] leading-5 text-muted">
+          <Text className="px-5 pt-6 text-[14px] leading-5 text-court-muted">
             No events match “{query.trim()}”. Try a city or tournament name.
           </Text>
         ) : (

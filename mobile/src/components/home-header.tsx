@@ -15,8 +15,9 @@ import Animated, {
 
 import { MenuButton } from '@/components/app-drawer';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
+import { useScreenActive } from '@/hooks/use-screen-active';
 import { hapticLight } from '@/lib/haptics';
-import { brand } from '@/theme/tokens';
+import { lightBrand as brand } from '@/theme/tokens';
 
 type Props = {
   onSearch: () => void;
@@ -36,12 +37,13 @@ export function HomeHeader({ onSearch, onNotifications, noticeCount = 0 }: Props
 
   return (
     <View
-      className="flex-row items-center justify-between bg-page px-4"
+      className="flex-row items-center justify-between bg-court-page px-4"
       style={{ height: 52, zIndex: 30, elevation: 30 }}>
       <View className="flex-row items-center">
         <Image
           source={require('@/assets/images/4m-logo.png')}
           style={{ width: 48, height: 36 }}
+          tintColor={brand.premium}
           contentFit="contain"
           accessibilityLabel="4M Padel"
         />
@@ -75,11 +77,12 @@ export function NotificationBell({
   ringing: boolean;
 }) {
   const reduced = useReducedMotion();
+  const active = useScreenActive();
   const rotate = useSharedValue(0);
   const ping = useSharedValue(0);
 
   useEffect(() => {
-    if (!ringing || reduced) {
+    if (!ringing || reduced || !active) {
       cancelAnimation(rotate);
       cancelAnimation(ping);
       rotate.value = 0;
@@ -113,7 +116,7 @@ export function NotificationBell({
       cancelAnimation(rotate);
       cancelAnimation(ping);
     };
-  }, [ping, reduced, ringing, rotate]);
+  }, [ping, reduced, ringing, rotate, active]);
 
   const bellStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotate.value}deg` }],
@@ -134,7 +137,7 @@ export function NotificationBell({
       hitSlop={8}
       className="h-11 w-11 items-center justify-center">
       <Animated.View style={bellStyle} collapsable={false}>
-        <SymbolView name="bell" size={20} tintColor={brand.premium} />
+        <SymbolView name={{ ios: 'bell', android: 'notifications', web: 'notifications' }} size={20} tintColor={brand.premium} />
       </Animated.View>
       {ringing ? (
         <>
@@ -194,7 +197,7 @@ function HeaderIcon({
       accessibilityLabel={label}
       hitSlop={8}
       className="h-11 w-11 items-center justify-center">
-      <SymbolView name={name} size={20} tintColor={brand.premium} />
+      <SymbolView name={{ ios: name, android: 'search', web: 'search' }} size={20} tintColor={brand.premium} />
     </Pressable>
   );
 }

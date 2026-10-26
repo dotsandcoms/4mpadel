@@ -53,3 +53,16 @@ mobile/dist/
 .env*.local
 organisations-dev/
 scripts/reports/
+
+# Local work products and Supabase CLI state
+/.tmp/
+/outputs/
+/supabase/.temp/
+/mobile/supabase/.temp/
+/4M_Padel_Admin_UI_Concept.pptx
+/4M_Padel_Admin_UI_Concept.pptx.inspect.ndjson
+
+# Keep environment variants local while retaining placeholder templates.
+.env.*
+!.env.example
+!.env.*.example

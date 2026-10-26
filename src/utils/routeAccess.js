@@ -1,4 +1,4 @@
-const PUBLIC_EXACT = ['/reset-password', '/contact', '/rankings'];
+const PUBLIC_EXACT = ['/reset-password', '/contact', '/rankings', '/privacy-policy'];
 
 /** Match the same optional trailing slash and casing as React Router. */
 export function isPrivacyPolicyRoute(pathname) {

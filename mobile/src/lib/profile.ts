@@ -1,12 +1,14 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { queueWelcomeEmail } from '@/lib/welcome-email';
+import { parseSponsors } from '@/lib/sponsors';
+import { courtSideLabel, playingHandLabel } from '@/lib/player-preferences';
+import { clearDraftText, loadDraftText, saveDraftText } from './profile-draft-storage';
 import type { Session, User } from '@supabase/supabase-js';
 
 import { fetchPlayerMatches, isMatchWinner, type PlayerMatch } from './matches';
 import { collectSignupDevice, resolveSignupSource } from './signup-source';
 import { supabase } from './supabase';
-import { brand } from '@/theme/tokens';
+import { brand, lightBrand } from '@/theme/tokens';
 
-const DRAFT_KEY = 'player_profile_draft_v1';
 
 export type PlayerDraft = {
   firstName: string;
@@ -20,6 +22,8 @@ export type PlayerDraft = {
   category: string;
   clubId: string;
   customClub: string;
+  courtSide?: string;
+  playingHand?: string;
   bio: string;
   instagramLink: string;
   sponsors: string;
@@ -29,16 +33,20 @@ export type PlayerDraft = {
 
 export type ClubRow = { id: string; name: string };
 
-/** True when this account already has a usable player row on 4M Padel. */
+/** Existing players can sign in even when optional profile details are missing. */
 export async function hasPlayerProfile(email: string | undefined): Promise<boolean> {
-  if (!email) return false;
+  const address = email?.trim();
+  if (!address) return false;
+  // Keep case-insensitive matching without treating '_' or '%' as wildcards.
+  const literalEmail = address.replace(/[\\%_]/g, '\\$&');
   const { data, error } = await supabase
     .from('players')
-    .select('id, name, contact_number, gender, region')
-    .ilike('email', email.trim())
+    .select('id')
+    .ilike('email', literalEmail)
     .maybeSingle();
-  if (error || !data) return false;
-  return Boolean(data.name && data.contact_number && data.gender && data.region);
+  // A failed lookup must not be mistaken for a new account and reopen signup.
+  if (error) throw new Error('Unable to load your player profile. Please try again.');
+  return data !== null;
 }
 
 export async function fetchClubs(): Promise<ClubRow[]> {
@@ -72,6 +80,8 @@ export function nameFromUser(user: User | null): { firstName: string; lastName: 
 }
 
 export async function createPlayerProfile(draft: PlayerDraft, clubs: ClubRow[]) {
+  if (draft.courtSide && !courtSideLabel(draft.courtSide)) throw new Error('Select a valid court side.');
+  if (draft.playingHand && !playingHandLabel(draft.playingHand)) throw new Error('Select a valid playing hand.');
   const homeClub =
     draft.clubId === 'Other'
       ? draft.customClub.trim()
@@ -82,15 +92,15 @@ export async function createPlayerProfile(draft: PlayerDraft, clubs: ClubRow[]) 
   const payload = {
     p_email: draft.email.trim().toLowerCase(),
     p_name: `${draft.firstName} ${draft.lastName}`.replace(/\s+/g, ' ').trim(),
-    p_contact: draft.contactNumber.trim(),
+    p_contact: draft.contactNumber.trim() || null,
     p_category: draft.category || 'Unranked',
-    p_gender: draft.gender,
-    p_nationality: draft.nationality.trim(),
-    p_id_number: draft.idNumber.trim(),
+    p_gender: draft.gender.trim() || null,
+    p_nationality: draft.nationality.trim() || null,
+    p_id_number: draft.idNumber.trim() || null,
     p_bio: draft.bio.trim(),
     p_home_club: homeClub,
     p_sponsors: draft.sponsors.trim() || null,
-    p_region: draft.region,
+    p_region: draft.region.trim() || null,
     p_instagram_link: draft.instagramLink.trim() || null,
     p_paid_registration: false,
     p_license_type: 'none',
@@ -106,6 +116,25 @@ export async function createPlayerProfile(draft: PlayerDraft, clubs: ClubRow[]) 
     if (retry.error) throw first.error;
   }
 
+  // The existing profile-creation RPC does not accept playing preferences.
+  // Save selected values through the same player permissions used by Edit profile.
+  if (draft.courtSide || draft.playingHand) {
+    const preferences = {
+      ...(draft.courtSide ? { court_side: draft.courtSide } : {}),
+      ...(draft.playingHand ? { playing_hand: draft.playingHand } : {}),
+    };
+    const { data, error } = await supabase.from('players').update(preferences)
+      .eq('email', payload.p_email).select('id').maybeSingle();
+    if (error || !data) throw new Error('Your playing preferences could not be saved. Please try again.');
+  }
+
+  // Profile creation has succeeded; email must never turn this into a failed signup.
+  try {
+    await queueWelcomeEmail();
+  } catch {
+    console.warn('[profile] Unable to persist welcome-email retry');
+  }
+
   const { data: sessionData } = await supabase.auth.getUser();
   const source = resolveSignupSource(sessionData.user?.user_metadata?.signup_source);
   const device = collectSignupDevice();
@@ -118,18 +147,14 @@ export async function createPlayerProfile(draft: PlayerDraft, clubs: ClubRow[]) 
   }
 }
 
-function draftKey(email?: string) {
-  return `${DRAFT_KEY}:${(email ?? '').trim().toLowerCase()}`;
-}
-
 export async function saveProfileDraft(draft: Partial<PlayerDraft> & { accepted?: boolean }) {
-  await AsyncStorage.setItem(draftKey(draft.email), JSON.stringify(draft));
+  await saveDraftText(draft.email, JSON.stringify(draft));
 }
 
 export async function loadProfileDraft(
   email?: string
 ): Promise<(Partial<PlayerDraft> & { accepted?: boolean }) | null> {
-  const raw = await AsyncStorage.getItem(draftKey(email));
+  const raw = await loadDraftText(email);
   if (!raw) return null;
   try {
     return JSON.parse(raw) as Partial<PlayerDraft> & { accepted?: boolean };
@@ -139,7 +164,7 @@ export async function loadProfileDraft(
 }
 
 export async function clearProfileDraft(email?: string) {
-  await AsyncStorage.removeItem(draftKey(email));
+  await clearDraftText(email);
 }
 
 /** True when a draft has more than an email — enough to restore on return. */
@@ -156,6 +181,8 @@ export function draftHasProgress(draft: Partial<PlayerDraft> | null | undefined)
     draft.category,
     draft.clubId,
     draft.customClub,
+    draft.courtSide,
+    draft.playingHand,
     draft.bio,
     draft.racketBrand,
   ].some((value) => typeof value === 'string' && value.trim().length > 0);
@@ -202,6 +229,8 @@ export type PlayerRow = {
   instagram_link: string | null;
   region: string | null;
   racket_brand: string | null;
+  court_side: string | null;
+  playing_hand: string | null;
   image_url: string | null;
   license_type: string | null;
   paid_registration: boolean | null;
@@ -252,14 +281,16 @@ export type ProfileBundle = {
 };
 
 export type PlayerDetailsUpdate = {
-  contact_number: string;
-  region: string;
+  contact_number: string | null;
+  region: string | null;
   category: string;
   home_club: string;
   club_id: string | null;
   bio: string;
   instagram_link: string | null;
   racket_brand: string | null;
+  court_side: string | null;
+  playing_hand: string | null;
 };
 
 const EMPTY_STATS: ProfileStats = {
@@ -272,13 +303,15 @@ const EMPTY_STATS: ProfileStats = {
 };
 
 /** Load the signed-in player, RankedIn form, and any still-valid temp license. */
-export async function fetchProfileBundle(email?: string | null): Promise<ProfileBundle> {
+export async function fetchProfileBundle(email?: string | null, onPlayer?: (player: PlayerRow | null) => void): Promise<ProfileBundle> {
   const normalised = email?.trim().toLowerCase() ?? '';
   if (!normalised) {
+    onPlayer?.(null);
     return { player: null, stats: EMPTY_STATS, tempLicense: null };
   }
 
   const player = await fetchPlayerRow(normalised);
+  onPlayer?.(player);
   if (!player) {
     return { player: null, stats: EMPTY_STATS, tempLicense: null };
   }
@@ -292,8 +325,9 @@ export async function fetchProfileBundle(email?: string | null): Promise<Profile
 }
 
 export async function updatePlayerDetails(id: number, updates: PlayerDetailsUpdate) {
-  const { error } = await supabase.from('players').update(updates).eq('id', id);
+  const { data, error } = await supabase.from('players').update(updates).eq('id', id).select('id').maybeSingle();
   if (error) throw error;
+  if (!data) throw new Error('Unable to save your player profile. Please try again.');
 }
 
 export type LicenseBadge = {
@@ -308,10 +342,10 @@ export function licenseBadge(type?: string | null): LicenseBadge | null {
   const key = (type || '').toLowerCase();
   if (key === 'full') {
     return {
-      label: 'Full License Player',
-      color: brand.padel,
-      border: 'rgba(204,255,0,0.3)',
-      bg: 'rgba(204,255,0,0.1)',
+      label: 'SAPA Registered',
+      color: lightBrand.accent,
+      border: lightBrand.edge,
+      bg: lightBrand.glass,
       pulse: true,
     };
   }
@@ -371,19 +405,16 @@ async function fetchPlayerRow(email: string): Promise<PlayerRow | null> {
 
 async function fetchProfileStats(player: PlayerRow): Promise<ProfileStats> {
   const rankedinId = player.rankedin_id ? String(player.rankedin_id) : null;
-  const matches = rankedinId
-    ? await fetchPlayerMatches(rankedinId)
-    : { upcoming: [], past: [] };
+  const matches = await fetchPlayerMatches(rankedinId);
   const past = matches.past ?? [];
-  const upcoming = matches.upcoming ?? [];
-  const wins = past.filter((match) => isMatchWinner(match)).length;
-  const played = past.length;
+  const wins = matches.career?.wins ?? past.filter((match) => isMatchWinner(match)).length;
+  const played = matches.career?.played ?? past.length;
 
   return {
-    matchCount: upcoming.length + past.length,
+    matchCount: played,
     played,
     wins,
-    losses: Math.max(0, played - wins),
+    losses: matches.career?.losses ?? Math.max(0, played - wins),
     lastFive: lastFiveOf(player.match_form, past),
     winRatio: played > 0 ? Math.round((wins / played) * 1000) / 10 : 0,
   };
@@ -396,6 +427,7 @@ async function fetchTempLicense(playerId: number): Promise<TempLicense | null> {
     const { data, error } = await supabase
       .from('temporary_licenses')
       .select('event_name, event_date')
+      .is('revoked_at', null)
       .eq('player_id', playerId)
       .order('event_date', { ascending: false })
       .limit(8);
@@ -432,7 +464,7 @@ export function rankingsOf(player: PlayerRow | null): RankingRow[] {
   }
 }
 
-export function galleryOf(player: PlayerRow | null): string[] {
+export function galleryOf(player: Pick<PlayerRow, 'additional_images'> | null): string[] {
   if (!player?.additional_images) return [];
   if (Array.isArray(player.additional_images)) {
     return player.additional_images.filter((url) => typeof url === 'string');
@@ -446,14 +478,7 @@ export function galleryOf(player: PlayerRow | null): string[] {
 }
 
 export function sponsorsOf(player: PlayerRow | null): string[] {
-  if (!player?.sponsors) return [];
-  try {
-    const parsed = JSON.parse(player.sponsors) as unknown;
-    if (Array.isArray(parsed)) return parsed.filter((item) => typeof item === 'string');
-  } catch {
-    /* plain string */
-  }
-  return player.sponsors.trim() ? [player.sponsors] : [];
+  return parseSponsors(player?.sponsors ?? '');
 }
 
 export async function setPreferredRanking(playerId: number, ranking: RankingRow) {
@@ -472,11 +497,12 @@ export async function setPreferredRanking(playerId: number, ranking: RankingRow)
 }
 
 export async function updateGallery(playerId: number, urls: string[]) {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('players')
     .update({ additional_images: JSON.stringify(urls) })
-    .eq('id', playerId);
-  if (error) throw error;
+    .eq('id', playerId).select('id').maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('Unable to save your gallery. Please try again.');
 }
 
 function formatTransactionAmount(amount: number) {

@@ -37,6 +37,7 @@ const AdminManager = () => {
         { id: 'organisations', label: 'Organisations' },
         { id: 'clubs', label: 'Clubs' },
         { id: 'players', label: 'Players' },
+        { id: 'licenses', label: 'Licenses' },
         { id: 'coaches', label: 'Coaches' },
         { id: 'calendar', label: 'Calendar' },
         { id: 'event-mgmt', label: 'Event Management' },

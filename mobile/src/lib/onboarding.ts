@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { trackEvent } from './analytics';
 
 /**
  * Whether the user has seen onboarding.
@@ -26,6 +27,7 @@ export async function hasSeenOnboarding(): Promise<boolean> {
 export async function markOnboardingSeen(): Promise<void> {
   try {
     await AsyncStorage.setItem(KEY, 'true');
+    void trackEvent('tutorial_complete');
   } catch {
     // Non-fatal: worst case they see onboarding again next launch.
   }

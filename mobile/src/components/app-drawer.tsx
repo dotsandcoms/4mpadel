@@ -22,7 +22,7 @@ import Animated, {
 import { DrawerMenu } from '@/components/drawer-menu';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
-import { brand, motion } from '@/theme/tokens';
+import { lightBrand as brand, motion } from '@/theme/tokens';
 
 const SPRING = { damping: 28, stiffness: 260, mass: 0.85, overshootClamping: true as const };
 const SCREEN_W = Dimensions.get('window').width;
@@ -196,7 +196,7 @@ export function AppDrawer({ children }: { children: ReactNode }) {
                   right: 0,
                   bottom: 0,
                   left: 0,
-                  backgroundColor: '#000',
+                  backgroundColor: '#F5F6F3',
                   pointerEvents: open ? 'auto' : 'none',
                 },
                 dimStyle,

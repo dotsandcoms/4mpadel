@@ -1,0 +1,24 @@
+/* Respond to the workspace pane, including when the admin sidebar is open. */
+.draw-workflow-root { container: draw-workspace / inline-size; }
+.draw-workflow-layout { display: grid; gap: 2rem; min-width: 0; }
+.draw-workflow-main { container: draw-stage / inline-size; min-width: 0; }
+.draw-division-list { display: flex; gap: .5rem; overflow-x: auto; padding-bottom: .5rem; }
+.draw-division-button { min-width: 11rem; flex-shrink: 0; }
+.draw-stepper { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.draw-overview-labels, .draw-overview-check { display: none; }
+.draw-overview-row { display: grid; gap: .75rem; }
+.draw-overview-next { padding-left: 18px; }
+@container draw-workspace (min-width: 960px) {
+  .draw-workflow-layout { grid-template-columns: 200px minmax(0, 1fr); }
+  .draw-workflow-sidebar { position: sticky; top: 1rem; align-self: start; }
+  .draw-division-list { flex-direction: column; overflow: visible; }
+  .draw-division-button { min-width: 0; }
+}
+@container draw-stage (min-width: 700px) {
+  .draw-stepper { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@container draw-stage (min-width: 880px) {
+  .draw-overview-labels, .draw-overview-row { display: grid; grid-template-columns: minmax(150px, 1fr) repeat(4, minmax(70px, .6fr)) minmax(140px, 1fr); gap: .75rem; align-items: center; }
+  .draw-overview-check { display: flex; }
+  .draw-overview-next { padding-left: 0; }
+}

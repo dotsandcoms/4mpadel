@@ -266,8 +266,11 @@ const TournamentDraw = () => {
     // The native routes are an explicit choice, regardless of whether the
     // event also has an imported RankedIn draw. The legacy routes remain
     // available at /draws and /results.
+    if ((isNativePreview || isNativePublic) && !dbEvent) {
+        return <main className="pt-page"><div className="pt-shell"><div className="pt-loading" role="status">{lookupLoading ? <><Loader2 size={22} className="animate-spin" />Loading tournament…</> : <><p>This tournament could not be found.</p><Link to="/calendar">Back to events</Link></>}</div></div></main>;
+    }
     if (dbEvent && (isNativePreview || isNativePublic || (dbEvent.is_manual && !resolvedId))) {
-        return <NativeTournamentDraw event={dbEvent} preview={isNativePreview} />;
+        return <NativeTournamentDraw key={dbEvent.id} event={dbEvent} preview={isNativePreview} />;
     }
 
     return (

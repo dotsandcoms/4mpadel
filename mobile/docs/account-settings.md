@@ -1,0 +1,17 @@
+# Account and help
+
+Design target: the user's grouped account/settings reference, with existing 4M typography, page background and royal-blue controls. White rounded groups contain compact icon/title/detail rows. Profile completeness moves from the drawer into the account header; the Profile gear and drawer Account & settings row open `/settings`. Administrative access remains in the drawer.
+
+Settings links to profile editing, entries, payments, licence, notification and legal screens. The Profile route accepts `section=events` or `section=payments`. Password reset sends the existing recovery link after an explicit tap/confirmation. Account deletion opens `/delete-account`, explains permanent removal and retained payment/tournament records, and requires a destructive confirmation. The authenticated `delete-account` Edge Function verifies the caller's identity, removes owned profile photos through the Storage API and transactionally removes the Auth identity/profile while anonymizing shared records. Apple-linked accounts reauthenticate and revoke Apple authorization before deletion. Successful deletion clears the device draft, session, image caches and companion schedule.
+
+The selectable App version footer shows the installed native version and build number, for example `1.0.1 (8)`, using Expo Application. It stays visible without signing in or loading account data. Web previews fall back to the app-config version and omit the native build number. The footer reuses the settings screen's muted 12-point text and 24-point group spacing.
+
+Signed-in device registration uses the same Expo Application native version/build APIs for `player_devices.device.appVersion` and `device.build`. It runs on session restoration at startup and sign-in. Existing records refresh when the corrected app next records a device; historical null build numbers cannot be reconstructed from the stored app version. `node scripts/test-signup-device.cjs` verifies the iOS/Android RPC payloads and unavailable-metadata fallbacks.
+
+Edit profile includes an Add/Change photo control. It opens the native image library with a square crop and saves the profile photo immediately, independently of the details form. The Player Gallery + control opens the same system image library and appends one photo to the saved gallery, up to five photos. Cancellation leaves existing photos untouched. Both flows resize and convert phone images to JPEG, upload to the existing `profile-pics` player folder, and show progress and save errors. Adding the Expo image picker and image manipulator requires a new native build; an OTA update alone cannot add these modules.
+
+`/help` offers topic-specific guidance, then an optional enquiry. Entry and payment options load from the signed-in user's existing data. Users choose which reference to include. Enquiries open the user's email composer addressed to info@4mpadel.co.za (confirmed by the user). Name/account email, the selected reference and the user's message are visible before handoff. The app never reports that an email was sent; the user sends in their mail app. Missing mail apps show a fallback address and retain the message. No support backend/ticket dashboard is implied.
+
+The website Contact form currently simulates submission; this feature does not use it. No enquiries were sent during validation.
+
+Validation: `npm run check`, including support URL recipient/encoding tests. Interactive mail sending requires a configured email app.

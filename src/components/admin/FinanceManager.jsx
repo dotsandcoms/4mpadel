@@ -13,6 +13,7 @@ import EventFinance from './EventFinance';
 import { useAdminPermissions } from '../../hooks/useAdminPermissions';
 import { useCommerceConfig } from '../../hooks/useCommerceConfig';
 import { licenseQuote, matchLicenseTypeByAmount } from '../../utils/commerce';
+import { classifyPaystackTransaction, paystackMetadata } from '../../utils/paystackClassification';
 
 const FinanceManager = () => {
     const { config: commerce } = useCommerceConfig();
@@ -229,19 +230,14 @@ const FinanceManager = () => {
             const isEventReg = reference.startsWith('REGEV-')
                 || (reference.startsWith('MANUAL-') && !reference.startsWith('MANUAL-ADMIN-'));
             
-            // Fallback Metadata Recovery: If Paystack API didn't return metadata, try to find an existing local record
-            let localMetadata = null;
-            if (!trx.metadata) {
-                const { data: existingPayment } = await supabase
-                    .from('payments')
-                    .select('metadata')
-                    .eq('reference', reference)
-                    .maybeSingle();
-                
-                if (existingPayment?.metadata) {
-                    localMetadata = existingPayment.metadata;
-                }
-            }
+            // Preserve reviewed classifications when a transaction is synced again.
+            const { data: existingPayment, error: existingPaymentError } = await supabase
+                .from('payments')
+                .select('metadata, payment_type, event_id')
+                .eq('reference', reference)
+                .maybeSingle();
+            if (existingPaymentError) throw existingPaymentError;
+            const localMetadata = paystackMetadata(existingPayment?.metadata);
 
             let enrichedEventId = trx.metadata?.event_id || localMetadata?.event_id || null;
             let enrichedEventName = trx.metadata?.event_name || localMetadata?.event_name || null;
@@ -259,11 +255,12 @@ const FinanceManager = () => {
 
             const fullLicenseTotal = licenseQuote('full', commerce).total;
             const tempLicenseTotal = licenseQuote('temporary', commerce).total;
-            const matchedStandalone = isEventReg ? null : matchLicenseTypeByAmount(amount, commerce);
-            let licenseType = isEventReg
-                ? null
-                : (matchedStandalone || (amount > fullLicenseTotal ? 'full' : 'temporary'));
-            let paymentType = isEventReg ? 'event_entry_fee' : (licenseType === 'full' ? 'membership' : 'temp_license');
+            let { licenseType, paymentType } = classifyPaystackTransaction({
+                reference,
+                metadata: { ...localMetadata, ...paystackMetadata(trx.metadata) },
+                matchedLicenseType: matchLicenseTypeByAmount(amount, commerce),
+                previousPayment: existingPayment,
+            });
             let licensePortion = 0;
 
             const { data: player, error: fetchError } = await supabase
@@ -624,76 +621,7 @@ const FinanceManager = () => {
                 }
             }
 
-            // 4. Handle Temporary License Lookup fallback (if still no event_id)
-            if (licenseType === 'temporary' && !enrichedEventId) {
-                const { data: tempLic } = await supabase
-                    .from('temporary_licenses')
-                    .select('event_id, event_name')
-                    .eq('player_id', player.id)
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
-                
-                if (tempLic) {
-                    enrichedEventId = tempLic.event_id;
-                    enrichedEventName = tempLic.event_name;
-                }
-            }
-
-            // 5. Update Player Table (Now using correctly calculated licenseType)
-            // Only update if we have a valid licenseType to apply (e.g. they actually bought a license or standalone)
-            // We now allow updating even if they are 'full' to correct potential misidentifications during syncs.
-            if (licenseType && (!player.paid_registration || player.license_type !== licenseType)) {
-                const { error: updateError } = await supabase
-                    .from('players')
-                    .update({
-                        paid_registration: true,
-                        license_type: licenseType,
-                        approved: true
-                    })
-                    .eq('id', player.id);
-
-                if (updateError) throw updateError;
-            }
-
-            // 5b. Covers-driven side effects — mirrors what the live checkout flow
-            // (confirm-manual-payment / webhook) would have done, so a sync fully
-            // repairs a missed transaction instead of only writing a ledger row.
-            for (const c of licenseCovers) {
-                const covEmail = String(c.email).toLowerCase();
-                const isFull = c.license === 'full';
-                const { data: covPlayer } = await supabase
-                    .from('players')
-                    .select('id, license_type, paid_registration')
-                    .ilike('email', covEmail)
-                    .maybeSingle();
-                if (!covPlayer) {
-                    console.warn(`[Sync] License cover for unknown player ${covEmail} — skipped`);
-                    continue;
-                }
-                if (covPlayer.license_type !== (isFull ? 'full' : 'temporary') || !covPlayer.paid_registration) {
-                    await supabase
-                        .from('players')
-                        .update({ license_type: isFull ? 'full' : 'temporary', paid_registration: true, approved: true })
-                        .eq('id', covPlayer.id);
-                }
-                if (!isFull && enrichedEventId) {
-                    const { data: existingCovLic } = await supabase
-                        .from('temporary_licenses')
-                        .select('id')
-                        .eq('player_id', covPlayer.id)
-                        .eq('event_id', enrichedEventId)
-                        .maybeSingle();
-                    if (!existingCovLic) {
-                        await supabase.from('temporary_licenses').insert({
-                            player_id: covPlayer.id,
-                            event_id: enrichedEventId,
-                            event_name: enrichedEventName || 'Calendar Event',
-                            event_date: enrichedEventDate || new Date().toISOString(),
-                        });
-                    }
-                }
-            }
+            // License issuance is owned by verified server payment finalization.
 
             if (enrichedEventId) {
                 for (const c of entryCovers) {
@@ -732,6 +660,7 @@ const FinanceManager = () => {
                 event_id: enrichedEventId,
                 event_name: enrichedEventName,
                 registrant_email: email,
+                ...(localMetadata.payment_classification ? { payment_classification: localMetadata.payment_classification } : {}),
                 ...(coversMeta.length > 0 ? {
                     covers: coversMeta,
                     division_entry_fees: siblingMeta?.division_entry_fees
@@ -799,35 +728,6 @@ const FinanceManager = () => {
                     .neq('payment_status', 'paid');
             }
 
-            // CRITICAL: Ensure temporary license record exists to prevent scavenger cleanup
-            if (licenseType === 'temporary' && enrichedEventId) {
-                // 1. Check for existing license
-                const { data: existingLic } = await supabase
-                    .from('temporary_licenses')
-                    .select('id')
-                    .eq('player_id', player.id)
-                    .eq('event_id', enrichedEventId)
-                    .maybeSingle();
-
-                const licensePayload = {
-                    player_id: player.id,
-                    event_id: enrichedEventId,
-                    event_name: enrichedEventName || 'Calendar Event',
-                    event_date: enrichedEventDate || new Date().toISOString()
-                };
-
-                if (existingLic) {
-                    await supabase
-                        .from('temporary_licenses')
-                        .update(licensePayload)
-                        .eq('id', existingLic.id);
-                } else {
-                    await supabase
-                        .from('temporary_licenses')
-                        .insert([licensePayload]);
-                }
-            }
-
             await fetchTransactions();
         } catch (err) {
             console.error("Sync error:", err);
@@ -875,9 +775,14 @@ const FinanceManager = () => {
         // Pending bucket = anything not settled success (pending / failed / abandoned / etc.)
         if (statusFilter === 'pending' && isSuccess) return false;
 
-        const matchesLicense = filter === 'all' || 
-            (filter === 'full' && parseFloat(trx.amount.replace('R ', '').replace(',', '')) >= licenseQuote('full', commerce).total) ||
-            (filter === 'temp' && [120, licenseQuote('temporary', commerce).total].includes(parseFloat(trx.amount.replace('R ', '').replace(',', ''))));
+        const classification = classifyPaystackTransaction({
+            reference: trx.id || '',
+            metadata: trx.metadata,
+            matchedLicenseType: matchLicenseTypeByAmount(parseFloat(trx.amount.replace('R ', '').replace(',', '')), commerce),
+        });
+        const matchesLicense = filter === 'all'
+            || (filter === 'full' && classification.licenseType === 'full')
+            || (filter === 'temp' && classification.licenseType === 'temporary');
 
         if (filter === 'reconcile') {
             if (trx.status !== 'Success') return false;

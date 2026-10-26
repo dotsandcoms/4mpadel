@@ -1,3 +1,5 @@
+import LicensePaymentModal from '../components/LicensePaymentModal';
+import { eventLicense } from '../utils/licenses';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useParams, useLocation, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -50,6 +52,7 @@ import {
 } from '../utils/weeklyRegistration';
 import TournamentProgressBar from '../components/TournamentProgressBar';
 import VideoModal from '../components/VideoModal';
+import EventMediaGallery from '../components/EventMediaGallery';
 import { divisionRankingSource, resolvePlayerRanking } from '../utils/playerRankingSelection';
 import { addPublicPlayerPaymentStatuses, publicPlayerPaymentLabel } from '../utils/publicPlayerPayment';
 
@@ -638,7 +641,6 @@ const ModuleAccordion = ({ title, icon: Icon, children, defaultOpen = false, cla
 };
 
 const EventDetails = () => {
-    const { config: commerce } = useCommerceConfig();
     const getPlaylistEmbedUrl = (url) => {
         if (!url) return null;
         const match = url.match(/[&?]list=([^&]+)/);
@@ -656,13 +658,19 @@ const EventDetails = () => {
     const { slug } = useParams(); // changed from id to slug
     const navigate = useNavigate();
     const location = useLocation();
+    const [licensePurchase, setLicensePurchase] = useState(() => new URLSearchParams(window.location.search).has('license_payment') ? {} : null);
     const [event, setEvent] = useState(null);
+    const { config: commerce } = useCommerceConfig(Number(String(event?.start_date || '').slice(0, 4)) || 2026);
     const isCancelled = event?.event_status === 'cancelled';
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setSubmitting] = useState(false);
     const [weather, setWeather] = useState(null);
     const [albumPhotos, setAlbumPhotos] = useState([]);
     const [albumInfo, setAlbumInfo] = useState(null);
+    const [loadingAlbum, setLoadingAlbum] = useState(true);
+    const eventGalleryImages = useMemo(() => Array.isArray(event?.media_gallery_urls)
+        ? [...new Set(event.media_gallery_urls.filter((url) => typeof url === 'string' && url.trim()).map((url) => url.trim()))]
+        : [], [event?.media_gallery_urls]);
 
     // Animation Variants
     const containerVariants = {
@@ -1698,6 +1706,7 @@ const EventDetails = () => {
                 .select('id, name, contact_number, email, license_type, paid_registration, image_url, points, approved, temporary_licenses(event_id, event_date)')
                 .ilike('email', manualUserEmail)
                 .maybeSingle();
+            if (data) { const lic = await eventLicense(data.id, event.id); data.paid_registration = lic.active; data.license_type = lic.full ? 'full' : lic.active ? 'temporary' : 'none'; }
             if (active) setLoggedInPlayer(data || null);
         })();
         return () => { active = false; };
@@ -1715,11 +1724,12 @@ const EventDetails = () => {
 
             const { data: playerData } = await supabase
                 .from('players')
-                .select('name, email, contact_number, category, license_type, paid_registration')
+                .select('id, name, email, contact_number, category, license_type, paid_registration')
                 .ilike('email', targetEmail)
                 .maybeSingle();
 
             if (playerData) {
+                const lic = await eventLicense(playerData.id, event.id); playerData.paid_registration = lic.active; playerData.license_type = lic.full ? 'full' : lic.active ? 'temporary' : 'none';
                 setLoggedInPlayer(playerData);
                 setFormData(prev => ({
                     ...prev,
@@ -2689,8 +2699,12 @@ const EventDetails = () => {
     }, [getOrganisationRankings]);
 
     useEffect(() => {
+        let cancelled = false;
         const fetchAlbumPhotos = async () => {
-            if (!event) return;
+            if (!event?.id) return;
+            setLoadingAlbum(true);
+            setAlbumInfo(null);
+            setAlbumPhotos([]);
 
             // Check if there's an album linked to this event in our DB
             try {
@@ -2698,9 +2712,11 @@ const EventDetails = () => {
                     .from('albums')
                     .select('id, title, description, slug')
                     .eq('event_id', event.id)
+                    .eq('is_active', true)
                     .is('parent_album_id', null)
                     .limit(1);
 
+                if (cancelled) return;
                 if (!albumError && albumsData && albumsData.length > 0) {
                     const albumData = albumsData[0];
                     setAlbumInfo(albumData);
@@ -2710,16 +2726,19 @@ const EventDetails = () => {
                         .eq('album_id', albumData.id)
                         .order('sort_order', { ascending: true });
 
-                    if (images && !imageError) {
+                    if (!cancelled && images && !imageError) {
                         setAlbumPhotos(images);
                     }
                 }
             } catch (err) {
                 console.error("Error fetching event album:", err);
+            } finally {
+                if (!cancelled) setLoadingAlbum(false);
             }
         };
         fetchAlbumPhotos();
-    }, [event]);
+        return () => { cancelled = true; };
+    }, [event?.id]);
 
     useEffect(() => {
         const fetchWeather = async () => {
@@ -3135,6 +3154,15 @@ const EventDetails = () => {
         const [firstname, ...lastnameParts] = (formData.full_name || '').split(' ');
         const lastname = lastnameParts.join(' ');
 
+        if (playerProfileData && !playerProfileData.paid_registration) {
+            setLicensePurchase({ playerId: playerProfileData.id, type: licenseChoice || 'temporary' });
+            return;
+        }
+        const unlicensedPartner = Object.values(divisionPartners).find(p => p?.payForPartner && p?.partnerProfile && !p.partnerProfile.paid_registration);
+        if (unlicensedPartner) {
+            setLicensePurchase({ playerId: unlicensedPartner.partnerProfile.id, type: unlicensedPartner.partnerLicenseChoice || 'temporary' });
+            return;
+        }
         const paystackPop = new PaystackPop();
 
         await paystackPop.checkout({
@@ -3394,7 +3422,7 @@ const EventDetails = () => {
                     payment_method: 'paystack',
                     reference: `License - ${formData.full_name}`,
                     is_test: isTestMode,
-                    metadata: { paystack_ref: paystackRef, line_items: [{ type: isFull ? 'full_license' : 'temp_license', amount: licenseAmount, player: formData.full_name }] }
+                    metadata: { license_year: commerce.license_year, paystack_ref: paystackRef, line_items: [{ type: isFull ? 'full_license' : 'temp_license', amount: licenseAmount, player: formData.full_name }] }
                 });
             }
 
@@ -3415,7 +3443,7 @@ const EventDetails = () => {
                             payment_method: 'paystack',
                             reference: `License - ${partnerState.partnerProfile.name} (Paid by ${formData.full_name})`,
                             is_test: isTestMode,
-                            metadata: { paystack_ref: paystackRef, paid_by_name: formData.full_name, paid_by_id: playerId, line_items: [{ type: isFull ? 'full_license' : 'temp_license', amount: licenseAmount, player: partnerState.partnerProfile.name, paid_by: formData.full_name }] }
+                            metadata: { license_year: commerce.license_year, paystack_ref: paystackRef, paid_by_name: formData.full_name, paid_by_id: playerId, line_items: [{ type: isFull ? 'full_license' : 'temp_license', amount: licenseAmount, player: partnerState.partnerProfile.name, paid_by: formData.full_name }] }
                         });
                     }
                 }
@@ -3427,44 +3455,7 @@ const EventDetails = () => {
             }
 
             // Apply licenses to players if paid
-            const licensesToGrant = [];
-
-            // Player License
-            if (playerProfileData && !playerProfileData.paid_registration && licenseSalesOpen) {
-                licensesToGrant.push({
-                    playerId: playerId,
-                    isFull: licenseChoice === 'full',
-                    amount: licenseCharge(licenseChoice)
-                });
-            }
-
-            // Partner Licenses
-            selectedDivisions.forEach(division => {
-                const partnerState = divisionPartners[division];
-                if (partnerState?.payForPartner && partnerState?.partnerProfile && !partnerState.partnerProfile.paid_registration && partnerState.payForPartnerLicense && licenseSalesOpen) {
-                    if (!licensesToGrant.some(l => l.playerId === partnerState.partnerProfile.id)) {
-                        licensesToGrant.push({
-                            playerId: partnerState.partnerProfile.id,
-                            isFull: partnerState.partnerLicenseChoice === 'full',
-                            amount: licenseCharge(partnerState.partnerLicenseChoice)
-                        });
-                    }
-                }
-            });
-
-            for (const license of licensesToGrant) {
-                if (!license.playerId) continue;
-                if (license.isFull) {
-                    await supabase.rpc('grant_partner_full_license', { p_player_id: license.playerId });
-                } else {
-                    await supabase.from('temporary_licenses').insert({
-                        player_id: license.playerId,
-                        event_id: event.id,
-                        event_name: event.event_name,
-                        event_date: event.start_date
-                    });
-                }
-            }
+            // Verified server payment confirmation finalizes each player/event license.
 
             // Sync emails and participants
             await finalizeRegistrationEmailsAndSync(true);
@@ -3652,10 +3643,6 @@ const EventDetails = () => {
     const openManualPayFlow = () => {
         if (!manualUserEmail) {
             promptMembersOnly();
-            return;
-        }
-        if (registrationClosed) {
-            toast.error('Registration has closed — payment is no longer available for this event.');
             return;
         }
         manualRegActionsRef.current?.openPayFlow?.();
@@ -3916,6 +3903,9 @@ const EventDetails = () => {
                             onRemovePartner={entry.canWithdraw
                                 ? () => manualRegActionsRef.current?.openRemovePartner?.(entry.id)
                                 : undefined}
+                            onReplacePartner={entry.canReplacePartner
+                                ? () => manualRegActionsRef.current?.openReplacePartner?.(entry.id)
+                                : undefined}
                         />
                     ))}
                 </div>
@@ -3923,7 +3913,7 @@ const EventDetails = () => {
                 {(manualRegStatus.hasPendingPayment || manualRegStatus.canAddDivision) && (
                     <div className={`flex flex-col gap-2.5 mt-4 pt-4 border-t ${manualAllPaid ? 'border-emerald-200/60' : 'border-amber-200/60'
                         }`}>
-                        {manualRegStatus.hasPendingPayment && !registrationClosed && (
+                        {manualRegStatus.canPayPending && (
                             <button
                                 type="button"
                                 onClick={() => manualRegActionsRef.current?.openPayFlow?.()}
@@ -3933,9 +3923,14 @@ const EventDetails = () => {
                                 Pay Entry <CreditCard className="w-4 h-4" />
                             </button>
                         )}
-                        {manualRegStatus.hasPendingPayment && registrationClosed && (
+                        {manualRegStatus.canPayPending && event.allow_payments_after_close !== false && registrationClosed && (
                             <p className="text-xs text-amber-800/80 text-center leading-relaxed">
-                                Registration has closed. Unpaid entries may be removed from the draw.
+                                Registration has closed. You can still pay for your existing entries.
+                            </p>
+                        )}
+                        {manualRegStatus.hasPendingPayment && manualRegStatus.paymentsClosed && !manualRegStatus.canPayPending && (
+                            <p className="text-xs text-amber-800/80 text-center leading-relaxed">
+                                Payments have closed. Contact the organiser about your outstanding entry fees.
                             </p>
                         )}
                         {manualRegStatus.canAddDivision && !event?.is_weekly && (
@@ -4011,6 +4006,7 @@ const EventDetails = () => {
 
     return (
         <>
+            <LicensePaymentModal isOpen={!!licensePurchase} onClose={() => setLicensePurchase(null)} initialEventId={event?.id} initialType={licensePurchase?.type || 'temporary'} beneficiaryPlayerId={licensePurchase?.playerId} returnEventId={event?.id} onPaymentSuccess={() => window.location.reload()} />
             <Helmet>
                 <title>{`${event.event_name} | 4M Padel`}</title>
                 <meta property="og:title" content={`${event.event_name} | 4M Padel`} />
@@ -4169,7 +4165,7 @@ const EventDetails = () => {
                                             if (!isEventPassed) {
                                                 if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
                                                     cta = null;
-                                                } else if (manualRegStatus.hasPendingPayment && !registrationClosed) {
+                                                } else if (manualRegStatus.hasPendingPayment) {
                                                     cta = (
                                                         <button
                                                             type="button"
@@ -4335,7 +4331,7 @@ const EventDetails = () => {
                                         if (event.is_manual) {
                                             if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
                                                 countdownCta = { label: 'Manage Entry', onClick: openManageEntry };
-                                            } else if (manualRegStatus.hasPendingPayment && !registrationClosed) {
+                                            } else if (manualRegStatus.hasPendingPayment) {
                                                 countdownCta = { label: 'Pay Now', onClick: openManualPayFlow };
                                             } else if (manualRegStatus.hasPendingPayment || manualRegStatus.hasRegistrations || manualRegStatus.hasAnyRegistration) {
                                                 countdownCta = { label: 'Manage Entry', onClick: openManageEntry };
@@ -5555,7 +5551,7 @@ const EventDetails = () => {
                                                     {albumPhotos.slice(0, 3).map((photo, i) => (
                                                         <div key={i} className={`relative overflow-hidden ${i === 0 ? 'col-span-2' : ''}`}>
                                                             <img
-                                                                src={photo.url || photo.photo_url}
+                                                                src={photo.thumbnail_url || photo.image_url}
                                                                 alt=""
                                                                 className="w-full h-full object-cover opacity-80"
                                                             />
@@ -5577,6 +5573,10 @@ const EventDetails = () => {
                                                 </Link>
                                             </div>
                                         </div>
+                                    )}
+
+                                    {!loadingAlbum && !albumInfo && eventGalleryImages.length > 0 && (
+                                        <EventMediaGallery key={event.id} images={eventGalleryImages} eventName={event.event_name} />
                                     )}
 
                                     {/* YouTube Videos */}
@@ -5633,7 +5633,8 @@ const EventDetails = () => {
                                         </div>
                                     )}
 
-                                    {!albumInfo && !event.youtube_playlist_url && (
+                                    {loadingAlbum && <p role="status" className="py-6 text-center text-sm text-gray-500">Loading event photos…</p>}
+                                    {!loadingAlbum && !albumInfo && eventGalleryImages.length === 0 && !event.youtube_playlist_url && (
                                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-16 flex flex-col items-center text-center">
                                             <ImageIcon className="w-12 h-12 text-gray-200 mb-4" />
                                             <h3 className="text-base font-semibold text-slate-900 mb-2">No Media Yet</h3>
@@ -6388,6 +6389,7 @@ const EventDetails = () => {
                                         </div>
                                     ) : (
                                         <>
+
                                             {/* Ambient Glows */}
                                             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 bg-padel-green/10 blur-[120px] rounded-full pointer-events-none" />
                                             <div className="absolute bottom-0 right-0 w-32 h-32 bg-white/5 blur-[80px] rounded-full pointer-events-none" />

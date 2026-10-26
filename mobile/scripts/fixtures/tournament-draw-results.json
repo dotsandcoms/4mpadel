@@ -1,0 +1,3230 @@
+{
+  "tournamentId": 75153,
+  "capturedAt": "2026-10-12",
+  "divisions": [
+    {
+      "name": "Men 35+",
+      "classId": 177841,
+      "draw": [
+        {
+          "BaseType": "Elimination",
+          "Elimination": {
+            "PlacesStartPos": 1,
+            "PlacesEndPos": 8,
+            "DrawCells": [
+              {
+                "MatchId": 6931897,
+                "ChallengeId": 6931822,
+                "Round": 1,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492552,
+                  "FirstPlayer": {
+                    "Name": "Brett Hilarides"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Jason Blakey-Milner"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492556,
+                  "FirstPlayer": {
+                    "Name": "Mike Coni"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Nicol Crous"
+                  }
+                },
+                "WinnerParticipantId": 6492552,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 1,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 1,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931898,
+                "ChallengeId": 6931830,
+                "Round": 1,
+                "MatchOrder": 2,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492555,
+                  "FirstPlayer": {
+                    "Name": "Brian Gradner"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Frederick Rickers"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492551,
+                  "FirstPlayer": {
+                    "Name": "Botha Pretorius"
+                  },
+                  "SecondPlayer": {
+                    "Name": "DJ Broeksma"
+                  }
+                },
+                "WinnerParticipantId": 6492551,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 2,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 3,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931899,
+                "ChallengeId": 6931832,
+                "Round": 1,
+                "MatchOrder": 3,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492557,
+                  "FirstPlayer": {
+                    "Name": "Ockie Oosthuizen"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Scott Whysall"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492553,
+                  "FirstPlayer": {
+                    "Name": "Imraan Fakier"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Masood Van Der Schyff"
+                  }
+                },
+                "WinnerParticipantId": 6492557,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 0,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 0,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931900,
+                "ChallengeId": 6931828,
+                "Round": 1,
+                "MatchOrder": 4,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492558,
+                  "FirstPlayer": {
+                    "Name": "Stefano Aracena"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Shannon de Saint Pern"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492554,
+                  "FirstPlayer": {
+                    "Name": "Martin Redelinghuys"
+                  },
+                  "SecondPlayer": {
+                    "Name": "James Munro"
+                  }
+                },
+                "WinnerParticipantId": 6492554,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 0,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 0,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931901,
+                "ChallengeId": 6931825,
+                "Round": 2,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492552,
+                  "FirstPlayer": {
+                    "Name": "Brett Hilarides"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Jason Blakey-Milner"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492551,
+                  "FirstPlayer": {
+                    "Name": "Botha Pretorius"
+                  },
+                  "SecondPlayer": {
+                    "Name": "DJ Broeksma"
+                  }
+                },
+                "WinnerParticipantId": 6492552,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 0,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 1,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931902,
+                "ChallengeId": 6931823,
+                "Round": 2,
+                "MatchOrder": 2,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492557,
+                  "FirstPlayer": {
+                    "Name": "Ockie Oosthuizen"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Scott Whysall"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492554,
+                  "FirstPlayer": {
+                    "Name": "Martin Redelinghuys"
+                  },
+                  "SecondPlayer": {
+                    "Name": "James Munro"
+                  }
+                },
+                "WinnerParticipantId": 6492557,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 1,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": []
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931903,
+                "ChallengeId": 6931827,
+                "Round": 3,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492552,
+                  "FirstPlayer": {
+                    "Name": "Brett Hilarides"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Jason Blakey-Milner"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492557,
+                  "FirstPlayer": {
+                    "Name": "Ockie Oosthuizen"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Scott Whysall"
+                  }
+                },
+                "WinnerParticipantId": 6492557,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 1,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 3,
+                        "SecondParticipantScore": 6,
+                        "IsFirstParticipantWinner": false
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 3,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 4,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "BaseType": "Elimination",
+          "Elimination": {
+            "PlacesStartPos": 3,
+            "PlacesEndPos": 4,
+            "DrawCells": [
+              {
+                "MatchId": 6931907,
+                "ChallengeId": 6931829,
+                "Round": 1,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492551,
+                  "FirstPlayer": {
+                    "Name": "Botha Pretorius"
+                  },
+                  "SecondPlayer": {
+                    "Name": "DJ Broeksma"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492554,
+                  "FirstPlayer": {
+                    "Name": "Martin Redelinghuys"
+                  },
+                  "SecondPlayer": {
+                    "Name": "James Munro"
+                  }
+                },
+                "WinnerParticipantId": 6492554,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 2,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 1,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "BaseType": "Elimination",
+          "Elimination": {
+            "PlacesStartPos": 5,
+            "PlacesEndPos": 8,
+            "DrawCells": [
+              {
+                "MatchId": 6931904,
+                "ChallengeId": 6931833,
+                "Round": 1,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492556,
+                  "FirstPlayer": {
+                    "Name": "Mike Coni"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Nicol Crous"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492555,
+                  "FirstPlayer": {
+                    "Name": "Brian Gradner"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Frederick Rickers"
+                  }
+                },
+                "WinnerParticipantId": 6492555,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 3,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 1,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931905,
+                "ChallengeId": 6931824,
+                "Round": 1,
+                "MatchOrder": 2,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492553,
+                  "FirstPlayer": {
+                    "Name": "Imraan Fakier"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Masood Van Der Schyff"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492558,
+                  "FirstPlayer": {
+                    "Name": "Stefano Aracena"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Shannon de Saint Pern"
+                  }
+                },
+                "WinnerParticipantId": 6492558,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 2,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 4,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931906,
+                "ChallengeId": 6931826,
+                "Round": 2,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492555,
+                  "FirstPlayer": {
+                    "Name": "Brian Gradner"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Frederick Rickers"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492558,
+                  "FirstPlayer": {
+                    "Name": "Stefano Aracena"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Shannon de Saint Pern"
+                  }
+                },
+                "WinnerParticipantId": 6492555,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 1,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 1,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "BaseType": "Elimination",
+          "Elimination": {
+            "PlacesStartPos": 7,
+            "PlacesEndPos": 8,
+            "DrawCells": [
+              {
+                "MatchId": 6931908,
+                "ChallengeId": 6931831,
+                "Round": 1,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492556,
+                  "FirstPlayer": {
+                    "Name": "Mike Coni"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Nicol Crous"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492553,
+                  "FirstPlayer": {
+                    "Name": "Imraan Fakier"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Masood Van Der Schyff"
+                  }
+                },
+                "WinnerParticipantId": 6492556,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 2,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 0,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "matches": [
+        {
+          "Id": 6931822,
+          "Challenger": [
+            "Brett Hilarides",
+            "Jason Blakey-Milner"
+          ],
+          "Challenged": [
+            "Mike Coni",
+            "Nicol Crous"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931830,
+          "Challenger": [
+            "Botha Pretorius",
+            "DJ Broeksma"
+          ],
+          "Challenged": [
+            "Brian Gradner",
+            "Frederick Rickers"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 2,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 3,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931832,
+          "Challenger": [
+            "Ockie Oosthuizen",
+            "Scott Whysall"
+          ],
+          "Challenged": [
+            "Imraan Fakier",
+            "Masood Van Der Schyff"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 0,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 0,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931828,
+          "Challenger": [
+            "Martin Redelinghuys",
+            "James Munro"
+          ],
+          "Challenged": [
+            "Stefano Aracena",
+            "Shannon de Saint Pern"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 0,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 0,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931825,
+          "Challenger": [
+            "Brett Hilarides",
+            "Jason Blakey-Milner"
+          ],
+          "Challenged": [
+            "Botha Pretorius",
+            "DJ Broeksma"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 0,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931823,
+          "Challenger": [
+            "Ockie Oosthuizen",
+            "Scott Whysall"
+          ],
+          "Challenged": [
+            "Martin Redelinghuys",
+            "James Munro"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 1,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": []
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931833,
+          "Challenger": [
+            "Brian Gradner",
+            "Frederick Rickers"
+          ],
+          "Challenged": [
+            "Mike Coni",
+            "Nicol Crous"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 3,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931824,
+          "Challenger": [
+            "Stefano Aracena",
+            "Shannon de Saint Pern"
+          ],
+          "Challenged": [
+            "Imraan Fakier",
+            "Masood Van Der Schyff"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 2,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931831,
+          "Challenger": [
+            "Mike Coni",
+            "Nicol Crous"
+          ],
+          "Challenged": [
+            "Imraan Fakier",
+            "Masood Van Der Schyff"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 2,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 0,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931827,
+          "Challenger": [
+            "Ockie Oosthuizen",
+            "Scott Whysall"
+          ],
+          "Challenged": [
+            "Brett Hilarides",
+            "Jason Blakey-Milner"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 1,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 3,
+                  "SecondParticipantScore": 6,
+                  "IsFirstParticipantWinner": false
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 3,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931829,
+          "Challenger": [
+            "Martin Redelinghuys",
+            "James Munro"
+          ],
+          "Challenged": [
+            "Botha Pretorius",
+            "DJ Broeksma"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 2,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931826,
+          "Challenger": [
+            "Brian Gradner",
+            "Frederick Rickers"
+          ],
+          "Challenged": [
+            "Stefano Aracena",
+            "Shannon de Saint Pern"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "Men 45+",
+      "classId": 177842,
+      "draw": [
+        {
+          "BaseType": "Elimination",
+          "Elimination": {
+            "PlacesStartPos": 1,
+            "PlacesEndPos": 16,
+            "DrawCells": [
+              {
+                "MatchId": 6931937,
+                "ChallengeId": 6931862,
+                "Round": 1,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492607,
+                  "FirstPlayer": {
+                    "Name": "Paul Atkinson"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Paul Waldburger"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 0,
+                  "FirstPlayer": {
+                    "Name": "Bye"
+                  },
+                  "SecondPlayer": {
+                    "Name": null
+                  }
+                },
+                "WinnerParticipantId": 6492607,
+                "MatchViewModel": {
+                  "Score": null,
+                  "IsFirstParticipantWinner": null,
+                  "HasScore": false,
+                  "HasCancellation": false,
+                  "IsPlayed": false
+                }
+              },
+              {
+                "MatchId": 6931964,
+                "ChallengeId": 6931882,
+                "Round": 1,
+                "MatchOrder": 2,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492617,
+                  "FirstPlayer": {
+                    "Name": "Garth Kingwill"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Victor White"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492618,
+                  "FirstPlayer": {
+                    "Name": "James Montagu"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Nick Berman"
+                  }
+                },
+                "WinnerParticipantId": 6492617,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 4,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 3,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931963,
+                "ChallengeId": 6931884,
+                "Round": 1,
+                "MatchOrder": 3,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492614,
+                  "FirstPlayer": {
+                    "Name": "Marc Waldburger"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Adrian Jacobs"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492620,
+                  "FirstPlayer": {
+                    "Name": "Shane Murugan"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Ricardo Mcgregor"
+                  }
+                },
+                "WinnerParticipantId": 6492614,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 0,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 1,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931962,
+                "ChallengeId": 6931891,
+                "Round": 1,
+                "MatchOrder": 4,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492611,
+                  "FirstPlayer": {
+                    "Name": "Ugo Venter"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Nathier Price"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492616,
+                  "FirstPlayer": {
+                    "Name": "Bernhard von Heynitz"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Peter Blyth"
+                  }
+                },
+                "WinnerParticipantId": 6492616,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 1,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 0,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931961,
+                "ChallengeId": 6931888,
+                "Round": 1,
+                "MatchOrder": 5,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492610,
+                  "FirstPlayer": {
+                    "Name": "David Adams"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Neil Broad"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492615,
+                  "FirstPlayer": {
+                    "Name": "Aubrey Martin"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Mark Bredell"
+                  }
+                },
+                "WinnerParticipantId": 6492610,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 0,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 0,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931960,
+                "ChallengeId": 6931879,
+                "Round": 1,
+                "MatchOrder": 6,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492612,
+                  "FirstPlayer": {
+                    "Name": "Shaun Ludwig"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Vittorio Russolillo"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492609,
+                  "FirstPlayer": {
+                    "Name": "Chris Trehearn"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Johannes Christiaan Pieterse"
+                  }
+                },
+                "WinnerParticipantId": 6492609,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 1,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 1,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931959,
+                "ChallengeId": 6931876,
+                "Round": 1,
+                "MatchOrder": 7,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492619,
+                  "FirstPlayer": {
+                    "Name": "Luke Potter"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Wojciech Dowbor"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492613,
+                  "FirstPlayer": {
+                    "Name": "Raymond Dodgen"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Warren van Wyk"
+                  }
+                },
+                "WinnerParticipantId": 6492619,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 1,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 0,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931958,
+                "ChallengeId": 6931873,
+                "Round": 1,
+                "MatchOrder": 8,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 0,
+                  "FirstPlayer": {
+                    "Name": "Bye"
+                  },
+                  "SecondPlayer": {
+                    "Name": null
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492608,
+                  "FirstPlayer": {
+                    "Name": "Brad Vermeulen"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Brandon Weir-Smith"
+                  }
+                },
+                "WinnerParticipantId": 6492608,
+                "MatchViewModel": {
+                  "Score": null,
+                  "IsFirstParticipantWinner": null,
+                  "HasScore": false,
+                  "HasCancellation": false,
+                  "IsPlayed": false
+                }
+              },
+              {
+                "MatchId": 6931957,
+                "ChallengeId": 6931870,
+                "Round": 2,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492607,
+                  "FirstPlayer": {
+                    "Name": "Paul Atkinson"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Paul Waldburger"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492617,
+                  "FirstPlayer": {
+                    "Name": "Garth Kingwill"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Victor White"
+                  }
+                },
+                "WinnerParticipantId": 6492607,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 0,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 2,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931956,
+                "ChallengeId": 6931868,
+                "Round": 2,
+                "MatchOrder": 2,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492614,
+                  "FirstPlayer": {
+                    "Name": "Marc Waldburger"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Adrian Jacobs"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492616,
+                  "FirstPlayer": {
+                    "Name": "Bernhard von Heynitz"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Peter Blyth"
+                  }
+                },
+                "WinnerParticipantId": 6492616,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": []
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931955,
+                "ChallengeId": 6931865,
+                "Round": 2,
+                "MatchOrder": 3,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492610,
+                  "FirstPlayer": {
+                    "Name": "David Adams"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Neil Broad"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492609,
+                  "FirstPlayer": {
+                    "Name": "Chris Trehearn"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Johannes Christiaan Pieterse"
+                  }
+                },
+                "WinnerParticipantId": 6492610,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 1,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 3,
+                        "SecondParticipantScore": 6,
+                        "IsFirstParticipantWinner": false
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 4,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 7,
+                        "SecondParticipantScore": 6,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931954,
+                "ChallengeId": 6931863,
+                "Round": 2,
+                "MatchOrder": 4,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492619,
+                  "FirstPlayer": {
+                    "Name": "Luke Potter"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Wojciech Dowbor"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492608,
+                  "FirstPlayer": {
+                    "Name": "Brad Vermeulen"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Brandon Weir-Smith"
+                  }
+                },
+                "WinnerParticipantId": 6492608,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 1,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 4,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931953,
+                "ChallengeId": 6931878,
+                "Round": 3,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492607,
+                  "FirstPlayer": {
+                    "Name": "Paul Atkinson"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Paul Waldburger"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492616,
+                  "FirstPlayer": {
+                    "Name": "Bernhard von Heynitz"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Peter Blyth"
+                  }
+                },
+                "WinnerParticipantId": 6492607,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 4,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 4,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931952,
+                "ChallengeId": 6931866,
+                "Round": 3,
+                "MatchOrder": 2,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492610,
+                  "FirstPlayer": {
+                    "Name": "David Adams"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Neil Broad"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492608,
+                  "FirstPlayer": {
+                    "Name": "Brad Vermeulen"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Brandon Weir-Smith"
+                  }
+                },
+                "WinnerParticipantId": 6492610,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 7,
+                        "SecondParticipantScore": 6,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 1,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931951,
+                "ChallengeId": 6931874,
+                "Round": 4,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492607,
+                  "FirstPlayer": {
+                    "Name": "Paul Atkinson"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Paul Waldburger"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492610,
+                  "FirstPlayer": {
+                    "Name": "David Adams"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Neil Broad"
+                  }
+                },
+                "WinnerParticipantId": 6492607,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 7,
+                        "SecondParticipantScore": 6,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 4,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "BaseType": "Elimination",
+          "Elimination": {
+            "PlacesStartPos": 3,
+            "PlacesEndPos": 4,
+            "DrawCells": [
+              {
+                "MatchId": 6931950,
+                "ChallengeId": 6931889,
+                "Round": 1,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492616,
+                  "FirstPlayer": {
+                    "Name": "Bernhard von Heynitz"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Peter Blyth"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492608,
+                  "FirstPlayer": {
+                    "Name": "Brad Vermeulen"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Brandon Weir-Smith"
+                  }
+                },
+                "WinnerParticipantId": 6492608,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 7,
+                        "SecondParticipantScore": 6,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 7,
+                        "SecondParticipantScore": 6,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "BaseType": "Elimination",
+          "Elimination": {
+            "PlacesStartPos": 5,
+            "PlacesEndPos": 8,
+            "DrawCells": [
+              {
+                "MatchId": 6931949,
+                "ChallengeId": 6931885,
+                "Round": 1,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492617,
+                  "FirstPlayer": {
+                    "Name": "Garth Kingwill"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Victor White"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492614,
+                  "FirstPlayer": {
+                    "Name": "Marc Waldburger"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Adrian Jacobs"
+                  }
+                },
+                "WinnerParticipantId": 6492617,
+                "MatchViewModel": {
+                  "Score": null,
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": false,
+                  "HasCancellation": true,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931948,
+                "ChallengeId": 6931869,
+                "Round": 1,
+                "MatchOrder": 2,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492609,
+                  "FirstPlayer": {
+                    "Name": "Chris Trehearn"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Johannes Christiaan Pieterse"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492619,
+                  "FirstPlayer": {
+                    "Name": "Luke Potter"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Wojciech Dowbor"
+                  }
+                },
+                "WinnerParticipantId": 6492609,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 4,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 4,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931947,
+                "ChallengeId": 6931881,
+                "Round": 2,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492617,
+                  "FirstPlayer": {
+                    "Name": "Garth Kingwill"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Victor White"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492609,
+                  "FirstPlayer": {
+                    "Name": "Chris Trehearn"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Johannes Christiaan Pieterse"
+                  }
+                },
+                "WinnerParticipantId": 6492609,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 3,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 0,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "BaseType": "Elimination",
+          "Elimination": {
+            "PlacesStartPos": 7,
+            "PlacesEndPos": 8,
+            "DrawCells": [
+              {
+                "MatchId": 6931946,
+                "ChallengeId": 6931887,
+                "Round": 1,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492614,
+                  "FirstPlayer": {
+                    "Name": "Marc Waldburger"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Adrian Jacobs"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492619,
+                  "FirstPlayer": {
+                    "Name": "Luke Potter"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Wojciech Dowbor"
+                  }
+                },
+                "WinnerParticipantId": 6492619,
+                "MatchViewModel": {
+                  "Score": null,
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": false,
+                  "HasCancellation": true,
+                  "IsPlayed": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "BaseType": "Elimination",
+          "Elimination": {
+            "PlacesStartPos": 9,
+            "PlacesEndPos": 16,
+            "DrawCells": [
+              {
+                "MatchId": 6931945,
+                "ChallengeId": 6931872,
+                "Round": 1,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 0,
+                  "FirstPlayer": {
+                    "Name": "Bye"
+                  },
+                  "SecondPlayer": {
+                    "Name": null
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492618,
+                  "FirstPlayer": {
+                    "Name": "James Montagu"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Nick Berman"
+                  }
+                },
+                "WinnerParticipantId": 6492618,
+                "MatchViewModel": {
+                  "Score": null,
+                  "IsFirstParticipantWinner": null,
+                  "HasScore": false,
+                  "HasCancellation": false,
+                  "IsPlayed": false
+                }
+              },
+              {
+                "MatchId": 6931944,
+                "ChallengeId": 6931877,
+                "Round": 1,
+                "MatchOrder": 2,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492620,
+                  "FirstPlayer": {
+                    "Name": "Shane Murugan"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Ricardo Mcgregor"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492611,
+                  "FirstPlayer": {
+                    "Name": "Ugo Venter"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Nathier Price"
+                  }
+                },
+                "WinnerParticipantId": 6492611,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 4,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 2,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931943,
+                "ChallengeId": 6931864,
+                "Round": 1,
+                "MatchOrder": 3,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492615,
+                  "FirstPlayer": {
+                    "Name": "Aubrey Martin"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Mark Bredell"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492612,
+                  "FirstPlayer": {
+                    "Name": "Shaun Ludwig"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Vittorio Russolillo"
+                  }
+                },
+                "WinnerParticipantId": 6492612,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 1,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 2,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931942,
+                "ChallengeId": 6931867,
+                "Round": 1,
+                "MatchOrder": 4,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492613,
+                  "FirstPlayer": {
+                    "Name": "Raymond Dodgen"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Warren van Wyk"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 0,
+                  "FirstPlayer": {
+                    "Name": "Bye"
+                  },
+                  "SecondPlayer": {
+                    "Name": null
+                  }
+                },
+                "WinnerParticipantId": 6492613,
+                "MatchViewModel": {
+                  "Score": null,
+                  "IsFirstParticipantWinner": null,
+                  "HasScore": false,
+                  "HasCancellation": false,
+                  "IsPlayed": false
+                }
+              },
+              {
+                "MatchId": 6931941,
+                "ChallengeId": 6931871,
+                "Round": 2,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492618,
+                  "FirstPlayer": {
+                    "Name": "James Montagu"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Nick Berman"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492611,
+                  "FirstPlayer": {
+                    "Name": "Ugo Venter"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Nathier Price"
+                  }
+                },
+                "WinnerParticipantId": 6492618,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 4,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 4,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931940,
+                "ChallengeId": 6931875,
+                "Round": 2,
+                "MatchOrder": 2,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492612,
+                  "FirstPlayer": {
+                    "Name": "Shaun Ludwig"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Vittorio Russolillo"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492613,
+                  "FirstPlayer": {
+                    "Name": "Raymond Dodgen"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Warren van Wyk"
+                  }
+                },
+                "WinnerParticipantId": 6492612,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 1,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 4,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 3,
+                        "SecondParticipantScore": 6,
+                        "IsFirstParticipantWinner": false
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 1,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              },
+              {
+                "MatchId": 6931939,
+                "ChallengeId": 6931890,
+                "Round": 3,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492618,
+                  "FirstPlayer": {
+                    "Name": "James Montagu"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Nick Berman"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492612,
+                  "FirstPlayer": {
+                    "Name": "Shaun Ludwig"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Vittorio Russolillo"
+                  }
+                },
+                "WinnerParticipantId": 6492618,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 1,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 4,
+                        "SecondParticipantScore": 6,
+                        "IsFirstParticipantWinner": false
+                      },
+                      {
+                        "FirstParticipantScore": 7,
+                        "SecondParticipantScore": 6,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 7,
+                        "SecondParticipantScore": 5,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              }
+            ]
+          }
+        },
+        {
+          "BaseType": "Elimination",
+          "Elimination": {
+            "PlacesStartPos": 13,
+            "PlacesEndPos": 16,
+            "DrawCells": [
+              {
+                "MatchId": 6931938,
+                "ChallengeId": 6931886,
+                "Round": 1,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 0,
+                  "FirstPlayer": {
+                    "Name": "Bye"
+                  },
+                  "SecondPlayer": {
+                    "Name": null
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492620,
+                  "FirstPlayer": {
+                    "Name": "Shane Murugan"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Ricardo Mcgregor"
+                  }
+                },
+                "WinnerParticipantId": 6492620,
+                "MatchViewModel": {
+                  "Score": null,
+                  "IsFirstParticipantWinner": null,
+                  "HasScore": false,
+                  "HasCancellation": false,
+                  "IsPlayed": false
+                }
+              },
+              {
+                "MatchId": 6931965,
+                "ChallengeId": 6931883,
+                "Round": 1,
+                "MatchOrder": 2,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492615,
+                  "FirstPlayer": {
+                    "Name": "Aubrey Martin"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Mark Bredell"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 0,
+                  "FirstPlayer": {
+                    "Name": "Bye"
+                  },
+                  "SecondPlayer": {
+                    "Name": null
+                  }
+                },
+                "WinnerParticipantId": 6492615,
+                "MatchViewModel": {
+                  "Score": null,
+                  "IsFirstParticipantWinner": null,
+                  "HasScore": false,
+                  "HasCancellation": false,
+                  "IsPlayed": false
+                }
+              },
+              {
+                "MatchId": 6931966,
+                "ChallengeId": 6931880,
+                "Round": 2,
+                "MatchOrder": 1,
+                "IsPublished": true,
+                "ChallengerParticipant": {
+                  "EventParticipantId": 6492620,
+                  "FirstPlayer": {
+                    "Name": "Shane Murugan"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Ricardo Mcgregor"
+                  }
+                },
+                "ChallengedParticipant": {
+                  "EventParticipantId": 6492615,
+                  "FirstPlayer": {
+                    "Name": "Aubrey Martin"
+                  },
+                  "SecondPlayer": {
+                    "Name": "Mark Bredell"
+                  }
+                },
+                "WinnerParticipantId": 6492615,
+                "MatchViewModel": {
+                  "Score": {
+                    "FirstParticipantScore": 2,
+                    "SecondParticipantScore": 0,
+                    "IsFirstParticipantWinner": true,
+                    "DetailedScoring": [
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 2,
+                        "IsFirstParticipantWinner": true
+                      },
+                      {
+                        "FirstParticipantScore": 6,
+                        "SecondParticipantScore": 4,
+                        "IsFirstParticipantWinner": true
+                      }
+                    ]
+                  },
+                  "IsFirstParticipantWinner": true,
+                  "HasScore": true,
+                  "HasCancellation": false,
+                  "IsPlayed": true
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "matches": [
+        {
+          "Id": 6931879,
+          "Challenger": [
+            "Chris Trehearn",
+            "Johannes Christiaan Pieterse"
+          ],
+          "Challenged": [
+            "Shaun Ludwig",
+            "Vittorio Russolillo"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931891,
+          "Challenger": [
+            "Bernhard von Heynitz",
+            "Peter Blyth"
+          ],
+          "Challenged": [
+            "Ugo Venter",
+            "Nathier Price"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 0,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931882,
+          "Challenger": [
+            "Garth Kingwill",
+            "Victor White"
+          ],
+          "Challenged": [
+            "James Montagu",
+            "Nick Berman"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 3,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931876,
+          "Challenger": [
+            "Luke Potter",
+            "Wojciech  Dowbor"
+          ],
+          "Challenged": [
+            "Raymond Dodgen",
+            "Warren van Wyk"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 0,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931888,
+          "Challenger": [
+            "David Adams",
+            "Neil Broad"
+          ],
+          "Challenged": [
+            "Aubrey Martin",
+            "Mark  Bredell"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 0,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 0,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931884,
+          "Challenger": [
+            "Marc Waldburger",
+            "Adrian  Jacobs"
+          ],
+          "Challenged": [
+            "Shane Murugan",
+            "Ricardo Mcgregor"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 0,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931864,
+          "Challenger": [
+            "Shaun Ludwig",
+            "Vittorio Russolillo"
+          ],
+          "Challenged": [
+            "Aubrey Martin",
+            "Mark  Bredell"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 2,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931877,
+          "Challenger": [
+            "Ugo Venter",
+            "Nathier Price"
+          ],
+          "Challenged": [
+            "Shane Murugan",
+            "Ricardo Mcgregor"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 2,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931863,
+          "Challenger": [
+            "Brad Vermeulen",
+            "Brandon Weir-Smith"
+          ],
+          "Challenged": [
+            "Luke Potter",
+            "Wojciech  Dowbor"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931865,
+          "Challenger": [
+            "David Adams",
+            "Neil Broad"
+          ],
+          "Challenged": [
+            "Chris Trehearn",
+            "Johannes Christiaan Pieterse"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 1,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 3,
+                  "SecondParticipantScore": 6,
+                  "IsFirstParticipantWinner": false
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 7,
+                  "SecondParticipantScore": 6,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931868,
+          "Challenger": [
+            "Bernhard von Heynitz",
+            "Peter Blyth"
+          ],
+          "Challenged": [
+            "Marc Waldburger",
+            "Adrian  Jacobs"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": []
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931870,
+          "Challenger": [
+            "Paul Atkinson",
+            "Paul Waldburger"
+          ],
+          "Challenged": [
+            "Garth Kingwill",
+            "Victor White"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 0,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 2,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931875,
+          "Challenger": [
+            "Shaun Ludwig",
+            "Vittorio Russolillo"
+          ],
+          "Challenged": [
+            "Raymond Dodgen",
+            "Warren van Wyk"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 1,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 3,
+                  "SecondParticipantScore": 6,
+                  "IsFirstParticipantWinner": false
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931871,
+          "Challenger": [
+            "James Montagu",
+            "Nick Berman"
+          ],
+          "Challenged": [
+            "Ugo Venter",
+            "Nathier Price"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931869,
+          "Challenger": [
+            "Chris Trehearn",
+            "Johannes Christiaan Pieterse"
+          ],
+          "Challenged": [
+            "Luke Potter",
+            "Wojciech  Dowbor"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931885,
+          "Challenger": [
+            "Garth Kingwill",
+            "Victor White"
+          ],
+          "Challenged": [
+            "Marc Waldburger",
+            "Adrian  Jacobs"
+          ],
+          "MatchResult": {
+            "Score": null,
+            "IsFirstParticipantWinner": true,
+            "HasScore": false,
+            "HasCancellation": false,
+            "IsPlayed": false
+          }
+        },
+        {
+          "Id": 6931866,
+          "Challenger": [
+            "David Adams",
+            "Neil Broad"
+          ],
+          "Challenged": [
+            "Brad Vermeulen",
+            "Brandon Weir-Smith"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 7,
+                  "SecondParticipantScore": 6,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 1,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931878,
+          "Challenger": [
+            "Paul Atkinson",
+            "Paul Waldburger"
+          ],
+          "Challenged": [
+            "Bernhard von Heynitz",
+            "Peter Blyth"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931880,
+          "Challenger": [
+            "Aubrey Martin",
+            "Mark  Bredell"
+          ],
+          "Challenged": [
+            "Shane Murugan",
+            "Ricardo Mcgregor"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 2,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931890,
+          "Challenger": [
+            "James Montagu",
+            "Nick Berman"
+          ],
+          "Challenged": [
+            "Shaun Ludwig",
+            "Vittorio Russolillo"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 1,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 4,
+                  "SecondParticipantScore": 6,
+                  "IsFirstParticipantWinner": false
+                },
+                {
+                  "FirstParticipantScore": 7,
+                  "SecondParticipantScore": 6,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 7,
+                  "SecondParticipantScore": 5,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931887,
+          "Challenger": [
+            "Luke Potter",
+            "Wojciech  Dowbor"
+          ],
+          "Challenged": [
+            "Marc Waldburger",
+            "Adrian  Jacobs"
+          ],
+          "MatchResult": {
+            "Score": null,
+            "IsFirstParticipantWinner": true,
+            "HasScore": false,
+            "HasCancellation": false,
+            "IsPlayed": false
+          }
+        },
+        {
+          "Id": 6931881,
+          "Challenger": [
+            "Chris Trehearn",
+            "Johannes Christiaan Pieterse"
+          ],
+          "Challenged": [
+            "Garth Kingwill",
+            "Victor White"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 3,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 0,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931889,
+          "Challenger": [
+            "Brad Vermeulen",
+            "Brandon Weir-Smith"
+          ],
+          "Challenged": [
+            "Bernhard von Heynitz",
+            "Peter Blyth"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 7,
+                  "SecondParticipantScore": 6,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 7,
+                  "SecondParticipantScore": 6,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        },
+        {
+          "Id": 6931874,
+          "Challenger": [
+            "Paul Atkinson",
+            "Paul Waldburger"
+          ],
+          "Challenged": [
+            "David Adams",
+            "Neil Broad"
+          ],
+          "MatchResult": {
+            "Score": {
+              "FirstParticipantScore": 2,
+              "SecondParticipantScore": 0,
+              "IsFirstParticipantWinner": true,
+              "DetailedScoring": [
+                {
+                  "FirstParticipantScore": 7,
+                  "SecondParticipantScore": 6,
+                  "IsFirstParticipantWinner": true
+                },
+                {
+                  "FirstParticipantScore": 6,
+                  "SecondParticipantScore": 4,
+                  "IsFirstParticipantWinner": true
+                }
+              ]
+            },
+            "IsFirstParticipantWinner": true,
+            "HasScore": true,
+            "HasCancellation": false,
+            "IsPlayed": true
+          }
+        }
+      ]
+    }
+  ]
+}

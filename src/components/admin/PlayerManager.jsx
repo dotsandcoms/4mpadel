@@ -45,10 +45,11 @@ const StatCard = ({ title, value, subtext, icon: Icon, color = 'padel-green', de
     );
 };
 
-const PlayerManager = () => {
+const PlayerManager = ({ canManageLicenses = false }) => {
     const [players, setPlayers] = useState([]);
     const { clubs, loading: loadingClubs } = useClubs();
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const [isEditing, setIsEditing] = useState(false);
     const [currentPlayer, setCurrentPlayer] = useState(null);
     const [uploadingImage, setUploadingImage] = useState(false);
@@ -65,12 +66,6 @@ const PlayerManager = () => {
     const [filterRegion, setFilterRegion] = useState('All');
     const [currentPage, setCurrentPage] = useState(1);
     const [fullLicensePayments, setFullLicensePayments] = useState([]);
-    const [events, setEvents] = useState([]);
-    const [isAssigningTemp, setIsAssigningTemp] = useState(false);
-    const [tempLicenseTarget, setTempLicenseTarget] = useState(null);
-    const [selectedEventId, setSelectedEventId] = useState('');
-    const [eventSearchTerm, setEventSearchTerm] = useState('');
-    const [assignLoading, setAssignLoading] = useState(false);
     const itemsPerPage = 50;
     const [showCharts, setShowCharts] = useState(() => {
         const saved = localStorage.getItem('show_admin_charts');
@@ -105,43 +100,7 @@ const PlayerManager = () => {
 
     useEffect(() => {
         fetchPlayers();
-        fetchEvents();
     }, []);
-
-    const fetchEvents = async () => {
-        try {
-            // Try fetching from calendar first
-            const { data: cData, error: cError } = await supabase
-                .from('calendar')
-                .select('id, event_name, start_date')
-                .order('start_date', { ascending: false });
-            
-            if (!cError && cData && cData.length > 0) {
-                setEvents(cData.map(e => ({
-                    id: e.id,
-                    name: e.event_name,
-                    date: e.start_date
-                })));
-                return;
-            }
-
-            // Fallback to events table
-            const { data: eData, error: eError } = await supabase
-                .from('events')
-                .select('id, title, date')
-                .order('date', { ascending: false });
-            
-            if (!eError && eData) {
-                setEvents(eData.map(e => ({
-                    id: e.id,
-                    name: e.title,
-                    date: e.date
-                })));
-            }
-        } catch (err) {
-            console.error("Fetch events failure:", err);
-        }
-    };
 
     const showToast = (message, type = 'success') => {
         const id = Date.now();
@@ -155,6 +114,7 @@ const PlayerManager = () => {
 
     const fetchPlayers = async () => {
         setLoading(true);
+        setLoadError('');
         try {
             let allPlayers = [];
             let allPayments = [];
@@ -164,13 +124,16 @@ const PlayerManager = () => {
             while (true) {
                 const { data, error } = await supabase
                     .from('players')
-                    .select('*, temporary_licenses(event_name, event_date)')
+                    .select('*, temporary_licenses(event_name, event_date, revoked_at)')
                     .order('created_at', { ascending: false })
                     .range(page * limit, (page + 1) * limit - 1);
                 
                 if (error) throw error;
                 if (data && data.length > 0) {
-                    allPlayers = [...allPlayers, ...data];
+                    allPlayers = [...allPlayers, ...data.map(player => ({
+                        ...player,
+                        temporary_licenses: (player.temporary_licenses || []).filter(license => !license.revoked_at),
+                    }))];
                     if (data.length < limit) break;
                     page++;
                 } else {
@@ -178,6 +141,7 @@ const PlayerManager = () => {
                 }
             }
 
+            setPlayers(allPlayers);
             page = 0;
             while (true) {
                 const { data, error } = await supabase
@@ -198,10 +162,10 @@ const PlayerManager = () => {
                 }
             }
 
-            setPlayers(allPlayers);
             setFullLicensePayments(allPayments);
         } catch (error) {
             console.error('Error fetching players:', error);
+            setLoadError(error.message || 'Could not load player data.');
             showToast('Failed to fetch players', 'error');
         }
 
@@ -382,6 +346,7 @@ const PlayerManager = () => {
             }
         }
         setFormData({
+            id: player.id,
             name: player.name,
             rank_label: player.rank_label || '',
             points: player.points ?? '',
@@ -504,8 +469,6 @@ const PlayerManager = () => {
             email: formData.email,
             gender: formData.gender,
             approved: formData.approved,
-            paid_registration: formData.paid_registration,
-            license_type: formData.license_type,
             region: formData.region,
             racket_brand: formData.racket_brand,
         };
@@ -726,6 +689,11 @@ const PlayerManager = () => {
                     </button>
                 </div>
             </div>
+
+            {loadError && <div role="alert" className="rounded-xl border border-red-400/30 p-4 text-red-200 flex flex-wrap items-center justify-between gap-3">
+                <p>Could not load all player data. {loadError}</p>
+                <button type="button" onClick={fetchPlayers} disabled={loading} className="border border-red-300/40 rounded-lg px-3 py-2 text-sm disabled:opacity-50">Retry</button>
+            </div>}
 
             {/* Stats Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -993,7 +961,7 @@ const PlayerManager = () => {
                             {loading ? (
                                 <tr><td colSpan="8" className="text-center py-12 text-gray-500">Loading...</td></tr>
                             ) : currentPlayers.length === 0 ? (
-                                <tr><td colSpan="8" className="text-center py-12 text-gray-500">No players match your filters</td></tr>
+                                <tr><td colSpan="10" className="text-center py-12 text-gray-500">{loadError ? 'Player data could not be loaded. Use Retry above.' : 'No players match your filters'}</td></tr>
                             ) : (
                                 currentPlayers.map(player => (
                                     <tr key={player.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
@@ -1055,16 +1023,13 @@ const PlayerManager = () => {
                                                 >
                                                     <Mail size={14} />
                                                 </button>
-                                                <button
-                                                    onClick={() => {
-                                                        setTempLicenseTarget(player);
-                                                        setIsAssigningTemp(true);
-                                                    }}
-                                                    title="Assign Temporary License"
+                                                {canManageLicenses && <button
+                                                    onClick={() => { window.location.href = `/admin?tab=licenses&player=${player.id}`; }}
+                                                    title="Manage licenses"
                                                     className="p-1.5 bg-sky-500/10 text-sky-400 rounded-lg hover:bg-sky-500 hover:text-white"
                                                 >
                                                     <Calendar size={14} />
-                                                </button>
+                                                </button>}
                                                 <button onClick={() => handleEdit(player)} className="p-1.5 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white">
                                                     <Edit2 size={14} />
                                                 </button>
@@ -1082,7 +1047,7 @@ const PlayerManager = () => {
 
                 <div className="flex justify-between items-center px-4 py-3 border-t border-white/5 bg-black/20">
                     <span className="text-sm text-gray-500">
-                        Showing {indexOfFirstItem + 1}–{Math.min(indexOfLastItem, filteredPlayers.length)} of {filteredPlayers.length}
+                        Showing {filteredPlayers.length ? indexOfFirstItem + 1 : 0}–{Math.min(indexOfLastItem, filteredPlayers.length)} of {filteredPlayers.length}
                     </span>
                     {totalPages > 1 && (
                         <div className="flex gap-2">
@@ -1331,29 +1296,7 @@ const PlayerManager = () => {
                                         <div className="h-8 w-px bg-white/10 hidden sm:block" />
 
                                         <div className="flex-1 w-full sm:w-auto">
-                                            <label className="block text-gray-400 text-[10px] uppercase font-black tracking-widest mb-2">License Status</label>
-                                            <div className="grid grid-cols-3 gap-2">
-                                                {[
-                                                    { id: 'none', label: 'Unpaid', color: 'bg-gray-800' },
-                                                    { id: 'temporary', label: 'Temp', color: 'bg-blue-600' },
-                                                    { id: 'full', label: 'Full', color: 'bg-padel-green' }
-                                                ].map(opt => (
-                                                    <button
-                                                        key={opt.id}
-                                                        type="button"
-                                                        onClick={() => setFormData({
-                                                            ...formData,
-                                                            license_type: opt.id,
-                                                            paid_registration: opt.id !== 'none'
-                                                        })}
-                                                        className={`py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${formData.license_type === opt.id
-                                                            ? `${opt.color} ${opt.id === 'full' ? 'text-black' : 'text-white'} border-white/20 shadow-lg`
-                                                            : 'bg-black/40 text-gray-500 border-white/5 hover:border-white/10'}`}
-                                                    >
-                                                        {opt.label}
-                                                    </button>
-                                                ))}
-                                            </div>
+                                            {canManageLicenses ? <a className="inline-block px-4 py-3 rounded-xl border border-padel-green/30 text-padel-green text-sm" href={`/admin?tab=licenses&player=${formData.id || ''}`}>Manage licenses</a> : <p className="text-sm text-gray-400">A Licenses administrator can manage this player’s coverage.</p>}
                                         </div>
                                     </div>
                                 </div>
@@ -1411,157 +1354,6 @@ const PlayerManager = () => {
                                     </button>
                                 </div>
                             </form>
-                        </motion.div>
-                    </motion.div>
-                )}
-                {/* Assign Temp License Modal */}
-                {isAssigningTemp && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-                    >
-                        <motion.div
-                            initial={{ scale: 0.95, opacity: 0, y: 20 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.95, opacity: 0, y: 20 }}
-                            className="bg-[#1a1a1a] w-full max-w-md rounded-2xl border border-white/10 shadow-2xl overflow-hidden"
-                        >
-                            <div className="p-6 border-b border-white/10 flex justify-between items-center">
-                                <h3 className="text-xl font-bold text-white">Assign Temp License</h3>
-                                <button onClick={() => setIsAssigningTemp(false)} className="text-gray-400 hover:text-white"><X size={24} /></button>
-                            </div>
-
-                            <div className="p-6 space-y-6">
-                                <div>
-                                    <p className="text-gray-400 text-sm mb-2">Assigning license to:</p>
-                                    <p className="text-white font-black text-lg">{tempLicenseTarget?.name}</p>
-                                    <p className="text-gray-500 text-xs">{tempLicenseTarget?.email}</p>
-                                </div>
-
-                                <div>
-                                    <label className="block text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">Search Target Event</label>
-                                    <div className="relative">
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
-                                            <Search size={16} />
-                                        </div>
-                                        <input 
-                                            type="text"
-                                            placeholder="Type to filter events..."
-                                            value={eventSearchTerm}
-                                            onChange={(e) => {
-                                                setEventSearchTerm(e.target.value);
-                                                setSelectedEventId(''); // Reset selection when searching
-                                            }}
-                                            className="w-full bg-black/50 border border-white/10 rounded-xl px-10 py-3 text-white focus:border-padel-green outline-none font-bold"
-                                        />
-                                    </div>
-                                    
-                                    {/* Filtered Results List */}
-                                    <div className="mt-2 max-h-48 overflow-y-auto bg-black/40 rounded-xl border border-white/5 custom-scrollbar">
-                                        {events
-                                            .filter(e => !eventSearchTerm || e.name?.toLowerCase().includes(eventSearchTerm.toLowerCase()))
-                                            .map(event => (
-                                                <button
-                                                    key={event.id}
-                                                    onClick={() => {
-                                                        setSelectedEventId(event.id);
-                                                        setEventSearchTerm(event.name);
-                                                    }}
-                                                    className={`w-full text-left px-4 py-3 text-sm transition-all border-b border-white/5 last:border-0 hover:bg-padel-green/10 ${
-                                                        selectedEventId === event.id ? 'bg-padel-green/20 text-padel-green font-black' : 'text-gray-300'
-                                                    }`}
-                                                >
-                                                    <div className="flex justify-between items-center">
-                                                        <span>{event.name}</span>
-                                                        <span className="text-[10px] opacity-50">{new Date(event.date || new Date()).toLocaleDateString()}</span>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        {events.filter(e => !eventSearchTerm || e.name?.toLowerCase().includes(eventSearchTerm.toLowerCase())).length === 0 && (
-                                            <div className="p-4 text-center text-gray-500 text-xs italic">No events found matching your search</div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <button
-                                    disabled={!selectedEventId || assignLoading}
-                                    onClick={async () => {
-                                        setAssignLoading(true);
-                                        try {
-                                            const event = events.find(e => String(e.id) === String(selectedEventId));
-                                            if (!event) throw new Error("Please select an event from the list first.");
-
-                                            // Ensure we have a valid date string
-                                            const validDate = event.date || new Date().toISOString();
-                                            
-                                            // 1. Check for existing license to avoid conflict errors
-                                            const { data: existingLic } = await supabase
-                                                .from('temporary_licenses')
-                                                .select('id')
-                                                .eq('player_id', tempLicenseTarget.id)
-                                                .eq('event_id', event.id)
-                                                .maybeSingle();
-
-                                            const licenseData = {
-                                                player_id: tempLicenseTarget.id,
-                                                event_id: event.id,
-                                                event_name: event.name || 'Tournament Event',
-                                                event_date: validDate
-                                            };
-
-                                            let licError;
-                                            if (existingLic) {
-                                                const { error } = await supabase
-                                                    .from('temporary_licenses')
-                                                    .update(licenseData)
-                                                    .eq('id', existingLic.id);
-                                                licError = error;
-                                            } else {
-                                                const { error } = await supabase
-                                                    .from('temporary_licenses')
-                                                    .insert([licenseData]);
-                                                licError = error;
-                                            }
-                                            
-                                            if (licError) {
-                                                console.error("License Save Error:", licError);
-                                                throw new Error(`License Save Error: ${licError.message}`);
-                                            }
-
-                                            // 2. Update Player Status
-                                            const { error: playerError } = await supabase
-                                                .from('players')
-                                                .update({
-                                                    paid_registration: true,
-                                                    license_type: 'temporary',
-                                                    approved: true
-                                                })
-                                                .eq('id', tempLicenseTarget.id);
-                                            
-                                            if (playerError) {
-                                                console.error("Player Update Error:", playerError);
-                                                throw new Error(`Player Update Error: ${playerError.message}`);
-                                            }
-
-                                            showToast("Temporary license assigned successfully!");
-                                            setIsAssigningTemp(false);
-                                            setEventSearchTerm('');
-                                            setSelectedEventId('');
-                                            fetchPlayers();
-                                        } catch (err) {
-                                            console.error("Manual Assign catch:", err);
-                                            showToast(err.message || "Failed to assign license", "error");
-                                        } finally {
-                                            setAssignLoading(false);
-                                        }
-                                    }}
-                                    className="w-full bg-padel-green text-black py-4 rounded-xl font-black uppercase tracking-widest hover:scale-[1.02] transition-all disabled:opacity-50 disabled:hover:scale-100 shadow-lg shadow-padel-green/20"
-                                >
-                                    {assignLoading ? 'Assigning...' : 'Confirm Assignment'}
-                                </button>
-                            </div>
                         </motion.div>
                     </motion.div>
                 )}

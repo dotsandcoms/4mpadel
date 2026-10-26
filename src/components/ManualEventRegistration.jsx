@@ -1,3 +1,4 @@
+import { eventLicense } from '../utils/licenses';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -27,10 +28,12 @@ import { isPaystackConfigured, isPaystackTestMode } from '../utils/paystackConfi
 import { buildPaystackCheckoutConfig, isInAppBrowser } from '../utils/paystackCheckout';
 import PartnerProfileInvite from './PartnerProfileInvite';
 import ManualRegistrationEntryCard from './ManualRegistrationEntryCard';
+import ReplacePartnerDialog from './ReplacePartnerDialog';
+import { usePaidPartnerReplacements } from '../hooks/usePaidPartnerReplacements';
 import { useMembersOnly } from '../context/MembersOnlyContext';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
-import { isRegistrationClosed } from '../utils/registrationClose';
-import { isPartnerBookingOwner, resolvePartnerPaid } from '../utils/partnerPaymentStatus';
+import { isRegistrationClosed, isRegistrationPaymentClosed } from '../utils/registrationClose';
+import { resolvePartnerPaid } from '../utils/partnerPaymentStatus';
 import { isEarlyBirdActive, resolveDivisionEntryFee } from '../utils/eventEntryFee';
 import {
     WEEKLY_OPEN_DIVISION,
@@ -43,6 +46,8 @@ import {
     weeklySpotsRemaining,
 } from '../utils/weeklyRegistration';
 import { addEventToSchedule } from '../utils/playerSchedule';
+import { countDivisionPlaces, divisionTeamLimit, reserveDivisionPlaces } from '../utils/divisionCapacity';
+import { registrationMatchesDivision } from '../utils/registrationDivision';
 
 const STEPS = [
     { id: 1, label: 'Profile' },
@@ -394,7 +399,7 @@ const ProgressBar = ({ step, theme, steps = STEPS }) => (
 const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null, fourMPlayers = {}, onStatusChange, onParticipantsChange, registrationActionsRef, highlightClassName = '', accessGrantId = null, onAccessRequired = null }) => {
     const navigate = useNavigate();
     const { promptMembersOnly } = useMembersOnly();
-    const { config: commerce } = useCommerceConfig();
+    const { config: commerce } = useCommerceConfig(Number(String(event.start_date || '').slice(0, 4)) || 2026);
     const eventPaymentMethod = event?.payment_method || (event?.allow_payments === false ? 'free' : 'platform');
     const usesManualEntryPayment = eventPaymentMethod === 'eft' || eventPaymentMethod === 'external';
     const manualPaymentLabel = eventPaymentMethod === 'eft' ? 'EFT' : 'external payment';
@@ -410,6 +415,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const [withdrawing, setWithdrawing] = useState(false);
     const [withdrawAll, setWithdrawAll] = useState(false);
     const [removePartnerTarget, setRemovePartnerTarget] = useState(null);
+    const [replacePartnerTarget, setReplacePartnerTarget] = useState(null);
+    const { replacements, refresh: refreshReplacements } = usePaidPartnerReplacements(event.id, !!userEmail);
     const [removingPartner, setRemovingPartner] = useState(false);
     const [switchMode, setSwitchMode] = useState(false);
     const [switchWholeTeam, setSwitchWholeTeam] = useState(false);
@@ -507,53 +514,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const resolveLicense = useCallback(async (player, eventId) => {
         if (!player) return { active: false, label: 'No active license' };
 
-        const lt = String(player.license_type || 'none').toLowerCase();
-
-        if (lt === 'full') {
-            return { active: true, label: 'Annual SAPA License Active' };
-        }
-
-        if (lt === 'temporary') {
-            const hasEmbeddedForEvent = player.temporary_licenses?.some((lic) => lic.event_id === eventId);
-            if (hasEmbeddedForEvent) {
-                return { active: true, label: 'Temporary SAPA License Active' };
-            }
-
-            const { data: tempLic } = await supabase
-                .from('temporary_licenses')
-                .select('id, event_date')
-                .eq('player_id', player.id)
-                .eq('event_id', eventId)
-                .maybeSingle();
-            if (tempLic) {
-                return { active: true, label: 'Temporary SAPA License Active' };
-            }
-
-            const { data: latestTemp } = await supabase
-                .from('temporary_licenses')
-                .select('id, event_date, event_id')
-                .eq('player_id', player.id)
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-
-            if (latestTemp?.event_date) {
-                const eventDate = new Date(latestTemp.event_date);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                if (eventDate >= today && latestTemp.event_id === eventId) {
-                    return { active: true, label: 'Temporary SAPA License Active' };
-                }
-            }
-
-            return { active: false, label: 'No active license for this event' };
-        }
-
-        if (player.paid_registration === true) {
-            return { active: true, label: 'SAPA License Active' };
-        }
-
-        return { active: false, label: 'No active license' };
+        return eventLicense(player.id, eventId);
     }, []);
 
     const loadDivisions = useCallback(async () => {
@@ -793,6 +754,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     );
 
     const hasPendingPayment = pendingPaymentRegs.length > 0;
+    const canPayPending = pendingPaymentRegs.some((reg) => !isRegistrationPaymentClosed(divisions.find((d) => d.id === reg.division_id), event));
+    const paymentsClosed = pendingPaymentRegs.some((reg) => isRegistrationPaymentClosed(divisions.find((d) => d.id === reg.division_id), event));
     const hasRegistrations = confirmedRegs.length > 0;
     const allRegistrationsPaid = hasRegistrations && confirmedRegs.every((reg) => {
         if (reg.payment_status === 'paid') return true;
@@ -842,7 +805,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 : null;
             return {
                 id: reg.id,
-                division: reg.division,
+                division: div?.name || reg.division,
                 divisionId: reg.division_id,
                 partnerName: resolvedPartnerName,
                 partnerEmail: resolvedPartnerEmail,
@@ -861,16 +824,15 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 statusClassName: isPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
                 partnerStatusClassName: partnerPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
                 canAddPartner,
-                isBookingOwner: isPartnerBookingOwner(reg, userEmail),
+                canReplacePartner: !regClosed && replacements.some((item) => item.owner_registration_id === reg.id),
+                isBookingOwner: !reversePartnerReg && !wasAddedByPartner,
                 canWithdraw: reg.status !== 'withdrawn' && !regClosed,
             };
         }),
-        [myRegs, divisions, divisionRegs, userEmail, event, isWeeklyEvent],
+        [myRegs, divisions, divisionRegs, userEmail, event, isWeeklyEvent, replacements],
     );
 
     const panelEntries = registrationEntries;
-    const removePartnerEntry = registrationEntries.find((entry) => entry.id === removePartnerTarget?.id);
-    const cancellingPendingPartner = !!removePartnerEntry && !removePartnerEntry.partnerPaid;
 
     const divisionsAvailableToRegister = useMemo(
         () => {
@@ -920,7 +882,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const pendingSelf = myRegs.filter((reg) => {
             if (reg.payment_status === 'paid') return false;
             const div = divisions.find((d) => d.id === reg.division_id);
-            return div && resolveDivisionEntryFee(div, event) > 0;
+            return div && resolveDivisionEntryFee(div, event) > 0 && !isRegistrationPaymentClosed(div, event);
         });
         if (pendingSelf.length === 0) return false;
 
@@ -935,7 +897,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const pendingPartner = (partnerRows || []).filter((reg) => {
             if (reg.payment_status === 'paid') return false;
             const div = divisions.find((d) => d.id === reg.division_id);
-            return div && resolveDivisionEntryFee(div, event) > 0;
+            return div && resolveDivisionEntryFee(div, event) > 0 && !isRegistrationPaymentClosed(div, event);
         });
 
         const hasPartnerEntry = pendingSelf.some((r) => r.partner_name || r.partner_email) || pendingPartner.length > 0;
@@ -965,16 +927,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
         setSelected(next);
         return true;
-    }, [myRegs, divisions, event.id, userEmail]);
+    }, [myRegs, divisions, event, userEmail]);
 
     const openPayWizard = useCallback(async () => {
         if (!userEmail) { promptMembersOnly(); return; }
-        if (event?.registration_closes_at && new Date(event.registration_closes_at).getTime() < Date.now()) {
-            toast.error('Registration has closed — payment is no longer available for this event.');
-            return;
-        }
         const restored = await restoreSelectedFromPending();
-        if (!restored) { toast.error('No outstanding payment found'); return; }
+        if (!restored) { toast.error(paymentsClosed ? 'Payments have closed. Contact the organiser.' : 'No outstanding payment found'); return; }
         setWizardMode('payOnly');
         setAddPartnerTarget(null);
         paymentRetryRef.current = true;
@@ -986,7 +944,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         await loadProfile();
         setWizardStep(4);
         setShowWizard(true);
-    }, [userEmail, restoreSelectedFromPending, loadProfile, promptMembersOnly, event?.registration_closes_at]);
+    }, [userEmail, restoreSelectedFromPending, loadProfile, promptMembersOnly, paymentsClosed]);
 
     const openAddPartnerWizard = useCallback(async (reg) => {
         if (!userEmail) { promptMembersOnly(); return; }
@@ -1040,6 +998,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     useEffect(() => {
         onStatusChange?.({
             hasPendingPayment,
+            canPayPending,
+            paymentsClosed,
             hasRegistrations,
             allRegistrationsPaid,
             hasAnyRegistration,
@@ -1087,8 +1047,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 },
                 openRemovePartner: (regId) => {
                     const reg = myRegs.find((r) => r.id === regId);
-                    const entry = registrationEntries.find((item) => item.id === regId);
-                    if (!reg || !entry?.isBookingOwner || !entry.hasPartner) return;
+                    if (!reg) return;
                     const div = divisions.find((d) => d.id === reg.division_id || d.name === reg.division);
                     const closed = isWeeklyEvent
                         ? isRegistrationClosed(null, event)
@@ -1098,6 +1057,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         return;
                     }
                     setRemovePartnerTarget(reg);
+                },
+                openReplacePartner: (regId) => {
+                    const entry = registrationEntries.find((item) => item.id === regId);
+                    const reg = myRegs.find((item) => item.id === regId);
+                    if (reg && entry?.canReplacePartner) setReplacePartnerTarget(reg);
                 },
                 openManageEntry: () => {
                     setDivisionsBlockOpen(true);
@@ -1121,6 +1085,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
     }, [
         hasPendingPayment,
+        canPayPending,
+        paymentsClosed,
         hasRegistrations,
         allRegistrationsPaid,
         hasAnyRegistration,
@@ -1328,30 +1294,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const resolvePartnerLicense = useCallback(async (player) => {
         if (!player) return { active: false, label: 'No active license' };
 
-        const lt = String(player.license_type || 'none').toLowerCase();
-
-        if (lt === 'full') {
-            return { active: true, label: 'Annual SAPA License Active' };
-        }
-
-        if (lt === 'temporary') {
-            const { data: tempLic } = await supabase
-                .from('temporary_licenses')
-                .select('id')
-                .eq('player_id', player.id)
-                .eq('event_id', event.id)
-                .maybeSingle();
-            if (tempLic) {
-                return { active: true, label: 'Temporary SAPA License Active' };
-            }
-            return { active: false, label: 'No active license for this event' };
-        }
-
-        if (player.paid_registration === true) {
-            return { active: true, label: 'SAPA License Active' };
-        }
-
-        return { active: false, label: 'No active license' };
+        return eventLicense(player.id, event.id);
     }, [event.id]);
 
     const clearPartner = () => {
@@ -1838,7 +1781,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const showPartnerLicenseOptions = showPartnerLicenseWarning;
 
-    const licenseFee = (choice) => licenseQuote(choice === 'full' ? 'full' : 'temporary', commerce).total;
+    const personLicenseQuote = (choice, partnerId) => { const info = partnerId ? getPartnerLicenseInfo(partnerId) : licenseInfo; return licenseQuote(choice === 'full' ? 'full' : 'temporary', { ...commerce, full_license_price: info.fullPrice ?? commerce.full_license_price }); };
+    const licenseFee = (choice, partnerId) => personLicenseQuote(choice, partnerId).total;
     const allowTemporaryLicense = event?.allow_temporary_license !== false;
     const licenseTypes = useMemo(
         () => availableLicenseTypes(commerce, { allowTemporary: allowTemporaryLicense }),
@@ -1957,7 +1901,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             let t = eventEntryQuote(entryBase, commerce).total;
             if (buyLicenseSelf) t += licenseFee(licenseSelfChoice);
             for (const purchase of partnerLicensePurchases) {
-                t += licenseFee(purchase.choice);
+                t += licenseFee(purchase.choice, purchase.partnerId);
             }
             return t;
         }
@@ -1971,10 +1915,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         let t = eventEntryQuote(entryBase, commerce).total;
         if (buyLicenseSelf) t += licenseFee(licenseSelfChoice);
         for (const purchase of partnerLicensePurchases) {
-            t += licenseFee(purchase.choice);
+            t += licenseFee(purchase.choice, purchase.partnerId);
         }
         return t;
-    }, [isWeeklyEvent, selectedWeeks, weeklyEntryMode, selectedDivisions, selected, myRegs, divisionRegs, buyLicenseSelf, licenseSelfChoice, partnerLicensePurchases, userEmail, event, commerce]);
+    }, [isWeeklyEvent, selectedWeeks, weeklyEntryMode, selectedDivisions, selected, myRegs, divisionRegs, buyLicenseSelf, licenseSelfChoice, partnerLicensePurchases, userEmail, event, commerce, licenseInfo, partnerLicenseCache]);
 
     const total = subtotal;
 
@@ -2026,7 +1970,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         label: purchase.choice === 'full'
                             ? `Partner annual license — ${purchase.partnerName}`
                             : `Partner temporary license — ${purchase.partnerName}`,
-                        amount: licenseFee(purchase.choice),
+                        amount: licenseFee(purchase.choice, purchase.partnerId),
                     });
                 }
                 const entryBase = players.reduce((sum, player) => sum + player.total, 0);
@@ -2091,7 +2035,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 label: purchase.choice === 'full'
                     ? `Partner annual license — ${purchase.partnerName}`
                     : `Partner temporary license — ${purchase.partnerName}`,
-                amount: licenseFee(purchase.choice),
+                amount: licenseFee(purchase.choice, purchase.partnerId),
             });
         }
 
@@ -2108,15 +2052,15 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     }, [
         isWeeklyEvent, selectedWeeks, weeklyEntryMode, selectedDivisions, selected, myRegs, divisionRegs,
         buyLicenseSelf, licenseSelfChoice, partnerLicenseCache, partnerLicensePurchases,
-        profile?.name, displayProfile?.name, event, commerce,
+        profile?.name, displayProfile?.name, event, commerce, licenseInfo,
     ]);
 
     const reviewPaySummary = useMemo(() => {
         const selfName = displayProfile?.name || profile?.name || 'You';
 
         const licenseLines = [];
-        const pushLicenseLine = (choice, label) => {
-            const quote = licenseQuote(choice === 'full' ? 'full' : 'temporary', commerce);
+        const pushLicenseLine = (choice, label, partnerId) => {
+            const quote = personLicenseQuote(choice, partnerId);
             licenseLines.push({
                 label,
                 base: quote.base,
@@ -2136,6 +2080,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 purchase.choice === 'full'
                     ? `${purchase.partnerName} annual SAPA license`
                     : `${purchase.partnerName} temporary SAPA license`,
+                purchase.partnerId,
             );
         }
         const licensesBase = licenseLines.reduce((sum, line) => sum + line.base, 0);
@@ -2230,7 +2175,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     }, [
         isWeeklyEvent, selectedWeeks, weeklyEntryMode, selectedDivisions, selected, myRegs, divisionRegs,
         buyLicenseSelf, licenseSelfChoice, hasLicense, anySelectedRequiresLicense, partnerLicenseCache,
-        partnerLicensePurchases, profile?.name, displayProfile?.name, profileImageUrl, event, commerce,
+        partnerLicensePurchases, profile?.name, displayProfile?.name, profileImageUrl, event, commerce, licenseInfo,
     ]);
 
     const lineItems = useMemo(() => {
@@ -2388,11 +2333,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             }));
             if (isReserve) return { ...built, covers: [] };
             const covers = [...(built.covers || [])];
-            if (buyLicenseSelf) covers.push({ email: userEmail, type: 'license', license: licenseSelfChoice });
+            if (buyLicenseSelf) covers.push({ email: userEmail, type: 'license', license_year: commerce.license_year, license: licenseSelfChoice });
             for (const purchase of partnerLicensePurchases) {
                 covers.push({
                     email: purchase.partnerEmail,
                     type: 'license',
+                    license_year: commerce.license_year,
                     license: purchase.choice,
                 });
             }
@@ -2473,7 +2419,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             covers.push({ email: soloReg.email, division: d.name, type: 'entry' });
                         }
                     }
-                } else {
+                } else if (wizardMode !== 'payOnly') {
                     const partnerEmailKey = String(sel.partnerEmail).toLowerCase();
                     rows.push({
                         event_id: event.id,
@@ -2496,11 +2442,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 }
             }
         }
-        if (buyLicenseSelf) covers.push({ email: userEmail, type: 'license', license: licenseSelfChoice });
+        if (buyLicenseSelf) covers.push({ email: userEmail, type: 'license', license_year: commerce.license_year, license: licenseSelfChoice });
         for (const purchase of partnerLicensePurchases) {
             covers.push({
                 email: purchase.partnerEmail,
                 type: 'license',
+                    license_year: commerce.license_year,
                 license: purchase.choice,
             });
         }
@@ -2592,6 +2539,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         allowWeeklyReserve,
         divisions,
         commerce,
+        wizardMode,
+        accessGrantId,
     ]);
 
     const persistRegistrations = async (rows, soloLinks = [], covers = []) => {
@@ -2778,10 +2727,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             },
             onCancel: () => {
                 setProcessing(false);
-                toast.info('Payment cancelled. You have not been registered.');
+                toast.info('Payment cancelled. Any reserved entry remains unpaid. You can retry payment or withdraw it.');
+                loadMyRegs();
+                loadDivisionRegs();
             },
         });
-    }, [userEmail, event.id, event.event_name, profile?.name, displayProfile?.name, handlePaymentSuccess]);
+    }, [userEmail, event.id, event.event_name, profile?.name, displayProfile?.name, handlePaymentSuccess, loadMyRegs, loadDivisionRegs]);
 
     const expireAbandonedCheckouts = useCallback(async () => {
         const cutoff = new Date(Date.now() - ABANDONED_CHECKOUT_AFTER_MS).toISOString();
@@ -2799,6 +2750,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const insertProcessingPayment = useCallback(async (payload) => {
         await expireAbandonedCheckouts();
+        await reserveDivisionPlaces(supabase, (payload.rows || []).map((row) => ({
+            ...row,
+            ...(accessGrantId ? { access_grant_id: accessGrantId } : {}),
+        })), payload.soloLinks || []);
         const metadata = {
             ...(payload.paymentMetadata || {}),
             // RLS ownership keys — must match auth JWT email for insert policy.
@@ -2817,7 +2772,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             is_test: isPaystackTestMode,
             metadata,
         }]);
-    }, [event.id, profile?.id, userEmail, expireAbandonedCheckouts]);
+    }, [event.id, profile?.id, userEmail, expireAbandonedCheckouts, accessGrantId]);
 
     useEffect(() => {
         if (
@@ -2859,7 +2814,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     },
                     onCancel: () => {
                         setProcessing(false);
-                        toast.info('Payment cancelled. You have not been registered.');
+                        toast.info('Payment cancelled. Any reserved entry remains unpaid. You can retry payment or withdraw it.');
+                        loadMyRegs();
+                        loadDivisionRegs();
                     },
                 });
                 if (!cancelled) {
@@ -2890,6 +2847,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         displayProfile?.name,
         buildManualPaymentPayload,
         handlePaymentSuccess,
+        loadMyRegs,
+        loadDivisionRegs,
         allowWeeklyReserve,
         weeklyCheckoutIntent,
     ]);
@@ -2926,8 +2885,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
         setProcessing(true);
         try {
+            await reserveDivisionPlaces(supabase, meta.registration_rows || [], meta.solo_link_updates || []);
             toast.info('Complete your payment to confirm registration');
             await launchPaystackCheckout(reference, Number(payment.amount));
+        } catch (err) {
+            toast.error(err.message || 'Unable to reserve your place.');
         } finally {
             setProcessing(false);
         }
@@ -2958,6 +2920,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const handleRegister = async () => {
         if (!userEmail) { toast.error('Please log in to register'); return; }
+        if (selectedDivisions.some((division) => isRegistrationPaymentClosed(division, event))) {
+            toast.error('Payments have closed. Contact the organiser.');
+            return;
+        }
         if (event?.registration_access === 'code' && !accessGrantId) {
             setShowWizard(false);
             onAccessRequired?.();
@@ -3169,11 +3135,6 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const reg = removePartnerTarget;
         if (!reg || removingPartner) return;
 
-        if (!removePartnerEntry?.isBookingOwner || !removePartnerEntry.hasPartner) {
-            toast.error('Only the booking owner can change this partner.');
-            return;
-        }
-
         const div = divisions.find((d) => d.id === reg.division_id || d.name === reg.division);
         if (isClosed(div, event)) {
             toast.error('Registration has closed — partner changes are no longer available.');
@@ -3183,17 +3144,15 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setRemovingPartner(true);
         try {
             const result = await invokePaystackRefund({ action: 'remove_partner', registration_id: reg.id });
-            if (!result?.refunds?.length || result.refunds.some((item) => item.status?.startsWith('skipped:'))) {
-                throw new Error('Partner entry could not be cancelled. Refresh the page and try again.');
-            }
             const refunded = Number(result?.total_refunded_rands || 0);
             if (refunded > 0) {
                 toast.success(`Partner removed — R ${refunded.toLocaleString('en-ZA')} refund initiated.`);
             } else {
-                toast.success(cancellingPendingPartner ? 'Pending partner entry cancelled. You can now add another partner.' : 'Partner removed');
+                toast.success('Partner removed');
             }
             setRemovePartnerTarget(null);
-            await Promise.all([loadMyRegs(), loadDivisionRegs()]);
+            loadMyRegs();
+            loadDivisionRegs();
             onParticipantsChange?.();
         } catch (err) {
             console.error('Remove partner failed:', err);
@@ -3912,6 +3871,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 const closed = isClosed(d, event);
                                 const reged = registeredDivisionIds.has(d.id);
                                 const sel = selected[d.id];
+                                const teamLimit = !event.is_quick_event ? divisionTeamLimit(d) : null;
+                                const usedPlaces = teamLimit == null ? null : countDivisionPlaces(divisionRegs.filter((r) => registrationMatchesDivision(r, d, divisions)));
                                 const addPartnerLocked = wizardMode === 'addPartner';
                                 const isSelected = addPartnerLocked ? true : !!sel;
                                 const isExpanded = addPartnerLocked ? true : (isSelected && expandedDivisions[d.id] !== false);
@@ -3976,6 +3937,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                         {d.name}
                                                     </p>
                                                     <DivisionDetails division={d} event={event} className="text-[11px] text-slate-600 font-normal leading-snug mt-1 rich-text max-w-none" />
+                                                    {teamLimit != null && (
+                                                        <p className="text-[11px] text-slate-600 mt-1">
+                                                            {usedPlaces}/{teamLimit} team places reserved · {usedPlaces >= teamLimit ? 'Full — you can still join an existing solo entry' : `${teamLimit - usedPlaces} available`}
+                                                        </p>
+                                                    )}
                                                     {reged && (
                                                         <p className="text-[10px] text-emerald-600 font-normal mt-0.5">
                                                             {enteredByName ? `Entered by ${enteredByName}` : 'Already entered'}
@@ -4131,8 +4097,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                             </div>
                                                             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-6">
                                                                 {[
-                                                                    licenseTypes.includes('temporary') && ['temporary', `Temporary SAPA license (${fmtRWhole(licenseFee('temporary'))})`],
-                                                                    licenseTypes.includes('full') && ['full', `Annual SAPA license (${fmtRWhole(licenseFee('full'))})`],
+                                                                    licenseTypes.includes('temporary') && ['temporary', `Temporary SAPA license (${fmtRWhole(licenseFee('temporary', sel.partnerId))})`],
+                                                                    licenseTypes.includes('full') && ['full', `Annual SAPA license (${fmtRWhole(licenseFee('full', sel.partnerId))})`],
                                                                 ].filter(Boolean).map(([val, label]) => (
                                                                     <label key={val} className="flex items-center gap-2 text-xs text-slate-900 cursor-pointer font-normal whitespace-nowrap">
                                                                         <input
@@ -4155,7 +4121,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                             <Check size={16} className="shrink-0 mt-0.5 text-emerald-600" />
                                                             <p>
                                                                 SAPA license already selected for {sel.partnerName}
-                                                                {' '}({eventPartnerLicenseChoice === 'full' ? `annual — ${fmtRWhole(licenseFee('full'))}` : `temporary — ${fmtRWhole(licenseFee('temporary'))}`}).
+                                                                {' '}({eventPartnerLicenseChoice === 'full' ? `annual — ${fmtRWhole(licenseFee('full', sel.partnerId))}` : `temporary — ${fmtRWhole(licenseFee('temporary', sel.partnerId))}`}).
                                                                 {' '}One license covers all divisions for this event.
                                                             </p>
                                                         </div>
@@ -4491,8 +4457,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     </p>
                                     <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 overflow-hidden">
                                         {[
-                                            licenseTypes.includes('full') && ['annual', `Add annual SAPA license for partner — ${fmtRWhole(licenseFee('full'))}`],
-                                            licenseTypes.includes('temporary') && ['temporary', `Add temporary SAPA license for partner — ${fmtRWhole(licenseFee('temporary'))}`],
+                                            licenseTypes.includes('full') && ['annual', `Add annual SAPA license for partner — ${fmtRWhole(licenseFee('full', primaryPartner.partnerProfile?.id))}`],
+                                            licenseTypes.includes('temporary') && ['temporary', `Add temporary SAPA license for partner — ${fmtRWhole(licenseFee('temporary', primaryPartner.partnerProfile?.id))}`],
                                             ['none', 'Do not add now — notify partner to complete later'],
                                         ].filter(Boolean).map(([val, label]) => (
                                             <label key={val} className="flex items-center gap-2 px-2.5 py-2 cursor-pointer hover:bg-gray-50 min-h-0">
@@ -5325,7 +5291,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 <div className="flex items-start gap-2.5 mb-4 p-3 rounded-xl bg-amber-50/80 border border-amber-100">
                                     <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                                     <p className="text-xs text-amber-900 leading-relaxed">
-                                        {hasRegistrations
+                                        {!canPayPending && paymentsClosed
+                                            ? 'Payments have closed. Contact the organiser about your outstanding entry fees.'
+                                            : hasRegistrations
                                             ? 'You have an outstanding payment to complete your registration.'
                                             : 'Complete your payment to secure your spot.'}
                                     </p>
@@ -5365,6 +5333,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                             onWithdraw={reg && entry.canWithdraw ? () => { setWithdrawAll(false); setSwitchMode(false); setSwitchTargetDivId(''); setWithdrawTarget(reg); } : undefined}
                                             onSwitch={reg && entry.canWithdraw && !isWeeklyEvent ? () => { setWithdrawAll(false); setSwitchMode(true); setSwitchWholeTeam(false); setSwitchTargetDivId(''); setWithdrawTarget(reg); } : undefined}
                                             onRemovePartner={reg && entry.canWithdraw ? () => setRemovePartnerTarget(reg) : undefined}
+                                            onReplacePartner={reg && entry.canReplacePartner ? () => setReplacePartnerTarget(reg) : undefined}
                                             withdrawLabel={entry.wasAddedByPartner && !entry.isPaid ? 'Decline' : 'Withdraw'}
                                         />
                                     );
@@ -5375,14 +5344,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 <p className="text-xs text-slate-500 mb-4 -mt-2">You can add a partner to any solo entry at any time.</p>
                             )}
                             <div className="flex flex-col gap-2.5 pt-1">
-                                {hasPendingPayment && !(event?.registration_closes_at && new Date(event.registration_closes_at).getTime() < Date.now()) && (
+                                {canPayPending && (
                                     <PrimaryBtn onClick={openPayWizard}>
                                         Pay Entry <CreditCard className="w-4 h-4" />
                                     </PrimaryBtn>
                                 )}
-                                {hasPendingPayment && event?.registration_closes_at && new Date(event.registration_closes_at).getTime() < Date.now() && (
+                                {canPayPending && event.allow_payments_after_close !== false && registrationFullyClosed && (
                                     <p className="text-xs text-amber-700 text-center leading-relaxed">
-                                        Registration has closed. Unpaid entries may be removed from the draw.
+                                        Registration has closed. You can still pay for your existing entries.
                                     </p>
                                 )}
                                 {canAddDivision && (
@@ -5541,6 +5510,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             </AnimatePresence>
 
             {/* Withdraw confirmation */}
+            {replacePartnerTarget && (
+                <ReplacePartnerDialog owner={replacePartnerTarget} onClose={() => setReplacePartnerTarget(null)}
+                    onReplaced={() => { loadMyRegs(); loadDivisionRegs(); refreshReplacements(); }} />
+            )}
             <AnimatePresence>
                 {withdrawTarget && (
                     <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4">
@@ -5843,9 +5816,6 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 12 }}
                             className="relative w-full max-w-md bg-white rounded-2xl border border-gray-100 shadow-xl overflow-hidden"
-                            role="dialog"
-                            aria-modal="true"
-                            aria-labelledby="partner-removal-title"
                             onClick={(e) => e.stopPropagation()}
                         >
                             <div className="px-6 py-5 border-b border-gray-50 flex items-start gap-3">
@@ -5853,19 +5823,18 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     <AlertCircle className="w-5 h-5 text-red-600" />
                                 </div>
                                 <div className="min-w-0">
-                                    <h3 id="partner-removal-title" className="text-base font-semibold text-slate-900">
-                                        {cancellingPendingPartner ? 'Cancel pending partner entry?' : `Remove ${removePartnerTarget.partner_name || 'your partner'}?`}
+                                    <h3 className="text-base font-semibold text-slate-900">
+                                        Remove {removePartnerTarget.partner_name || 'your partner'}?
                                     </h3>
                                     <p className="text-xs text-slate-600 mt-1 font-normal leading-snug">
-                                        {cancellingPendingPartner
-                                            ? `${removePartnerTarget.partner_name || 'Your partner'}'s unpaid entry in ${removePartnerEntry.division} will be cancelled. Your entry and payment stay active, and you can add another partner.`
-                                            : `${removePartnerTarget.partner_name || 'Your partner'}'s entry will be withdrawn and, if it was paid, refunded automatically to whoever paid for it. Your entry stays active.`}
+                                        {removePartnerTarget.partner_payment_status === 'paid'
+                                            ? `${removePartnerTarget.partner_name || 'Your partner'}'s entry will be withdrawn and, if it was paid, refunded automatically to whoever paid for it. Your entry stays active.`
+                                            : `${removePartnerTarget.partner_name || 'Your partner'}'s entry will be removed. Your entry stays active.`}
                                     </p>
                                 </div>
                                 <button
                                     type="button"
                                     onClick={() => !removingPartner && setRemovePartnerTarget(null)}
-                                    aria-label="Close partner confirmation"
                                     className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-gray-100 shrink-0"
                                     disabled={removingPartner}
                                 >
@@ -5880,7 +5849,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     disabled={removingPartner}
                                     className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-slate-700 hover:bg-gray-50 disabled:opacity-50"
                                 >
-                                    {cancellingPendingPartner ? 'Keep partner' : 'Cancel'}
+                                    Cancel
                                 </button>
                                 <button
                                     type="button"
@@ -5889,7 +5858,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     className="flex-1 py-3 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
                                 >
                                     {removingPartner ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                                    {removingPartner ? (cancellingPendingPartner ? 'Cancelling…' : 'Removing…') : (cancellingPendingPartner ? 'Cancel pending entry' : 'Remove partner')}
+                                    {removingPartner ? 'Removing…' : 'Remove partner'}
                                 </button>
                             </div>
                         </motion.div>

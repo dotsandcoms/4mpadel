@@ -9,7 +9,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "sync:paystack-edge": "node scripts/sync-paystack-edge.mjs"
+    "sync:paystack-edge": "node scripts/sync-paystack-edge.mjs",
+    "dev:tournament": "vite --config sandbox/tournament-manager/vite.config.mjs"
   },
   "dependencies": {
     "@burkcorp/reactmath": "file:reactmath-package",

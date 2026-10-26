@@ -5,11 +5,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import LicensePaymentModal from '../components/LicensePaymentModal';
+import PlayerLicenseCard from '../components/PlayerLicenseCard';
+import { PlayerPreferenceFields, PlayerPreferenceDetails } from '../components/PlayerPreferences';
 import { useCommerceConfig } from '../hooks/useCommerceConfig';
 import CoachProfileModal from '../components/CoachProfileModal';
 import OrgHostBanner from '../components/OrgHostBanner';
 import heroBg from '../assets/hero_bg.png';
 import { useRankedin } from '../hooks/useRankedin';
+import useLivePlayerRankings from '../hooks/useLivePlayerRankings';
+import { resultRankingKey } from '../utils/rankedinResults';
 import { usePendingPayments } from '../hooks/usePendingPayments';
 import { useClubs } from '../hooks/useClubs';
 import SearchableSelect from '../components/SearchableSelect';
@@ -155,6 +159,7 @@ const PlayerProfile = () => {
     const [hasSession, setHasSession] = useState(null);
     const [isMobileAccordionOpen, setIsMobileAccordionOpen] = useState(false);
     const [isCareerAccordionOpen, setIsCareerAccordionOpen] = useState(false);
+    const [statsExpanded, setStatsExpanded] = useState(false);
     const [isSecurityAccordionOpen, setIsSecurityAccordionOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [uploadingImage, setUploadingImage] = useState(false);
@@ -164,7 +169,7 @@ const PlayerProfile = () => {
     const [newPassword, setNewPassword] = useState('');
     const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
     const [player, setPlayer] = useState(null);
-    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [showPaymentModal, setShowPaymentModal] = useState(() => new URLSearchParams(window.location.search).get('license_payment') === '1');
     const [isImpersonating, setIsImpersonating] = useState(false);
     const [loadingReset, setLoadingReset] = useState(false);
     const [coachApplication, setCoachApplication] = useState(null);
@@ -185,6 +190,8 @@ const PlayerProfile = () => {
     const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
     const [isMobileEditingProfile, setIsMobileEditingProfile] = useState(false);
     const [selectedRankingForBreakdown, setSelectedRankingForBreakdown] = useState(null);
+    const { rankings: liveRankings, error: rankingRefreshError } = useLivePlayerRankings(player, Boolean(selectedRankingForBreakdown));
+    const displayedBreakdown = liveRankings.find(row => resultRankingKey(row) === resultRankingKey(selectedRankingForBreakdown)) || selectedRankingForBreakdown;
     const [tempLicenseDetails, setTempLicenseDetails] = useState(null);
     const [currentMatchPage, setCurrentMatchPage] = useState(1);
 
@@ -223,6 +230,8 @@ const PlayerProfile = () => {
         instagram_link: '',
         region: '',
         racket_brand: '',
+        playing_hand: '',
+        court_side: '',
         additional_images: []
     });
 
@@ -296,6 +305,7 @@ const PlayerProfile = () => {
                     const { data: tempLicenseRows } = await supabase
                         .from('temporary_licenses')
                         .select('*')
+                        .is('revoked_at', null)
                         .eq('player_id', playerData.id)
                         .order('event_date', { ascending: false });
 
@@ -310,24 +320,7 @@ const PlayerProfile = () => {
 
                     if (validTemps.length > 0) {
                         setTempLicenseDetails(validTemps[0]);
-                        if (playerData.license_type !== 'temporary' || !playerData.paid_registration) {
-                            await supabase
-                                .from('players')
-                                .update({ license_type: 'temporary', paid_registration: true })
-                                .eq('id', playerData.id);
-                            setPlayer((prev) => ({
-                                ...prev,
-                                license_type: 'temporary',
-                                paid_registration: true,
-                            }));
-                        }
-                    } else if (playerData.license_type === 'temporary') {
-                        console.log('Temporary license expired, resetting status...');
-                        await supabase
-                            .from('players')
-                            .update({ license_type: 'none', paid_registration: false })
-                            .eq('id', playerData.id);
-                        setPlayer((prev) => ({ ...prev, license_type: 'none', paid_registration: false }));
+                    } else {
                         setTempLicenseDetails(null);
                     }
                 }
@@ -385,6 +378,8 @@ const PlayerProfile = () => {
                     instagram_link: playerData.instagram_link || '',
                     region: playerData.region || '',
                     racket_brand: playerData.racket_brand || '',
+                    playing_hand: playerData.playing_hand || '',
+                    court_side: playerData.court_side || '',
                     additional_images: additionalImagesArray
                 });
 
@@ -407,6 +402,8 @@ const PlayerProfile = () => {
 
                 // Fetch transactions for this user
                 fetchTransactions(emailToFetch);
+            } else if (!error && !testEmail) {
+                setFormData(previous => ({ ...previous, email: session.user.email || '', name: session.user.user_metadata?.full_name || session.user.user_metadata?.name || '' }));
             }
             setLoading(false);
         };
@@ -795,6 +792,8 @@ const PlayerProfile = () => {
         const params = new URLSearchParams(window.location.search);
         if (params.get('edit') === 'true') {
             setIsEditing(true);
+            setIsEditProfileModalOpen(true);
+            setIsMobileEditingProfile(true);
         }
         const tab = params.get('tab');
         if (tab && ['events', 'matches', 'rankings', 'payments', 'club', 'coach'].includes(tab)) {
@@ -1163,12 +1162,12 @@ const PlayerProfile = () => {
 
     const handleSave = async (e) => {
         e.preventDefault();
-        if (!player) return;
+        if (!player && isImpersonating) return;
         setSaving(true);
         setMessage(null);
 
         // Check if email is being changed
-        const emailChanged = !isImpersonating && formData.email !== player.email;
+        const emailChanged = !!player && !isImpersonating && formData.email !== player.email;
 
         // Parse sponsors back to JSON array before saving
         let sponsorsArray = [];
@@ -1194,10 +1193,31 @@ const PlayerProfile = () => {
             instagram_link: formData.instagram_link,
             region: formData.region,
             racket_brand: formData.racket_brand,
+            playing_hand: formData.playing_hand || null,
+            court_side: formData.court_side || null,
             additional_images: JSON.stringify(formData.additional_images || [])
         };
 
         try {
+            if (!player) {
+                if (!formData.name.trim() || !formData.contact_number.trim()) throw new Error('Add your full name and mobile number.');
+                const { data: { user }, error: userError } = await supabase.auth.getUser();
+                if (userError || !user?.email) throw new Error('Sign in again to complete your player profile.');
+                const { error: createError } = await supabase.rpc('create_player_profile', {
+                    p_email: user.email,
+                    p_name: formData.name.trim(),
+                    p_contact: formData.contact_number.trim(),
+                    p_category: 'Unranked',
+                    p_gender: null, p_nationality: null, p_id_number: null, p_bio: null,
+                    p_home_club: null, p_sponsors: null, p_region: null,
+                    p_paid_registration: false, p_license_type: 'none',
+                    p_image_url: null, p_racket_brand: null, p_club_id: null
+                });
+                if (createError) throw createError;
+                await refetchPlayer();
+                showMessage('Player profile saved. You can now choose your license.', 'success');
+                return;
+            }
             // Update the players table
             const { error: dbError } = await supabase
                 .from('players')
@@ -1694,10 +1714,17 @@ const PlayerProfile = () => {
 
     if (!player) {
         return (
-            <div className="min-h-screen bg-black flex items-center justify-center pt-24 text-white">
-                <div className="text-center">
-                    <h2 className="text-2xl font-bold mb-2">No Profile Found</h2>
-                    <p className="text-gray-400">We couldn't link your account to a player profile.</p>
+            <div className="min-h-screen bg-black flex items-center justify-center px-5 pt-24 pb-12 text-white">
+                <div className="w-full max-w-md">
+                    <h2 className="text-2xl font-bold mb-2">Complete your player profile</h2>
+                    <p className="text-sm text-gray-400 mb-6">Add your full name and mobile number to buy a license and enter events.</p>
+                    {message && <p role="alert" className="mb-4 text-sm text-red-300">{message.text}</p>}
+                    {isImpersonating ? <p className="text-gray-400">We couldn't find a player profile for this account.</p> : <form onSubmit={handleSave} className="space-y-4">
+                        <label className="block text-sm">Full name<input required autoComplete="name" value={formData.name} onChange={e => setFormData(previous => ({ ...previous, name: e.target.value }))} className="mt-2 block w-full rounded-md border border-white/20 bg-neutral-950 p-3" /></label>
+                        <label className="block text-sm">Email address<input readOnly type="email" autoComplete="email" value={formData.email} className="mt-2 block w-full rounded-md border border-white/20 bg-neutral-950 p-3 text-gray-400" /></label>
+                        <label className="block text-sm">Mobile number<input required type="tel" autoComplete="tel" value={formData.contact_number} onChange={e => setFormData(previous => ({ ...previous, contact_number: e.target.value }))} className="mt-2 block w-full rounded-md border border-white/20 bg-neutral-950 p-3" /></label>
+                        <button disabled={saving} type="submit" className="w-full rounded-md bg-padel-green px-4 py-3 font-semibold text-black disabled:opacity-50">{saving ? 'Saving…' : 'Save player profile'}</button>
+                    </form>}
                 </div>
             </div>
         );
@@ -1884,6 +1911,7 @@ const PlayerProfile = () => {
                             </div>
                         </div>
 
+                        <PlayerLicenseCard playerId={player?.id} refreshKey={`${showPaymentModal}:${player?.name}:${player?.contact_number}`} onManage={() => setShowPaymentModal(true)} />
                         {/* Mobile License Purchase / Upgrade CTA */}
                         {player && player.license_type !== 'full' && (
                             <div className={`bg-[#0a0a0a]/70 backdrop-blur-2xl border rounded-3xl p-4 shadow-2xl relative overflow-hidden ${
@@ -1940,7 +1968,20 @@ const PlayerProfile = () => {
                         )}
 
                         {/* Performance Statistics Card */}
-                        <div className="bg-[#0a0a0a]/70 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 shadow-2xl space-y-4">
+                        <div className="bg-[#0a0a0a]/70 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 shadow-2xl">
+                            <button
+                                type="button"
+                                aria-expanded={statsExpanded}
+                                aria-controls="profile-performance"
+                                onClick={() => setStatsExpanded(open => !open)}
+                                className="flex w-full min-h-[44px] items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-padel-green"
+                            >
+                                <TrendingUp size={16} className="text-gray-400" />
+                                <span className="flex-1 text-[11px] font-black uppercase tracking-widest text-gray-400">Stats &amp; Performance</span>
+                                <span className="text-sm font-bold text-white">{statsExpanded ? 'Hide' : 'Show'}</span>
+                                <ChevronDown size={16} className={`text-gray-400 transition-transform ${statsExpanded ? 'rotate-180' : ''}`} />
+                            </button>
+                            <div id="profile-performance" hidden={!statsExpanded} className="mt-4 space-y-4">
                             <div className="grid grid-cols-4 gap-2 text-center">
                                 <div className="flex flex-col p-1.5 bg-white/[0.02] border border-white/5 rounded-xl">
                                     <span className="text-[7px] font-black text-gray-500 uppercase tracking-widest">Total Match</span>
@@ -1994,6 +2035,7 @@ const PlayerProfile = () => {
                                         <span className="w-1.5 h-1.5 bg-black rounded-full" />
                                     </div>
                                 </div>
+                            </div>
                             </div>
                         </div>
 
@@ -2390,19 +2432,18 @@ const PlayerProfile = () => {
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
                                         <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-300">Rankings Points Breakdown</h4>
+                                                        {rankingRefreshError && <p role="alert" className="text-xs text-amber-300">Some rankings could not refresh. Showing saved results.</p>}
                                     </div>
 
                                     {/* Scrollable organizational pills selection */}
                                     {player.rankings && player.rankings.length > 0 && (
                                         <div className="flex gap-1.5 overflow-x-auto no-scrollbar scrollbar-none pb-1 -mx-2 px-2">
-                                            {player.rankings.map((r, i) => {
+                                            {liveRankings.map((r, i) => {
                                                 const isSelected = selectedRankingForBreakdown === r
                                                     || (selectedRankingForBreakdown
                                                         && selectedRankingForBreakdown.org === r.org
                                                         && selectedRankingForBreakdown.age_group === r.age_group
-                                                        && selectedRankingForBreakdown.match_type === r.match_type
-                                                        && selectedRankingForBreakdown.rank === r.rank
-                                                        && selectedRankingForBreakdown.points === r.points);
+                                                        && displayedBreakdown.match_type === r.match_type);
                                                 return (
                                                     <button
                                                         key={i}
@@ -2425,23 +2466,23 @@ const PlayerProfile = () => {
                                             <div className="grid grid-cols-3 gap-2">
                                                 <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-3.5 text-center">
                                                     <p className="text-[7.5px] font-black text-gray-500 uppercase tracking-widest mb-0.5">Standing</p>
-                                                    <p className="text-lg font-black text-yellow-500">#{selectedRankingForBreakdown.rank}</p>
+                                                    <p className="text-lg font-black text-yellow-500">#{displayedBreakdown.rank}</p>
                                                 </div>
                                                 <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-3.5 text-center">
                                                     <p className="text-[7.5px] font-black text-gray-500 uppercase tracking-widest mb-0.5">Points</p>
-                                                    <p className="text-lg font-black text-white">{selectedRankingForBreakdown.points}</p>
+                                                    <p className="text-lg font-black text-white">{displayedBreakdown.points}</p>
                                                 </div>
                                                 <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-3.5 text-center flex flex-col justify-center">
                                                     <p className="text-[7.5px] font-black text-gray-500 uppercase tracking-widest mb-0.5">Type</p>
-                                                    <p className="text-[9px] font-extrabold text-gray-300 uppercase leading-none mt-1 truncate">{selectedRankingForBreakdown.match_type}</p>
+                                                    <p className="text-[9px] font-extrabold text-gray-300 uppercase leading-none mt-1 truncate">{displayedBreakdown.match_type}</p>
                                                 </div>
                                             </div>
 
                                             {/* Contributions List Table */}
                                             <div className="space-y-3">
                                                 <h5 className="text-[9px] font-black uppercase tracking-[0.25em] text-gray-500 pl-1">Detailed Breakdown</h5>
-                                                {selectedRankingForBreakdown.details && selectedRankingForBreakdown.details.length > 0 ? (
-                                                    selectedRankingForBreakdown.details.map((item, idx) => (
+                                                {displayedBreakdown.details && displayedBreakdown.details.length > 0 ? (
+                                                    displayedBreakdown.details.map((item, idx) => (
                                                         <div key={idx} className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 space-y-3 shadow-lg backdrop-blur-xl">
                                                             <div className="flex justify-between items-start gap-2">
                                                                 <div className="min-w-0">
@@ -2638,6 +2679,8 @@ const PlayerProfile = () => {
                                                     </p>
                                                 </div>
 
+                                                <PlayerPreferenceDetails player={player} compact />
+
                                                 {/* Racket Brand */}
                                                 <div className="bg-[#0a0a0a]/70 border border-white/10 rounded-2xl p-3.5 flex flex-col justify-between min-h-[75px] shadow-lg backdrop-blur-xl">
                                                     <span className="text-[7.5px] font-black text-padel-green uppercase tracking-widest flex items-center gap-1">
@@ -2816,6 +2859,8 @@ const PlayerProfile = () => {
                                                 )}
                                             </div>
 
+                                            <PlayerPreferenceFields value={formData} onChange={setFormData} compact />
+
                                             {/* Racket Brand */}
                                             <div className="space-y-1">
                                                 <label className="text-[8.5px] font-black uppercase tracking-wider text-padel-green ml-1">Racket Brand</label>
@@ -2986,7 +3031,7 @@ const PlayerProfile = () => {
                                             <div className="bg-white/5 rounded-2xl p-4 border border-white/5 space-y-4">
                                                 <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Organizational Rankings</p>
                                                 <div className="space-y-2">
-                                                    {player.rankings.map((r, i) => {
+                                                    {liveRankings.map((r, i) => {
                                                         const rankingKey = `${r.org || ''}|${r.age_group || ''}|${r.match_type || ''}|${r.rank || ''}|${r.points || ''}`;
                                                         const preferredKey = player.preferred_ranking || '';
                                                         const preferredMatches = preferredKey && preferredKey === `${r.org || ''}|${r.age_group || ''}|${r.match_type || ''}`;
@@ -3292,6 +3337,7 @@ const PlayerProfile = () => {
                     {/* Organisation Host Application / Portal Banner */}
                     <OrgHostBanner player={player} />
 
+                    <PlayerLicenseCard playerId={player?.id} refreshKey={`${showPaymentModal}:${player?.name}:${player?.contact_number}`} onManage={() => setShowPaymentModal(true)} />
                     {/* Payment Required Banner - shown when profile is not visible (none or temporary) */}
                     {player && (player.license_type !== 'full') && (
                         <motion.div
@@ -3429,7 +3475,7 @@ const PlayerProfile = () => {
                                                     <div className="bg-white/5 rounded-2xl p-4 border border-white/5 space-y-4">
                                                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Organizational Rankings</p>
                                                         <div className="space-y-2">
-                                                            {player.rankings.map((r, i) => {
+                                                            {liveRankings.map((r, i) => {
                                                                 const rankingKey = `${r.org || ''}|${r.age_group || ''}|${r.match_type || ''}|${r.rank || ''}|${r.points || ''}`;
                                                         const preferredKey = player.preferred_ranking || '';
                                                         const preferredMatches = preferredKey && preferredKey === `${r.org || ''}|${r.age_group || ''}|${r.match_type || ''}`;
@@ -3907,6 +3953,7 @@ const PlayerProfile = () => {
                                                                     <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Region</p>
                                                                     <p className="text-lg font-bold text-white uppercase">{player.region || 'Not set'}</p>
                                                                 </div>
+                                                                <PlayerPreferenceDetails player={player} />
                                                                 <div className="space-y-1">
                                                                     <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Racket Brand</p>
                                                                     <p className="text-lg font-bold text-white">{player.racket_brand || 'Not set'}</p>
@@ -4128,6 +4175,7 @@ const PlayerProfile = () => {
                                                                             <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-padel-green/75 pointer-events-none" size={20} />
                                                                         </div>
                                                                     </div>
+                                                                    <div className="md:col-span-2"><PlayerPreferenceFields value={formData} onChange={setFormData} desktop /></div>
                                                                     <div className="space-y-2">
                                                                         <label className="text-[10px] font-black text-padel-green uppercase tracking-[0.2em] ml-2">Racket Brand</label>
                                                                         <div className="relative space-y-3">
@@ -4301,6 +4349,7 @@ const PlayerProfile = () => {
                                                         <h4 className="font-black text-white uppercase tracking-wider text-sm sm:text-base lg:text-lg truncate">
                                                             RANKINGS POINTS BREAKDOWN
                                                         </h4>
+                                                        {rankingRefreshError && <p role="alert" className="text-xs text-amber-300">Some rankings could not refresh. Showing saved results.</p>}
                                                     </div>
                                                 </div>
                                                 <div className="lg:hidden">
@@ -4320,14 +4369,12 @@ const PlayerProfile = () => {
                                                     {/* Small ranking list select pills */}
                                                     {player.rankings && player.rankings.length > 0 && (
                                                         <div className="relative z-10 flex flex-wrap gap-1.5 bg-white/[0.03] backdrop-blur-md p-1 rounded-xl w-fit border border-white/10">
-                                                            {player.rankings.map((r, i) => {
+                                                            {liveRankings.map((r, i) => {
                                                                 const isSelected = selectedRankingForBreakdown === r
                                                                     || (selectedRankingForBreakdown
                                                                         && selectedRankingForBreakdown.org === r.org
                                                                         && selectedRankingForBreakdown.age_group === r.age_group
-                                                                        && selectedRankingForBreakdown.match_type === r.match_type
-                                                                        && selectedRankingForBreakdown.rank === r.rank
-                                                                        && selectedRankingForBreakdown.points === r.points);
+                                                                        && displayedBreakdown.match_type === r.match_type);
                                                                 return (
                                                                     <button
                                                                         key={i}
@@ -4350,15 +4397,15 @@ const PlayerProfile = () => {
                                                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                                                 <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-4 text-center hover:bg-white/[0.06] transition-all duration-300">
                                                                     <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Current Standing</p>
-                                                                    <p className="text-2xl font-black text-padel-green">#{selectedRankingForBreakdown.rank}</p>
+                                                                    <p className="text-2xl font-black text-padel-green">#{displayedBreakdown.rank}</p>
                                                                 </div>
                                                                 <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-4 text-center hover:bg-white/[0.06] transition-all duration-300">
                                                                     <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Points</p>
-                                                                    <p className="text-2xl font-black text-white">{selectedRankingForBreakdown.points}</p>
+                                                                    <p className="text-2xl font-black text-white">{displayedBreakdown.points}</p>
                                                                 </div>
                                                                 <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-4 text-center hover:bg-white/[0.06] transition-all duration-300">
                                                                     <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Match Type</p>
-                                                                    <p className="text-xs font-bold text-gray-300 uppercase mt-2">{selectedRankingForBreakdown.match_type}</p>
+                                                                    <p className="text-xs font-bold text-gray-300 uppercase mt-2">{displayedBreakdown.match_type}</p>
                                                                 </div>
                                                             </div>
 
@@ -4376,8 +4423,8 @@ const PlayerProfile = () => {
                                                                             </tr>
                                                                         </thead>
                                                                         <tbody>
-                                                                            {selectedRankingForBreakdown.details && selectedRankingForBreakdown.details.length > 0 ? (
-                                                                                selectedRankingForBreakdown.details.map((item, idx) => (
+                                                                            {displayedBreakdown.details && displayedBreakdown.details.length > 0 ? (
+                                                                                displayedBreakdown.details.map((item, idx) => (
                                                                                     <tr key={idx} className="border-b border-white/10 hover:bg-white/[0.05] transition-colors">
                                                                                         <td className="py-4 px-6 text-xs text-gray-400 font-medium whitespace-nowrap">{item.date}</td>
                                                                                         <td className="py-4 px-6">
@@ -4407,8 +4454,8 @@ const PlayerProfile = () => {
 
                                                             {/* Mobile Card list */}
                                                             <div className="block md:hidden space-y-3">
-                                                                {selectedRankingForBreakdown.details && selectedRankingForBreakdown.details.length > 0 ? (
-                                                                    selectedRankingForBreakdown.details.map((item, idx) => (
+                                                                {displayedBreakdown.details && displayedBreakdown.details.length > 0 ? (
+                                                                    displayedBreakdown.details.map((item, idx) => (
                                                                         <div key={idx} className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-4 space-y-3 hover:bg-white/[0.06] transition-all duration-300">
                                                                             <div className="flex justify-between items-start gap-2">
                                                                                 <div className="min-w-0">
@@ -5163,6 +5210,8 @@ const PlayerProfile = () => {
                 <LicensePaymentModal
                     isOpen={showPaymentModal}
                     onClose={() => setShowPaymentModal(false)}
+                    beneficiaryPlayerId={player?.id}
+                    onEditProfile={() => { setShowPaymentModal(false); setIsEditProfileModalOpen(true); setIsMobileEditingProfile(true); setIsEditing(true); }}
                     userEmail={player?.email}
                     userName={player?.name}
                     onPaymentSuccess={refetchPlayer}
@@ -5404,6 +5453,8 @@ const PlayerProfile = () => {
                                                     </div>
                                                 </div>
                                             </div>
+
+                                            <PlayerPreferenceFields value={formData} onChange={setFormData} />
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
                                                 <div className="space-y-1.5">

@@ -46,3 +46,13 @@ function hexAlpha(hex: string, alpha: number) {
   const b = parseInt(n.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
 }
+
+/** Accessible tier labels for V2 white cards; original fills remain unchanged. */
+export function lightSapaTone(status?: string | null): SapaTone {
+  const original = sapaTone(status);
+  const textByFill: Record<string, string> = {
+    '#CCFF00': '#386018', '#EAB308': '#875E0B', '#F59E0B': '#87520B',
+    '#9CA3AF': '#52625A', '#F40020': '#B42335',
+  };
+  return { ...original, text: textByFill[original.fill] || original.fill };
+}

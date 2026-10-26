@@ -1,23 +1,24 @@
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { SymbolView } from 'expo-symbols';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import Animated, {
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
   withRepeat,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 
 import { FadeUp } from '@/components/fade-up';
-import { MotionBorder } from '@/components/motion-border';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { useOnboardingEvents } from '@/lib/onboarding-events';
-import { sapaLabel, sapaTone } from '@/theme/sapa';
-import { brand, motion } from '@/theme/tokens';
+import { sapaLabel, lightSapaTone } from '@/theme/sapa';
+import { lightBrand as brand, motion } from '@/theme/tokens';
 
-/** Website `text-yellow-500` — rank only, same as Hero.jsx. */
-const RANK_GOLD = '#EAB308';
 
 /**
  * Believable product snapshots for onboarding. Decorative — the slide copy
@@ -54,9 +55,71 @@ export function EventsPreview() {
   );
 }
 
+export function TournamentFollowPreview() {
+  const reduced = useReducedMotion();
+  const { events } = useOnboardingEvents();
+  const event = events?.[0];
+  const followed = useSharedValue(reduced ? 1 : 0);
+  const alert = useSharedValue(reduced ? 1 : 0);
+
+  useEffect(() => {
+    if (reduced) {
+      followed.value = 1;
+      alert.value = 1;
+      return;
+    }
+    followed.value = withDelay(550, withSpring(1, { damping: 13, stiffness: 190 }));
+    alert.value = withDelay(1050, withTiming(1, { duration: 360 }));
+    return () => {
+      cancelAnimation(followed);
+      cancelAnimation(alert);
+    };
+  }, [alert, followed, reduced]);
+
+  const followStyle = useAnimatedStyle(() => ({
+    opacity: followed.value,
+    transform: [{ scale: 0.85 + followed.value * 0.15 }],
+  }));
+  const alertStyle = useAnimatedStyle(() => ({
+    opacity: alert.value,
+    transform: [{ translateY: (1 - alert.value) * 18 }],
+  }));
+
+  return (
+    <View {...a11yHide} style={{ gap: 12 }}>
+      <View style={{ padding: 18, borderRadius: 22, borderWidth: 1, borderColor: brand.edge, backgroundColor: brand.elevated, gap: 18 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          <View style={{ width: 54, height: 62, borderRadius: 12, backgroundColor: brand.glass, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="calendar-outline" size={25} color={brand.accent} />
+          </View>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={{ color: brand.premium, fontSize: 17, fontWeight: '800' }} numberOfLines={1}>{event?.place || 'Your next tournament'}</Text>
+            <Text style={{ color: brand.muted, fontSize: 12 }} numberOfLines={1}>{event ? `${event.date} · ${event.location}` : 'Follow for event updates'}</Text>
+          </View>
+        </View>
+        <View style={{ height: 1, backgroundColor: brand.edge }} />
+        <Animated.View style={[followStyle, { minHeight: 46, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, borderRadius: 12, backgroundColor: brand.padel }]}>
+          <Ionicons name="notifications" size={19} color={brand.premium} />
+          <Text style={{ color: brand.premium, fontSize: 14, fontWeight: '800' }}>Following tournament</Text>
+        </Animated.View>
+      </View>
+      <Animated.View style={[alertStyle, { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 15, borderRadius: 18, borderWidth: 1, borderColor: brand.edge, backgroundColor: brand.elevated }]}>
+        <View style={{ width: 35, height: 35, borderRadius: 9, backgroundColor: brand.padel, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name="notifications" size={18} color={brand.premium} />
+        </View>
+        <View style={{ flex: 1, gap: 3 }}>
+          <Text style={{ color: brand.muted, fontSize: 10, fontWeight: '700', letterSpacing: 1.1 }}>4M PADEL · NOW</Text>
+          <Text style={{ color: brand.premium, fontSize: 14, fontWeight: '800' }}>Draws are ready</Text>
+          <Text style={{ color: brand.muted, fontSize: 12, lineHeight: 17 }} numberOfLines={2}>{event ? `${event.place} has published its draw.` : 'Your tournament has published its draw.'}</Text>
+        </View>
+      </Animated.View>
+    </View>
+  );
+}
+
 function EventCardSkeleton() {
   return (
-    <View className="rounded-2xl border border-edge bg-elevated px-5 py-4">
+    <View className="rounded-2xl border border-court-edge bg-court-elevated px-5 py-4">
       <View className="h-3 w-20 rounded bg-edge" />
       <View className="mt-2.5 h-4 w-3/4 rounded bg-edge" />
       <View className="mt-3 h-3.5 w-28 rounded bg-edge" />
@@ -75,15 +138,15 @@ function EventCard({
   location: string;
   sapaStatus: string | null;
 }) {
-  const tone = sapaTone(sapaStatus);
+  const tone = lightSapaTone(sapaStatus);
   const label = sapaLabel(sapaStatus);
 
   return (
-    <MotionBorder>
+    <View className="overflow-hidden rounded-3xl border border-court-edge bg-court-elevated">
       <View className="px-5 py-4">
         <View className="flex-row items-center justify-between">
           <Text
-            className="text-[11px] font-bold uppercase text-faint"
+            className="text-[11px] font-bold uppercase text-court-faint"
             style={{ letterSpacing: 1.4 }}>
             {date}
           </Text>
@@ -99,52 +162,95 @@ function EventCard({
             </View>
           ) : null}
         </View>
-        <Text className="mt-1.5 text-[16px] font-semibold text-premium" numberOfLines={1}>
+        <Text className="mt-1.5 text-[16px] font-semibold text-court-ink" numberOfLines={1}>
           {place}
         </Text>
         {location ? (
-          <Text className="mt-3 text-[14px] text-muted" numberOfLines={1}>
+          <Text className="mt-3 text-[14px] text-court-muted" numberOfLines={1}>
             {location}
           </Text>
         ) : null}
       </View>
-    </MotionBorder>
+    </View>
   );
 }
 
 export function PartnerPreview() {
+  const reduced = useReducedMotion();
+  const checkScale = useSharedValue(0);
+
+  useEffect(() => {
+    checkScale.value = reduced
+      ? 1
+      : withDelay(600, withSpring(1, { damping: 10, stiffness: 220, mass: 0.7 }));
+    return () => cancelAnimation(checkScale);
+  }, [checkScale, reduced]);
+
+  const checkStyle = useAnimatedStyle(() => ({
+    opacity: reduced ? 1 : Math.min(1, checkScale.value),
+    transform: [{ scale: reduced ? 1 : checkScale.value }],
+  }));
+
   return (
     <View {...a11yHide}>
-      <MotionBorder>
+      <View className="overflow-hidden rounded-3xl border border-court-edge bg-court-elevated">
         <View className="px-5 py-5">
-          <Text className="text-[16px] font-semibold text-premium">Cape Town Open</Text>
-          <Text className="mt-1 text-[13px] text-muted">Men's Open</Text>
+          <Text className="text-[16px] font-semibold text-court-ink">Cape Town Open</Text>
+          <Text className="mt-1 text-[13px] text-court-muted">Men's Open</Text>
 
           <Text
-            className="mb-2 mt-5 text-[11px] font-bold uppercase text-faint"
+            className="mb-2 mt-5 text-[11px] font-bold uppercase text-court-faint"
             style={{ letterSpacing: 1.4 }}>
             Add a partner
           </Text>
-          <View className="flex-row items-center rounded-xl border border-padel bg-surface px-3 py-3">
-            <View className="h-9 w-9 items-center justify-center rounded-full border border-edge bg-elevated">
-            <Text className="text-[12px] font-bold text-premium">PN</Text>
+          <View className="flex-row items-center rounded-xl border border-padel bg-court-surface px-3 py-3">
+            <View className="h-9 w-9 items-center justify-center rounded-full border border-court-edge bg-court-elevated">
+            <Text className="text-[12px] font-bold text-court-ink">PN</Text>
           </View>
           <View className="ml-3 flex-1">
-            <Text className="text-[15px] font-semibold text-premium">Partner Name</Text>
-              <Text className="mt-0.5 text-[12px] text-muted">Linked to your entry</Text>
+            <Text className="text-[15px] font-semibold text-court-ink">Partner Name</Text>
+              <Text className="mt-0.5 text-[12px] text-court-muted">Linked to your entry</Text>
             </View>
-            <SymbolView name="checkmark.circle.fill" size={22} tintColor={brand.padel} />
+            <Animated.View style={checkStyle}>
+              <SymbolView name="checkmark.circle.fill" size={22} tintColor={brand.accent} />
+            </Animated.View>
           </View>
         </View>
-      </MotionBorder>
+      </View>
     </View>
   );
 }
 
 export function RankingPreview() {
+  const reduced = useReducedMotion();
+  const [points, setPoints] = useState(0);
+
+  useEffect(() => {
+    if (reduced) {
+      setPoints(3606);
+      return;
+    }
+    setPoints(0);
+    let frame = 0;
+    const delay = setTimeout(() => {
+      let started: number | undefined;
+      const tick = (now: number) => {
+        started ??= now;
+        const progress = Math.min((now - started) / 1200, 1);
+        setPoints(Math.round(3606 * (1 - Math.pow(1 - progress, 3))));
+        if (progress < 1) frame = requestAnimationFrame(tick);
+      };
+      frame = requestAnimationFrame(tick);
+    }, 500);
+    return () => {
+      clearTimeout(delay);
+      cancelAnimationFrame(frame);
+    };
+  }, [reduced]);
+
   return (
     <View {...a11yHide}>
-      <MotionBorder>
+      <View className="overflow-hidden rounded-3xl border border-court-edge bg-court-elevated">
         <View className="flex-row items-stretch px-3.5 py-3.5">
           <View
             className="h-20 w-20 shrink-0 self-center overflow-hidden rounded-full bg-glass"
@@ -168,34 +274,31 @@ export function RankingPreview() {
               <LicenseDot />
               <Text
                 allowFontScaling={false}
-                className="ml-1.5 uppercase text-padel"
+                className="ml-1.5 uppercase text-court-accent"
                 style={{ fontSize: 8, fontWeight: '800', letterSpacing: 0.8 }}>
-                Full License Player
+                SAPA Registered
               </Text>
             </View>
 
             <Text
               allowFontScaling={false}
-              className="uppercase text-premium"
+              className="uppercase text-court-ink"
               numberOfLines={1}
               style={{ fontSize: 18, fontWeight: '800', letterSpacing: -0.4, lineHeight: 18 }}>
               Your Name
             </Text>
 
             <View className="flex-row items-stretch pt-0.5">
-              <Stat value="#1" label="Rank" color={RANK_GOLD} pad="start" hint="—" />
+              <Stat value="#1" label="Rank" color={brand.premium} pad="start" hint="—" />
               <View className="w-px self-stretch bg-edge" style={{ marginVertical: 2 }} />
-              <Stat value="3,606" label="Points" color={brand.padel} pad="middle" />
+              <Stat value={(reduced ? 3606 : points).toLocaleString('en-US')} label="Points" color={brand.accent} pad="middle" />
               <View className="w-px self-stretch bg-edge" style={{ marginVertical: 2 }} />
               <Stat value="30-0" label="W-L" color={brand.premium} pad="end" />
             </View>
           </View>
 
-          <View className="shrink-0 self-center pl-1">
-            <SymbolView name="chevron.right" size={22} tintColor="rgba(255,255,255,0.5)" />
-          </View>
         </View>
-      </MotionBorder>
+      </View>
     </View>
   );
 }
@@ -232,14 +335,14 @@ function Stat({
       {hint ? (
         <Text
           allowFontScaling={false}
-          className="text-faint"
+          className="text-court-faint"
           style={{ marginTop: 2, fontSize: 9, fontWeight: '800', lineHeight: 9 }}>
           {hint}
         </Text>
       ) : null}
       <Text
         allowFontScaling={false}
-        className="uppercase text-faint"
+        className="uppercase text-court-faint"
         style={{ marginTop: 2, fontSize: 8, fontWeight: '800', letterSpacing: 1.6, lineHeight: 8 }}>
         {label}
       </Text>
@@ -270,5 +373,47 @@ function LicenseDot() {
         reduced ? null : style,
       ]}
     />
+  );
+}
+
+/** Feature illustration; no invented scores or implied live coverage. */
+export function WorldPadelPreview() {
+  return (
+    <View {...a11yHide} className="overflow-hidden rounded-3xl border border-court-edge bg-court-elevated">
+      <View className="flex-row items-center border-b border-court-edge px-5 py-4" style={{ gap: 12 }}>
+        <View className="h-11 w-11 items-center justify-center rounded-full bg-court-glass">
+          <Ionicons name="globe-outline" size={28} color={brand.accent} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text className="text-[17px] font-extrabold text-court-ink">World padel</Text>
+          <Text className="mt-1 text-[12px] text-court-muted">From your court to the world tour</Text>
+        </View>
+      </View>
+      <View className="px-5 py-4" style={{ gap: 18 }}>
+        <FadeUp delay={180}>
+          <WorldPreviewRow icon="people-outline" title="Your favourite players" detail="Profiles and world rankings" />
+        </FadeUp>
+        <FadeUp delay={320}>
+          <WorldPreviewRow icon="trophy-outline" title="Tournaments worldwide" detail="Follow the tour, stop by stop" />
+        </FadeUp>
+        <FadeUp delay={460}>
+          <WorldPreviewRow icon="tennisball-outline" title="Every match matters" detail="Schedules, scores and results" />
+        </FadeUp>
+      </View>
+    </View>
+  );
+}
+
+function WorldPreviewRow({ icon, title, detail }: {
+  icon: 'people-outline' | 'trophy-outline' | 'tennisball-outline'; title: string; detail: string;
+}) {
+  return (
+    <View className="flex-row items-center" style={{ gap: 12 }}>
+      <Ionicons name={icon} size={20} color={brand.accent} />
+      <View style={{ flex: 1 }}>
+        <Text className="text-[14px] font-bold text-court-ink">{title}</Text>
+        <Text className="mt-1 text-[12px] text-court-muted">{detail}</Text>
+      </View>
+    </View>
   );
 }

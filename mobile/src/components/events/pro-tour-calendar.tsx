@@ -1,0 +1,276 @@
+import { Chip } from '@/components/events/event-ui';
+import { EventIcon } from '@/components/events/website-ui';
+import { addToCalendar } from '@/lib/device-calendar';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { fetchProSnapshot, proDate, proStale, type ProTour, type ProFixtures, type ProTournament } from '@/lib/pro-padel';
+import { fetchProSeasons, fetchSeasonTournaments, fetchTournamentMatches, type MatchDetails, type ProSeason } from '@/lib/pro-padel-live';
+import { MatchCard } from '@/components/pro-padel-feed';
+import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
+import { lightBrand as brand } from '@/theme/tokens';
+
+const premierLevels = ['', 'major', 'p1', 'p2', 'finals'];
+const currentTourSeasons = (items: ProSeason[]) => items.filter(item => {
+  const year = Number(item.name.match(/\b20\d{2}\b/)?.[0] || item.startDate.slice(0, 4));
+  return year >= new Date().getFullYear();
+});
+const initialSeasons = currentTourSeasons([
+  { id: 5, name: 'Premier Padel 2026', startDate: '', endDate: '', status: 'active' },
+  { id: 6, name: 'Cupra FIP Tour 2026', startDate: '', endDate: '', status: 'active' },
+  { id: -1, name: 'FIP Promises 2026', startDate: '', endDate: '', status: 'active' },
+]);
+const dateDay = (date: string) => date.slice(0, 10);
+const today = () => new Date().toISOString().slice(0, 10);
+const finished = (event: ProTournament) => event.status === 'finished' || dateDay(event.endDate) < today();
+const levelName = (value?: string | null) => value ? value === 'major' ? 'Major' : value === 'finals' ? 'Finals' : value.replaceAll('_', ' ').toUpperCase() : 'International';
+function Button({ label, onPress, selected = false }: { label: string; onPress: () => void; selected?: boolean }) {
+  return <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={[s.button, selected && { backgroundColor: brand.padel, borderColor: brand.padel }]}>
+    <Text style={[s.buttonText, selected && { color: '#000' }]}>{label}</Text>
+  </Pressable>;
+}
+function Artwork({ event, large = false }: { event: ProTournament; large?: boolean }) {
+  const [failed, setFailed] = useState(false);
+  return <Image source={event.photoUrl && !failed ? { uri: event.photoUrl } : require('@/assets/images/calendar-hero.png')}
+    onError={() => setFailed(true)} contentFit="cover" style={large ? s.cover : s.thumbnail} />;
+}
+
+export function ProTourCalendar() {
+  const router = useRouter();
+  const bottom = useTabScenePadding();
+  const insets = useSafeAreaInsets();
+  const [showFilters, setShowFilters] = useState(false);
+  const [official, setOfficial] = useState<ProTournament[]>([]);
+  const [officialUpdated, setOfficialUpdated] = useState('');
+  const [tour, setTour] = useState<ProTour | null>(null);
+  const [seasons, setSeasons] = useState<ProSeason[]>(initialSeasons);
+  const [seasonId, setSeasonId] = useState(initialSeasons[0]?.id ?? 0);
+  const [seasonEvents, setSeasonEvents] = useState<ProTournament[] | null>(null);
+  const [seasonPage, setSeasonPage] = useState(0);
+  const [seasonMore, setSeasonMore] = useState(false);
+  const [seasonLoading, setSeasonLoading] = useState(false);
+  const [seasonError, setSeasonError] = useState('');
+  const [seasonReload, setSeasonReload] = useState(0);
+  const [fixtures, setFixtures] = useState<ProFixtures | null>(null);
+  const [error, setError] = useState('');
+  const [fixtureError, setFixtureError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  const [level, setLevel] = useState('');
+  const [timing, setTiming] = useState<'upcoming' | 'past'>('upcoming');
+  const [selected, setSelected] = useState<ProTournament | null>(null);
+  const [matchOpen, setMatchOpen] = useState(false);
+  const [allMatches, setAllMatches] = useState<MatchDetails[]>([]);
+  const [matchesPage, setMatchesPage] = useState(0);
+  const [matchesMore, setMatchesMore] = useState(false);
+  const [matchesLoading, setMatchesLoading] = useState(false);
+  const [matchesError, setMatchesError] = useState('');
+  const request = useRef(0);
+  const seasonRequest = useRef(0);
+  const load = useCallback(async () => {
+    const id = ++request.current;
+    setLoading(true);
+    const [tourResult, fixtureResult, seasonsResult, officialResult] = await Promise.allSettled([fetchProSnapshot('tour'), fetchProSnapshot('fixtures'), fetchProSeasons(), fetchProSnapshot('fip-calendar')]);
+    if (id !== request.current) return;
+    if (tourResult.status === 'fulfilled') { setTour(tourResult.value); setError(''); }
+    else setError('Could not refresh the tour calendar. Please try again.');
+    if (fixtureResult.status === 'fulfilled') { setFixtures(fixtureResult.value); setFixtureError(''); }
+    else setFixtureError('Published fixtures could not refresh.');
+    if (officialResult.status === 'fulfilled') { setOfficial(officialResult.value.tournaments); setOfficialUpdated(officialResult.value.updatedAt); }
+    if (seasonsResult.status === 'fulfilled') {
+      const currentSeasons = [...currentTourSeasons(seasonsResult.value), initialSeasons.find(item => item.id === -1)!];
+      setSeasons(currentSeasons);
+      setSeasonId(selected => currentSeasons.some(item => item.id === selected) ? selected : currentSeasons[0]?.id ?? 0);
+    }
+    setLoading(false);
+  }, []);
+  useFocusEffect(useCallback(() => { void load(); return () => { request.current++; }; }, [load]));
+  useFocusEffect(useCallback(() => { setMatchOpen(false); }, []));
+  const openMatch = (id: number) => {
+    setMatchOpen(true);
+    router.push({ pathname: '/pro/match/[id]', params: { id: String(id), from: 'calendar' } });
+  };
+  useEffect(() => {
+    let active = true;
+    const version = ++seasonRequest.current;
+    setSeasonEvents(null); setSeasonPage(0); setSeasonMore(false); setSeasonError(''); setSeasonLoading(true);
+    if (seasonId === -1) { setSeasonEvents(official.filter(event => event.level === 'fip_promises')); setSeasonLoading(false); return; }
+    if (!seasonId) { setSeasonLoading(false); return; }
+    void (async () => {
+      let page = 1;
+      let tournaments: ProTournament[] = [];
+      while (page <= 20) {
+        const result = await fetchSeasonTournaments(seasonId, page);
+        if (!active || version !== seasonRequest.current) return;
+        tournaments = [...new Map([...tournaments, ...result.tournaments].map(event => [event.id, event])).values()];
+        setSeasonEvents(tournaments); setSeasonPage(page); setSeasonMore(result.hasMore && page < 20);
+        if (!result.hasMore || tournaments.some(event => !finished(event))) return;
+        page++;
+      }
+    })().catch(e => { if (active && version === seasonRequest.current) setSeasonError(e instanceof Error ? e.message : 'Season could not be loaded.'); })
+      .finally(() => { if (active && version === seasonRequest.current) setSeasonLoading(false); });
+    return () => { active = false; seasonRequest.current++; };
+  }, [seasonId, seasonReload, official]);
+  const loadMoreSeason = async () => {
+    if (!seasonId || !seasonMore || seasonLoading || seasonPage >= 20) return;
+    const version = seasonRequest.current;
+    setSeasonLoading(true); setSeasonError('');
+    try {
+      const result = await fetchSeasonTournaments(seasonId, seasonPage + 1);
+      if (version !== seasonRequest.current) return;
+      setSeasonEvents(previous => [...new Map([...(previous || []), ...result.tournaments].map(event => [event.id, event])).values()]);
+      setSeasonPage(seasonPage + 1); setSeasonMore(result.hasMore && seasonPage + 1 < 20);
+    } catch (e) { if (version === seasonRequest.current) setSeasonError(e instanceof Error ? e.message : 'More tournaments could not be loaded.'); }
+    finally { if (version === seasonRequest.current) setSeasonLoading(false); }
+  };
+  const season = seasons.find(item => item.id === seasonId);
+  const providerEvents = seasonEvents ?? (tour?.tournaments || []).filter(event => seasonId === 5 ? premierLevels.includes(event.level || '') : !premierLevels.includes(event.level || ''));
+  const availableEvents = !season ? [] : seasonId === 6 ? [...providerEvents, ...official.filter(event => event.level === 'fip_bronze')] : providerEvents;
+  const levels = seasonId === 5 ? premierLevels : ['', ...new Set(availableEvents.map(event => event.level?.toLowerCase()).filter((value): value is string => !!value))];
+  const rows = useMemo(() => [...new Map(availableEvents.map(e => [e.id, e])).values()]
+    .filter(e => (timing === 'past' ? finished(e) : !finished(e)) && (!level || e.level?.toLowerCase() === level)
+      && `${e.name} ${e.location || ''} ${e.country || ''} ${e.venue || ''}`.toLowerCase().includes(search.trim().toLowerCase()))
+    .sort((a, b) => timing === 'past' ? b.startDate.localeCompare(a.startDate) : a.startDate.localeCompare(b.startDate)), [availableEvents, timing, level, search]);
+  const resultMatches = selected ? tour?.matches.filter(m => m.tournamentId === selected.id) || [] : [];
+  const fixtureMatches = selected ? fixtures?.matches.filter(m => m.tournamentId === selected.id) || [] : [];
+  const lookup = useMemo(() => new Map(), []);
+  useEffect(() => {
+    if (!selected) return;
+    let active = true;
+    setAllMatches([]); setMatchesPage(0); setMatchesMore(false); setMatchesError(''); setMatchesLoading(true);
+    if (selected.matchesAvailable === false) { setMatchesLoading(false); return; }
+    void fetchTournamentMatches(selected.id).then(result => {
+      if (!active) return;
+      setAllMatches(result.matches); setMatchesPage(1); setMatchesMore(result.hasMore);
+    }).catch(e => { if (active) setMatchesError(e instanceof Error ? e.message : 'Matches could not be loaded.'); })
+      .finally(() => { if (active) setMatchesLoading(false); });
+    return () => { active = false; };
+  }, [selected?.id]);
+  const loadMoreMatches = async () => {
+    if (!selected || matchesLoading || !matchesMore) return;
+    setMatchesLoading(true); setMatchesError('');
+    try {
+      const result = await fetchTournamentMatches(selected.id, matchesPage + 1);
+      setAllMatches(previous => [...previous, ...result.matches]);
+      setMatchesPage(matchesPage + 1); setMatchesMore(result.hasMore);
+    } catch (e) { setMatchesError(e instanceof Error ? e.message : 'More matches could not be loaded.'); }
+    finally { setMatchesLoading(false); }
+  };
+  return <View style={{ flex: 1 }}>
+    <FlatList data={rows} keyExtractor={e => String(e.id)} refreshing={loading || seasonLoading} onRefresh={() => { void load(); setSeasonReload(value => value + 1); }}
+      keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: bottom }}
+      ListHeaderComponent={<View style={s.header}>
+        <Text style={s.kicker}>INTERNATIONAL TOUR</Text>
+        <Text accessibilityRole="header" style={s.heading}>{season?.name.toUpperCase() || 'INTERNATIONAL TOUR'}</Text>
+        <Text style={s.body}>Explore seasons, upcoming tournaments and published matches across the international tour.</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+          {seasons.map(item => <Button key={item.id} label={item.name} selected={seasonId === item.id} onPress={() => { setSeasonId(item.id); setLevel(''); setTiming('upcoming'); }} />)}
+        </ScrollView>
+        {!seasons.length && <Text style={s.body}>No current tour season has been published yet.</Text>}
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          <View style={[s.search, { flex: 1 }]}>
+            <Ionicons name="search" size={18} color={brand.faint} />
+            <TextInput accessibilityLabel="Search tour tournaments or locations" value={search} onChangeText={setSearch} placeholder="Search tournaments or locations" placeholderTextColor={brand.faint} autoCorrect={false} style={s.input} />
+          </View>
+          <Pressable onPress={() => setShowFilters(true)} accessibilityRole="button" accessibilityLabel={`Filters, 1 active, ${timing}`} style={s.filterButton}>
+            <EventIcon name="line.3.horizontal.decrease" color="#65726B" />
+            <View style={s.filterBadge}><Text style={{ color: '#000', fontSize: 10, fontWeight: '800' }}>1</Text></View>
+          </Pressable>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+          {levels.map(value => <Button key={value} label={value ? levelName(value) : 'All levels'} selected={level === value} onPress={() => setLevel(value)} />)}
+        </ScrollView>
+        {!!seasonError && <Text style={{ color: brand.danger }}>{seasonError}{seasonId === 5 && !seasonEvents ? ' Showing the last published Premier Padel calendar.' : ''}</Text>}
+        <Text style={{ color: brand.premium, fontSize: 11, fontWeight: '600', letterSpacing: 0.7 }}>{timing === 'past' ? 'PAST TOURNAMENTS' : 'UPCOMING TOURNAMENTS'}</Text>
+        <Text style={s.caption}>{rows.length} tournaments{seasonMore ? ' · More available' : ''}{seasonId === -1 ? ` · Official FIP calendar · Updated ${proDate(officialUpdated)}` : seasonEvents ? ' · Shared season directory' : tour && seasonId === 5 ? ` · Snapshot updated ${proDate(tour.updatedAt)}` : ''}</Text>
+        {!!error && <View style={{ gap: 8 }}><Text style={{ color: brand.danger }}>{error}</Text><Button label="Retry" onPress={() => void load()} /></View>}
+      </View>}
+      ListEmptyComponent={seasonLoading ? <ActivityIndicator color={brand.accent} style={{ margin: 30 }} /> : <View style={s.header}><Text style={s.body}>{seasonError ? 'This season is unavailable. Pull to retry.' : 'No tournaments match these filters in this season.'}</Text></View>}
+      ListFooterComponent={seasonMore && !seasonLoading ? <View style={{ paddingHorizontal: 20, paddingBottom: 24 }}><Button label="Load more tournaments" onPress={() => { void loadMoreSeason(); }} /></View> : null}
+      renderItem={({ item }) => <Pressable accessibilityRole="button" accessibilityLabel={`View ${item.name}, ${proDate(item.startDate)}`} onPress={() => item.matchesAvailable === false ? router.push({ pathname: '/pro/fip/[id]', params: { id: String(item.id) } }) : setSelected(item)} style={s.card}>
+        <Artwork key={item.id} event={item} />
+        <View style={{ flex: 1, gap: 7 }}>
+          <Text style={s.kicker}>{levelName(item.level)}{finished(item) ? ' · Completed' : item.status === 'ongoing' || item.status === 'live' ? ' · In progress' : ''}</Text>
+          <Text style={s.name} numberOfLines={3}>{item.name}</Text>
+          <Text style={s.date}>{proDate(item.startDate)} – {proDate(item.endDate)}</Text>
+          <Text style={s.caption} numberOfLines={2}>{[item.location, item.country].filter(Boolean).join(' · ') || 'Location to be confirmed'}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={brand.accent} />
+      </Pressable>} />
+    <Modal visible={showFilters} animationType="slide" transparent onRequestClose={() => setShowFilters(false)}>
+      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#0009' }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close filters" onPress={() => setShowFilters(false)} style={{ flex: 1 }} />
+        <View accessibilityViewIsModal style={{ maxHeight: '85%', backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: insets.bottom + 24, gap: 20 }}>
+          <Text accessibilityRole="header" style={{ color: brand.premium, fontSize: 20, fontWeight: '700' }}>Filters</Text>
+          <ScrollView contentContainerStyle={{ gap: 18 }}>
+            <Text style={{ color: '#65726B', fontSize: 12 }}>WHEN</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{(['upcoming', 'past'] as const).map(value => <Chip key={value} label={value === 'past' ? 'Past' : 'Upcoming'} selected={timing === value} onPress={() => setTiming(value)} />)}</View>
+          </ScrollView>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Pressable accessibilityRole="button" onPress={() => { setSearch(''); setLevel(''); setTiming('upcoming'); }} style={{ padding: 14 }}><Text style={{ color: brand.premium }}>Clear</Text></Pressable>
+            <Pressable accessibilityRole="button" onPress={() => setShowFilters(false)} style={{ flex: 1, backgroundColor: brand.padel, padding: 14, alignItems: 'center', borderRadius: 12 }}><Text style={{ color: '#000', fontWeight: '700' }}>Show Results</Text></Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+    <Modal visible={!!selected && !matchOpen} presentationStyle="fullScreen" animationType="slide" onRequestClose={() => setSelected(null)}>
+      <SafeAreaProvider><SafeAreaView style={s.modal}>
+        <View style={{ paddingHorizontal: 20, paddingVertical: 8, alignItems: 'flex-start' }}><Button label="Back to tour calendar" onPress={() => setSelected(null)} /></View>
+        {selected && <ScrollView contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 40 }}>
+          <Artwork key={selected.id} event={selected} large />
+          <Text style={s.kicker}>{levelName(selected.level)} · {season?.name.toUpperCase() || 'INTERNATIONAL TOUR'}</Text>
+          <Text accessibilityRole="header" style={s.detailTitle}>{selected.name}</Text>
+          <Text style={s.date}>{proDate(selected.startDate)} – {proDate(selected.endDate)}</Text>
+          <Text style={s.body}>{[selected.venue, selected.location, selected.country].filter(Boolean).join(' · ') || 'Venue to be confirmed'}</Text>
+          <Button label="Add to calendar" selected onPress={() => {
+            void addToCalendar({ title: selected.name, startDate: selected.startDate, endDate: selected.endDate,
+              location: [selected.venue, selected.location, selected.country].filter(Boolean).join(' · '),
+            }).catch(error => Alert.alert('Calendar unavailable', error instanceof Error ? error.message : 'Please try again.'));
+          }} />
+          <Text style={s.caption}>Tour information only. Entry registration is not available through 4M for this tournament.</Text>
+          {selected.matchesAvailable === false ? <><Text style={s.body}>Official FIP tournament information.</Text><Button label="Open event centre" onPress={() => { setSelected(null); router.push({ pathname: '/pro/fip/[id]', params: { id: String(selected.id) } }); }} /></> : <>
+          <Text style={s.section}>Full published draw</Text>
+          <Text style={s.caption}>Main draw and qualifying · Men and women · Tap Match details for points and stats.</Text>
+          {matchesLoading && <ActivityIndicator color={brand.accent} />}
+          {!!matchesError && <Text style={{ color: brand.danger }}>{matchesError}</Text>}
+          {allMatches.map(row => <MatchCard key={row.match.id} match={row.match} lookup={lookup} onPlayer={() => {}} onOpenMatch={openMatch} />)}
+          {matchesMore && <Button label="Load more matches" onPress={() => { void loadMoreMatches(); }} />}
+          {!matchesLoading && !matchesError && !allMatches.length && <Text style={s.body}>The draw has not been published yet.</Text>}
+          {!allMatches.length && <><Text style={s.section}>Saved schedule</Text>
+          {!!fixtureError && <View style={{ gap: 8 }}><Text style={{ color: brand.danger }}>{fixtureError}</Text><Button label="Retry fixtures" onPress={() => void load()} /></View>}
+          {fixtures && <Text style={s.caption}>Updated {proDate(fixtures.updatedAt)}{proStale(fixtures.updatedAt) ? ' · Update overdue' : ''}</Text>}
+          {fixtureMatches.length ? fixtureMatches.map(m => <MatchCard key={m.id} match={m} lookup={lookup} onPlayer={() => {}} onOpenMatch={openMatch} />)
+            : <Text style={s.body}>{fixtures?.tournament?.id === selected.id && !fixtures.drawPublished ? 'The main draw has not been published yet.' : 'No fixtures available in the current feed. Fixture coverage is limited to the next tour event.'}</Text>}
+          <Text style={s.section}>Results</Text>
+          {tour && <Text style={s.caption}>{tour.coverage} · Updated {proDate(tour.updatedAt)}</Text>}
+          {resultMatches.length ? resultMatches.map(m => <MatchCard key={m.id} match={m} lookup={lookup} onPlayer={() => {}} onOpenMatch={openMatch} />)
+            : <Text style={s.body}>No results for this tournament in the current feed.</Text>}</>}
+          </>}
+        </ScrollView>}
+      </SafeAreaView></SafeAreaProvider>
+    </Modal>
+  </View>;
+}
+
+const s = StyleSheet.create({
+  header: { padding: 20, gap: 14 }, modal: { flex: 1, backgroundColor: brand.page },
+  kicker: { color: brand.accent, fontSize: 10, fontWeight: '700', letterSpacing: 1 },
+  heading: { color: brand.premium, fontSize: 36, fontWeight: '800', letterSpacing: -1 },
+  detailTitle: { color: brand.premium, fontSize: 28, fontWeight: '700' },
+  body: { color: brand.muted, fontSize: 14, lineHeight: 21 },
+  caption: { color: brand.muted, fontSize: 11, lineHeight: 17 },
+  search: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, borderRadius: 24, backgroundColor: brand.elevated, alignItems: 'center' },
+  filterButton: { paddingHorizontal: 20, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#16251f0d', borderRadius: 30 },
+  filterBadge: { backgroundColor: brand.padel, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  input: { flex: 1, minHeight: 48, fontSize: 13, color: brand.premium },
+  button: { minHeight: 44, borderRadius: 22, paddingHorizontal: 16, justifyContent: 'center', borderWidth: 1, borderColor: brand.edge },
+  buttonText: { color: brand.premium, fontSize: 12, fontWeight: '600' },
+  card: { marginHorizontal: 20, marginBottom: 12, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: brand.elevated, borderRadius: 20, borderColor: brand.edge, borderWidth: 1 },
+  thumbnail: { width: 66, height: 90, borderRadius: 10 }, cover: { width: '100%', height: 190, borderRadius: 20 },
+  name: { color: brand.premium, fontSize: 16, lineHeight: 21, fontWeight: '700' },
+  date: { color: brand.accent, fontSize: 12, lineHeight: 18, fontWeight: '600' },
+  section: { color: brand.premium, fontSize: 20, fontWeight: '700' },
+});

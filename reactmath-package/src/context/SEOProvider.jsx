@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 import seoConfigData from '../seo.config.json';
 import { saveConfigToGitHub, saveRedirectsToGitHub, testConnection } from '../utils/github';
-import { supabase as defaultSupabase } from '../utils/supabase';
+import { getDefaultSupabase } from '../utils/supabase';
 
 const SEOContext = createContext(null);
 
@@ -12,7 +12,7 @@ const SEOContext = createContext(null);
  * Pass supabase prop to use your app's client (connects on any domain).
  */
 export const SEOProvider = ({ children, supabase: supabaseProp }) => {
-    const supabase = supabaseProp ?? defaultSupabase;
+    const supabase = useMemo(() => supabaseProp ?? getDefaultSupabase(), [supabaseProp]);
     // 1. Domain Logic FIRST (needed for keys)
     const [linkedDomain, setLinkedDomainState] = useState(() => {
         if (typeof window !== 'undefined') {
@@ -135,7 +135,7 @@ export const SEOProvider = ({ children, supabase: supabaseProp }) => {
         };
 
         loadFromSupabase();
-    }, [currentDomain]);
+    }, [currentDomain, supabase]);
 
     // --- EFFECT: LocalStorage Persistence ---
     useEffect(() => {
@@ -213,7 +213,7 @@ export const SEOProvider = ({ children, supabase: supabaseProp }) => {
             }
             return { ...prev, site: newSite };
         });
-    }, [isSupabaseConnected, currentDomain]);
+    }, [isSupabaseConnected, currentDomain, supabase]);
 
     const updatePageConfig = useCallback((path, updates) => {
         setConfig((prev) => {
@@ -235,7 +235,7 @@ export const SEOProvider = ({ children, supabase: supabaseProp }) => {
                 pages: { ...prev.pages, [path]: newPageConf },
             };
         });
-    }, [isSupabaseConnected, currentDomain]);
+    }, [isSupabaseConnected, currentDomain, supabase]);
 
     const getPageConfig = useCallback((path) => {
         const pageConfig = config.pages[path];

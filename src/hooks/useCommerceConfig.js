@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     COMMERCE_DEFAULTS,
+    defaultLicenseYear,
     availableLicenseTypes,
     fetchCommerceConfig,
     licenseQuote,
@@ -11,14 +12,14 @@ import {
  * Live platform license prices and fee percents.
  * Falls back to COMMERCE_DEFAULTS if the table is unreachable (offline / pre-migration).
  */
-export function useCommerceConfig() {
+export function useCommerceConfig(licenseYear = defaultLicenseYear()) {
     const [config, setConfig] = useState(COMMERCE_DEFAULTS);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     const refresh = useCallback(async () => {
         try {
-            const next = await fetchCommerceConfig();
+            const next = await fetchCommerceConfig(undefined, licenseYear);
             setConfig(next);
             setError(null);
             return next;
@@ -30,7 +31,7 @@ export function useCommerceConfig() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [licenseYear]);
 
     useEffect(() => {
         refresh();

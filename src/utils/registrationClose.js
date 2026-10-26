@@ -13,3 +13,10 @@ export const isRegistrationClosed = (division, event) => {
     }
     return false;
 };
+
+/** Existing entries can pay after closing unless the organiser switches it off. */
+export const isRegistrationPaymentClosed = (division, event, now = Date.now()) => {
+    if (event?.allow_payments_after_close !== false) return false;
+    const closesAt = division?.entries_close_at || event?.registration_closes_at;
+    return !!closesAt && new Date(closesAt).getTime() <= now;
+};

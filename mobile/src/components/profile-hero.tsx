@@ -12,8 +12,8 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { FadeUp } from '@/components/fade-up';
-import { MotionBorder } from '@/components/motion-border';
-import { PulseDot } from '@/components/pulse-dot';
+import { IdentityBadge } from '@/components/home-player-card';
+import { PlayerFollowerCount } from '@/components/players/player-follower-count';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import {
   formatPoints,
@@ -23,9 +23,10 @@ import {
   type ProfileStats,
   type TempLicense,
 } from '@/lib/profile';
-import { brand, motion } from '@/theme/tokens';
+import { courtSideLabel, playingHandLabel } from '@/lib/player-preferences';
+import { hapticLight } from '@/lib/haptics';
+import { lightBrand as brand, motion } from '@/theme/tokens';
 
-const KNOB = 14;
 const COUNT_MS = 800;
 const countEase = Easing.bezier(
   motion.easing.decelerate[0],
@@ -74,14 +75,15 @@ function useCountTo(target: number, decimals = 0, playId = 0) {
   return { shown, sv };
 }
 
-const RANK_GOLD = '#EAB308';
-const LOSS_RED = '#EF4444';
 
 type HeroProps = {
   player: PlayerRow;
   stats: ProfileStats;
-  onEditPhoto: () => void;
   playId?: number;
+  fipLinked?: boolean;
+  statsReady?: boolean;
+  followerRefreshKey?: number;
+  onFollowersPress?: () => void;
 };
 
 function rankNumber(label?: string | null) {
@@ -90,8 +92,8 @@ function rankNumber(label?: string | null) {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Website mobile identity card: photo + pencil, license, name, rank / points / matches. */
-export function ProfileHero({ player, stats, onEditPhoto, playId = 0 }: HeroProps) {
+/** Profile identity card with the same badges and SAPA career heading as Home. */
+export function ProfileHero({ player, stats, playId = 0, fipLinked = false, statsReady = true, followerRefreshKey = 0, onFollowersPress }: HeroProps) {
   const license = licenseBadge(player.license_type);
   const name = player.name?.trim() || 'Player';
   const rankN = rankNumber(player.rank_label);
@@ -99,14 +101,17 @@ export function ProfileHero({ player, stats, onEditPhoto, playId = 0 }: HeroProp
   const pointsCount = useCountTo(player.points ?? 0, 0, playId);
   const matchesCount = useCountTo(stats.matchCount, 0, playId);
   const rankValue = rankN == null ? formatRank(player.rank_label) : `#${rankCount.shown}`;
+  const sapaProfile = rankN != null || player.license_type?.toLowerCase() === 'full';
   const photo = 64;
+  const side = courtSideLabel(player.court_side);
+  const hand = playingHandLabel(player.playing_hand);
 
   return (
-    <View className="rounded-2xl border border-white/10 bg-[#0a0a0a]/70 p-3.5">
+    <View className="rounded-2xl border border-court-edge bg-court-elevated p-3.5">
       <View className="flex-row items-center">
         <View className="relative shrink-0">
           <View
-            className="items-center justify-center overflow-hidden rounded-full bg-elevated"
+            className="items-center justify-center overflow-hidden rounded-full bg-court-elevated"
             style={{
               width: photo,
               height: photo,
@@ -122,59 +127,39 @@ export function ProfileHero({ player, stats, onEditPhoto, playId = 0 }: HeroProp
                 accessibilityIgnoresInvertColors
               />
             ) : (
-              <Text className="text-lg font-bold text-white/20">
+              <Text className="text-lg font-bold text-court-muted">
                 {name.charAt(0)}
               </Text>
             )}
           </View>
-          <Pressable
-            onPress={onEditPhoto}
-            accessibilityRole="button"
-            accessibilityLabel="Edit profile"
-            hitSlop={8}
-            className="absolute items-center justify-center rounded-full bg-padel"
-            style={{
-              width: 22,
-              height: 22,
-              bottom: 0,
-              right: 0,
-              borderWidth: 1,
-              borderColor: '#000',
-            }}>
-            <SymbolView name="pencil" size={10} tintColor="#000" />
-          </Pressable>
         </View>
 
         <View className="ml-3 min-w-0 flex-1">
-          {license ? (
-            <View
-              className="mb-1 flex-row items-center self-start rounded-full border px-2 py-0.5"
-              style={{ borderColor: license.border, backgroundColor: license.bg }}>
-              {license.pulse ? <PulseDot color={brand.padel} size={5} /> : null}
-              <Text
-                className="text-[7px] font-black uppercase tracking-wider"
-                style={{
-                  color: license.color,
-                  marginLeft: license.pulse ? 5 : 0,
-                }}>
-                {license.label}
-              </Text>
-            </View>
-          ) : null}
+          <View className="mb-1.5 flex-row flex-wrap items-center" style={{ gap: 6 }}>
+            {sapaProfile ? <IdentityBadge label="SAPA" color={brand.accent} border={brand.edge} background={brand.glass} /> : null}
+            <IdentityBadge label="4M" color="#8D610C" border="#EFDCAA" background="#FFF7E5" />
+            {fipLinked ? <IdentityBadge label="FIP" color="#2449D8" border="#CAD8FF" background="#EEF3FF" /> : null}
+            {license && !sapaProfile ? <IdentityBadge label={license.label} color={license.color} border={license.border} background={license.bg} /> : null}
+          </View>
 
           <Text
-            className="text-lg font-extrabold uppercase leading-tight text-premium"
+            className="text-lg font-extrabold uppercase leading-tight text-court-ink"
             numberOfLines={2}>
             {name}
           </Text>
+          <PlayerFollowerCount playerId={String(player.id)} refreshKey={followerRefreshKey} onPress={onFollowersPress} />
+          {(side || hand) && <Text style={{ color: brand.muted, fontSize: 12, lineHeight: 17 }} numberOfLines={2}>{[side && `${side} court`, hand].filter(Boolean).join(' · ')}</Text>}
 
-          <View className="mt-1.5 flex-row items-stretch">
-            <Stat value={rankValue} label="Rank" color={RANK_GOLD} />
-            <View className="h-7 w-px self-center bg-white/10" />
-            <Stat value={player.points == null ? '—' : formatPoints(pointsCount.shown)} label="Points" color={brand.padel} />
-            <View className="h-7 w-px self-center bg-white/10" />
-            <Stat value={String(matchesCount.shown)} label="Matches" color={brand.premium} />
-          </View>
+        </View>
+      </View>
+      <View className="mt-3 rounded-xl bg-court-surface px-3 py-2.5">
+        <Text className="mb-2 text-[11px] font-bold text-court-muted">SAPA Career</Text>
+        <View className="flex-row items-stretch">
+          <Stat value={rankValue} label="Rank" color={brand.premium} />
+          <View className="w-px self-stretch bg-court-edge" />
+          <Stat value={player.points == null ? '—' : formatPoints(pointsCount.shown)} label="Points" color={brand.accent} />
+          <View className="w-px self-stretch bg-court-edge" />
+          <Stat value={statsReady ? String(matchesCount.shown) : '—'} label="Matches" color={brand.premium} />
         </View>
       </View>
     </View>
@@ -183,11 +168,14 @@ export function ProfileHero({ player, stats, onEditPhoto, playId = 0 }: HeroProp
 
 export function ProfileStatsCard({
   stats,
+  skillRating,
   playId = 0,
 }: {
   stats: ProfileStats;
+  skillRating?: PlayerRow['skill_rating'];
   playId?: number;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const ratioTarget = Math.min(100, Math.max(0, stats.winRatio));
   const played = useCountTo(stats.played, 0, playId);
   const wins = useCountTo(stats.wins, 0, playId);
@@ -198,96 +186,63 @@ export function ProfileStatsCard({
   const fillStyle = useAnimatedStyle(() => ({
     width: (trackW.value * ratio.sv.value) / 100,
   }));
-  const knobStyle = useAnimatedStyle(() => {
-    const x = (trackW.value * ratio.sv.value) / 100 - KNOB / 2;
-    const max = Math.max(0, trackW.value - KNOB);
-    return { transform: [{ translateX: Math.min(max, Math.max(0, x)) }] };
-  });
-
   return (
-    <MotionBorder>
-      <View className="p-3.5">
-      <View className="flex-row" style={{ gap: 6 }}>
-        <MiniStat label="Total Match" value={String(played.shown)} />
-        <MiniStat label="Won" value={String(wins.shown)} labelColor={brand.padel} />
-        <MiniStat label="Lost" value={String(losses.shown)} labelColor="#F87171" />
-        <View className="min-h-[52px] flex-1 items-center justify-center rounded-xl border border-white/5 bg-white/[0.02] px-1 py-1">
-          <Text className="mb-1 w-full text-center text-[7px] font-black uppercase tracking-widest text-faint">
-            Last 5
-          </Text>
-          {stats.lastFive.length ? (
-            <View
-              accessible
-              accessibilityLabel={`Last 5 matches, ${stats.lastFive.join(', ')}`}
-              className="flex-row items-center"
-              style={{ gap: 2 }}>
-              {stats.lastFive.map((mark, index) => {
-                const win = mark === 'W';
-                return (
+    <View className="overflow-hidden rounded-2xl border border-court-edge bg-court-elevated">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${expanded ? 'Hide' : 'Show'} stats and performance`}
+        accessibilityState={{ expanded }}
+        onPress={() => { hapticLight(); setExpanded(value => !value); }}
+        className="active:opacity-70"
+        style={{ minHeight: 48, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <SymbolView name={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }} size={16} tintColor={brand.faint} />
+        <Text style={{ flex: 1, color: brand.muted, fontSize: 10, fontWeight: '800', letterSpacing: 0.8 }}>STATS & PERFORMANCE</Text>
+        <Text style={{ color: brand.premium, fontSize: 12, fontWeight: '600' }}>{expanded ? 'Hide' : 'Show'}</Text>
+        <SymbolView name={{ ios: expanded ? 'chevron.up' : 'chevron.down', android: expanded ? 'expand_less' : 'expand_more', web: expanded ? 'expand_less' : 'expand_more' }} size={13} tintColor={brand.muted} />
+      </Pressable>
+      {expanded ? (
+        <View style={{ paddingHorizontal: 14, paddingBottom: 16 }}>
+          <View className="flex-row" style={{ gap: 8 }}>
+            <MiniStat label="Matches" value={String(played.shown)} />
+            <MiniStat label="Won" value={String(wins.shown)} labelColor={brand.accent} />
+            <MiniStat label="Lost" value={String(losses.shown)} labelColor={brand.danger} />
+            {skillRating != null && Number.isFinite(Number(skillRating)) ? (
+              <MiniStat label="Skill" value={String(skillRating)} labelColor={brand.premium} highlight />
+            ) : null}
+          </View>
+
+          <View className="mt-4 flex-row items-center justify-between">
+            <Text className="text-xs font-semibold text-court-muted">Last 5 matches</Text>
+            {stats.lastFive.length ? (
+              <View accessible accessibilityLabel={`Last 5 matches: ${stats.lastFive.map(mark => mark === 'W' ? 'win' : 'loss').join(', ')}`} className="flex-row" style={{ gap: 6 }}>
+                {stats.lastFive.map((mark, index) => (
                   <FadeUp key={`${playId}-${mark}-${index}`} delay={index * motion.stagger}>
-                    <View
-                      accessibilityElementsHidden
-                      className="h-2 w-2 items-center justify-center rounded-full"
-                      style={{ backgroundColor: win ? brand.padel : LOSS_RED }}>
-                      <View
-                        className="rounded-full"
-                        style={{
-                          width: 3.5,
-                          height: 3.5,
-                          backgroundColor: win ? '#000' : '#fff',
-                        }}
-                      />
+                    <View className="h-6 w-6 items-center justify-center rounded-full" style={{ backgroundColor: mark === 'W' ? brand.glass : '#FBECEB' }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: mark === 'W' ? brand.accent : brand.danger }}>{mark}</Text>
                     </View>
                   </FadeUp>
-                );
-              })}
-            </View>
-          ) : (
-            <Text className="text-[7px] font-bold uppercase tracking-widest text-faint">
-              None
-            </Text>
-          )}
-        </View>
-      </View>
-
-      <View className="mt-3">
-        <View className="mb-1.5 flex-row items-center justify-between">
-          <Text className="text-[8px] font-black uppercase tracking-widest text-muted">
-            Win Ratio
-          </Text>
-          <Text
-            className="text-[8px] font-extrabold text-padel"
-            style={{ fontVariant: ['tabular-nums'] }}>
-            {ratio.shown.toFixed(1)}%
-          </Text>
-        </View>
-        <View
-          accessibilityRole="progressbar"
-          accessibilityValue={{ min: 0, max: 100, now: Math.round(ratioTarget) }}
-          className="relative mt-1 h-2.5 w-full justify-center"
-          onLayout={(event) => {
-            trackW.value = event.nativeEvent.layout.width;
-          }}>
-          <View className="h-1.5 w-full rounded-full bg-white/5">
-            <Animated.View className="h-full rounded-full bg-padel" style={fillStyle} />
+                ))}
+              </View>
+            ) : <Text className="text-xs text-court-faint">No matches yet</Text>}
           </View>
-          <Animated.View
-            accessibilityElementsHidden
-            className="absolute items-center justify-center rounded-full border border-black bg-padel"
-            style={[
-              {
-                width: KNOB,
-                height: KNOB,
-                top: -2,
-              },
-              knobStyle,
-            ]}>
-            <View className="h-1.5 w-1.5 rounded-full bg-black" />
-          </Animated.View>
+
+          <View className="mt-4">
+            <View className="mb-2 flex-row items-center justify-between">
+              <Text className="text-xs font-semibold text-court-muted">Win ratio</Text>
+              <Text className="text-sm font-bold text-court-ink" style={{ fontVariant: ['tabular-nums'] }}>{ratio.shown.toFixed(1)}%</Text>
+            </View>
+            <View
+              accessibilityRole="progressbar"
+              accessibilityLabel="Win ratio"
+              accessibilityValue={{ min: 0, max: 100, now: Math.round(ratioTarget) }}
+              className="h-2 w-full overflow-hidden rounded-full bg-court-surface"
+              onLayout={event => { trackW.value = event.nativeEvent.layout.width; }}>
+              <Animated.View className="h-full rounded-full" style={[{ backgroundColor: brand.accent }, fillStyle]} />
+            </View>
+          </View>
         </View>
-      </View>
-      </View>
-    </MotionBorder>
+      ) : null}
+    </View>
   );
 }
 
@@ -314,8 +269,8 @@ export function LicenseCallout({
     <View
       className="overflow-hidden rounded-3xl border p-4"
       style={{
-        borderColor: temporary ? 'rgba(96,165,250,0.3)' : 'rgba(255,255,255,0.1)',
-        backgroundColor: 'rgba(10,10,10,0.7)',
+        borderColor: temporary ? 'rgba(96,165,250,0.3)' : 'rgba(22,37,31,0.1)',
+        backgroundColor: '#FFFFFF',
         borderLeftWidth: 2,
         borderLeftColor: temporary ? '#3B82F6' : '#6B7280',
       }}>
@@ -323,17 +278,17 @@ export function LicenseCallout({
         className="self-start rounded px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.2em]"
         style={{
           color: temporary ? '#60A5FA' : brand.faint,
-          backgroundColor: temporary ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.05)',
+          backgroundColor: temporary ? 'rgba(59,130,246,0.1)' : 'rgba(22,37,31,0.05)',
         }}>
         {temporary ? 'Temporary License Active' : 'License Inactive'}
       </Text>
       {temporary && tempLicense?.event_name ? (
-        <Text className="mt-3 text-[13px] font-bold uppercase text-premium">
+        <Text className="mt-3 text-[13px] font-bold uppercase text-court-ink">
           {tempLicense.event_name}
           {eventDate ? `  ${eventDate}` : ''}
         </Text>
       ) : (
-        <Text className="mt-3 text-[10px] leading-5 text-muted">
+        <Text className="mt-3 text-[10px] leading-5 text-court-muted">
           Activate your elite license to appear on public rankings & track tour statistics.
         </Text>
       )}
@@ -357,7 +312,7 @@ function Stat({
         style={{ color, fontVariant: ['tabular-nums'] }}>
         {value}
       </Text>
-      <Text className="mt-0.5 text-[8px] font-black uppercase tracking-widest text-faint">
+      <Text className="mt-0.5 text-[8px] font-black uppercase tracking-widest text-court-faint">
         {label}
       </Text>
     </View>
@@ -368,21 +323,23 @@ function MiniStat({
   label,
   value,
   labelColor,
+  highlight = false,
 }: {
   label: string;
   value: string;
   labelColor?: string;
+  highlight?: boolean;
 }) {
   return (
-    <View className="min-h-[52px] flex-1 items-center justify-center rounded-xl border border-white/5 bg-white/[0.02] p-1">
+    <View className="min-h-[64px] min-w-0 flex-1 items-center justify-center rounded-xl p-2" style={{ backgroundColor: highlight ? '#2449D8' : brand.surface }}>
       <Text
-        className="w-full text-center text-[7px] font-black uppercase tracking-widest"
-        style={{ color: labelColor ?? brand.faint }}>
+        className="w-full text-center text-[11px] font-semibold"
+        style={{ color: highlight ? '#FFFFFF' : labelColor ?? brand.faint }}>
         {label}
       </Text>
       <Text
-        className="mt-0.5 w-full text-center text-[15px] font-black text-premium"
-        style={{ fontVariant: ['tabular-nums'] }}>
+        className="mt-1 w-full text-center text-[22px] font-bold text-court-ink"
+        style={{ fontVariant: ['tabular-nums'], color: highlight ? '#FFFFFF' : brand.premium }}>
         {value}
       </Text>
     </View>

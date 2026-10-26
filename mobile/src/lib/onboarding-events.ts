@@ -50,6 +50,8 @@ type CalendarRow = {
 export async function fetchOnboardingEvents(): Promise<OnboardingEventCard[]> {
   if (!isSupabaseConfigured()) return FALLBACK;
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4000);
   try {
     const today = isoDate(new Date());
     const { data, error } = await supabase
@@ -61,7 +63,8 @@ export async function fetchOnboardingEvents(): Promise<OnboardingEventCard[]> {
       .neq('is_visible', false)
       .or(`end_date.gte.${today},start_date.gte.${today}`)
       .order('start_date', { ascending: true })
-      .limit(24);
+      .limit(24)
+      .abortSignal(controller.signal);
 
     if (error || !data?.length) return FALLBACK;
 
@@ -72,11 +75,14 @@ export async function fetchOnboardingEvents(): Promise<OnboardingEventCard[]> {
     return upcoming.slice(0, 2).map(toCard);
   } catch {
     return FALLBACK;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
 export function useOnboardingEvents() {
-  const [events, setEvents] = useState<OnboardingEventCard[] | null>(null);
+  // Show the sample cards immediately; live events enhance an already usable screen.
+  const [events, setEvents] = useState<OnboardingEventCard[]>(FALLBACK);
 
   useEffect(() => {
     let cancelled = false;

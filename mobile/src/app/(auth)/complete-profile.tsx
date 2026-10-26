@@ -1,3 +1,6 @@
+import { trackEvent } from '@/lib/analytics';
+import { SponsorField } from '@/components/sponsor-field';
+import { parseSponsors, serializeSponsors } from '@/lib/sponsors';
 import { SymbolView } from 'expo-symbols';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -13,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LiquidField } from '@/components/liquid-field';
+import { ObserveReady } from '@/components/observe-ready';
 import { PressableScale } from '@/components/pressable-scale';
 import {
   CourtBackdrop,
@@ -40,6 +44,7 @@ import {
   type PlayerDraft,
 } from '@/lib/profile';
 import { openLegal } from '@/lib/legal';
+import { COURT_SIDE_OPTIONS, PLAYING_HAND_OPTIONS, courtSideLabel, playingHandLabel } from '@/lib/player-preferences';
 import {
   CATEGORIES,
   GENDERS,
@@ -49,7 +54,7 @@ import {
   SA_REGIONS,
 } from '@/lib/registration';
 import { supabase } from '@/lib/supabase';
-import { brand } from '@/theme/tokens';
+import { FieldColors, profileColors as brand } from '@/components/field-colors';
 
 type Errors = Partial<Record<string, string>>;
 
@@ -107,9 +112,12 @@ export default function CompleteProfileScreen() {
   const [category, setCategory] = useState('');
   const [clubId, setClubId] = useState('');
   const [customClub, setCustomClub] = useState('');
+  const [courtSide, setCourtSide] = useState('');
+  const [playingHand, setPlayingHand] = useState('');
   const [bio, setBio] = useState('');
   const [instagramLink, setInstagramLink] = useState('');
   const [sponsors, setSponsors] = useState('');
+  const [sponsorInput, setSponsorInput] = useState('');
   const [racketBrand, setRacketBrand] = useState('');
   const [customRacketBrand, setCustomRacketBrand] = useState('');
 
@@ -126,9 +134,11 @@ export default function CompleteProfileScreen() {
       category,
       clubId,
       customClub,
+      courtSide,
+      playingHand,
       bio,
       instagramLink,
-      sponsors,
+      sponsors: serializeSponsors([...parseSponsors(sponsors), ...parseSponsors(sponsorInput)]),
       racketBrand,
       customRacketBrand,
       accepted,
@@ -140,6 +150,8 @@ export default function CompleteProfileScreen() {
     clubId,
     contactNumber,
     customClub,
+    courtSide,
+    playingHand,
     customRacketBrand,
     email,
     firstName,
@@ -151,6 +163,7 @@ export default function CompleteProfileScreen() {
     racketBrand,
     region,
     sponsors,
+    sponsorInput,
   ]);
 
   useEffect(() => {
@@ -175,6 +188,8 @@ export default function CompleteProfileScreen() {
           setCategory((v) => v || saved.category || '');
           setClubId((v) => v || saved.clubId || '');
           setCustomClub((v) => v || saved.customClub || '');
+          setCourtSide((v) => v || (courtSideLabel(saved.courtSide) ? saved.courtSide! : ''));
+          setPlayingHand((v) => v || (playingHandLabel(saved.playingHand) ? saved.playingHand! : ''));
           setBio((v) => v || saved.bio || '');
           setInstagramLink((v) => v || saved.instagramLink || '');
           setSponsors((v) => v || saved.sponsors || '');
@@ -219,14 +234,7 @@ export default function CompleteProfileScreen() {
   const clubName =
     clubId === 'Other' ? customClub.trim() : clubs.find((c) => c.id === clubId)?.name ?? '';
 
-  const step1Complete =
-    filled(firstName) &&
-    filled(lastName) &&
-    filled(idNumber) &&
-    filled(contactNumber) &&
-    !!gender &&
-    filled(nationality) &&
-    !!region;
+  const step1Complete = filled(firstName) && filled(lastName);
 
   const clubReady = !!clubId && (clubId !== 'Other' || filled(customClub));
   const racketReady = !!racketBrand && (racketBrand !== 'Other' || filled(customRacketBrand));
@@ -235,12 +243,7 @@ export default function CompleteProfileScreen() {
   const completionChecks = [
     filled(firstName),
     filled(lastName),
-    filled(idNumber),
     !!email,
-    filled(contactNumber),
-    !!gender,
-    filled(nationality),
-    !!region,
     !!category,
     clubReady,
     filled(bio),
@@ -264,11 +267,6 @@ export default function CompleteProfileScreen() {
     const next: Errors = {};
     if (!filled(firstName)) next.firstName = 'Enter your first name.';
     if (!filled(lastName)) next.lastName = 'Enter your surname.';
-    if (!filled(idNumber)) next.idNumber = 'Enter an ID or passport number.';
-    if (!filled(contactNumber)) next.contactNumber = 'Enter a mobile number.';
-    if (!gender) next.gender = 'Select a gender.';
-    if (!filled(nationality)) next.nationality = 'Select a nationality.';
-    if (!region) next.region = 'Select a region.';
     return next;
   }
 
@@ -289,8 +287,6 @@ export default function CompleteProfileScreen() {
   function focusFirst(next: Errors) {
     if (next.firstName) firstNameRef.current?.focus();
     else if (next.lastName) lastNameRef.current?.focus();
-    else if (next.idNumber) idRef.current?.focus();
-    else if (next.contactNumber) mobileRef.current?.focus();
     else if (next.bio) bioRef.current?.focus();
   }
 
@@ -305,18 +301,21 @@ export default function CompleteProfileScreen() {
       return;
     }
     setSavingStep(true);
-    await saveProfileDraft(draft());
-    if (!reduced) {
-      await new Promise((resolve) => setTimeout(resolve, 520));
+    try {
+      await saveProfileDraft(draft());
+      if (!reduced) await new Promise((resolve) => setTimeout(resolve, 520));
+      setHasStepped(true);
+      setStep(2);
+    } catch {
+      setFormError('Your draft could not be saved securely. Please try again.');
+    } finally {
+      setSavingStep(false);
     }
-    setHasStepped(true);
-    setStep(2);
-    setSavingStep(false);
   }
 
   async function saveAndExit() {
-    await saveProfileDraft(draft());
-    await signOut();
+    try { await saveProfileDraft(draft()); await signOut(); }
+    catch { setFormError('Your draft could not be saved securely. Please try again before signing out.'); }
   }
 
   async function finish() {
@@ -333,6 +332,7 @@ export default function CompleteProfileScreen() {
     setBusy(true);
     try {
       await createPlayerProfile(draft(), clubs);
+      void trackEvent('profile_completed');
       await clearProfileDraft(email);
       router.replace('/(tabs)');
     } catch (e: any) {
@@ -355,9 +355,11 @@ export default function CompleteProfileScreen() {
         : 'Continue';
 
   return (
+    <FieldColors.Provider value={brand}>
+    <ObserveReady ready={hydrate === 'ready'} />
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      className="flex-1 bg-page"
+      className="flex-1 bg-court-page"
       style={{ flex: 1, backgroundColor: brand.page }}>
       <View className="flex-1" style={{ paddingTop: insets.top + 8 }}>
         <CourtBackdrop completeness={percent / 100} />
@@ -376,12 +378,12 @@ export default function CompleteProfileScreen() {
                 tintColor={brand.muted}
                 accessibilityElementsHidden
               />
-              <Text className="ml-1 text-[15px] font-semibold text-muted">Save and exit</Text>
+              <Text className="ml-1 text-[15px] font-semibold text-court-muted">Save and exit</Text>
             </Pressable>
             {hydrate === 'ready' ? (
               <Text
                 className="text-[12px] font-bold"
-                style={{ color: percent > 0 ? brand.padel : brand.faint }}>
+                style={{ color: percent > 0 ? brand.accent : brand.faint }}>
                 Profile {percent}% complete
               </Text>
             ) : (
@@ -423,12 +425,13 @@ export default function CompleteProfileScreen() {
               <>
                 <Text
                   accessibilityRole="header"
-                  className="mb-2 font-extrabold text-premium"
+                  className="mb-2 font-extrabold text-court-ink"
                   style={{ fontSize: 28, lineHeight: 33 }}>
                   Your details
                 </Text>
-                <Text className="mb-6 text-muted" style={{ fontSize: 16, lineHeight: 24 }}>
+                <Text className="mb-6 text-court-muted" style={{ fontSize: 16, lineHeight: 24 }}>
                   Use the same name as your RankedIn profile so we can match your results.
+                  {'\n'}ID / passport, mobile number, gender, nationality and region are optional.
                 </Text>
 
                 <SectionLabel first>Identity</SectionLabel>
@@ -474,7 +477,7 @@ export default function CompleteProfileScreen() {
                 </View>
                 <LiquidField
                   ref={idRef}
-                  label="ID / passport"
+                  label="ID / passport (optional)"
                   value={idNumber}
                   error={errors.idNumber}
                   invalid={!!errors.idNumber}
@@ -492,7 +495,7 @@ export default function CompleteProfileScreen() {
                 {email ? <VerifiedEmail email={email} /> : null}
                 <LiquidField
                   ref={mobileRef}
-                  label="Mobile number"
+                  label="Mobile number (optional)"
                   icon="phone.fill"
                   value={contactNumber}
                   error={errors.contactNumber}
@@ -511,11 +514,11 @@ export default function CompleteProfileScreen() {
                 <View className="flex-row" style={{ gap: 12 }}>
                   <View className="flex-1">
                     <SelectField
-                      label="Gender"
+                      label="Gender (optional)"
                       value={gender}
                       error={errors.gender}
                       valid={!!gender && !errors.gender}
-                      options={GENDERS.map((g) => ({ label: g, value: g }))}
+                      options={[{ label: 'Prefer not to say', value: '' }, ...GENDERS.map((g) => ({ label: g, value: g }))]}
                       onChange={(v) => {
                         setGender(v);
                         clearError('gender');
@@ -524,12 +527,12 @@ export default function CompleteProfileScreen() {
                   </View>
                   <View className="flex-1">
                     <SelectField
-                      label="Nationality"
+                      label="Nationality (optional)"
                       value={nationality}
                       error={errors.nationality}
                       valid={filled(nationality) && !errors.nationality}
                       badge={nationalityBadge}
-                      options={nationalityOptions}
+                      options={[{ label: 'Prefer not to say', value: '' }, ...nationalityOptions]}
                       onChange={(v) => {
                         setNationality(v);
                         clearError('nationality');
@@ -538,12 +541,12 @@ export default function CompleteProfileScreen() {
                   </View>
                 </View>
                 <SelectField
-                  label="Region"
+                  label="Region (optional)"
                   value={region}
                   error={errors.region}
                   valid={!!region && !errors.region}
                   badge={regionBadge}
-                  options={SA_REGIONS.map((r) => ({ label: r, value: r }))}
+                  options={[{ label: 'Prefer not to say', value: '' }, ...SA_REGIONS.map((r) => ({ label: r, value: r }))]}
                   onChange={(v) => {
                     setRegion(v);
                     clearError('region');
@@ -554,11 +557,11 @@ export default function CompleteProfileScreen() {
               <>
                 <Text
                   accessibilityRole="header"
-                  className="mb-2 font-extrabold text-premium"
+                  className="mb-2 font-extrabold text-court-ink"
                   style={{ fontSize: 28, lineHeight: 33 }}>
                   Your game
                 </Text>
-                <Text className="mb-5 text-muted" style={{ fontSize: 16, lineHeight: 24 }}>
+                <Text className="mb-5 text-court-muted" style={{ fontSize: 16, lineHeight: 24 }}>
                   Your player card fills in as you choose a level, club and preferences.
                 </Text>
 
@@ -610,6 +613,22 @@ export default function CompleteProfileScreen() {
                   />
                 ) : null}
 
+                <SectionLabel>Playing preferences (optional)</SectionLabel>
+                <SelectField
+                  label="Court side"
+                  value={courtSide}
+                  valid={!!courtSide}
+                  options={COURT_SIDE_OPTIONS}
+                  onChange={setCourtSide}
+                />
+                <SelectField
+                  label="Playing hand"
+                  value={playingHand}
+                  valid={!!playingHand}
+                  options={PLAYING_HAND_OPTIONS}
+                  onChange={setPlayingHand}
+                />
+
                 <SectionLabel>About your game</SectionLabel>
                 <LiquidField
                   ref={bioRef}
@@ -636,13 +655,11 @@ export default function CompleteProfileScreen() {
                   keyboardType="url"
                   placeholder="https://instagram.com/you"
                 />
-                <LiquidField
-                  label="Sponsors (optional)"
+                <SponsorField
                   value={sponsors}
-                  valid={filled(sponsors)}
-                  onChangeText={setSponsors}
-                  autoCapitalize="words"
-                  autoCorrect
+                  input={sponsorInput}
+                  onChange={setSponsors}
+                  onInputChange={setSponsorInput}
                 />
 
                 <SectionLabel>Kit</SectionLabel>
@@ -694,36 +711,36 @@ export default function CompleteProfileScreen() {
                         backgroundColor: accepted ? brand.padel : 'transparent',
                       }}>
                       {accepted ? (
-                        <Text className="text-[13px] font-extrabold text-page">✓</Text>
+                        <Text className="text-[13px] font-extrabold" style={{ color: '#FFFFFF' }}>✓</Text>
                       ) : null}
                     </View>
                   </Pressable>
-                  <Text className="min-h-11 flex-1 pt-2.5 text-[14px] leading-5 text-muted">
+                  <Text className="min-h-11 flex-1 pt-2.5 text-[14px] leading-5 text-court-muted">
                     I agree to the{' '}
                     <Text
                       onPress={() => openLegal('terms')}
                       accessibilityRole="link"
-                      className="font-semibold text-padel">
+                      className="font-semibold" style={{ color: brand.accent }}>
                       Terms
                     </Text>
                     {' and '}
                     <Text
                       onPress={() => openLegal('privacy')}
                       accessibilityRole="link"
-                      className="font-semibold text-padel">
+                      className="font-semibold" style={{ color: brand.accent }}>
                       Privacy Policy
                     </Text>
                   </Text>
                 </View>
                 {errors.accepted ? (
-                  <Text className="mt-2 text-[13px] text-danger">{errors.accepted}</Text>
+                  <Text className="mt-2 text-[13px] text-court-danger">{errors.accepted}</Text>
                 ) : null}
               </>
             )}
           </StepSlide>
 
           {formError ? (
-            <Text accessibilityRole="alert" className="mt-3 text-[14px] leading-5 text-danger">
+            <Text accessibilityRole="alert" className="mt-3 text-[14px] leading-5 text-court-danger">
               {formError}
             </Text>
           ) : null}
@@ -745,12 +762,12 @@ export default function CompleteProfileScreen() {
             style={{
               height: CONTROL_H,
               borderRadius: CONTROL_R,
-              backgroundColor: ctaMuted ? '#5C6B14' : brand.padel,
+              backgroundColor: ctaMuted ? brand.panel : brand.padel,
             }}>
             {saving ? <CourtLine /> : null}
             <Text
               className="text-base font-bold"
-              style={{ color: ctaMuted ? 'rgba(10,10,10,0.45)' : brand.page }}>
+              style={{ color: ctaMuted ? brand.faint : '#FFFFFF' }}>
               {ctaLabel}
             </Text>
           </PressableScale>
@@ -765,5 +782,6 @@ export default function CompleteProfileScreen() {
         onDismiss={dismissToast}
       />
     </KeyboardAvoidingView>
+    </FieldColors.Provider>
   );
 }

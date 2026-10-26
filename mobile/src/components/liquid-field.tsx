@@ -9,13 +9,15 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
-import { brand, motion, padelGlow } from '@/theme/tokens';
+import { motion } from '@/theme/tokens';
 
 export type FieldIcon =
   | 'envelope.fill'
   | 'lock.fill'
   | 'person.fill'
   | 'phone.fill';
+
+import { useFieldColors } from '@/components/field-colors';
 
 type Props = {
   label: string;
@@ -27,12 +29,12 @@ type Props = {
   labelAccessory?: ReactNode;
 } & React.ComponentProps<typeof TextInput>;
 
-const ANDROID_ICON: Record<FieldIcon, string> = {
+const ANDROID_ICON = {
   'envelope.fill': 'mail',
   'lock.fill': 'lock',
   'person.fill': 'person',
   'phone.fill': 'phone',
-};
+} as const;
 
 /**
  * Auth field. Persistent label above the input. Lime 2px ring + restrained
@@ -60,6 +62,7 @@ export const LiquidField = forwardRef<TextInput, Props>(function LiquidField(
   },
   ref
 ) {
+  const brand = useFieldColors();
   const reduced = useReducedMotion();
   const uid = useId();
   const labelId = `${uid}-label`;
@@ -96,13 +99,11 @@ export const LiquidField = forwardRef<TextInput, Props>(function LiquidField(
   }, [checkT, focused, invalid, limeT, ms, reduced, valid]);
 
   const container = useAnimatedStyle(() => {
-    const rest = interpolateColor(limeT.value, [0, 1], [brand.edge, brand.padel]);
-    const active = interpolateColor(focusT.value, [0, 1], [rest, brand.padel]);
-    const glow = (1 - errorT.value) * Math.max(focusT.value, limeT.value);
+    const rest = interpolateColor(limeT.value, [0, 1], [brand.edge, brand.accent]);
+    const active = interpolateColor(focusT.value, [0, 1], [rest, brand.accent]);
     return {
       borderColor: interpolateColor(errorT.value, [0, 1], [active, brand.danger]),
-      boxShadow: padelGlow(0, 10, reduced ? 0 : glow * 0.32),
-      elevation: reduced ? 0 : glow * 6,
+      elevation: 0,
     };
   });
 
@@ -163,16 +164,23 @@ export const LiquidField = forwardRef<TextInput, Props>(function LiquidField(
           container,
           {
             borderWidth: 2,
+            flexDirection: 'row',
+            alignItems: multiline ? 'flex-start' : 'center',
+            borderRadius: 14,
+            backgroundColor: brand.elevated,
+            paddingHorizontal: 14,
+            paddingVertical: multiline ? 12 : 0,
+            minHeight: multiline ? 120 : 52,
           },
         ]}
-        className={`flex-row items-center rounded-[14px] bg-elevated px-3.5 ${multiline ? 'min-h-[120px] items-start py-3' : 'h-[52px]'}`}>
+        >
         {symbol ? (
           <View style={{ width: 18, height: 18 }}>
             <Animated.View style={[{ position: 'absolute', width: 18, height: 18 }, mutedIcon]}>
               <SymbolView name={symbol} size={18} tintColor={brand.placeholder} accessibilityElementsHidden />
             </Animated.View>
             <Animated.View style={[{ position: 'absolute', width: 18, height: 18 }, limeIcon]}>
-              <SymbolView name={symbol} size={18} tintColor={brand.padel} accessibilityElementsHidden />
+              <SymbolView name={symbol} size={18} tintColor={brand.accent} accessibilityElementsHidden />
             </Animated.View>
           </View>
         ) : null}
@@ -184,9 +192,8 @@ export const LiquidField = forwardRef<TextInput, Props>(function LiquidField(
           placeholderTextColor={brand.placeholder}
           accessibilityLabel={label}
           accessibilityLabelledBy={labelId}
-          accessibilityState={{ invalid: !!invalid }}
           aria-invalid={!!invalid}
-          accessibilityDescribedBy={describedBy || undefined}
+          accessibilityHint={error || hint || undefined}
           onFocus={(e) => {
             setFocused(true);
             onFocus?.(e);
@@ -201,9 +208,9 @@ export const LiquidField = forwardRef<TextInput, Props>(function LiquidField(
           multiline={multiline}
           textAlignVertical={multiline ? 'top' : 'center'}
           importantForAutofill="yes"
-          cursorColor={brand.padel}
-          selectionColor="rgba(204,255,0,0.35)"
-          keyboardAppearance="dark"
+          cursorColor={brand.accent}
+          selectionColor={brand.selection}
+          keyboardAppearance="light"
           className="flex-1 text-[16px]"
           style={{
             color: brand.premium,
@@ -218,7 +225,7 @@ export const LiquidField = forwardRef<TextInput, Props>(function LiquidField(
             <SymbolView
               name={{ ios: 'checkmark', android: 'check', web: 'check' }}
               size={16}
-              tintColor={brand.padel}
+              tintColor={brand.accent}
               accessibilityElementsHidden
             />
           </Animated.View>
@@ -248,7 +255,7 @@ export const LiquidField = forwardRef<TextInput, Props>(function LiquidField(
           nativeID={invalid ? errorId : undefined}
           accessibilityLiveRegion="polite"
           accessibilityElementsHidden={!invalid}
-          className="px-1 text-[13px] leading-5 text-danger">
+          className="px-1 text-[13px] leading-5 text-court-danger">
           {heldError}
         </Text>
       </Animated.View>

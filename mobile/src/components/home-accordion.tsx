@@ -12,15 +12,18 @@ import { SymbolView } from 'expo-symbols';
 
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { hapticLight } from '@/lib/haptics';
-import { brand, motion } from '@/theme/tokens';
+import { lightBrand as brand, motion } from '@/theme/tokens';
 
-type Badge = { label: string; count?: boolean };
+type Badge = { label: string; count?: boolean; color?: string };
 
 type Props = {
   title: string;
+  titleCount?: number;
+  countColor?: string;
   open: boolean;
   onToggle: () => void;
   badges?: Badge[];
+  showBadgesWhenOpen?: boolean;
   children: ReactNode;
 };
 
@@ -28,7 +31,7 @@ type Props = {
  * Website home accordion: uppercase label, count pills when collapsed,
  * chevron points trailing when closed and down when open.
  */
-export function HomeAccordion({ title, open, onToggle, badges, children }: Props) {
+export function HomeAccordion({ title, titleCount, countColor, open, onToggle, badges, showBadgesWhenOpen = false, children }: Props) {
   const reduced = useReducedMotion();
   const rot = useSharedValue(open ? 0 : -90);
 
@@ -44,28 +47,30 @@ export function HomeAccordion({ title, open, onToggle, badges, children }: Props
   }));
 
   return (
-    <View className="border-t border-white/5 py-3">
+    <View className="border-t border-court-edge py-3">
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
-        accessibilityLabel={title}
+        accessibilityLabel={titleCount == null ? title : `${title} (${titleCount})`}
         onPress={() => {
           hapticLight();
           onToggle();
         }}
         className="min-h-11 flex-row items-center justify-between px-1">
-        <Text className="text-xs font-bold uppercase tracking-[0.2em] text-white/80">
+        <Text className="text-[19px] font-bold tracking-tight text-court-ink">
           {title}
+          {titleCount != null && <Text style={{ color: countColor }}> ({titleCount})</Text>}
         </Text>
         <View className="flex-row items-center">
-          {!open && badges?.length
+          {(!open || showBadgesWhenOpen) && badges?.length
             ? badges.map((badge) => (
                 <View
                   key={badge.label}
-                  className="ml-1.5 rounded-full border border-white/20 px-2 py-0.5">
+                  style={badge.color ? { borderColor: badge.color } : undefined}
+                  className="ml-1.5 rounded-full border border-court-edge px-2 py-0.5">
                   <Text
-                    className="text-[9px] font-bold uppercase tracking-wider text-white/80"
-                    style={badge.count ? { fontVariant: ['tabular-nums'] } : undefined}>
+                    className="text-[9px] font-bold uppercase tracking-wider text-court-muted"
+                    style={[badge.count ? { fontVariant: ['tabular-nums'] } : undefined, badge.color ? { color: badge.color } : undefined]}>
                     {badge.label}
                   </Text>
                 </View>

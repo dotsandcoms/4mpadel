@@ -9,6 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
+import { useScreenActive } from '@/hooks/use-screen-active';
 
 type Props = {
   color: string;
@@ -18,10 +19,11 @@ type Props = {
 /** Status pulse. Reduce Motion keeps the colour, drops the blink. */
 export function PulseDot({ color, size = 6 }: Props) {
   const reduced = useReducedMotion();
+  const active = useScreenActive();
   const opacity = useSharedValue(1);
 
   useEffect(() => {
-    if (reduced) {
+    if (reduced || !active) {
       cancelAnimation(opacity);
       opacity.value = 1;
       return;
@@ -32,7 +34,7 @@ export function PulseDot({ color, size = 6 }: Props) {
       true
     );
     return () => cancelAnimation(opacity);
-  }, [opacity, reduced]);
+  }, [opacity, reduced, active]);
 
   const anim = useAnimatedStyle(() => ({ opacity: opacity.value }));
 

@@ -1,12 +1,14 @@
-import { Image } from 'expo-image';
+import { compareEventDates } from '@/lib/event-rules';
 import { SymbolView } from 'expo-symbols';
-import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { Observe } from 'expo-observe';
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
 import {
+  AppState,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -21,6 +23,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Notice } from '@/components/events/event-ui';
 import { FadeUp } from '@/components/fade-up';
 import { HomeAccordion } from '@/components/home-accordion';
 import {
@@ -34,14 +37,23 @@ import {
   RecentResultCard,
 } from '@/components/home-event-card';
 import { HomeHeader } from '@/components/home-header';
+import { ObserveReady } from '@/components/observe-ready';
+import { FollowingPreview } from '@/components/following-feed';
+import { useFollowingFeed } from '@/hooks/use-following-feed';
+import { ProPadelFeed } from '@/components/pro-padel-feed';
+import { OfficialFipFeed } from '@/components/official-fip-feed';
+import { usePlayerHub } from '@/hooks/use-player-hub';
+import { makeCompanionSchedule } from '@/lib/companion-schedule';
+import { publishCompanionSchedule } from '@/lib/companion';
 import { HomeGreeting, HomePlayerCard } from '@/components/home-player-card';
-import { PressableScale } from '@/components/pressable-scale';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
 import {
   EMPTY_HOME,
   eventPath,
   fetchHomeBundle,
+  fetchHomePlayerExtras,
+  resolveFeaturedCta,
   type CalendarEvent,
   type HomeBundle,
   type PendingAction,
@@ -54,85 +66,96 @@ import {
 } from '@/lib/notifications';
 import { openSitePath } from '@/lib/site';
 import { supabase } from '@/lib/supabase';
-import { brand, motion } from '@/theme/tokens';
+import { lightBrand as brand, motion } from '@/theme/tokens';
 
 const MATCH_ORANGE = '#F97316';
-
-const QUICK_LINKS = [
-  {
-    key: 'rankings',
-    label: 'Player Rankings',
-    icon: 'chart.bar.fill' as const,
-    tab: '/(tabs)/rankings' as const,
-  },
-  {
-    key: 'calendar',
-    label: 'Find Tournaments',
-    icon: 'magnifyingglass' as const,
-    tab: '/(tabs)/calendar' as const,
-  },
-  {
-    key: 'profile',
-    label: 'My Profile',
-    icon: 'person.fill' as const,
-    tab: '/(tabs)/profile' as const,
-  },
-  {
-    key: 'help',
-    label: 'Help & Support',
-    icon: 'questionmark.circle' as const,
-    href: '/contact',
-  },
-];
 
 type OpenMap = {
   pending: boolean;
   schedule: boolean;
   featured: boolean;
   results: boolean;
-  links: boolean;
 };
 
 export default function HomeScreen() {
+  const playerHub = usePlayerHub();
+  const following = useFollowingFeed('all', 3);
+  const proPadel = playerHub.pro;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const tabPad = useTabScenePadding();
   const [bundle, setBundle] = useState<HomeBundle>(EMPTY_HOME);
+  const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [open, setOpen] = useState<OpenMap>({
     pending: false,
     schedule: false,
-    featured: false,
+    featured: true,
     results: false,
-    links: false,
   });
   const [schedulePast, setSchedulePast] = useState(false);
   const [scheduleKind, setScheduleKind] = useState<'matches' | 'events'>('events');
   const scheduleKindTouched = useRef(false);
+  const loadId = useRef(0);
 
   const load = useCallback(async (soft?: boolean) => {
+    const currentLoad = ++loadId.current;
     if (!soft) setLoading(true);
+    setLoadError(false);
     try {
       const { data } = await supabase.auth.getUser();
-      setBundle(await fetchHomeBundle(data.user?.email));
+      if (currentLoad !== loadId.current) return;
+      const next = await fetchHomeBundle(data.user?.email, {
+        strictSchedule: true,
+        deferPlayerExtras: true,
+        onPlayer: player => {
+          if (currentLoad === loadId.current) {
+            setBundle(previous => ({ ...previous, player }));
+          }
+        },
+      });
+      if (currentLoad !== loadId.current) return;
+      setBundle(next);
+      if (next.player?.rankedin_id) {
+        void fetchHomePlayerExtras(next.player).then(extras => {
+          if (currentLoad !== loadId.current) return;
+          const enriched: HomeBundle = {
+            ...next,
+            player: next.player ? { ...next.player, winLoss: extras.winLoss, rankingChange: extras.rankingChange } : null,
+            upcomingMatches: extras.upcomingMatches,
+            pastMatches: extras.pastMatches,
+          };
+          setBundle(enriched);
+          if (data.user) void publishCompanionSchedule(data.user.id, makeCompanionSchedule(enriched));
+        }).catch(error => console.warn('[home] Optional player details', error));
+      } else if (data.user) {
+        void publishCompanionSchedule(data.user.id, makeCompanionSchedule(next));
+      }
     } catch (err) {
+      if (currentLoad === loadId.current) {
+        Observe.reportError(new Error('Home data load failed'));
+        setLoadError(true);
+      }
       console.warn('[home]', err);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (currentLoad === loadId.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  useEffect(() => {
-    if (bundle.pending.length > 0) {
-      setOpen((current) => (current.pending ? current : { ...current, pending: true }));
-    }
-  }, [bundle.pending.length]);
+  useFocusEffect(useCallback(() => {
+    void load(true);
+    const foreground = AppState.addEventListener('change', state => {
+      if (state === 'active') void load(true);
+    });
+    return () => {
+      loadId.current += 1;
+      foreground.remove();
+    };
+  }, [load]));
 
   useEffect(() => {
     if (loading || scheduleKindTouched.current) return;
@@ -151,11 +174,21 @@ export default function HomeScreen() {
     };
   }, []);
 
-  const schedule = schedulePast ? bundle.pastSchedule : bundle.upcomingSchedule;
+  const schedule = useMemo(() => [...(schedulePast ? bundle.pastSchedule : bundle.upcomingSchedule)]
+    .sort((a, b) => compareEventDates(a, b, schedulePast)), [schedulePast, bundle.pastSchedule, bundle.upcomingSchedule]);
   const matches = schedulePast ? bundle.pastMatches : bundle.upcomingMatches;
 
   async function openEvent(event: CalendarEvent) {
     await openSitePath(eventPath(event));
+  }
+
+  function openFeaturedAction(event: CalendarEvent) {
+    const cta = resolveFeaturedCta(event);
+    if (event.is_manual && (cta.action === 'pay' || cta.action === 'register')) {
+      router.push({ pathname: '/events/register', params: { id: String(event.id), ...(cta.action === 'pay' ? { mode: 'pay' } : {}) } });
+    } else {
+      void openEvent(event);
+    }
   }
 
   function openPending(action: PendingAction) {
@@ -171,9 +204,10 @@ export default function HomeScreen() {
   }
 
   return (
-    <View className="flex-1 bg-page">
+    <View className="flex-1 bg-court-page">
+      <ObserveReady ready={!loading} />
       <View
-        className="bg-page"
+        className="bg-court-page"
         style={{ paddingTop: insets.top, zIndex: 30, elevation: 30 }}>
         <HomeHeader
           onSearch={() => router.push('/search')}
@@ -183,43 +217,47 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView
-        className="flex-1 bg-page"
+        className="flex-1 bg-court-page"
         contentContainerStyle={{
-          paddingBottom: tabPad,
+          paddingBottom: Platform.OS === 'ios' ? 16 : tabPad,
         }}
+        contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
+            refreshing={refreshing || proPadel.loading}
             onRefresh={() => {
               setRefreshing(true);
-              load(true);
+              void Promise.all([load(true), playerHub.refresh(), following.refresh()]);
             }}
-            tintColor={brand.padel}
+            tintColor={brand.accent}
           />
         }>
-        <View>
-          <Image
-            source={require('@/assets/images/hero-bg.jpg')}
-            style={[styles.heroImage, { pointerEvents: 'none' }]}
-            contentFit="cover"
-            accessibilityElementsHidden
-          />
-          <View style={[styles.heroScrim, { pointerEvents: 'none' }]} />
-
+        <View style={{ overflow: 'hidden' }}>
           <View className="px-4 pt-3 pb-2">
             <FadeUp>
               <HomeGreeting player={bundle.player} />
               <HomePlayerCard
                 player={bundle.player}
                 loading={loading}
+                fipLinked={playerHub.fipLinks.some(link => link.local_player_id === bundle.player?.id && link.status === 'verified')}
                 onPress={() => router.push('/(tabs)/profile')}
               />
             </FadeUp>
           </View>
         </View>
 
-        <View className="px-4">
+        <View className="px-4 bg-court-page">
+        <Pressable accessibilityRole="button" accessibilityLabel="Find and enter a tournament" onPress={() => router.push('/calendar')}
+          style={{ marginTop: 16, marginBottom: 20, backgroundColor: brand.padel, padding: 20, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 16, minHeight: 104 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: '#386018', fontSize: 11, fontWeight: '700', letterSpacing: 1.4 }}>GET ON COURT</Text>
+            <Text style={{ color: brand.premium, fontSize: 26, fontWeight: '800', letterSpacing: -0.8, marginTop: 5 }}>Your next tournament.</Text>
+            <Text style={{ color: '#34473D', fontSize: 13, lineHeight: 19, marginTop: 5 }}>Find an event. Pick your partner. Play.</Text>
+          </View>
+          <SymbolView name={{ ios: 'arrow.up.right', android: 'north_east', web: 'north_east' }} size={23} tintColor={brand.premium} />
+        </Pressable>
+        {loadError && <Notice title="Your latest activity couldn’t load" onRetry={() => void load(true)}>Please try again to refresh your entries, payments and schedule.</Notice>}
         {bundle.happeningNow.length ? (
           <FadeUp delay={motion.stagger * 6} className="mt-6">
             {bundle.happeningNow.slice(0, 3).map((event, i) => (
@@ -237,10 +275,11 @@ export default function HomeScreen() {
         <FadeUp delay={motion.stagger * 8} className="mt-4">
           {bundle.pending.length ? (
             <HomeAccordion
-              title={`Pending Actions (${bundle.pending.length})`}
+              title="Complete your entry"
+              countColor={brand.danger}
               open={open.pending}
               onToggle={() => toggle('pending')}
-              badges={[{ label: String(bundle.pending.length), count: true }]}>
+              badges={[{ label: String(bundle.pending.length), count: true, color: brand.danger }]}>
               {bundle.pending.map((action) => (
                 <PendingRow
                   key={action.key}
@@ -299,7 +338,7 @@ export default function HomeScreen() {
                   }}
                 />
               </View>
-              <View className="ml-auto shrink-0 flex-row rounded-lg border border-white/15 p-0.5">
+              <View className="ml-auto shrink-0 flex-row rounded-lg border border-court-edge p-0.5">
                 {(
                   [
                     { key: false, label: 'Upcoming' },
@@ -311,12 +350,13 @@ export default function HomeScreen() {
                     onPress={() => setSchedulePast(tab.key)}
                     accessibilityRole="button"
                     accessibilityState={{ selected: schedulePast === tab.key }}
-                    className={`min-h-10 justify-center px-2.5 ${
-                      schedulePast === tab.key ? 'rounded-md bg-white/10' : ''
+                    hitSlop={6}
+                    className={`min-h-8 justify-center px-2 ${
+                      schedulePast === tab.key ? 'rounded-md bg-court-surface' : ''
                     }`}>
                     <Text
-                      className={`text-[11px] font-semibold ${
-                        schedulePast === tab.key ? 'text-premium' : 'text-white/45'
+                      className={`text-[10px] font-normal ${
+                        schedulePast === tab.key ? 'text-court-ink' : 'text-court-muted'
                       }`}>
                       {tab.label}
                     </Text>
@@ -336,12 +376,12 @@ export default function HomeScreen() {
                   ) : null}
                   {(schedulePast ? matches : matches.slice(1)).length ? (
                     <View
-                      className={`overflow-hidden rounded-2xl border border-edge bg-white/5 ${
+                      className={`overflow-hidden rounded-2xl border border-court-edge bg-court-elevated ${
                         schedulePast ? '' : 'mt-3'
                       }`}>
                       {(schedulePast ? matches : matches.slice(1)).map((match, i) => (
                         <View key={matchKey(match, i)}>
-                          {i > 0 ? <View className="h-px bg-edge" /> : null}
+                          {i > 0 ? <View className="h-px bg-court-edge" /> : null}
                           <MatchRow
                             match={match}
                             showResult={schedulePast}
@@ -366,10 +406,10 @@ export default function HomeScreen() {
                 />
               )
             ) : schedule.length ? (
-              <View className="overflow-hidden rounded-2xl border border-edge bg-white/5">
+              <View className="overflow-hidden rounded-2xl border border-court-edge bg-court-elevated">
                 {schedule.map((event, i) => (
                   <View key={event.id}>
-                    {i > 0 ? <View className="h-px bg-edge" /> : null}
+                    {i > 0 ? <View className="h-px bg-court-edge" /> : null}
                     <EventRow
                       event={event}
                       showStartCountdown={!schedulePast}
@@ -388,13 +428,13 @@ export default function HomeScreen() {
                     : 'Explore the calendar to find your next event.'
                 }
                 actionLabel={schedulePast ? undefined : 'Explore Calendar'}
-                onAction={schedulePast ? undefined : () => router.push('/(tabs)/calendar')}
+                onAction={schedulePast ? undefined : () => router.push('/calendar')}
               />
             )}
           </HomeAccordion>
 
           <HomeAccordion
-            title="Featured Events"
+            title="Tournament spotlight"
             open={open.featured}
             onToggle={() => toggle('featured')}
             badges={
@@ -403,13 +443,13 @@ export default function HomeScreen() {
                 : undefined
             }>
             {bundle.featured.length ? (
-              <EventSlide events={bundle.featured} onOpen={openEvent} />
+              <EventSlide events={bundle.featured} onOpen={openEvent} onAction={openFeaturedAction} />
             ) : (
               <EmptyBlock
                 title="No featured events right now"
                 body="Spotlight tournaments will appear here when they are announced."
                 actionLabel="Browse calendar"
-                onAction={() => router.push('/(tabs)/calendar')}
+                onAction={() => router.push('/calendar')}
               />
             )}
           </HomeAccordion>
@@ -433,33 +473,13 @@ export default function HomeScreen() {
             )}
           </HomeAccordion>
 
-          <HomeAccordion
-            title="Quick Links"
-            open={open.links}
-            onToggle={() => toggle('links')}>
-            <View className="overflow-hidden rounded-2xl border border-edge bg-elevated">
-              {QUICK_LINKS.map((link, i) => (
-                <View key={link.key}>
-                  {i > 0 ? <View className="h-px bg-edge" /> : null}
-                  <PressableScale
-                    onPress={() => {
-                      if ('tab' in link && link.tab) router.push(link.tab);
-                      else if ('href' in link && link.href) openSitePath(link.href);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={link.label}
-                    className="min-h-[52px] flex-row items-center px-4">
-                    <SymbolView name={link.icon} size={18} tintColor={brand.faint} />
-                    <Text className="ml-3.5 flex-1 text-[14px] font-medium text-premium">
-                      {link.label}
-                    </Text>
-                    <SymbolView name="chevron.right" size={14} tintColor={brand.faint} />
-                  </PressableScale>
-                </View>
-              ))}
-            </View>
-          </HomeAccordion>
+          <FollowingPreview state={following} />
+
+          <ProPadelFeed state={proPadel} localState={playerHub} showInternationalResults={false} />
+          <OfficialFipFeed />
+
         </FadeUp>
+
         </View>
       </ScrollView>
     </View>
@@ -469,79 +489,28 @@ export default function HomeScreen() {
 function EventSlide({
   events,
   onOpen,
+  onAction,
 }: {
   events: CalendarEvent[];
   onOpen: (event: CalendarEvent) => void;
+  onAction: (event: CalendarEvent) => void;
 }) {
-  const [page, setPage] = useState(0);
-  const ids = events.map((event) => event.id).join(',');
-
-  useEffect(() => {
-    setPage(0);
-  }, [ids]);
-
-  const last = Math.max(0, events.length - 1);
-  const index = Math.min(page, last);
-  const event = events[index];
-  if (!event) return null;
-
-  const many = events.length > 1;
-
-  return (
-    <View>
-      <FeaturedCard event={event} onPress={() => onOpen(event)} />
-      {many ? (
-        <>
-          <Pressable
-            onPress={() => setPage((current) => Math.max(0, current - 1))}
-            disabled={index === 0}
-            accessibilityRole="button"
-            accessibilityLabel="Previous featured event"
-            accessibilityState={{ disabled: index === 0 }}
-            style={{
-              position: 'absolute',
-              top: '50%',
-              left: 0,
-              marginTop: -22,
-              width: 44,
-              height: 44,
-              justifyContent: 'center',
-              alignItems: 'center',
-              zIndex: 10,
-            }}>
-            <SymbolView
-              name={{ ios: 'chevron.left', android: 'chevron_left', web: 'chevron_left' }}
-              size={18}
-              tintColor={index === 0 ? 'rgba(255,255,255,0.28)' : brand.premium}
-            />
-          </Pressable>
-          <Pressable
-            onPress={() => setPage((current) => Math.min(last, current + 1))}
-            disabled={index === last}
-            accessibilityRole="button"
-            accessibilityLabel="Next featured event"
-            accessibilityState={{ disabled: index === last }}
-            style={{
-              position: 'absolute',
-              top: '50%',
-              right: 0,
-              marginTop: -22,
-              width: 44,
-              height: 44,
-              justifyContent: 'center',
-              alignItems: 'center',
-              zIndex: 10,
-            }}>
-            <SymbolView
-              name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
-              size={18}
-              tintColor={index === last ? 'rgba(255,255,255,0.28)' : brand.premium}
-            />
-          </Pressable>
-        </>
-      ) : null}
-    </View>
-  );
+  const [width, setWidth] = useState(0);
+  const rail = useRef<ScrollView>(null);
+  const ids = events.map(event => event.id).join(',');
+  const cardWidth = events.length > 1 ? Math.min(340, width * 0.86) : width;
+  const step = cardWidth + 12;
+  useEffect(() => { rail.current?.scrollTo({ x: 0, animated: false }); }, [ids, width]);
+  return <View onLayout={event => setWidth(event.nativeEvent.layout.width)}>
+    {width > 0 && <ScrollView ref={rail} horizontal showsHorizontalScrollIndicator={false}
+      decelerationRate="fast" snapToInterval={step} snapToAlignment="start"
+      disableIntervalMomentum directionalLockEnabled
+      contentContainerStyle={{ gap: 12, paddingRight: Math.max(0, width - cardWidth) }}>
+      {events.map(event => <View key={event.id} style={{ width: cardWidth }}>
+        <FeaturedCard event={event} onPress={() => onOpen(event)} onCta={() => onAction(event)} />
+      </View>)}
+    </ScrollView>}
+  </View>;
 }
 
 function ResultSwipe({
@@ -685,17 +654,18 @@ function KindTab({
       onPress={onPress}
       accessibilityRole="tab"
       accessibilityState={{ selected }}
-      className={`mr-1.5 min-h-11 shrink-0 flex-row items-center rounded-lg px-2.5 ${
-        selected ? 'border border-white/40 bg-white/5' : ''
+      hitSlop={6}
+      className={`mr-1.5 min-h-8 shrink-0 flex-row items-center rounded-lg px-2 ${
+        selected ? 'border border-court-edge bg-court-surface' : ''
       }`}>
       <SymbolView
         name={icon}
         size={14}
-        tintColor={selected ? brand.premium : 'rgba(255,255,255,0.5)'}
+        tintColor={selected ? brand.premium : 'rgba(22,37,31,0.5)'}
       />
       <Text
-        className={`ml-1.5 text-[13px] font-bold ${
-          selected ? 'text-premium' : 'text-white/50'
+        className={`ml-1.5 text-[12px] font-normal ${
+          selected ? 'text-court-ink' : 'text-court-muted'
         }`}>
         {label}
       </Text>
@@ -704,7 +674,7 @@ function KindTab({
           className="ml-1.5 min-h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5"
           style={{ backgroundColor: badgeColor }}>
           <Text
-            className="text-[10px] font-black text-black"
+            className="text-[9px] font-normal text-black"
             style={{ fontVariant: ['tabular-nums'] }}>
             {count}
           </Text>
@@ -713,21 +683,3 @@ function KindTab({
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  heroImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 340,
-  },
-  heroScrim: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 340,
-    backgroundColor: 'rgba(10,10,10,0.48)',
-  },
-});

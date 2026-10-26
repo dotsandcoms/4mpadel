@@ -1,14 +1,26 @@
 /**
- * Push event catalog. Keep in sync with:
- *   - supabase/migrations/20260814_player_push_notifications.sql
- *   - src/utils/notificationEvents.js
- *   - supabase/functions/_shared/notification-events.ts
- *
- * Types match the existing send-email templates so a partner registration,
- * payment, or withdrawal can enqueue a push next to the email.
+ * Mobile push catalog. SQL producers and preferences live in
+ * mobile/supabase/migrations/20260925100000_push_delivery.sql.
+ * Existing service callers retain their legacy event keys.
  */
 
 export const NOTIFICATION_TYPES = [
+  'admin_broadcast',
+  'registration_open',
+  'early_bird_ending',
+  'registration_closing',
+  'registration_closed',
+  'schedule_published',
+  'schedule_changed',
+  'match_progression',
+  'opponent_confirmed',
+  'result_confirmed',
+  'result_corrected',
+  'tournament_live',
+  'tournament_finished',
+  'event_updated',
+  'registration_complete',
+  'event_cancelled',
   'partner_assigned',
   'partner_entry_paid',
   'partner_invite',
@@ -22,25 +34,43 @@ export const NOTIFICATION_TYPES = [
   'match_reminder',
   'ranking_change',
   'club_announcement',
+  'pro_match_live',
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
 /** Default in-app path when the sender does not supply one. */
 export const NOTIFICATION_PATHS: Record<NotificationType, string> = {
-  partner_assigned: '/(tabs)/calendar',
-  partner_entry_paid: '/(tabs)/calendar',
-  partner_invite: '/(tabs)/calendar',
-  event_registration: '/(tabs)/calendar',
-  payment_confirmation: '/(tabs)/calendar',
-  payment_reminder: '/(tabs)/calendar',
-  entry_withdrawn: '/(tabs)/calendar',
-  entry_refunded: '/(tabs)/calendar',
-  draws_ready: '/(tabs)/calendar',
-  division_changed: '/(tabs)/calendar',
-  match_reminder: '/(tabs)/calendar',
+  admin_broadcast: '/calendar',
+  registration_open: '/calendar',
+  early_bird_ending: '/calendar',
+  registration_closing: '/calendar',
+  registration_closed: '/calendar',
+  schedule_published: '/calendar',
+  schedule_changed: '/calendar',
+  match_progression: '/calendar',
+  opponent_confirmed: '/calendar',
+  result_confirmed: '/calendar',
+  result_corrected: '/calendar',
+  tournament_live: '/calendar',
+  tournament_finished: '/calendar',
+  event_updated: '/calendar',
+  registration_complete: '/(tabs)/profile',
+  event_cancelled: '/calendar',
+  partner_assigned: '/calendar',
+  partner_entry_paid: '/calendar',
+  partner_invite: '/calendar',
+  event_registration: '/calendar',
+  payment_confirmation: '/calendar',
+  payment_reminder: '/calendar',
+  entry_withdrawn: '/calendar',
+  entry_refunded: '/calendar',
+  draws_ready: '/calendar',
+  division_changed: '/calendar',
+  match_reminder: '/calendar',
   ranking_change: '/(tabs)/rankings',
   club_announcement: '/(tabs)/explore',
+  pro_match_live: '/pro/live',
 };
 
 export type PushCopyVars = {
@@ -66,6 +96,40 @@ export function pushCopy(
   const payer = vars.payerName || partner;
 
   switch (type) {
+    case 'admin_broadcast':
+      return { title: '4M Padel update', body: 'You have a new message from 4M Padel.' };
+    case 'pro_match_live':
+      return { title: 'Your starred match is live', body: `Play has started at ${event}.` };
+    case 'registration_open':
+      return { title: 'Registration open', body: `Open ${event} for the latest details.` };
+    case 'early_bird_ending':
+      return { title: 'Early bird ending', body: `Open ${event} for the latest details.` };
+    case 'registration_closing':
+      return { title: 'Registration closing', body: `Open ${event} for the latest details.` };
+    case 'registration_closed':
+      return { title: 'Registration closed', body: `Open ${event} for the latest details.` };
+    case 'schedule_published':
+      return { title: 'Schedule published', body: `Open ${event} for the latest details.` };
+    case 'schedule_changed':
+      return { title: 'Schedule changed', body: `Open ${event} for the latest details.` };
+    case 'match_progression':
+      return { title: 'Match progression', body: `Open ${event} for the latest details.` };
+    case 'opponent_confirmed':
+      return { title: 'Opponent confirmed', body: `Open ${event} for the latest details.` };
+    case 'result_confirmed':
+      return { title: 'Result confirmed', body: `Open ${event} for the latest details.` };
+    case 'result_corrected':
+      return { title: 'Result corrected', body: `Open ${event} for the latest details.` };
+    case 'tournament_live':
+      return { title: 'Tournament live', body: `Open ${event} for the latest details.` };
+    case 'tournament_finished':
+      return { title: 'Tournament finished', body: `Open ${event} for the latest details.` };
+    case 'event_updated':
+      return { title: 'Event updated', body: `Open ${event} for the latest details.` };
+    case 'registration_complete':
+      return { title: 'Registration complete', body: 'Your 4M Padel player profile is ready.' };
+    case 'event_cancelled':
+      return { title: 'Event cancelled', body: `${event} has been cancelled. Open the app for details.` };
     case 'partner_entry_paid':
       return {
         title: 'You’ve been entered',

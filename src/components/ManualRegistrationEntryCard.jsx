@@ -68,6 +68,7 @@ const ManualRegistrationEntryCard = ({
     onWithdraw,
     onSwitch,
     onRemovePartner,
+    onReplacePartner,
     withdrawLabel = 'Withdraw',
     showActions = false,
     hideDivision = false,
@@ -142,6 +143,12 @@ const ManualRegistrationEntryCard = ({
                             paid={partnerPaid}
                             label={partnerLabel}
                         />
+                        {showActions && onReplacePartner && entry.canReplacePartner && (
+                            <button type="button" onClick={onReplacePartner}
+                                className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-emerald-200 text-emerald-700 bg-white hover:bg-emerald-50 focus-visible:outline-2 focus-visible:outline-emerald-500">
+                                <ArrowRightLeft size={13} /> Replace partner · Free
+                            </button>
+                        )}
                         {showActions && onRemovePartner && entry.isBookingOwner && entry.canWithdraw && (
                             <button
                                 type="button"
