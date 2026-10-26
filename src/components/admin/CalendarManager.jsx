@@ -311,9 +311,6 @@ const CalendarManager = () => {
                 if (tournamentWinners && tournamentWinners.length > 0) {
                     apiWinners = tournamentWinners;
                     apiHasResults = true;
-                } else {
-                    const matches = await getTournamentMatches({ tournamentId: rId, isFinished: true });
-                    apiHasResults = !!(matches && matches.length > 0);
                 }
             } else {
                 const matchesPreview = await getTournamentMatches({ tournamentId: rId, isFinished: false });
@@ -379,9 +376,6 @@ const CalendarManager = () => {
                 if (tournamentWinners && tournamentWinners.length > 0) {
                     apiWinners = tournamentWinners;
                     apiHasResults = true;
-                } else {
-                    const matches = await getTournamentMatches({ tournamentId: rId, isFinished: true });
-                    apiHasResults = !!(matches && matches.length > 0);
                 }
 
                 const { error } = await supabase

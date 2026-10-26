@@ -7,6 +7,7 @@ import { fetchPublishedClubs } from '../utils/club';
 import { fetchAllRows } from '../utils/fetchAllRows';
 import { useRankedin } from '../hooks/useRankedin';
 import { publicRankedinResultsCache, requiresRankedinPublication } from '../utils/rankedinDrawPublication';
+import { areRankedinResultsPublished, hasVerifiedRankedinWinners } from '../utils/rankedinTournamentResults';
 import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, ChevronUp, FileText, User, Users, UserPlus, Trophy, AlertCircle, Heart, ChevronRight, Gift, Award, Layout, Circle, Check, Clock, Crown, Coins, Grid2x2, Plus, LockKeyhole } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import PaystackPop from '@paystack/inline-js';
@@ -724,7 +725,7 @@ const EventDetails = () => {
     const [topSeedsGender, setTopSeedsGender] = useState('men');
     const [topSeedsOpen, setTopSeedsOpen] = useState(false);
     const [fetchingParticipants, setFetchingParticipants] = useState(false);
-    const { getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentParticipants, getTournamentPlayerTabs, getTournamentInfo, getOrganisationRankings } = useRankedin();
+    const { getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentParticipants, getTournamentPlayerTabs, getTournamentInfo, getTournamentStandings, getOrganisationRankings } = useRankedin();
 
     const totalPlayersCount = useMemo(() => {
         // Manual events are the source of truth via their own registrations — never fall
@@ -2109,19 +2110,27 @@ const EventDetails = () => {
 
         const checkRankedinStatus = async () => {
             if (!event) return;
+            setWinners([]);
+            setHasResults(false);
             const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
 
             if (rId) {
                 setFetchingRankedinData(true);
                 try {
-                    // 1. Check DB Cache first — apply draw/results flags immediately so the Draws
-                    // tab does not flash "Coming Soon" while slower Rankedin calls run.
-                    const { data: rawCacheRow } = await supabase
-                        .from('rankedin_results_cache')
-                        .select('*')
-                        .eq('event_id', event.id)
-                        .maybeSingle();
-                    const cacheRow = publicRankedinResultsCache(rId, rawCacheRow);
+                    // Check publication before displaying any cached champions.
+                    const [cacheResponse, standings] = await Promise.all([
+                        supabase.from('rankedin_results_cache').select('*').eq('event_id', event.id).maybeSingle(),
+                        getTournamentStandings(rId),
+                    ]);
+                    const rawCacheRow = cacheResponse.data;
+                    const resultsPublished = areRankedinResultsPublished(standings);
+                    const publicCache = publicRankedinResultsCache(rId, rawCacheRow);
+                    const verifiedWinners = resultsPublished && hasVerifiedRankedinWinners(publicCache);
+                    const cacheRow = publicCache ? {
+                        ...publicCache,
+                        winners: verifiedWinners ? publicCache.winners : [],
+                        has_results: verifiedWinners,
+                    } : null;
 
                     if (cacheRow?.has_draw) {
                         setHasDraw(true);
@@ -2170,12 +2179,12 @@ const EventDetails = () => {
                         }
                     }
 
+                    if (resultsPublished && !hasVerifiedRankedinWinners(cacheRow)) useCache = false;
+
                     if (useCache && cacheRow) {
                         const winnersArray = Array.isArray(cacheRow.winners) ? cacheRow.winners : [];
-                        const hasPending = winnersArray.some(w => {
-                            const wStr = JSON.stringify(w).toLowerCase();
-                            return wStr.includes('pending') || wStr.includes('null');
-                        });
+                        const hasPending = winnersArray.some((winner) =>
+                            !winner.Winner?.Name || /^(pending|tbd|bye)$/i.test(winner.Winner.Name.trim()));
                         const isEmpty = winnersArray.length === 0;
                         const diffHrs = Math.abs(Date.now() - new Date(cacheRow.last_synced_at).getTime()) / 36e5;
 
@@ -2221,21 +2230,15 @@ const EventDetails = () => {
                             setHasDraw(false);
                         }
 
-                        const tournamentWinners = await getTournamentWinners(rId);
+                        const tournamentWinners = resultsPublished ? await getTournamentWinners(rId, standings) : [];
                         if (tournamentWinners && tournamentWinners.length > 0) {
                             apiWinners = tournamentWinners;
                             setWinners(tournamentWinners);
                             apiHasResults = true;
                             setHasResults(true);
                         } else {
-                            const tournamentMatchesCompleted = await getTournamentMatches({ tournamentId: rId, isFinished: true });
-                            if (tournamentMatchesCompleted && tournamentMatchesCompleted.length > 0) {
-                                apiHasResults = true;
-                                setHasResults(true);
-                            } else if (cacheRow?.has_results) {
-                                apiHasResults = true;
-                                setHasResults(true);
-                            }
+                            setWinners([]);
+                            setHasResults(false);
                         }
 
                         if (!isPassed) {
@@ -2261,9 +2264,9 @@ const EventDetails = () => {
                                 event_id: event.id,
                                 rankedin_id: rId.toString(),
                                 classes: classesToStore,
-                                winners: apiWinners.length > 0 ? apiWinners : (cacheRow?.winners || []),
+                                winners: standings ? apiWinners : (rawCacheRow?.winners || []),
                                 has_draw: hasDrawToStore,
-                                has_results: apiHasResults || Boolean(cacheRow?.has_results),
+                                has_results: standings ? apiHasResults : Boolean(rawCacheRow?.has_results),
                                 upcoming_matches: apiUpcomingMatches.length > 0
                                     ? apiUpcomingMatches
                                     : (cacheRow?.upcoming_matches || []),
@@ -2291,7 +2294,7 @@ const EventDetails = () => {
             }
         };
         checkRankedinStatus();
-    }, [event, getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentInfo, isEventPassed]);
+    }, [event, getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentInfo, getTournamentStandings, isEventPassed]);
 
     useEffect(() => {
         const fetchParticipantsData = async () => {
@@ -5448,7 +5451,7 @@ const EventDetails = () => {
                                                 <div className="w-8 h-8 rounded-lg bg-[#CCFF00]/20 flex items-center justify-center">
                                                     <Trophy className="w-4 h-4 text-[#0a0a0a]" />
                                                 </div>
-                                                <h2 className="font-semibold text-slate-900 text-sm tracking-normal">Champions</h2>
+                                                <h2 className="font-semibold text-slate-900 text-sm tracking-normal">{winners.length > 0 ? 'Champions' : 'Results'}</h2>
                                             </div>
                                             {winners.length > 0 ? (
                                                 <div className="divide-y divide-gray-50">
@@ -5527,7 +5530,7 @@ const EventDetails = () => {
                                             ) : (
                                                 <div className="px-6 py-10 text-center">
                                                     <Trophy className="w-10 h-10 text-gray-200 mx-auto mb-2" />
-                                                    <p className="text-xs font-bold text-gray-400">Results pending</p>
+                                                    <p className="text-xs font-bold text-gray-400">Results have not been published yet.</p>
                                                 </div>
                                             )}
                                         </div>
@@ -5535,7 +5538,7 @@ const EventDetails = () => {
                                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-16 flex flex-col items-center text-center">
                                             <Trophy className="w-12 h-12 text-gray-200 mb-4" />
                                             <h3 className="text-base font-semibold text-slate-900 mb-2">No Results Yet</h3>
-                                            <p className="text-sm text-gray-400">Tournament results will appear here once matches are completed.</p>
+                                            <p className="text-sm text-gray-400">Tournament results will appear here once the organiser publishes the final standings.</p>
                                         </div>
                                     )}
                                 </div>
