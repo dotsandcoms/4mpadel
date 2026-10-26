@@ -492,7 +492,7 @@ const OrgProfileEditor = ({ org, onSaved, onDeleted, adminMode = false, canDelet
                                 <div>
                                     <p className="text-sm font-bold text-red-300">Danger zone</p>
                                     <p className="text-xs text-red-200/70 mt-1 leading-relaxed">
-                                        Permanently delete this organisation. Linked events keep their data but are unlinked; members and album links are removed.
+                                        Permanently delete this organisation. Linked events keep their data but are unlinked; members and album links are removed. Private payout banking and payout requests are permanently deleted.
                                     </p>
                                 </div>
                             </div>

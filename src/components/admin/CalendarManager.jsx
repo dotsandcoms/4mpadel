@@ -725,7 +725,7 @@ const CalendarManager = () => {
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this event?')) return;
+        if (!window.confirm('Delete this event? Its private payout banking snapshots and payout requests will also be permanently deleted.')) return;
 
         try {
             const { error } = await supabase

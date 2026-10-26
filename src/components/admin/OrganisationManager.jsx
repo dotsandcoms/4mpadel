@@ -15,6 +15,7 @@ import OrgMembersManager from './OrgMembersManager';
 import EventBuilder from './EventBuilder';
 import QuickEventBuilder from './QuickEventBuilder';
 import OrgProfileEditor from './OrgProfileEditor';
+import OrganisationBankingDetails from './OrganisationBankingDetails';
 import CreateOrganisationModal from './CreateOrganisationModal';
 import OrgAuditLog from './OrgAuditLog';
 import ManualEventRegistrations from './ManualEventRegistrations';
@@ -880,7 +881,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
         }
         if (!org?.id || deletingOrganisation) return;
 
-        if (!window.confirm(`Permanently delete "${org.name}"?\n\nLinked events will be unlinked (not deleted). Members will be removed. This cannot be undone.`)) {
+        if (!window.confirm(`Permanently delete "${org.name}"?\n\nLinked events will be unlinked (not deleted). Members, private payout banking and payout requests will be removed. This cannot be undone.`)) {
             return;
         }
         const typed = window.prompt(`Type the organisation name to confirm:\n${org.name}`);
@@ -2004,15 +2005,18 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
 
                     {/* 3. Club Settings Panel */}
                     {activeSection === 'org-settings' && (
-                        <div className="w-full bg-white/[0.02] border border-white/10 backdrop-blur-md rounded-2xl p-6 md:p-8 text-left shadow-xl relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-padel-green/5 blur-3xl rounded-full pointer-events-none" />
-                            <OrgProfileEditor
-                                org={localOrgState || currentOrg}
-                                onSaved={(updatedOrg) => {
-                                    setLocalOrgState(updatedOrg);
-                                    if (permissions?.org) Object.assign(permissions.org, updatedOrg);
-                                }}
-                            />
+                        <div className="space-y-6">
+                            <div className="w-full bg-white/[0.02] border border-white/10 backdrop-blur-md rounded-2xl p-6 md:p-8 text-left shadow-xl relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-padel-green/5 blur-3xl rounded-full pointer-events-none" />
+                                <OrgProfileEditor
+                                    org={localOrgState || currentOrg}
+                                    onSaved={(updatedOrg) => {
+                                        setLocalOrgState(updatedOrg);
+                                        if (permissions?.org) Object.assign(permissions.org, updatedOrg);
+                                    }}
+                                />
+                            </div>
+                            <OrganisationBankingDetails key={currentOrg.id} organisationId={currentOrg.id} />
                         </div>
                     )}
 
@@ -2608,6 +2612,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                             fetchSuperAdminData();
                                         }}
                                     />
+                                    <OrganisationBankingDetails key={selectedOrgDetails.id} organisationId={selectedOrgDetails.id} />
                                 </div>
                             ) : (
                                 <>

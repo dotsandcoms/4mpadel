@@ -1064,99 +1064,19 @@ async function generateEmailBody(
       break;
 
     case 'organiser_payout_request':
-      subject = `Payout requested: ${vars.eventName || 'Tournament'} — ${vars.amountRequested || vars.dueToOrganiser || ''}`;
+      // Variables for this template are loaded from the private request RPC.
+      // Never accept caller-supplied banking, recipient, event or amount fields.
+      subject = `Manual payout requested: ${escapeEmailHtml(vars.eventName)} — ${fmtR(vars.amountRequested)}`;
       contentHtml = `
-        <h2 style="font-size: 24px; font-weight: 800; color: #F59E0B; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Organiser Payout Request</h2>
-        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
-          An organiser has requested settlement for <strong style="color:#FFFFFF;">${vars.eventName || 'a tournament'}</strong>.
-        </p>
-        <div style="background: linear-gradient(135deg, #1F2937, #111827); border: 1px solid rgba(255,255,255,0.05); padding: 24px; border-radius: 16px; margin-bottom: 24px;">
-          <h3 style="font-size: 12px; font-weight: 900; text-transform: uppercase; color: #9AE900; margin-top: 0; margin-bottom: 16px; letter-spacing: 1.5px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px;">Settlement Summary</h3>
-          <table width="100%" style="font-size: 13.5px; color: #E2E8F0; border-collapse: collapse;">
-            <tr>
-              <td style="padding: 8px 0; color: #64748B;">Organiser:</td>
-              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.organiserName || '—'}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #64748B;">Organiser email:</td>
-              <td align="right" style="font-weight: bold; color: #9AE900;">${vars.organiserEmail || '—'}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #64748B;">Total amount billed:</td>
-              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.totalBilled || vars.grossEntryFees || vars.collected || 'R 0'}</td>
-            </tr>
-            ${vars.outstanding && vars.outstanding !== 'R 0' ? `
-            <tr>
-              <td style="padding: 8px 0; color: #64748B;">Less outstanding entry fees:</td>
-              <td align="right" style="font-weight: bold; color: #F59E0B;">−${vars.outstanding}</td>
-            </tr>` : ''}
-            <tr>
-              <td style="padding: 8px 0; color: #64748B;">Gross entry fees collected:</td>
-              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.grossEntryFees || vars.collected || 'R 0'}</td>
-            </tr>
-            ${vars.paystackCollected ? `
-            <tr>
-              <td style="padding: 4px 0 4px 16px; color: #64748B; font-size: 12px;">of which Paystack:</td>
-              <td align="right" style="font-weight: bold; color: #CBD5E1; font-size: 12px;">${vars.paystackCollected}</td>
-            </tr>` : ''}
-            ${vars.manualCollected && vars.manualCollected !== 'R 0' ? `
-            <tr>
-              <td style="padding: 4px 0 8px 16px; color: #64748B; font-size: 12px;">of which Manual / EFT:</td>
-              <td align="right" style="font-weight: bold; color: #CBD5E1; font-size: 12px;">${vars.manualCollected}</td>
-            </tr>` : ''}
-            <tr>
-              <td style="padding: 8px 0; color: #64748B;">Less entry fee refunds:</td>
-              <td align="right" style="font-weight: bold; color: #F87171;">−${vars.refunded || 'R 0'}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #64748B;">Final entry sales:</td>
-              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.finalEntrySales || vars.balance || 'R 0'}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #64748B;">Platform fees (5% of gross entry fees):</td>
-              <td align="right" style="font-weight: bold; color: #F87171;">−${vars.commission || 'R 0'}</td>
-            </tr>
-            ${(() => {
-              const interimNumeric = Number(vars.interimPaidAmount);
-              const interimFromLabel = Number(String(vars.interimPaid || '').replace(/[^\d.-]/g, ''));
-              const interimAmount = Number.isFinite(interimNumeric) && interimNumeric > 0
-                ? interimNumeric
-                : (Number.isFinite(interimFromLabel) ? interimFromLabel : 0);
-              if (interimAmount <= 0) return '';
-              const interimLabel = vars.interimPaid || fmtR(interimAmount);
-              return `
-            <tr>
-              <td style="padding: 8px 0; color: #64748B;">Partial / interim payment:</td>
-              <td align="right" style="font-weight: bold; color: #F87171;">−${interimLabel}</td>
-            </tr>`;
-            })()}
-            <tr>
-              <td style="padding: 8px 0; color: #64748B;">Amount due to organiser:</td>
-              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.dueToOrganiser || 'R 0'}</td>
-            </tr>
-            ${vars.maxRequestable ? `
-            <tr>
-              <td style="padding: 8px 0; color: #64748B;">Max requestable:</td>
-              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.maxRequestable}</td>
-            </tr>` : ''}
-            ${vars.requestPhase ? `
-            <tr>
-              <td style="padding: 8px 0; color: #64748B;">Request type:</td>
-              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.requestPhase}</td>
-            </tr>` : ''}
-            <tr>
-              <td style="padding: 12px 0 8px; color: #9AE900; font-weight: 800; border-top: 1px solid rgba(255,255,255,0.08);">Amount requested:</td>
-              <td align="right" style="padding: 12px 0 8px; font-weight: 900; color: #9AE900; font-size: 18px; border-top: 1px solid rgba(255,255,255,0.08);">${vars.amountRequested || vars.dueToOrganiser || 'R 0'}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; color: #64748B;">Requested:</td>
-              <td align="right" style="font-weight: bold; color: #FFFFFF;">${vars.requestedAt || '—'}</td>
-            </tr>
-          </table>
-        </div>
+        <h2 style="color:#FFFFFF;">Manual payout request</h2>
+        <p style="color:#CBD5E1;">${escapeEmailHtml(vars.organiserName)} requested a payout for ${escapeEmailHtml(vars.eventName)}.</p>
+        <p style="color:#9AE900;font-size:22px;font-weight:bold;">${fmtR(vars.amountRequested)}</p>
+        <p style="color:#94A3B8;">Request: ${escapeEmailHtml(vars.payoutRequestId)}<br>Requested: ${escapeEmailHtml(vars.requestedAt)}</p>
+        <p style="color:#CBD5E1;">Review event reconciliation before paying. Open the event's finance panel or the organisation's settings to view the saved request and securely reveal its banking details. Payments are made manually.</p>
+        <p style="color:#94A3B8;">Banking details are available only in the authenticated admin portal.</p>
       `;
       actionUrl = 'https://4mpadel.co.za/admin';
-      actionLabel = 'Open Admin Panel';
+      actionLabel = 'Review manual payout';
       break;
 
     case 'partner_invite':
@@ -1345,7 +1265,7 @@ serve(async (req: Request) => {
       throw new Error('RESEND_API_KEY is not configured in Edge Function secrets');
     }
 
-    const { to, template, variables, bcc } = await req.json();
+    let { to, template, variables, bcc } = await req.json();
 
     if (!to && !bcc) {
       throw new Error('Missing recipient email (to or bcc)');
@@ -1385,6 +1305,27 @@ serve(async (req: Request) => {
       }
     }
     // ---------------------------------------------------------------------
+
+    if (template === 'organiser_payout_request') {
+      const requestId = variables?.payoutRequestId;
+      if (typeof requestId !== 'string' || !/^[0-9a-f-]{36}$/i.test(requestId)) {
+        return new Response(JSON.stringify({ error: 'A saved payout request is required' }), { status: 400, headers: corsHeaders });
+      }
+      // Use the caller's JWT, never the service role, to enforce organisation,
+      // requester and fresh-MFA checks in the same backend used by the UI.
+      const caller = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '', {
+        global: { headers: { Authorization: authHeader || '' } }, auth: { persistSession: false },
+      });
+      const { data: request, error: requestError } = await caller.rpc('organisation_banking', {
+        p_action: 'notification', p_data: { request_id: requestId },
+      });
+      if (requestError || !request) {
+        return new Response(JSON.stringify({ error: 'Payout notification access denied' }), { status: 403, headers: corsHeaders });
+      }
+      variables = request;
+      to = 'markstillerman@gmail.com';
+      bcc = undefined;
+    }
 
     // Make the primary recipient available to template logic (e.g. resolving the
     // registrant's partner from the database) without changing any caller.

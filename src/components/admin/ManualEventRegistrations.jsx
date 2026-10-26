@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
@@ -39,6 +39,10 @@ import { parseEventDate } from '../../utils/eventEntryFee';
 import { findFinancePayment, buildFinanceAllocations, loadEventRefunds } from '../../utils/eventFinanceReconciliation';
 import { downloadEventFinanceWorkbook } from '../../utils/eventFinanceExport';
 import { useAdminPermissions } from '../../hooks/useAdminPermissions';
+import { organisationBanking, formatBankingDestination } from '../../utils/organisationBanking';
+import BankingVerification from './BankingVerification';
+import OrganisationBankingDetails from './OrganisationBankingDetails';
+import OrganisationPayoutRequests from './OrganisationPayoutRequests';
 import CancelEventButton from './CancelEventButton';
 import CancelEventDialog from './CancelEventDialog';
 import NativeDrawManager from './NativeDrawManager';
@@ -235,6 +239,49 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const [requestingPayout, setRequestingPayout] = useState(false);
     const [payoutModalOpen, setPayoutModalOpen] = useState(false);
     const [payoutRequestAmount, setPayoutRequestAmount] = useState('');
+    const [payoutBanking, setPayoutBanking] = useState(null);
+    const [payoutBankingError, setPayoutBankingError] = useState('');
+    const [payoutBankingConfirmed, setPayoutBankingConfirmed] = useState(false);
+    const [payoutVerification, setPayoutVerification] = useState(false);
+    const [payoutRequestId, setPayoutRequestId] = useState(null);
+    const [payoutRefresh, setPayoutRefresh] = useState(0);
+    const payoutDialogRef = useRef(null);
+    const payoutSendingRef = useRef(false);
+    payoutSendingRef.current = requestingPayout;
+    useEffect(() => {
+        if (!payoutModalOpen) return;
+        const previousFocus = document.activeElement;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        payoutDialogRef.current?.focus();
+        const keydown = keyEvent => {
+            if (keyEvent.key === 'Escape') {
+                keyEvent.preventDefault(); keyEvent.stopPropagation();
+                if (!payoutSendingRef.current) {
+                    setPayoutModalOpen(false); setPayoutVerification(false); setPayoutBanking(null);
+                }
+            }
+            if (keyEvent.key !== 'Tab' || !payoutDialogRef.current) return;
+            const controls = [...payoutDialogRef.current.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), summary, [tabindex="0"]')].filter(element => element.getClientRects().length);
+            const first = controls[0], last = controls.at(-1);
+            if (keyEvent.shiftKey && (document.activeElement === first || document.activeElement === payoutDialogRef.current)) { keyEvent.preventDefault(); last?.focus(); }
+            else if (!keyEvent.shiftKey && (document.activeElement === last || document.activeElement === payoutDialogRef.current)) { keyEvent.preventDefault(); first?.focus(); }
+        };
+        document.addEventListener('keydown', keydown);
+        return () => {
+            document.removeEventListener('keydown', keydown);
+            document.body.style.overflow = previousOverflow;
+            if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+        };
+    }, [payoutModalOpen]);
+    useEffect(() => {
+        if (!payoutModalOpen || !event?.organisation_id) return;
+        let active = true;
+        organisationBanking('summary', event.organisation_id).then(data => {
+            if (active) setPayoutBanking(data);
+        }).catch(error => { if (active) setPayoutBankingError(error.message); });
+        return () => { active = false; };
+    }, [payoutModalOpen, event?.organisation_id]);
     const [statementSearch, setStatementSearch] = useState('');
     const [exportingFinance, setExportingFinance] = useState(false);
     const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -2731,6 +2778,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             return;
         }
         setPayoutRequestAmount(String(maxPayoutRequest));
+        setPayoutBanking(null);
+        setPayoutBankingError('');
+        setPayoutBankingConfirmed(false);
+        setPayoutVerification(false);
+        setPayoutRequestId(crypto.randomUUID());
         setPayoutModalOpen(true);
     };
 
@@ -2738,6 +2790,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         if (requestingPayout) return;
         setPayoutModalOpen(false);
         setPayoutRequestAmount('');
+        setPayoutVerification(false);
+        setPayoutBanking(null);
     };
 
     const handleRequestPayout = async () => {
@@ -2767,38 +2821,29 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             toast.error(`Cannot request more than the amount due (${fmtR(overviewStats.dueToOrg)})`);
             return;
         }
+        if (!event?.organisation_id || !payoutBanking?.saved || !payoutBankingConfirmed) {
+            toast.error('Save and confirm the organisation payout account first.');
+            setPayoutVerification(false);
+            return;
+        }
         setRequestingPayout(true);
         try {
-            const result = await sendEmail(PAYOUT_ADMIN_EMAIL, 'organiser_payout_request', {
-                eventName: event?.event_name || 'Tournament',
-                eventId: event?.id,
-                organiserName: event?.organiser_name || 'Organiser',
-                organiserEmail: event?.organiser_email || '',
-                totalBilled: fmtR(overviewStats.totalAmountBilled),
-                outstanding: fmtR(overviewStats.pendingAmount),
-                grossEntryFees: fmtR(overviewStats.grossEntryFees),
-                paystackCollected: fmtR(overviewStats.collected4M),
-                manualCollected: fmtR(overviewStats.collectedManual),
-                refunded: fmtR(overviewStats.entryFeesRefunded),
-                finalEntrySales: fmtR(overviewStats.entryFeeBalance),
-                commission: fmtR(overviewStats.commission),
-                interimPaid: fmtR(overviewStats.interimPaid),
-                interimPaidAmount: overviewStats.interimPaid,
-                dueToOrganiser: fmtR(overviewStats.dueToOrg),
-                amountRequested: fmtR(amount),
-                amountRequestedValue: amount,
-                maxRequestable: fmtR(maxPayoutRequest),
-                requestPhase: payoutRequestRules.phase === 'first' ? 'First request (max 50%)' : 'Final balance (after event)',
-                licenseRevenue: fmtR(overviewStats.licenseRevenue4M),
-                paidEntries: overviewStats.paid4M,
-                requestedAt: new Date().toLocaleString('en-ZA', {
-                    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-                }),
+            const saved = await organisationBanking('request', event.organisation_id, {
+                event_id: event.id, amount, request_id: payoutRequestId,
+                expected_version: payoutBanking.version,
             });
-            if (!result.success) throw new Error(result.error || 'Email failed');
-            toast.success(`Payout request of ${fmtR(amount)} sent to 4M admin`);
+            // The notification endpoint reads server-owned request metadata only.
+            // Full banking details never enter emails or ordinary event activity logs.
+            const result = await sendEmail(PAYOUT_ADMIN_EMAIL, 'organiser_payout_request', {
+                payoutRequestId: saved.request_id,
+            });
+            if (result.success) toast.success(`Payout request of ${fmtR(amount)} saved and sent to 4M admin`);
+            else toast.warning('Payout request saved, but the email notification failed. 4M can view it in payout requests.');
             setPayoutModalOpen(false);
+            setPayoutVerification(false);
+            setPayoutBanking(null);
             setPayoutRequestAmount('');
+            setPayoutRefresh(value => value + 1);
             try {
                 await logEventActivity({
                     eventId: event.id,
@@ -2818,8 +2863,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                 });
             } catch (_) { /* non-blocking */ }
         } catch (err) {
-            console.error('Payout request failed:', err);
-            toast.error(err.message || 'Failed to send payout request');
+            setPayoutVerification(false);
+            toast.error(err.message || 'Failed to save payout request');
         } finally {
             setRequestingPayout(false);
         }
@@ -4182,7 +4227,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
 
                     {payoutModalOpen && (
                         <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/60" onClick={closePayoutRequestModal}>
-                            <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+                            <div ref={payoutDialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Request payout" className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto overscroll-contain p-5" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-start gap-3 mb-4">
                                     <div className="w-9 h-9 rounded-xl bg-padel-green/10 flex items-center justify-center shrink-0">
                                         <DollarSign size={16} className="text-padel-green" />
@@ -4212,10 +4257,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                         max={maxPayoutRequest}
                                         step={1}
                                         value={payoutRequestAmount}
+                                        disabled={requestingPayout || payoutVerification}
                                         onChange={(e) => setPayoutRequestAmount(e.target.value)}
                                         className="w-full bg-black/30 border border-white/10 rounded-lg pl-8 pr-3 py-2.5 text-sm text-white outline-none focus:border-padel-green/50"
                                         placeholder={String(maxPayoutRequest)}
-                                        autoFocus
                                     />
                                 </div>
                                 <div className="flex items-center justify-between mb-4">
@@ -4225,17 +4270,31 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                     <button
                                         type="button"
                                         onClick={() => setPayoutRequestAmount(String(maxPayoutRequest))}
+                                        disabled={requestingPayout || payoutVerification}
                                         className="text-[11px] font-bold uppercase tracking-wider text-padel-green hover:text-white"
                                     >
                                         Use max
                                     </button>
                                 </div>
 
+                                <div className="mb-4 space-y-3">
+                                    {!event?.organisation_id ? <p role="alert" className="text-sm text-amber-300">Link this event to an organisation before requesting a payout.</p>
+                                        : payoutBankingError ? <p role="alert" className="text-sm text-red-300">{payoutBankingError}</p>
+                                        : !payoutBanking ? <p role="status" className="text-sm text-gray-400">Loading payout account…</p>
+                                        : !payoutBanking.saved ? <OrganisationBankingDetails compact organisationId={event.organisation_id} onSaved={data => { setPayoutBanking(data); setPayoutBankingConfirmed(false); }} />
+                                        : <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-2">
+                                            <p className="text-xs text-gray-400">Manual payment destination</p>
+                                            <p className="text-sm text-white font-semibold">{formatBankingDestination(payoutBanking)}</p>
+                                            <label className="flex items-start gap-2 text-xs text-gray-300"><input type="checkbox" checked={payoutBankingConfirmed} onChange={e => setPayoutBankingConfirmed(e.target.checked)} disabled={requestingPayout || payoutVerification} className="mt-0.5 accent-padel-green" />I confirm this is the account for this payout.</label>
+                                        </div>}
+                                    <p className="text-xs text-gray-500">4M will review this request and make the payment manually.</p>
+                                </div>
+                                {payoutVerification && <div className="mb-4"><BankingVerification purpose="send this payout request" onVerified={handleRequestPayout} onCancel={() => setPayoutVerification(false)} /></div>}
                                 <div className="flex flex-col gap-2">
                                     <button
                                         type="button"
-                                        onClick={handleRequestPayout}
-                                        disabled={requestingPayout}
+                                        onClick={() => setPayoutVerification(true)}
+                                        disabled={requestingPayout || payoutVerification || !payoutBanking?.saved || !payoutBankingConfirmed}
                                         className="w-full py-2.5 rounded-lg text-sm font-bold bg-padel-green text-black hover:bg-white disabled:opacity-40 inline-flex items-center justify-center gap-2"
                                     >
                                         {requestingPayout ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
@@ -4692,6 +4751,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                     </button>
                                 </div>
                             </div>
+
+                            {event?.organisation_id && <OrganisationPayoutRequests key={event.organisation_id} organisationId={event.organisation_id} eventId={event.id} refreshKey={payoutRefresh} onProcessed={data => { if (Array.isArray(data.interim_payments)) setInterimPayments(data.interim_payments); }} />}
 
                             <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 gap-3">
                                 {[
