@@ -8,8 +8,9 @@ import VideoModal from './VideoModal';
 import { getYoutubeEmbedUrl } from '../utils/youtube';
 import { getEventImage, getDefaultEventBackground } from '../utils/imageUtils';
 import CommunityCtaBanner from './CommunityCtaBanner';
+import { fetchEventEntryCounts } from '../utils/calendarEvents';
+import { areRankedinResultsPublished, hasVerifiedRankedinWinners } from '../utils/rankedinTournamentResults';
 import {
-    promoteFinishedTiersToRecentResults,
     isCalendarEventFinished,
     isRecentResultsAutoTier,
     RECENT_RESULTS_AUTO_TIERS,
@@ -1493,7 +1494,7 @@ const FeaturedTournamentHero = ({ events = [], session = null }) => {
 };
 
 const FeaturedSections = ({ session = null }) => {
-    const { getRecentTournaments } = useRankedin();
+    const { getRecentTournaments, getTournamentStandings, getTournamentWinners } = useRankedin();
     const [liveTournaments, setLiveTournaments] = useState([]);
     const [featuredTournaments, setFeaturedTournaments] = useState([]);
     const [liveFeaturedTournaments, setLiveFeaturedTournaments] = useState([]);
@@ -1511,9 +1512,6 @@ const FeaturedSections = ({ session = null }) => {
     useEffect(() => {
         const fetchTours = async () => {
             try {
-                // Flip Show in Recent Results for finished Gold / Super Gold / Major events.
-                await promoteFinishedTiersToRecentResults(supabase);
-
                 // First try to fetch results marked as featured_result in our calendar table
                 const { data: featuredResults, error } = await supabase
                     .from('calendar')
@@ -1524,7 +1522,7 @@ const FeaturedSections = ({ session = null }) => {
                     .order('start_date', { ascending: false })
                     .limit(10);
 
-                // Fallback / supplement: finished auto-tier events even if flags were not writable.
+                // Include eligible past events, then check official standings before displaying them.
                 const { data: autoTierResults } = await supabase
                     .from('calendar')
                     .select('*, registered_players, start_date, end_date')
@@ -1550,11 +1548,23 @@ const FeaturedSections = ({ session = null }) => {
                     // Pull cached RankedIn winners so we can surface the Men's Open champions on each result card
                     const { data: resultsCache } = await supabase
                         .from('rankedin_results_cache')
-                        .select('event_id, winners')
+                        .select('event_id, rankedin_id, has_results, winners')
                         .in('event_id', mergedResults.map(t => t.id));
 
+                    const publishedResults = await Promise.all(mergedResults.map(async (event) => {
+                        const cached = resultsCache?.find((row) => row.event_id === event.id);
+                        const rankedinId = event.rankedin_id || cached?.rankedin_id || extractRankedinId(event.rankedin_url);
+                        if (!rankedinId) return { event, winners: cached?.winners || [] };
+                        const standings = await getTournamentStandings(rankedinId);
+                        if (!areRankedinResultsPublished(standings)) return null;
+                        const winners = hasVerifiedRankedinWinners(cached)
+                            ? cached.winners
+                            : await getTournamentWinners(rankedinId, standings);
+                        return winners.length > 0 ? { event, winners } : null;
+                    }));
+
                     // Map calendar events to the format expected by TournamentCard for results
-                    const mappedResults = mergedResults.map(t => ({
+                    const mappedResults = publishedResults.filter(Boolean).map(({ event: t, winners }) => ({
                         eventId: t.id,
                         eventName: t.event_name,
                         city: t.city,
@@ -1565,7 +1575,7 @@ const FeaturedSections = ({ session = null }) => {
                         registeredPlayers: t.registered_players,
                         venue: t.venue || t.clubName,
                         organiserName: t.organiser_name,
-                        winnerName: findMensOpenWinner(resultsCache?.find(c => c.event_id === t.id)?.winners),
+                        winnerName: findMensOpenWinner(winners),
                     }));
                     setLiveTournaments(mappedResults);
                 } else {
@@ -1600,24 +1610,10 @@ const FeaturedSections = ({ session = null }) => {
                     let enrichedData = data;
                     const manualEventIds = data.filter(e => e.is_manual).map(e => e.id);
                     if (manualEventIds.length > 0) {
-                        const { data: regs } = await supabase
-                            .from('event_registrations_public')
-                            .select('event_id, full_name, partner_name')
-                            .in('event_id', manualEventIds);
-
-                        if (regs) {
-                            const counts = {};
-                            regs.forEach(reg => {
-                                if (!counts[reg.event_id]) counts[reg.event_id] = 0;
-                                counts[reg.event_id]++;
-                            });
-
-                            enrichedData = data.map(event =>
-                                event.is_manual
-                                    ? { ...event, registered_players: counts[event.id] || 0 }
-                                    : event
-                            );
-                        }
+                        const counts = await fetchEventEntryCounts(supabase, manualEventIds);
+                        enrichedData = data.map(event => event.is_manual
+                            ? { ...event, registered_players: counts[event.id] || 0 }
+                            : event);
                     }
 
                     // Sort the spotlight event to the front
@@ -1712,7 +1708,7 @@ const FeaturedSections = ({ session = null }) => {
         };
 
         fetchLiveFeatured();
-    }, [getRecentTournaments]);
+    }, [getRecentTournaments, getTournamentStandings, getTournamentWinners]);
 
     const loggedOutCta = !session ? (
         <section className="relative border-t border-white/5 bg-[#000000] pt-3 pb-4 lg:pt-4 lg:pb-4">

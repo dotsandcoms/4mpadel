@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Instagram, Facebook, MapPin, Clock, Phone, Youtube, Shield, Smartphone, ArrowUpRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { supabase } from '../supabaseClient';
@@ -86,6 +87,8 @@ const SiteFooter = () => {
                                 </svg>
                             </a>
                         </div>
+
+                        <Link to="/privacy-policy" className="text-xs text-gray-400 underline underline-offset-4 transition-colors hover:text-padel-green">Privacy policy</Link>
 
                         {/* Legal Badge & Copyright */}
                         <div className="flex items-center gap-2 text-[10px] text-gray-500 font-black uppercase tracking-widest">

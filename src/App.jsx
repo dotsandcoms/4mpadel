@@ -36,6 +36,7 @@ import CoachRegistration from './pages/CoachRegistration';
 import Gallery from './pages/Gallery';
 import AlbumDetails from './pages/AlbumDetails';
 import Contact from './pages/Contact';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 import NotFound from './pages/NotFound';
 import ResetPassword from './pages/ResetPassword';
 import ClaimClubInvite from './pages/ClaimClubInvite';
@@ -52,7 +53,7 @@ import MembersOnlyModal from './components/MembersOnlyModal';
 import MobileBottomNav from './components/MobileBottomNav';
 import { MembersOnlyProvider } from './context/MembersOnlyContext';
 
-import { requiresAuth } from './utils/routeAccess';
+import { isPrivacyPolicyRoute, requiresAuth } from './utils/routeAccess';
 
 function AppContent() {
   const location = useLocation();
@@ -104,13 +105,14 @@ function AppContent() {
   const isAdminRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/reports');
   const routeRequiresAuth = requiresAuth(location.pathname);
   const showMembersOnly =
-    (!loading && !session && routeRequiresAuth) || membersOnlyPrompt;
+    !isPrivacyPolicyRoute(location.pathname) &&
+    ((!loading && !session && routeRequiresAuth) || membersOnlyPrompt);
 
   useEffect(() => {
-    if (session) {
+    if (session || isPrivacyPolicyRoute(location.pathname)) {
       setMembersOnlyPrompt(false);
     }
-  }, [session]);
+  }, [session, location.pathname]);
 
   const handleRestrictedNav = () => {
     if (session) return;
@@ -162,6 +164,7 @@ function AppContent() {
           <Route path="/gallery" element={<Gallery />} />
           <Route path="/gallery/:slug" element={<AlbumDetails />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/results/:id" element={<TournamentDraw />} />
           <Route path="/draws/:id" element={<TournamentDraw />} />
           <Route path="/draws-preview/:id" element={<TournamentDraw />} />

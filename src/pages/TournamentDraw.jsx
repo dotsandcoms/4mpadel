@@ -9,6 +9,7 @@ import { useRankedin } from '../hooks/useRankedin';
 import KnockoutBracket from '../components/KnockoutBracket';
 import { getEventImage } from '../utils/imageUtils';
 import NativeTournamentDraw from './NativeTournamentDraw';
+import { requiresRankedinPublication } from '../utils/rankedinDrawPublication';
 
 const TournamentDraw = () => {
     const { id: idOrSlug } = useParams();
@@ -257,6 +258,8 @@ const TournamentDraw = () => {
 
     const activeClass = classes.find(c => c.Id.toString() === selectedClassId.toString());
     const availableDraws = activeClass?.TournamentDraws || [];
+    const publicationRequired = requiresRankedinPublication(resolvedId);
+    const awaitingPublication = publicationRequired && !classes.some(c => c.IsPublished === true && c.TournamentDraws?.length > 0);
 
     const isNativePreview = location.pathname.startsWith('/draws-preview/');
     const isNativePublic = location.pathname.startsWith('/native-draws/');
@@ -309,7 +312,7 @@ const TournamentDraw = () => {
                         <div className="flex items-center gap-2 mb-3">
                             <span className="flex items-center gap-1.5 text-[10px] font-bold text-padel-green bg-padel-green/10 border border-padel-green/20 px-3 py-1 rounded-full uppercase tracking-widest">
                                 <GitBranch className="w-3 h-3" />
-                                Live Draw
+                                {awaitingPublication ? 'Draw not available' : 'Live Draw'}
                             </span>
                         </div>
                         <motion.h1
@@ -323,6 +326,12 @@ const TournamentDraw = () => {
                 </div>
 
                 <div className="container mx-auto px-4 md:px-6 max-w-7xl pt-12">
+                    {awaitingPublication ? (
+                        <div className="rounded-3xl border border-white/5 bg-[#0B1221] py-20 text-center text-gray-400">
+                            {loading ? 'Checking draw availability...' : 'Draw not available'}
+                        </div>
+                    ) : (
+                    <>
                     {/* Tab Switcher */}
                     <div className="flex justify-center mb-12">
                         <div className="inline-flex bg-[#131C2F]/80 p-1.5 rounded-3xl border border-white/5 shadow-2xl backdrop-blur-xl">
@@ -614,6 +623,8 @@ const TournamentDraw = () => {
                             </motion.div>
                         )}
                     </AnimatePresence>
+                    </>
+                    )}
                 </div>
             </main>
         </>

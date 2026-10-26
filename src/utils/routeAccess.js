@@ -1,7 +1,13 @@
 const PUBLIC_EXACT = ['/reset-password', '/contact', '/rankings'];
 
+/** Match the same optional trailing slash and casing as React Router. */
+export function isPrivacyPolicyRoute(pathname) {
+    return /^\/privacy-policy\/*$/i.test(pathname);
+}
+
 /** Routes accessible without signing in */
 export function isPublicRoute(pathname) {
+    if (isPrivacyPolicyRoute(pathname)) return true;
     if (pathname === '/') return true;
     if (pathname === '/pro' || /^\/pro\/(rankings|following|results|calendar|compare)$/.test(pathname) || /^\/pro\/players\/\d+(?:\/[a-z0-9-]+)?$/.test(pathname)) return true;
     if (pathname === '/calendar' || pathname.startsWith('/calendar/')) return true;

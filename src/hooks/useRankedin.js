@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { normalizeRankedinMatchScore } from '../utils/rankedinMatchScore';
+import { areRankedinResultsPublished, rankedinWinnersFromStandings } from '../utils/rankedinTournamentResults';
+import { publicRankedinClasses, publicRankedinMatches, requiresRankedinPublication } from '../utils/rankedinDrawPublication';
 import { SAPA_FALLBACK_RANKEDIN, fetchDefaultFederationRankedinConfig } from '../utils/federation';
 
 // Rankedin API Base URL
@@ -221,6 +223,19 @@ export const useRankedin = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
+    const getTournamentStandings = useCallback(async (tournamentId) => {
+        try {
+            return await fetchWithCache(
+                `${API_BASE}/tournament/GetStandingsAsync?id=${tournamentId}`,
+                {},
+                1000 * 60 * 2,
+            );
+        } catch (err) {
+            console.warn('RankedIn standings publication status unavailable:', err);
+            return null;
+        }
+    }, []);
+
     /**
      * Fetches the latest finished tournaments for SAPA.
      * @param {number} take Number of tournaments to fetch
@@ -234,7 +249,10 @@ export const useRankedin = () => {
             const data = await fetchWithCache(
                 `${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${eventsOrgId}&IsFinished=true&Language=en&skip=0&take=${take}`
             );
-            return data.payload || [];
+            const events = data.payload || [];
+            const published = await Promise.all(events.map(async (event) =>
+                areRankedinResultsPublished(await getTournamentStandings(event.eventId))));
+            return events.filter((_, index) => published[index]);
         } catch (err) {
             console.error('Error fetching recent tournaments:', err);
             setError(err.message);
@@ -242,7 +260,7 @@ export const useRankedin = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [getTournamentStandings]);
 
     /**
      * Fetches standings and fixtures for a team league.
@@ -342,7 +360,7 @@ export const useRankedin = () => {
                 {},
                 1000 * 60 * 2 // 2 minutes cache
             );
-            return data || [];
+            return publicRankedinClasses(tournamentId, data);
         } catch (err) {
             console.error('Error fetching tournament classes:', err);
             setError(err.message);
@@ -533,7 +551,10 @@ export const useRankedin = () => {
             if (isFinished !== undefined) url += `&isFinished=${isFinished}`;
 
             const data = await fetchWithCache(url, {}, 1000 * 60 * 2); // 2 minutes cache
-            return data.Matches || [];
+            const classes = requiresRankedinPublication(tournamentId)
+                ? await getTournamentClasses(tournamentId)
+                : [];
+            return publicRankedinMatches(tournamentId, data, classes);
         } catch (err) {
             console.error('Error fetching tournament matches:', err);
             setError(err.message);
@@ -541,203 +562,33 @@ export const useRankedin = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [getTournamentClasses]);
 
-    /**
-     * Attempts to find winners for all classes in a tournament.
-     * @param {string|number} tournamentId 
-     * @returns {Promise<Array>} Array of objects { className, winners }
-     */
-    const getTournamentWinners = useCallback(async (tournamentId) => {
+    /** Fetch only the final standings that RankedIn has released publicly. */
+    const getTournamentWinners = useCallback(async (tournamentId, standingsSnapshot = null) => {
         try {
-            const classes = await getTournamentClasses(tournamentId);
-            const winnersList = [];
-
-            for (const cls of classes.slice(0, 24)) {
-                if (!cls.TournamentDraws || cls.TournamentDraws.length === 0) continue;
-
-                // Fetch each draw (Main, Backdraw, etc.)
-                for (const draw of cls.TournamentDraws) {
-                    try {
-                        const drawData = await getDrawsForClass(cls.Id, draw.Stage, draw.Strength);
-                        if (!drawData || !Array.isArray(drawData)) continue;
-
-                        // Look for Elimination draw winners
-                        const eliminationDraw = drawData.find(d => d.BaseType === 'Elimination');
-                        const elimination = eliminationDraw?.Elimination;
-
-                        if (elimination && elimination.DrawData) {
-                            // Find the Final (highest round)
-                            const allCells = elimination.DrawData.flat()
-                                .filter(cell => cell && (cell.MatchCell || cell.MatchViewModel || cell.WinnerParticipantId !== undefined || cell.Round !== undefined));
-
-                            // Identical grouping logic to KnockoutBracket.jsx
-                            // Cells arrive either as { MatchCell: {...} } (legacy) or
-                            // { MatchViewModel: {...} } (current API shape) — support both.
-                            const unwrap = (cell) => cell.MatchCell || cell.MatchViewModel || cell;
-
-                            // Round/MatchId/MatchOrder live on the cell itself (both legacy
-                            // MatchCell and current MatchViewModel shapes) — NOT inside
-                            // MatchViewModel, which only holds Score/IsPlayed. Reading them
-                            // via unwrap() silently returned undefined for every current-shape
-                            // cell, so roundsMap stayed empty and no winner was ever found.
-                            const roundsMap = {};
-                            elimination.DrawData.forEach(row => {
-
-                                row.forEach(cell => {
-                                    if (!cell || (!cell.MatchCell && !cell.MatchViewModel)) return;
-                                    const round = cell.Round;
-                                    if (typeof round === 'undefined') return;
-                                    if (!roundsMap[round]) roundsMap[round] = [];
-                                    const matchId = cell.MatchId;
-                                    if (!roundsMap[round].some(existing => existing.MatchId === matchId)) {
-                                        roundsMap[round].push(cell);
-                                    }
-                                });
-                            });
-
-                            const sortedRounds = Object.keys(roundsMap).map(Number).sort((a, b) => a - b).map(roundKey => {
-                                return roundsMap[roundKey].sort((a, b) => {
-                                    const ordA = a.MatchOrder || 0;
-                                    const ordB = b.MatchOrder || 0;
-                                    return ordA - ordB;
-                                });
-                            });
-
-                            // A match counts as decided when it has been played or has
-                            // a winner/score — placeholder slots ("Pending") don't.
-                            const isDecided = (cell) => {
-                                const m = unwrap(cell);
-                                return !!(m.IsPlayed || m.WinnerParticipantId
-                                    || m.MatchResults?.WinnerParticipantId
-                                    || m.Score || m.MatchResults?.Score
-                                    || cell.Score || cell.WinnerParticipantId);
-                            };
-
-                            // Walk back from the last round to the last DECIDED match —
-                            // avoids picking an unplayed placeholder final.
-                            let finalRoundIdx = -1;
-                            let finalCell = null;
-                            for (let r = sortedRounds.length - 1; r >= 0 && !finalCell; r--) {
-                                finalCell = sortedRounds[r].find(isDecided) || null;
-                                if (finalCell) finalRoundIdx = r;
-                            }
-                            if (!finalCell && sortedRounds.length > 0) {
-                                finalRoundIdx = sortedRounds.length - 1;
-                                finalCell = sortedRounds[finalRoundIdx][0] || null;
-                            }
-                            const semiFinalRound = finalRoundIdx > 0 ? sortedRounds[finalRoundIdx - 1] : [];
-
-                            // RankedIn uses "Pending" as a placeholder participant name.
-                            const cleanName = (n) => (!n || /^pending$/i.test(String(n).trim())) ? null : n;
-
-                            const extractNames = (participant) => {
-                                if (!participant) return null;
-                                let names = cleanName(participant.Name);
-                                if (!names && participant.FirstPlayer) {
-                                    const first = cleanName(participant.FirstPlayer.Name);
-                                    const second = cleanName(participant.SecondPlayer?.Name);
-                                    names = first ? (second ? `${first} & ${second}` : first) : null;
-                                }
-                                return names;
-                            };
-
-                            const getLoser = (matchCell) => {
-                                if (!matchCell) return null;
-                                const m = matchCell.MatchCell || matchCell.MatchViewModel || matchCell;
-                                const scoreObj = m.MatchResults?.Score || m.MatchViewModel?.Score || m.Score || matchCell.Score;
-                                const winnerId = m.MatchResults?.WinnerParticipantId || m.MatchViewModel?.WinnerParticipantId || m.WinnerParticipantId || matchCell.WinnerParticipantId;
-
-                                const p1 = matchCell.ChallengerParticipant || m.ChallengerParticipant;
-                                const p2 = matchCell.ChallengedParticipant || m.ChallengedParticipant;
-
-                                let winningParticipant = null;
-                                if (winnerId) {
-                                    const p1Matches = (p1?.Id == winnerId || p1?.EventParticipantId == winnerId);
-                                    const p2Matches = (p2?.Id == winnerId || p2?.EventParticipantId == winnerId);
-                                    if (p1Matches) winningParticipant = p1;
-                                    else if (p2Matches) winningParticipant = p2;
-                                }
-
-                                if (!winningParticipant) {
-                                    const isFirstWinner = scoreObj?.IsFirstParticipantWinner
-                                        || m.IsFirstParticipantWinner
-                                        || m.MatchViewModel?.IsFirstParticipantWinner || false;
-                                    winningParticipant = isFirstWinner ? p1 : p2;
-                                }
-
-                                if (winningParticipant === p1) return p2;
-                                if (winningParticipant === p2) return p1;
-                                return null;
-                            };
-
-                            if (finalCell) {
-                                const m = finalCell.MatchCell || finalCell.MatchViewModel || finalCell;
-                                const p1 = finalCell.ChallengerParticipant || m.ChallengerParticipant;
-                                const p2 = finalCell.ChallengedParticipant || m.ChallengedParticipant;
-
-                                const loser = getLoser(finalCell);
-                                const winner = loser === p1 ? p2 : p1;
-
-                                const winnerNames = extractNames(winner);
-                                const runnerUpNames = extractNames(loser);
-
-                                let thirdPlaceNames = null;
-                                let fourthPlaceNames = null;
-
-                                if (semiFinalRound.length === 2) {
-                                    const sf1Loser = getLoser(semiFinalRound[0]);
-                                    const sf2Loser = getLoser(semiFinalRound[1]);
-                                    thirdPlaceNames = extractNames(sf1Loser);
-                                    fourthPlaceNames = extractNames(sf2Loser);
-                                }
-
-                                if (winnerNames) {
-                                    winnersList.push({
-                                        CategoryName: cls.Name,
-                                        Winner: { Name: winnerNames },
-                                        RunnerUp: runnerUpNames ? { Name: runnerUpNames } : null,
-                                        ThirdPlace: thirdPlaceNames ? { Name: thirdPlaceNames } : null,
-                                        FourthPlace: fourthPlaceNames ? { Name: fourthPlaceNames } : null,
-                                        className: cls.Name,
-                                        drawName: draw.Name,
-                                        winners: winnerNames,
-                                        runnerUp: runnerUpNames
-                                    });
-                                }
-                            }
-                        } else if (drawData.some(d => d.BaseType === 'RoundRobin')) {
-                            // Simple RoundRobin detection if available
-                            const rr = drawData.find(d => d.BaseType === 'RoundRobin')?.RoundRobin;
-                            if (rr && rr.Ranking && rr.Ranking.length > 0) {
-                                const top = rr.Ranking[0];
-                                let winnerNames = top.ParticipantName;
-                                const runnerUp = rr.Ranking.length > 1 ? rr.Ranking[1] : null;
-                                let runnerUpNames = runnerUp ? runnerUp.ParticipantName : null;
-
-                                if (winnerNames) {
-                                    winnersList.push({
-                                        CategoryName: cls.Name,
-                                        Winner: { Name: winnerNames },
-                                        RunnerUp: runnerUpNames ? { Name: runnerUpNames } : null,
-                                        className: cls.Name,
-                                        drawName: draw.Name,
-                                        winners: winnerNames
-                                    });
-                                }
-                            }
-                        }
-                    } catch (drawErr) {
-                        console.error(`Error processing draw ${draw.Name}:`, drawErr);
-                    }
+            const standings = standingsSnapshot || await getTournamentStandings(tournamentId);
+            if (!areRankedinResultsPublished(standings)) return [];
+            const rankingId = standings.Rankings?.[0]?.Id || 0;
+            const winners = await Promise.all((standings.Classes || []).slice(0, 24).map(async (division) => {
+                try {
+                    const results = await fetchWithCache(
+                        `${API_BASE}/tournament/GetResultsAsync?tournamentId=${tournamentId}&classId=${division.Id}&rankingId=${rankingId}&language=en`,
+                        {},
+                        1000 * 60 * 2,
+                    );
+                    return rankedinWinnersFromStandings(standings, division, results);
+                } catch (err) {
+                    console.warn(`Published standings unavailable for ${division.Name}:`, err);
+                    return null;
                 }
-            }
-            return winnersList;
+            }));
+            return winners.filter(Boolean);
         } catch (err) {
-            console.error('Error fetching winners:', err);
+            console.error('Error fetching published winners:', err);
             return [];
         }
-    }, [getTournamentClasses, getDrawsForClass]);
+    }, [getTournamentStandings]);
 
     /**
      * Internal helper to fetch an anonymous token if not cached.
@@ -1133,6 +984,7 @@ export const useRankedin = () => {
         getDrawsForClass,
         getTournamentDetails,
         getTournamentInfo,
+        getTournamentStandings,
         getOrganisationRankings,
         getPlayerProfile,
         getPlayerEventsAsync,

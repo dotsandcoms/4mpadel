@@ -18,6 +18,14 @@ export function resolvePartnerPaid(reg, partnerReg) {
     return reg?.partner_payment_status === 'paid';
 }
 
+/** Booking attribution, rather than reciprocal partner links, identifies the inviter. */
+export function isPartnerBookingOwner(reg, viewerEmail) {
+    const email = String(viewerEmail || '').trim().toLowerCase();
+    return !!email
+        && String(reg?.email || '').trim().toLowerCase() === email
+        && String(reg?.registered_by || '').trim().toLowerCase() === email;
+}
+
 /**
  * Whether the viewer has paid for their own entry on this registration row.
  * Only the viewer's registrant row (`email`) is authoritative — never the

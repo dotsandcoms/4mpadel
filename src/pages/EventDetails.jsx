@@ -6,6 +6,8 @@ import { supabase } from '../supabaseClient';
 import { fetchPublishedClubs } from '../utils/club';
 import { fetchAllRows } from '../utils/fetchAllRows';
 import { useRankedin } from '../hooks/useRankedin';
+import { publicRankedinResultsCache, requiresRankedinPublication } from '../utils/rankedinDrawPublication';
+import { areRankedinResultsPublished, hasVerifiedRankedinWinners } from '../utils/rankedinTournamentResults';
 import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, ChevronUp, FileText, User, Users, UserPlus, Trophy, AlertCircle, Heart, ChevronRight, Gift, Award, Layout, Circle, Check, Clock, Crown, Coins, Grid2x2, Plus, LockKeyhole } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import PaystackPop from '@paystack/inline-js';
@@ -18,7 +20,7 @@ import {
     licenseQuote,
 } from '../utils/commerce';
 import ManualEventRegistration from '../components/ManualEventRegistration';
-import ManualRegistrationEntryCard from '../components/ManualRegistrationEntryCard';
+import ManualRegistrationEntryCard, { PaymentBadge } from '../components/ManualRegistrationEntryCard';
 import PlayerModal from '../components/PlayerModal';
 import { toast } from 'sonner';
 import { sendEmail } from '../utils/emails';
@@ -39,7 +41,7 @@ import sapaLogo from '../assets/sapa-logo.svg';
 import { getEventImage } from '../utils/imageUtils';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
 import { isRegistrationClosed } from '../utils/registrationClose';
-import { resolvePartnerPaid } from '../utils/partnerPaymentStatus';
+import { isPartnerBookingOwner, resolvePartnerPaid } from '../utils/partnerPaymentStatus';
 import { isEarlyBirdActive, resolveDivisionEntryFee } from '../utils/eventEntryFee';
 import {
     countWeeklyEntries,
@@ -49,6 +51,7 @@ import {
 import TournamentProgressBar from '../components/TournamentProgressBar';
 import VideoModal from '../components/VideoModal';
 import { divisionRankingSource, resolvePlayerRanking } from '../utils/playerRankingSelection';
+import { addPublicPlayerPaymentStatuses, publicPlayerPaymentLabel } from '../utils/publicPlayerPayment';
 
 const formatPlayerName = (fullName) => {
     if (!fullName) return '';
@@ -722,7 +725,7 @@ const EventDetails = () => {
     const [topSeedsGender, setTopSeedsGender] = useState('men');
     const [topSeedsOpen, setTopSeedsOpen] = useState(false);
     const [fetchingParticipants, setFetchingParticipants] = useState(false);
-    const { getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentParticipants, getTournamentPlayerTabs, getTournamentInfo, getOrganisationRankings } = useRankedin();
+    const { getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentParticipants, getTournamentPlayerTabs, getTournamentInfo, getTournamentStandings, getOrganisationRankings } = useRankedin();
 
     const totalPlayersCount = useMemo(() => {
         // Manual events are the source of truth via their own registrations — never fall
@@ -1625,7 +1628,7 @@ const EventDetails = () => {
                 partnerPaid,
                 wasAddedByPartner,
                 addedByName,
-                isBookingOwner: !wasAddedByPartner,
+                isBookingOwner: isPartnerBookingOwner(reg, manualUserEmail),
                 canWithdraw,
                 partnerPaymentLabel: !hasPartner
                     ? null
@@ -2107,18 +2110,27 @@ const EventDetails = () => {
 
         const checkRankedinStatus = async () => {
             if (!event) return;
+            setWinners([]);
+            setHasResults(false);
             const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
 
             if (rId) {
                 setFetchingRankedinData(true);
                 try {
-                    // 1. Check DB Cache first — apply draw/results flags immediately so the Draws
-                    // tab does not flash "Coming Soon" while slower Rankedin calls run.
-                    const { data: cacheRow } = await supabase
-                        .from('rankedin_results_cache')
-                        .select('*')
-                        .eq('event_id', event.id)
-                        .maybeSingle();
+                    // Check publication before displaying any cached champions.
+                    const [cacheResponse, standings] = await Promise.all([
+                        supabase.from('rankedin_results_cache').select('*').eq('event_id', event.id).maybeSingle(),
+                        getTournamentStandings(rId),
+                    ]);
+                    const rawCacheRow = cacheResponse.data;
+                    const resultsPublished = areRankedinResultsPublished(standings);
+                    const publicCache = publicRankedinResultsCache(rId, rawCacheRow);
+                    const verifiedWinners = resultsPublished && hasVerifiedRankedinWinners(publicCache);
+                    const cacheRow = publicCache ? {
+                        ...publicCache,
+                        winners: verifiedWinners ? publicCache.winners : [],
+                        has_results: verifiedWinners,
+                    } : null;
 
                     if (cacheRow?.has_draw) {
                         setHasDraw(true);
@@ -2167,12 +2179,12 @@ const EventDetails = () => {
                         }
                     }
 
+                    if (resultsPublished && !hasVerifiedRankedinWinners(cacheRow)) useCache = false;
+
                     if (useCache && cacheRow) {
                         const winnersArray = Array.isArray(cacheRow.winners) ? cacheRow.winners : [];
-                        const hasPending = winnersArray.some(w => {
-                            const wStr = JSON.stringify(w).toLowerCase();
-                            return wStr.includes('pending') || wStr.includes('null');
-                        });
+                        const hasPending = winnersArray.some((winner) =>
+                            !winner.Winner?.Name || /^(pending|tbd|bye)$/i.test(winner.Winner.Name.trim()));
                         const isEmpty = winnersArray.length === 0;
                         const diffHrs = Math.abs(Date.now() - new Date(cacheRow.last_synced_at).getTime()) / 36e5;
 
@@ -2218,21 +2230,15 @@ const EventDetails = () => {
                             setHasDraw(false);
                         }
 
-                        const tournamentWinners = await getTournamentWinners(rId);
+                        const tournamentWinners = resultsPublished ? await getTournamentWinners(rId, standings) : [];
                         if (tournamentWinners && tournamentWinners.length > 0) {
                             apiWinners = tournamentWinners;
                             setWinners(tournamentWinners);
                             apiHasResults = true;
                             setHasResults(true);
                         } else {
-                            const tournamentMatchesCompleted = await getTournamentMatches({ tournamentId: rId, isFinished: true });
-                            if (tournamentMatchesCompleted && tournamentMatchesCompleted.length > 0) {
-                                apiHasResults = true;
-                                setHasResults(true);
-                            } else if (cacheRow?.has_results) {
-                                apiHasResults = true;
-                                setHasResults(true);
-                            }
+                            setWinners([]);
+                            setHasResults(false);
                         }
 
                         if (!isPassed) {
@@ -2258,9 +2264,9 @@ const EventDetails = () => {
                                 event_id: event.id,
                                 rankedin_id: rId.toString(),
                                 classes: classesToStore,
-                                winners: apiWinners.length > 0 ? apiWinners : (cacheRow?.winners || []),
+                                winners: standings ? apiWinners : (rawCacheRow?.winners || []),
                                 has_draw: hasDrawToStore,
-                                has_results: apiHasResults || Boolean(cacheRow?.has_results),
+                                has_results: standings ? apiHasResults : Boolean(rawCacheRow?.has_results),
                                 upcoming_matches: apiUpcomingMatches.length > 0
                                     ? apiUpcomingMatches
                                     : (cacheRow?.upcoming_matches || []),
@@ -2288,7 +2294,7 @@ const EventDetails = () => {
             }
         };
         checkRankedinStatus();
-    }, [event, getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentInfo, isEventPassed]);
+    }, [event, getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentInfo, getTournamentStandings, isEventPassed]);
 
     useEffect(() => {
         const fetchParticipantsData = async () => {
@@ -2298,6 +2304,7 @@ const EventDetails = () => {
             try {
                 let divisions = [];
                 let participantsMap = {};
+                let publicRegistrations = [];
 
                 // Manual events: divisions come only from tournament_divisions (never RankedIn).
                 // Weekly socials have no divisions — one flat entries list.
@@ -2311,6 +2318,8 @@ const EventDetails = () => {
                         .select('id, full_name, partner_name, payment_status, email_hash, partner_email_hash, registered_by_hash, created_at')
                         .eq('event_id', event.id)
                         .order('created_at', { ascending: true });
+
+                    publicRegistrations = localRegs || [];
 
                     const activeEmails = new Set(
                         (localRegs || [])
@@ -2335,11 +2344,11 @@ const EventDetails = () => {
                         }
                         if (partnerEmail) seenEmails.add(partnerEmail);
 
-                        const players = [{ Name: reg.full_name, Email: null }];
+                        const players = [{ Name: reg.full_name, Email: null, EmailHash: reg.email_hash, RegistrationId: reg.id }];
                         // Weekly: always show a named partner (including unpaid reserve flow).
                         if (reg.partner_name?.trim()) {
                             if (!players.some((p) => (p.Name || '').toLowerCase() === (reg.partner_name || '').toLowerCase())) {
-                                players.push({ Name: reg.partner_name, Email: null });
+                                players.push({ Name: reg.partner_name, Email: null, EmailHash: reg.partner_email_hash });
                             }
                         }
 
@@ -2355,8 +2364,6 @@ const EventDetails = () => {
                         });
                     });
 
-                    setPlayerDivisions(divisions);
-                    setParticipants(participantsMap);
                 } else if (event.is_manual) {
                     const { data: manualDivs } = await supabase
                         .from('tournament_divisions')
@@ -2377,6 +2384,8 @@ const EventDetails = () => {
                         .from('event_registrations_public')
                         .select('id, full_name, partner_name, division, division_id, payment_status, email_hash, partner_email_hash')
                         .eq('event_id', event.id);
+
+                    publicRegistrations = localRegs || [];
 
                     const activeEmailsByDiv = new Map();
                     (localRegs || []).forEach((reg) => {
@@ -2404,10 +2413,10 @@ const EventDetails = () => {
 
                         if (!existing) {
                             const activeEmails = activeEmailsByDiv.get(div.Id) || new Set();
-                            const players = [{ Name: reg.full_name, Email: null }];
+                            const players = [{ Name: reg.full_name, Email: null, EmailHash: reg.email_hash, RegistrationId: reg.id }];
                             const partnerEmail = (reg.partner_email_hash || '').toLowerCase();
                             if (reg.partner_name && (!partnerEmail || activeEmails.has(partnerEmail))) {
-                                players.push({ Name: reg.partner_name, Email: null });
+                                players.push({ Name: reg.partner_name, Email: null, EmailHash: reg.partner_email_hash });
                             }
                             participantsMap[div.Id].push({
                                 Participant: {
@@ -2425,8 +2434,6 @@ const EventDetails = () => {
                         if (!participantsMap[d.Id]) participantsMap[d.Id] = [];
                     });
 
-                    setPlayerDivisions(divisions);
-                    setParticipants(participantsMap);
                 } else {
                     const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
 
@@ -2447,22 +2454,27 @@ const EventDetails = () => {
                     // 2. Fetch from local event_registrations
                     const { data: localRegs } = await supabase
                         .from('event_registrations_public')
-                        .select('id, full_name, partner_name, division, payment_status, status')
+                        .select('id, full_name, partner_name, division, division_id, payment_status, status, email_hash, partner_email_hash')
                         .eq('event_id', event.id);
+
+                    publicRegistrations = localRegs || [];
 
                     if (localRegs && localRegs.length > 0) {
                         localRegs.forEach(reg => {
-                            if (reg.status === 'withdrawn' || reg.payment_status !== 'paid') {
+                            if (reg.status === 'withdrawn') {
                                 return;
                             }
 
+                            const divisionName = String(reg.division || '').trim();
+                            if (!divisionName) return;
+
                             // Find division by name, case-insensitive
-                            let div = divisions.find(d => d.Name.toLowerCase() === reg.division.toLowerCase());
+                            let div = divisions.find(d => d.Name.toLowerCase() === divisionName.toLowerCase());
 
                             // If it's a Rankedin event, only accept divisions that exist on Rankedin. 
                             // If it's a local-only event (!rId), allow creating new divisions from registrations.
                             if (!div && !rId) {
-                                div = { Id: `local_${reg.division.replace(/\s+/g, '_')}`, Name: reg.division };
+                                div = { Id: `local_${divisionName.replace(/\s+/g, '_')}`, Name: divisionName };
                                 divisions.push(div);
                             }
 
@@ -2482,9 +2494,9 @@ const EventDetails = () => {
                                 });
 
                                 if (!existingInRankedin) {
-                                    const players = [{ Name: reg.full_name, Email: null }];
+                                    const players = [{ Name: reg.full_name, Email: null, EmailHash: reg.email_hash, RegistrationId: reg.id }];
                                     if (reg.partner_name) {
-                                        players.push({ Name: reg.partner_name });
+                                        players.push({ Name: reg.partner_name, EmailHash: reg.partner_email_hash });
                                     }
 
                                     participantsMap[div.Id].push({
@@ -2499,9 +2511,15 @@ const EventDetails = () => {
                         });
                     }
 
-                    setPlayerDivisions(divisions);
-                    setParticipants(prev => ({ ...prev, ...participantsMap }));
                 }
+
+                for (const division of divisions) {
+                    participantsMap[division.Id] = addPublicPlayerPaymentStatuses(
+                        participantsMap[division.Id], publicRegistrations, division, { isWeekly: !!event.is_weekly },
+                    );
+                }
+                setPlayerDivisions(divisions);
+                setParticipants(prev => event.is_manual ? participantsMap : { ...prev, ...participantsMap });
 
                 // Gather all player names and Rankedin IDs for bulk database query
                 const names = new Set();
@@ -5176,6 +5194,9 @@ const EventDetails = () => {
                                                                                             <span className="text-sm font-bold text-slate-800 mt-1.5 text-center max-w-[96px] truncate group-hover:underline underline-offset-2">
                                                                                                 {pName}
                                                                                             </span>
+                                                                                            {publicPlayerPaymentLabel(player.PaymentStatus) && (
+                                                                                                <PaymentBadge paid={player.PaymentStatus === 'paid'} label={publicPlayerPaymentLabel(player.PaymentStatus)} compact className="mt-1.5" />
+                                                                                            )}
                                                                                         </button>
                                                                                     );
                                                                                 })}
@@ -5328,6 +5349,9 @@ const EventDetails = () => {
                                                                                                                     {pts.toLocaleString()}
                                                                                                                 </span>
                                                                                                             )}
+                                                                                                            {publicPlayerPaymentLabel(player.PaymentStatus) && (
+                                                                                                                <PaymentBadge paid={player.PaymentStatus === 'paid'} label={publicPlayerPaymentLabel(player.PaymentStatus)} compact className="mt-1.5" />
+                                                                                                            )}
                                                                                                         </button>
                                                                                                     );
                                                                                                 })}
@@ -5411,8 +5435,8 @@ const EventDetails = () => {
                                     ) : (
                                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-16 flex flex-col items-center text-center">
                                             <GitBranch className="w-12 h-12 text-gray-200 mb-4" />
-                                            <h3 className="text-base font-semibold text-slate-900 mb-2">Draws Coming Soon</h3>
-                                            <p className="text-sm text-gray-400">Draws will be released shortly before the tournament begins.</p>
+                                            <h3 className="text-base font-semibold text-slate-900 mb-2">{requiresRankedinPublication(event.rankedin_id || extractRankedinId(event.rankedin_url)) ? 'Draw not available' : 'Draws Coming Soon'}</h3>
+                                            {!requiresRankedinPublication(event.rankedin_id || extractRankedinId(event.rankedin_url)) && <p className="text-sm text-gray-400">Draws will be released shortly before the tournament begins.</p>}
                                         </div>
                                     )}
                                 </div>
@@ -5427,7 +5451,7 @@ const EventDetails = () => {
                                                 <div className="w-8 h-8 rounded-lg bg-[#CCFF00]/20 flex items-center justify-center">
                                                     <Trophy className="w-4 h-4 text-[#0a0a0a]" />
                                                 </div>
-                                                <h2 className="font-semibold text-slate-900 text-sm tracking-normal">Champions</h2>
+                                                <h2 className="font-semibold text-slate-900 text-sm tracking-normal">{winners.length > 0 ? 'Champions' : 'Results'}</h2>
                                             </div>
                                             {winners.length > 0 ? (
                                                 <div className="divide-y divide-gray-50">
@@ -5506,7 +5530,7 @@ const EventDetails = () => {
                                             ) : (
                                                 <div className="px-6 py-10 text-center">
                                                     <Trophy className="w-10 h-10 text-gray-200 mx-auto mb-2" />
-                                                    <p className="text-xs font-bold text-gray-400">Results pending</p>
+                                                    <p className="text-xs font-bold text-gray-400">Results have not been published yet.</p>
                                                 </div>
                                             )}
                                         </div>
@@ -5514,7 +5538,7 @@ const EventDetails = () => {
                                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-16 flex flex-col items-center text-center">
                                             <Trophy className="w-12 h-12 text-gray-200 mb-4" />
                                             <h3 className="text-base font-semibold text-slate-900 mb-2">No Results Yet</h3>
-                                            <p className="text-sm text-gray-400">Tournament results will appear here once matches are completed.</p>
+                                            <p className="text-sm text-gray-400">Tournament results will appear here once the organiser publishes the final standings.</p>
                                         </div>
                                     )}
                                 </div>
