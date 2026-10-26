@@ -139,15 +139,6 @@ async function resolveClubAccess(userEmail, orgMembership) {
 
 export const useAdminPermissions = (userEmail) => {
     const [permissions, setPermissions] = useState(null);
-    const [tournamentAssignments, setTournamentAssignments] = useState([]);
-    useEffect(() => {
-        let active = true;
-        setTournamentAssignments([]);
-        if (userEmail) supabase.rpc('tm_list_events').then(({ data }) => {
-            if (active) setTournamentAssignments(Array.isArray(data) ? data : []);
-        }).catch(() => {});
-        return () => { active = false; };
-    }, [userEmail]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -300,9 +291,9 @@ export const useAdminPermissions = (userEmail) => {
 
     const hasPermission = (tabId) => {
         if (!permissions) return false;
+        if (tabId === 'tournament-mgmt') return false;
         if (permissions.role === 'super_admin') return true;
-        
-        if (tabId === 'tournament-mgmt') return tournamentAssignments.length > 0;
+
         if (tabId === 'event-mgmt' && permissions.module_permissions?.['event-mgmt']?.allowedEvents?.length > 0) return true;
         if (tabId === 'gallery' && permissions.module_permissions?.gallery?.allowedAlbums?.length > 0) return true;
         if (tabId === 'clubs' && permissions.hasDirectClubMembership) return true;
@@ -311,5 +302,5 @@ export const useAdminPermissions = (userEmail) => {
         return permissions.allowed_tabs && permissions.allowed_tabs.includes(tabId);
     };
 
-    return { permissions: permissions ? { ...permissions, tournamentAssignments } : null, loading, hasPermission };
+    return { permissions, loading, hasPermission };
 };

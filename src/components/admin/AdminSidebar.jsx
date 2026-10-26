@@ -14,7 +14,6 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDe
         { id: 'coaches', label: 'Coaches', icon: UserPlus },
         { id: 'calendar', label: 'Calendar', icon: Calendar },
         { id: 'event-mgmt', label: 'Event Manager', icon: Trophy },
-        { id: 'tournament-mgmt', label: 'Tournament Manager', icon: Trophy },
         { id: 'gallery', label: 'Gallery', icon: ImageIcon },
         { id: 'email-broadcast', label: 'Broadcasts', icon: Mail },
         { id: 'finance', label: 'Finance', icon: DollarSign },
@@ -27,7 +26,6 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDe
         if (!permissions) return false;
         if (permissions.role === 'super_admin') return true;
         if (item.superAdminOnly) return false;
-        if (item.id === 'tournament-mgmt') return Boolean(permissions.tournamentAssignments?.length);
 
         // Auto-show Event Manager if they have specific event permissions
         if (item.id === 'event-mgmt' && permissions.module_permissions?.['event-mgmt']?.allowedEvents?.length > 0) return true;

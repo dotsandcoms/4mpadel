@@ -13,7 +13,6 @@ import CoachManager from '../components/admin/CoachManager';
 import SettingsManager from '../components/admin/SettingsManager';
 import AdminManager from '../components/admin/AdminManager';
 import EventManagement from '../components/admin/EventManagement';
-import TournamentManager from '../components/admin/tournament/TournamentManager';
 import EmailBroadcastManager from '../components/admin/EmailBroadcastManager';
 import OrganisationManager from '../components/admin/OrganisationManager';
 import FederationManager from '../components/admin/FederationManager';
@@ -30,7 +29,8 @@ const Admin = () => {
     const [activeTab, setActiveTab] = useState(() => {
         try {
             const params = new URLSearchParams(window.location.search);
-            return params.get('tab') || 'dashboard';
+            const tab = params.get('tab') || 'dashboard';
+            return tab === 'tournament-mgmt' ? 'event-mgmt' : tab;
         } catch {
             return 'dashboard';
         }
@@ -205,7 +205,7 @@ const Admin = () => {
 
     useEffect(() => {
         if (!permissionsLoading && permissions && !hasPermission(activeTab)) {
-            const allTabs = ['dashboard', 'federations', 'organisations', 'clubs', 'players', 'licenses', 'coaches', 'calendar', 'event-mgmt', 'tournament-mgmt', 'gallery', 'email-broadcast', 'finance', 'blog', 'settings', 'admin-mgmt'];
+            const allTabs = ['dashboard', 'federations', 'organisations', 'clubs', 'players', 'licenses', 'coaches', 'calendar', 'event-mgmt', 'gallery', 'email-broadcast', 'finance', 'blog', 'settings', 'admin-mgmt'];
             const firstAllowed = allTabs.find(tab => hasPermission(tab));
             if (firstAllowed) {
                 setActiveTab(firstAllowed);
@@ -502,7 +502,6 @@ const Admin = () => {
                                     {activeTab === 'players' && <PlayerManager canManageLicenses={hasPermission('licenses')} />}
                                     {activeTab === 'blog' && <BlogManager />}
                                     {activeTab === 'calendar' && <CalendarManager />}
-                                    {activeTab === 'tournament-mgmt' && <TournamentManager canBuildEvents={permissions?.role === 'super_admin'} />}
                                     {activeTab === 'event-mgmt' && <EventManagement allowedEvents={permissions?.module_permissions?.['event-mgmt']?.allowedEvents || []} />}
                                     {activeTab === 'gallery' && (
                                         <GalleryManager permissions={permissions} />
