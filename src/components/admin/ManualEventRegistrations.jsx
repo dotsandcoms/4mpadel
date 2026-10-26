@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
-    X, Users, CheckCircle, Clock, DollarSign, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy, Link2, Info, MessageCircle, XCircle, Pencil, FileText, ArrowRight, ArrowDownLeft, ArrowUpRight, Phone, RefreshCcw, ExternalLink, Plus, FileSpreadsheet
+    X, Users, CheckCircle, Clock, DollarSign, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy, Link2, Info, MessageCircle, XCircle, Pencil, FileText, ArrowRight, ArrowDownLeft, ArrowUpRight, Phone, RefreshCcw, ExternalLink, Plus, FileSpreadsheet, Unlink, GitMerge
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
@@ -46,6 +46,13 @@ import OrganisationPayoutRequests from './OrganisationPayoutRequests';
 import CancelEventButton from './CancelEventButton';
 import CancelEventDialog from './CancelEventDialog';
 import NativeDrawManager from './NativeDrawManager';
+import RegistrationTeamDialog from './RegistrationTeamDialog';
+import ReplaceRegistrationPlayerDialog from './ReplaceRegistrationPlayerDialog';
+import {
+    eligibleRegistrationTeamPartners,
+    findRegistrationTeammate,
+    manageRegistrationTeam,
+} from '../../utils/registrationTeams';
 import { divisionRankingSource, resolvePlayerRanking } from '../../utils/playerRankingSelection';
 import {
     buildRegistrationTeamsByDivision,
@@ -218,6 +225,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const [linkTarget, setLinkTarget] = useState(null); // solo entry we're adding a partner to
     const [linkSearch, setLinkSearch] = useState('');
     const [linkBusy, setLinkBusy] = useState(false);
+    const [replacePlayerTarget, setReplacePlayerTarget] = useState(null);
+    const [teamAction, setTeamAction] = useState(null);
+    const [teamActionBusy, setTeamActionBusy] = useState(false);
+    const [teamActionError, setTeamActionError] = useState('');
     const [moveTarget, setMoveTarget] = useState(null);
     const [moveTeamPlayers, setMoveTeamPlayers] = useState([]);
     const [moveTeamTogether, setMoveTeamTogether] = useState(false);
@@ -1100,6 +1111,34 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             return true;
         });
     }, [linkTarget, registrations, linkSearch, divisions]);
+
+    const mergeCandidates = useMemo(
+        () => eligibleRegistrationTeamPartners(teamAction?.registration, registrations, divisions),
+        [teamAction, registrations, divisions],
+    );
+
+    const openTeamAction = (action, registration, teammate = null) => {
+        setTeamActionError('');
+        setTeamAction({ action, registration, teammate });
+    };
+
+    const confirmTeamAction = async (other) => {
+        if (teamActionBusy || !teamAction || !other) return;
+        setTeamActionBusy(true);
+        setTeamActionError('');
+        try {
+            await manageRegistrationTeam(supabase, teamAction.action, teamAction.registration, other, divisions);
+            toast.success(teamAction.action === 'merge'
+                ? `Merged ${teamAction.registration.full_name} and ${other.full_name} into one team`
+                : 'Team split into two solo entries');
+            setTeamAction(null);
+            await load();
+        } catch (err) {
+            setTeamActionError(err.message || 'Unable to update this team. Please try again.');
+        } finally {
+            setTeamActionBusy(false);
+        }
+    };
 
     // Search 4M player profiles who are NOT yet entered in this division — these can
     // be added as a partner and will be invited (by email) to pay their entry.
@@ -3086,6 +3125,14 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
 
     const panelContent = (
         <>
+                    {replacePlayerTarget && (
+                        <ReplaceRegistrationPlayerDialog
+                            players={replacePlayerTarget.players}
+                            initialRegistrationId={replacePlayerTarget.initialRegistrationId}
+                            onClose={() => setReplacePlayerTarget(null)}
+                            onReplaced={load}
+                        />
+                    )}
                     {/* Header */}
                     <div className={`${isInline ? 'bg-[#1a1a1a]/50 backdrop-blur-md rounded-3xl border border-white/10' : ''} px-6 pt-4 ${isInline ? 'pb-0' : 'border-b border-white/10'}`}>
                         {isInline && onBack && (
@@ -3771,6 +3818,17 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                                                                 {team.players.length > 1 ? (
                                                                                     <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-2.5">
                                                                                         <p className="text-[9px] font-black uppercase tracking-widest text-violet-300/80 mb-2">Whole team</p>
+                                                                                        <button type="button"
+                                                                                            onClick={() => openTeamAction('split', team.players[0], team.players[1])}
+                                                                                            className="w-full mb-2 inline-flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[10px] font-bold border border-violet-500/30 bg-violet-500/10 text-violet-200 hover:bg-violet-500/20 focus-visible:outline-2 focus-visible:outline-violet-400">
+                                                                                            <Unlink size={12} /> Split team
+                                                                                        </button>
+                                                                                        <button type="button"
+                                                                                            onClick={() => setReplacePlayerTarget({ players: team.players })}
+                                                                                            disabled={isCancelled}
+                                                                                            className="w-full mb-2 inline-flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[10px] font-bold border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 focus-visible:outline-2 focus-visible:outline-emerald-400 disabled:opacity-40">
+                                                                                            <ArrowRightLeft size={12} /> Replace player
+                                                                                        </button>
                                                                                         <div className="grid grid-cols-2 gap-1.5">
                                                                                             <button
                                                                                                 type="button"
@@ -3791,6 +3849,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                                                                 ) : (
                                                                                     <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-2.5 space-y-2">
                                                                                         <p className="text-[9px] font-black uppercase tracking-widest text-amber-300">Solo entry</p>
+                                                                                        <button type="button"
+                                                                                            onClick={() => openTeamAction('merge', team.players[0])}
+                                                                                            className="w-full inline-flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[10px] font-bold border border-sky-500/30 bg-sky-600 text-white hover:bg-sky-500 focus-visible:outline-2 focus-visible:outline-sky-400">
+                                                                                            <GitMerge size={12} /> Merge with solo entry
+                                                                                        </button>
                                                                                         <div className="flex items-center gap-1.5 justify-end flex-nowrap">
                                                                                             {team.players[0].status !== 'withdrawn' && !team.players[0].partner_name?.trim() && !team.players[0].partner_email?.trim() && (
                                                                                                 <button
@@ -3987,6 +4050,23 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                                         </td>
                                                         <td className="py-3 px-4 text-right">
                                                             <div className="inline-flex items-center gap-2 justify-end">
+                                                                {r.status !== 'withdrawn' && !isCancelled && (
+                                                                    <button type="button" onClick={() => {
+                                                                        const teammate = findRegistrationTeammate(r, registrations, divisions);
+                                                                        setReplacePlayerTarget({ players: [r, ...(teammate ? [teammate] : [])], initialRegistrationId: r.id });
+                                                                    }} className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-[10px] font-bold text-emerald-300 hover:bg-emerald-500/20 focus-visible:outline-2 focus-visible:outline-emerald-400">
+                                                                        <ArrowRightLeft size={11} /> Replace
+                                                                    </button>
+                                                                )}
+                                                                {r.status !== 'withdrawn' && (() => {
+                                                                    const teammate = findRegistrationTeammate(r, registrations, divisions);
+                                                                    return <button type="button"
+                                                                        onClick={() => openTeamAction(teammate ? 'split' : 'merge', r, teammate)}
+                                                                        className="bg-sky-500/10 text-sky-300 border border-sky-500/20 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-sky-600 hover:text-white inline-flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-sky-400">
+                                                                        {teammate ? <Unlink size={12} /> : <GitMerge size={12} />}
+                                                                        {teammate ? 'Split team' : 'Merge'}
+                                                                    </button>;
+                                                                })()}
                                                                 {r.status !== 'withdrawn' && !r.partner_name?.trim() && !r.partner_email?.trim() && (
                                                                     <button
                                                                         onClick={() => { setLinkSearch(''); setProfileResults([]); setLinkTarget(r); }}
@@ -4080,6 +4160,20 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                             </div>
                         );
                     })()}
+
+                    {teamAction && (
+                        <RegistrationTeamDialog
+                            key={`${teamAction.action}-${teamAction.registration.id}`}
+                            action={teamAction.action}
+                            registration={teamAction.registration}
+                            teammate={teamAction.teammate}
+                            candidates={mergeCandidates}
+                            busy={teamActionBusy}
+                            error={teamActionError}
+                            onConfirm={confirmTeamAction}
+                            onClose={() => setTeamAction(null)}
+                        />
+                    )}
 
                     {linkTarget && (
                         <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/60" onClick={() => !linkBusy && setLinkTarget(null)}>
