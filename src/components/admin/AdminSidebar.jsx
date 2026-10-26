@@ -27,8 +27,11 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDe
         if (permissions.role === 'super_admin') return true;
         if (item.superAdminOnly) return false;
 
-        // Auto-show Event Manager if they have specific event permissions
-        if (item.id === 'event-mgmt' && permissions.module_permissions?.['event-mgmt']?.allowedEvents?.length > 0) return true;
+        // Auto-show Event Manager if they have specific event permissions or legacy Tournament Manager access
+        if (item.id === 'event-mgmt' && (
+            permissions.module_permissions?.['event-mgmt']?.allowedEvents?.length > 0
+            || permissions.allowed_tabs?.includes('tournament-mgmt')
+        )) return true;
         if (item.id === 'organisations' && permissions.orgs?.length > 0) return true;
         if (item.id === 'clubs' && permissions.hasDirectClubMembership) return true;
 

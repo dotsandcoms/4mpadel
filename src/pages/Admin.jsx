@@ -23,18 +23,29 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { Menu, ShieldAlert, ExternalLink, Home, Bell, MapPin, DollarSign, UserPlus, CalendarPlus } from 'lucide-react';
 
+/** Retired admin tabs map to their replacement module. */
+const LEGACY_ADMIN_TABS = { 'tournament-mgmt': 'event-mgmt' };
+const resolveAdminTab = (tab) => LEGACY_ADMIN_TABS[tab] || tab;
+
 const Admin = () => {
     const [session, setSession] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState(() => {
+    const [activeTab, setActiveTabState] = useState(() => {
         try {
             const params = new URLSearchParams(window.location.search);
-            const tab = params.get('tab') || 'dashboard';
-            return tab === 'tournament-mgmt' ? 'event-mgmt' : tab;
+            const requested = params.get('tab') || 'dashboard';
+            const tab = resolveAdminTab(requested);
+            if (requested !== tab) {
+                params.set('tab', tab);
+                const query = params.toString();
+                window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash || ''}`);
+            }
+            return tab;
         } catch {
             return 'dashboard';
         }
     });
+    const setActiveTab = (tab) => setActiveTabState(resolveAdminTab(tab));
     const [orgPortalView, setOrgPortalView] = useState(() => {
         try {
             const params = new URLSearchParams(window.location.search);
