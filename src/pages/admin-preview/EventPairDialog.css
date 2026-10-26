@@ -1,0 +1,24 @@
+.ap-pair-dialog .ap-event-player-search input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--ap-line, #b9c1b8);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.ap-pair-dialog > header > button {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--ap-line, #d9ded8);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 24px;
+  cursor: pointer;
+}

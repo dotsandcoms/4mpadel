@@ -1,0 +1,6 @@
+.ap-event-record-state { border-radius:14px; }
+.ap-event-record-message { display:grid; gap:12px; padding:24px; }
+.ap-event-record-message h2,.ap-event-record-message p { margin:0; }
+.ap-event-record-message h2 { font-size:1rem; font-weight:600; }
+.ap-event-record-message p { color:var(--ap-muted,#687068); line-height:1.6; overflow-wrap:anywhere; }
+@media(max-width:600px) { .ap-event-record-message { padding:20px 16px; } }

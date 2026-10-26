@@ -1,0 +1,9 @@
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import EmailBroadcastWorkspace from '../../src/pages/admin-preview/EmailBroadcastWorkspace.jsx';
+import '../../src/index.css';
+import '../../src/pages/AdminPreview.css';
+const state=window.broadcastQA={reads:[],role:'custom',tabs:['email-broadcast'],fail:null};
+const client={auth:{getUser:async()=>({data:{user:{id:'actor',email:'qa@example.invalid'}}})},from(table){let offset=0,ids;return{select(){return this;},ilike(){return this;},order(){return this;},in(_,v){ids=v;return this;},range(v){offset=v;return this;},abortSignal(){return this;},then(resolve){return(async()=>{state.reads.push(table);if(table==='event_registrations')await new Promise(r=>setTimeout(r,200));let rows=table==='admin_sidebar_permissions'?[{email:'qa@example.invalid',role:state.role,allowed_tabs:state.tabs}]:table==='calendar'?[{id:1,event_name:'Synthetic Open',start_date:'2026-10-10'},{id:2,event_name:'Synthetic Summer',start_date:'2026-12-05'}]:table==='event_registrations'?[{id:1,email:'one@example.invalid',status:'registered',payment_status:'paid',partner_name:'Partner'},{id:2,email:'solo@example.invalid',status:'registered',payment_status:'pending'}]:[{id:3,email:' ONE@example.invalid '},{id:4,email:'ranked@example.invalid'}];if(table==='calendar'&&ids)rows=rows.filter(r=>ids.includes(String(r.id)));return{data:rows.slice(offset,offset+2),error:state.fail===table?new Error('Synthetic read failure'):null};})().then(resolve);}};}};
+function App(){const[rev,setRev]=React.useState(0),[user,setUser]=React.useState('actor');state.refresh=()=>setRev(v=>v+1);state.context=()=>setUser('other');return<div className="ap-root" style={{display:'block',padding:24}}><EmailBroadcastWorkspace client={client} session={{user:{id:user}}} permissions={{role:'custom',allowed_tabs:['email-broadcast']}} scopeId="all" refreshRevision={rev}/></div>;}
+createRoot(document.getElementById('root')).render(<App/>);

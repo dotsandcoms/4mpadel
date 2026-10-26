@@ -1,0 +1,15 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {dayKey,eventPhase,filterCalendar,loadCalendar,loadCalendarDivisions,monthDays,occursOn,setupGaps} from '../../src/pages/admin-preview/calendarData.js';
+import {mockReadClient} from './playersTestData.mjs';
+import {calendarEvents,calendarTables} from './calendarTestData.mjs';
+test('calendar reads every page without a write API',async()=>{const c=mockReadClient(calendarTables,{cap:17});const data=await loadCalendar(c);assert.equal(data.events.length,105);assert.equal(data.events[0]._organisation.name,'QA Organisation');assert.equal(data.events[0]._audit.creator_name,'QA administrator');assert.equal(data.warnings.length,0);});
+test('calendar failure does not become a successful empty calendar',async()=>{await assert.rejects(loadCalendar(mockReadClient(calendarTables,{errors:{calendar:'denied'}})),/denied/);});
+test('optional attribution failure is visible',async()=>{const r=await loadCalendar(mockReadClient(calendarTables,{errors:{event_creation_audit:'denied'}}));assert.equal(r.events.length,105);assert.equal(r.warnings.length,1);});
+test('multi-day events stay in progress until their final day',()=>{const e={start_date:'2026-09-03',end_date:'2026-09-05'};assert.equal(eventPhase(e,'2026-09-04'),'In progress');assert.equal(eventPhase(e,'2026-09-06'),'Past');assert.equal(occursOn(e,'2026-09-04'),true);assert.equal(occursOn(e,'2026-09-06'),false);});
+test('missing and malformed dates do not become upcoming',()=>{assert.equal(eventPhase({},'2026-09-04'),'Unscheduled');assert.equal(dayKey('2026-02-30'),'');assert.equal(eventPhase({start_date:'2026-09-05',end_date:'2026-09-01'}),'Unscheduled');});
+test('cancelled is distinct from past or upcoming',()=>{assert.equal(eventPhase({event_status:'cancelled',start_date:'2026-12-01'},'2026-09-04'),'Cancelled');});
+test('month grid is Monday-first and crosses year boundaries',()=>{const days=monthDays('2026-01');assert.equal(days.length,42);assert.equal(days[0],'2025-12-29');assert.equal(new Set(days).size,42);assert.deepEqual(monthDays('2026-13'),[]);});
+test('filters handle nulls, hidden events and numeric source identifiers',()=>{assert.equal(filterCalendar([{id:1}],{q:'pretoria'}).length,0);assert.equal(filterCalendar(calendarEvents,{visibility:'hidden'}).length,21);assert.ok(filterCalendar(calendarEvents,{source:'rankedin'}).every(e=>e.rankedin_id));assert.ok(filterCalendar(calendarEvents,{q:'PRETORIA'}).every(e=>e.city==='Pretoria'));});
+test('zero entry fee is not flagged as missing',()=>{assert.deepEqual(setupGaps({start_date:'2026-09-04',venue:'QA',organiser_name:'QA',allow_payments:true,entry_fee:0}),[]);});
+test('division query is scoped to the selected event',async()=>{assert.equal((await loadCalendarDivisions(mockReadClient(calendarTables),9000)).length,1);assert.equal((await loadCalendarDivisions(mockReadClient(calendarTables),9001)).length,0);});

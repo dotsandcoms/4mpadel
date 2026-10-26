@@ -5,6 +5,7 @@ import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Reports from './pages/Reports';
 import Admin from './pages/Admin';
+import AdminPreview from './pages/AdminPreview';
 import Players from './pages/Players';
 import Calendar from './pages/Calendar';
 import EventDetails from './pages/EventDetails';
@@ -136,6 +137,7 @@ function AppContent() {
           <Route path="/" element={<Home />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/admin-preview/*" element={<AdminPreview />} />
           <Route path="/players" element={<Players />} /> {/* Added route for Players */}
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/calendar/:slug" element={<EventDetails />} />

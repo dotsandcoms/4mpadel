@@ -1,3 +1,4 @@
+import SearchableDropdown from "../SearchableDropdown";
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, Check, Copy, Eye, EyeOff, FileText,
@@ -7,8 +8,8 @@ import { toast } from 'sonner';
 import { supabase } from '../../supabaseClient';
 import { useClubs } from '../../hooks/useClubs';
 import { attachPlacesAutocomplete } from '../../utils/googleMaps';
+import './EventBuilderPreview.css';
 
-const STEPS = ['Event details', 'Event setup', 'Media & prizes', 'Additional info', 'Review & create'];
 const STEP_ICONS = [CalendarDays, SlidersHorizontal, ImageIcon, FileText, Eye];
 const FORMATS = ['TBC', 'Americano', 'Mexicano', 'King of the Court', 'Knockout', 'Round Robin', 'Free Play'];
 const ENTRY_OPTIONS = [
@@ -93,7 +94,12 @@ const blankForm = {
     contact_details: '', organiser_phone: '', organiser_email: '', other_info: '',
 };
 
-const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, editingEvent = null }) => {
+const QuickEventBuilder = ({ isOpen, onClose: closeRequested, onSaved, organisation = null, editingEvent = null, beforeSave, theme, renderEditor }) => {
+    const previewTheme = theme === 'preview';
+    const mutationLock = useRef(false);
+    const failedWrite = useRef(false);
+    const [saveError, setSaveError] = useState('');
+    const onClose = () => { if (!mutationLock.current) closeRequested?.(); };
     const [step, setStep] = useState(1);
     const [form, setForm] = useState(blankForm);
     const [saving, setSaving] = useState(false);
@@ -115,6 +121,7 @@ const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, edit
     const { clubs, loadingClubs } = useClubs();
 
     const isEditing = !!editingEvent?.id;
+    const STEPS = ['Event details', 'Event setup', 'Media & prizes', 'Additional info', isEditing ? 'Review & save' : 'Review & create'];
     const inputClass = 'w-full min-h-11 rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-base sm:text-sm text-white outline-none placeholder:text-gray-600 focus-visible:border-padel-green focus-visible:ring-2 focus-visible:ring-padel-green/25';
     const labelClass = 'mb-1.5 block text-xs font-bold text-gray-300';
 
@@ -466,7 +473,7 @@ const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, edit
             if (form.payment_method === 'eft' && !form.payment_bank_name.trim()) errors.payment_bank_name = 'Enter the bank name.';
             if (form.payment_method === 'eft' && !form.payment_account_number.trim()) errors.payment_account_number = 'Enter the account number.';
             if (form.payment_method === 'external' && !/^https?:\/\//i.test(form.external_payment_url)) errors.external_payment_url = 'Enter a complete URL beginning with http:// or https://.';
-            if (form.require_access_code && !isEditing && form.access_code.trim().length < 6) errors.access_code = 'Use at least 6 characters.';
+            if (form.require_access_code && (!isEditing || editingEvent?.registration_access !== 'code') && form.access_code.trim().length < 6) errors.access_code = 'Use at least 6 characters.';
             if (form.require_access_code && form.access_code && form.access_code.trim().length < 6) errors.access_code = 'Use at least 6 characters.';
         }
         return errors;
@@ -517,9 +524,13 @@ const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, edit
 
     const handleUpload = async (event, type) => {
         const file = event.target.files?.[0];
-        if (!file) return;
+        if (!file || mutationLock.current || (previewTheme && failedWrite.current)) return;
+        mutationLock.current = true;
         setUploading(type);
         try {
+            const authorised = await beforeSave?.({ operation: 'upload', event: editingEvent, form });
+            if (authorised === false) throw new Error('The upload was not authorised.');
+            await authorised?.verifyContinuing?.();
             const url = await uploadImage(file, type === 'poster' ? 'quick-event-posters' : 'quick-event-sponsors');
             if (type === 'poster') update('custom_image_url', url);
             else update('sponsor_logos', [url]);
@@ -527,13 +538,18 @@ const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, edit
         } catch (error) {
             toast.error(error.message || 'Unable to upload image');
         } finally {
+            mutationLock.current = false;
             setUploading('');
             event.target.value = '';
         }
     };
 
     const save = async () => {
+        if (mutationLock.current || savedDetails || (previewTheme && failedWrite.current)) return;
         if (!validateStep(1) || !validateStep(2)) return;
+        mutationLock.current = true;
+        let mutationAttempted = false;
+        setSaveError('');
         setSaving(true);
         let eventId = editingEvent?.id || null;
         try {
@@ -576,6 +592,11 @@ const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, edit
                 ...(!isEditing ? { sanction_status: isOrgEvent ? 'pending' : 'approved' } : {}),
             };
 
+            const authorised = await beforeSave?.({ operation: 'save', event: editingEvent, form, payload });
+            if (authorised === false) throw new Error('The save was not authorised.');
+            const checkpoint = authorised?.verifyContinuing || (async () => {});
+            await checkpoint();
+            mutationAttempted = true;
             if (isEditing) {
                 const { error } = await supabase.from('calendar').update(payload).eq('id', eventId);
                 if (error) throw error;
@@ -602,20 +623,24 @@ const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, edit
                 divisionId = data?.id || null;
             }
             if (divisionId) {
+                await checkpoint();
                 const { error } = await supabase.from('tournament_divisions').update(division).eq('id', divisionId);
                 if (error) throw error;
             } else {
+                await checkpoint();
                 const { error } = await supabase.from('tournament_divisions').insert([division]);
                 if (error) throw error;
             }
 
             const protectedBefore = editingEvent?.registration_access === 'code';
             if (form.require_access_code && (!protectedBefore || form.access_code)) {
+                await checkpoint();
                 const { error } = await supabase.rpc('set_event_access_code', {
                     p_event_id: eventId, p_enabled: true, p_code: form.access_code.trim(),
                 });
                 if (error) throw error;
             } else if (!form.require_access_code && protectedBefore) {
+                await checkpoint();
                 const { error } = await supabase.rpc('set_event_access_code', {
                     p_event_id: eventId, p_enabled: false, p_code: null,
                 });
@@ -623,6 +648,7 @@ const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, edit
             }
 
             if (!isOrgEvent && !isEditing) {
+                await checkpoint();
                 const { error } = await supabase.from('calendar').update({ is_visible: true }).eq('id', eventId);
                 if (error) throw error;
             }
@@ -639,7 +665,10 @@ const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, edit
         } catch (error) {
             console.error(error);
             toast.error(error.message || 'Unable to save quick event');
+            if (previewTheme && mutationAttempted) failedWrite.current = true;
+            setSaveError(`${error.message || 'Unable to save quick event'}${previewTheme && mutationAttempted ? ' Changes may already have occurred. Close and review Calendar before trying again.' : ''}`);
         } finally {
+            mutationLock.current = false;
             setSaving(false);
         }
     };
@@ -668,8 +697,9 @@ const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, edit
     }, [form, editingEvent?.registration_access]);
 
     if (!isOpen) return null;
+    if (renderEditor) return renderEditor({ form, setForm, save, handleUpload, saving, saveError, savedDetails });
     if (savedDetails) return (
-        <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="quick-event-success-title">
+        <div className={`${previewTheme ? 'ap-live-event-editor ap-quick-event-editor ' : ''}fixed inset-0 z-[210] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md`} role="dialog" aria-modal="true" aria-labelledby="quick-event-success-title">
             <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#0a0a0a] p-6 shadow-2xl sm:p-8">
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-padel-green/15 text-padel-green"><Check size={28} strokeWidth={3} /></div>
                 <h2 id="quick-event-success-title" className="mt-5 text-2xl font-black text-white">{savedDetails.wasEditing ? 'Quick event updated' : 'Quick event created'}</h2>
@@ -686,7 +716,7 @@ const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, edit
         </div>
     );
     return (
-        <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/85 p-3 backdrop-blur-md sm:p-6" role="dialog" aria-modal="true" aria-labelledby="quick-event-title">
+        <div className={`${previewTheme ? 'ap-live-event-editor ap-quick-event-editor ' : ''}fixed inset-0 z-[210] flex items-center justify-center bg-black/85 p-3 backdrop-blur-md sm:p-6`} role="dialog" aria-modal="true" aria-labelledby="quick-event-title">
             <div className="flex max-h-[94vh] w-full max-w-5xl overflow-hidden rounded-2xl border border-white/10 bg-[#0a0a0a] shadow-2xl">
                 <div className="flex min-w-0 flex-1 flex-col">
                     <header className="flex items-center justify-between border-b border-white/10 px-5 py-4 sm:px-6">
@@ -820,7 +850,7 @@ const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, edit
                             <div className="md:col-span-2"><label htmlFor="quick-event-venue" className={labelClass}>Venue *</label><input id="quick-event-venue" value={form.venue} onChange={(e) => update('venue', e.target.value)} className={fieldClass('venue')} placeholder="Enter a venue or select a club above" {...fieldA11y('venue')} />{renderFieldError('venue')}</div>
                             <div className="md:col-span-2"><label htmlFor="quick-event-address" className={labelClass}>Address</label><input ref={addressInputRef} id="quick-event-address" value={form.address} onChange={(e) => update('address', e.target.value)} placeholder="Start typing to search Google…" autoComplete="off" className={inputClass} /><p className="mt-1.5 text-[11px] leading-5 text-gray-500">Powered by Google — selecting a result fills the city and, when empty, the venue.</p></div>
                             <div className="md:col-span-2"><label htmlFor="quick-event-city" className={labelClass}>City</label><input id="quick-event-city" value={form.city} onChange={(e) => update('city', e.target.value)} className={inputClass} placeholder="City" /></div>
-                            <div><label className={labelClass}>Court type</label><select value={form.indoor_outdoor} onChange={(e) => update('indoor_outdoor', e.target.value)} className={inputClass}><option>Indoor</option><option>Outdoor</option><option>Mixed</option><option>Panoramic</option></select></div>
+                            <div><label className={labelClass}>Court type</label><SearchableDropdown searchable={previewTheme} value={form.indoor_outdoor} onChange={(e) => update('indoor_outdoor', e.target.value)} className={inputClass}><option>Indoor</option><option>Outdoor</option><option>Mixed</option><option>Panoramic</option></SearchableDropdown></div>
                             <div><label className={labelClass}>Number of courts</label><input type="number" min="1" value={form.courts_count} onChange={(e) => update('courts_count', e.target.value)} className={inputClass} /></div>
                             <div><label htmlFor="quick-event-max-players" className={labelClass}>Maximum players *</label><input id="quick-event-max-players" type="number" min="1" value={form.max_players} onChange={(e) => update('max_players', e.target.value)} className={fieldClass('max_players')} {...fieldA11y('max_players')} />{renderFieldError('max_players')}</div>
                         </div>}
@@ -828,7 +858,7 @@ const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, edit
                         {step === 2 && <div className="space-y-6">
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 <div><label htmlFor="quick-event-division" className={labelClass}>Division *</label><input id="quick-event-division" value={form.division_name} onChange={(e) => update('division_name', e.target.value)} className={fieldClass('division_name')} {...fieldA11y('division_name')} />{renderFieldError('division_name')}</div>
-                                <div><label htmlFor="quick-event-format" className={labelClass}>Format *</label><select id="quick-event-format" value={form.format} onChange={(e) => update('format', e.target.value)} className={fieldClass('format')} {...fieldA11y('format')}>{FORMATS.map((format) => <option key={format}>{format}</option>)}</select>{renderFieldError('format')}</div>
+                                <div><label htmlFor="quick-event-format" className={labelClass}>Format *</label><SearchableDropdown searchable={previewTheme} id="quick-event-format" value={form.format} onChange={(e) => update('format', e.target.value)} className={fieldClass('format')} {...fieldA11y('format')}>{FORMATS.map((format) => <option key={format}>{format}</option>)}</SearchableDropdown>{renderFieldError('format')}</div>
                             </div>
                             <fieldset><legend className={labelClass}>Entry option</legend><div className="grid grid-cols-3 gap-2">{ENTRY_OPTIONS.map((option) => <label key={option.value} className={`flex min-h-11 cursor-pointer items-center justify-center rounded-xl border px-3 py-3 text-sm font-bold ${form.partner_requirement === option.value ? 'border-padel-green bg-padel-green/10 text-padel-green' : 'border-white/10 text-gray-300'}`}><input type="radio" name="quick-entry-option" value={option.value} checked={form.partner_requirement === option.value} onChange={() => update('partner_requirement', option.value)} className="sr-only" />{option.label}</label>)}</div></fieldset>
                             <fieldset><legend className={labelClass}>Payment method</legend><div className="grid grid-cols-2 gap-2 md:grid-cols-4">{PAYMENT_OPTIONS.map((option) => <label key={option.value} className={`flex min-h-11 cursor-pointer items-center justify-center rounded-xl border px-3 py-3 text-center text-xs font-bold ${form.payment_method === option.value ? 'border-padel-green bg-padel-green/10 text-padel-green' : 'border-white/10 text-gray-300'}`}><input type="radio" name="quick-payment" value={option.value} checked={form.payment_method === option.value} onChange={() => update('payment_method', option.value)} className="sr-only" />{option.label}</label>)}</div></fieldset>
@@ -849,10 +879,10 @@ const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, edit
 
                             {step === 5 && (
                                 <div className="space-y-4">
-                                    <p className="text-xs text-gray-400">Review everything below before creating the event.</p>
+                                    <p className="text-xs text-gray-400">{isEditing ? 'Review everything below before saving your changes.' : 'Review everything below before creating the event.'}</p>
 
                                     {quickReviewIssues.length === 0 ? (
-                                        <div className="flex items-center gap-2 rounded-xl border border-padel-green/30 bg-padel-green/10 px-4 py-3 text-sm font-semibold text-padel-green"><Check size={16} /> Ready to create — no blocking issues found.</div>
+                                        <div className="flex items-center gap-2 rounded-xl border border-padel-green/30 bg-padel-green/10 px-4 py-3 text-sm font-semibold text-padel-green"><Check size={16} /> {isEditing ? 'Ready to save' : 'Ready to create'} — no blocking issues found.</div>
                                     ) : (
                                         <div className="space-y-1.5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3"><p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-red-300"><AlertTriangle size={14} /> Blocking issues ({quickReviewIssues.length})</p><ul className="space-y-1">{quickReviewIssues.map((issue) => <li key={issue} className="text-sm text-red-200">• {issue}</li>)}</ul></div>
                                     )}
@@ -908,7 +938,7 @@ const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, edit
 
                                     {['eft', 'external'].includes(form.payment_method) && <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3"><AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-300" /><div><p className="text-sm font-bold text-amber-100">Manual payment confirmation required</p><p className="mt-1 text-xs leading-relaxed text-amber-100/80">Registrations will remain pending until an event admin checks the {form.payment_method === 'eft' ? 'bank account' : 'external provider'} and marks the player as paid in Event Manager.</p></div></div>}
 
-                                    {form.require_access_code && <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3"><KeyRound size={18} className="mt-0.5 shrink-0 text-amber-300" /><div><p className="text-sm font-bold text-amber-100">Save the access code securely</p><p className="mt-1 text-xs leading-relaxed text-amber-100/80">The saved code cannot be displayed later. You can copy it from the confirmation screen after creating the event.</p></div></div>}
+                                    {form.require_access_code && <div className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3"><KeyRound size={18} className="mt-0.5 shrink-0 text-amber-300" /><div><p className="text-sm font-bold text-amber-100">{isEditing && editingEvent?.registration_access === 'code' && !form.access_code ? 'Existing access code retained' : 'Save the access code securely'}</p><p className="mt-1 text-xs leading-relaxed text-amber-100/80">{isEditing && editingEvent?.registration_access === 'code' && !form.access_code ? 'Your current code will stay unchanged. Saved codes cannot be displayed again.' : 'The saved code cannot be displayed later. You can copy it from the confirmation screen after saving the event.'}</p></div></div>}
 
                                     <section className="rounded-xl border border-white/10 bg-black/20 p-4">
                                         <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400">Event link</h3>
@@ -918,6 +948,7 @@ const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, edit
                             )}
                     </main>
 
+                    {saveError && <p role="alert" className="px-6 py-3 text-red-300">{saveError}</p>}
                     <footer className="flex items-center justify-between gap-3 border-t border-white/10 px-5 py-4 sm:px-6">
                         <button type="button" onClick={step === 1 ? onClose : () => setStep((current) => current - 1)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/10 px-4 text-sm font-bold text-gray-300 hover:bg-white/5">{step === 1 ? 'Cancel' : <><ArrowLeft size={16} /> Back</>}</button>
                         {step < 5 ? <button type="button" onClick={next} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-padel-green px-5 text-sm font-black text-black hover:brightness-110">Continue <ArrowRight size={16} /></button> : <button type="button" onClick={save} disabled={saving} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-padel-green px-5 text-sm font-black text-black hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50">{saving ? <Loader2 size={17} className="animate-spin" /> : <Trophy size={17} />}{saving ? (isEditing ? 'Saving changes…' : 'Creating event…') : isEditing ? 'Save quick event' : 'Create quick event'}</button>}

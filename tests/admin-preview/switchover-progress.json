@@ -1,0 +1,116 @@
+{
+  "updated": "2026-10-19",
+  "productionDeployment": "not-authorised-by-this-integration-batch",
+  "annualLicenseRelease": "held; do not open sales or apply pending migrations",
+  "designReference": "existing light admin preview; current MAIN business controllers and deployed RPCs",
+  "statusMeaning": "locally_verified means source integration plus automated/synthetic checks; not production acceptance or switch-over approval",
+  "firstBatchVerification": {
+    "unitTests": "387 passed; 0 failed, skipped or cancelled",
+    "productionBuild": "passed; existing gradient, mixed-import and large-chunk warnings remain",
+    "rootBoundaryLint": "passed for event authority, event licence hydration, tournament access, permission hook and shell adapter",
+    "diffWhitespaceCheck": "passed",
+    "browserChecks": "synthetic desktop/mobile: licences, player editor, team/completion, tournament workspaces and failure/concurrency paths; integrated shell routes and signed-out guards checked",
+    "productionWritesExecuted": false,
+    "migrationsApplied": false,
+    "emailsOrRefundsSent": false
+  },
+  "secondBatchVerification": {
+    "unitTests": "410 passed; 0 failed, skipped or cancelled",
+    "productionBuild": "passed (3482 modules); existing gradient, mixed-import and large-chunk warnings remain",
+    "focusedLint": "15 boundary/dialog/helper files: 0 errors, 0 warnings",
+    "browserChecks": "background CUA desktop: synthetic imported profile link and licence reload, WhatsApp checklist, player creation, explicit invitation and repeat lock; actual event engine interrupted after first mock write and retry blocked. Native Safari checked light event access-code controls",
+    "mobileBrowserChecks": "not performed this batch; responsive browser emulation unavailable",
+    "fixtureNetworkProtection": "mock clients plus CSP blocking external connections and form submissions",
+    "productionWritesExecuted": false,
+    "migrationsAppliedToSharedDatabases": false,
+    "emailsAuthAccountsOrRefundsCreated": false,
+    "drawRevisionCandidate": {
+      "file": "supabase/migrations/20261019071938_tournament_private_draw_revision_guard.sql",
+      "status": "offline_verified_not_applied_to_staging_or_production",
+      "testCommand": "node tests/admin-preview/draw-revision-db-check.mjs",
+      "database": "disposable socket-only local PostgreSQL 14.17; stopped after checks; production uses PostgreSQL 17",
+      "verified": ["deployed race reproduced", "exact deployed function-body fingerprint", "source drift rejection", "replay", "stale and NULL revision rejection", "transaction rollback", "publication and reconfirmation compatibility", "two concurrent RPC writers have one winner", "synthetic role denial", "legacy direct-write bypass reproduced"],
+      "remaining": "requires PostgreSQL 17/staging acceptance, current deployed RLS review and coordinated legacy draw-writer changes before rollout"
+    }
+  },
+  "thirdBatchVerification": {
+    "unitTests": "439 passed; 0 failed, skipped or cancelled",
+    "productionBuild": "passed (3493 modules); existing gradient, mixed-import and large-chunk warnings remain",
+    "focusedLint": "12 new or hardened module/helper files: 0 errors, 0 warnings; this is not a claim of repository-wide lint acceptance",
+    "diffWhitespaceCheck": "passed",
+    "browserChecks": "background CUA desktop: collapsed club groups and held unlink review, searchable federation personnel roles, readable before/after review, mocked federation and organisation saves and saved directory reload, recorded recipient/licence coverage and line items",
+    "browserRegressionFixes": "explicit JSX fixture import avoids case-insensitive Mac resolution to the similarly named JS helper; hot-reload-invalidated review correctly refused to write and passed after reopening a fresh context",
+    "mobileBrowserChecks": "not performed this batch; no supported viewport emulation available",
+    "fixtureNetworkProtection": "mock clients; CSP blocks external connections/images and form submissions",
+    "productionWritesExecuted": false,
+    "migrationsAppliedToSharedDatabases": false,
+    "emailsAuthAccountsRefundsOrPayoutsCreated": false,
+    "clubRelationshipGuardCandidate": {
+      "file": "supabase/migrations/20261019075330_club_relationship_write_guards.sql",
+      "status": "offline_verified_not_applied_to_staging_or_production",
+      "testCommand": "node tests/admin-preview/club-relationship-guard-db-check.mjs",
+      "database": "disposable socket-only local PostgreSQL 14.17; stopped after checks; production uses PostgreSQL 17",
+      "verified": ["reproduced ordinary authenticated writes", "source-policy drift refusal and transactional rollback", "public reads preserved", "super-admin and direct Clubs module CRUD", "ordinary/deleted/missing account denial", "literal wildcard and ambiguous custom grant denial", "spoofed email denial", "revoked grant denial", "restrictive guards compose with additional permissive policies"],
+      "remaining": "platform-manager-only candidate; delegated association policy, group cascades, other club/storage/member policies, PostgreSQL 17 and staging acceptance still required; does not activate held UI writes"
+    },
+    "remainingFunctions": {
+      "clubs": ["production claims/application/member/invitation RPC acceptance", "association writes and delegated authority", "group CRUD, venue/member/branding cascades", "Google sync", "permanent delete/merge", "consolidated pending claims queue", "member/admin/invitation metrics"],
+      "organisationsFederations": ["creation and media uploads", "membership and role changes", "organisation approval and rejection", "federation assignment", "sanction and amendment decisions", "deletion", "legacy organisation creator editing without explicit membership"],
+      "finance": ["atomic/idempotent single and bulk payment reconciliation", "safe participant mark/unmark-paid workflows", "interim-payment compare-and-swap and durable audit", "durable idempotent payout requests and server-enforced request limits", "production gateway verification/refund acceptance", "delegated finance scopes", "persistent gateway settings, not component-local toggles"]
+    },
+    "sourceRiskEvidence": [
+      "Production club_groups and club_organisations: authenticated ALL policies USING/WITH CHECK true; restrictive account_must_exist only checks active account, not module or club authority",
+      "Current MAIN FinanceManager.handleSyncPlayer: participant/registration/licence/ledger multiwrites and old split-payment deletion before insertion (lines 213-733, particularly 692-706)",
+      "Current MAIN EventFinance mark/unmark paid: separate participant, payment and registration updates with unchecked returned errors (lines 1206-1298)",
+      "Current MAIN ManualEventRegistrations: organiser_interim_payments local JSON snapshot replacement lacks compare-and-swap (lines 326-395); payout request is email plus best-effort activity, not durable idempotent request (lines 2760-2838)",
+      "Current MAIN FinanceManager Paystack setting at lines 1052 onward is component-local state, not a persistent gateway configuration"
+    ]
+  },
+  "sourceImprovements": [
+    "Private tournament schedule generation is explicit; opening Schedule no longer writes",
+    "Tournament action failures lock further mutations until a verified fresh snapshot",
+    "Event/account/scope/connection changes stop subsequent steps in chained tournament actions",
+    "Event-year eligibility failures are visible; malformed/missing responses never become a guessed unlicensed status",
+    "Full/quick event saves and post-resize media uploads check the opening actor and immutable context before every subsequent write",
+    "New player/participant actions verify active accounts and exact authenticated-email super-admin authority rather than wildcard-based authority",
+    "Player creation is separate from Auth creation; invitations require explicit recipient review and lock repeated requests after an attempt",
+    "Club creation/media authority no longer uses wildcard-prone sidebar lookup; fresh active-account and exact-email super-admin RPC checks are followed by final identity verification",
+    "New organisation reads preserve source standalone oversight, direct federation-module access and legacy creator scope without accidentally granting oversight to a host member",
+    "Profile changes use changed-field compare-and-swap and structural JSONB receipt checks; federation review uses readable before/after values and image previews",
+    "Recorded payment metadata rejects malformed/coercible/overprecise amounts instead of silently rounding evidence or inferring licence entitlement",
+    "Connected module refresh now targets its own records and invalidates stale dialogs/exports instead of refreshing the event loader"
+  ],
+  "releaseRisks": [
+    "Deployed tm_save_draw still permits concurrent RPC overwrites. A locally verified revision-consuming migration candidate exists, but is not deployed; legacy NativeDrawManager direct writes bypass it and tm_confirm retains a separate NULL-revision weakness",
+    "Annual-licence release remains held; review forms cannot execute licence changes or sales-setting writes",
+    "Tournament player detail deliberately uses only authorized snapshot fields; wider profile integration remains to be reviewed",
+    "RankedIn sync remains held: live browser importer can delete participants after a division fetch failure; financial participant writes remain held because the source updates multiple records without an atomic success guarantee",
+    "Weekly pending/rejected amendments remain held because the live cascade does not safely consume amendment metadata",
+    "Player password reset, test-login override and deletion remain held: endpoint target restrictions/audit, actual impersonation authorization and profile-vs-Auth deletion semantics need reviewed safe workflows",
+    "Production club-group/association policies still allow broad authenticated writes; the locally tested restrictive candidate is not deployed and intentionally does not settle delegated association permissions or multiwrite group cascades",
+    "Organisation/federation access changes, approvals, sanctions, uploads and deletion are not integrated for execution; legacy creator profiles are read-only without explicit owner/admin membership",
+    "Finance reconciliation and participant payment updates remain non-atomic in current source; interim-payment edits risk lost updates and payout requests lack durable idempotency; production financial actions and delegated finance remain held",
+    "Production cross-role, payment/refund reconciliation, concurrency and rollback acceptance still required",
+    "Existing large JavaScript bundle and CSS gradient warnings remain; no wholesale deployment of this older worktree"
+  ],
+  "batches": [
+    { "id": "baseline", "status": "locally_verified", "owner": "root", "scope": "isolate current source integrations without wholesale old-worktree deployment" },
+    { "id": "licenses", "status": "locally_verified_release_held", "owner": "event_settings", "scope": "source register, player history, season settings and sales report; held writes remain disabled" },
+    { "id": "teams-completion", "status": "locally_verified", "owner": "partner_pairing", "scope": "current merge/split RPC and manual-event management completion/reopen; only finance-managed events offer the control" },
+    { "id": "tournaments", "status": "locally_verified_backend_concurrency_risk_open", "owner": "rankedin_draws", "scope": "existing Tournament Manager controller and workflows in new UI; wider profile boundary documented" },
+    { "id": "shared-eligibility-access", "status": "locally_verified", "owner": "root", "scope": "event-year eligibility, revoked coverage, legacy flag control removal, navigation and tournament assignments" },
+    { "id": "event-builder-catchup", "status": "locally_verified_partial_weekly_amendments_held", "owner": "event_settings", "scope": "current full/quick access codes and weekly code cascade, late-payment setting, capacity validation, RankedIn seed feedback, actor/context fences; amendment consumption still held" },
+    { "id": "imported-participants", "status": "locally_verified_partial_sync_and_payments_held", "owner": "partner_pairing", "scope": "profile linking, WhatsApp checklist, event-year coverage and eligible management completion connected; risky sync/payment source workflows review-only" },
+    { "id": "players", "status": "locally_verified_partial_sensitive_account_workflows_held", "owner": "rankedin_draws", "scope": "profile-only creation, explicit login invitations, playing preferences, guarded edits/uploads; reset/test-login/deletion held" },
+    { "id": "clubs", "status": "locally_verified_partial_access_and_cascade_workflows_held", "owner": "event_settings", "scope": "whole-row opening, searchable collapsed groups, linked-organisation reads/held review, correct refresh, exact creation authority; production claims/member/invitation decisions, group mutations, Google sync and deletion/merge remain" },
+    { "id": "organisations-federations", "status": "locally_verified_partial_approvals_memberships_and_media_held", "owner": "partner_pairing", "scope": "real directories, source-shaped org/federation profile editing, nested federation settings, readable review, linked records and current read permissions; access/approval/sanction/upload/delete workflows remain" },
+    { "id": "finance-payments-payouts", "status": "locally_verified_partial_financial_mutations_and_delegation_held", "owner": "rankedin_draws", "scope": "recorded payment coverage/classification/provenance review and own-module refresh; reconciliation, interim-payment updates, payout requests, gateway production actions and delegated scopes remain" },
+    { "id": "permissions", "status": "queued", "scope": "source-aligned save/revoke and server-enforced capabilities with notifications" },
+    { "id": "gallery-broadcast", "status": "queued", "scope": "production publishing/delivery after backend permission and retry fixes" },
+    { "id": "blog-settings", "status": "queued", "scope": "existing content management, site settings and commerce controls" },
+    { "id": "coaches", "status": "queued", "scope": "remaining deletion and current-source parity" },
+    { "id": "shell-dashboard", "status": "queued", "scope": "real counts/ages, notifications, global search/Create and non-demo destinations" },
+    { "id": "security-backend", "status": "local_draw_and_club_policy_candidates_verified_other_controls_queued", "owner": "root", "scope": "private-draw RPC and club-relationship restrictive candidates tested locally only; legacy draw writer, delegated club authority, group cascades, broadcast permission, scoped storage/match policies and RLS advisory triage remain; no shared mutation without reviewed rollout" },
+    { "id": "release-acceptance", "status": "queued", "scope": "cross-role and concurrent-operation acceptance, financial reconciliation, pilot and rollback" }
+  ]
+}

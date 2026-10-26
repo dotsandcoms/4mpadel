@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
 import { isManageableClubStatus } from '../utils/club';
+import { SUPER_ADMIN_EMAILS } from '../utils/adminIdentity.js';
+import { readTournamentAssignments } from '../utils/tournamentAccess.js';
 
-export const SUPER_ADMIN_EMAILS = ['bradein@dotsandcoms.co.za', 'brad@dotsandcoms.co.za', 'admin@4mpadel.co.za', 'markstillerman@gmail.com'];
+export { SUPER_ADMIN_EMAILS } from '../utils/adminIdentity.js';
 
 export async function canAccessHiddenEvents(email) {
     const normalized = (email || '').toLowerCase().trim();
@@ -138,10 +140,38 @@ async function resolveClubAccess(userEmail, orgMembership) {
 }
 
 export const useAdminPermissions = (userEmail) => {
-    const [permissions, setPermissions] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [resolved, setResolved] = useState({ identity: null, permissions: null, loading: true });
+    const [tournaments, setTournaments] = useState({ identity: null, assignments: [], loading: true });
+    const basePermissions = resolved.identity === userEmail ? resolved.permissions : null;
+    const permissions = useMemo(() => {
+        const assignments = tournaments.identity === userEmail ? tournaments.assignments : [];
+        return basePermissions || assignments.length
+            ? { ...(basePermissions || { role: 'custom', allowed_tabs: [], module_permissions: {} }), tournamentAssignments: assignments }
+            : null;
+    }, [basePermissions, tournaments, userEmail]);
+    const loading = Boolean(userEmail) && (resolved.identity !== userEmail || resolved.loading || tournaments.identity !== userEmail || tournaments.loading);
 
     useEffect(() => {
+        let cancelled = false;
+        setTournaments({ identity: userEmail, assignments: [], loading: Boolean(userEmail) });
+        if (userEmail) readTournamentAssignments(supabase, userEmail).then(assignments => {
+            if (!cancelled) setTournaments({ identity: userEmail, assignments, loading: false });
+        }).catch(error => {
+            console.warn('Tournament access could not be resolved:', error.message);
+            if (!cancelled) setTournaments({ identity: userEmail, assignments: [], loading: false });
+        });
+        return () => { cancelled = true; };
+    }, [userEmail]);
+
+    useEffect(() => {
+        let cancelled = false;
+        const setPermissions = value => {
+            if (!cancelled) setResolved(current => ({ ...current, identity: userEmail, permissions: value }));
+        };
+        const setLoading = value => {
+            if (!cancelled) setResolved(current => ({ ...current, identity: userEmail, loading: value }));
+        };
+        setResolved({ identity: userEmail, permissions: null, loading: Boolean(userEmail) });
         const fetchPermissions = async () => {
             if (!userEmail) {
                 setLoading(false);
@@ -287,11 +317,13 @@ export const useAdminPermissions = (userEmail) => {
         };
 
         fetchPermissions();
+        return () => { cancelled = true; };
     }, [userEmail]);
 
     const hasPermission = (tabId) => {
         if (!permissions) return false;
         if (permissions.role === 'super_admin') return true;
+        if (tabId === 'tournament-mgmt') return permissions.tournamentAssignments?.length > 0;
         
         if (tabId === 'event-mgmt' && permissions.module_permissions?.['event-mgmt']?.allowedEvents?.length > 0) return true;
         if (tabId === 'gallery' && permissions.module_permissions?.gallery?.allowedAlbums?.length > 0) return true;

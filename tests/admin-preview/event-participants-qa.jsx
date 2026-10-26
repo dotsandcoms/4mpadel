@@ -1,0 +1,10 @@
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import '../../src/pages/AdminPreview.css';
+import '../../src/pages/admin-preview/EventManagerDashboard.css';
+import EventParticipantsWorkspace from '../../src/pages/admin-preview/EventParticipantsWorkspace';
+import EventManagerDashboard from '../../src/pages/admin-preview/EventManagerDashboard';
+const event = { id: 7, event_name: 'Imported participant fixture', is_manual: false, start_date: '2099-09-26', end_date: '2099-09-27' };
+const rows = Array.from({ length: 49 }, (_, id) => ({ id, event_id: 7, full_name: `Player ${id + 1}`, class_name: id < 25 ? 'Open' : 'Advanced', is_paid: false }));
+const client = { from() { let offset = 0; const query = { select() { return query; }, eq() { return query; }, order() { return query; }, range(start) { offset = start; return query; }, abortSignal() { return query; }, then(resolve) { return Promise.resolve({ data: rows.slice(offset, offset + 500), error: null }).then(resolve); } }; return query; } };
+createRoot(document.getElementById('root')).render(<div className="ap-root" style={{ display: 'block', padding: 24 }}>{location.search.includes('list') ? <EventManagerDashboard events={[event]} registrations={[]} go={() => {}} /> : <EventParticipantsWorkspace event={event} go={() => {}} client={client} />}</div>);

@@ -1,0 +1,18 @@
+.ap-event-location { display:grid; grid-template-columns:1fr 1fr; gap:20px; grid-column:1/-1; min-width:0; }
+.ap-location-venue { grid-column:1/-1; position:relative; }
+.ap-event-location label { display:grid; gap:8px; font-weight:600; font-size:14px; }
+.ap-event-location input { width:100%; min-width:0; min-height:44px; box-sizing:border-box; padding:12px; font:inherit; color:inherit; border:1px solid #b9c1b8; border-radius:8px; background:transparent; }
+.ap-location-search { display:flex; align-items:center; gap:8px; margin-top:8px; border:1px solid #b9c1b8; border-radius:8px; padding:0 12px; }
+.ap-location-search:focus-within { outline:2px solid #527628; outline-offset:2px; }
+.ap-event-location .ap-location-search input { border:0; outline:none; padding:12px 0; box-shadow:none; flex:1; }
+.ap-location-chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.ap-location-chips>span { display:inline-flex; align-items:center; gap:6px; padding:4px 8px 4px 12px; border:1px solid #c9d9ae; background:#edf4e2; border-radius:20px; font-size:13px; }
+.ap-location-chips button { display:grid; place-items:center; min-width:28px; min-height:28px; border:0; border-radius:50%; background:transparent; color:inherit; }
+.ap-location-options { position:absolute; top:100%; left:0; right:0; z-index:12; background:var(--ap-surface,#fafbf8); border:1px solid #b9c1b8; border-radius:8px; max-height:240px; overflow:auto; box-shadow:0 8px 24px #19201922; }
+.ap-location-options button { display:grid; gap:4px; width:100%; min-height:44px; text-align:left; border:0; background:transparent; padding:12px; color:inherit; font:inherit; }
+.ap-location-options button:hover,.ap-location-options button[aria-selected=true] { background:#e7eddf; }
+.ap-location-options small { color:#687069; }
+.ap-location-options p { padding:12px; }
+.ap-event-location .ap-location-status { grid-column:1/-1; margin:0; color:#687069; font-size:12px; font-weight:400; }
+.ap-location-google { font-family:inherit; border:1px solid #b9c1b8; border-radius:8px; }
+@media(max-width:560px) { .ap-event-location { grid-template-columns:1fr; } }

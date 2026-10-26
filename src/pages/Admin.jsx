@@ -20,6 +20,7 @@ import { useAdminFeedNotifications } from '../hooks/useAdminFeedNotifications';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { Menu, ShieldAlert, ExternalLink, Home, Bell, MapPin, DollarSign, UserPlus, CalendarPlus } from 'lucide-react';
+import AdminLogin from '../components/admin/AdminLogin';
 
 const Admin = () => {
     const [session, setSession] = useState(null);
@@ -43,6 +44,7 @@ const Admin = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loginLoading, setLoginLoading] = useState(false);
+    const [loginError, setLoginError] = useState('');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
     const [player, setPlayer] = useState(null);
@@ -181,14 +183,17 @@ const Admin = () => {
 
     const handleLogin = async (e) => {
         e.preventDefault();
+        if (loginLoading) return;
         setLoginLoading(true);
-        const { error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-        });
-
-        if (error) alert(error.message);
-        setLoginLoading(false);
+        setLoginError('');
+        try {
+            const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+            if (error) setLoginError(error.message);
+        } catch {
+            setLoginError('The sign-in service could not be reached. Check your connection and try again.');
+        } finally {
+            setLoginLoading(false);
+        }
     };
 
     const handleLogout = async () => {
@@ -209,54 +214,7 @@ const Admin = () => {
     if (loading || (session && permissionsLoading)) return <div className="min-h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
 
     if (!session) {
-        return (
-            <div className="min-h-screen bg-black flex items-center justify-center px-4 relative overflow-hidden">
-                {/* Background Elements */}
-                <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1554068865-24cecd4e34b8?q=80&w=2670&auto=format&fit=crop')] bg-cover bg-center opacity-20" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent" />
-
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="max-w-md w-full bg-[#0a0a0a]/80 backdrop-blur-xl p-8 rounded-3xl border border-white/10 relative z-10 shadow-2xl shadow-padel-green/10"
-                >
-                    <div className="text-center mb-8">
-                        <h2 className="text-4xl font-bold text-white mb-2">Admin Access</h2>
-                        <p className="text-gray-400">Enter your credentials to continue</p>
-                    </div>
-
-                    <form onSubmit={handleLogin} className="space-y-4">
-                        <div>
-                            <label className="block text-gray-400 text-sm mb-2 font-medium">Email Address</label>
-                            <input
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all"
-                                placeholder="admin@4mpadel.co.za"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-gray-400 text-sm mb-2 font-medium">Password</label>
-                            <input
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all"
-                                placeholder="••••••••"
-                            />
-                        </div>
-                        <button
-                            type="submit"
-                            disabled={loginLoading}
-                            className="w-full bg-padel-green text-black font-bold py-4 rounded-xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 mt-4 shadow-lg shadow-padel-green/20"
-                        >
-                            {loginLoading ? 'Authenticating...' : 'Sign In to Dashboard'}
-                        </button>
-                    </form>
-                </motion.div>
-            </div>
-        );
+        return <AdminLogin email={email} password={password} onEmail={(event) => setEmail(event.target.value)} onPassword={(event) => setPassword(event.target.value)} onSubmit={handleLogin} busy={loginLoading} error={loginError} />;
     }
 
     return (

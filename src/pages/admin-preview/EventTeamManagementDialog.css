@@ -1,0 +1,7 @@
+.ap-team-management-dialog { width:min(680px,calc(100vw - 32px)); overscroll-behavior:contain; }
+.ap-team-management-dialog .ap-team-management-review { display:grid;grid-template-columns:1fr auto 1fr;gap:16px;align-items:center;padding:16px;border:1px solid var(--ap-line,#d9ded8);border-radius:10px;background:var(--ap-surface-2,#eef1eb);overflow-wrap:anywhere; }
+.ap-team-management-dialog .ap-team-management-review span { font-size:13px;color:var(--ap-muted-ink,#687069); }
+.ap-team-management-dialog button { min-height:42px; }
+.ap-team-management-dialog header > button { min-width:42px;border:1px solid var(--ap-line,#d9ded8);border-radius:8px;font-size:24px;line-height:1;background:transparent; }
+.ap-team-management-dialog button:focus-visible { outline:2px solid #56741d;outline-offset:3px; }
+@media(max-width:520px) { .ap-team-management-dialog .ap-team-management-review { grid-template-columns:1fr;gap:8px; } }

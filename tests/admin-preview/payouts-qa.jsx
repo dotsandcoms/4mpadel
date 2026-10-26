@@ -1,0 +1,11 @@
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import PayoutsWorkspace from '../../src/pages/admin-preview/PayoutsWorkspace.jsx';
+import '../../src/pages/AdminPreview.css';
+const events=Array.from({length:12},(_,id)=>({id,event_name:`Synthetic Open ${id}`,organiser_name:'Synthetic organiser',organiser_interim_payments:[{id:`qa-${id}`,amount:id===0?'invalid':1250,paid_at:'2026-09-08',note:'Synthetic recorded payout'}]}));
+const params=new URLSearchParams(location.search);
+if(params.has('empty'))events.length=0;
+if(params.has('issues'))events.push({id:99,event_name:'Unreadable synthetic event',organiser_interim_payments:{}});
+const client={from(){let start=0;return {select(){return this;},order(){return this;},abortSignal(){return this;},range(value){start=value;return this;},then(resolve){return new Promise(done=>setTimeout(()=>done({data:events.slice(start,start+5)}),250)).then(resolve);}};}};
+if(params.has('error'))client.from=()=>{throw new Error('Synthetic load failure');};
+createRoot(document.getElementById('root')).render(<div className="ap-root" style={{display:'block',padding:24}}><p>Synthetic payout QA — no database requests</p><PayoutsWorkspace client={client} session={{user:{id:'qa'}}} permissions={{role:params.has('denied')?'custom':'super_admin'}} scopeId="all"/></div>);

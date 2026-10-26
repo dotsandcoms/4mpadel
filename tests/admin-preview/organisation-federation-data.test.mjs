@@ -1,0 +1,48 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {entityPatch,entityEqual,loadEntities,saveEntityProfile,verifyEntityAccess} from '../../src/pages/admin-preview/organisationFederationData.js';
+const org={id:'org',name:'Original',contact_email:'contact@example.invalid',contact_phone:'',logo_url:'',website_url:'',status:'approved'};
+const context={userId:'actor',scopeId:'all',isCurrent:()=>true};
+function mock({admin=true,active=true,member=true,stale=false,receipt=true}={}){
+ const state={writes:[],rpcs:[]};const client={state,auth:{getUser:async()=>({data:{user:{id:'actor',email:'admin_1@example.invalid'}}})},rpc:async(name,args)=>{state.rpcs.push({name,args});return{data:name==='account_is_active'?active:name==='is_super_admin'?admin:member};},from(table){let patch,offset=0;const filters=[];return{select(){return this;},order(){return this;},ilike(){return this;},in(){return this;},range(value){offset=value;return this;},eq(key,value){filters.push([key,value]);return this;},is(key,value){filters.push([key,value]);return this;},update(value){patch=value;return this;},single:async()=>{if(patch){state.writes.push({table,patch,filters});return{data:receipt?{...org,...patch}:null};}return{data:{...org,...(stale?{name:'Changed'}:{})}};},then(resolve){const rows=table==='admin_sidebar_permissions'?[]:table==='organisation_members'?[{user_email:member?'admin_1@example.invalid':'adminX1@example.invalid',organisation_id:'org',role:'owner'}]:[org];return Promise.resolve({data:offset?[]:rows}).then(resolve);}};}};return client;
+}
+test('source profile fields only and unchanged nulls preserved',()=>{assert.deepEqual(entityPatch('organisations',org,{...org,name:' Updated ',status:'rejected',created_by:7}),{name:'Updated'});assert.deepEqual(entityPatch('federations',{name:'F',slug:'f',about:null},{name:'F',slug:'f',about:''}),{});assert.throws(()=>entityPatch('organisations',org,{...org,contact_email:''}),/required/);});
+test('save only profile patch with status and changed field CAS',async()=>{const client=mock();const saved=await saveEntityProfile(client,'organisations',org,{...org,name:'Updated'},context);assert.equal(saved.name,'Updated');assert.deepEqual(client.state.writes[0].patch,{name:'Updated'});assert(client.state.writes[0].filters.some(([key,value])=>key==='status'&&value==='approved'));assert(client.state.rpcs.some(row=>row.name==='is_super_admin'&&row.args.user_email==='admin_1@example.invalid'));});
+test('exact approved organisation owner may edit via existing RPC',async()=>{const client=mock({admin:false});await saveEntityProfile(client,'organisations',org,{...org,name:'Updated'},context);assert.equal(client.state.writes.length,1);assert.equal(client.state.rpcs.filter(row=>row.name==='is_organisation_admin').length,2);});
+test('wildcard neighbour, inactive, stale, actor/scope/context changes prevent mutation',async()=>{for(const [options,ctx] of [[{admin:false,member:false},{}],[{active:false},{}],[{stale:true},{}],[{},{userId:'other'}],[{},{scopeId:'org:other'}],[{},{isCurrent:()=>false}]]){const client=mock(options);await assert.rejects(saveEntityProfile(client,'organisations',org,{...org,name:'Updated'},{...context,...ctx}));assert.equal(client.state.writes.length,0);}});
+test('missing write receipt fails uncertain; federation delegated editing denied',async()=>{const client=mock({receipt:false});await assert.rejects(saveEntityProfile(client,'organisations',org,{...org,name:'Updated'},context),/outcome/);const denied=mock({admin:false});await assert.rejects(saveEntityProfile(denied,'federations',{...org,slug:'f'},{...org,slug:'f',name:'Updated'},context));assert.equal(denied.state.writes.length,0);});
+test('directory loads via authorised paginated reads',async()=>{const client=mock();assert.deepEqual((await loadEntities(client,'organisations',context)).rows,[org]);assert.equal(client.state.writes.length,0);});
+test('federation nested fields preserve source serialization and safe publication options',()=>{
+ const source={name:'Federation',slug:'f',socials:{instagram:'old',youtube:''},personnel:[{name:'Member',role:'Custom role'}],committees:[{name:'Panel',members:['One']}]};
+ const patch=entityPatch('federations',source,{...source,status:'published',verified:true,is_national_governing_body:true,socials:{instagram:' new '},personnel:[{name:' Person ',role:' Custom role '},{name:'',role:''}],committees:[{name:' Panel ',membersText:' One, Two, ,Three '}]});
+ assert.deepEqual(patch.socials,{instagram:'new',facebook:'',tiktok:'',youtube:''});assert.deepEqual(patch.personnel,[{name:'Person',role:'Custom role'}]);assert.deepEqual(patch.committees,[{name:'Panel',members:['One','Two','Three']}]);assert.equal(patch.status,'published');assert.equal(patch.verified,true);
+ assert(entityEqual({a:1,b:2},{b:2,a:1}));assert.throws(()=>entityPatch('federations',source,{...source,slug:'!!!'}),/letters/);assert.throws(()=>entityPatch('federations',source,{...source,status:'approved'}),/supported/);
+});
+test('identity switching during permission checks is denied',async()=>{const client=mock();let reads=0;client.auth.getUser=async()=>({data:{user:{id:++reads===1?'actor':'other',email:'admin_1@example.invalid'}}});await assert.rejects(loadEntities(client,'organisations',context),/account changed/);assert.equal(client.state.writes.length,0);});
+test('JSONB edits use serialized CAS and structurally validate reordered receipt keys',async()=>{
+ const original={id:'fed',name:'F',slug:'f',status:'published',socials:{instagram:'old',facebook:'',tiktok:'',youtube:''}};
+ const client=mock(),filters=[];let patch;
+ client.from=()=>({select(){return this;},eq(key,value){filters.push([key,value]);return this;},is(){return this;},update(value){patch=value;return this;},single:async()=>({data:patch?{...original,...patch,socials:{youtube:'',tiktok:'',facebook:'',instagram:'new'}}:original})});
+ const saved=await saveEntityProfile(client,'federations',original,{...original,socials:{...original.socials,instagram:'new'}},context);
+ assert.equal(saved.socials.instagram,'new');assert(filters.some(([key,value])=>key==='socials'&&value===JSON.stringify(original.socials)));assert(patch.updated_at);
+});
+test('actor switch during last delegated RPC cannot reach update',async()=>{
+ const client=mock({admin:false});let adminChecks=0;const rpc=client.rpc;client.rpc=async(name,args)=>{const result=await rpc(name,args);if(name==='is_organisation_admin'&&++adminChecks===2)client.auth.getUser=async()=>({data:{user:{id:'replacement',email:'other@example.invalid'}}});return result;};
+ await assert.rejects(saveEntityProfile(client,'organisations',org,{...org,name:'Updated'},context),/account changed/);assert.equal(client.state.writes.length,0);
+});
+test('source standalone custom org oversight and direct federation grants are read-only',async()=>{
+ const accessClient=(grant,members=[])=>{const client=mock({admin:false});client.from=table=>{let offset=0;return{select(){return this;},ilike(){return this;},order(){return this;},range(value){offset=value;return this;},then(resolve){return Promise.resolve({data:offset?[]:table==='admin_sidebar_permissions'?[{email:'admin_1@example.invalid',...grant}]:members}).then(resolve);}};};return client;};
+ const standalone=accessClient({role:'custom',allowed_tabs:['organisations']});assert.equal((await verifyEntityAccess(standalone,'organisations',context)).ids,null);
+ await assert.rejects(saveEntityProfile(standalone,'organisations',org,{...org,name:'Updated'},context),/membership/);
+ const membership={user_email:'admin_1@example.invalid',role:'staff',organisation_id:'org'};
+ const scoped=await verifyEntityAccess(accessClient({role:'custom',allowed_tabs:['organisations']},[membership]),'organisations',context);assert.deepEqual(scoped.ids,['org']);
+ assert.equal((await verifyEntityAccess(accessClient({role:'custom',allowed_tabs:[],module_permissions:{organisations:{platformOversight:true}}},[membership]),'organisations',context)).ids,null);
+ const federation=accessClient({role:'custom',allowed_tabs:['federations']});assert.equal((await verifyEntityAccess(federation,'federations',context)).ids,null);await assert.rejects(saveEntityProfile(federation,'federations',{...org,slug:'f'},{...org,slug:'f',name:'Updated'},context),/membership/);
+});
+test('malformed legacy nested rows do not crash serialization',()=>{
+ const patch=entityPatch('federations',{name:'F',slug:'f'},{name:'F',slug:'f',personnel:[null,{},'bad',{title:'Legacy',position:'Director'}],committees:[null,{},'bad',{title:'Panel',members:['One','Two']}]});assert.deepEqual(patch.personnel,[{name:'Legacy',role:'Director'}]);assert.deepEqual(patch.committees,[{name:'Panel',members:['One','Two']}]);
+});
+test('legacy creator identity prevents accidental standalone oversight and ambiguity denies',async()=>{
+ const client=mock({admin:false});let duplicate=false;
+ client.from=table=>{let offset=0;return{select(){return this;},ilike(){return this;},order(){return this;},eq(){return this;},range(value){offset=value;return this;},then(resolve){const rows=table==='admin_sidebar_permissions'?[{email:'admin_1@example.invalid',role:'custom',allowed_tabs:['organisations']}]:table==='players'?[{id:5,email:' ADMIN_1@example.invalid '},...(duplicate?[{id:6,email:'admin_1@example.invalid'}]:[])]:table==='organisations'?[{id:'legacy'}]:[];return Promise.resolve({data:offset?[]:rows}).then(resolve);}};};
+ assert.deepEqual((await verifyEntityAccess(client,'organisations',context)).ids,['legacy']);duplicate=true;await assert.rejects(verifyEntityAccess(client,'organisations',context),/identity is ambiguous/);assert.equal(client.state.writes.length,0);
+});

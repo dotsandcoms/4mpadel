@@ -10,6 +10,8 @@ import { slugifyClub, SA_REGIONS, CLAIMABLE_CLUB_STATUSES } from '../../utils/cl
 import { attachPlacesAutocomplete } from '../../utils/googleMaps';
 import { sendEmail } from '../../utils/emails';
 import VerifiedBadge from '../VerifiedBadge';
+import SearchableDropdown from '../SearchableDropdown';
+import './ClubCreateWizardPreview.css';
 
 const ADMIN_NOTIFY_EMAIL = 'markstillerman@gmail.com';
 
@@ -82,7 +84,7 @@ const inputClass = 'mt-1.5 w-full bg-black/40 border border-white/10 rounded-xl 
 const labelClass = 'block text-xs font-bold uppercase tracking-wider text-gray-400';
 const selectClass = `${inputClass} appearance-none pr-9 cursor-pointer`;
 
-const SelectField = ({ label, required, optional, value, onChange, options, placeholder }) => (
+const SelectField = ({ label, required, optional, value, onChange, options, placeholder, previewTheme = false }) => (
     <div>
         <label className={labelClass}>
             {label}
@@ -90,27 +92,27 @@ const SelectField = ({ label, required, optional, value, onChange, options, plac
             {optional && <span className="text-gray-600 normal-case tracking-normal font-medium ml-1">(optional)</span>}
         </label>
         <div className="relative">
-            <select value={value} onChange={(e) => onChange(e.target.value)} className={selectClass}>
+            <SearchableDropdown searchable={previewTheme} aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className={selectClass}>
                 {placeholder && <option value="">{placeholder}</option>}
                 {options.map((opt) => (
                     <option key={opt} value={opt}>{opt}</option>
                 ))}
-            </select>
-            <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+            </SearchableDropdown>
+            {!previewTheme && <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />}
         </div>
     </div>
 );
 
-const TimeSelect = ({ value, onChange }) => (
+const TimeSelect = ({ value, onChange, previewTheme = false }) => (
     <div className="relative">
-        <select
+        <SearchableDropdown searchable={previewTheme} aria-label="Opening hours time"
             value={value}
             onChange={(e) => onChange(e.target.value)}
             className="appearance-none bg-black/40 border border-white/10 rounded-xl pl-3 pr-8 py-2.5 text-sm text-white focus:outline-none focus:border-padel-green cursor-pointer"
         >
             {TIME_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+        </SearchableDropdown>
+        {!previewTheme && <ChevronDown size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />}
     </div>
 );
 
@@ -230,7 +232,25 @@ const ClubCreateWizard = ({
     contactEmail = '',
     initialClubClaim = null,
     embedded = false,
+    theme = 'legacy',
+    client = supabase,
+    beforeWrite,
+    onBusyChange,
+    onCreated,
+    onDirtyChange,
 }) => {
+    const previewTheme = theme === 'preview';
+    const [writeBlocked, setWriteBlocked] = useState(false);
+    const [writeError, setWriteError] = useState('');
+    const mutationAttempted = useRef(false), uploadLock = useRef(false);
+    const busyCallback = useRef(onBusyChange); busyCallback.current = onBusyChange;
+    const authorizeWrite = async (kind) => {
+        if (previewTheme && typeof beforeWrite !== 'function') throw new Error('Creation permission could not be verified. Close and reopen this form.');
+        if (previewTheme && writeBlocked) throw new Error('A previous write could not be confirmed. Close and refresh before trying again.');
+        const allowed = await beforeWrite?.({ kind });
+        if (allowed === false) throw new Error('This action is not permitted.');
+        mutationAttempted.current = true;
+    };
     const isPublic = mode === 'public';
     const [stepIndex, setStepIndex] = useState(0);
     const [phase, setPhase] = useState('form'); // form | publishing | success
@@ -255,6 +275,10 @@ const ClubCreateWizard = ({
     const addressRef = useRef(null);
     const publishingRef = useRef(false);
     const containerRef = useRef(null);
+    const initialDraft = useRef(JSON.stringify(form)), dirtyCallback = useRef(onDirtyChange); dirtyCallback.current = onDirtyChange;
+    useEffect(() => { dirtyCallback.current?.(JSON.stringify(form) !== initialDraft.current); }, [form]);
+    useEffect(() => { busyCallback.current?.(uploading || phase === 'publishing'); }, [uploading, phase]);
+    useEffect(() => () => busyCallback.current?.(false), []);
 
     const steps = isPublic ? (claimClub ? CLAIM_STEPS : PUBLIC_STEPS) : ADMIN_STEPS;
     const step = steps[Math.min(stepIndex, steps.length - 1)];
@@ -271,10 +295,10 @@ const ClubCreateWizard = ({
         if (!isPublic) return undefined;
         let cancelled = false;
         (async () => {
-            const { data: { session } } = await supabase.auth.getSession();
+            const { data: { session } } = await client.auth.getSession();
             if (!session?.user?.email || cancelled) return;
             setSessionEmail(session.user.email);
-            const { data: player } = await supabase
+            const { data: player } = await client
                 .from('players')
                 .select('id, name, email, contact_number')
                 .ilike('email', session.user.email)
@@ -314,7 +338,7 @@ const ClubCreateWizard = ({
         let cancelled = false;
         const t = setTimeout(async () => {
             const safe = q.replace(/[%_,]/g, ' ').trim();
-            let query = supabase
+            let query = client
                 .from('clubs')
                 .select('id, name, short_name, city, status, logo_url')
                 .or(`name.ilike.%${safe}%,short_name.ilike.%${safe}%`)
@@ -342,7 +366,7 @@ const ClubCreateWizard = ({
         const t = setTimeout(async () => {
             setSearchingPlayers(true);
             try {
-                const { data, error } = await supabase
+                const { data, error } = await client
                     .from('players')
                     .select('id, name, email, contact_number, image_url')
                     .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
@@ -404,6 +428,28 @@ const ClubCreateWizard = ({
         if (step.key !== 'location') return undefined;
         let cancelled = false;
         let attached = null;
+        let observer;
+        const field = addressRef.current;
+        const dialog = previewTheme ? field?.closest('dialog') : null;
+        const before = new Set(document.querySelectorAll('.pac-container')), owned = new Set();
+        const position = () => {
+            if (!dialog || !field) return;
+            const rect = field.getBoundingClientRect(), below = innerHeight - rect.bottom - 12;
+            const height = Math.max(100, Math.min(250, below < 150 ? rect.top - 12 : below));
+            owned.forEach(container => {
+                const styles = { position: 'fixed', left: `${rect.left}px`, top: `${below < 150 ? Math.max(4, rect.top - height - 4) : rect.bottom + 4}px`, width: `${rect.width}px`, maxHeight: `${height}px`, overflowY: 'auto', zIndex: '20' };
+                Object.entries(styles).forEach(([key, value]) => { if (container.style[key] !== value) container.style[key] = value; });
+            });
+        };
+        const claim = () => {
+            if (!dialog) return;
+            document.querySelectorAll('.pac-container').forEach(container => {
+                if (before.has(container) || owned.has(container)) return;
+                owned.add(container); container.classList.add('club-create-google'); dialog.appendChild(container);
+                observer?.observe(container, { attributes: true, attributeFilter: ['style'] });
+            });
+            position();
+        };
         const timer = setTimeout(() => {
             const input = addressRef.current;
             if (!input) return;
@@ -436,15 +482,23 @@ const ClubCreateWizard = ({
                         return;
                     }
                     attached = api;
+                    if (dialog) {
+                        observer = new MutationObserver(claim);
+                        observer.observe(document.body, { childList: true, subtree: true }); claim();
+                        field.addEventListener('focus', position); window.addEventListener('resize', position); document.addEventListener('scroll', position, true);
+                    }
                 })
                 .catch((err) => console.warn('Google Maps failed to load:', err));
         }, 0);
         return () => {
             cancelled = true;
             clearTimeout(timer);
+            observer?.disconnect();
             attached?.destroy();
+            owned.forEach(container => container.remove());
+            field?.removeEventListener('focus', position); window.removeEventListener('resize', position); document.removeEventListener('scroll', position, true);
         };
-    }, [step.key]);
+    }, [step.key, previewTheme]);
 
     const useMyLocation = () => {
         if (!navigator.geolocation) {
@@ -510,23 +564,28 @@ const ClubCreateWizard = ({
 
     const handlePhotoUpload = async (e) => {
         const files = Array.from(e.target.files || []);
-        if (!files.length) return;
+        if (!files.length || uploadLock.current || publishingRef.current || (previewTheme && writeBlocked)) return;
+        uploadLock.current = true; mutationAttempted.current = false; setWriteError('');
+        busyCallback.current?.(true);
         setUploading(true);
         try {
             const uploaded = [];
             for (const file of files) {
                 const ext = file.name.split('.').pop() || 'jpg';
                 const path = `clubs/gallery/new_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
-                const { error } = await supabase.storage.from('profile-pics').upload(path, file, { upsert: true });
+                await authorizeWrite('gallery-upload');
+                const { error } = await client.storage.from('profile-pics').upload(path, file, { upsert: true });
                 if (error) throw error;
-                const { data: { publicUrl } } = supabase.storage.from('profile-pics').getPublicUrl(path);
+                const { data: { publicUrl } } = client.storage.from('profile-pics').getPublicUrl(path);
                 uploaded.push({ url: publicUrl, tag: '' });
             }
             setForm((prev) => ({ ...prev, photos: [...prev.photos, ...uploaded] }));
             toast.success(`${uploaded.length} photo${uploaded.length > 1 ? 's' : ''} uploaded`);
         } catch (err) {
             toast.error(`Upload failed: ${err.message}`);
+            if (previewTheme) { setWriteError(`${err.message}. ${mutationAttempted.current ? 'Some files may have uploaded. Close and refresh before trying again.' : 'No upload was attempted.'}`); if (mutationAttempted.current) setWriteBlocked(true); }
         } finally {
+            uploadLock.current = false;
             setUploading(false);
             e.target.value = '';
         }
@@ -560,19 +619,24 @@ const ClubCreateWizard = ({
 
     const handleLogoUpload = async (e) => {
         const file = e.target.files?.[0];
-        if (!file) return;
+        if (!file || uploadLock.current || publishingRef.current || (previewTheme && writeBlocked)) return;
+        uploadLock.current = true; mutationAttempted.current = false; setWriteError('');
+        busyCallback.current?.(true);
         setUploading(true);
         try {
             const ext = file.name.split('.').pop() || 'jpg';
             const path = `clubs/logo/new_${Date.now()}.${ext}`;
-            const { error } = await supabase.storage.from('profile-pics').upload(path, file, { upsert: true });
+            await authorizeWrite('logo-upload');
+            const { error } = await client.storage.from('profile-pics').upload(path, file, { upsert: true });
             if (error) throw error;
-            const { data: { publicUrl } } = supabase.storage.from('profile-pics').getPublicUrl(path);
+            const { data: { publicUrl } } = client.storage.from('profile-pics').getPublicUrl(path);
             setField('logo_url', publicUrl);
             toast.success('Logo uploaded');
         } catch (err) {
             toast.error(`Upload failed: ${err.message}`);
+            if (previewTheme) { setWriteError(`${err.message}. ${mutationAttempted.current ? 'The file may have uploaded. Close and refresh before trying again.' : 'No upload was attempted.'}`); if (mutationAttempted.current) setWriteBlocked(true); }
         } finally {
+            uploadLock.current = false;
             setUploading(false);
             e.target.value = '';
         }
@@ -624,18 +688,19 @@ const ClubCreateWizard = ({
         if (!email || !accountPassword.trim()) {
             throw new Error('Enter the password for this player account to continue.');
         }
-        const { error } = await supabase.auth.signInWithPassword({ email, password: accountPassword });
+        const { error } = await client.auth.signInWithPassword({ email, password: accountPassword });
         if (error) throw new Error(error.message || 'Could not sign in. Check the password for this account.');
         setSessionEmail(email);
     };
 
     const buildPayload = async () => {
         const baseSlug = slugifyClub(form.name) || 'club';
-        const { data: slugTaken } = await supabase
+        const { data: slugTaken, error: slugError } = await client
             .from('clubs')
             .select('id')
             .eq('slug', baseSlug)
             .maybeSingle();
+        if (slugError) throw new Error('The club page URL could not be verified. Try again before creating the club.');
         const slug = slugTaken ? `${baseSlug}-${Date.now().toString(36).slice(-4)}` : baseSlug;
         const isAdmin = mode === 'admin';
         const now = new Date().toISOString();
@@ -699,7 +764,8 @@ const ClubCreateWizard = ({
 
     const submitClaim = async () => {
         const email = form.contact_email.trim().toLowerCase();
-        const { error } = await supabase.from('club_claim_requests').insert({
+        await authorizeWrite('claim-insert');
+        const { error } = await client.from('club_claim_requests').insert({
             club_id: claimClub.id,
             requester_player_id: sessionPlayerId || matchedProfile?.id || null,
             requester_email: email,
@@ -730,11 +796,14 @@ const ClubCreateWizard = ({
 
     const submitCreate = async () => {
         const payload = await buildPayload();
-        const { data, error } = await supabase.from('clubs').insert([payload]).select('*').single();
+        await authorizeWrite('club-insert');
+        const { data, error } = await client.from('clubs').insert([payload]).select('*').single();
         if (error) {
             if (error.code === '23505') throw new Error('A club with this name or slug already exists.');
             throw error;
         }
+        if (!data) throw new Error('Club creation could not be confirmed.');
+        try { onCreated?.(data); } catch (callbackError) { console.error('Club created, but the local list could not be refreshed:', callbackError); }
         if (isPublic) {
             const emailVars = {
                 clubName: data.name,
@@ -753,11 +822,13 @@ const ClubCreateWizard = ({
 
     const publishTasks = isPublic && claimClub
         ? ['Submitting your club claim', 'Notifying the 4M Padel team']
-        : PUBLISH_TASKS;
+        : previewTheme ? ['Saving club profile'] : PUBLISH_TASKS;
 
     const handlePublish = async () => {
-        if (publishingRef.current) return;
+        if (publishingRef.current || uploadLock.current || (previewTheme && writeBlocked)) return;
+        mutationAttempted.current = false; setWriteError('');
         publishingRef.current = true;
+        busyCallback.current?.(true);
         setPhase('publishing');
         setPublishTasksDone(0);
 
@@ -778,6 +849,7 @@ const ClubCreateWizard = ({
             clearInterval(ticker);
             console.error(err);
             toast.error(err.message || 'Failed to submit');
+            if (previewTheme) { setWriteError(err.message || 'Failed to submit'); if (mutationAttempted.current) setWriteBlocked(true); }
             setPhase('form');
         } finally {
             publishingRef.current = false;
@@ -803,7 +875,7 @@ const ClubCreateWizard = ({
 
     if (phase === 'publishing') {
         return (
-            <div ref={containerRef} className={`${embedded ? 'w-full' : 'max-w-md mx-auto rounded-3xl border border-white/10 bg-[#0d0d0d] p-8 shadow-2xl'} scroll-mt-28`}>
+            <div ref={containerRef} className={`${previewTheme ? 'club-create-preview ' : ''}${embedded ? 'w-full' : 'max-w-md mx-auto rounded-3xl border border-white/10 bg-[#0d0d0d] p-8 shadow-2xl'} scroll-mt-28`}>
                 <StepHeader
                     title={isPublic && claimClub ? 'Submitting your club claim…' : isPublic ? 'Submitting your club…' : 'Creating your club…'}
                     subtitle={isPublic ? "We're sending your application to the 4M Padel team." : "We're setting up your club profile."}
@@ -840,7 +912,7 @@ const ClubCreateWizard = ({
         const isCreatePending = !isAdmin && submitMode !== 'claim';
 
         return (
-            <div ref={containerRef} className={`${embedded ? 'w-full' : 'max-w-md mx-auto rounded-3xl border border-white/10 bg-[#0d0d0d] p-8 shadow-2xl'} text-center scroll-mt-28`}>
+            <div ref={containerRef} className={`${previewTheme ? 'club-create-preview ' : ''}${embedded ? 'w-full' : 'max-w-md mx-auto rounded-3xl border border-white/10 bg-[#0d0d0d] p-8 shadow-2xl'} text-center scroll-mt-28`}>
                 <div className="w-16 h-16 mx-auto rounded-full border-2 border-padel-green flex items-center justify-center mb-5">
                     <Check size={30} className="text-padel-green" />
                 </div>
@@ -939,7 +1011,7 @@ const ClubCreateWizard = ({
     /* ------------------------------ form ------------------------------- */
 
     return (
-        <div ref={containerRef} className={`${embedded ? 'w-full' : 'max-w-xl mx-auto rounded-3xl border border-white/10 bg-[#0d0d0d] p-5 md:p-8 shadow-2xl'} scroll-mt-28`}>
+        <div ref={containerRef} className={`${previewTheme ? 'club-create-preview ' : ''}${embedded ? 'w-full' : 'max-w-xl mx-auto rounded-3xl border border-white/10 bg-[#0d0d0d] p-5 md:p-8 shadow-2xl'} scroll-mt-28`}>
             <div className="flex items-center justify-between mb-5">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">
                     {isAdmin ? 'New club' : claimClub ? 'Claim this club' : 'Register your club'}
@@ -947,7 +1019,7 @@ const ClubCreateWizard = ({
                 {onCancel && (
                     <button
                         type="button"
-                        onClick={onCancel}
+                        disabled={uploading || phase === 'publishing'} onClick={() => { if (!uploadLock.current && !publishingRef.current) onCancel(); }}
                         className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/5"
                         aria-label="Close"
                     >
@@ -1010,7 +1082,7 @@ const ClubCreateWizard = ({
                                     <label className={`inline-flex items-center gap-1.5 bg-white/5 border border-white/10 text-gray-200 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg cursor-pointer hover:bg-white/10 ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
                                         {uploading ? <Loader2 size={11} className="animate-spin" /> : <Upload size={11} />}
                                         {form.logo_url ? 'Replace' : 'Upload'}
-                                        <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={uploading} />
+                                        <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} disabled={uploading || (previewTheme && writeBlocked)} />
                                     </label>
                                     {form.logo_url && (
                                         <button type="button" onClick={() => setField('logo_url', '')} className="text-[10px] font-black uppercase tracking-wider text-red-400 hover:underline">
@@ -1091,7 +1163,7 @@ const ClubCreateWizard = ({
                                 className={`${inputClass} text-gray-400 cursor-default focus:border-white/10`}
                             />
                         </div>
-                        <SelectField
+                        <SelectField previewTheme={previewTheme}
                             label="Affiliation"
                             optional
                             value={form.affiliation}
@@ -1130,7 +1202,7 @@ const ClubCreateWizard = ({
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                            <SelectField
+                            <SelectField previewTheme={previewTheme}
                                 label="Province"
                                 required
                                 value={form.province}
@@ -1138,7 +1210,7 @@ const ClubCreateWizard = ({
                                 options={SA_REGIONS.includes(form.province) || !form.province ? SA_REGIONS : [form.province, ...SA_REGIONS]}
                                 placeholder="Select…"
                             />
-                            <SelectField
+                            <SelectField previewTheme={previewTheme}
                                 label="Country"
                                 required
                                 value={form.country}
@@ -1265,14 +1337,14 @@ const ClubCreateWizard = ({
                                 />
                             </div>
                         </div>
-                        <SelectField
+                        <SelectField previewTheme={previewTheme}
                             label="Court surface"
                             required
                             value={form.court_surface}
                             onChange={(v) => setField('court_surface', v)}
                             options={COURT_SURFACES}
                         />
-                        <SelectField
+                        <SelectField previewTheme={previewTheme}
                             label="Lighting"
                             value={form.lighting}
                             onChange={(v) => setField('lighting', v)}
@@ -1319,7 +1391,7 @@ const ClubCreateWizard = ({
                     <label className={`mt-3 w-full py-3 rounded-xl border border-dashed border-white/15 text-gray-400 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer hover:bg-white/5 ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
                         {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
                         {uploading ? 'Uploading…' : form.photos.length ? 'Add more photos' : 'Upload photos'}
-                        <input type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} disabled={uploading} />
+                        <input type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoUpload} disabled={uploading || (previewTheme && writeBlocked)} />
                     </label>
 
                     <div className="mt-5">
@@ -1356,9 +1428,9 @@ const ClubCreateWizard = ({
                             <div key={row.label} className="flex items-center justify-between gap-3">
                                 <p className="text-sm font-bold text-white w-28 shrink-0">{row.label}</p>
                                 <div className="flex items-center gap-2">
-                                    <TimeSelect value={form.hours[row.keys[0]].open} onChange={(v) => setHours(row.keys, { open: v })} />
+                                    <TimeSelect previewTheme={previewTheme} value={form.hours[row.keys[0]].open} onChange={(v) => setHours(row.keys, { open: v })} />
                                     <span className="text-gray-600 text-xs">–</span>
-                                    <TimeSelect value={form.hours[row.keys[0]].close} onChange={(v) => setHours(row.keys, { close: v })} />
+                                    <TimeSelect previewTheme={previewTheme} value={form.hours[row.keys[0]].close} onChange={(v) => setHours(row.keys, { close: v })} />
                                 </div>
                             </div>
                         ))}
@@ -1512,7 +1584,7 @@ const ClubCreateWizard = ({
                                 className={inputClass}
                             />
                         </div>
-                        <SelectField
+                        <SelectField previewTheme={previewTheme}
                             label="Your role at the club"
                             required
                             value={form.primary_role}
@@ -1626,11 +1698,13 @@ const ClubCreateWizard = ({
                 </div>
             )}
 
-            <div className="mt-7 flex items-center gap-3">
+            {previewTheme && writeError && <div className="club-create-error" role="alert">{writeError}{writeBlocked && <p>A write was attempted. Close and refresh to check the result before creating another club.</p>}</div>}
+            <div className="club-create-footer mt-7 flex items-center gap-3">
                 {stepIndex > 0 ? (
                     <button
                         type="button"
                         onClick={goBack}
+                        disabled={uploading}
                         className="flex-1 py-3 rounded-xl border border-white/10 text-gray-300 text-sm font-bold hover:bg-white/5"
                     >
                         Back
@@ -1639,7 +1713,7 @@ const ClubCreateWizard = ({
                     onCancel && (
                         <button
                             type="button"
-                            onClick={onCancel}
+                            disabled={uploading || phase === 'publishing'} onClick={() => { if (!uploadLock.current && !publishingRef.current) onCancel(); }}
                             className="flex-1 py-3 rounded-xl border border-white/10 text-gray-300 text-sm font-bold hover:bg-white/5"
                         >
                             Cancel
@@ -1650,7 +1724,7 @@ const ClubCreateWizard = ({
                     <button
                         type="button"
                         onClick={handlePublish}
-                        disabled={uploading}
+                        disabled={uploading || (previewTheme && writeBlocked)}
                         className="flex-1 py-3 rounded-xl bg-padel-green text-black text-sm font-black disabled:opacity-50"
                     >
                         {isAdmin ? 'Publish Club' : claimClub ? 'Submit club claim' : 'Submit for review'}
@@ -1659,6 +1733,7 @@ const ClubCreateWizard = ({
                     <button
                         type="button"
                         onClick={goNext}
+                        disabled={uploading}
                         className="flex-1 py-3 rounded-xl bg-padel-green text-black text-sm font-black"
                     >
                         Continue

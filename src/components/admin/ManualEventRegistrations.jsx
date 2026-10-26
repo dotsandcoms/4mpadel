@@ -1,3 +1,9 @@
+import { pairEventEntries, inviteEventPartner } from "../../utils/pairEventEntries.js";
+import { invokeEventRefund, removeEventEntries } from "../../utils/removeEventEntries.js";
+import { moveEventEntries } from "../../utils/moveEventEntries.js";
+import { seedTeams } from '../../utils/teamSeeding.js';
+import { addProvisionalEntries } from '../../utils/provisionalEntry.js';
+import { saveManualEntryPayment, unmarkManualEntryPayment } from '../../utils/manualEntryPayment.js';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -15,6 +21,7 @@ import {
     findAdminMarkedPayment,
     findParentEntryPayment,
     findPaymentForRegistration,
+    findStrictPaystackEntryPayment,
     getRegistrationEntryFeePaid,
     hasBlockingProcessedRefund,
     isEntryFeeRefund,
@@ -30,26 +37,14 @@ import {
     resolveRegistrationPaymentMethod,
     resolveRegistrationPayer,
 } from '../../utils/paymentRegistrationMatch';
-import { createPendingRegistrations, searchRegistrationPlayers } from '../../utils/adminEventRegistration';
 import { sendEmail } from '../../utils/emails';
 import AdminPlayerProfileModal from './AdminPlayerProfileModal';
 import EventActivityLog from './EventActivityLog';
 import { logEventActivity } from '../../utils/eventActivityLog';
 import { parseEventDate } from '../../utils/eventEntryFee';
-import { findFinancePayment, buildFinanceAllocations, loadEventRefunds } from '../../utils/eventFinanceReconciliation';
 import { downloadEventFinanceWorkbook } from '../../utils/eventFinanceExport';
 import { useAdminPermissions } from '../../hooks/useAdminPermissions';
-import CancelEventButton from './CancelEventButton';
-import CancelEventDialog from './CancelEventDialog';
 import NativeDrawManager from './NativeDrawManager';
-import { divisionRankingSource, resolvePlayerRanking } from '../../utils/playerRankingSelection';
-import {
-    buildRegistrationTeamsByDivision,
-    registrationDivisionKey,
-    registrationMatchesDivision,
-    registrationsShareDivision,
-    resolveRegistrationDivision,
-} from '../../utils/registrationDivision';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 const normEmail = (value) => String(value || '').trim().toLowerCase();
@@ -71,7 +66,7 @@ const isWithdrawnRegistration = (reg) => String(reg?.status || '').toLowerCase()
  * Prefer one registration per email+division (paid / more complete partner info wins).
  * Prevents abandoned-checkout duplicates from appearing twice in admin lists.
  */
-const dedupeRegistrationsByEmailDivision = (regs, divisions) => {
+const dedupeRegistrationsByEmailDivision = (regs) => {
     const preferred = new Map();
     const noEmail = [];
     const scoreReg = (reg) => {
@@ -88,13 +83,24 @@ const dedupeRegistrationsByEmailDivision = (regs, divisions) => {
             noEmail.push(reg);
             return;
         }
-        const key = `${email}::${registrationDivisionKey(reg, divisions)}`;
+        const key = `${email}::${reg.division || ''}`;
         const existing = preferred.get(key);
         if (!existing || scoreReg(reg) > scoreReg(existing)) {
             preferred.set(key, reg);
         }
     });
     return [...preferred.values(), ...noEmail];
+};
+
+/** Income-statement label for a registration payment row — never invents 'paid'. */
+const resolveIncomeStatementPaymentStatus = (reg, refundByRegMap = null, payments = null) => {
+    if (!reg) return 'pending';
+    if (isWithdrawnRegistration(reg)) return 'withdrawn';
+    const paymentStatus = String(reg.payment_status || 'pending').toLowerCase();
+    if (paymentStatus === 'refunded' || hasBlockingProcessedRefund(reg, refundByRegMap, payments)) return 'refunded';
+    if (registrationCountsAsPaid(reg, refundByRegMap, payments)) return 'paid';
+    if (paymentStatus === 'unpaid') return 'pending';
+    return paymentStatus || 'pending';
 };
 
 const PLATFORM_COMMISSION_RATE = 0.05;
@@ -172,11 +178,7 @@ const TeamPlayerRows = ({ players, children }) => (
     </div>
 );
 
-const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEventCancelled, event, variant = 'modal', backLabel = '← Back to Events List' }) => {
-    const [showCancelDivision, setShowCancelDivision] = useState(false);
-    const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-    const [cancelledEventId, setCancelledEventId] = useState(null);
-    const isCancelled = event?.event_status === 'cancelled' || cancelledEventId === event?.id;
+const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, event, variant = 'modal', backLabel = '← Back to Events List' }) => {
     const isInline = variant === 'inline';
     const isActive = isInline || isOpen;
     const [registrations, setRegistrations] = useState([]);
@@ -185,7 +187,6 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const [refunds, setRefunds] = useState([]);
     const [playersByEmail, setPlayersByEmail] = useState(new Map());
     const [loading, setLoading] = useState(true);
-    const [financeLoadError, setFinanceLoadError] = useState(null);
     const [search, setSearch] = useState('');
     const [playerSearch, setPlayerSearch] = useState('');
     const [paymentFilter, setPaymentFilter] = useState('all'); // all | paid | manual | pending | refunded | withdrawn
@@ -202,8 +203,6 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const [addPlayerResults, setAddPlayerResults] = useState([]);
     const [addPlayerSearching, setAddPlayerSearching] = useState(false);
     const [addPlayerSelected, setAddPlayerSelected] = useState(null);
-    const [addTeam, setAddTeam] = useState(false);
-    const [addPartnerSelected, setAddPartnerSelected] = useState(null);
     const [addPlayerDivision, setAddPlayerDivision] = useState('');
     const [addPlayerNote, setAddPlayerNote] = useState('');
     const [addPlayerBusy, setAddPlayerBusy] = useState(false);
@@ -383,8 +382,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const load = useCallback(async () => {
         if (!event?.id) return;
         setLoading(true);
-        setFinanceLoadError(null);
-        try {
+
         const abandonCutoff = new Date(Date.now() - ABANDONED_CHECKOUT_AFTER_MS).toISOString();
         await supabase
             .from('payments')
@@ -402,11 +400,28 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         if (eventRes?.data && Array.isArray(eventRes.data.organiser_interim_payments)) {
             setInterimPayments(eventRes.data.organiser_interim_payments);
         }
-        for (const result of [regRes, payRes, divRes, eventRes]) {
-            if (result.error) throw new Error(result.error.message);
-        }
         let regs = regRes.data || [];
         const payRows = payRes.data || [];
+        const successPayments = payRows.filter((p) => p.status === 'success');
+
+        const paymentMethodPatches = [];
+        for (const reg of regs) {
+            if (isWithdrawnRegistration(reg)) continue;
+            if (reg.payment_status !== 'paid') continue;
+            if (String(reg.payment_method || '').toLowerCase() === 'paystack') continue;
+            if (!findStrictPaystackEntryPayment(successPayments, reg)) continue;
+            paymentMethodPatches.push(reg.id);
+        }
+        if (paymentMethodPatches.length > 0) {
+            await Promise.all(
+                paymentMethodPatches.map((id) => supabase
+                    .from('event_registrations')
+                    .update({ payment_method: 'paystack' })
+                    .eq('id', id)),
+            );
+            const patched = new Set(paymentMethodPatches);
+            regs = regs.map((r) => (patched.has(r.id) ? { ...r, payment_method: 'paystack' } : r));
+        }
 
         setRegistrations(regs);
         setPayments(payRows);
@@ -417,26 +432,41 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         // registration-id match, so include refunds found through this event's
         // payments as well. Otherwise the original receipt remains in the
         // payment ledger while its refund silently drops out of the settlement.
-        setRefunds(await loadEventRefunds(supabase, regs, payRows));
+        const regIds = regs.map((r) => r.id);
+        const paymentIds = payRows.map((p) => p.id);
+        const refundQueries = [];
+        if (regIds.length > 0) {
+            refundQueries.push(supabase
+                .from('payment_refunds')
+                .select('*')
+                .in('event_registration_id', regIds));
+        }
+        if (paymentIds.length > 0) {
+            refundQueries.push(supabase
+                .from('payment_refunds')
+                .select('*')
+                .in('payment_id', paymentIds));
+        }
+        const refundResults = await Promise.all(refundQueries);
+        const refundById = new Map();
+        refundResults.forEach(({ data }) => {
+            (data || []).forEach((refund) => refundById.set(refund.id, refund));
+        });
+        setRefunds([...refundById.values()]);
 
         const emails = [...new Set(regs.flatMap((r) => [r.email, r.partner_email]).filter(Boolean))];
         if (emails.length > 0) {
             const players = await fetchPlayersByEmails(
                 supabase,
                 emails,
-                'id, name, email, license_type, paid_registration, image_url, rankedin_id, points, rank_label, rankings, preferred_ranking, active_ranking_label, category, gender, temporary_licenses(event_id, event_date)',
+                'id, name, email, license_type, paid_registration, image_url, points, temporary_licenses(event_id, event_date)',
             );
             setPlayersByEmail(buildPlayersByEmail(players));
         } else {
             setPlayersByEmail(new Map());
         }
 
-        } catch (error) {
-            setFinanceLoadError(error.message);
-            toast.error(error.message);
-        } finally {
-            setLoading(false);
-        }
+        setLoading(false);
     }, [event?.id]);
 
     const handleSyncToRankedin = useCallback(async () => {
@@ -533,10 +563,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     }, [isActive, load]);
 
     const divFee = useCallback(
-        (registrationOrName) => Number(resolveRegistrationDivision(
-            typeof registrationOrName === 'string' ? { division: registrationOrName } : registrationOrName,
-            divisions,
-        )?.entry_fee || 0),
+        (name) => Number(divisions.find((d) => d.name === name)?.entry_fee || 0),
         [divisions]
     );
 
@@ -567,7 +594,6 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const stats = useMemo(() => {
         const active = dedupeRegistrationsByEmailDivision(
             registrations.filter((r) => !isWithdrawnRegistration(r)),
-            divisions,
         );
         const paid = active.filter((r) => registrationCountsAsPaid(r, refundByReg, payments)).length;
         const pending = active.length - paid;
@@ -591,7 +617,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             abandonedCheckoutCount: abandonedCheckouts.length,
             withdrawn: registrations.filter((r) => isWithdrawnRegistration(r)).length,
         };
-    }, [registrations, payments, refundByReg, divisions]);
+    }, [registrations, payments, refundByReg]);
 
     const refundSummaryFor = (regId) => {
         const e = refundByReg.get(regId);
@@ -685,13 +711,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     };
 
     const openAddPlayerModal = () => {
-        setAddTeam(false);
-        setAddPartnerSelected(null);
         setAddPlayerOpen(true);
         setAddPlayerSearch('');
         setAddPlayerResults([]);
         setAddPlayerSelected(null);
-        setAddPlayerDivision('');
+        setAddPlayerDivision(divisions[0]?.name || '');
         setAddPlayerNote('');
         setAddPlayerBusy(false);
     };
@@ -716,12 +740,16 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         let cancelled = false;
         const handle = setTimeout(async () => {
             setAddPlayerSearching(true);
-            const { data, error } = await searchRegistrationPlayers(supabase, addPlayerSearch, 12);
+            const q = addPlayerSearch.trim().replace(/[,()%]/g, ' ');
+            const { data, error } = await supabase
+                .from('players')
+                .select('id, name, email, image_url')
+                .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
+                .limit(12);
             if (cancelled) return;
             if (error) {
                 console.error('Add player search failed:', error);
                 setAddPlayerResults([]);
-                toast.error('Unable to search players. Please try again.');
             } else {
                 setAddPlayerResults((data || []).filter((p) => p.email));
             }
@@ -733,15 +761,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         };
     }, [addPlayerOpen, addPlayerSearch]);
 
-    const createRegistrationWithReleasedSlot = async (payload) => {
-        const result = await createPendingRegistrations(supabase, [payload]);
-        return { data: result.data[0], replacedWithdrawn: result.replacedWithdrawn };
-    };
-
     const confirmAddPlayer = async () => {
-        if (addPlayerBusy) return;
-        if (!addPlayerSelected?.email || (addTeam && !addPartnerSelected?.email)) {
-            toast.error(addTeam ? 'Select both teammates' : 'Select a 4M player');
+        if (!addPlayerSelected?.email) {
+            toast.error('Select a 4M player');
             return;
         }
         if (!addPlayerDivision) {
@@ -750,79 +772,25 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         }
 
         const note = addPlayerNote.trim();
-        const players = addTeam ? [addPlayerSelected, addPartnerSelected] : [addPlayerSelected];
-        const names = players.map((player) => player.name).join(' & ');
+        const email = addPlayerSelected.email.trim();
+        const alreadyEntered = registrations.some((r) =>
+            r.status !== 'withdrawn'
+            && r.division === addPlayerDivision
+            && (r.email || '').toLowerCase() === email.toLowerCase());
+        if (alreadyEntered) {
+            toast.error(`${addPlayerSelected.name} is already entered in ${addPlayerDivision}`);
+            return;
+        }
 
         setAddPlayerBusy(true);
         try {
             const div = divisions.find((d) => d.name === addPlayerDivision);
             const { data: { user } } = await supabase.auth.getUser();
             const adminEmail = user?.email || null;
-            const fee = Number(div?.entry_fee || 0);
+            const result = await addProvisionalEntries({ client: supabase, event, division: div, players: [addPlayerSelected], registrations, adminEmail, note, sendEmail, logEventActivity });
+            result.warnings.forEach(message => toast.message(message));
 
-            const { data: inserted, replacedWithdrawn } = await createPendingRegistrations(supabase, players.map((player, index) => {
-                const partner = addTeam ? players[1 - index] : null;
-                return {
-                    event_id: event.id,
-                    email: player.email,
-                    full_name: player.name,
-                    division: addPlayerDivision,
-                    division_id: div?.id || null,
-                    registered_by: adminEmail || player.email,
-                    partner_name: partner?.name || null,
-                    partner_email: partner?.email?.trim().toLowerCase() || null,
-                    partner_payment_status: partner ? 'pending' : null,
-                };
-            }));
-
-            const eventUrl = `https://4mpadel.co.za/calendar/${event.slug || event.id}`;
-            const eventDates = event.event_dates
-                || (event.start_date
-                    ? new Date(event.start_date).toLocaleDateString(undefined, {
-                        weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
-                    })
-                    : '');
-            try {
-                const emailResults = await Promise.all(players.map((player, index) => sendEmail(player.email, 'event_registration', {
-                    eventId: event.id,
-                    playerName: player.name,
-                    eventName: event.event_name,
-                    division: addPlayerDivision,
-                    partnerName: addTeam ? players[1 - index].name : 'TBD',
-                    eventDates,
-                    venue: [event.venue, event.city].filter(Boolean).join(', '),
-                    paid: false,
-                    amountDue: fmtR(fee),
-                    eventUrl,
-                })));
-                if (emailResults.some((result) => !result?.success)) {
-                    toast.message('Entry added, but a confirmation email could not be sent');
-                }
-            } catch (mailErr) {
-                console.error('Entry confirmation email failed:', mailErr);
-                toast.message('Entry added, but a confirmation email could not be sent');
-            }
-
-            await logEventActivity({
-                eventId: event.id,
-                action: 'admin.added_player',
-                category: 'ADMIN',
-                summary: `Added ${names} provisionally (${addPlayerDivision}) — payment pending`,
-                details: {
-                    registration_id: inserted[0].id,
-                    registration_ids: inserted.map((row) => row.id),
-                    player_name: names,
-                    player_email: players[0].email,
-                    partner_email: addTeam ? players[1].email : null,
-                    division: addPlayerDivision,
-                    note: note || null,
-                    payment_status: 'pending',
-                    added_by: adminEmail,
-                    replaced_withdrawn_registration: replacedWithdrawn,
-                },
-            });
-
-            toast.success(`Added ${names} — payment pending`);
+            toast.success(`Added ${addPlayerSelected.name} — payment pending`);
             setAddPlayerOpen(false);
             setAddPlayerSearch('');
             setAddPlayerResults([]);
@@ -864,47 +832,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         setUnmarkBusy(true);
         setMarkingId(reg.id);
         try {
-            const { error } = await supabase
-                .from('event_registrations')
-                .update({
-                    payment_status: 'pending',
-                    payment_method: null,
-                })
-                .eq('id', reg.id);
-            if (error) throw error;
-
-            const reference = `MANUAL-ADMIN-${reg.id}`;
-            const compReference = `MANUAL-ADMIN-COMP-${reg.id}`;
-            const payment = findAdminMarkedPayment(payments, reg)
-                || payments.find((p) => p.reference === reference)
-                || payments.find((p) => p.reference === compReference);
-            if (payment) {
-                const { error: payErr } = await supabase
-                    .from('payments')
-                    .update({
-                        status: 'cancelled',
-                        metadata: {
-                            ...(payment.metadata || {}),
-                            unmarked_by_admin: true,
-                            unmarked_at: new Date().toISOString(),
-                        },
-                    })
-                    .eq('id', payment.id);
-                if (payErr) throw payErr;
-            }
-
-            await logEventActivity({
-                eventId: event.id,
-                action: 'admin.unmarked_paid',
-                category: 'ADMIN',
-                summary: `Unmarked ${reg.full_name} as paid`,
-                details: {
-                    registration_id: reg.id,
-                    player_name: reg.full_name,
-                    player_email: reg.email,
-                    division: reg.division,
-                },
-            });
+            await unmarkManualEntryPayment({ supabase, event, reg, payments, logEventActivity });
 
             toast.success(`Unmarked ${reg.full_name} as paid — back to pending`);
             setUnmarkTarget(null);
@@ -933,87 +861,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         setMarkPaidBusy(true);
         setMarkingId(reg.id);
         try {
-            // Comp is stored as a plain manual payment of R0 — 'comp' is a UI-only
-            // selection that flags the payment row as complimentary via metadata.
-            const storedMethod = isComp ? 'manual' : markPaidMethod;
-            const { error } = await supabase
-                .from('event_registrations')
-                .update({
-                    payment_status: 'paid',
-                    payment_method: storedMethod,
-                })
-                .eq('id', reg.id);
-            if (error) throw error;
-
-            const reference = isComp ? `MANUAL-ADMIN-COMP-${reg.id}` : `MANUAL-ADMIN-${reg.id}`;
-            const amount = isComp ? 0 : divFee(reg);
-            const paymentMetadata = {
-                source: isComp ? 'admin_add_player' : 'manual_event_admin',
-                division: reg.division,
-                email: reg.email,
-                registration_id: reg.id,
-                marked_by_admin: true,
-                note,
-                payment_note: note,
-                ...(isComp ? { free_entry: true, comp_entry: true } : {}),
-            };
-            const { data: existing } = await supabase.from('payments').select('id, metadata').eq('reference', reference).maybeSingle();
-            if (existing) {
-                const { error: payErr } = await supabase
-                    .from('payments')
-                    .update({
-                        status: 'success',
-                        payment_method: storedMethod,
-                        amount,
-                        metadata: { ...(existing.metadata || {}), ...paymentMetadata },
-                    })
-                    .eq('id', existing.id);
-                if (payErr) throw payErr;
-            } else {
-                const { error: payErr } = await supabase.from('payments').insert([{
-                    event_id: event.id,
-                    amount,
-                    currency: 'ZAR',
-                    status: 'success',
-                    payment_type: 'event_entry_fee',
-                    payment_method: storedMethod,
-                    reference,
-                    metadata: paymentMetadata,
-                }]);
-                if (payErr) throw payErr;
-            }
-
-            await logEventActivity({
-                eventId: event.id,
-                action: isComp ? 'admin.comped_entry' : 'admin.marked_paid',
-                category: 'ADMIN',
-                summary: isComp
-                    ? `Comped entry for ${reg.full_name} (${reg.division})`
-                    : `Marked ${reg.full_name} as paid (${labelPaymentMethod(markPaidMethod) || 'manual'})`,
-                details: {
-                    registration_id: reg.id,
-                    player_name: reg.full_name,
-                    player_email: reg.email,
-                    division: reg.division,
-                    note,
-                    ...(isComp ? { free_entry: true } : { method: markPaidMethod }),
-                },
-            });
-
-            if (isComp) {
-                const emailResult = await sendEmail(reg.email, 'entry_comped', {
-                    eventId: event.id,
-                    registrationId: reg.id,
-                    playerName: reg.full_name,
-                    eventName: event.event_name,
-                    division: reg.division,
-                    partnerName: reg.partner_name || 'TBD',
-                    eventUrl: `https://4mpadel.co.za/calendar/${event.slug || event.id}`,
-                });
-                if (!emailResult?.success) {
-                    toast.message('Entry comped, but the complimentary entry email could not be sent');
-                }
-            }
+            await saveManualEntryPayment({ supabase, event, reg, method: markPaidMethod, note, fee: divFee(reg.division), logEventActivity });
 
             toast.success(isComp ? `Comped ${reg.full_name} — free entry` : `Marked ${reg.full_name} as paid — ${note}`);
             closeMarkPaidModal();
@@ -1035,14 +883,14 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         const q = linkSearch.trim().toLowerCase();
         return registrations.filter((r) => {
             if (r.id === linkTarget.id) return false;
-            if (!registrationsShareDivision(r, linkTarget, divisions)) return false;
+            if (r.division !== linkTarget.division) return false;        // same division only
             if (r.status === 'withdrawn') return false;
             if ((r.email || '').toLowerCase() === targetEmail) return false;
             if (r.partner_name?.trim() || r.partner_email?.trim()) return false; // must be solo
             // exclude anyone already listed as another active entry's partner in this division
             const alreadyTaken = registrations.some((x) =>
                 x.id !== r.id
-                && registrationsShareDivision(x, r, divisions)
+                && x.division === r.division
                 && x.status !== 'withdrawn'
                 && (x.partner_email || '').toLowerCase() === (r.email || '').toLowerCase());
             if (alreadyTaken) return false;
@@ -1052,7 +900,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             }
             return true;
         });
-    }, [linkTarget, registrations, linkSearch, divisions]);
+    }, [linkTarget, registrations, linkSearch]);
 
     // Search 4M player profiles who are NOT yet entered in this division — these can
     // be added as a partner and will be invited (by email) to pay their entry.
@@ -1061,16 +909,17 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         let cancelled = false;
         const handle = setTimeout(async () => {
             setSearchingProfiles(true);
-            const { data, error } = await searchRegistrationPlayers(supabase, linkSearch, 8);
+            const q = linkSearch.trim().replace(/[,()%]/g, ' ');
+            const { data } = await supabase
+                .from('players')
+                .select('id, name, email, image_url')
+                .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
+                .limit(8);
             if (cancelled) return;
-            if (error) {
-                console.error('Partner search failed:', error);
-                toast.error('Unable to search players. Please try again.');
-            }
             // Exclude the solo player and anyone already entered (active) in this division.
             const taken = new Set(
                 registrations
-                    .filter((r) => registrationsShareDivision(r, linkTarget, divisions) && r.status !== 'withdrawn')
+                    .filter((r) => r.division === linkTarget.division && r.status !== 'withdrawn')
                     .map((r) => (r.email || '').toLowerCase()),
             );
             taken.add((linkTarget.email || '').toLowerCase());
@@ -1078,7 +927,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             setSearchingProfiles(false);
         }, 300);
         return () => { cancelled = true; clearTimeout(handle); };
-    }, [linkTarget, linkSearch, registrations, divisions]);
+    }, [linkTarget, linkSearch, registrations]);
 
     // Add a profile-holder who isn't entered yet as a partner: create their PENDING
     // entry, link it to the solo entry, and email them an invite to pay. Guards
@@ -1086,58 +935,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const addUnregisteredPartner = async (soloReg, profile) => {
         setLinkBusy(true);
         try {
-            const alreadyEntered = registrations.some((r) =>
-                registrationsShareDivision(r, soloReg, divisions)
-                && r.status !== 'withdrawn'
-                && (r.email || '').toLowerCase() === (profile.email || '').toLowerCase());
-            if (alreadyEntered) {
-                toast.error(`${profile.name} is already entered in ${soloReg.division}`);
-                setLinkBusy(false);
-                return;
-            }
-
-            const div = resolveRegistrationDivision(soloReg, divisions);
-            const fee = divFee(soloReg);
-
-            const { data: inserted } = await createRegistrationWithReleasedSlot({
-                event_id: event.id,
-                email: profile.email,
-                full_name: profile.name,
-                division: soloReg.division,
-                division_id: div?.id || null,
-                registered_by: soloReg.email, // the solo player is the inviter
-                partner_name: soloReg.full_name,
-                partner_email: soloReg.email,
-                partner_payment_status: soloReg.payment_status === 'paid' ? 'paid' : 'pending',
-            });
-
-            const { error: updErr } = await supabase
-                .from('event_registrations')
-                .update({
-                    partner_name: profile.name,
-                    partner_email: profile.email,
-                    partner_payment_status: 'pending', // new partner hasn't paid yet
-                })
-                .eq('id', soloReg.id);
-            if (updErr) throw updErr;
-
-            // Invite-to-pay email (best-effort).
-            const eventUrl = `https://4mpadel.co.za/calendar/${event.slug || event.id}`;
-            const payUrl = inserted?.pay_token ? `${eventUrl}?pay_token=${inserted.pay_token}` : eventUrl;
-            try {
-                await sendEmail(profile.email, 'partner_invite', {
-                    eventId: event.id,
-                    playerName: profile.name,
-                    inviterName: soloReg.full_name,
-                    eventName: event.event_name,
-                    division: soloReg.division,
-                    eventDates: event.event_dates || '',
-                    amountDue: fmtR(fee),
-                    payUrl,
-                });
-            } catch (mailErr) {
-                console.error('Partner invite email failed:', mailErr);
-            }
+            const { warnings } = await inviteEventPartner({ client: supabase, event, solo: soloReg, profile, division: divisions.find(d => d.name === soloReg.division), registrations, sendEmail });
+            warnings.forEach(warning => toast.warning(warning));
 
             toast.success(`Invited ${profile.name} — they'll get an email to pay their entry`);
             setLinkTarget(null);
@@ -1155,44 +954,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const linkPartner = async (soloReg, partnerReg) => {
         setLinkBusy(true);
         try {
-            // Pairing is a pure link, not a payment event — each side's
-            // partner_payment_status just mirrors what the other has actually paid.
-            const [a, b] = await Promise.all([
-                supabase.from('event_registrations').update({
-                    partner_name: partnerReg.full_name,
-                    partner_email: partnerReg.email,
-                    partner_payment_status: partnerReg.payment_status === 'paid' ? 'paid' : 'pending',
-                }).eq('id', soloReg.id),
-                supabase.from('event_registrations').update({
-                    partner_name: soloReg.full_name,
-                    partner_email: soloReg.email,
-                    partner_payment_status: soloReg.payment_status === 'paid' ? 'paid' : 'pending',
-                }).eq('id', partnerReg.id),
-            ]);
-            if (a.error) throw a.error;
-            if (b.error) throw b.error;
-
-            // Notify both players that they're now a team (best-effort).
-            try {
-                await Promise.all([
-                    sendEmail(soloReg.email, 'partner_assigned', {
-                        eventId: event.id,
-                        playerName: soloReg.full_name,
-                        partnerName: partnerReg.full_name,
-                        eventName: event.event_name,
-                        division: soloReg.division,
-                    }),
-                    sendEmail(partnerReg.email, 'partner_assigned', {
-                        eventId: event.id,
-                        playerName: partnerReg.full_name,
-                        partnerName: soloReg.full_name,
-                        eventName: event.event_name,
-                        division: soloReg.division,
-                    }),
-                ]);
-            } catch (mailErr) {
-                console.error('Partner-assigned email failed:', mailErr);
-            }
+            const { warnings } = await pairEventEntries({ client: supabase, event, solo: soloReg, partner: partnerReg, registrations, sendEmail });
+            warnings.forEach(warning => toast.warning(warning));
 
             toast.success(`Paired ${soloReg.full_name} with ${partnerReg.full_name}`);
             setLinkTarget(null);
@@ -1231,7 +994,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     ), [moveTeamTogether, moveTeamPlayers, moveTarget]);
 
     const registrationInDivision = useCallback((regRow, div) => {
-        return registrationMatchesDivision(regRow, div, divisions);
+        if (!regRow || !div) return false;
+        if (regRow.division_id && div.id && regRow.division_id === div.id) return true;
+        if (regRow.division === div.name) return true;
+        const linked = divisions.find((d) => d.id === regRow.division_id);
+        return linked?.name === div.name;
     }, [divisions]);
 
     // Divisions entries can be moved into: active, not the current one, and not
@@ -1254,244 +1021,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         });
     }, [moveTarget, playersToMove, divisions, registrations, registrationInDivision]);
 
-    const archiveConflictSlot = async (rowId) => {
-        // RLS allows UPDATE but not DELETE — reassign division to free the unique slot.
-        const { error } = await supabase
-            .from('event_registrations')
-            .update({
-                division: `__archived__/${rowId}`,
-                division_id: null,
-                status: 'withdrawn',
-                withdrawn_at: new Date().toISOString(),
-            })
-            .eq('id', rowId);
-        if (error) throw error;
-    };
-
-    const releaseDivisionSlotConflicts = async (reg, targetDiv) => {
-        const email = normEmail(reg.email);
-        const { data: rows, error: fetchErr } = await supabase
-            .from('event_registrations')
-            .select('id, status, full_name, email, division, division_id, partner_email')
-            .eq('event_id', event.id)
-            .neq('id', reg.id);
-
-        if (fetchErr) throw fetchErr;
-
-        const conflicts = (rows || []).filter((r) =>
-            registrationInDivision(r, targetDiv)
-            && (normEmail(r.email) === email || normEmail(r.partner_email) === email)
-        );
-        for (const row of conflicts) {
-            if (String(row.status || '').toLowerCase() === 'withdrawn') {
-                await archiveConflictSlot(row.id);
-            } else {
-                throw new Error(`${reg.full_name || email} already has an active entry in ${targetDiv.name}. Remove it before moving.`);
-            }
-        }
-    };
-
-    const unlinkExternalPartnersInDivision = async (divisionName, movingIds) => {
-        const movingSet = new Set(movingIds);
-        const toUnlink = registrations.filter((r) =>
-            r.division === divisionName
-            && r.status !== 'withdrawn'
-            && !movingSet.has(r.id)
-            && r.partner_email
-            && playersToMove.some((m) => (m.email || '').toLowerCase() === (r.partner_email || '').toLowerCase()),
-        );
-
-        for (const row of toUnlink) {
-            const { error } = await supabase
-                .from('event_registrations')
-                .update({ partner_name: null, partner_email: null, partner_payment_status: null })
-                .eq('id', row.id);
-            if (error) throw error;
-        }
-    };
-
-    // Move one or more entries to another division. Team moves keep the pairing intact.
     const moveEntries = async () => {
-        if (!moveTarget || !moveDivId) return;
-        const targetDiv = divisions.find((d) => d.id === moveDivId);
-        if (!targetDiv) return;
-        const toMove = playersToMove;
-        const movingIds = toMove.map((r) => r.id);
+        const targetDiv = divisions.find(d => d.id === moveDivId);
+        if (!moveTarget || !targetDiv) return;
         setMoveBusy(true);
         try {
-            const oldFee = divFee(moveTarget);
-            const newFee = Number(targetDiv.entry_fee || 0);
-            const sourceDivision = moveTarget.division;
-
-            if (!moveTeamTogether && moveTarget.partner_email) {
-                await supabase.from('event_registrations')
-                    .update({ partner_name: null, partner_email: null, partner_payment_status: null })
-                    .eq('event_id', event.id)
-                    .ilike('email', moveTarget.partner_email)
-                    .eq('division', sourceDivision)
-                    .neq('status', 'withdrawn');
-            }
-
-            if (moveTeamTogether && toMove.length > 1) {
-                await unlinkExternalPartnersInDivision(sourceDivision, movingIds);
-            }
-
-            // Park team rows in unique temporary divisions so simultaneous moves
-            // cannot collide on the (event_id, email, division) constraint.
-            if (toMove.length > 1) {
-                for (const reg of toMove) {
-                    const { error: parkErr } = await supabase
-                        .from('event_registrations')
-                        .update({ division: `__moving__/${reg.id}`, division_id: null })
-                        .eq('id', reg.id);
-                    if (parkErr) throw parkErr;
-                }
-            }
-
-            // Withdrawn ghost rows still occupy the unique slot; archive them
-            // (DELETE is blocked by RLS — only UPDATE is allowed).
-            for (const reg of toMove) {
-                await releaseDivisionSlotConflicts(reg, targetDiv);
-            }
-
-            for (const reg of toMove) {
-                const owesMore = newFee > oldFee && reg.payment_status === 'paid';
-                const newStatus = owesMore ? 'pending' : reg.payment_status;
-
-                const updates = {
-                    division_id: targetDiv.id,
-                    division: targetDiv.name,
-                    registered_by: reg.email,
-                    payment_status: newStatus,
-                };
-
-                if (moveTeamTogether && toMove.length > 1) {
-                    const partner = toMove.find((p) => p.id !== reg.id);
-                    if (partner) {
-                        updates.partner_name = partner.full_name;
-                        updates.partner_email = partner.email;
-                        updates.partner_payment_status = partner.payment_status;
-                    }
-                } else {
-                    updates.partner_name = null;
-                    updates.partner_email = null;
-                    updates.partner_payment_status = null;
-                }
-
-                // .select() surfaces silent RLS no-ops (0 rows, no error) that left
-                // players stuck in the old division on the public Players tab.
-                const { data: movedRows, error } = await supabase
-                    .from('event_registrations')
-                    .update(updates)
-                    .eq('id', reg.id)
-                    .select('id, division');
-                if (error) throw error;
-                if (!movedRows?.length) {
-                    throw new Error(
-                        `Could not move ${reg.full_name || reg.email}. You may not have permission to update this event's registrations — ask a 4M admin to apply the org-admin RLS migration.`,
-                    );
-                }
-
-                const { error: partErr } = await supabase.rpc('reassign_tournament_participant_division', {
-                    p_event_id: event.id,
-                    p_email: reg.email || '',
-                    p_full_name: reg.full_name || '',
-                    p_from_class: sourceDivision,
-                    p_to_class: targetDiv.name,
-                    p_is_paid: newStatus === 'paid',
-                });
-                if (partErr) {
-                    console.warn('Participant division sync failed:', partErr.message);
-                }
-
-                // Keep Paystack covers on the new division so status stays Via Paystack.
-                const regEmail = (reg.email || '').toLowerCase();
-                const relatedPays = (payments || []).filter((p) => {
-                    if (p.status !== 'success') return false;
-                    const blob = JSON.stringify(p.metadata || {}).toLowerCase();
-                    return regEmail && blob.includes(regEmail);
-                });
-                await Promise.all(relatedPays.map(async (p) => {
-                    let meta = p.metadata || {};
-                    if (typeof meta === 'string') {
-                        try { meta = JSON.parse(meta); } catch { meta = {}; }
-                    }
-                    const covers = Array.isArray(meta.covers) ? meta.covers : [];
-                    let changed = false;
-                    const nextCovers = covers.map((c) => {
-                        if (
-                            c?.type === 'entry'
-                            && (c.email || '').toLowerCase() === regEmail
-                            && (c.division || '') === sourceDivision
-                        ) {
-                            changed = true;
-                            return { ...c, division: targetDiv.name };
-                        }
-                        return c;
-                    });
-                    if (!changed) return;
-                    const fees = { ...(meta.division_entry_fees || {}) };
-                    fees[targetDiv.name] = newFee;
-                    const { error: payErr } = await supabase
-                        .from('payments')
-                        .update({
-                            metadata: {
-                                ...meta,
-                                covers: nextCovers,
-                                division_entry_fees: fees,
-                            },
-                        })
-                        .eq('id', p.id);
-                    if (payErr) console.warn('Payment cover rewrite on move failed:', payErr.message);
-                }));
-
-                let feeNote = 'There was no change to your entry fee.';
-                if (owesMore) feeNote = `Your new division has a higher entry fee of ${fmtR(newFee)}. Your entry is now marked pending — please complete payment to confirm your spot.`;
-                else if (newFee < oldFee) feeNote = 'Your new division has a lower entry fee; any difference will be handled by the organiser.';
-
-                try {
-                    await sendEmail(reg.email, 'division_changed', {
-                        eventId: event.id,
-                        playerName: reg.full_name,
-                        eventName: event.event_name,
-                        fromDivision: sourceDivision,
-                        toDivision: targetDiv.name,
-                        division: targetDiv.name,
-                        partnerName: moveTeamTogether && toMove.length > 1
-                            ? toMove.find((p) => p.id !== reg.id)?.full_name || 'TBD'
-                            : 'TBD',
-                        paid: newStatus === 'paid',
-                        amount: fmtR(newFee),
-                        amountDue: newStatus === 'paid' ? 'R 0.00' : fmtR(newFee),
-                        feeNote,
-                    });
-                } catch (mailErr) {
-                    console.error('Move email failed:', mailErr);
-                }
-            }
-
-            const teamLabel = moveTeamTogether && toMove.length > 1
-                ? `team (${toMove.map((p) => p.full_name).join(' & ')})`
-                : moveTarget.full_name;
-            const anyOwesMore = toMove.some((reg) => newFee > oldFee && reg.payment_status === 'paid');
-
-            await logEventActivity({
-                eventId: event.id,
-                action: 'admin.moved_entries',
-                category: 'ADMIN',
-                summary: `Moved ${teamLabel} from ${sourceDivision} to ${targetDiv.name}`,
-                details: {
-                    from_division: sourceDivision,
-                    to_division: targetDiv.name,
-                    players: toMove.map((p) => p.full_name),
-                    registration_ids: movingIds,
-                    fee_changed: anyOwesMore,
-                },
-            });
-
-            toast.success(anyOwesMore
-                ? `Moved ${teamLabel} to ${targetDiv.name} — marked pending payment where owed`
-                : `Moved ${teamLabel} to ${targetDiv.name}`);
+            const { teamLabel, anyOwesMore } = await moveEventEntries({ supabase, event, registrations, payments, divisions, moveTarget, playersToMove, targetDiv, moveTeamTogether, sendEmail, logEventActivity });
+            toast.success(`Moved ${teamLabel} to ${targetDiv.name}${anyOwesMore ? ' — marked pending payment where owed' : ''}`);
             closeMoveModal();
             load();
         } catch (err) {
@@ -1501,22 +1037,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         }
     };
 
-    const invokeAdminRefund = async (body) => {
-        const { data, error } = await supabase.functions.invoke('paystack-refund', { body });
-        if (error) {
-            let payload = null;
-            try {
-                if (error.context && typeof error.context.json === 'function') {
-                    payload = await error.context.json();
-                }
-            } catch {
-                // ignore
-            }
-            throw new Error(payload?.error || payload?.message || error.message || 'Request failed');
-        }
-        if (data?.error) throw new Error(data.message || data.error);
-        return data;
-    };
+    const invokeAdminRefund = body => invokeEventRefund(supabase, body);
 
     const retryFailedRefund = async (paymentRefundId) => {
         if (!paymentRefundId || retryRefundId) return;
@@ -1547,7 +1068,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         return registrations.find(
             (x) => x.id !== reg.id
                 && (x.email || '').toLowerCase() === pe
-                && registrationsShareDivision(x, reg, divisions)
+                && x.division === reg.division
                 && x.status !== 'withdrawn',
         ) || null;
     };
@@ -1556,37 +1077,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const removeRegistration = async (reg, mode) => {
         setRemoveBusy(true);
         try {
-            const flags = {};
-            if (mode === 'cash_refund') flags.skip_paystack = true;
-            if (mode === 'no_refund') flags.no_refund = true;
-
-            const toRemove = [reg];
-            if (removePair) {
-                const pr = partnerRegOf(reg);
-                if (pr) toRemove.push(pr);
-            }
-
-            let totalRefunded = 0;
-            for (const t of toRemove) {
-                const res = await invokeAdminRefund({ action: 'admin_remove', registration_id: t.id, ...flags });
-                totalRefunded += Number(res?.total_refunded_rands || 0);
-            }
-
-            await logEventActivity({
-                eventId: event.id,
-                action: 'admin.removed',
-                category: 'ADMIN',
-                summary: `Removed ${toRemove.map((t) => t.full_name).join(' & ')}${totalRefunded > 0 ? ` · refunded ${fmtR(totalRefunded)}` : mode === 'no_refund' ? ' · no refund' : ''}`,
-                details: {
-                    players: toRemove.map((t) => t.full_name),
-                    registration_ids: toRemove.map((t) => t.id),
-                    mode,
-                    refunded: totalRefunded,
-                    division: reg.division,
-                },
-            });
+            const partner = removePair ? partnerRegOf(reg) : null;
+            const entries = partner ? [reg, partner] : [reg];
+            const { totalRefunded, warnings } = await removeEventEntries({ event, entries, mode, invoke: invokeAdminRefund, logEventActivity });
 
             toast.success(totalRefunded > 0 ? `Removed — ${fmtR(totalRefunded)} refunded` : 'Removed');
+            warnings.forEach(warning => toast.warning(warning));
             setRemoveTarget(null);
             setRemovePair(false);
             load();
@@ -1598,8 +1094,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     };
 
     const findPaymentForReg = useCallback(
-        (reg) => findFinancePayment(payments, reg, refunds),
-        [payments, refunds],
+        (reg) => findPaymentForRegistration(payments.filter((p) => p.status === 'success'), reg),
+        [payments],
     );
 
     const resolvePaymentPayer = useCallback((reg, payment) => {
@@ -1762,7 +1258,6 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         } else {
             rows = dedupeRegistrationsByEmailDivision(
                 rows.filter((r) => !isWithdrawnRegistration(r)),
-                divisions,
             );
             if (paymentFilter !== 'all') {
                 rows = rows.filter((r) => regMatchesPaymentFilter(r));
@@ -1772,8 +1267,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             rows = rows.filter((r) => regMatchesLicenseFilter(r));
         }
         if (divisionFilter !== 'all') {
-            const division = divisions.find((d) => d.name === divisionFilter);
-            rows = rows.filter((r) => registrationInDivision(r, division));
+            rows = rows.filter((r) => r.division === divisionFilter);
         }
         if (search.trim()) {
             const q = search.toLowerCase();
@@ -1790,14 +1284,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             sorted.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
         }
         return sorted;
-    }, [registrations, paymentFilter, licenseFilter, search, divisionFilter, sortBy, regMatchesPaymentFilter, regMatchesLicenseFilter, divisions, registrationInDivision]);
+    }, [registrations, paymentFilter, licenseFilter, search, divisionFilter, sortBy, regMatchesPaymentFilter, regMatchesLicenseFilter]);
 
     const activeRegistrations = useMemo(
         () => dedupeRegistrationsByEmailDivision(
             registrations.filter((r) => !isWithdrawnRegistration(r)),
-            divisions,
         ),
-        [registrations, divisions],
+        [registrations],
     );
 
     const orderTeamPlayers = useCallback((players) => {
@@ -1817,10 +1310,29 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         });
     }, [playersByEmail]);
 
-    const teamsByDivision = useMemo(
-        () => buildRegistrationTeamsByDivision(activeRegistrations, divisions, orderTeamPlayers),
-        [activeRegistrations, divisions, orderTeamPlayers],
-    );
+    const teamsByDivision = useMemo(() => {
+        const result = {};
+        divisions.forEach(d => {
+            result[d.name] = [];
+            const divRegs = activeRegistrations.filter(r => r.division === d.name);
+            const processed = new Set();
+
+            divRegs.forEach(reg => {
+                if (processed.has(reg.id)) return;
+                processed.add(reg.id);
+
+                const partner = divRegs.find(r => r.id !== reg.id && (r.email || '').toLowerCase() === (reg.partner_email || '').toLowerCase());
+                if (partner) {
+                    processed.add(partner.id);
+                    const players = orderTeamPlayers([reg, partner]);
+                    result[d.name].push({ id: `team_${players[0].id}`, players });
+                } else {
+                    result[d.name].push({ id: `team_${reg.id}`, players: [reg] });
+                }
+            });
+        });
+        return result;
+    }, [activeRegistrations, divisions, orderTeamPlayers]);
 
     const getPlayerProfile = useCallback((reg) => {
         if (!reg?.email) return null;
@@ -1831,8 +1343,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         return getPlayerProfile(reg)?.image_url || null;
     }, [getPlayerProfile]);
 
-    const getPlayerPoints = useCallback((reg, source = 'active') => {
-        return resolvePlayerRanking(getPlayerProfile(reg), source).points;
+    const getPlayerPoints = useCallback((reg) => {
+        return Number(getPlayerProfile(reg)?.points || 0);
     }, [getPlayerProfile]);
 
     const getPlayerPhone = useCallback((reg) => {
@@ -1935,12 +1447,16 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         }
         setSearchingProfiles(true);
         try {
-            const { data, error } = await searchRegistrationPlayers(supabase, q);
+            const { data, error } = await supabase
+                .from('players')
+                .select('id, name, email, contact_number')
+                .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
+                .order('name')
+                .limit(20);
             if (error) throw error;
             setProfileLinkResults(data || []);
         } catch (err) {
             console.error('Profile search failed:', err.message);
-            toast.error('Unable to search players. Please try again.');
             setProfileLinkResults([]);
         } finally {
             setSearchingProfiles(false);
@@ -2181,23 +1697,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         const result = {};
         divisions.forEach((cls) => {
             const teams = teamsByDivision[cls.name] || [];
-            const rankingSource = divisionRankingSource(cls);
-            const enriched = teams.map((team) => {
-                const playerPoints = team.players.map((reg) => getPlayerPoints(reg, rankingSource));
-                const totalPoints = playerPoints.reduce((sum, points) => sum + points, 0);
-                return { ...team, totalPoints, playerPoints, rankingSource };
-            });
-            const ranked = [...enriched].filter((t) => t.totalPoints > 0).sort((a, b) => b.totalPoints - a.totalPoints);
-            const seedMap = {};
-            ranked.forEach((t, idx) => { seedMap[t.id] = idx + 1; });
-            const seeded = enriched.map((t) => ({ ...t, seed: seedMap[t.id] || null }));
-            seeded.sort((a, b) => {
-                if (a.seed && b.seed) return a.seed - b.seed;
-                if (a.seed) return -1;
-                if (b.seed) return 1;
-                return b.totalPoints - a.totalPoints;
-            });
-            result[cls.name] = seeded;
+            result[cls.name] = seedTeams(teams, getPlayerPoints);
         });
         return result;
     }, [teamsByDivision, divisions, getPlayerPoints]);
@@ -2246,12 +1746,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                 const actualPaid = getRegistrationEntryFeePaid(
                     findPaymentForRegistration(successPaymentsOnly(payments), r),
                     r,
-                    divFee(r),
+                    divFee(r.division),
                 );
                 expected += actualPaid;
                 collected += actualPaid;
             } else {
-                expected += divFee(r);
+                expected += divFee(r.division);
             }
 
             const email = (r.email || '').toLowerCase().trim();
@@ -2283,11 +1783,6 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             totalEntries: stats.total,
         };
     }, [activeRegistrations, divFee, playersByEmail, payments, event?.id, refundByReg, refunds, stats.paid, stats.total]);
-
-    const financeReconciliation = useMemo(() => {
-        try { return { allocations: buildFinanceAllocations(registrations, payments, refunds), error: null }; }
-        catch (error) { return { allocations: [], error: error.message }; }
-    }, [registrations, payments, refunds]);
 
     const overviewStats = useMemo(() => {
         let paid4M = 0;
@@ -2360,7 +1855,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             const ps = String(r.payment_status || '').toLowerCase();
             if (ps === 'refunded' || hasBlockingProcessedRefund(r, refundByReg, payments)) return;
             pendingCount += 1;
-            pendingAmount += divFee(r);
+            pendingAmount += divFee(r.division);
         });
 
         const withdrawnCount = registrations.filter((r) => isWithdrawnRegistration(r)).length;
@@ -2383,13 +1878,20 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         // an unpaid withdrawal was never billed.
         const billedTiers = new Map();
         const successPays = successPaymentsOnly(payments);
-        const allocations = financeReconciliation.allocations;
-        allocations.forEach(({ amount }) => {
-            const rate = Math.round(amount * 100) / 100;
-            const tier = billedTiers.get(rate) || { rate, count: 0, total: 0 };
-            tier.count += 1;
-            tier.total += rate;
-            billedTiers.set(rate, tier);
+        registrations.forEach((r) => {
+            if (registrationIsCompedEntry(r, payments)) return;
+            const payment = findStrictPaystackEntryPayment(successPays, r)
+                || findPaymentForRegistration(successPays, r);
+            if (!payment && isWithdrawnRegistration(r)) return;
+            const amount = payment
+                ? getRegistrationEntryFeePaid(payment, r, divFee(r.division))
+                : divFee(r.division);
+            if (amount <= 0) return;
+            const rate = Math.round(Number(amount) * 100) / 100;
+            const current = billedTiers.get(rate) || { rate, count: 0, total: 0 };
+            current.count += 1;
+            current.total += rate;
+            billedTiers.set(rate, current);
         });
         const billedTierBreakdown = [...billedTiers.values()].sort((a, b) => a.rate - b.rate);
         // The organiser settlement is based on total event income: Paystack and
@@ -2411,7 +1913,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             : null;
         const paidFeeAmounts = [];
         activeRegistrations.forEach((r) => {
-            const payment = findFinancePayment(successPays, r, refunds);
+            const payment = findStrictPaystackEntryPayment(successPays, r);
             if (!payment) return;
             const fee = getRegistrationEntryFeePaid(payment, r, 0);
             if (fee > 0) paidFeeAmounts.push(Math.round(Number(fee) * 100) / 100);
@@ -2426,7 +1928,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         let earlyBirdSignups = 0;
         let normalSignups = 0;
         activeRegistrations.forEach((r) => {
-            const payment = findFinancePayment(successPays, r, refunds);
+            const payment = findStrictPaystackEntryPayment(successPays, r);
             const paid = payment ? getRegistrationEntryFeePaid(payment, r, 0) : null;
 
             let isEarly = false;
@@ -2469,36 +1971,102 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             earlyBirdSignups,
             normalSignups,
         };
-    }, [activeRegistrations, payments, divFee, formatPaymentMethodForExport, formatLicenseForExport, refundByReg, refunds, interimPayments, earlyBirdMeta, registrations, financeReconciliation]);
+    }, [activeRegistrations, payments, divFee, formatPaymentMethodForExport, formatLicenseForExport, refundByReg, refunds, interimPayments, earlyBirdMeta, registrations]);
 
     const incomeStatementRows = useMemo(() => {
         const rows = [];
         const usedPaymentIds = new Set();
         const teamLabel = (r) => [r.full_name, r.partner_name].filter(Boolean).join(' / ') || r.email || '—';
-        financeReconciliation.allocations.forEach(({ registration: r, payment, amount }, index) => {
-            usedPaymentIds.add(payment.id);
-            const meta = normalizePaymentMetadata(payment.metadata);
-            rows.push({
-                id: `entry-${payment.id}-${r?.id || index}`, date: payment.created_at,
-                description: `${r?.division || meta.division || 'Unallocated entry'} — Entry Fee`,
-                category: 'Entry payment', bucket: isPaystackPaymentMethod(payment.payment_method) ? '4M Paystack' : 'Manual / club',
-                type: 'payment', player: r ? teamLabel(r) : meta.paid_by_name || meta.email || 'Unallocated entry',
-                email: r?.email || meta.email || '', division: r?.division || meta.division || '',
-                amount, status: 'success', method: labelPaymentMethod(payment.payment_method),
-                reference: payment.reference || '', note: meta.note || meta.payment_note || '',
-            });
-        });
+        const successPays = successPaymentsOnly(payments);
+
         activeRegistrations.forEach((r) => {
-            const comped = registrationIsCompedEntry(r, payments);
-            if (!comped && registrationCountsAsPaid(r, refundByReg, payments)) return;
-            if (r.payment_status === 'refunded') return;
-            rows.push({ id: `uncollected-${r.id}`, date: r.created_at,
-                description: `${r.division} — ${comped ? 'Comped Entry' : 'Outstanding entry fee'}`,
-                category: comped ? 'Comped entry' : 'Pending / unpaid', bucket: comped ? 'Informational' : 'Outstanding',
-                type: comped ? 'comped' : 'pending', player: teamLabel(r), email: r.email,
-                division: r.division, amount: comped ? 0 : divFee(r), status: comped ? 'comped' : 'pending',
-                method: comped ? 'Comped' : '—', reference: '', note: '',
-            });
+            const player = teamLabel(r);
+            const email = r.email || '';
+            const division = r.division || 'Entry';
+            const status = resolveIncomeStatementPaymentStatus(r, refundByReg, payments);
+
+            if (registrationIsCompedEntry(r, payments)) {
+                const payment = findPaymentForReg(r);
+                if (payment?.id) usedPaymentIds.add(payment.id);
+                rows.push({
+                    id: `comp-${r.id}`,
+                    date: payment?.created_at || r.paid_at || r.created_at,
+                    description: `${division} — Comped Entry`,
+                    category: 'Comped entry',
+                    bucket: 'Informational',
+                    type: 'comped',
+                    player,
+                    email,
+                    division,
+                    amount: 0,
+                    status: 'comped',
+                    method: 'Comped',
+                    reference: payment?.reference || '',
+                    note: payment?.metadata?.note || payment?.metadata?.payment_note || '',
+                });
+                return;
+            }
+
+            const paystackPay = findStrictPaystackEntryPayment(successPays, r);
+            if (paystackPay) {
+                usedPaymentIds.add(paystackPay.id);
+                const fee = getRegistrationEntryFeePaid(paystackPay, r, 0);
+                if (fee > 0) {
+                    rows.push({
+                        id: `pay-${r.id}`,
+                        date: paystackPay.created_at || r.paid_at || r.created_at,
+                        description: `${division} — Entry Fee`,
+                        category: 'Entry payment',
+                        bucket: '4M Paystack',
+                        type: 'payment',
+                        player,
+                        email,
+                        division,
+                        amount: fee,
+                        status,
+                        method: 'Paystack',
+                        reference: paystackPay.reference || '',
+                        note: '',
+                    });
+                }
+            } else if (registrationCountsAsPaid(r, refundByReg, payments)) {
+                const payment = findPaymentForReg(r);
+                if (payment?.id) usedPaymentIds.add(payment.id);
+                const fee = getRegistrationEntryFeePaid(payment, r, divFee(r.division));
+                rows.push({
+                    id: `manual-${r.id}`,
+                    date: payment?.created_at || r.paid_at || r.created_at,
+                    description: `${division} — Entry Fee (Manual)`,
+                    category: 'Entry payment',
+                    bucket: 'Manual / club',
+                    type: 'payment',
+                    player,
+                    email,
+                    division,
+                    amount: fee,
+                    status,
+                    method: formatPaymentMethodForExport(r) || 'Manual',
+                    reference: payment?.reference || '',
+                    note: payment?.metadata?.note || payment?.metadata?.payment_note || '',
+                });
+            } else if (status !== 'refunded' && status !== 'withdrawn') {
+                rows.push({
+                    id: `pending-${r.id}`,
+                    date: r.created_at,
+                    description: `${division} — Outstanding entry fee`,
+                    category: 'Pending / unpaid',
+                    bucket: 'Outstanding',
+                    type: 'pending',
+                    player,
+                    email,
+                    division,
+                    amount: divFee(r.division),
+                    status: 'pending',
+                    method: '—',
+                    reference: '',
+                    note: '',
+                });
+            }
         });
 
         const paymentById = new Map((payments || []).map((p) => [p.id, p]));
@@ -2628,7 +2196,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         });
 
         return rows;
-    }, [activeRegistrations, payments, refundByReg, refunds, registrations, overviewStats.commission, interimPayments, event?.organiser_name, event?.organiser_email, divFee, financeReconciliation]);
+    }, [activeRegistrations, payments, findPaymentForReg, refundByReg, refunds, registrations, overviewStats.commission, interimPayments, event?.organiser_name, event?.organiser_email, divFee, formatPaymentMethodForExport]);
 
     const filteredIncomeStatementRows = useMemo(() => {
         const q = statementSearch.trim().toLowerCase();
@@ -2826,7 +2394,6 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     };
 
     const exportFinanceExcel = async (reportType = 'full') => {
-        if (loading || financeLoadError || financeReconciliation.error) { toast.error(financeLoadError || financeReconciliation.error || 'Wait for finance records to finish loading.'); return; }
         const normalizedReportType = reportType === 'organiser' ? 'organiser' : 'full';
         if (normalizedReportType === 'full' && !isSuperAdmin) {
             toast.error('Only Super Admins can export the full event report.');
@@ -2845,7 +2412,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                     ? 'Early bird'
                     : 'Regular';
                 return {
-                    section: 'Collected entry composition',
+                    section: 'Billed composition',
                     label: `${label} (${tier.count} × ${fmtR(tier.rate)})`,
                     value: tier.total,
                     money: true,
@@ -2914,15 +2481,15 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                     else if (details.isManualChannel) channel = `Manual (${labelPaymentMethod(details.method) || 'Admin'})`;
                     else channel = labelPaymentMethod(details.method) || 'Paystack';
                 }
-                const paystackPay = findFinancePayment(successPaymentsOnly(payments), r, refunds);
+                const paystackPay = findStrictPaystackEntryPayment(successPaymentsOnly(payments), r);
                 const payment = paystackPay || findPaymentForReg(r);
                 const isComped = registrationIsCompedEntry(r, payments);
                 const paid = registrationCountsAsPaid(r, refundByReg, payments);
                 let entryAmount = 0;
                 if (isComped) entryAmount = 0;
                 else if (paystackPay) entryAmount = getRegistrationEntryFeePaid(paystackPay, r, 0);
-                else if (paid) entryAmount = getRegistrationEntryFeePaid(payment, r, divFee(r));
-                else entryAmount = r.status === 'withdrawn' ? 0 : divFee(r);
+                else if (paid) entryAmount = getRegistrationEntryFeePaid(payment, r, divFee(r.division));
+                else entryAmount = divFee(r.division);
 
                 return {
                     name: r.full_name,
@@ -2988,7 +2555,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                 <button
                     type="button"
                     onClick={() => setExportMenuOpen((open) => !open)}
-                    disabled={exportingFinance || loading || Boolean(financeLoadError)}
+                    disabled={exportingFinance}
                     className={buttonClass}
                     aria-haspopup="menu"
                     aria-expanded={exportMenuOpen}
@@ -3028,16 +2595,6 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     if (!isActive) return null;
 
     const handleClose = onBack || onClose;
-    if (financeLoadError || financeReconciliation.error) return (
-        <div role="alert" className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-6">
-            <div className="max-w-lg rounded-xl bg-[#151515] p-6 text-white">
-                <h2 className="text-xl font-bold">Finance records could not be verified</h2>
-                <p className="my-4">{financeLoadError || financeReconciliation.error}</p>
-                <button onClick={load} disabled={loading} className="mr-4 rounded bg-padel-green px-4 py-2 text-black">Retry</button>
-                <button onClick={handleClose}>Close</button>
-            </div>
-        </div>
-    );
 
     const panelContent = (
         <>
@@ -3077,7 +2634,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                             onClick={openAddPlayerModal}
                                             className="bg-padel-green text-black px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:brightness-110 shrink-0"
                                         >
-                                            <UserPlus size={16} /> Add Player / Team
+                                            <UserPlus size={16} /> Add Player
                                         </button>
                                         {linkedRankedinId && (
                                             <>
@@ -3156,10 +2713,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                 </div>
                             </div>
                         )}
-                        <>{financeLoadError && <p role="alert" className="p-4 text-red-300">Finance report unavailable: {financeLoadError}</p>}</><div className="flex gap-6 overflow-x-auto no-scrollbar border-b border-white/10">
+                        <div className="flex gap-6 overflow-x-auto no-scrollbar border-b border-white/10">
                             {[
                                 { id: 'overview', label: 'Overview' },
-                                { id: 'players', label: 'Teams' },
+                                { id: 'players', label: 'Players' },
                                 { id: 'list', label: 'Registrations List' },
                                 ...(event?.is_manual ? [{ id: 'draws', label: 'Draws' }] : []),
                                 { id: 'statement', label: 'Income Statement' },
@@ -3173,38 +2730,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                     {tab.label}
                                 </button>
                             ))}
-                            {event?.is_manual && !isCancelled && (
-                                <CancelEventButton label="Cancel division" onClick={() => setShowCancelDivision(true)} className="self-center mb-0.5 shrink-0 text-sm" />
-                            )}
-                            {event?.is_manual && (
-                                isCancelled ? (
-                                    <span role="status" className="self-center shrink-0 rounded-xl bg-red-500/10 px-4 py-2 text-sm font-bold text-red-300">Event cancelled</span>
-                                ) : (
-                                    <CancelEventButton
-                                        onClick={() => setShowCancelConfirm(true)}
-                                        className="self-center mb-0.5 shrink-0 text-sm"
-                                    />
-                                )
-                            )}
                         </div>
                     </div>
-
-                    {showCancelDivision && <CancelEventDialog event={event} divisions={divisions}
-                        onClose={() => { setShowCancelDivision(false); load(); }}
-                        onCancelled={() => { setShowCancelDivision(false); load(); }} />}
-                    {showCancelConfirm && (
-                        <CancelEventDialog
-                            key={event.id}
-                            event={event}
-                            onClose={() => setShowCancelConfirm(false)}
-                            onCancelled={(updatedEvent) => {
-                                setCancelledEventId(updatedEvent.id);
-                                setShowCancelConfirm(false);
-                                load();
-                                onEventCancelled?.(updatedEvent);
-                            }}
-                        />
-                    )}
 
                     {['eft', 'external'].includes(event?.payment_method) && (
                         <div className={`${isInline ? 'mt-4 rounded-2xl' : ''} mx-6 flex items-start gap-3 border border-amber-500/30 bg-amber-500/10 px-4 py-3`} role="status">
@@ -3397,7 +2924,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                         </div>
                                         {overviewStats.billedTierBreakdown.length > 0 && (
                                             <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 space-y-1.5">
-                                                <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Collected entry composition</p>
+                                                <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Billed composition</p>
                                                 {overviewStats.billedTierBreakdown.map((tier, index) => (
                                                     <div key={tier.rate} className="flex items-center justify-between gap-4 text-xs">
                                                         <span className="text-gray-400">
@@ -3655,7 +3182,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                                                             <div className="flex items-center justify-center gap-3">
                                                                                 {team.players.map((p, pi) => {
                                                                                     const img = getPlayerImage(p);
-                                                                                    const pts = team.playerPoints?.[pi] ?? getPlayerPoints(p, team.rankingSource);
+                                                                                    const pts = getPlayerPoints(p);
                                                                                     const firstName = (p.full_name || '').split(' ')[0];
                                                                                     return (
                                                                                         <React.Fragment key={p.id}>
@@ -3836,7 +3363,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                     >
                                         <option value="all">All divisions ({stats.total})</option>
                                         {divisions.map((d) => {
-                                            const count = activeRegistrations.filter(r => registrationInDivision(r, d)).length;
+                                            const count = registrations.filter(r => r.status !== 'withdrawn' && r.division === d.name).length;
                                             return (
                                                 <option key={d.id} value={d.name}>{d.name} ({count})</option>
                                             );
@@ -4152,7 +3679,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                     <div className="min-w-0">
                                         <h3 className="text-white font-bold truncate">Unmark {unmarkTarget.full_name} as paid?</h3>
                                         <p className="text-xs text-gray-400 mt-0.5">
-                                            {unmarkTarget.division} · {fmtR(divFee(unmarkTarget))}
+                                            {unmarkTarget.division} · {fmtR(divFee(unmarkTarget.division))}
                                         </p>
                                     </div>
                                 </div>
@@ -4266,7 +3793,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                             {markPaidMethod === 'comp' ? 'Comp ' : 'Mark '}{markPaidTarget.full_name}{markPaidMethod === 'comp' ? '?' : ' as paid'}
                                         </h3>
                                         <p className="text-xs text-gray-400 mt-0.5">
-                                            {markPaidTarget.division} · {markPaidMethod === 'comp' ? 'Free / complimentary entry (R 0)' : fmtR(divFee(markPaidTarget))}
+                                            {markPaidTarget.division} · {markPaidMethod === 'comp' ? 'Free / complimentary entry (R 0)' : fmtR(divFee(markPaidTarget.division))}
                                         </p>
                                     </div>
                                 </div>
@@ -4329,7 +3856,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                         <UserPlus size={16} className="text-padel-green" />
                                     </div>
                                     <div className="min-w-0 flex-1">
-                                        <h3 className="text-white font-bold">{addTeam ? 'Add Team' : 'Add Player'}</h3>
+                                        <h3 className="text-white font-bold">Add Player</h3>
                                         <p className="text-xs text-gray-400 mt-0.5">
                                             Add them provisionally with payment pending. Mark paid (or comp) afterwards if needed.
                                         </p>
@@ -4344,46 +3871,32 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                     </button>
                                 </div>
 
-                                <div className="flex gap-2 mb-4" role="group" aria-label="Entry type">
-                                    {[false, true].map((team) => (
-                                        <button key={String(team)} type="button" aria-pressed={addTeam === team} disabled={addPlayerBusy}
-                                            onClick={() => { setAddTeam(team); setAddPartnerSelected(null); setAddPlayerSearch(''); setAddPlayerResults([]); }}
-                                            className={`flex-1 rounded-lg border px-3 py-2 text-sm font-bold ${addTeam === team ? 'border-padel-green text-padel-green bg-padel-green/10' : 'border-white/10 text-gray-400'}`}>
-                                            {team ? 'Full team' : 'Single player'}
-                                        </button>
-                                    ))}
-                                </div>
-                                {(addTeam ? [0, 1] : [0]).map((index) => {
-                                    const selected = index === 0 ? addPlayerSelected : addPartnerSelected;
-                                    const setSelected = index === 0 ? setAddPlayerSelected : setAddPartnerSelected;
-                                    const other = index === 0 ? addPartnerSelected : addPlayerSelected;
-                                    return <React.Fragment key={index}>
-                                {selected ? (
+                                {addPlayerSelected ? (
                                     <div className="mb-4 flex items-center gap-3 rounded-xl border border-padel-green/30 bg-padel-green/5 px-3 py-2.5">
                                         <div className="w-10 h-10 rounded-full overflow-hidden bg-white/5 border border-white/10 shrink-0 flex items-center justify-center">
-                                            {selected.image_url ? (
-                                                <img src={selected.image_url} alt="" className="w-full h-full object-cover" />
+                                            {addPlayerSelected.image_url ? (
+                                                <img src={addPlayerSelected.image_url} alt="" className="w-full h-full object-cover" />
                                             ) : (
                                                 <User size={16} className="text-gray-500" />
                                             )}
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-bold text-white truncate">{selected.name}</p>
-                                            <p className="text-[11px] text-gray-400 truncate">{selected.email}</p>
+                                            <p className="text-sm font-bold text-white truncate">{addPlayerSelected.name}</p>
+                                            <p className="text-[11px] text-gray-400 truncate">{addPlayerSelected.email}</p>
                                         </div>
                                         <button
                                             type="button"
-                                            onClick={() => { setSelected(null); setAddPlayerSearch(''); setAddPlayerResults([]); }}
+                                            onClick={() => setAddPlayerSelected(null)}
                                             disabled={addPlayerBusy}
                                             className="text-[11px] font-bold uppercase tracking-wider text-gray-400 hover:text-white disabled:opacity-40"
                                         >
                                             Change
                                         </button>
                                     </div>
-                                ) : (index === 0 || addPlayerSelected) ? (
+                                ) : (
                                     <div className="mb-4">
                                         <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">
-                                            Search 4M players {addTeam ? `· Player ${index + 1}` : ''}
+                                            Search 4M players
                                         </label>
                                         <div className="relative">
                                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" size={14} />
@@ -4392,7 +3905,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                                 value={addPlayerSearch}
                                                 onChange={(e) => setAddPlayerSearch(e.target.value)}
                                                 placeholder="Name or email…"
-                                                disabled={addPlayerBusy}
+                                                autoFocus
                                                 className="w-full bg-black/30 border border-white/10 rounded-lg pl-9 pr-3 py-2.5 text-sm text-white outline-none focus:border-padel-green/50"
                                             />
                                         </div>
@@ -4410,14 +3923,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                                     const alreadyInSelectedDiv = addPlayerDivision && registrations.some((r) =>
                                                         r.status !== 'withdrawn'
                                                         && r.division === addPlayerDivision
-                                                        && [r.email, r.partner_email].some((email) => (email || '').trim().toLowerCase() === p.email.trim().toLowerCase()));
-                                                    const isTeammate = other?.email?.trim().toLowerCase() === p.email.trim().toLowerCase();
+                                                        && (r.email || '').toLowerCase() === (p.email || '').toLowerCase());
                                                     return (
                                                         <button
                                                             key={p.id}
                                                             type="button"
-                                                            disabled={alreadyInSelectedDiv || isTeammate || addPlayerBusy}
-                                                            onClick={() => { setSelected(p); setAddPlayerSearch(''); setAddPlayerResults([]); }}
+                                                            disabled={alreadyInSelectedDiv || addPlayerBusy}
+                                                            onClick={() => setAddPlayerSelected(p)}
                                                             className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.04] disabled:opacity-40 disabled:cursor-not-allowed"
                                                         >
                                                             <div className="w-8 h-8 rounded-full overflow-hidden bg-white/5 border border-white/10 shrink-0 flex items-center justify-center">
@@ -4442,23 +3954,18 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                             )}
                                         </div>
                                     </div>
-                                ) : null}
-                                    </React.Fragment>;
-                                })}
+                                )}
 
-                                <label htmlFor="add-player-division" className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">Division</label>
+                                <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">Division</label>
                                 {divisions.length === 0 ? (
                                     <p className="text-xs text-amber-400 mb-3">No divisions found for this event.</p>
                                 ) : (
                                     <select
-                                        id="add-player-division"
-                                        required
                                         value={addPlayerDivision}
                                         onChange={(e) => setAddPlayerDivision(e.target.value)}
                                         disabled={addPlayerBusy}
                                         className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-padel-green/50 mb-3"
                                     >
-                                        <option value="" disabled>Select a division</option>
                                         {divisions.map((d) => (
                                             <option key={d.id || d.name} value={d.name}>
                                                 {d.name}{d.entry_fee != null ? ` · ${fmtR(d.entry_fee)}` : ''}
@@ -4470,9 +3977,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                 <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
                                     <p className="text-[11px] font-bold uppercase tracking-wider text-amber-400">Entry status</p>
                                     <p className="text-sm text-white font-semibold mt-0.5">
-                                        {addPlayerDivision
-                                            ? <>Pending payment · {fmtR(divFee(addPlayerDivision) * (addTeam ? 2 : 1))} due{addTeam ? ` (${fmtR(divFee(addPlayerDivision))} per player)` : ''}</>
-                                            : 'Select a division to see the entry fee.'}
+                                        Pending payment · {fmtR(divFee(addPlayerDivision))} due
                                     </p>
                                     <p className="text-[11px] text-gray-400 mt-1">
                                         After adding, use Mark paid on their row (comp is an option there) if needed.
@@ -4498,14 +4003,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                         disabled={
                                             addPlayerBusy
                                             || !addPlayerSelected
-                                            || (addTeam && !addPartnerSelected)
                                             || !addPlayerDivision
                                             || divisions.length === 0
                                         }
                                         className="w-full py-2.5 rounded-lg text-sm font-bold bg-padel-green text-black hover:brightness-110 disabled:opacity-40 inline-flex items-center justify-center gap-2"
                                     >
                                         {addPlayerBusy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                                        {addTeam ? 'Add team (pending)' : 'Add player (pending)'}
+                                        Add player (pending)
                                     </button>
                                     <button
                                         type="button"
@@ -4585,7 +4089,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
 
                     {moveTarget && (() => {
                         const targetDiv = divisions.find((d) => d.id === moveDivId);
-                        const oldFee = divFee(moveTarget);
+                        const oldFee = divFee(moveTarget.division);
                         const newFee = targetDiv ? Number(targetDiv.entry_fee || 0) : null;
                         const owesMore = !!targetDiv && playersToMove.some((reg) => newFee > oldFee && reg.payment_status === 'paid');
                         const cheaper = !!targetDiv && newFee < oldFee;
@@ -4844,13 +4348,6 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                             registrations={registrations}
                             playersByEmail={playersByEmail}
                             onSaved={load}
-                            onDivisionRankingSourceChange={(changedDivisionId, source) => {
-                                setDivisions((current) => current.map((item) => (
-                                    item.id === changedDivisionId
-                                        ? { ...item, seeding_ranking_source: source }
-                                        : item
-                                )));
-                            }}
                         />
                     )}
 

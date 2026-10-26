@@ -1,0 +1,17 @@
+.ap-payment-dialog { width:min(560px,calc(100vw - 32px)); max-height:90dvh; margin:auto; padding:0; overflow:auto; border:1px solid var(--ap-line,#d9ded8); border-radius:16px; background:var(--ap-surface,#fafbf8); color:var(--ap-ink,#192019); box-shadow:0 24px 80px #15201533; }
+.ap-payment-dialog::backdrop { background:#17201880; }
+.ap-payment-dialog header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; padding:24px; border-bottom:1px solid #d9ded8; }
+.ap-payment-dialog header p { margin:0 0 8px; font-size:13px; color:#687069; }
+.ap-payment-dialog h2 { margin:0; font-size:24px; }
+.ap-payment-dialog form { display:grid; gap:20px; padding:24px; }
+.ap-payment-dialog .ap-payment-person { display:grid; gap:6px; }
+.ap-payment-dialog .ap-payment-person strong { font-size:18px; }
+.ap-payment-dialog p { margin:0; font-size:14px; line-height:1.5; }
+.ap-payment-dialog label { display:grid; gap:8px; font-size:14px; font-weight:600; }
+.ap-payment-dialog :is(select, .ap-select-trigger),.ap-payment-dialog textarea { width:100%; box-sizing:border-box; border:1px solid #b9c1b8; border-radius:8px; background:transparent; color:inherit; padding:12px; font:inherit; }
+.ap-payment-dialog textarea { min-height:110px; resize:vertical; }
+.ap-payment-dialog .ap-payment-amount { padding:16px; background:#eef3e7; border-radius:10px; font-weight:600; }
+.ap-payment-dialog .ap-payment-live-note { color:#687069; font-size:13px; }
+.ap-payment-dialog [role=alert] { color:#a3352b; }
+.ap-payment-dialog footer { display:flex; gap:12px; flex-wrap:wrap; justify-content:flex-end; }
+@media(max-width:480px) { .ap-payment-dialog header,.ap-payment-dialog form { padding:20px; } }

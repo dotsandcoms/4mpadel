@@ -5,6 +5,9 @@
 export function resolveRegistrationLicenseCategory(email, eventId, player, eventPayments = []) {
     const norm = (email || '').toLowerCase().trim();
     if (!norm) return 'none';
+    if (player?.event_license?.event_id === Number(eventId)) {
+        return player.event_license.full ? 'full' : player.event_license.temporary ? 'temp' : 'none';
+    }
 
     for (const pay of eventPayments) {
         if (pay?.status && pay.status !== 'success') continue;
@@ -18,7 +21,7 @@ export function resolveRegistrationLicenseCategory(email, eventId, player, event
     if (!player) return 'none';
     if (String(player.license_type || '').toLowerCase() === 'full') return 'full';
     if ((player.temporary_licenses || []).some(
-        (lic) => Number(lic.event_id) === Number(eventId),
+        (lic) => !lic.revoked_at && Number(lic.event_id) === Number(eventId),
     )) {
         return 'temp';
     }
@@ -39,6 +42,12 @@ export function resolveRegistrationLicenseDisplay(email, eventId, player, eventP
     const norm = (email || '').toLowerCase().trim();
     if (!norm) {
         return { kind: 'none', label: 'Not on file', text: 'Not on file' };
+    }
+    if (player?.event_license?.event_id === Number(eventId)) {
+        const licence = player.event_license;
+        if (licence.full) return { kind: 'full', label: `${licence.year} Full`, text: `${licence.year} Full` };
+        if (licence.temporary) return { kind: 'temp', label: 'Temporary', text: 'Temporary · this event' };
+        return { kind: 'none', label: 'None', text: 'None' };
     }
 
     for (const pay of eventPayments) {
@@ -69,7 +78,7 @@ export function resolveRegistrationLicenseDisplay(email, eventId, player, eventP
     }
 
     const tempLic = (player.temporary_licenses || []).find(
-        (lic) => Number(lic.event_id) === Number(eventId),
+        (lic) => !lic.revoked_at && Number(lic.event_id) === Number(eventId),
     );
     if (tempLic) {
         const purchasedAt = tempLic.created_at || tempLic.event_date || null;

@@ -136,7 +136,7 @@ const ClaimClubInvite = () => {
                         </p>
                         <button
                             type="button"
-                            onClick={() => navigate(`/profile?new_invite=true&claim_token=${invite?.token}`)}
+                            onClick={() => navigate(`/profile?new_invite=true&claim_token=${encodeURIComponent(token)}`)}
                             className="w-full py-3 rounded-xl bg-padel-green text-black font-black uppercase tracking-wider text-sm flex items-center justify-center gap-2"
                         >
                             Create Profile

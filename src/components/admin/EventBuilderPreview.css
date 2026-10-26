@@ -1,0 +1,34 @@
+/* One EventBuilder markup and workflow; the new admin changes presentation only. */
+.ap-quick-event-editor img { outline:1px solid oklch(0 0 0 / .1); outline-offset:-1px; }
+.ap-quick-event-editor > div:first-child { max-height:95dvh; overflow:auto; }
+.ap-live-event-editor { background:#17201880!important; backdrop-filter:blur(3px); color:#192019; font-family:inherit; }
+.ap-live-event-editor:focus { outline:none; }
+.ap-live-event-editor > div:first-child { width:min(1120px,100%); max-width:1120px; background:#fafbf8!important; border:1px solid #d9ded8!important; border-radius:16px; box-shadow:0 24px 80px #15201533; }
+.ap-live-event-editor [class*="bg-black"], .ap-live-event-editor [class*="bg-[#"], .ap-live-event-editor [class*="bg-white/"] { background-color:#f0f2ed!important; }
+.ap-live-event-editor [class*="border-white"] { border-color:#d9ded8!important; }
+.ap-live-event-editor [class*="text-white"], .ap-live-event-editor [class*="text-gray-200"], .ap-live-event-editor [class*="text-gray-300"] { color:#192019!important; }
+.ap-live-event-editor [class*="text-gray-400"], .ap-live-event-editor [class*="text-gray-500"], .ap-live-event-editor [class*="text-gray-600"] { color:#657064!important; }
+.ap-live-event-editor [class*="text-padel-green"] { color:#506a19!important; }
+.ap-live-event-editor [class*="bg-padel-green"] { background-color:#eaf0da!important; }
+.ap-live-event-editor .bg-padel-green { background-color:#bde332!important; color:#192019!important; }
+.ap-live-event-editor [class*="text-red-"] { color:#a6382d!important; }
+.ap-live-event-editor [class*="text-amber-"], .ap-live-event-editor [class*="text-yellow-"] { color:#805d00!important; }
+.ap-live-event-editor [class*="text-sky-"], .ap-live-event-editor [class*="text-blue-"] { color:#146b85!important; }
+.ap-live-event-editor [class*="text-emerald-"], .ap-live-event-editor [class*="text-green-"] { color:#286c43!important; }
+.ap-live-event-editor input:not([type=checkbox]):not([type=radio]):not([type=file]), .ap-live-event-editor :is(select, .ap-select-trigger), .ap-live-event-editor textarea { background:#fafbf8!important; color:#192019!important; border-color:#b9c1b8!important; min-height:44px; font:inherit; border-radius:8px; }
+.ap-live-event-editor input::placeholder, .ap-live-event-editor textarea::placeholder { color:#7c857a!important; }
+.ap-live-event-editor [contenteditable=true] { background:#fafbf8!important; color:#192019!important; }
+.ap-live-event-editor button { font-family:inherit; }
+.ap-live-event-editor button:hover:not(:disabled) { filter:brightness(.97); }
+.ap-live-event-editor :focus-visible { outline:2px solid #597622; outline-offset:3px; }
+.ap-live-event-editor input[type=checkbox], .ap-live-event-editor input[type=radio] { accent-color:#597622; }
+.ap-live-event-editor label { letter-spacing:.035em; }
+.ap-live-event-editor .custom-scrollbar { scrollbar-color:#bbc4b7 #fafbf8; }
+body:has(.ap-live-event-editor) .pac-container { background:#fafbf8!important; border-color:#d9ded8!important; }
+body:has(.ap-live-event-editor) .pac-item, body:has(.ap-live-event-editor) .pac-item-query { color:#192019!important; border-color:#d9ded8!important; }
+body:has(.ap-live-event-editor) .pac-item:hover, body:has(.ap-live-event-editor) .pac-item-selected { background:#eaf0da!important; }
+.ap-live-event-editor > div:first-child > div:last-child { flex-wrap:wrap; gap:12px; }
+.ap-live-event-editor > div:first-child > div:first-child h2 { font-size:24px; }
+@media(max-width:600px) { .ap-live-event-editor { padding:10px; } .ap-live-event-editor > div:first-child { max-height:95dvh; } .ap-live-event-editor .px-6 { padding-left:16px; padding-right:16px; } }
+.ap-quick-event-editor > div:first-child > div:last-child { flex-wrap:nowrap; gap:0; min-width:0; }
+.ap-quick-event-editor[aria-labelledby="quick-event-success-title"] > div:first-child { max-width:560px; }

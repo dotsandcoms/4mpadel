@@ -1,0 +1,25 @@
+# Clubs preview checkpoint
+
+Implemented: platform-super-admin, All 4M Padel read-only directory; name/location/ID search; status/province/verification filters; 10-row pagination; independent summary counts; logos with fallback; shared padded loading states; errors/retry; reduced-motion support; mobile horizontal-scroll hint.
+
+Club names open a right-side native dialog with focus return and Escape support. An exact-club signed-in/RLS read supplies about, contact, courts, services, café, opening hours and timestamps. No member records are queried. External websites allow only HTTP(S).
+
+Excel exports all filtered directory rows, not just the visible page. Contacts are excluded; text is written as literal strings. Pending downloads are invalidated when access context changes or the workspace unmounts.
+
+Verification: 135 unit tests passed; synthetic browser checks cover directory filters/pagination, profile loading/errors, desktop/mobile layout, focus restoration, export row count, reduced motion, missing logos, empty/error/denied states. Production build passed with existing bundle/import/CSS warnings. No production writes or deployments performed.
+
+Gallery, social/booking links, principal sponsor and partner presentation are now included. Gallery pages contain six records; unsafe URLs are not linked or loaded; failed images have a fallback. A section chooser navigates the profile drawer. Additional synthetic media checks cover pagination, malformed lists, image failures, safe links and mobile overflow.
+
+Not a complete replacement for the live ClubManager: create/edit, image upload, claims/invites, member access, approval/rejection/deletion and linked organisation/federation management remain unimplemented in the preview. Keep these explicit rather than implying module parity. The existing live manager was not modified.
+
+Profile editing now has a local-only draft for name, short name, tagline, about, location and contact fields. Required name, limits, email and HTTP(S) URL validation; before/after review; explicit discard confirmation. It never writes to storage/database or sends emails and is discarded when the club closes. Status, verification, SAPA registration and ownership are excluded. 137 unit tests and expanded synthetic draft browser checks passed; build passed with existing warnings.
+
+Write-enablement finding: the saved staging schema dump includes `Authenticated manage clubs` with USING/WITH CHECK true. This is historical snapshot evidence, not a fresh production audit. Do not enable live editor saves based on UI gates. Claim approval currently spans membership/status/claim updates and email in separate client operations; a reviewed atomic backend plus notification delivery tracking is still required.
+
+2026-09-09: `club-write-candidate/apply.sql` implements a candidate profile-only RPC, not installed in Supabase or called by the UI. Resolves the authenticated user's current email from auth.users, requires exactly one super-admin permission row (locked during the transaction), whitelists/validates profile fields, locks the club and checks exact original values of changed fields, then updates and audits atomically. Audit contains field names, not contact values. Pure client argument builder preserves exact originals for this check.
+
+Executed candidate in a fresh disposable local PostgreSQL database. Verified authorised update, restricted/unsigned/ambiguous identity denial, stale-field conflict, protected status rejection, unsafe URL rejection, anonymous execute denial, audit count, and full rollback when audit insertion fails. Local server stopped afterward. This does not validate deployed Supabase policies/triggers or fix legacy direct-write routes. The earlier temporary staging dump is no longer present; refresh the staging schema before integration/deployment. No production or staging changes made this turn.
+
+2026-09-09 continued: refreshed public staging types via read-only CLI generation. Added claim-decision candidate SQL: exact server identity, restricted access, pending-claim lock, claimant/player identity match, membership update, eligible club publishing, reviewer attribution, private audit and one pending notification per claim, all atomic. Same-decision retry is idempotent; conflicting decisions fail. Local PostgreSQL checks passed, including forced outbox failure rolling back membership, club, claim and audit. No SQL was installed in Supabase and no notifications were sent. Delivery consumer, staging permissions validation and live enablement remain outstanding.
+
+Members and claims now load on demand in the club drawer using exact club filters and signed-in client/RLS. Member names use the verified player FK when available; claims show applicant details. Search, five-record pages and local-only decision review are implemented. Rejection requires feedback. No mutation RPC is called from the UI. Synthetic browser tests run on the current worktree server at port 5175; older 5173/5174 servers belong to another checkout. Node suite: 141 tests passed. Build passed with existing warnings.

@@ -1,0 +1,7 @@
+.ap-payment-dialog label.ap-cancellation-confirm { display:flex; align-items:flex-start; gap:12px; padding:14px; border:1px solid var(--ap-border, #d5dbd3); border-radius:8px; }
+.ap-payment-dialog .ap-cancellation-confirm input[type="checkbox"] { width:18px; height:18px; flex:0 0 18px; margin:2px 0 0; accent-color:#a6382c; }
+.ap-payment-dialog .ap-cancellation-confirm span { line-height:1.5; }
+.ap-export-options > button.ap-event-cancel-option { background:var(--ap-danger-bg, #fae9e7); border-color:#ddb1aa; color:var(--ap-danger, #a33a30); border-left:4px solid var(--ap-danger, #a33a30); }
+.ap-export-options > button.ap-event-cancel-option small { color:#78514b; }
+.ap-export-options > button.ap-event-cancel-option:hover { background:#f4d9d4; border-color:var(--ap-danger, #a33a30); }
+.ap-export-options > button.ap-event-cancel-option:focus-visible { outline:3px solid var(--ap-danger, #a33a30); outline-offset:3px; }

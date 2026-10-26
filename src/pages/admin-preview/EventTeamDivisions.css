@@ -1,0 +1,12 @@
+.ap-team-divisions { display: grid; gap: 18px; }
+.ap-team-division > summary { display: flex; align-items: center; gap: 16px; padding: 20px 22px; cursor: pointer; list-style: none; }
+.ap-team-division > summary::-webkit-details-marker { display: none; }
+.ap-team-division[open] > summary { border-bottom: 1px solid var(--ap-line); }
+.ap-team-division > summary:focus-visible { outline: 2px solid var(--ap-ink); outline-offset: -4px; }
+.ap-team-division-title { flex: 1; min-width: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px 20px; }
+.ap-team-division-title strong { font-size: 16px; }
+.ap-team-division-title > span { display: flex; flex-wrap: wrap; gap: 14px; color: var(--ap-muted); font-size: 13px; }
+.ap-team-division-count { flex-shrink: 0; padding: 5px 9px; border-radius: var(--ap-radius); background: var(--ap-surface-2); font-size: 12px; font-weight: 700; }
+.ap-team-division > summary > svg { flex-shrink: 0; transform: rotate(-90deg); }
+.ap-team-division[open] > summary > svg { transform: rotate(0); }
+@media (max-width: 600px) { .ap-team-division > summary { padding: 16px; gap: 10px; } }

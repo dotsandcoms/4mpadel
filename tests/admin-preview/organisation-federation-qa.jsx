@@ -1,0 +1,8 @@
+import React from 'react';import {createRoot} from 'react-dom/client';
+import OrganisationFederationWorkspace from '../../src/pages/admin-preview/OrganisationFederationWorkspace';
+import '../../src/index.css';import '../../src/pages/AdminPreview.css';
+const kind=new URLSearchParams(location.search).has('federation')?'federations':'organisations';
+const state=window.entityQA={writes:[],admin:true,fail:false,active:true};
+let row={id:'synthetic',name:'Synthetic Padel Association',short_name:'SPA',slug:'synthetic-padel',status:kind==='federations'?'published':'approved',contact_email:'office@example.invalid',contact_phone:'',website_url:'',logo_url:'',about:'A synthetic association for isolated interface testing.'};
+const client={auth:{getUser:async()=>({data:{user:{id:'actor',email:'admin@example.invalid'}}})},rpc:async name=>({data:name==='account_is_active'?state.active:state.admin}),from(table){let patch,offset=0;return{select(){return this;},order(){return this;},range(value){offset=value;return this;},eq(){return this;},is(){return this;},ilike(){return this;},in(){return this;},abortSignal(){return this;},update(value){patch=value;return this;},single:async()=>{if(patch){state.writes.push({table,patch});if(state.fail)throw Error('Synthetic unknown outcome');row={...row,...patch};}return{data:row};},then(resolve){return Promise.resolve({data:offset?[]:table===kind?[row]:[]}).then(resolve);}};}};
+createRoot(document.getElementById('root')).render(<div className="ap-root" style={{display:'block',padding:24}}><OrganisationFederationWorkspace kind={kind} client={client} session={{user:{id:'actor'}}} scopeId="all"/></div>);

@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { buildSavedPermissionNotification, permissionNotificationGate } from '../_shared/permissionNotification.js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1367,6 +1368,12 @@ serve(async (req: Request) => {
     // requires a logged-in user; admin-only templates additionally need
     // an admin caller.
     const authHeader = req.headers.get('Authorization');
+    // Keep disabled until secure permission saving and a durable outbox exist.
+    // The generic admin check below is NOT sufficient for this notification.
+    if (template === 'permission_access_updated') {
+      const gate = permissionNotificationGate(isTrustedServiceCaller(authHeader), Deno.env.get('ENABLE_PERMISSION_NOTIFICATIONS'));
+      if (gate) return new Response(JSON.stringify({ error: gate.error }), { status: gate.status, headers: corsHeaders });
+    }
     if (!isTrustedServiceCaller(authHeader)) {
       const user = authHeader ? await getAuthenticatedUser(authHeader) : null;
       const isPublicApplication = PUBLIC_APPLICATION_TEMPLATES.has(template);
@@ -1395,7 +1402,10 @@ serve(async (req: Request) => {
     }
 
     // Compile beautiful HTML body and subject (asynchronous for db lookup)
-    const { subject, html } = await generateEmailBody(supabaseAdmin, template, emailVars);
+    const renderedEmail = template === 'permission_access_updated'
+      ? await buildSavedPermissionNotification(supabaseAdmin, to, bcc)
+      : await generateEmailBody(supabaseAdmin, template, emailVars);
+    const { subject, html } = renderedEmail;
 
     // Check if verified sender domain exists, otherwise fallback to custom domain
     const verifiedSender = Deno.env.get('RESEND_VERIFIED_SENDER') || 'notifications.4mpadel.co.za';
@@ -1465,6 +1475,7 @@ serve(async (req: Request) => {
         subject: subject,
         html: finalHtml,
     };
+    if ('text' in renderedEmail) payload.text = renderedEmail.text;
     if (finalTo) payload.to = finalTo;
     if (finalBcc) {
         payload.bcc = finalBcc;

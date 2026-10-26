@@ -1,19 +1,22 @@
+import { generateAccessCode, getAccessCodeError, saveEventAccessCode } from '../../utils/eventAccessCode';
+import SearchableDropdown from "../SearchableDropdown";
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
     X, Save, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Plus, Trash2, UploadCloud, Loader2,
-    Info, Layers, FileText, ImageIcon, Check, Eye, Copy, Pencil, ClipboardList, Shield, AlertTriangle,
-    Bold, Italic, Underline, List, ListOrdered, Heading, UserPlus, RefreshCcw, ExternalLink, Repeat
+    Info, Layers, FileText, ImageIcon, Check, Eye, EyeOff, Copy, Pencil, ClipboardList, Shield, AlertTriangle,
+    UserPlus, RefreshCcw, ExternalLink, Repeat, Ban
 } from 'lucide-react';
-import CancelEventButton from './CancelEventButton';
-import CancelEventDialog from './CancelEventDialog';
 import { supabase } from '../../supabaseClient';
+import { uploadToGallery, uploadEventAsset } from '../../utils/eventMedia';
 import { useClubs } from '../../hooks/useClubs';
 import { useAdminPermissions } from '../../hooks/useAdminPermissions';
 import { getDefaultBackgroundForStatus } from '../../utils/imageUtils';
 import { buildRankedinTournamentUrl, downloadRankedinSkipReport, extractRankedinId } from '../../utils/rankedinLink';
 import { loadGoogleMaps } from '../../utils/googleMaps';
+import RichTextEditor from './EventRichTextEditor';
+import './EventBuilderPreview.css';
 import {
     isCalendarEventFinished,
     isRecentResultsAutoTier,
@@ -144,7 +147,7 @@ const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
 const looksLikeEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
 
 /** Chip + player type-ahead for event_co_admins (stored as comma-separated emails). */
-const CoAdminsPicker = ({ value, onChange }) => {
+export const CoAdminsPicker = ({ value, onChange, renderContent }) => {
     const emails = useMemo(() => parseCoAdminEmails(value), [value]);
     const [query, setQuery] = useState('');
     const [results, setResults] = useState([]);
@@ -240,6 +243,8 @@ const CoAdminsPicker = ({ value, onChange }) => {
             addEmail(results[0].email);
         }
     };
+
+    if (renderContent) return renderContent({ emails, query, setQuery, results, open, setOpen, searching, wrapRef, selectedRef, addEmail, removeEmail, commitTyped, looksLikeEmail });
 
     return (
         <div className="space-y-2">
@@ -341,7 +346,7 @@ const CoAdminsPicker = ({ value, onChange }) => {
 };
 
 // Styled dropdown (matches the Venue / Club dropdown) for fixed option lists.
-const SelectMenu = ({ value, onChange, options, placeholder = 'Select...' }) => {
+const SelectMenu = ({ value, onChange, options, placeholder = 'Select...', searchable = false }) => {
     const [open, setOpen] = useState(false);
     const ref = useRef(null);
     useEffect(() => {
@@ -352,6 +357,10 @@ const SelectMenu = ({ value, onChange, options, placeholder = 'Select...' }) => 
     const opts = options.map((o) => (typeof o === 'string' ? { value: o, label: o } : o));
     const selected = opts.find((o) => o.value === value);
     const hasValue = selected && selected.label;
+    if (searchable) return <SearchableDropdown value={value ?? ''} onChange={event => onChange(event.target.value)} className={inputClass}>
+        {!opts.some(option => option.value === '') && <option value="" disabled>{placeholder}</option>}
+        {opts.map(option => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label || '—'}</option>)}
+    </SearchableDropdown>;
     return (
         <div className="relative" ref={ref}>
             <button type="button" onClick={() => setOpen((v) => !v)} className={`${inputClass} flex items-center justify-between text-left`}>
@@ -411,62 +420,6 @@ const ComboBox = ({ value, onChange, options, placeholder = 'Select or type' }) 
 
 // Lightweight WYSIWYG editor (no external dependency) producing simple HTML so the
 // formatted layout is preserved when shown on the public event page.
-const RichTextEditor = ({ value, onChange, placeholder = 'Type here...', minHeight = 130 }) => {
-    const ref = useRef(null);
-
-    // Sync external value into the editor without clobbering the caret while typing.
-    useEffect(() => {
-        if (ref.current && ref.current.innerHTML !== (value || '')) {
-            ref.current.innerHTML = value || '';
-        }
-    }, [value]);
-
-    const emit = () => onChange(ref.current ? ref.current.innerHTML : '');
-    const exec = (command, arg = null) => {
-        ref.current?.focus();
-        document.execCommand(command, false, arg);
-        emit();
-    };
-
-    const ToolBtn = ({ onClick, title, children }) => (
-        <button
-            type="button"
-            title={title}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={onClick}
-            className="p-1.5 rounded text-gray-300 hover:bg-padel-green hover:text-black transition-colors"
-        >
-            {children}
-        </button>
-    );
-
-    return (
-        <div className="border border-white/10 rounded-lg overflow-hidden bg-black/40 focus-within:border-padel-green">
-            <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5 border-b border-white/10 bg-white/5">
-                <ToolBtn title="Bold" onClick={() => exec('bold')}><Bold size={15} /></ToolBtn>
-                <ToolBtn title="Italic" onClick={() => exec('italic')}><Italic size={15} /></ToolBtn>
-                <ToolBtn title="Underline" onClick={() => exec('underline')}><Underline size={15} /></ToolBtn>
-                <span className="w-px h-5 bg-white/10 mx-1" />
-                <ToolBtn title="Heading" onClick={() => exec('formatBlock', '<h3>')}><Heading size={15} /></ToolBtn>
-                <ToolBtn title="Bullet list" onClick={() => exec('insertUnorderedList')}><List size={15} /></ToolBtn>
-                <ToolBtn title="Numbered list" onClick={() => exec('insertOrderedList')}><ListOrdered size={15} /></ToolBtn>
-                <span className="w-px h-5 bg-white/10 mx-1" />
-                <ToolBtn title="Clear formatting" onClick={() => exec('removeFormat')}><X size={15} /></ToolBtn>
-            </div>
-            <div
-                ref={ref}
-                contentEditable
-                suppressContentEditableWarning
-                onInput={emit}
-                onBlur={emit}
-                data-placeholder={placeholder}
-                className="rte-content px-4 py-3 text-white text-sm leading-relaxed focus:outline-none overflow-y-auto custom-scrollbar"
-                style={{ minHeight }}
-            />
-        </div>
-    );
-};
-
 const emptyDivision = (licenseRequired = false, scoringPoint = 'golden') => ({
     _key: Math.random().toString(36).slice(2),
     id: null,
@@ -530,74 +483,6 @@ const formatEventDates = (start, end) => {
     return `${s.getDate()} ${s.toLocaleString('default', { month: 'short' })} - ${e.getDate()} ${e.toLocaleString('default', { month: 'short' })} ${e.getFullYear()}`;
 };
 
-const resizeImage = (file, maxWidth = 1200, quality = 0.8, preserveAlpha = false) =>
-    new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (ev) => {
-            const img = new Image();
-            img.src = ev.target.result;
-            img.onload = () => {
-                let { width, height } = img;
-                if (width > maxWidth) {
-                    height = Math.round((height * maxWidth) / width);
-                    width = maxWidth;
-                }
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                if (preserveAlpha) {
-                    ctx.clearRect(0, 0, width, height);
-                }
-                ctx.drawImage(img, 0, 0, width, height);
-                const mime = preserveAlpha ? 'image/png' : 'image/jpeg';
-                canvas.toBlob(
-                    (blob) => {
-                        const baseName = (file.name || 'image').replace(/\.[^.]+$/, '');
-                        resolve(new File(
-                            [blob],
-                            `${baseName}.${preserveAlpha ? 'png' : 'jpg'}`,
-                            { type: mime, lastModified: Date.now() }
-                        ));
-                    },
-                    mime,
-                    quality
-                );
-            };
-            img.onerror = reject;
-        };
-        reader.onerror = reject;
-    });
-
-const uploadToGallery = async (file, prefix) => {
-    const preserveAlpha = prefix === 'sponsors' || prefix === 'org-logos';
-    const resized = await resizeImage(file, 1200, 0.8, preserveAlpha);
-    const ext = preserveAlpha ? 'png' : 'jpg';
-    const fileName = `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}.${ext}`;
-    const filePath = `${prefix}/${fileName}`;
-    const { error } = await supabase.storage.from('gallery').upload(filePath, resized);
-    if (error) throw error;
-    const { data: { publicUrl } } = supabase.storage.from('gallery').getPublicUrl(filePath);
-    return publicUrl;
-};
-
-const uploadEventAsset = async (file, prefix, maxBytes = 10 * 1024 * 1024) => {
-    if (!file) throw new Error('Choose a file to upload');
-    if (file.size > maxBytes) throw new Error(`File must be smaller than ${Math.round(maxBytes / (1024 * 1024))} MB`);
-    const safeName = String(file.name || 'asset')
-        .toLowerCase()
-        .replace(/[^a-z0-9._-]+/g, '-')
-        .replace(/^-+|-+$/g, '');
-    const filePath = `${prefix}/${Date.now()}_${Math.random().toString(36).slice(2)}_${safeName}`;
-    const { error } = await supabase.storage.from('gallery').upload(filePath, file, {
-        contentType: file.type || undefined,
-        upsert: false,
-    });
-    if (error) throw error;
-    const { data: { publicUrl } } = supabase.storage.from('gallery').getPublicUrl(filePath);
-    return publicUrl;
-};
 
 /** Unique trimmed venue names, order preserved. */
 const normalizeVenues = (list) => {
@@ -696,6 +581,9 @@ const blankForm = {
     is_visible: true,
     finance_managed: true,
     allow_payments: true,
+    allow_payments_after_close: true,
+    require_access_code: false,
+    access_code: '',
     show_in_recent_results: false,
     allow_temporary_license: true,
     license_required_default: false,
@@ -851,7 +739,18 @@ const ageFromDivisionName = (name) => {
     return '';
 };
 
-const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisation = null }) => {
+const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisation = null, renderEditor, beforeSave, theme }) => {
+    const previewTheme = theme === 'preview';
+    const guardedEditor = Boolean(renderEditor || previewTheme);
+    const previewWriteFailed = useRef(false);
+    const previewRoot = useRef(null);
+    useEffect(() => {
+        if (!previewTheme || !isOpen) return;
+        const trigger = document.activeElement, overflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        previewRoot.current?.focus();
+        return () => { document.body.style.overflow = overflow; if (trigger?.isConnected) trigger.focus(); };
+    }, [previewTheme, isOpen]);
     // Tracks the event currently being edited inside this session (survives first create
     // when the parent still has editingEvent=null, so Save can keep the modal open).
     const [workingEvent, setWorkingEvent] = useState(null);
@@ -869,9 +768,20 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const [showPrizeBreakdown, setShowPrizeBreakdown] = useState(false);
     const [showEventDescription, setShowEventDescription] = useState(false);
     const [saving, setSaving] = useState(false);
+    const saveLock = useRef(false);
+    const [loadingExisting, setLoadingExisting] = useState(Boolean(editingEvent));
+    const [loadError, setLoadError] = useState('');
+    const [saveError, setSaveError] = useState('');
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+    const [cancelling, setCancelling] = useState(false);
+    const [cancellationReason, setCancellationReason] = useState('');
     /** Sibling calendar rows for the weekly series being edited (sorted by start_date). */
     const [seriesSiblings, setSeriesSiblings] = useState([]);
+    const [showAccessCode, setShowAccessCode] = useState(false);
+    const [accessCodeError, setAccessCodeError] = useState('');
+    const [savedAccessCode, setSavedAccessCode] = useState(null);
+    const hasExistingAccessCode = activeEvent?.registration_access === 'code'
+        && (!form.is_weekly || !seriesSiblings.some(event => event.registration_access !== 'code'));
     const [uploadingCover, setUploadingCover] = useState(false);
     const [uploadingPoster, setUploadingPoster] = useState(false);
     const [uploadingOrgLogo, setUploadingOrgLogo] = useState(false);
@@ -1067,7 +977,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
 
     // Google Places autocomplete on the address field (step 1, when Date & Venue is open).
     useEffect(() => {
-        if (!isOpen || step !== 1 || (!openPanels.venue && !openPanels.identity)) return;
+        if (renderEditor || !isOpen || step !== 1 || (!openPanels.venue && !openPanels.identity)) return;
         let cancelled = false;
         // Allow the collapsible panel to mount the input before attaching.
         const timer = setTimeout(() => {
@@ -1112,7 +1022,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             clearTimeout(timer);
             autocompleteRef.current = null;
         };
-    }, [isOpen, step, openPanels.venue, openPanels.identity]);
+    }, [isOpen, step, openPanels.venue, openPanels.identity, renderEditor]);
 
     useEffect(() => {
         if (!isOpen) {
@@ -1120,6 +1030,13 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             setSeriesSiblings([]);
             return;
         }
+        let disposed = false;
+        setShowAccessCode(false);
+        setAccessCodeError('');
+        setSavedAccessCode(null);
+        setLoadError('');
+        setSaveError('');
+        setLoadingExisting(Boolean(editingEvent));
         setSeriesSiblings([]);
         setStep(1);
         licenseDefaultTouchedRef.current = false;
@@ -1139,6 +1056,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         });
         setShowPreview(false);
         setShowCancelConfirm(false);
+        setCancelling(false);
+        setCancellationReason('');
         setVenueQuery('');
         setVenueOpen(false);
         if (editingEvent) {
@@ -1154,7 +1073,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             const resolvedEvent = draft ? { ...editingEvent, ...draft.payload } : editingEvent;
             setWorkingEvent(resolvedEvent);
             setRemovedDivisionIds(draft?.removed_division_ids || []);
-            loadExisting(resolvedEvent, draft?.divisions || null);
+            loadExisting(resolvedEvent, draft?.divisions || null)
+                .catch(error => { if (!disposed) setLoadError(error.message || 'Event setup could not be loaded.'); })
+                .finally(() => { if (!disposed) setLoadingExisting(false); });
         } else {
             setWorkingEvent(null);
             regCloseTouchedRef.current = false;
@@ -1181,6 +1102,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             setDivisions([emptyDivision(base.license_required_default)]);
             setShowPrizeBreakdown(false);
         }
+        return () => { disposed = true; };
         // Only re-init when the modal opens or a different event is loaded — not after in-session saves.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, editingEvent?.id]);
@@ -1259,6 +1181,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             federation_sanction_status: ev.federation_sanction_status || (ev.sanction_requested ? 'pending' : 'not_requested'),
             is_visible: ev.is_visible !== false,
             allow_payments: ev.allow_payments ?? true,
+            require_access_code: ev.registration_access === 'code',
+            access_code: '',
             finance_managed: ev.finance_managed ?? true,
             show_in_recent_results: !!(ev.show_in_recent_results || ev.featured_result),
             golden_point: resolveScoringPoint(ev) === 'golden',
@@ -1291,11 +1215,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (ev.is_weekly && ev.series_id) {
             const { data: siblings, error: seriesErr } = await supabase
                 .from('calendar')
-                .select('id, start_date, slug, event_name')
+                .select('id, start_date, slug, event_name, registration_access')
                 .eq('series_id', ev.series_id)
                 .eq('is_weekly', true)
                 .order('start_date', { ascending: true });
             if (seriesErr) {
+                if (guardedEditor) throw seriesErr;
                 console.error('[EventBuilder] load series siblings failed:', seriesErr.message);
                 setSeriesSiblings([]);
             } else {
@@ -1336,6 +1261,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             .select('*')
             .eq('event_id', ev.id)
             .order('sort_order', { ascending: true });
+        if (error && guardedEditor) throw error;
         if (!error && data && data.length > 0) {
             setDivisions(data.map((d) => mapDivisionRow(d, d.id)));
             if (ev.entry_fee != null && ev.entry_fee !== '') {
@@ -1350,6 +1276,13 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     };
 
     const setField = (name, value) => setForm((prev) => ({ ...prev, [name]: value }));
+
+    const authorizeMutation = async (operation, payload, mode) => {
+        if (guardedEditor && (loadingExisting || loadError)) throw new Error(loadError || 'Wait for event setup to finish loading.');
+        const result = await beforeSave?.({ operation, event: activeEvent, sourceEvent: editingEvent, form, divisions, removedDivisionIds, seriesSiblings, payload, mode });
+        if (result === false) throw new Error('The event change was not authorised.');
+        return result?.verifyContinuing || (async () => {});
+    };
 
     /**
      * Enable/disable weekly social occurrence mode and apply non-SAPA defaults.
@@ -1721,7 +1654,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!file) return;
         try {
             setUploadingCover(true);
-            const url = await uploadToGallery(file, 'covers');
+            const checkpoint = await authorizeMutation('upload-cover');
+            const url = await uploadToGallery(file, 'covers', checkpoint);
             setField('custom_image_url', url);
             toast.success('Cover photo uploaded');
         } catch (err) {
@@ -1737,11 +1671,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!file) return;
         try {
             setUploadingPoster(true);
+            const checkpoint = await authorizeMutation('upload-poster');
             if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-                const url = await uploadEventAsset(file, 'event-posters');
+                const url = await uploadEventAsset(file, 'event-posters', undefined, checkpoint);
                 setForm((prev) => ({ ...prev, poster_document_url: url, poster_image_url: '' }));
             } else {
-                const url = await uploadToGallery(file, 'posters');
+                const url = await uploadToGallery(file, 'posters', checkpoint);
                 setForm((prev) => ({ ...prev, poster_image_url: url, poster_document_url: '' }));
             }
             toast.success('Event poster uploaded');
@@ -1758,7 +1693,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!file) return;
         try {
             setUploadingKit(true);
-            const url = await uploadEventAsset(file, 'event-kits');
+            const checkpoint = await authorizeMutation('upload-organiser-kit');
+            const url = await uploadEventAsset(file, 'event-kits', undefined, checkpoint);
             setField('organiser_kit_url', url);
             toast.success('Event organiser document uploaded');
         } catch (err) {
@@ -1774,8 +1710,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!files.length) return;
         try {
             setUploadingGallery(true);
+            const checkpoint = await authorizeMutation('upload-gallery');
             const urls = [];
-            for (const file of files) urls.push(await uploadToGallery(file, 'event-media'));
+            for (const file of files) urls.push(await uploadToGallery(file, 'event-media', checkpoint));
             setForm((prev) => ({
                 ...prev,
                 media_gallery_urls: [...(prev.media_gallery_urls || []), ...urls],
@@ -1794,7 +1731,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!file) return;
         try {
             setUploadingOrgLogo(true);
-            const url = await uploadToGallery(file, 'org-logos');
+            const checkpoint = await authorizeMutation('upload-organiser-logo');
+            const url = await uploadToGallery(file, 'org-logos', checkpoint);
             setField('organiser_logo_url', url);
             toast.success('Organisation logo uploaded');
         } catch (err) {
@@ -1811,8 +1749,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!files.length) return;
         try {
             setUploadingSponsor(true);
+            const checkpoint = await authorizeMutation('upload-sponsor');
             const urls = [];
-            for (const file of files) urls.push(await uploadToGallery(file, 'sponsors'));
+            for (const file of files) urls.push(await uploadToGallery(file, 'sponsors', checkpoint));
             setForm((prev) => {
                 const current = [...(prev.sponsor_logos || [])];
                 if (asMain) {
@@ -1905,7 +1844,46 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         );
     };
 
+    const accessCodeOptions = (protectedBefore = hasExistingAccessCode) => ({
+        enabled: form.require_access_code,
+        code: form.access_code,
+        protectedBefore,
+    });
+
+    const validateAccessCode = () => {
+        const error = getAccessCodeError(accessCodeOptions());
+        setAccessCodeError(error);
+        if (!error) return true;
+        toast.error(error);
+        setStep(2);
+        requestAnimationFrame(() => document.getElementById('create-event-access-code')?.focus());
+        return false;
+    };
+
+    const persistAccessCode = async (eventId, protectedBefore = activeEvent?.registration_access === 'code', checkpoint = async () => {}) => {
+        await checkpoint();
+        return saveEventAccessCode(supabase, eventId, accessCodeOptions(protectedBefore));
+    };
+
+    const rememberSavedAccessCode = () => {
+        if (!form.require_access_code) setSavedAccessCode(null);
+        else if (form.access_code.trim()) setSavedAccessCode(form.access_code.trim());
+        setForm((prev) => ({ ...prev, access_code: '' }));
+        setAccessCodeError('');
+    };
+
+    const copyAccessCode = async (code) => {
+        if (!code) return;
+        try {
+            await navigator.clipboard.writeText(code);
+            toast.success('Access code copied');
+        } catch {
+            toast.error('Unable to copy the access code. Select and copy it manually.');
+        }
+    };
+
     const validateDraft = () => {
+        if (!validateAccessCode()) return false;
         if (!form.event_name.trim()) { toast.error('Event name is required'); return false; }
         if (!form.start_date) { toast.error('Start date is required'); return false; }
         if (form.is_weekly) {
@@ -1924,6 +1902,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!normalizeVenues(form.venues).length) { toast.error('Add at least one venue'); return false; }
         if (!form.city.trim()) { toast.error('City is required'); return false; }
         if (!form.is_weekly && !validateDivisionsNamed()) return false;
+        for (const d of divisions) {
+            if (d.entry_limit !== '' && d.entry_limit != null && (!Number.isInteger(Number(d.entry_limit)) || Number(d.entry_limit) < 1)) {
+                toast.error(`Maximum teams must be a positive whole number: ${d.name || 'Unnamed division'}`);
+                return false;
+            }
+        }
         return true;
     };
 
@@ -1967,6 +1951,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const getReviewIssues = () => {
         const errors = [];
         const warnings = [];
+        const codeError = getAccessCodeError(accessCodeOptions());
+        if (codeError) errors.push(codeError);
+        divisions.forEach(d => {
+            if (d.entry_limit !== '' && d.entry_limit != null && (!Number.isInteger(Number(d.entry_limit)) || Number(d.entry_limit) < 1)) errors.push(`Maximum teams must be a positive whole number: ${d.name || 'Unnamed division'}`);
+        });
         if (!form.event_name?.trim()) errors.push('Event name is required');
         if (!form.start_date) errors.push('Start date is required');
         if (form.is_weekly) {
@@ -2052,6 +2041,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
 
     const next = () => {
         if (step === 1 && !validateBasics()) return;
+        if (step === 2 && !validateAccessCode()) return;
         if (step === 4 && !form.is_weekly && !validateDivisionsNamed()) return;
         if (step === 4 && !form.is_weekly && showPrizeBreakdown) syncPrizeBreakdownToDivisions();
         setStep((s) => {
@@ -2127,6 +2117,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             entry_fee_notes: form.entry_fee_notes || null,
             payment_method: form.payment_method || (form.allow_payments ? 'platform' : 'free'),
             allow_payments: (form.payment_method || 'platform') !== 'free',
+            allow_payments_after_close: form.allow_payments_after_close !== false,
             finance_managed: (form.payment_method || 'platform') === 'platform',
             payment_bank_name: form.payment_method === 'eft' ? (form.payment_bank_name?.trim() || null) : null,
             payment_account_name: form.payment_method === 'eft' ? (form.payment_account_name?.trim() || null) : null,
@@ -2162,6 +2153,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         };
         // UI-only — never send to calendar table
         delete payload.weekly_count;
+        delete payload.require_access_code;
+        delete payload.access_code;
+        if (!isEditing) payload.registration_access = form.require_access_code ? 'code' : 'public';
         // Never invent a series for normal events
         if (!isWeekly) {
             delete payload.series_id;
@@ -2258,7 +2252,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         setSyncingRankedin(true);
         const toastId = toast.loading('Syncing with RankedIn…');
         try {
+            const checkpoint = await authorizeMutation('sync-rankedin');
             // Persist the link before calling the edge function
+            await checkpoint();
             await supabase
                 .from('calendar')
                 .update({
@@ -2267,6 +2263,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 })
                 .eq('id', eventId);
 
+            await checkpoint();
             const { data, error } = await supabase.functions.invoke('sync-to-rankedin', {
                 body: { eventId, rankedinId },
             });
@@ -2287,6 +2284,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             const pushErrors = data.writePush?.errors || [];
             const detailsUpdated = data.detailsPush?.updated || [];
             const detailsErrors = data.detailsPush?.errors || [];
+            const seedsUpdated = data.seedsPush?.updated || 0;
+            const seedsErrors = data.seedsPush?.errors || [];
+            const seedsRetained = (data.seedsPush?.byDivision || []).some((d) => ['existing_seeds', 'draws_exist', 'tournament_locked'].includes(d.reason));
+            const seedsBit = seedsUpdated > 0
+                ? ` Seeds: ${seedsUpdated} team(s) updated.`
+                : (seedsRetained ? ' Existing RankedIn draws and seeds retained.' : '');
             const skipCounts = pushSkipped.reduce((acc, s) => {
                 const key = s.reason || 'other';
                 acc[key] = (acc[key] || 0) + 1;
@@ -2295,11 +2298,13 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             const skipSummary = Object.entries(skipCounts)
                 .map(([reason, count]) => `${count} ${reason}`)
                 .join(', ');
-            if ((pushErrors.length > 0 && pushed === 0) || (detailsErrors.length > 0 && detailsUpdated.length === 0 && data.detailsPush?.status === 'error')) {
+            if ((pushErrors.length > 0 && pushed === 0) || (detailsErrors.length > 0 && detailsUpdated.length === 0 && data.detailsPush?.status === 'error') || data.seedsPush?.status === 'error') {
                 toast.error(
-                    detailsErrors[0] || pushErrors[0] || 'Sync push failed',
+                    seedsErrors[0] || detailsErrors[0] || pushErrors[0] || 'Sync push failed',
                     { id: toastId, duration: 8000 },
                 );
+            } else if (seedsErrors.length > 0) {
+                toast.warning(`Entries synced, but some seeds could not be saved: ${seedsErrors[0]}`, { id: toastId, duration: 9000 });
             } else if (missing.length > 0) {
                 toast.warning(
                     `Linked RankedIn #${data.rankedinId}. Mapped ${mappedCount} division(s). Create on RankedIn: ${missing.map((d) => d.divisionName).join(', ')}`,
@@ -2317,12 +2322,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                             : ' No paid doubles teams to push yet.'))
                     : ' Set RankedIn edge secrets to push paid entries.';
                 toast.success(
-                    `Linked RankedIn #${data.rankedinId} — ${mappedCount} division(s) mapped.${detailsBit}${pushBit}`,
+                    `Linked RankedIn #${data.rankedinId} — ${mappedCount} division(s) mapped.${detailsBit}${pushBit}${seedsBit}`,
                     { id: toastId, duration: 9000 },
                 );
             }
             if (data.writePush || data.detailsPush) {
-                console.info('[sync-to-rankedin]', { writePush: data.writePush, detailsPush: data.detailsPush });
+                console.info('[sync-to-rankedin]', { writePush: data.writePush, detailsPush: data.detailsPush, seedsPush: data.seedsPush });
             }
             if (pushSkipped.length > 0) {
                 const rowCount = downloadRankedinSkipReport(pushSkipped, {
@@ -2343,18 +2348,22 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         }
     };
 
-    const persistDivisions = async (eventId) => {
+    const persistDivisions = async (eventId, checkpoint = async () => {}) => {
         if (removedDivisionIds.length) {
-            await supabase.from('tournament_divisions').delete().in('id', removedDivisionIds);
+            await checkpoint();
+            const { error } = await supabase.from('tournament_divisions').delete().in('id', removedDivisionIds);
+            if (error) throw error;
         }
         const rows = divisions.filter((d) => d.name.trim());
         for (let i = 0; i < rows.length; i++) {
             const d = rows[i];
             const record = { event_id: eventId, ...divisionRecord(d, i) };
             if (d.id) {
+                await checkpoint();
                 const { error } = await supabase.from('tournament_divisions').update(record).eq('id', d.id);
                 if (error) throw error;
             } else {
+                await checkpoint();
                 const { error } = await supabase.from('tournament_divisions').insert([record]);
                 if (error) throw error;
             }
@@ -2367,6 +2376,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             .select('*')
             .eq('event_id', eventId)
             .order('sort_order', { ascending: true });
+        if (error && guardedEditor) throw error;
         if (!error && data) {
             setDivisions(
                 data.length > 0
@@ -2384,9 +2394,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
      * @param {object} payload - built calendar payload for the edited occurrence
      * @param {{ id: number|string, start_date?: string, series_id?: string }} editedEvent
      */
-    const persistWeeklySeriesUpdate = async (payload, editedEvent) => {
+    const persistWeeklySeriesUpdate = async (payload, editedEvent, checkpoint = async () => {}) => {
         const seriesId = payload.series_id || editedEvent.series_id || form.series_id;
         if (!seriesId) {
+            await persistAccessCode(editedEvent.id, undefined, checkpoint);
+            await checkpoint();
             const { error } = await supabase.from('calendar').update(payload).eq('id', editedEvent.id);
             if (error) throw error;
             return 1;
@@ -2396,7 +2408,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!siblings.length) {
             const { data, error } = await supabase
                 .from('calendar')
-                .select('id, start_date, slug')
+                .select('id, start_date, slug, registration_access')
                 .eq('series_id', seriesId)
                 .eq('is_weekly', true)
                 .order('start_date', { ascending: true });
@@ -2405,6 +2417,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             setSeriesSiblings(siblings);
         }
         if (!siblings.length) {
+            await persistAccessCode(editedEvent.id, undefined, checkpoint);
+            await checkpoint();
             const { error } = await supabase.from('calendar').update(payload).eq('id', editedEvent.id);
             if (error) throw error;
             return 1;
@@ -2417,6 +2431,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
 
         for (let j = 0; j < siblings.length; j += 1) {
             const sibling = siblings[j];
+            await persistAccessCode(sibling.id, sibling.registration_access === 'code', checkpoint);
             const weekOffsetDays = (j - editIdx) * 7;
             const occurrenceDate = addDaysToDate(form.start_date, weekOffsetDays);
             const instancePayload = {
@@ -2437,12 +2452,16 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             // Keep existing slug so public links stay stable
             delete instancePayload.slug;
 
+            await checkpoint();
             const { error } = await supabase
                 .from('calendar')
                 .update(instancePayload)
                 .eq('id', sibling.id);
             if (error) throw error;
         }
+        setSeriesSiblings(siblings.map((event) => ({
+            ...event, registration_access: form.require_access_code ? 'code' : 'public',
+        })));
         return siblings.length;
     };
 
@@ -2451,17 +2470,30 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
      * @param {{ stayOpen?: boolean }} options - stayOpen (default true) keeps the builder open after save
      */
     const handleSave = async (mode = 'publish', { stayOpen = true } = {}) => {
-        if (mode === 'draft') {
-            if (!validateDraft()) return;
-        } else {
-            if (!validatePublish()) return;
+        if (previewTheme && previewWriteFailed.current) { toast.error('Close and refresh before retrying this save.'); return { success: false, error: 'Close and refresh before retrying.', mutationAttempted: true }; }
+        if (saveLock.current) return { success: false, reason: 'busy', mutationAttempted: false };
+        if (guardedEditor && (loadingExisting || loadError)) return { success: false, error: loadError || 'Wait for event setup to finish loading.', mutationAttempted: false };
+        if (guardedEditor && form.is_weekly && activeEvent?.pending_changes?.payload && ['pending', 'rejected'].includes(activeEvent.pending_changes_status)) {
+            if (previewTheme) toast.error('Weekly-series amendments need an explicit approval workflow before saving here.');
+            return { success: false, error: 'Weekly-series amendments need an explicit approval workflow before saving here.', mutationAttempted: false };
         }
-        if (!confirmLowFees()) return;
+        if (mode === 'draft') {
+            if (!validateDraft()) return { success: false, reason: 'validation', mutationAttempted: false };
+        } else {
+            if (!validatePublish()) return { success: false, reason: 'validation', mutationAttempted: false };
+        }
+        if (!confirmLowFees()) return { success: false, reason: 'cancelled', mutationAttempted: false };
 
+        saveLock.current = true;
+        setSaveError('');
         setSaving(true);
+        let mutationAttempted = false;
         const wasNew = !activeEvent?.id;
         try {
             const payload = buildPayload(mode);
+            const checkpoint = await authorizeMutation('save', payload, mode);
+            await checkpoint();
+            mutationAttempted = true;
             let eventId = activeEvent?.id;
             const applyingPendingAmendment = !!activeEvent?.pending_changes?.payload
                 && ['pending', 'rejected'].includes(activeEvent.pending_changes_status);
@@ -2489,7 +2521,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                         id: activeEvent.id,
                         start_date: activeEvent.start_date || form.start_date,
                         series_id: payload.series_id,
-                    });
+                    }, checkpoint);
                     eventId = activeEvent.id;
                     setWorkingEvent((prev) => ({
                         ...(prev || activeEvent || {}),
@@ -2498,8 +2530,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                         slug: activeEvent.slug || payload.slug,
                         series_id: payload.series_id,
                         is_weekly: true,
+                        registration_access: form.require_access_code ? 'code' : 'public',
                         sanction_status: prev?.sanction_status || activeEvent?.sanction_status || 'approved',
                     }));
+                    rememberSavedAccessCode();
                     toast.success(
                         updatedCount > 1
                             ? `Updated all ${updatedCount} weekly events in this series`
@@ -2514,11 +2548,13 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                         seriesCount: updatedCount,
                     });
                     if (!stayOpen) onClose?.();
-                    return;
+                    return { success: true, eventId, seriesCount: updatedCount, mutationAttempted: true };
                 }
+                await checkpoint();
                 const { error } = await supabase.from('calendar').update(payload).eq('id', activeEvent.id);
                 if (error) throw error;
-                await persistDivisions(eventId);
+                await persistAccessCode(eventId, undefined, checkpoint);
+                await persistDivisions(eventId, checkpoint);
             } else if (form.is_weekly && mode === 'publish') {
                 const weeklyDates = buildWeeklyDates(form.start_date, form.weekly_count);
                 if (weeklyDates.length < 2) {
@@ -2557,6 +2593,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                         `${payload.slug || form.event_name}-${occurrenceDate}`,
                         { startDate: occurrenceDate },
                     );
+                    await checkpoint();
                     const { data, error } = await supabase
                         .from('calendar')
                         .insert([instancePayload])
@@ -2564,7 +2601,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                         .single();
                     if (error) throw error;
                     createdIds.push(data.id);
+                    await persistAccessCode(data.id, false, checkpoint);
                     if (divisionRows.length > 0) {
+                        await checkpoint();
                         const { error: divErr } = await supabase
                             .from('tournament_divisions')
                             .insert(divisionRows.map((row) => ({ ...row, event_id: data.id })));
@@ -2579,7 +2618,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                     sanction_status: 'approved',
                     is_weekly: true,
                     series_id: seriesId,
+                    registration_access: form.require_access_code ? 'code' : 'public',
                 });
+                rememberSavedAccessCode();
                 await reloadDivisionsForEvent(eventId);
                 toast.success(`Created ${createdIds.length} weekly events`);
                 onSaved?.({
@@ -2591,15 +2632,17 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                     seriesCount: createdIds.length,
                 });
                 if (!stayOpen) onClose?.();
-                return;
+                return { success: true, eventId, seriesCount: createdIds.length, mutationAttempted: true };
             } else {
                 payload.slug = await ensureUniqueSlug(payload.slug || form.event_name, {
                     startDate: form.start_date,
                 });
+                await checkpoint();
                 const { data, error } = await supabase.from('calendar').insert([payload]).select('id').single();
                 if (error) throw error;
                 eventId = data.id;
-                await persistDivisions(eventId);
+                await persistAccessCode(eventId, false, checkpoint);
+                await persistDivisions(eventId, checkpoint);
             }
 
             // Stay in edit mode for this session and sync division IDs so the next save updates rows.
@@ -2607,10 +2650,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 ...(prev || activeEvent || {}),
                 id: eventId,
                 event_name: payload.event_name,
+                registration_access: form.require_access_code ? 'code' : 'public',
                 slug: payload.slug,
                 sanction_status: prev?.sanction_status || activeEvent?.sanction_status
                     || (organisation ? 'approved' : undefined),
             }));
+            rememberSavedAccessCode();
             await reloadDivisionsForEvent(eventId);
 
             toast.success(
@@ -2626,13 +2671,29 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             );
             onSaved?.({ eventId, isNew: wasNew, eventName: payload.event_name, mode, stayOpen });
             if (!stayOpen) onClose?.();
+            return { success: true, eventId, mutationAttempted: true };
         } catch (err) {
             console.error('Error saving manual event:', err);
             toast.error(`Failed to save: ${err.message}`);
+            setSaveError(err.message || 'Event could not be saved.');
+            if (previewTheme && mutationAttempted) previewWriteFailed.current = true;
+            return { success: false, error: err.message || 'Event could not be saved.', mutationAttempted };
         } finally {
+            saveLock.current = false;
             setSaving(false);
         }
     };
+
+    const renderSavedAccessCode = () => (
+        <div className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/10 p-4">
+            <label htmlFor="create-event-saved-access-code" className="mb-2 block text-xs font-bold text-amber-200">Access code · copy this now</label>
+            <div className="flex gap-2">
+                <input id="create-event-saved-access-code" readOnly value={savedAccessCode} className={`${inputClass} min-h-11 font-mono tracking-widest`} />
+                <button type="button" onClick={() => copyAccessCode(savedAccessCode)} aria-label="Copy saved access code" className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-amber-400/30 text-amber-200 hover:border-amber-300 focus-visible:outline-2 focus-visible:outline-padel-green"><Copy size={17} /></button>
+            </div>
+            <p className="mt-2 text-[11px] leading-5 text-amber-100/70">For security, the saved code cannot be displayed again after closing this editor. You can replace it later when editing the event.</p>
+        </div>
+    );
 
     const PanelHeader = ({ id, title }) => (
         <button
@@ -2645,11 +2706,83 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         </button>
     );
 
+    const handleCancelEvent = async () => {
+        if (!activeEvent?.id || cancelling) return;
+        setCancelling(true);
+        try {
+            const checkpoint = await authorizeMutation('cancel-event');
+            await checkpoint();
+            const { data, error } = await supabase.functions.invoke('paystack-refund', {
+                body: {
+                    action: 'cancel_event',
+                    event_id: activeEvent.id,
+                    cancellation_reason: cancellationReason.trim() || undefined,
+                },
+            });
+            if (error) throw error;
+            if (data?.error) throw new Error(data.error);
+
+            const cancelledAt = new Date().toISOString();
+            setWorkingEvent((prev) => ({
+                ...(prev || activeEvent),
+                event_status: 'cancelled',
+                cancelled_at: cancelledAt,
+                cancellation_reason: cancellationReason.trim() || null,
+                cancellation_refund_status: data?.refund_status || 'complete',
+            }));
+            setShowCancelConfirm(false);
+            const refundMessage = data?.refund_status === 'needs_attention'
+                ? 'Event cancelled. Some refunds need administrator attention.'
+                : `Event cancelled. ${data?.registrations_processed || 0} player entr${data?.registrations_processed === 1 ? 'y' : 'ies'} processed.`;
+            data?.refund_status === 'needs_attention' ? toast.warning(refundMessage) : toast.success(refundMessage);
+            onSaved?.({ eventId: activeEvent.id, cancelled: true });
+        } catch (err) {
+            console.error('Event cancellation failed:', err);
+            toast.error(err?.message || 'Could not cancel the event');
+        } finally {
+            setCancelling(false);
+        }
+    };
 
     if (!isOpen) return null;
 
     const namedDivisions = divisions.filter((d) => d.name.trim());
-    const reviewIssues = step === 6 ? getReviewIssues() : { errors: [], warnings: [] };
+    const reviewIssues = renderEditor || step === 6 ? getReviewIssues() : { errors: [], warnings: [] };
+
+    // One headless engine, two presentations. All transformations, validation,
+    // persistence and side effects above remain the existing live workflow.
+    if (renderEditor) return renderEditor({
+        form, setForm, setField, handleInput, divisions, setDivisions,
+        showAccessCode, setShowAccessCode, accessCodeError, setAccessCodeError, savedAccessCode, hasExistingAccessCode, generateAccessCode, copyAccessCode,
+        activeEvent, sourceEvent: editingEvent, organisation, isEditing, isSuperAdmin,
+        ready: !loadingExisting && !loadError, loading: loadingExisting, loadError,
+        saving, saveError, buildPayload, divisionRecord, handleSave, getReviewIssues,
+        reviewIssues, validateBasics, validateDraft, validatePublish, confirmLowFees,
+        removedDivisionIds, updateDivision, addDivision, duplicateDivision, removeDivision,
+        standardPrice, setStandardPrice, bulkCloseDate, setBulkCloseDate,
+        applyStandardPrice, applyLicenseToAll, applyScoringToAll, applyCloseDateToAll,
+        divisionMultiOpen, setDivisionMultiOpen, pendingDivisionPicks, setPendingDivisionPicks,
+        openDivisionMultiSelect, togglePendingDivision, applyPendingDivisions,
+        createStandardSapaDivisions, namedDivisions, namedDivisionCount,
+        expandedDivisionKey, setExpandedDivisionKey,
+        clubs, selectedVenues, addVenue, removeVenue,
+        orgSearchRef, orgSuggestions, orgSearchOpen, setOrgSearchOpen, searchingOrgs,
+        selectOrganisation, clearOrganisationLink, handleOrganiserNameChange,
+        setWeeklyMode, seriesSiblings, buildWeeklyDates, addDaysToDate,
+        federations, selectedFederation, selectedFederationIsSapa, rankingTiers,
+        handleSanctionRequestedChange, handleFederationChange, handleSapaStatusChange,
+        handleCourtTypeChange, handleRankedinIdChange, handleSyncToRankedin, syncingRankedin,
+        togglePlayerGift, showPrizeBreakdown, setShowPrizeBreakdown,
+        addPrizeRow, updatePrizeRow, removePrizeRow, syncPrizeBreakdownToDivisions,
+        handleCoverUpload, handlePosterUpload, handleOrganiserKitUpload, handleGalleryUpload,
+        handleOrgLogoUpload, removeOrgLogo, handleSponsorUpload, removeSponsor, moveSponsor,
+        uploadingCover, uploadingPoster, uploadingKit, uploadingGallery, uploadingOrgLogo, uploadingSponsor,
+        CoAdminsPicker, step, setStep, next, back,
+        showCancelConfirm, setShowCancelConfirm, cancellationReason, setCancellationReason,
+        cancelling, handleCancelEvent,
+        options: { DIVISION_GROUPS, STANDARD_DIVISIONS, FORMATS, GENDERS, AGE_CATEGORIES,
+            SAPA_STATUSES, SAPA_WINNER_POINTS, PAYMENT_METHODS, PLAYER_GIFTS, SCORING_POINTS, TOURNAMENT_TAGS },
+    });
 
     return (
         <AnimatePresence>
@@ -2657,8 +2790,20 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[1100] flex items-center justify-center p-4"
-                onClick={onClose}
+                className={`fixed inset-0 bg-black/80 backdrop-blur-sm z-[1100] flex items-center justify-center p-4 ${previewTheme ? 'ap-live-event-editor' : ''}`}
+                role="dialog" aria-modal="true" aria-label="Edit event"
+                ref={previewRoot} tabIndex={-1}
+                onKeyDown={e => {
+                    if (!previewTheme) return;
+                    if (e.key === 'Escape' && !saving && !cancelling) { e.preventDefault(); onClose?.(); }
+                    if (e.key === 'Tab') {
+                        const items = [...e.currentTarget.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [contenteditable=true]')].filter(item => item.getClientRects().length && item.tabIndex !== -1);
+                        const first = items[0], last = items[items.length - 1];
+                        if (e.shiftKey && (document.activeElement === first || document.activeElement === e.currentTarget)) { e.preventDefault(); last?.focus(); }
+                        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+                    }
+                }}
+                onClick={() => !saving && !cancelling && onClose?.()}
             >
                 <motion.div
                     initial={{ opacity: 0, scale: 0.97, y: 20 }}
@@ -2678,7 +2823,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                 {form.is_weekly ? ' · Weekly series' : ''}
                             </p>
                         </div>
-                        <button onClick={onClose} className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5">
+                        <button aria-label="Close event editor" disabled={saving || cancelling} onClick={onClose} className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5">
                             <X size={20} />
                         </button>
                     </div>
@@ -2715,7 +2860,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                     </div>
 
                     {/* Body */}
-                    <div className="flex-1 overflow-y-auto px-6 py-6 custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto px-6 py-6 custom-scrollbar" inert={previewTheme && (loadingExisting || !!loadError || saving) ? true : undefined}>
+                        {previewTheme && (loadingExisting || loadError || saveError) && <p role="status">{loadError || saveError || 'Loading event settings…'}</p>}
                         {step === 1 && (
                             <div className="space-y-4">
                                 {isEditing && form.is_weekly && (
@@ -2874,7 +3020,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                     <div className="grid grid-cols-1 gap-4 border-t border-white/10 pt-5 md:grid-cols-3">
                                                         <div>
                                                             <label className={labelClass}>Court type *</label>
-                                                            <SelectMenu
+                                                            <SelectMenu searchable={previewTheme}
                                                                 value={form.indoor_outdoor || form.courts}
                                                                 onChange={handleCourtTypeChange}
                                                                 options={['Indoor', 'Outdoor', 'Panoramic', 'Mixed']}
@@ -2962,11 +3108,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                 <>
                                                     <div>
                                                         <label className={labelClass}>SAPA Status</label>
-                                                        <SelectMenu value={form.sapa_status} onChange={handleSapaStatusChange} options={SAPA_STATUSES} />
+                                                        <SelectMenu searchable={previewTheme} value={form.sapa_status} onChange={handleSapaStatusChange} options={SAPA_STATUSES} />
                                                     </div>
                                                     <div>
                                                         <label className={labelClass}>Event Series / Tag</label>
-                                                        <SelectMenu value={form.tournament_tag} onChange={(v) => setField('tournament_tag', v)} options={TOURNAMENT_TAGS} />
+                                                        <SelectMenu searchable={previewTheme} value={form.tournament_tag} onChange={(v) => setField('tournament_tag', v)} options={TOURNAMENT_TAGS} />
                                                     </div>
                                                     <div className="md:col-span-2">
                                                         <label className={labelClass}>Event subtitle / badge text</label>
@@ -3407,6 +3553,66 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                     Core setup rules for registration — set these before configuring divisions.
                                 </p>
 
+                                <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                                    <label className="flex cursor-pointer items-start gap-3">
+                                        <input
+                                            type="checkbox"
+                                            checked={form.require_access_code}
+                                            onChange={(e) => {
+                                                setField('require_access_code', e.target.checked);
+                                                setAccessCodeError('');
+                                            }}
+                                            className="mt-1 h-5 w-5 accent-padel-green focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-padel-green"
+                                        />
+                                        <span>
+                                            <span className="block text-sm font-bold text-white">Require an access code</span>
+                                            <span className="mt-1 block text-xs leading-relaxed text-gray-500">Only signed-in players with the code can unlock registration.</span>
+                                        </span>
+                                    </label>
+                                    {form.require_access_code && (
+                                        <div className="mt-4">
+                                            <label htmlFor="create-event-access-code" className={labelClass}>
+                                                {hasExistingAccessCode ? 'New access code (leave blank to keep the current code)' : 'Access code *'}
+                                            </label>
+                                            <div className="flex flex-col gap-2 sm:flex-row">
+                                                <div className="relative flex-1">
+                                                    <input
+                                                        id="create-event-access-code"
+                                                        type={showAccessCode ? 'text' : 'password'}
+                                                        value={form.access_code}
+                                                        onChange={(e) => {
+                                                            setField('access_code', e.target.value);
+                                                            setAccessCodeError('');
+                                                            setSavedAccessCode(null);
+                                                        }}
+                                                        minLength={6}
+                                                        maxLength={64}
+                                                        autoComplete="new-password"
+                                                        autoCapitalize="none"
+                                                        spellCheck={false}
+                                                        aria-invalid={!!accessCodeError}
+                                                        aria-describedby={`create-event-access-code-help${accessCodeError ? ' create-event-access-code-error' : ''}`}
+                                                        className={`${inputClass} min-h-11 pr-12 ${accessCodeError ? 'border-red-400' : ''}`}
+                                                    />
+                                                    <button type="button" onClick={() => setShowAccessCode((visible) => !visible)} aria-label={showAccessCode ? 'Hide access code' : 'Show access code'} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-lg text-gray-400 hover:text-white focus-visible:outline-2 focus-visible:outline-padel-green">
+                                                        {showAccessCode ? <EyeOff size={17} /> : <Eye size={17} />}
+                                                    </button>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button type="button" onClick={() => { setField('access_code', generateAccessCode()); setAccessCodeError(''); setSavedAccessCode(null); }} className="min-h-11 flex-1 rounded-xl border border-white/10 px-4 text-xs font-bold text-white hover:border-padel-green focus-visible:outline-2 focus-visible:outline-padel-green sm:flex-none">Generate</button>
+                                                    <button type="button" onClick={() => copyAccessCode(form.access_code)} disabled={!form.access_code.trim()} aria-label="Copy access code" className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-white/10 text-gray-300 hover:border-padel-green focus-visible:outline-2 focus-visible:outline-padel-green disabled:opacity-40"><Copy size={16} /></button>
+                                                </div>
+                                            </div>
+                                            {accessCodeError && <p id="create-event-access-code-error" role="alert" className="mt-2 text-xs text-red-400">{accessCodeError}</p>}
+                                            <p id="create-event-access-code-help" className="mt-2 text-[11px] leading-5 text-gray-500">Use 6–64 characters. The code is case-sensitive and cannot be viewed after closing this editor.</p>
+                                            {form.is_weekly && <p className="mt-1 text-[11px] leading-5 text-gray-500">Access-code changes apply to every weekly event in this series.</p>}
+                                            {savedAccessCode && renderSavedAccessCode()}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.allow_payments_after_close !== false} onChange={e => setField('allow_payments_after_close', e.target.checked)} />Allow payments after registration closes</label>
+                                <p className="text-xs text-gray-400">Existing entries can pay outstanding fees after closing; new registrations remain closed.</p>
                                 {/* Registration Window */}
                                 <div className="space-y-2">
                                     <PanelHeader id="regWindow" title="Registration Window" />
@@ -3715,7 +3921,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                         </p>
                                                     </div>
                                                 ) : (
-                                                    <select
+                                                    <SearchableDropdown searchable={previewTheme}
                                                         name="partner_requirement"
                                                         value={form.partner_requirement}
                                                         onChange={handleInput}
@@ -3724,7 +3930,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                     <option value="Required">Required</option>
                                                     <option value="Optional">Optional</option>
                                                     <option value="Not required">Not required</option>
-                                                    </select>
+                                                    </SearchableDropdown>
                                                 )}
                                             </div>
                                             <div>
@@ -3741,7 +3947,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                             </div>
                                             <div>
                                                 <label className={labelClass}>Plate / Back Draw</label>
-                                                <select
+                                                <SearchableDropdown searchable={previewTheme}
                                                     name="back_draw_options"
                                                     value={form.back_draw_options}
                                                     onChange={handleInput}
@@ -3749,12 +3955,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                 >
                                                     <option value="Plate Included">Plate Included (Guaranteed 2 Matches)</option>
                                                     <option value="No Plate">No Plate (Direct Elimination Only)</option>
-                                                </select>
+                                                </SearchableDropdown>
                                             </div>
                                             <div className="grid grid-cols-1 gap-3">
                                                 <div>
                                                     <label className={labelClass}>Deciding point (event default)</label>
-                                                    <SelectMenu
+                                                    <SelectMenu searchable={previewTheme}
                                                         value={form.scoring_point || 'golden'}
                                                         onChange={(v) => setField('scoring_point', v)}
                                                         options={SCORING_POINTS}
@@ -4104,15 +4310,15 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                                     </div>
                                                                     <div>
                                                                         <label className={labelClass}>Gender</label>
-                                                                        <SelectMenu value={d.gender} onChange={(v) => updateDivision(d._key, { gender: v })} options={GENDERS.map((g) => ({ value: g, label: g || '—' }))} placeholder="—" />
+                                                                        <SelectMenu searchable={previewTheme} value={d.gender} onChange={(v) => updateDivision(d._key, { gender: v })} options={GENDERS.map((g) => ({ value: g, label: g || '—' }))} placeholder="—" />
                                                                     </div>
                                                                     <div>
                                                                         <label className={labelClass}>Age category</label>
-                                                                        <SelectMenu value={d.age_category} onChange={(v) => updateDivision(d._key, { age_category: v })} options={AGE_CATEGORIES.map((a) => ({ value: a, label: a || '—' }))} placeholder="—" />
+                                                                        <SelectMenu searchable={previewTheme} value={d.age_category} onChange={(v) => updateDivision(d._key, { age_category: v })} options={AGE_CATEGORIES.map((a) => ({ value: a, label: a || '—' }))} placeholder="—" />
                                                                     </div>
                                                                     <div>
                                                                         <label className={labelClass}>Format</label>
-                                                                        <SelectMenu value={d.format} onChange={(v) => updateDivision(d._key, { format: v })} options={FORMATS} />
+                                                                        <SelectMenu searchable={previewTheme} value={d.format} onChange={(v) => updateDivision(d._key, { format: v })} options={FORMATS} />
                                                                     </div>
                                                                     <div>
                                                                         <label className={labelClass}>Entry fee (R)</label>
@@ -4123,25 +4329,26 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                                         <input value={d.suggested_level} onChange={(e) => updateDivision(d._key, { suggested_level: e.target.value })} placeholder="e.g. Playtomic 3.5–5" className={inputClass} />
                                                                     </div>
                                                                     <div>
-                                                                        <label className={labelClass}>Entry limit / capacity</label>
-                                                                        <input type="number" value={d.entry_limit} onChange={(e) => updateDivision(d._key, { entry_limit: e.target.value })} placeholder="Optional override" className={inputClass} />
+                                                                        <label className={labelClass}>Maximum teams</label>
+                                                                        <input type="number" min="1" step="1" value={d.entry_limit} onChange={(e) => updateDivision(d._key, { entry_limit: e.target.value })} placeholder="Unlimited" className={inputClass} />
+                                                                        <p className="mt-1.5 text-xs text-gray-400">Each pair or solo entry reserves one team place. Withdrawals and team merges free places; splitting a team needs an additional place.</p>
                                                                     </div>
                                                                     {isSuperAdmin && <>
                                                                         <div>
                                                                             <label className={labelClass}>Ranking tier</label>
-                                                                            <select value={d.ranking_tier_id} onChange={(e) => updateDivision(d._key, { ranking_tier_id: e.target.value })} className={inputClass}>
+                                                                            <SearchableDropdown searchable={previewTheme} value={d.ranking_tier_id} onChange={(e) => updateDivision(d._key, { ranking_tier_id: e.target.value })} className={inputClass}>
                                                                                 <option value="">No native points</option>
                                                                                 {rankingTiers.map((tier) => (
                                                                                     <option key={tier.id} value={tier.id}>{tier.name} · max {tier.max_points.toLocaleString()} pts</option>
                                                                                 ))}
-                                                                            </select>
+                                                                            </SearchableDropdown>
                                                                         </div>
                                                                         <div>
                                                                             <label className={labelClass}>Ranking category</label>
-                                                                            <select value={d.ranking_category} onChange={(e) => updateDivision(d._key, { ranking_category: e.target.value })} className={inputClass} disabled={!d.ranking_tier_id}>
+                                                                            <SearchableDropdown searchable={previewTheme} value={d.ranking_category} onChange={(e) => updateDivision(d._key, { ranking_category: e.target.value })} className={inputClass} disabled={!d.ranking_tier_id}>
                                                                                 <option value="">Select category</option>
                                                                                 {[1, 2, 3, 4].map((category) => <option key={category} value={category}>Category {category}</option>)}
-                                                                            </select>
+                                                                            </SearchableDropdown>
                                                                         </div>
                                                                     </>}
                                                                     <div>
@@ -4180,7 +4387,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                                     </div>
                                                                     <div>
                                                                         <label className={labelClass}>Deciding point</label>
-                                                                        <SelectMenu
+                                                                        <SelectMenu searchable={previewTheme}
                                                                             value={d.scoring_point || form.scoring_point || 'golden'}
                                                                             onChange={(v) => updateDivision(d._key, { scoring_point: v })}
                                                                             options={SCORING_POINTS}
@@ -4245,7 +4452,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                                         <div>
                                                             <label className={labelClass}>Federation *</label>
-                                                            <SelectMenu
+                                                            <SelectMenu searchable={previewTheme}
                                                                 value={form.federation_id || ''}
                                                                 onChange={handleFederationChange}
                                                                 options={federations.map((f) => ({ value: f.id, label: f.short_name ? `${f.short_name} — ${f.name}` : f.name }))}
@@ -4255,16 +4462,16 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                         {selectedFederationIsSapa && (
                                                             <div>
                                                                 <label className={labelClass}>SAPA tier *</label>
-                                                                <SelectMenu value={form.sapa_status} onChange={handleSapaStatusChange} options={SAPA_STATUSES.filter((tier) => tier !== 'None')} />
+                                                                <SelectMenu searchable={previewTheme} value={form.sapa_status} onChange={handleSapaStatusChange} options={SAPA_STATUSES.filter((tier) => tier !== 'None')} />
                                                             </div>
                                                         )}
                                                         <div>
                                                             <label className={labelClass}>Default match format</label>
-                                                            <SelectMenu value={form.default_match_format || 'Knockout'} onChange={(value) => setField('default_match_format', value)} options={FORMATS} />
+                                                            <SelectMenu searchable={previewTheme} value={form.default_match_format || 'Knockout'} onChange={(value) => setField('default_match_format', value)} options={FORMATS} />
                                                         </div>
                                                         <div>
                                                             <label className={labelClass}>Deciding point</label>
-                                                            <SelectMenu value={form.scoring_point || 'golden'} onChange={(value) => setField('scoring_point', value)} options={SCORING_POINTS} />
+                                                            <SelectMenu searchable={previewTheme} value={form.scoring_point || 'golden'} onChange={(value) => setField('scoring_point', value)} options={SCORING_POINTS} />
                                                         </div>
                                                         <div className="md:col-span-2">
                                                             <label className={labelClass}>Event badge text</label>
@@ -4299,7 +4506,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                         <div className="grid grid-cols-1 gap-4 rounded-xl border border-white/10 bg-black/20 p-4 md:grid-cols-2">
                                             <div>
                                                 <label className={labelClass}>Event Series / Tag</label>
-                                                <SelectMenu value={form.tournament_tag} onChange={(value) => setField('tournament_tag', value)} options={TOURNAMENT_TAGS} />
+                                                <SelectMenu searchable={previewTheme} value={form.tournament_tag} onChange={(value) => setField('tournament_tag', value)} options={TOURNAMENT_TAGS} />
                                             </div>
                                             <div className="md:col-span-2 grid grid-cols-1 gap-4 md:grid-cols-2">
                                                 <div>
@@ -4918,6 +5125,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                 {/* Settings Summary */}
                                 <div className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
                                     <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">Settings Summary</p>
+                                    <p className="text-sm">Entry access: {form.require_access_code ? 'Access code required' : 'Public'}</p>
+                                    <p className="text-sm">Payments after closing: {form.allow_payments_after_close ? 'Allowed for existing entries' : 'Off'}</p>
+                                    {form.require_access_code && (savedAccessCode ? renderSavedAccessCode() : <p className="text-sm">{hasExistingAccessCode && !form.access_code.trim() ? 'The current access code will be kept.' : 'Copy the access code securely before closing the editor. The saved code cannot be displayed later.'}</p>)}
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
                                         <p className="text-gray-300"><span className="text-gray-500">Entry payment method:</span> {PAYMENT_METHODS.find((method) => method.value === form.payment_method)?.label || '—'}</p>
                                         <p className="text-gray-300"><span className="text-gray-500">Partner requirement:</span> {form.is_weekly ? 'Optional (player chooses)' : (form.partner_requirement || '—')}</p>
@@ -4987,7 +5197,13 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                 <ChevronLeft size={16} /> Back
                             </button>
                             {isEditing && activeEvent?.event_status !== 'cancelled' && (
-                                <CancelEventButton onClick={() => setShowCancelConfirm(true)} />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCancelConfirm(true)}
+                                    className="px-4 py-2 rounded-xl font-bold text-red-400 border border-red-500/30 hover:bg-red-500/10 flex items-center gap-2"
+                                >
+                                    <Ban size={16} /> Cancel event
+                                </button>
                             )}
                             {activeEvent?.event_status === 'cancelled' && (
                                 <span className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider text-red-300 bg-red-500/10 border border-red-500/30">
@@ -5049,15 +5265,39 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 </motion.div>
 
                 {showCancelConfirm && (
-                    <CancelEventDialog
-                        event={activeEvent}
-                        onClose={() => setShowCancelConfirm(false)}
-                        onCancelled={(updatedEvent) => {
-                            setWorkingEvent(updatedEvent);
-                            setShowCancelConfirm(false);
-                            onSaved?.({ eventId: updatedEvent.id, cancelled: true });
-                        }}
-                    />
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="fixed inset-0 z-[1300] bg-black/80 flex items-center justify-center p-4"
+                        onClick={() => !cancelling && setShowCancelConfirm(false)}
+                    >
+                        <div className="w-full max-w-lg rounded-2xl border border-red-500/30 bg-[#111] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-start gap-4">
+                                <div className="rounded-xl bg-red-500/10 p-3 text-red-400"><AlertTriangle size={24} /></div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-white">Cancel this event?</h3>
+                                    <p className="mt-2 text-sm leading-6 text-gray-400">
+                                        This will withdraw every active player entry, automatically refund all eligible payments, remove the event from every player’s schedule, and mark it as cancelled publicly.
+                                    </p>
+                                </div>
+                            </div>
+                            <label className="mt-5 block text-xs font-bold uppercase tracking-wider text-gray-400">Reason (optional)</label>
+                            <textarea
+                                value={cancellationReason}
+                                onChange={(e) => setCancellationReason(e.target.value)}
+                                rows={3}
+                                placeholder="Tell registered players why the event was cancelled…"
+                                className="mt-2 w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none focus:border-red-500/50"
+                            />
+                            <div className="mt-6 flex justify-end gap-3">
+                                <button type="button" disabled={cancelling} onClick={() => setShowCancelConfirm(false)} className="px-4 py-2 rounded-xl border border-white/10 text-gray-300 hover:bg-white/5 disabled:opacity-50">Keep event</button>
+                                <button type="button" disabled={cancelling} onClick={handleCancelEvent} className="px-4 py-2 rounded-xl bg-red-500 text-white font-bold flex items-center gap-2 hover:bg-red-400 disabled:opacity-50">
+                                    {cancelling ? <Loader2 size={16} className="animate-spin" /> : <Ban size={16} />}
+                                    {cancelling ? 'Cancelling and refunding…' : 'Cancel event and refund players'}
+                                </button>
+                            </div>
+                        </div>
+                    </motion.div>
                 )}
 
                 {showPreview && (

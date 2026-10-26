@@ -1,0 +1,43 @@
+.admin-login { min-height:100dvh; display:grid; grid-template-columns:minmax(360px,.88fr) minmax(480px,1.12fr); background:#f4f5f2; color:#171a17; font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+.admin-login * {box-sizing:border-box;}.admin-login button,.admin-login input {font:inherit;}
+.admin-login h1,.admin-login h2 {font-family:inherit; font-weight:650;}
+.admin-login__brand {position:relative; min-height:100dvh; display:flex; flex-direction:column; padding:clamp(28px,5vw,72px); overflow:hidden; background:#171b18; color:#f3f6f1;}
+.admin-login__brand::after {content:""; position:absolute; width:460px; aspect-ratio:1; right:-210px; bottom:-210px; border:80px solid rgb(185 228 59 / .07); border-radius:50%; pointer-events:none;}
+.admin-login__logo {display:grid; grid-template-columns:auto 1fr; width:max-content; color:inherit!important; text-decoration:none; line-height:.73; letter-spacing:-.05em; position:relative; z-index:1;}
+.admin-login__logo strong {font-size:45px; grid-row:1/3;}.admin-login__logo span {font-size:17px; font-weight:850; letter-spacing:.03em; align-self:end;}.admin-login__logo small {font-size:11px; margin-top:6px; color:#aab2aa; letter-spacing:.08em; text-transform:uppercase;}
+.admin-login__story {margin:auto 0; max-width:610px; position:relative; z-index:1;}.admin-login__eyebrow {margin:0 0 13px!important; color:#7d8700; font-size:11px; font-weight:800; letter-spacing:.1em; text-transform:uppercase;}
+.admin-login__brand .admin-login__eyebrow {color:#b9e43b;}.admin-login__story h1 {max-width:13ch; margin:0 0 22px; font-size:clamp(39px,4.5vw,65px); line-height:.99; letter-spacing:-.055em; text-wrap:balance;}.admin-login__story > p:not(.admin-login__eyebrow) {max-width:51ch; color:#b8c0b7; font-size:15px; line-height:1.7;}
+.admin-login__story ul {list-style:none; margin:32px 0 0; padding:0; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); border-top:1px solid #3a403a;}.admin-login__story li {display:grid; gap:10px; padding:17px 12px 0 0; color:#dce2da; font-size:11px; line-height:1.4;}.admin-login__story li svg {color:#b9e43b;}
+.admin-login__brand-foot {display:flex; align-items:center; gap:8px; margin:0; color:#939c92; font-size:11px; position:relative; z-index:1;}
+.admin-login__form-side {display:grid; place-items:center; padding:40px 28px;}.admin-login__form {width:min(100%,440px);}.admin-login__lock {width:42px; height:42px; display:grid; place-items:center; margin-bottom:26px; border:1px solid #b8beb6; background:#fbfcf9; border-radius:7px; color:#4b534a;}
+.admin-login__form h2 {margin:0 0 12px; font-size:34px; line-height:1.08; letter-spacing:-.045em; text-wrap:balance;}.admin-login__intro {margin:0 0 31px; color:#626861; font-size:13px; line-height:1.65; text-wrap:pretty;}.admin-login__form label {display:block; margin:16px 0 7px; color:#363b35; font-size:12px; font-weight:700;}
+.admin-login__form input {width:100%; min-height:48px; padding:0 13px; border:1px solid #b8beb6; border-radius:6px; background:#fbfcf9; color:#171a17; outline:0;}.admin-login__form input::placeholder {color:#8b918a;}.admin-login__form :is(input,button,a):focus-visible {outline:3px solid #819f17; outline-offset:3px;}.admin-login__form input[aria-invalid=true] {border-color:#a33a30;}
+.admin-login__password {position:relative;}.admin-login__password input {padding-right:50px;}.admin-login__password button {position:absolute; top:5px; right:5px; width:38px; height:38px; display:grid; place-items:center; border:0; border-radius:5px; background:transparent; color:#626861; cursor:pointer;}.admin-login__password button:hover {background:#eef0eb; color:#171a17;}
+.admin-login__error {display:grid; gap:3px; margin-top:14px; padding:11px 12px; border:1px solid #dfb5ae; background:#f8e9e6; color:#7d3029; font-size:12px;}.admin-login__error span {line-height:1.45;}
+.admin-login__submit {width:100%; min-height:49px; display:flex; align-items:center; justify-content:center; gap:9px; margin-top:24px; border:1px solid #7a9718; border-radius:6px; background:#b9e43b; color:#1d2600; font-weight:800; cursor:pointer;}.admin-login__submit:hover:not(:disabled) {background:#c8ee5b;}.admin-login__submit:disabled {cursor:wait; opacity:.72;}
+.admin-login__spinner {width:17px; height:17px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:admin-spin .7s linear infinite;}@keyframes admin-spin {to{transform:rotate(360deg)}}
+.admin-login__help {margin:17px 0 0; padding-bottom:22px; border-bottom:1px solid #d8dcd5; color:#626861; font-size:11px; line-height:1.55;}.admin-login__back {display:inline-block; margin-top:19px; color:#414741!important; font-size:12px; font-weight:700; text-decoration:none;}.admin-login__back:hover {text-decoration:underline; text-underline-offset:4px;}
+@media(max-width:850px){.admin-login {grid-template-columns:1fr;}.admin-login__brand {min-height:auto; padding:24px;}.admin-login__story {margin:44px 0 28px;}.admin-login__story h1 {font-size:39px;}.admin-login__story ul {display:none;}.admin-login__brand-foot {display:none;}.admin-login__form-side {padding:38px 22px 52px;}.admin-login__form h2 {font-size:30px;}}
+@media(max-width:420px){.admin-login__brand {padding:20px;}.admin-login__story {margin:36px 0 12px;}.admin-login__story h1 {font-size:33px;}.admin-login__story > p:not(.admin-login__eyebrow) {display:none;}.admin-login__form-side {padding:30px 20px 44px;}}
+/* Keep motion on the compositor and never delay access to the form. */
+@media(prefers-reduced-motion:no-preference){
+  .admin-login__logo {animation:admin-login-enter .65s cubic-bezier(.16,1,.3,1) both;}
+  .admin-login__story > * {animation:admin-login-enter .8s cubic-bezier(.16,1,.3,1) both;}
+  .admin-login__story > :nth-child(1) {animation-delay:.08s;}
+  .admin-login__story > :nth-child(2) {animation-delay:.16s;}
+  .admin-login__story > :nth-child(3) {animation-delay:.24s;}
+  .admin-login__story > :nth-child(4) {animation-delay:.32s;}
+  .admin-login__brand-foot {animation:admin-login-enter .8s .38s cubic-bezier(.16,1,.3,1) both;}
+  .admin-login__form {animation:admin-login-form-enter .7s cubic-bezier(.16,1,.3,1) both;}
+  .admin-login__brand::after {animation:admin-login-drift 4.8s cubic-bezier(.16,1,.3,1) both;}
+  .admin-login__submit {transition:transform .18s ease;}
+  .admin-login__submit svg {transition:transform .2s ease;}
+  .admin-login__submit:hover:not(:disabled) {transform:translateY(-2px);}
+  .admin-login__submit:hover:not(:disabled) svg {transform:translateX(3px);}
+  .admin-login__submit:active:not(:disabled) {transform:translateY(0) scale(.99);}
+  .admin-login__error {animation:admin-login-enter .2s ease-out both;}
+}
+@keyframes admin-login-enter {from {opacity:0; transform:translateY(14px);} to {opacity:1; transform:translateY(0);}}
+@keyframes admin-login-form-enter {from {opacity:0; transform:translateY(8px);} to {opacity:1; transform:translateY(0);}}
+@keyframes admin-login-drift {from {opacity:0; transform:translate(65px,45px) scale(.8);} to {opacity:1; transform:translate(0,0) scale(1);}}
+@media(prefers-reduced-motion:reduce){.admin-login__spinner{animation:none;}}
