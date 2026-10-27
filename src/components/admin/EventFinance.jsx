@@ -331,19 +331,10 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                 const manualEventIdSet = new Set(manualEventIds);
 
                 // Fetch basic global stats for "at a glance" view
-                let allParts = [];
-                let from = 0;
-                const step = 1000;
-                while(true) {
-                    const { data } = await supabase
-                        .from('tournament_participants')
-                        .select('event_id, class_name, is_paid, profile_id, full_name')
-                        .range(from, from + step - 1);
-                    if (!data || data.length === 0) break;
-                    allParts.push(...data);
-                    if (data.length < step) break;
-                    from += step;
-                }
+                const allParts = await fetchAllRows(() => supabase
+                    .from('tournament_participants')
+                    .select('event_id, class_name, is_paid, profile_id, full_name')
+                    .order('id', { ascending: true }), 500);
 
                 const eventLicenses = new Map();
                 const idsByEvent = new Map();
@@ -386,11 +377,14 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                 // ── Manual events: pull stats from event_registrations ──────────────────
                 const manualLicenseCounted = {};
                 if (manualEventIds.length > 0) {
-                    const { data: manualRegs } = await supabase
+                    // These queries span all manual events, so a single select
+                    // silently drops entries/payments after the API's row cap.
+                    const manualRegs = await fetchAllRows(() => supabase
                         .from('event_registrations')
                         .select('id, event_id, email, division, payment_status, partner_email, partner_payment_status, division_id, tournament_divisions(entry_fee)')
                         .in('event_id', manualEventIds)
-                        .neq('status', 'withdrawn');
+                        .neq('status', 'withdrawn')
+                        .order('id', { ascending: true }), 500);
 
                     const manualEmails = [...new Set(
                         (manualRegs || [])
@@ -409,11 +403,12 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                     await Promise.all([...new Set((manualRegs||[]).map(r=>r.event_id))].map(async eid=>{const ids=new Set((manualRegs||[]).filter(r=>r.event_id===eid).map(r=>manualPlayersByEmail.get((r.email||'').toLowerCase().trim())?.id).filter(Boolean));const profiles=await hydrateEventLicenses([...ids].map(id=>({id})),eid);profiles.forEach(p=>manualEligibility.set(`${eid}:${p.id}`,p.event_license));}));
 
 
-                    const { data: manualPayments } = await supabase
+                    const manualPayments = await fetchAllRows(() => supabase
                         .from('payments')
-                        .select('event_id, status, metadata')
+                        .select('id, event_id, status, metadata')
                         .in('event_id', manualEventIds)
-                        .eq('status', 'success');
+                        .eq('status', 'success')
+                        .order('id', { ascending: true }), 500);
                     const paymentsByEvent = {};
                     (manualPayments || []).forEach((pay) => {
                         if (!paymentsByEvent[pay.event_id]) paymentsByEvent[pay.event_id] = [];
@@ -1765,6 +1760,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                     onBack={() => {
                         setSelectedEventId(null);
                         setViewMode('list');
+                        fetchInitialData();
                     }}
                 />
             ) : selectedEventId && viewMode !== 'list' && (
@@ -1776,6 +1772,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                             onClick={() => {
                                 setSelectedEventId(null);
                                 setViewMode('list');
+                                fetchInitialData();
                             }}
                             className="text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-white flex items-center gap-2 transition-colors"
                         >
