@@ -1,6 +1,6 @@
-// SA Nationals must follow RankedIn's explicit publication flag. ShowDraws
-// also appears on draft draws and is not a release signal for this event.
-export const requiresRankedinPublication = (tournamentId) => String(tournamentId) === '75314';
+// Every RankedIn tournament must follow its explicit publication flag.
+// ShowDraws can also be true for draft draws and is not a release signal.
+export const requiresRankedinPublication = (tournamentId) => /^[1-9]\d*$/.test(String(tournamentId ?? '').trim());
 
 export function publicRankedinClasses(tournamentId, classes) {
     if (!Array.isArray(classes)) return [];
@@ -20,6 +20,10 @@ export function publicRankedinResultsCache(tournamentId, row) {
         ...row,
         classes,
         has_draw: hasDraw,
+        upcoming_matches: publicRankedinMatches(tournamentId, {
+            AreMatchesPublished: true,
+            Matches: row.upcoming_matches,
+        }, classes),
         ...(!hasDraw ? { has_results: false, winners: [], upcoming_matches: [] } : {}),
     };
 }

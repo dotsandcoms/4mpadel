@@ -544,6 +544,12 @@ export const useRankedin = () => {
         setLoading(true);
         setError(null);
         try {
+            const classes = requiresRankedinPublication(tournamentId)
+                ? await getTournamentClasses(tournamentId)
+                : [];
+            if (requiresRankedinPublication(tournamentId)
+                && !classes.some(division => division.IsPublished === true && division.TournamentDraws?.length > 0)) return [];
+
             let url = `${API_BASE}/tournament/GetMatchesSectionAsync?Id=${tournamentId}&LanguageCode=en&IsReadonly=true`;
             if (tournamentClassId) url += `&tournamentClassId=${tournamentClassId}`;
             if (drawStage !== undefined) url += `&drawStage=${drawStage}`;
@@ -551,9 +557,6 @@ export const useRankedin = () => {
             if (isFinished !== undefined) url += `&isFinished=${isFinished}`;
 
             const data = await fetchWithCache(url, {}, 1000 * 60 * 2); // 2 minutes cache
-            const classes = requiresRankedinPublication(tournamentId)
-                ? await getTournamentClasses(tournamentId)
-                : [];
             return publicRankedinMatches(tournamentId, data, classes);
         } catch (err) {
             console.error('Error fetching tournament matches:', err);
