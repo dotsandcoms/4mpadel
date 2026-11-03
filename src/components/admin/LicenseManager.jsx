@@ -6,6 +6,7 @@ import { licenseStartDate } from '../../utils/licenseDates';
 import { grantTemporaryLicense } from '../../utils/temporaryLicenseAssignment';
 import TemporaryLicenseSales from './TemporaryLicenseSales';
 import LicenseOverview from './LicenseOverview';
+import LicenseFederationExport from './LicenseFederationExport';
 import { coverageStatus, groupLicensePayments } from '../../utils/licenseReporting';
 import './license-dashboard.css';
 
@@ -213,6 +214,7 @@ export default function LicenseManager() {
   const [tab, setTab] = useState('overview'), [seasons, setSeasons] = useState([]), [players, setPlayers] = useState([]), [lookup, setLookup] = useState('');
   const [player, setPlayer] = useState(() => new URLSearchParams(window.location.search).get('player'));
   const [salesYear, setSalesYear] = useState(String(currentYear())), [refreshKey, setRefreshKey] = useState(0);
+  const [showExport, setShowExport] = useState(false);
   const request = useRef(0);
   const registerRef = useRef(null);
   const load = useCallback(async () => {
@@ -261,7 +263,8 @@ export default function LicenseManager() {
   if (player) return <LicensePlayerPanel playerId={player} onBack={back} onSaved={refresh} />;
   const salesYears = [...new Set([currentYear(), ...seasons.map(season => Number(season.year))])].sort((a, b) => b - a);
   return <div className="license-workspace">
-    <header className="license-page-heading"><div><h1>Licenses</h1><p>License years, purchases and player coverage</p></div>{tab === 'register' && <div className="flex gap-2"><button type="button" disabled={loading} onClick={refresh} className={secondary} aria-label="Refresh register and active counts"><RefreshCw size={15} /><span>Refresh</span></button><button type="button" disabled={exporting || !result} onClick={download} className={secondary}><Download size={15} /><span>{exporting ? 'Exporting…' : 'Export register'}</span></button></div>}</header>
+    <header className="license-page-heading"><div><h1>Licenses</h1><p>License years, purchases and player coverage</p></div><div className="flex flex-wrap gap-2">{tab === 'register' && <><button type="button" disabled={loading} onClick={refresh} className={secondary} aria-label="Refresh register and active counts"><RefreshCw size={15} /><span>Refresh</span></button><button type="button" disabled={exporting || !result} onClick={download} className={secondary}><Download size={15} /><span>{exporting ? 'Exporting…' : 'Register CSV'}</span></button></>}<button type="button" className={secondary} aria-expanded={showExport} onClick={() => setShowExport(value => !value)}><Download size={16} />Export Excel</button></div></header>
+    {showExport && <LicenseFederationExport year={salesYear} seasons={seasons} onClose={() => setShowExport(false)} />}
     <nav aria-label="License management" className="license-tabs">{[['overview', 'Overview', LayoutDashboard], ['register', 'Register', List], ['sales', 'Temporary sales', BarChart3], ['settings', 'Prices & availability', Settings2]].map(([value, label, Icon]) => <button type="button" key={value} aria-current={tab === value ? 'page' : undefined} onClick={() => setTab(value)}>{React.createElement(Icon, { size: 15 })}{label}</button>)}</nav>
     {error && <p role="alert" className="license-error">{error}</p>}
     {tab === 'overview' ? <LicenseOverview year={salesYear} onYearChange={setSalesYear} years={salesYears} refreshKey={refreshKey} onRegister={values => { patch({ year: '', purchase_year: '', renewed_from_year: '', type: '', status: '', source: '', search: '', ...values }); setTab('register'); }} onTemporary={() => setTab('sales')} /> : tab === 'settings' ? <SeasonSettings onSaved={refresh} /> : tab === 'sales' ? <TemporaryLicenseSales /> : <>

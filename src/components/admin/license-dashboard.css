@@ -1,4 +1,15 @@
 /* Design polish informed by unslop, Damir Sokolovsky (@heydamir), CC BY 4.0. https://heydamir.design/unslop */
+.license-export-panel { margin-bottom: 24px; }
+.license-export-panel h2 { font-size: 18px; font-weight: 500; }
+.license-export-form { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 16px; padding: 12px 24px 24px; }
+.license-export-footer { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.license-export-footer p { color: var(--license-muted); font-size: 12px; max-width: 680px; }
+.license-export-form > :is(.license-error,.license-export-success) { grid-column: 1 / -1; }
+.license-export-success { color: #ccff00; font-size: 13px; }
+@media (max-width: 800px) {
+  .license-export-form { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .license-export-footer { align-items: stretch; flex-direction: column; gap: 16px; }
+}
 .license-workspace {
   --license-muted: #a1a1a6;
   --license-border: #ededed14;

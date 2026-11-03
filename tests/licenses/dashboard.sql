@@ -26,6 +26,8 @@ update public.calendar set start_date=current_date+4,end_date=current_date+6 whe
 \ir ../../supabase/migrations/20261102120125_license_register_active_breakdown.sql
 \ir ../../supabase/migrations/20261102120557_license_current_holder_summary.sql
 \ir ../../supabase/migrations/20261103083238_license_year_purchase_reporting.sql
+\ir ../../supabase/migrations/20261103091854_license_federation_sales_export.sql
+\ir ../../supabase/migrations/20261103093446_license_export_partner_payment_review.sql
 
 begin;
 create function pg_temp.expect(condition boolean,label text) returns void language plpgsql as $$begin if condition is distinct from true then raise exception 'FAIL: %',label;end if;end$$;
@@ -82,6 +84,25 @@ select pg_temp.expect((manage_license('list','{"year":2027,"type":"paid_full","p
 select pg_temp.expect((manage_license('list','{"year":2027,"type":"new_full","purchase_year":2026}')->>'total')::int=1,'new 2027 Full drill-down matches the headline');
 select pg_temp.expect((manage_license('list','{"year":2027,"type":"renewal","renewed_from_year":2026}')->>'total')::int=1,'2027 renewals from 2026 drill-down matches the headline');
 select pg_temp.expect((manage_license('list','{"year":2027,"purchase_year":2027}')->>'total')::int=0,'license year does not stand in for purchase year');
+select pg_temp.expect((license_federation_sales_export('2026-01-01','2026-12-31')->>'total_sold')::int=3,'federation detail matches paid unit totals rather than payment rows');
+select pg_temp.expect((license_federation_sales_export('2026-01-01','2026-12-31')->>'gross_amount')::numeric=1270,'federation prices use 500 renewal, 650 new and 120 temporary, excluding event checkout money');
+select pg_temp.expect((license_federation_sales_export('2026-01-01','2026-12-31')->>'refund_amount')::numeric=120,'completed temporary refund is attributed once');
+select pg_temp.expect((license_federation_sales_export('2026-01-01','2026-12-31')->>'net_amount')::numeric=1150,'federation net reconciles to known sale prices less completed refunds');
+select pg_temp.expect((license_federation_sales_export('2026-01-01','2026-12-31',2027,'full')->>'total_sold')::int=2,'federation purchase period and license year are independent');
+select pg_temp.expect((select (r->>'price')::numeric=120 and (r->>'refund_amount')::numeric=120 and (r->>'purchased_at')::timestamptz='2026-03-10T23:00:00Z'::timestamptz from jsonb_array_elements(license_federation_sales_export('2026-03-11','2026-03-11',null,'temporary')->'rows') r),'original checkout time and South African purchase date survive a later split');
+select pg_temp.expect(not has_function_privilege('anon','public.license_federation_sales_export(date,date,integer,text)','execute'),'anonymous clients cannot export billing data');
+select pg_temp.expect(not has_table_privilege('authenticated','private.license_federation_sales','select'),'billing source remains private');
+savepoint export_price_review;
+alter table public.payments disable trigger finalize_license_payment;
+insert into public.players(id,name,email) values(4,'Historical bundle','bundle@test.test');
+insert into public.payments(player_id,event_id,amount,currency,status,payment_type,payment_method,reference,metadata,created_at)
+values(4,10,900,'ZAR','success','temp_license','paystack','ambiguous-bundle','{"includes_license":true,"covers":[{"type":"license","license":"temporary","email":"bundle@test.test"}]}','2026-04-01');
+select pg_temp.expect((select r->'price'='null'::jsonb and r->>'review_note' like '%price needs review%' from jsonb_array_elements(license_federation_sales_export('2026-04-01','2026-04-30')->'rows') r),'an unidentified bundled license price stays blank rather than becoming the whole checkout total');
+select pg_temp.expect((select price=110 from private.license_export_price(820,'event_entry_fee','{"covers":[{"type":"license"},{"type":"license"}],"line_items":[{"label":"Temporary license","amount":110},{"label":"Partner temporary license","amount":110}]}','{}')),'historical prices use the recorded line items rather than current settings');
+select pg_temp.expect((select price is null from private.license_export_price(900,'event_entry_fee','{"covers":[{"type":"license"},{"type":"license"}],"line_items":[{"label":"Full license","amount":650},{"label":"Temporary license","amount":120}]}','{}')),'mixed license prices are not divided equally between people');
+select pg_temp.expect((select price is null from private.license_export_price(900,'temp_license','{"includes_license":false,"paying_for_partner":true}','{}')),'a paired checkout mislabeled by historical sync is not a verified license unit price');
+select pg_temp.expect((select price=120 from private.license_export_price(120,'temp_license','{"parent_reference":"parent","paying_for_partner":true}','{}')),'explicit child license payments remain valid when the parent checkout covered a partner');
+rollback to export_price_review;
 select pg_temp.expect(not has_function_privilege('authenticated','private.full_license_year_report()','execute'),'license-year helper remains private');
 savepoint license_year_cases;
 select manage_license('save_season','{"year":2029,"price":650,"renewal_price":500,"coverage_starts_on":"2028-01-01","sales_open":false,"reason":"Older renewal fixture"}');
@@ -114,6 +135,12 @@ select pg_temp.expect(not exists(
  join jsonb_array_elements(manage_license('list','{"year":2027,"page_size":10,"page":1}')->'rows') b on a->>'id'=b->>'id'
 ),'pages do not overlap');
 set test.email='new@test.test';
+do $$begin
+ begin perform public.license_federation_sales_export('2026-01-01','2026-12-31');exception when raise_exception then
+  if sqlerrm='Licenses permission required' then return;end if;raise;
+ end;
+ raise exception 'Unauthorized federation billing export was accepted';
+end $$;
 do $$begin
  begin perform public.license_sales_overview(2026);exception when raise_exception then
   if sqlerrm='Licenses permission required' then return;end if;raise;

@@ -45,6 +45,36 @@ Design guidance adapted from **unslop by Damir Sokolovsky
 ([@heydamir](https://x.com/heydamir))**, licensed CC BY 4.0:
 [unslop](https://heydamir.design/unslop).
 
+## Federation Excel export
+
+Use **Export Excel** at the top of Licenses. Choose purchase dates, an optional
+license year and license type, then download an `.xlsx` workbook. The report
+contains monthly totals, a breakdown by month/type/actual price, and one row per
+paid license with player, purchase date/time in SAST, license year, renewal
+origin, validity, event, payment references, license price, refunds and net value.
+
+Prices use recorded license payments, allocations or unambiguous license line
+items. Event-entry amounts and current catalog prices are never substituted.
+Parent/split rows and repeated divisions remain one player/event sale. Missing
+prices, unallocated refunds, missing players and missing historical event dates
+are flagged for review. Numeric money columns stay numeric; an unknown amount
+stays blank. Summary values include only verified amounts, and review counts
+make incomplete totals visible. Refunds are attributed to the original purchase
+month, as known at export time. Complimentary coverage and payment attempts are
+excluded. This is a sales reconciliation report, not a calculated federation fee.
+
+The new RPC checks license-admin permission, is unavailable to anonymous users,
+and reads private sources through an empty-search-path definer. It creates no
+tables. Export data arrives in one snapshot; client-side count/amount checks stop
+the download if details do not reconcile. The export is independent of register
+pagination and register search/status filters; its date/year/type choices are
+explicit. A 50,000-row safeguard asks for a shorter period rather than truncating.
+
+Workbook tests cover typed money/dates, SAST month boundaries, early purchases,
+refunds, empty months, missing prices, duplicate protection and serialization.
+Database tests cover matching sales counts, split checkout prices, refunds,
+license-year/date filters, ambiguous prices and admin-only access.
+
 ## Count definitions
 
 - **Sold:** paid, non-test licenses with verified payment evidence. Refunds stay
