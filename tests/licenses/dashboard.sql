@@ -25,10 +25,11 @@ update public.calendar set start_date=current_date+4,end_date=current_date+6 whe
 \ir ../../supabase/migrations/20261102115550_license_register_pagination.sql
 \ir ../../supabase/migrations/20261102120125_license_register_active_breakdown.sql
 \ir ../../supabase/migrations/20261102120557_license_current_holder_summary.sql
+\ir ../../supabase/migrations/20261103083238_license_year_purchase_reporting.sql
 
 begin;
 create function pg_temp.expect(condition boolean,label text) returns void language plpgsql as $$begin if condition is distinct from true then raise exception 'FAIL: %',label;end if;end$$;
-create or replace function public.license_today() returns date language sql stable set search_path='' as $$select '2026-11-02'::date$$;
+create or replace function public.license_today() returns date language sql stable set search_path='' as $$select (now() at time zone 'Africa/Johannesburg')::date$$;
 set test.uid='00000000-0000-0000-0000-000000000001';set test.email='admin@test.test';set test.role='authenticated';
 select pg_temp.expect((select status='upcoming' from private.license_register where player_id=2 and license_type='temporary'),'future event coverage is upcoming');
 select pg_temp.expect((manage_license('list','{"type":"temporary","status":"upcoming"}')->>'total')::int=1,'register status filters agree with coverage dates');
@@ -75,6 +76,18 @@ select pg_temp.expect((license_sales_overview(2027)->>'total_sold')::int=0,'2027
 select pg_temp.expect((license_sales_overview(null)->>'all_time_full')::int=2,'all-time Full units');
 select pg_temp.expect((license_sales_overview(null)->>'all_time_temporary')::int=1,'all-time temporary units');
 select pg_temp.expect((select (s->>'renewals')::int=1 and (s->>'new_full')::int=1 and (s->>'complimentary')::int=1 from jsonb_array_elements(license_sales_overview(2026)->'seasons') s where s->>'season_year'='2027'),'coverage-year breakdown includes early sales and free grants');
+select pg_temp.expect((select (s->>'total_sold')::int=2 and (s->>'new_full')::int=1 and (s->>'renewals_from_previous_year')::int=1 and (s->>'other_renewals')::int=0 and (s->>'complimentary')::int=1 from jsonb_array_elements(license_sales_overview(2026)->'license_years') s where s->>'license_year'='2027'),'2027 license-year totals split new sales and renewals from 2026');
+select pg_temp.expect((select (p->>'purchase_year')::int=2026 and (p->>'total_sold')::int=2 from jsonb_array_elements(license_sales_overview(2027)->'license_years') s cross join lateral jsonb_array_elements(s->'purchase_years') p where s->>'license_year'='2027'),'2027 licenses bought in 2026 retain their purchase year even when the purchase-year report is set to 2027');
+select pg_temp.expect((manage_license('list','{"year":2027,"type":"paid_full","purchase_year":2026}')->>'total')::int=2,'paid cohort drill-down excludes complimentary coverage');
+select pg_temp.expect((manage_license('list','{"year":2027,"type":"new_full","purchase_year":2026}')->>'total')::int=1,'new 2027 Full drill-down matches the headline');
+select pg_temp.expect((manage_license('list','{"year":2027,"type":"renewal","renewed_from_year":2026}')->>'total')::int=1,'2027 renewals from 2026 drill-down matches the headline');
+select pg_temp.expect((manage_license('list','{"year":2027,"purchase_year":2027}')->>'total')::int=0,'license year does not stand in for purchase year');
+select pg_temp.expect(not has_function_privilege('authenticated','private.full_license_year_report()','execute'),'license-year helper remains private');
+savepoint license_year_cases;
+select manage_license('save_season','{"year":2029,"price":650,"renewal_price":500,"coverage_starts_on":"2028-01-01","sales_open":false,"reason":"Older renewal fixture"}');
+select manage_license('grant','{"player_id":3,"year":2029,"source":"manual","amount":500,"payment_method":"eft","reason":"Renew from 2027 rather than 2028"}');
+select pg_temp.expect((select (s->>'other_renewals')::int=1 and (s->>'renewals_from_previous_year')::int=0 and (s->>'new_full')::int=0 from jsonb_array_elements(license_sales_overview(2026)->'license_years') s where s->>'license_year'='2029'),'renewal from an older year is not mislabelled as new or as a previous-year renewal');
+rollback to license_year_cases;
 select pg_temp.expect((select sum((m->>'total')::int)=3 from jsonb_array_elements(license_sales_overview(2026)->'series') m),'monthly totals reconcile');
 select pg_temp.expect((select (m->>'temporary')::int=1 from jsonb_array_elements(license_sales_overview(2026)->'series') m where m->>'month'='2026-03-01'),'split sale uses original checkout month');
 select pg_temp.expect((select (p->>'checkout_amount')::numeric=720 and (p->>'amount')::numeric=600 and (p->>'split_recorded')::boolean from jsonb_array_elements(get_player_licenses(1)->'payments') p where p->>'reference'='REGEV-dashboard'),'checkout total restores event plus license portions');
