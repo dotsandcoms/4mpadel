@@ -127,10 +127,10 @@ export function buildEventFinanceWorkbook(payload) {
     wsSummary.addRow([]);
     wsSummary.addRow([
         isOrganiserReport
-            ? 'Registrations lists current entries. Withdrawals shows previous payments and refunds separately. 4M receipts lists each Paystack entry receipt once, including external links. Withdrawal amounts are a breakdown of those receipts, not extra income. Club collections and licence fees are excluded from 4M receipts.'
+            ? 'Registrations lists current entries. Withdrawals shows previous payments and refunds separately. 4M receipts lists each entry receipt held by 4M once, including EFT and external links. Withdrawal amounts are a breakdown of those receipts, not extra income. Club collections and licence fees are excluded from 4M receipts. Unallocated credits remain in received cash and are reserved from payout.'
             : 'How to read this file: Summary totals must match the Line items sheet. '
-                + 'The balance due from 4M is Paystack entry funds after refunds, plus any explicit confirmed settlement adjustment, less 5% of active entry fees and interim payments. Club / organiser collections are excluded. '
-                + 'License fees stay with 4M.',
+                + 'The balance due from 4M is total entry collections less completed entry refunds, 5% of gross entry collections received by 4M, receipts retained by the organiser, and completed 4M payouts. Direct organiser collections earn no commission. Pending refunds reserve payout cash separately. '
+                + 'Unallocated credits remain in received cash and are reserved from payout. License fees stay with 4M.',
     ]);
     wsSummary.mergeCells(`A${wsSummary.rowCount}:C${wsSummary.rowCount}`);
     wsSummary.getRow(wsSummary.rowCount).alignment = { wrapText: true };
@@ -196,6 +196,7 @@ export function buildEventFinanceWorkbook(payload) {
         'T-shirt Size', 'T-shirt Sponsor', 'T-shirt Logo', 'License',
         'Payment Status', 'Payment Channel', 'Entry Amount (ZAR)', 'Comped',
         'Registration Status', 'Registered At', 'Payment Note',
+        'Paid to 4M (ZAR)', 'Paid direct to organiser (ZAR)', 'Recipient unconfirmed (ZAR)', 'Outstanding (ZAR)', 'Payment recipient',
     ];
     styleHeader(wsRegs.addRow(regHeaders));
     const exportedRegistrations = isOrganiserReport && activeRegistrationIds
@@ -219,9 +220,15 @@ export function buildEventFinanceWorkbook(payload) {
             r.registrationStatus || '',
             r.registeredAt ? new Date(r.registeredAt) : '',
             r.note || '',
+            Number(r.paidTo4M || 0),
+            Number(r.paidDirectToOrganiser || 0),
+            Number(r.recipientUnconfirmed || 0),
+            Number(r.outstanding || 0),
+            r.collectionRecipient || '',
         ]);
         row.getCell(13).numFmt = MONEY_FMT;
         row.getCell(16).numFmt = 'dd mmm yyyy hh:mm';
+        for (const index of [18, 19, 20, 21]) row.getCell(index).numFmt = MONEY_FMT;
         styleStatusRow(row, r.paymentStatus);
         styleStatus(row.getCell(11), r.paymentStatus);
         if (r.tshirtLogoUrl) {
@@ -302,6 +309,7 @@ export function buildEventFinanceWorkbook(payload) {
             { key: 'reference', label: 'Paystack receipt reference' },
             { key: 'refundedAt', label: 'Last refund date', date: true }, { key: 'refundReferences', label: 'Refund references' },
             { key: 'status', label: 'Receipt evidence' }, { key: 'note', label: 'Notes' },
+            { key: 'unallocatedCredit', label: 'Unallocated credit reserved (ZAR)', money: true },
         ], receiptReport.receipts || []);
     }
 

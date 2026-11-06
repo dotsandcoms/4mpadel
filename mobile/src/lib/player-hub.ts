@@ -117,10 +117,14 @@ export function rankedLocalPlayers(players: DirectoryPlayer[], men: RankingPlaye
   const names = new Map<string, number>();
   for (const p of players) names.set(normalizeName(p.name), (names.get(normalizeName(p.name)) || 0) + 1);
   return players.map(p => {
-    const exact = p.rankedin_id ? rankings.filter(r => r.rankedinId === String(p.rankedin_id)) : [];
-    const matchingNames = rankings.filter(r => normalizeName(r.name) === normalizeName(p.name));
+    const local = localHubPlayer(p);
+    // RankedIn can list one identity in both tables. Resolve within the
+    // player's category so the second entry does not erase their national rank.
+    const categoryRankings = local.gender === 'unknown' ? rankings : rankings.filter(r => r.gender === local.gender);
+    const exact = p.rankedin_id ? categoryRankings.filter(r => r.rankedinId === String(p.rankedin_id)) : [];
+    const matchingNames = categoryRankings.filter(r => normalizeName(r.name) === normalizeName(p.name));
     const match = exact.length === 1 ? exact[0] : !p.rankedin_id && matchingNames.length === 1 && names.get(normalizeName(p.name)) === 1 ? matchingNames[0] : undefined;
-    return { ...localHubPlayer(p), rank: match?.rank || null, rankChange: match && match.changeKnown !== false && Number.isFinite(match.change) ? match.change : null, points: match?.points ?? p.points, ...(match ? { gender: match.gender } : {}) };
+    return { ...local, rank: match?.rank || null, rankChange: match && match.changeKnown !== false && Number.isFinite(match.change) ? match.change : null, points: match?.points ?? p.points, ...(match ? { gender: match.gender } : {}) };
   });
 }
 

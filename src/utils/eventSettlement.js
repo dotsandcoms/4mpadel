@@ -1,12 +1,13 @@
 import {
-    findPaymentForRegistration, getRegistrationEntryFeePaid, isCompedEntryPayment,
+    getRegistrationEntryFeePaid, isCompedEntryPayment,
     isExplicitAdminMarkedPayment, isLicensePaymentRow, isLicenseRefund,
-    normalizePaymentMetadata, paymentMatchesRegistration, paymentHasEntryCoverForRegistration, registrationIsCompedEntry,
+    normalizePaymentMetadata, paymentMatchesRegistration, paymentHasEntryCoverForRegistration, registrationIsCompedEntry, findExpectedEntryPayment,
 } from './paymentRegistrationMatch.js';
 import { registrationDivisionKey, resolveRegistrationDivision } from './registrationDivision.js';
+import { findFinancePayment } from './eventFinanceReconciliation.js';
 
 const norm = value => String(value || '').trim().toLowerCase();
-const money = value => Math.round((Number(value) || 0) * 100) / 100;
+const money = value => Math.round(((Number(value) || 0) + Number.EPSILON) * 100) / 100;
 const positive = value => Math.max(0, money(value));
 const sum = rows => money(rows.reduce((total, row) => total + Number(row.amount || 0), 0));
 const refsFor = payment => {
@@ -26,138 +27,270 @@ export function activeSettlementRegistrations(registrations = [], divisions = []
     return [...selected.values()];
 }
 
-/** Cash held by 4M comes exclusively from Paystack, including external links.
- * Admin confirmations are allocation evidence, never additional cash receipts.
- * Commission is 5% of active entry invoices, including club-held and unpaid entries.
- */
+/** The recipient is independent of the payment method. Legacy manual receipts
+ * stay unconfirmed until a manager identifies who actually received the money. */
+export function collectionRecipient(payment) {
+    if (norm(payment?.payment_method) === 'paystack' && !isExplicitAdminMarkedPayment(payment)) return '4m';
+    const recipient = norm(normalizePaymentMetadata(payment?.metadata).collection_recipient);
+    if (recipient === '4m') return '4m';
+    if (['organiser', 'club'].includes(recipient)) return 'organiser';
+    return norm(payment?.payment_method) === 'paystack' ? '4m' : null;
+}
+
+export function collectionBucket(payment) {
+    const recipient = payment?.recipient ?? collectionRecipient(payment);
+    if (recipient === 'organiser') return 'Club / organiser';
+    if (recipient === '4m') return norm(payment.payment_method) === 'paystack' ? '4M Paystack' : '4M EFT / manual';
+    return 'Recipient unconfirmed';
+}
+
+/** Completed requests already live in the interim-payment array. Never add
+ * request amounts separately, or count a retried request ID twice. */
+export function completedOrganiserPayouts(rows = []) {
+    const seen = new Set();
+    return rows.filter(row => {
+        if (row.status && !['paid', 'success', 'processed', 'completed'].includes(norm(row.status))) return false;
+        if (positive(row.amount) <= 0) return false;
+        const key = row.request_id || row.id || (row.reference && norm(row.reference));
+        if (key && seen.has(key)) return false;
+        if (key) seen.add(key);
+        return true;
+    });
+}
+
+/** All event screens use this statement:
+ * collected - completed refunds - 5% of gross collections received by 4M = entitlement;
+ * entitlement - organiser-held receipts (net of organiser-funded refunds)
+ * - completed 4M payouts = balance due. Pending refunds reserve payout cash,
+ * but are not represented as completed refunds or unpaid entry fees. */
 export function calculateEventSettlement({ event = {}, registrations = [], divisions = [], payments = [], refunds = [], verification = null, entryFeeForRegistration, interimPayments = event.organiser_interim_payments || [] } = {}) {
+    refunds = refunds.map(r => ({ ...r, metadata: normalizePaymentMetadata(r.metadata) }));
     const issues = [];
     const referenceLinks = event.organiser_settlement_confirmation?.receipt_links || [];
-    const eligible = payments.filter(p => !p.is_test && !normalizePaymentMetadata(p.metadata).is_test && !isLicensePaymentRow(p) && !isCompedEntryPayment(p)).map(p => {
+    const eligible = payments.filter(p => !p.is_test && !normalizePaymentMetadata(p.metadata).is_test
+        && norm(p.payment_type) === 'event_entry_fee' && !isLicensePaymentRow(p) && !isCompedEntryPayment(p)).map(p => {
         const link = referenceLinks.find(link => link.payment_id === p.id);
-        return link ? { ...p, metadata: { ...normalizePaymentMetadata(p.metadata), paystack_ref: link.reference } } : p;
+        return { ...p, metadata: { ...normalizePaymentMetadata(p.metadata), ...(link ? { paystack_ref: link.reference } : {}) } };
     });
-    const success = eligible.filter(p => ['success', 'refunded'].includes(norm(p.status)));
+    const verified = new Map([...(verification?.receipts || []), ...(verification?.reversals || [])].map(r => [r.reference, r]));
+    const denied = new Set((verification?.non_receipts || []).map(r => r.reference));
+    const success = eligible.filter(p => (['success', 'refunded'].includes(norm(p.status)) || verified.has(p.reference))
+        && !denied.has(p.reference)).map(p => ({ ...p, status: 'success' }));
+    const groups = new Map();
+    for (const payment of success) {
+        const aliases = [...refsFor(payment)].filter(ref => ref !== payment.reference);
+        let reference = aliases.find(ref => verified.has(ref) || success.some(p => p.reference === ref && !isExplicitAdminMarkedPayment(p)))
+            || aliases.find(ref => /^T\d{10,}$/.test(ref)) || payment.reference || payment.id;
+        // An offline Paystack fix confirms an existing receipt; it is not new cash.
+        if (norm(payment.payment_method) === 'paystack' && isExplicitAdminMarkedPayment(payment) && reference === payment.reference) {
+            const original = success.find(p => !isExplicitAdminMarkedPayment(p) && norm(p.payment_method) === 'paystack'
+                && registrations.some(reg => paymentMatchesRegistration(payment, reg) && paymentMatchesRegistration(p, reg)));
+            if (!original) { issues.push(`Link the original Paystack reference: ${payment.reference || payment.id}`); continue; }
+            reference = original.reference || original.id;
+        }
+        const claims = groups.get(reference) || [];
+        claims.push(payment); groups.set(reference, claims);
+    }
+    const receiptRows = [...groups].map(([reference, claims]) => {
+        const primary = claims.find(p => p.reference === reference && !isExplicitAdminMarkedPayment(p)) || claims[0];
+        const gateway = verified.get(reference);
+        const external = reference !== primary.reference;
+        let amount = gateway && external ? Math.min(positive(gateway.amount), sum(claims))
+            : positive(primary.amount);
+        if (gateway && amount > positive(gateway.amount)) {
+            issues.push(`Receipt allocation exceeds Paystack amount: ${reference}`);
+            amount = positive(gateway.amount);
+        }
+        if (external && claims.length > 1 && (!gateway || sum(claims) > positive(gateway.amount))) {
+            issues.push(`Multiple entry confirmations share ${reference}; review the receipt allocation`);
+        }
+        const recipient = gateway || external && /^T\d{10,}$/.test(reference) ? '4m' : collectionRecipient(primary);
+        if (!recipient) issues.push(`Confirm who received ${reference || primary.id}`);
+        const unallocatedCredit = Math.min(amount, Math.max(0, ...claims.map(p => positive(p.metadata.unallocated_credit_amount))));
+        return { ...primary, reference, amount, recipient, gateway, claims, unallocatedCredit, paymentIds: claims.map(p => p.id),
+            payment_method: gateway || external && /^T\d{10,}$/.test(reference) ? 'paystack' : primary.payment_method };
+    });
+    const paymentById = new Map(payments.map(p => [p.id, p]));
+    const processedRefundRows = [], reservedRefundRows = [];
+    const usedRefunds = new Set();
+    for (const receipt of receiptRows) {
+        const linked = refunds.filter(r => receipt.paymentIds.includes(r.payment_id) || r.paystack_reference === receipt.reference
+            || (!r.payment_id && !r.paystack_reference && r.event_registration_id
+                && receipt.claims.some(p => p.metadata.registration_id === r.event_registration_id)
+                && receiptRows.filter(other => other.claims.some(p => p.metadata.registration_id === r.event_registration_id)).length === 1));
+        const rows = [];
+        for (const gateway of (verification?.gateway_refunds || []).filter(r => r.reference === receipt.reference)) {
+            const recorded = refunds.find(r => r.paystack_refund_id && String(r.paystack_refund_id) === String(gateway.refund_id));
+            if (recorded && isLicenseRefund(recorded, paymentById.get(recorded.payment_id))) continue;
+            if (!recorded && positive(receipt.gateway?.amount) > receipt.amount) {
+                issues.push(`Refund needs entry/licence allocation: ${receipt.reference}`);
+                continue;
+            }
+            rows.push({ ...gateway, ...(recorded || {}), id: recorded?.id || `gateway-${gateway.refund_id}`,
+                recorded_id: recorded?.id, paystack_refund_id: gateway.refund_id,
+                status: gateway.status, amount: positive(recorded?.amount ?? gateway.amount) });
+        }
+        rows.push(...linked);
+        rows.sort((a, b) => Number(norm(b.status) === 'processed') - Number(norm(a.status) === 'processed'));
+        receipt.refunded = 0; receipt.reserved = 0;
+        for (const row of rows) {
+            if (isLicenseRefund(row, paymentById.get(row.payment_id))) continue;
+            const status = norm(row.status);
+            if (!['processed', 'pending', 'processing', 'needs-attention', 'needs_attention'].includes(status)) continue;
+            const key = row.paystack_refund_id ? `provider-${row.paystack_refund_id}` : row.id;
+            if (key && usedRefunds.has(key)) continue;
+            if (key) usedRefunds.add(key);
+            const available = positive(receipt.amount - receipt.refunded - receipt.reserved);
+            if (positive(row.amount) > available) issues.push(`Refunds exceed entry receipt: ${receipt.reference}`);
+            const amount = Math.min(positive(row.amount), available);
+            const fundedBy = norm(normalizePaymentMetadata(row.metadata).refund_funded_by) || receipt.recipient;
+            const item = { ...row, amount, receipt, fundedBy };
+            if (status === 'processed') { processedRefundRows.push(item); receipt.refunded = money(receipt.refunded + amount); }
+            else { reservedRefundRows.push(item); receipt.reserved = money(receipt.reserved + amount); }
+        }
+        receipt.net = money(receipt.amount - receipt.refunded - receipt.reserved);
+        receipt.unallocatedCredit = Math.min(receipt.unallocatedCredit, positive(receipt.net));
+    }
+    for (const refund of refunds) {
+        if (norm(refund.status) === 'failed' || isLicenseRefund(refund, paymentById.get(refund.payment_id))) continue;
+        const key = refund.paystack_refund_id ? `provider-${refund.paystack_refund_id}` : refund.id;
+        if (!usedRefunds.has(key)) issues.push(`Entry refund has no collected receipt: ${refund.id}`);
+    }
     const active = activeSettlementRegistrations(registrations, divisions);
     const invoices = active.map(reg => {
         const comped = registrationIsCompedEntry(reg, payments);
-        const payment = findPaymentForRegistration(success, reg);
-        const fallback = entryFeeForRegistration ? entryFeeForRegistration(reg) : resolveRegistrationDivision(reg, divisions)?.entry_fee ?? event.category_fees?.[reg.division] ?? event.entry_fee ?? 0;
+        const payment = findFinancePayment(success, reg, refunds);
+        const fallback = entryFeeForRegistration ? entryFeeForRegistration(reg) : resolveRegistrationDivision(reg, divisions)?.entry_fee ?? reg.tournament_divisions?.entry_fee ?? event.category_fees?.[reg.division] ?? event.entry_fee ?? 0;
         return { registration: reg, amount: comped ? 0 : positive(getRegistrationEntryFeePaid(payment, reg, fallback)), comped };
     });
-    const totalAmountBilled = sum(invoices);
-    const verified = new Map([...(verification?.receipts || []), ...(verification?.reversals || [])].map(r => [r.reference, r]));
-    const denied = new Set((verification?.non_receipts || []).map(r => r.reference));
-    const receipts = new Map();
-    const addReceipt = row => {
-        if (!receipts.has(row.reference)) receipts.set(row.reference, row);
-    };
-    for (const p of eligible) {
-        if (norm(p.payment_type) !== 'event_entry_fee' || norm(p.payment_method) !== 'paystack' || !p.reference || /^MANUAL-ADMIN-/.test(p.reference)) continue;
-        const proof = verified.get(p.reference);
-        if (denied.has(p.reference)) continue;
-        if (isExplicitAdminMarkedPayment(p) && !proof) continue;
-        if (!proof && !['success', 'refunded'].includes(norm(p.status))) continue;
-        if (verification?.complete && !proof) { issues.push(`Receipt not verified: ${p.reference}`); continue; }
-        const amount = positive(p.amount);
-        if (proof && amount > positive(proof.amount)) { issues.push(`Receipt allocation exceeds Paystack amount: ${p.reference}`); continue; }
-        addReceipt({ ...p, amount, gateway: proof, claims: [proof ? { ...p, status: 'success' } : p], paymentIds: [p.id] });
-    }
-    for (const proof of verified.values()) {
-        if (receipts.has(proof.reference)) continue;
-        const claims = success.filter(p => refsFor(p).has(proof.reference));
-        if (!claims.length) continue;
-        const amount = Math.min(positive(proof.amount), sum(claims));
-        if (amount <= 0) continue;
-        addReceipt({ id: `external-${proof.reference}`, reference: proof.reference, amount,
-            created_at: proof.paid_at, payment_method: 'paystack', status: 'success', gateway: proof,
-            metadata: normalizePaymentMetadata(claims[0].metadata), claims, paymentIds: claims.map(p => p.id) });
-        if (sum(claims) > amount) issues.push(`Multiple entry confirmations share ${proof.reference}; only ${amount} was received`);
-    }
-    // Both a normal ledger row and an admin note can name the same physical receipt.
-    // Merge the claims without adding another receipt or changing its cash amount.
-    for (const receipt of receipts.values()) {
-        for (const claim of success.filter(p => refsFor(p).has(receipt.reference))) {
-            if (!receipt.paymentIds.includes(claim.id)) { receipt.claims.push(claim); receipt.paymentIds.push(claim.id); }
-        }
-    }
-    const receiptRows = [...receipts.values()];
-    const refundByProviderId = new Map(refunds.filter(r => r.paystack_refund_id).map(r => [String(r.paystack_refund_id), r]));
-    const processedRefundRows = [];
-    const reservedRefundRows = [];
-    const usedRefunds = new Set();
-    for (const receipt of receiptRows) {
-        const linked = refunds.filter(r => receipt.paymentIds.includes(r.payment_id) || r.paystack_reference === receipt.reference);
-        const gatewayRows = (verification?.gateway_refunds || []).filter(r => r.reference === receipt.reference);
-        const rows = [];
-        for (const refund of gatewayRows) {
-            const recorded = refundByProviderId.get(String(refund.refund_id));
-            if (recorded && isLicenseRefund(recorded, payments.find(p => p.id === recorded.payment_id))) { usedRefunds.add(recorded.id); continue; }
-            if (!recorded && positive(receipt.gateway?.amount) > receipt.amount) issues.push(`Refund needs entry/licence allocation: ${receipt.reference}`);
-            rows.push({ ...refund, id: `gateway-${refund.refund_id}`, recorded_id: recorded?.id, amount: positive(refund.amount), receipt });
-            if (recorded) usedRefunds.add(recorded.id);
-        }
-        for (const refund of linked) {
-            if (usedRefunds.has(refund.id) || isLicenseRefund(refund, payments.find(p => p.id === refund.payment_id))) continue;
-            rows.push({ ...refund, amount: positive(refund.amount), receipt });
-            usedRefunds.add(refund.id);
-        }
-        for (const row of rows) {
-            if (norm(row.status) === 'processed') processedRefundRows.push(row);
-            else if (['pending', 'processing', 'needs-attention', 'needs_attention'].includes(norm(row.status))) reservedRefundRows.push(row);
-        }
-        receipt.refunded = Math.min(receipt.amount, sum(rows.filter(r => norm(r.status) === 'processed')));
-        receipt.reserved = Math.min(Math.max(0, receipt.amount - receipt.refunded), sum(rows.filter(r => ['pending', 'processing', 'needs-attention', 'needs_attention'].includes(norm(r.status)))));
-        receipt.net = money(receipt.amount - receipt.refunded - receipt.reserved);
-    }
-    const grossCollected4M = sum(receiptRows);
-    const entryFeesRefunded = money(receiptRows.reduce((s, r) => s + r.refunded, 0));
-    const refundReserve = money(receiptRows.reduce((s, r) => s + r.reserved, 0));
-    const netHeld4M = money(grossCollected4M - entryFeesRefunded - refundReserve);
-    let paid4M = 0, paidClub = 0, pendingCount = 0, pendingAmount = 0, collectedManual = 0;
-    const available = new Map(receiptRows.map(r => [r.reference, r.net]));
+    let paid4M = 0, paidClub = 0, pendingCount = 0, pendingAmount = 0;
+    const available = new Map(receiptRows.map(r => [r.reference, positive(r.net - r.unallocatedCredit)]));
     const priority = invoice => receiptRows.some(r => norm(r.gateway?.payer_email || r.metadata?.email) === norm(invoice.registration.email)) ? 1 : 0;
     const allocations = [...invoices].sort((a, b) => priority(b) - priority(a)).map(invoice => {
         const reg = invoice.registration;
         if (invoice.comped) return { ...invoice, holder: 'comped' };
         const onlyEntryForEmail = invoices.filter(i => norm(i.registration.email) === norm(reg.email)).length === 1;
-        const funded = receiptRows.find(r => available.get(r.reference) >= invoice.amount && r.claims.some(p => paymentMatchesRegistration(p, reg)
-            || (onlyEntryForEmail && paymentHasEntryCoverForRegistration(p, reg, { requireDivision: false }))));
-        // Prefer a current club confirmation to an old fully refunded Paystack receipt.
-        const club = success.find(p => norm(p.payment_method) !== 'paystack'
-            && ![...refsFor(p)].some(ref => verified.has(ref) || /^T\d{10,}$/.test(ref))
-            && paymentMatchesRegistration(p, reg));
-        let holder = 'pending';
-        if (funded) { holder = '4m'; paid4M++; available.set(funded.reference, money(available.get(funded.reference) - invoice.amount)); }
-        else if (club && norm(reg.payment_status) === 'paid') { holder = 'club'; paidClub++; collectedManual += invoice.amount; }
-        else { pendingCount++; pendingAmount += invoice.amount; }
-        return { ...invoice, holder, receipt: funded, payment: club };
+        const matches = receiptRows.filter(r => r.claims.some(p => {
+            const registrationId = normalizePaymentMetadata(p.metadata).registration_id;
+            if (registrationId && registrationId !== reg.id) return false;
+            return paymentMatchesRegistration(p, reg) || (onlyEntryForEmail && paymentHasEntryCoverForRegistration(p, reg, { requireDivision: false }));
+        })).sort((a, b) => {
+            // A receipt explicitly recorded for this entry takes priority over
+            // an older team checkout that also covered a refunded division.
+            const direct = receipt => Number(receipt.claims.some(p => normalizePaymentMetadata(p.metadata).registration_id === reg.id));
+            return direct(b) - direct(a) || new Date(b.created_at || 0) - new Date(a.created_at || 0);
+        });
+        let remaining = invoice.amount;
+        const shares = [];
+        for (const receipt of matches) {
+            const amount = Math.min(remaining, available.get(receipt.reference));
+            if (amount <= 0) continue;
+            available.set(receipt.reference, money(available.get(receipt.reference) - amount));
+            remaining = money(remaining - amount); shares.push({ receipt, amount });
+        }
+        // A refund of this exact entry reduces income, not an unpaid invoice.
+        const refundsForEntry = rows => rows.filter(r => r.event_registration_id === reg.id
+            || (!r.event_registration_id && matches.includes(r.receipt) && invoices.filter(i => r.receipt.claims.some(p => paymentMatchesRegistration(p, i.registration))).length === 1));
+        const returned = sum(refundsForEntry(processedRefundRows));
+        const reserved = sum(refundsForEntry(reservedRefundRows));
+        remaining = positive(remaining - returned - reserved);
+        const holder = remaining > 0 ? 'pending' : shares.some(s => s.receipt.recipient === 'organiser') ? 'club'
+            : shares.some(s => !s.receipt.recipient) ? 'unconfirmed' : '4m';
+        if (remaining > 0 && norm(reg.payment_status) !== 'refunded') { pendingCount++; pendingAmount = money(pendingAmount + remaining); }
+        else if (shares.length) { if (holder === 'club') paidClub++; else if (holder === '4m') paid4M++; }
+        if (remaining > 0 && norm(reg.payment_status) === 'paid' && !findExpectedEntryPayment(payments, reg)) issues.push(`Paid entry has no fully allocated receipt: ${reg.full_name || reg.email || reg.id}`);
+        return { ...invoice, holder, receipt: shares[0]?.receipt, payment: shares[0]?.receipt.claims[0], shares, outstanding: norm(reg.payment_status) === 'refunded' ? 0 : remaining };
     });
+    const grossEntryFees = sum(receiptRows);
+    const entryFeesRefunded = sum(processedRefundRows);
+    const refundReserve = sum(reservedRefundRows);
+    const collected4M = sum(receiptRows.filter(r => r.recipient === '4m'));
+    const collectedManual = sum(receiptRows.filter(r => r.recipient === '4m' && norm(r.payment_method) !== 'paystack'));
+    const paystackCollected = sum(receiptRows.filter(r => r.recipient === '4m' && norm(r.payment_method) === 'paystack'));
+    const collectedOrganiser = sum(receiptRows.filter(r => r.recipient === 'organiser'));
+    const organiserRefunds = sum(processedRefundRows.filter(r => ['organiser', 'club'].includes(r.fundedBy)));
+    const organiserRetained = money(collectedOrganiser - organiserRefunds);
+    const unconfirmedCollected = sum(receiptRows.filter(r => !r.recipient));
+    const unallocatedCredit4M = money(receiptRows.filter(r => r.recipient === '4m').reduce((total, r) => total + r.unallocatedCredit, 0));
+    const entryFeeBalance = money(grossEntryFees - entryFeesRefunded);
+    const commissionBase = collected4M;
+    const commission = Math.round(Math.round(commissionBase * 100) * 5 / 100) / 100;
+    const organiserEntitlement = money(entryFeeBalance - commission);
+    const payoutRows = completedOrganiserPayouts(interimPayments);
+    const interimPaid = sum(payoutRows);
+    const dueBeforeInterim = money(organiserEntitlement - organiserRetained);
+    const dueToOrg = money(dueBeforeInterim - interimPaid);
+    const totalAmountBilled = money(grossEntryFees + pendingAmount);
     const tiers = new Map();
-    for (const invoice of invoices.filter(i => i.amount > 0)) {
-        const tier = tiers.get(invoice.amount) || { rate: invoice.amount, count: 0, total: 0 };
-        tier.count++; tier.total = money(tier.total + invoice.amount); tiers.set(invoice.amount, tier);
+    for (const receipt of receiptRows) {
+        const covers = [...new Map(receipt.claims.flatMap(p => {
+            const meta = normalizePaymentMetadata(p.metadata);
+            return (meta.covers || []).filter(c => c.type === 'entry').map(c => [`${norm(c.email)}:${c.division || ''}`, c]);
+        })).values()];
+        const count = Math.max(1, covers.length);
+        const rate = money(receipt.amount / count);
+        const tier = tiers.get(rate) || { rate, count: 0, total: 0 };
+        tier.count += count; tier.total = money(tier.total + receipt.amount); tiers.set(rate, tier);
     }
-    const commission = money(totalAmountBilled * 0.05);
-    const interimPaid = sum(interimPayments.map(p => ({ amount: positive(p.amount) })));
-    const calculated = { collected4M: grossCollected4M, netHeld4M, entryFeesRefunded, refundReserve, collectedManual: money(collectedManual), pendingCount, pendingAmount: money(pendingAmount), paid4M, paidClub,
-        commission, dueBeforeInterim: money(netHeld4M - commission), dueToOrg: money(netHeld4M - commission - interimPaid) };
-    const confirmation = event.organiser_settlement_confirmation;
-    const confirmed = confirmation?.version === 1 && Number(confirmation.entry_count) === invoices.length
-        && money(confirmation.total_billed) === totalAmountBilled
-        && ['held_by_4m', 'club_collected', 'outstanding'].every(key => Number.isFinite(Number(confirmation[key])) && Number(confirmation[key]) >= 0)
-        && money(Number(confirmation.held_by_4m) + Number(confirmation.club_collected) + Number(confirmation.outstanding)) === totalAmountBilled;
-    const final = confirmed ? { ...calculated, netHeld4M: money(confirmation.held_by_4m), collectedManual: money(confirmation.club_collected), pendingAmount: money(confirmation.outstanding),
-        pendingCount: Number(confirmation.unpaid_count || 0), paid4M: Number(confirmation.paystack_entry_count || 0), paidClub: Number(confirmation.club_entry_count || 0),
-        dueBeforeInterim: money(confirmation.held_by_4m - commission), dueToOrg: money(confirmation.held_by_4m - commission - interimPaid) } : calculated;
-    return { ...final, calculated, confirmation: confirmed ? confirmation : null, confirmationAdjustment: confirmed ? money(final.netHeld4M - calculated.netHeld4M) : 0,
-        totalAmountBilled, billedTierBreakdown: [...tiers.values()].sort((a, b) => a.rate - b.rate),
-        grossEntryFees: money(grossCollected4M + final.collectedManual), entryFeeBalance: money(final.netHeld4M + final.collectedManual),
-        interimPaid, compedEntries: invoices.filter(i => i.comped).length, withdrawnCount: registrations.filter(r => norm(r.status) === 'withdrawn').length,
-        licenseRevenue4M: sum(payments.filter(p => !p.is_test && p.status === 'success' && p.payment_method === 'paystack' && isLicensePaymentRow(p))),
-        licenseRefunds: sum(refunds.filter(r => r.status === 'processed' && isLicenseRefund(r, payments.find(p => p.id === r.payment_id)))),
-        receiptRows, processedRefundRows, reservedRefundRows, allocations, issues: [...issues, ...(verification?.unresolved || []).map(r => r.reason)],
-        verificationComplete: verification?.complete === true, activeEntries: invoices.length };
+    const result = { collected4M, paystackCollected, collectedManual, collectedOrganiser, organiserRetained, unconfirmedCollected, unallocatedCredit4M,
+        netHeld4M: money(collected4M - sum(processedRefundRows.filter(r => r.fundedBy === '4m'))),
+        grossEntryFees, entryFeesRefunded, refundReserve, entryFeeBalance, commissionBase, commission, organiserEntitlement,
+        totalAmountBilled, pendingCount, pendingAmount, paid4M, paidClub, interimPaid, payoutRows, dueBeforeInterim, dueToOrg,
+        availableForPayout: positive(dueToOrg - refundReserve - unconfirmedCollected - unallocatedCredit4M),
+        billedTierBreakdown: [...tiers.values()].sort((a, b) => a.rate - b.rate),
+        compedEntries: invoices.filter(i => i.comped).length, withdrawnCount: registrations.filter(r => ['withdrawn', 'cancelled'].includes(norm(r.status))).length,
+        licenseRevenue4M: sum(payments.filter(p => !p.is_test && !normalizePaymentMetadata(p.metadata).is_test && p.status === 'success' && isLicensePaymentRow(p))),
+        licenseRefunds: sum(refunds.filter(r => r.status === 'processed' && isLicenseRefund(r, paymentById.get(r.payment_id)))),
+        receiptRows, processedRefundRows, reservedRefundRows, allocations, issues: [...new Set([...issues, ...(verification?.unresolved || []).map(r => r.reason)])],
+        verificationComplete: verification?.complete === true, activeEntries: invoices.length,
+        // Legacy aggregate confirmations must never override actual cash movements.
+        confirmation: null, confirmationAdjustment: 0 };
+    return { ...result, calculated: { ...result } };
+}
+
+/** Aggregate event statements without netting an overpayment against another
+ * organiser's unpaid balance. Totals always cover the same displayed events. */
+export function summarizeEventSettlements(events = []) {
+    const total = key => money(events.reduce((n, event) => n + Number(event.settlement?.[key] || 0), 0));
+    return { events: events.length, entries: total('activeEntries'), collected: total('grossEntryFees'),
+        refunds: total('entryFeesRefunded'), commission: total('commission'), paid: total('interimPaid'),
+        direct: total('organiserRetained'), balanceOwed: money(events.reduce((n, e) => n + Math.max(0, e.settlement?.dueToOrg || 0), 0)),
+        overpaid: money(events.reduce((n, e) => n + Math.max(0, -(e.settlement?.dueToOrg || 0)), 0)) };
+}
+
+export function buildEventSettlements({ events = [], registrations = [], participants = [], payments = [], refunds = [], divisions = [] } = {}) {
+    return events.map(event => {
+        const eventPayments = payments.filter(p => String(p.event_id) === String(event.id));
+        const eventRegistrations = event.is_manual ? registrations.filter(r => String(r.event_id) === String(event.id))
+            : participants.filter(p => String(p.event_id) === String(event.id)).map(p => ({ ...p,
+                email: p.email || p.players?.email, division: p.class_name,
+                payment_status: p.is_paid ? 'paid' : 'pending' }));
+        const ids = new Set(eventPayments.map(p => p.id));
+        const references = new Set(eventPayments.flatMap(p => [...refsFor(p)]));
+        const registrationIds = new Set(eventRegistrations.map(r => r.id));
+        const settlement = calculateEventSettlement({ event, registrations: eventRegistrations, payments: eventPayments,
+            refunds: refunds.filter(r => ids.has(r.payment_id) || registrationIds.has(r.event_registration_id) || references.has(r.paystack_reference)),
+            divisions: divisions.filter(d => String(d.event_id) === String(event.id)) });
+        return { ...event, settlement };
+    });
+}
+
+export function eventPayoutRequestLimit(event, settlement, now = Date.now()) {
+    const remainingDue = positive(settlement.dueToOrg);
+    const totalDue = positive(settlement.dueBeforeInterim);
+    const firstRequestCap = Math.floor(Math.round(totalDue * 100) / 2) / 100;
+    const endDay = String(event.end_date || event.start_date || '').slice(0, 10);
+    const eventEnded = now > new Date(`${endDay}T23:59:59.999+02:00`).getTime();
+    const hasFirstPartial = settlement.interimPaid > 0;
+    let blockedReason = settlement.issues[0] || '';
+    if (!blockedReason && remainingDue <= 0) blockedReason = 'Nothing due to organiser yet';
+    if (!blockedReason && settlement.availableForPayout <= 0) blockedReason = 'No payout available while refunds or credits are reserved';
+    if (!blockedReason && !eventEnded && hasFirstPartial) blockedReason = 'First partial payment already recorded. The remaining balance can be requested after the event ends.';
+    const maxRequestable = blockedReason ? 0 : Math.min(remainingDue, settlement.availableForPayout, eventEnded ? remainingDue : firstRequestCap);
+    return { remainingDue, totalDue, firstRequestCap, eventEnded, hasFirstPartial, interimPaid: settlement.interimPaid,
+        maxRequestable, phase: eventEnded ? 'final' : 'first', blockedReason, canRequest: maxRequestable > 0,
+        helperText: eventEnded ? 'The event has ended. You can request the remaining available balance.'
+            : 'First payout request is limited to 50% of the amount due. The remaining balance can be requested after the event ends.' };
 }
 
 /** Read actual gateway evidence in bounded batches; never changes ledger or registration rows. */

@@ -19,7 +19,7 @@ const optionalFields = ['ID / passport', 'Mobile number', 'Gender', 'Nationality
 const optionalKeys = ['p_id_number', 'p_contact', 'p_gender', 'p_nationality', 'p_region'];
 
 // Exercise the screen's actual controls and profile payload without creating live accounts.
-async function screen({ os = 'ios', saved = null, edit = false, playerOverrides = {} } = {}) {
+async function screen({ os = 'ios', saved = null, edit = false, playerOverrides = {}, birthDate = '2000-02-29' } = {}) {
   const hooks = [], effects = [], paths = [], requests = [], updates = [], drafts = [];
   let cursor = 0;
   const react = {
@@ -40,9 +40,11 @@ async function screen({ os = 'ios', saved = null, edit = false, playerOverrides 
   };
   const supabase = {
     auth: { getUser: async () => ({ data: { user: { email: 'player@example.com', user_metadata: {} } } }) },
-    rpc: async (name, payload) => { requests.push([name, payload]); return { error: null }; },
+    rpc: async (name, payload) => { requests.push([name, payload]); return { error: null, data: name === 'get_player_profile_details' ? (birthDate ? { date_of_birth: birthDate, playtomic_level: 3.25,playtomic_proof_path:'1/a.jpg' } : null) : name === 'save_player_profile_details_v3' ? payload.p_details : 42 }; },
   };
+  const profileDetails = load('src/lib/profile-details.ts', { './supabase': { supabase } });
   const profile = load('src/lib/profile.ts', {
+    './profile-details': profileDetails,
     './supabase': { supabase },
     '@/lib/player-preferences': preferences,
     '@/lib/welcome-email': { queueWelcomeEmail: async () => {} },
@@ -71,6 +73,7 @@ async function screen({ os = 'ios', saved = null, edit = false, playerOverrides 
     '@/lib/sponsors': sponsors,
     '@/lib/supabase': { supabase },
     '@/lib/analytics': { trackEvent: async () => {} },
+    '@/lib/profile-details': profileDetails,
     '@/lib/profile': {
       ...profile,
       fetchClubs: async () => [{ id: 'club-1', name: 'Test Club' }],
@@ -119,7 +122,10 @@ for (const os of ['ios', 'android']) {
     for (const label of optionalFields) assert.equal(h.field(`${label} (optional)`).value, '');
     h.change('First name', 'Test');
     h.change('Surname', 'Player');
+    h.change('Date of birth (required, YYYY-MM-DD)', '2000-02-29');
     await h.press('Continue to padel profile');
+    h.change('Playtomic Level (required)', '3.25');
+    h.find(h.render(), props => typeof props.onLevelDetected === 'function').props.onChange('signup/fixture/a.jpg');
     h.change('Category', "Men's Intermediate");
     h.change('Home club', 'club-1');
     h.change('About your game', 'I enjoy padel.');
@@ -129,10 +135,11 @@ for (const os of ['ios', 'android']) {
     await h.press('Save profile');
     assert.deepEqual(h.paths, ['/(tabs)']);
     const [name, payload] = h.requests[0];
-    assert.equal(name, 'create_player_profile');
-    for (const key of optionalKeys) assert.equal(payload[key], null, key);
-    assert.equal(payload.p_name, 'Test Player');
-    assert.equal(payload.p_email, 'player@example.com');
+    assert.equal(name, 'create_player_profile_with_details_v3');
+    assert.equal(payload.p_details.date_of_birth, '2000-02-29');
+    for (const key of optionalKeys) assert.equal(payload.p_profile[key], null, key);
+    assert.equal(payload.p_profile.p_name, 'Test Player');
+    assert.equal(payload.p_profile.p_email, 'player@example.com');
   });
 }
 
@@ -147,7 +154,7 @@ test('first name and surname still validate before advancing', async () => {
 
 test('restored optional details can be removed before continuing', async () => {
   const h = await screen({ saved: {
-    firstName: 'Test', lastName: 'Player', idNumber: 'ID123', contactNumber: '0123456789',
+    firstName: 'Test', lastName: 'Player', dateOfBirth: '2000-02-29', playtomicLevel: '3.25', playtomicProofPath:'1/a.jpg', idNumber: 'ID123', contactNumber: '0123456789',
     gender: 'Female', nationality: 'South Africa', region: 'Gauteng',
   } });
   for (const label of optionalFields) {
@@ -169,15 +176,18 @@ test('profile payload preserves supplied values and normalises whitespace-only d
     const h = await screen();
     h.change('First name', 'Test');
     h.change('Surname', 'Player');
+    h.change('Date of birth (required, YYYY-MM-DD)', '2000-02-29');
     for (const label of optionalFields) h.change(`${label} (optional)`, value);
     await h.press('Continue to padel profile');
+    h.change('Playtomic Level (required)', '3.25');
+    h.find(h.render(), props => typeof props.onLevelDetected === 'function').props.onChange('signup/fixture/a.jpg');
     h.change('Category', "Men's Intermediate");
     h.change('Home club', 'club-1');
     h.change('About your game', 'I enjoy padel.');
     h.change('Racket brand', 'Adidas');
     await h.press('I agree to the Terms and Privacy Policy');
     await h.press('Save profile');
-    for (const key of optionalKeys) assert.equal(h.requests[0][1][key], value.trim() || null);
+    for (const key of optionalKeys) assert.equal(h.requests[0][1].p_profile[key], value.trim() || null);
   }
 });
 
@@ -190,4 +200,91 @@ test('editing another profile detail does not require a mobile number or region'
   assert.equal(h.updates[0].region, null);
   assert.equal(h.updates[0].bio, 'Updated padel bio.');
   assert.deepEqual(h.paths, ['back']);
+});
+
+
+test('date of birth is required at signup and future dates cannot advance', async () => {
+  const h = await screen();
+  h.change('First name', 'Test');
+  h.change('Surname', 'Player');
+  await h.press('Continue to padel profile');
+  assert.equal(h.field('Date of birth (required, YYYY-MM-DD)').error, 'Enter your date of birth.');
+  h.change('Date of birth (required, YYYY-MM-DD)', '2999-01-01');
+  await h.press('Continue to padel profile');
+  assert.match(h.field('Date of birth (required, YYYY-MM-DD)').error, /in the past/);
+  assert.equal(h.drafts.length, 0);
+});
+
+test('an existing player must add a birth date before saving profile changes', async () => {
+  const h = await screen({ edit: true, birthDate: '' });
+  h.change('About your game', 'New bio');
+  await h.press('Save changes');
+  assert.equal(h.field('Date of birth (required, YYYY-MM-DD)').error, 'Enter your date of birth.');
+  assert.equal(h.updates.length, 0);
+});
+
+test('a Playtomic level saves with its required screenshot', async () => {
+  const h = await screen({ edit: true });
+  h.change('Playtomic Level (required)', '0');
+  await h.press('Save changes');
+  assert.equal(h.field('Playtomic Level (required)').error, undefined);
+  assert.equal(h.updates.length, 1);
+  assert.equal(h.requests.find(([name]) => name === 'save_player_profile_details_v3')[1].p_details.playtomic_proof_path, '1/a.jpg');
+});
+
+test('profile age is read-only and recalculates immediately when the birth date changes', async () => {
+  const h = await screen({ edit: true });
+  h.change('Date of birth (required, YYYY-MM-DD)', '2000-01-01');
+  const older = Number(h.field('Age (calculated)').value);
+  assert.equal(h.field('Age (calculated)').editable, false);
+  h.change('Date of birth (required, YYYY-MM-DD)', '2010-01-01');
+  assert.equal(Number(h.field('Age (calculated)').value), older - 10);
+  h.change('Date of birth (required, YYYY-MM-DD)', '');
+  assert.equal(h.field('Age (calculated)').value, '');
+});
+
+
+test('existing players must enter a Playtomic level before saving', async () => {
+  const h = await screen({ edit: true });
+  h.change('Playtomic Level (required)', '');
+  await h.press('Save changes');
+  assert.equal(h.field('Playtomic Level (required)').error, 'Enter your Playtomic level.');
+  assert.equal(h.updates.length, 0);
+});
+
+test('signup requires a Playtomic level before creating the profile', async () => {
+  const h = await screen();
+  h.change('First name', 'Test'); h.change('Surname', 'Player');
+  h.change('Date of birth (required, YYYY-MM-DD)', '2000-02-29');
+  await h.press('Continue to padel profile');
+  await h.press('I agree to the Terms and Privacy Policy');
+  await h.press('Save profile');
+  assert.equal(h.field('Playtomic Level (required)').error, 'Enter your Playtomic level.');
+  assert.equal(h.requests.length, 0);
+});
+
+test('no-profile confirmation allows saving unknown level without screenshot',async()=>{
+ const h=await screen({edit:true});
+ h.find(h.render(),p=>typeof p.onNoProfileChange==='function').props.onNoProfileChange(true);
+ await h.press('Save changes');
+ const data=h.requests.find(([name])=>name==='save_player_profile_details_v3')[1].p_details;
+ assert.equal(data.playtomic_no_profile,true);assert.equal(data.playtomic_level,null);assert.equal(data.playtomic_proof_path,null);
+});
+test('removing required screenshot prevents saving until no-profile confirmation or replacement',async()=>{
+ const h=await screen({edit:true});
+ h.find(h.render(),p=>typeof p.onLevelDetected==='function').props.onChange('');
+ await h.press('Save changes');assert.equal(h.updates.length,0);
+ assert.match(h.field('Playtomic Level (required)').error,/Upload a screenshot/);
+});
+
+test('signup restores no-profile confirmation and creates a profile with an unknown level',async()=>{
+ const h=await screen({saved:{firstName:'Test',lastName:'Player',dateOfBirth:'2000-02-29',playtomicLevel:'',playtomicNoProfile:true}});
+ await h.press('Continue to padel profile');
+ assert.equal(h.drafts[0].playtomicNoProfile,true);
+ assert.equal(h.find(h.render(),p=>p.label==='Playtomic Level (required)'),null);
+ h.change('Category',"Men's Intermediate");h.change('Home club','club-1');h.change('About your game','I enjoy padel.');h.change('Racket brand','Adidas');
+ await h.press('I agree to the Terms and Privacy Policy');await h.press('Save profile');
+ assert.deepEqual(h.paths,['/(tabs)']);
+ const details=h.requests[0][1].p_details;
+ assert.equal(details.playtomic_no_profile,true);assert.equal(details.playtomic_level,null);assert.equal(details.playtomic_proof_path,null);
 });

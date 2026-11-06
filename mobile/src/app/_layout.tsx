@@ -1,3 +1,6 @@
+import { MessagingProvider } from '@/components/messaging/messaging-provider';
+import { AppIconBadge } from '@/components/app-icon-badge';
+import { IncomingMessageBanner } from '@/components/messaging/incoming-banner';
 import { watchWelcomeEmailRetries } from '@/lib/welcome-email';
 import 'react-native-gesture-handler';
 import type { Session } from '@supabase/supabase-js';
@@ -33,7 +36,7 @@ SplashScreen.preventAutoHideAsync();
 Observe.configure({
   integrations: {
     'expo-router': {
-      filteredParams: ['id', 'code', 'entry', 'pay_ref', 'payment_return', 'reference', 'registrationId', 'match', 'query', 'email', 'token'],
+      filteredParams: ['id', 'code', 'entry', 'pay_ref', 'payment_return', 'reference', 'registrationId', 'match', 'query', 'email', 'token', 'conversationId', 'playerId', 'body', 'code'],
     },
   },
 });
@@ -298,6 +301,6 @@ function ObserveFailure({ onRetry }: { onRetry: () => void }) {
 
 export default function ObservedRootLayout() {
   return <ObserveRoot errorBoundaryFallback={({ resetError }) => <ObserveFailure onRetry={resetError} />}>
-    <RootLayout />
+    <MessagingProvider><AppIconBadge /><RootLayout /><IncomingMessageBanner /></MessagingProvider>
   </ObserveRoot>;
 }

@@ -1,6 +1,6 @@
-import { calculateEventSettlement, loadEventCashVerification } from '../../utils/eventSettlement';
+import { calculateEventSettlement, buildEventSettlements, summarizeEventSettlements } from '../../utils/eventSettlement';
 import { hydrateEventLicenses } from '../../utils/licenses';
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Calendar, Users, CheckCircle, XCircle, Search, Download,
@@ -30,7 +30,7 @@ import { resolveRegistrationLicenseCategory } from '../../utils/registrationLice
 import ManualEventRegistrations from './ManualEventRegistrations';
 import EventBuilder from './EventBuilder';
 
-const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
+const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const EMPTY_ALLOWED_EVENTS = Object.freeze([]);
 
 const registrationCloseState = (value) => {
@@ -74,9 +74,10 @@ const getParticipantPaidAmount = (p) => {
 
 const isWithdrawnRegistration = (reg) => String(reg?.status || '').toLowerCase() === 'withdrawn';
 
-const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementModule = false }) => {
+const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementModule = false, initialEventId = null }) => {
     const [events, setEvents] = useState([]);
     const [selectedEventId, setSelectedEventId] = useState(null);
+    const openedInitialEvent = useRef(null);
     const [viewMode, setViewMode] = useState('list'); // 'list' | 'dashboard' | 'table'
     const [localParticipants, setLocalParticipants] = useState([]);
     const [systemProfiles, setSystemProfiles] = useState([]);
@@ -102,7 +103,6 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
     const [updatingWhatsApp, setUpdatingWhatsApp] = useState(null);
     const [refunds, setRefunds] = useState([]);
     const [eventPayments, setEventPayments] = useState([]);
-    const [cashVerification, setCashVerification] = useState(null);
 
     const { getTournamentPlayerTabs, getTournamentParticipants } = useRankedin();
 
@@ -270,22 +270,13 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
     }, [localParticipants, selectedEvent, totalCollected, getResolvedLicenseType, eventPayments]);
 
     const financialSummary = useMemo(() => calculateEventSettlement({
-        event: selectedEvent || {}, payments: eventPayments, refunds, verification: cashVerification,
+        event: selectedEvent || {}, payments: eventPayments, refunds,
         registrations: localParticipants.map(p => p._reg || { id: p.id, email: p.email, division: p.class_name, payment_status: p.is_paid ? 'paid' : 'pending', payment_method: p.registration_payment_method, status: p.status }),
         entryFeeForRegistration: reg => {
             const p = localParticipants.find(p => (p._reg?.id || p.id) === reg.id);
             return getParticipantEntryFee(p || {}, selectedEvent);
         },
-    }), [localParticipants, selectedEvent, eventPayments, refunds, cashVerification]);
-
-    useEffect(() => {
-        let cancelled = false;
-        setCashVerification(null);
-        if (selectedEventId && !(isEventManagementModule && selectedEvent?.is_manual)) {
-            loadEventCashVerification(supabase, selectedEventId).then(result => { if (!cancelled) setCashVerification(result); });
-        }
-        return () => { cancelled = true; };
-    }, [selectedEventId, eventPayments, isEventManagementModule, selectedEvent?.is_manual]);
+    }), [localParticipants, selectedEvent, eventPayments, refunds]);
 
     const fetchInitialData = useCallback(async () => {
             setLoading(prev => ({ ...prev, events: true }));
@@ -333,7 +324,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                 // Fetch basic global stats for "at a glance" view
                 const allParts = await fetchAllRows(() => supabase
                     .from('tournament_participants')
-                    .select('event_id, class_name, is_paid, profile_id, full_name')
+                    .select('id, event_id, class_name, is_paid, profile_id, full_name, email')
                     .order('id', { ascending: true }), 500);
 
                 const eventLicenses = new Map();
@@ -375,17 +366,18 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                 });
 
                 // ── Manual events: pull stats from event_registrations ──────────────────
+                const [manualRegs, allPayments, allRefunds, allDivisions] = await Promise.all([
+                    manualEventIds.length ? fetchAllRows(() => supabase.from('event_registrations')
+                        .select('*, tournament_divisions(entry_fee)').in('event_id', manualEventIds).order('id', { ascending: true }), 500) : [],
+                    fetchAllRows(() => supabase.from('payments').select('*').order('id', { ascending: true }), 500),
+                    fetchAllRows(() => supabase.from('payment_refunds').select('*').order('id', { ascending: true }), 500),
+                    fetchAllRows(() => supabase.from('tournament_divisions').select('*').order('id', { ascending: true }), 500),
+                ]);
+                const statements = buildEventSettlements({ events: eData || [], registrations: manualRegs,
+                    participants: allParts, payments: allPayments, refunds: allRefunds, divisions: allDivisions });
+                const settlementByEvent = new Map(statements.map(e => [e.id, e.settlement]));
                 const manualLicenseCounted = {};
                 if (manualEventIds.length > 0) {
-                    // These queries span all manual events, so a single select
-                    // silently drops entries/payments after the API's row cap.
-                    const manualRegs = await fetchAllRows(() => supabase
-                        .from('event_registrations')
-                        .select('id, event_id, email, division, payment_status, partner_email, partner_payment_status, division_id, tournament_divisions(entry_fee)')
-                        .in('event_id', manualEventIds)
-                        .neq('status', 'withdrawn')
-                        .order('id', { ascending: true }), 500);
-
                     const manualEmails = [...new Set(
                         (manualRegs || [])
                             .map((r) => (r.email || '').toLowerCase().trim())
@@ -403,12 +395,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                     await Promise.all([...new Set((manualRegs||[]).map(r=>r.event_id))].map(async eid=>{const ids=new Set((manualRegs||[]).filter(r=>r.event_id===eid).map(r=>manualPlayersByEmail.get((r.email||'').toLowerCase().trim())?.id).filter(Boolean));const profiles=await hydrateEventLicenses([...ids].map(id=>({id})),eid);profiles.forEach(p=>manualEligibility.set(`${eid}:${p.id}`,p.event_license));}));
 
 
-                    const manualPayments = await fetchAllRows(() => supabase
-                        .from('payments')
-                        .select('id, event_id, status, metadata')
-                        .in('event_id', manualEventIds)
-                        .eq('status', 'success')
-                        .order('id', { ascending: true }), 500);
+                    const manualPayments = allPayments.filter(p => manualEventIdSet.has(p.event_id));
                     const paymentsByEvent = {};
                     (manualPayments || []).forEach((pay) => {
                         if (!paymentsByEvent[pay.event_id]) paymentsByEvent[pay.event_id] = [];
@@ -416,6 +403,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                     });
 
                     (manualRegs || []).forEach(r => {
+                        if (['withdrawn', 'cancelled'].includes(r.status)) return;
                         const eid = r.event_id;
                         if (!statsByEvent[eid]) {
                             statsByEvent[eid] = {
@@ -467,31 +455,17 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                         licenses: { full: 0, temp: 0, none: 0 }
                     };
                     
-                    let exactBilled = 0;
-                    let exactCollected = 0;
-
-                    if (event.is_manual) {
-                        // Use pre-computed manual registration stats
-                        exactBilled   = stats._manualBilled   || 0;
-                        exactCollected = stats._manualCollected || 0;
-                    } else if (stats.entries > 0) {
-                        const eventParts = allParts.filter(p => p.event_id === event.id);
-                        eventParts.forEach(p => {
-                            const divFee = event.category_fees?.[p.class_name] || event.entry_fee || 0;
-                            exactBilled += Number(divFee);
-                            if (p.is_paid) exactCollected += Number(divFee);
-                        });
-                    }
-
                     return {
                         ...event,
+                        settlement: settlementByEvent.get(event.id),
                         stats: {
-                            entries: stats.entries,
-                            billed: exactBilled,
-                            collected: exactCollected,
-                            outstanding: exactBilled - exactCollected,
-                            paidCount: stats.paidCount,
-                            compedCount: stats.compedCount || 0,
+                            entries: settlementByEvent.get(event.id).activeEntries,
+                            billed: settlementByEvent.get(event.id).totalAmountBilled,
+                            collected: settlementByEvent.get(event.id).grossEntryFees,
+                            outstanding: settlementByEvent.get(event.id).pendingAmount,
+                            paidCount: settlementByEvent.get(event.id).paid4M + settlementByEvent.get(event.id).paidClub,
+
+                            compedCount: settlementByEvent.get(event.id).compedEntries,
                             uniquePlayersCount: stats.uniqueProfiles.size,
                             licenses: stats.licenses
                         }
@@ -510,6 +484,14 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
     useEffect(() => {
         fetchInitialData();
     }, [fetchInitialData]);
+
+    useEffect(() => {
+        if (initialEventId && openedInitialEvent.current !== initialEventId && events.some(e => e.id === initialEventId)) {
+            openedInitialEvent.current = initialEventId;
+            setSelectedEventId(initialEventId);
+            setViewMode('dashboard');
+        }
+    }, [initialEventId, events]);
 
     const changeEventCompletion = async (event) => {
         if (completionBusyId !== null) return;
@@ -1513,12 +1495,19 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                 <td className="px-2.5 py-2.5 text-center whitespace-nowrap">
                     <div className="flex flex-col">
                         <span className="text-lg font-black leading-none text-white">{e.stats?.entries || 0}</span>
-                        <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{e.stats?.paidCount || 0} Paid{e.stats?.compedCount ? ` · ${e.stats.compedCount} Comped` : ''}</span>
+                        <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{e.stats?.paidCount || 0} Paid</span>
+                        {e.stats?.compedCount > 0 && <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{e.stats.compedCount} Comped</span>}
                     </div>
                 </td>
                 <td className="px-2.5 py-2.5">
                     <div className="flex flex-col">
-                        <span className="text-padel-green font-bold text-[11px]">R{e.stats?.collected?.toLocaleString() || 0} / R{e.stats?.billed?.toLocaleString() || 0}</span>
+                        <span className="text-padel-green font-bold text-[11px]">{fmtR(e.stats?.collected)} / {fmtR(e.stats?.billed)}</span>
+                        {!isEventManagementModule && e.settlement && <>
+                            <span className="text-[9px] text-gray-400">Fee {fmtR(e.settlement.commission)} · Paid {fmtR(e.settlement.interimPaid)}</span>
+                            <span className="text-[9px] text-gray-400">Direct {fmtR(e.settlement.organiserRetained)} · Refunds {fmtR(e.settlement.entryFeesRefunded)}</span>
+                            <span className="text-[10px] font-bold text-padel-green">Balance {fmtR(e.settlement.dueToOrg)}</span>
+                            {e.settlement.issues.length > 0 && <span className="text-[9px] text-amber-300">Needs review</span>}
+                        </>}
                         {(e.stats?.outstanding > 0) && (
                             <span className="text-[8px] text-red-400 font-bold uppercase tracking-widest">R{e.stats.outstanding.toLocaleString()} Out</span>
                         )}
@@ -1696,7 +1685,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
-                                {(loading.events || completionLoadError) ? <tr><td colSpan={eventListColCount} className="px-6 py-10 text-center text-gray-400">{completionLoadError || 'Loading events…'}</td></tr> : (isEventManagementModule ? activeEvents : filteredEvents).length > 0 ? (
+                                {(loading.events || completionLoadError || eventLoadError) ? <tr><td colSpan={eventListColCount} className="px-6 py-10 text-center text-gray-400">{completionLoadError || eventLoadError || 'Loading events…'}</td></tr> : (isEventManagementModule ? activeEvents : filteredEvents).length > 0 ? (
                                     (isEventManagementModule ? activeEvents : filteredEvents).map(renderEventRow)
                                 ) : (
                                     <tr>
@@ -1706,12 +1695,13 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                                     </tr>
                                 )}
                             </tbody>
+                            {!isEventManagementModule && !loading.events && !eventLoadError && <tfoot className="border-t border-white/10 text-xs text-white"><tr><td colSpan={5} className="px-4 py-4 font-bold">Totals for displayed events</td><td className="text-center">{summarizeEventSettlements(filteredEvents).entries}</td><td colSpan={3} className="px-3 py-4">Collected {fmtR(summarizeEventSettlements(filteredEvents).collected)} · Fees {fmtR(summarizeEventSettlements(filteredEvents).commission)} · Paid {fmtR(summarizeEventSettlements(filteredEvents).paid)} · Balance owed {fmtR(summarizeEventSettlements(filteredEvents).balanceOwed)}</td></tr></tfoot>}
                         </table>
                     </div>
                 </div>
 
                 {/* Manually completed events - Event Manager only */}
-                {isEventManagementModule && !completionLoadError && completedEvents.length > 0 && (
+                {isEventManagementModule && !completionLoadError && !eventLoadError && completedEvents.length > 0 && (
                     <div className="mt-4 bg-black/20 rounded-2xl border border-white/5 overflow-hidden">
                         <button
                             onClick={() => setShowCompleted(s => !s)}
@@ -1749,7 +1739,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
             </div>
             )}
 
-            {selectedEventId && viewMode !== 'list' && isEventManagementModule && selectedEvent?.is_manual ? (
+            {selectedEventId && viewMode !== 'list' && selectedEvent?.is_manual ? (
                 <ManualEventRegistrations
                     variant="inline"
                     isOpen
@@ -1964,13 +1954,13 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                             <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Collected by 4M (gross)</p>
                                 <span className="text-xl font-black text-padel-green">{fmtR(financialSummary.collected4M)}</span>
-                                <p className="text-[9px] text-gray-500 mt-1">Entry fees via Paystack before refunds</p>
+                                <p className="text-[9px] text-gray-500 mt-1">Entry fees received by 4M before refunds</p>
                             </div>
                         </div>
                         <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-2xl p-5 space-y-3">
                             <div className="flex items-center justify-between gap-4 text-sm">
-                                <span className="text-gray-400">Funds collected for entry fees</span>
-                                <span className="font-bold text-white">{fmtR(financialSummary.collected4M)}</span>
+                                <span className="text-gray-400">Total entry fees collected (all methods)</span>
+                                <span className="font-bold text-white">{fmtR(financialSummary.grossEntryFees)}</span>
                             </div>
                             {financialSummary.compedEntries > 0 && (
                                 <div className="flex items-center justify-between gap-4 text-sm">
@@ -1986,13 +1976,17 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                                 <span className="font-bold text-red-400">−{fmtR(financialSummary.entryFeesRefunded)}</span>
                             </div>
                             <div className="flex items-center justify-between gap-4 text-sm border-t border-white/10 pt-3">
-                                <span className="text-gray-300 font-semibold">Balance of entry fee funds</span>
-                                <span className="font-black text-white">{fmtR(financialSummary.netHeld4M)}</span>
+                                <span className="text-gray-300 font-semibold">Net entry income</span>
+                                <span className="font-black text-white">{fmtR(financialSummary.entryFeeBalance)}</span>
                             </div>
                             <div className="flex items-center justify-between gap-4 text-sm">
-                                <span className="text-red-400">Platform fees @ 5%</span>
+                                <span className="text-red-400">Platform fees @ 5% of entry fees received by 4M</span>
                                 <span className="font-bold text-red-400">−{fmtR(financialSummary.commission)}</span>
                             </div>
+                            <div className="flex items-center justify-between gap-4 text-sm"><span className="text-gray-300">Organiser entitlement</span><span className="text-white font-bold">{fmtR(financialSummary.organiserEntitlement)}</span></div>
+                            <div className="flex items-center justify-between gap-4 text-sm"><span className="text-gray-400">Less: entry fees retained by organiser</span><span className="text-red-400 font-bold">−{fmtR(financialSummary.organiserRetained)}</span></div>
+                            {financialSummary.unallocatedCredit4M > 0 && <p className="text-xs text-amber-300">Unallocated credit held by 4M: {fmtR(financialSummary.unallocatedCredit4M)}. Available for payout after reserves: {fmtR(financialSummary.availableForPayout)}.</p>}
+                            {financialSummary.issues.length > 0 && <p role="alert" className="text-xs text-amber-300">{financialSummary.issues.join('. ')}</p>}
                             {financialSummary.interimPaid > 0 && (
                                 <div className="flex items-center justify-between gap-4 text-sm">
                                     <span className="text-red-400">Interim payments to organiser</span>
@@ -2008,7 +2002,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Amount due to organiser</p>
                                 <span className="text-3xl font-black text-padel-green">{fmtR(financialSummary.dueToOrg)}</span>
                                 <p className="text-[9px] text-gray-500 mt-1">
-                                    4M funds after refunds − 5% of active entry fees
+                                    Net entry income − 5% of 4M collections − organiser receipts
                                     {financialSummary.interimPaid > 0 ? ` − interim paid (${fmtR(financialSummary.interimPaid)})` : ''}
                                     {' · '}licenses stay with 4M
                                 </p>

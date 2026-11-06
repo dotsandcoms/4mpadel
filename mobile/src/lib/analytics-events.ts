@@ -39,7 +39,8 @@ const SCREENS: Record<string, string> = {
   'pro/fip/[id]/index': 'fip_tournament', 'pro/fip/[id]/document': 'fip_document',
   'media/index': 'media', 'media/[id]': 'media_album', 'calendar/[id]': 'calendar_event',
   search: 'event_search', help: 'help', legal: 'legal', 'reset-password': 'reset_password',
-  'match-result': 'match_result',
+  'match-result': 'match_result', messages: 'messages', 'messages/[id]': 'conversation',
+  'messages/new': 'message_request', 'messages/events': 'event_messages', 'settings/messaging': 'messaging_settings',
 };
 
 /** Receives Expo Router segments, whose dynamic parts are templates such as [id]. */

@@ -6,6 +6,8 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import LicensePaymentModal from '../components/LicensePaymentModal';
 import PlayerLicenseCard from '../components/PlayerLicenseCard';
+import { BirthDateField, PlayerProfileDetailsFields } from '../components/PlayerProfileDetailsFields';
+import { ageFromBirthDate, birthDateError, playtomicDetailsError, playtomicDetailsPayload, playtomicPrivateFields, getProfileDetails, saveProfileDetails, PROOF_BUCKET } from '../utils/profileDetails';
 import { PlayerPreferenceFields, PlayerPreferenceDetails } from '../components/PlayerPreferences';
 import { useCommerceConfig } from '../hooks/useCommerceConfig';
 import CoachProfileModal from '../components/CoachProfileModal';
@@ -169,6 +171,7 @@ const PlayerProfile = () => {
     const [newPassword, setNewPassword] = useState('');
     const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
     const [player, setPlayer] = useState(null);
+    const [signupUserId, setSignupUserId] = useState('');
     const [showPaymentModal, setShowPaymentModal] = useState(() => new URLSearchParams(window.location.search).get('license_payment') === '1');
     const [isImpersonating, setIsImpersonating] = useState(false);
     const [loadingReset, setLoadingReset] = useState(false);
@@ -226,7 +229,9 @@ const PlayerProfile = () => {
         home_club: '',
         club_id: '',
         custom_club: '',
-        age: '',
+        date_of_birth: '',
+        playtomic_level: '',
+        playtomic_proof_path: '',
         instagram_link: '',
         region: '',
         racket_brand: '',
@@ -234,6 +239,27 @@ const PlayerProfile = () => {
         court_side: '',
         additional_images: []
     });
+
+    const [profileDetails, setProfileDetails] = useState(null);
+    const profileAge = ageFromBirthDate(profileDetails?.date_of_birth);
+    const [detailsReady, setDetailsReady] = useState(false);
+    const [detailsError, setDetailsError] = useState('');
+    const [detailsRetry, setDetailsRetry] = useState(0);
+    const [proofUploading, setProofUploading] = useState(false);
+
+    useEffect(() => {
+        let active = true;
+        setDetailsReady(false);
+        setDetailsError('');
+        setProfileDetails(null);
+        if (player?.id) getProfileDetails(supabase, player.id).then(details => {
+            if (!active) return;
+            setProfileDetails(details);
+            setFormData(previous => ({ ...previous, ...playtomicPrivateFields(details), date_of_birth: details?.date_of_birth || '', playtomic_level: details?.playtomic_level ?? '', playtomic_proof_path: details?.playtomic_proof_path || '' }));
+            setDetailsReady(true);
+        }).catch(issue => { if (active) setDetailsError(issue.message); });
+        return () => { active = false; };
+    }, [player?.id, detailsRetry]);
 
     const showMessage = (text, type = 'success') => {
         setMessage({ text, type });
@@ -269,6 +295,7 @@ const PlayerProfile = () => {
         const checkUserAndFetchProfile = async () => {
             setLoading(true);
             const { data: { session } } = await supabase.auth.getSession();
+            setSignupUserId(session?.user?.id || '');
 
             if (!session) {
                 setHasSession(false);
@@ -360,7 +387,8 @@ const PlayerProfile = () => {
                     }
                 }
 
-                setFormData({
+                setFormData(previous => ({
+                    ...previous,
                     name: playerData.name || '',
                     email: playerData.email || '',
                     contact_number: playerData.contact_number || '',
@@ -374,14 +402,13 @@ const PlayerProfile = () => {
                     image_url: playerData.image_url || '',
                     category: playerData.category || '',
                     id_number: playerData.id_number || '',
-                    age: playerData.age || '',
                     instagram_link: playerData.instagram_link || '',
                     region: playerData.region || '',
                     racket_brand: playerData.racket_brand || '',
                     playing_hand: playerData.playing_hand || '',
                     court_side: playerData.court_side || '',
                     additional_images: additionalImagesArray
-                });
+                }));
 
                 // Fetch associated coach application if any
                 const { data: coachData } = await supabase
@@ -1163,6 +1190,10 @@ const PlayerProfile = () => {
     const handleSave = async (e) => {
         e.preventDefault();
         if (!player && isImpersonating) return;
+        if (proofUploading) { showMessage('Wait for your proof to finish uploading.', 'error'); return; }
+        if (player && !detailsReady) { showMessage(detailsError || 'Wait for your private profile details to load.', 'error'); return; }
+        const detailsIssue = birthDateError(formData.date_of_birth) || playtomicDetailsError(formData);
+        if (detailsIssue) { showMessage(detailsIssue, 'error'); return; }
         setSaving(true);
         setMessage(null);
 
@@ -1189,7 +1220,6 @@ const PlayerProfile = () => {
             image_url: formData.image_url,
             category: formData.category,
             id_number: formData.id_number,
-            age: formData.age === '' || formData.age === null ? null : parseInt(formData.age),
             instagram_link: formData.instagram_link,
             region: formData.region,
             racket_brand: formData.racket_brand,
@@ -1203,7 +1233,7 @@ const PlayerProfile = () => {
                 if (!formData.name.trim() || !formData.contact_number.trim()) throw new Error('Add your full name and mobile number.');
                 const { data: { user }, error: userError } = await supabase.auth.getUser();
                 if (userError || !user?.email) throw new Error('Sign in again to complete your player profile.');
-                const { error: createError } = await supabase.rpc('create_player_profile', {
+                const { error: createError } = await supabase.rpc('create_player_profile_with_details_v3', { p_details: playtomicDetailsPayload(formData), p_profile: {
                     p_email: user.email,
                     p_name: formData.name.trim(),
                     p_contact: formData.contact_number.trim(),
@@ -1212,11 +1242,16 @@ const PlayerProfile = () => {
                     p_home_club: null, p_sponsors: null, p_region: null,
                     p_paid_registration: false, p_license_type: 'none',
                     p_image_url: null, p_racket_brand: null, p_club_id: null
-                });
+                } });
                 if (createError) throw createError;
                 await refetchPlayer();
                 showMessage('Player profile saved. You can now choose your license.', 'success');
                 return;
+            }
+            const savedDetails = await saveProfileDetails(supabase, player.id, formData);
+            setProfileDetails(savedDetails);
+            if (profileDetails?.playtomic_proof_path && profileDetails.playtomic_proof_path !== savedDetails.playtomic_proof_path) {
+                void supabase.storage.from(PROOF_BUCKET).remove([profileDetails.playtomic_proof_path]);
             }
             // Update the players table
             const { error: dbError } = await supabase
@@ -1717,13 +1752,15 @@ const PlayerProfile = () => {
             <div className="min-h-screen bg-black flex items-center justify-center px-5 pt-24 pb-12 text-white">
                 <div className="w-full max-w-md">
                     <h2 className="text-2xl font-bold mb-2">Complete your player profile</h2>
-                    <p className="text-sm text-gray-400 mb-6">Add your full name and mobile number to buy a license and enter events.</p>
+                    <p className="text-sm text-gray-400 mb-6">Add your full name, mobile number, date of birth and Playtomic level to complete your player profile.</p>
                     {message && <p role="alert" className="mb-4 text-sm text-red-300">{message.text}</p>}
                     {isImpersonating ? <p className="text-gray-400">We couldn't find a player profile for this account.</p> : <form onSubmit={handleSave} className="space-y-4">
                         <label className="block text-sm">Full name<input required autoComplete="name" value={formData.name} onChange={e => setFormData(previous => ({ ...previous, name: e.target.value }))} className="mt-2 block w-full rounded-md border border-white/20 bg-neutral-950 p-3" /></label>
                         <label className="block text-sm">Email address<input readOnly type="email" autoComplete="email" value={formData.email} className="mt-2 block w-full rounded-md border border-white/20 bg-neutral-950 p-3 text-gray-400" /></label>
                         <label className="block text-sm">Mobile number<input required type="tel" autoComplete="tel" value={formData.contact_number} onChange={e => setFormData(previous => ({ ...previous, contact_number: e.target.value }))} className="mt-2 block w-full rounded-md border border-white/20 bg-neutral-950 p-3" /></label>
-                        <button disabled={saving} type="submit" className="w-full rounded-md bg-padel-green px-4 py-3 font-semibold text-black disabled:opacity-50">{saving ? 'Saving…' : 'Save player profile'}</button>
+                        <BirthDateField value={formData.date_of_birth} onChange={date_of_birth => setFormData(previous => ({ ...previous, date_of_birth }))} />
+                        <PlayerProfileDetailsFields signupUserId={signupUserId} value={formData} onChange={setFormData} disabled={saving} onBusyChange={setProofUploading} />
+                        <button disabled={saving || proofUploading} type="submit" className="w-full rounded-md bg-padel-green px-4 py-3 font-semibold text-black disabled:opacity-50">{saving ? 'Saving…' : 'Save player profile'}</button>
                     </form>}
                 </div>
             </div>
@@ -2664,7 +2701,7 @@ const PlayerProfile = () => {
                                                         Age
                                                     </span>
                                                     <p className="text-[11px] font-black text-white truncate mt-1">
-                                                        {player.age ? `${player.age} Years` : 'Not Set'}
+                                                        {profileAge == null ? 'Add date of birth' : `${profileAge} Years`}
                                                     </p>
                                                 </div>
 
@@ -2680,6 +2717,7 @@ const PlayerProfile = () => {
                                                 </div>
 
                                                 <PlayerPreferenceDetails player={player} compact />
+                                                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3.5"><p className="text-[10px] font-bold uppercase tracking-widest text-padel-green">Playtomic level</p><p className="mt-1 text-xs font-semibold text-white">{profileDetails?.playtomic_level == null ? 'Not set' : `${Number(profileDetails.playtomic_level).toFixed(2)} · player submitted`}</p></div>
 
                                                 {/* Racket Brand */}
                                                 <div className="bg-[#0a0a0a]/70 border border-white/10 rounded-2xl p-3.5 flex flex-col justify-between min-h-[75px] shadow-lg backdrop-blur-xl">
@@ -2821,19 +2859,7 @@ const PlayerProfile = () => {
                                             </div>
 
                                             {/* Age */}
-                                            <div className="space-y-1">
-                                                <label className="text-[8.5px] font-black uppercase tracking-wider text-padel-green ml-1">Age</label>
-                                                <div className="relative">
-                                                    <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/75 w-3.5 h-3.5" />
-                                                    <input
-                                                        type="number"
-                                                        value={formData.age || ''}
-                                                        onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                                                        className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl pl-11 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
-                                                        placeholder="Your Age"
-                                                    />
-                                                </div>
-                                            </div>
+                                            <BirthDateField value={formData.date_of_birth} onChange={date_of_birth => setFormData(previous => ({ ...previous, date_of_birth }))} />
 
                                             {/* Home Club */}
                                             <div className="space-y-1">
@@ -2860,6 +2886,8 @@ const PlayerProfile = () => {
                                             </div>
 
                                             <PlayerPreferenceFields value={formData} onChange={setFormData} compact />
+                                            {detailsError && <p role="alert" className="text-sm text-red-300">{detailsError} <button type="button" onClick={() => setDetailsRetry(value => value + 1)} className="underline">Retry</button></p>}
+                                            <PlayerProfileDetailsFields playerId={player?.id} value={formData} onChange={setFormData} disabled={!detailsReady || saving} onBusyChange={setProofUploading} />
 
                                             {/* Racket Brand */}
                                             <div className="space-y-1">
@@ -3313,10 +3341,10 @@ const PlayerProfile = () => {
                                             <span><strong className="text-white">{player.home_club || 'Not set'}</strong></span>
                                         </div>
 
-                                        {player.age && (
+                                        {profileAge != null && (
                                             <>
                                                 <span className="hidden sm:inline text-white/20">•</span>
-                                                <div>Age {player.age}</div>
+                                                <div>Age {profileAge}</div>
                                             </>
                                         )}
                                     </div>
@@ -3927,7 +3955,7 @@ const PlayerProfile = () => {
                                                                 </div>
                                                                 <div className="space-y-1">
                                                                     <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Age</p>
-                                                                    <p className="text-lg font-bold text-white">{player.age || 'Not set'}</p>
+                                                                    <p className="text-lg font-bold text-white">{profileAge ?? 'Add date of birth'}</p>
                                                                 </div>
                                                                 <div className="space-y-1">
                                                                     <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Nationality</p>
@@ -3954,6 +3982,7 @@ const PlayerProfile = () => {
                                                                     <p className="text-lg font-bold text-white uppercase">{player.region || 'Not set'}</p>
                                                                 </div>
                                                                 <PlayerPreferenceDetails player={player} />
+                                                                <div><p className="text-[10px] font-bold uppercase tracking-widest text-padel-green">Playtomic level</p><p className="text-lg font-bold text-white">{profileDetails?.playtomic_level == null ? 'Not set' : Number(profileDetails.playtomic_level).toFixed(2)}</p><p className="text-xs text-gray-400">Player submitted</p></div>
                                                                 <div className="space-y-1">
                                                                     <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Racket Brand</p>
                                                                     <p className="text-lg font-bold text-white">{player.racket_brand || 'Not set'}</p>
@@ -4056,19 +4085,7 @@ const PlayerProfile = () => {
                                                                         </div>
                                                                     </div>
 
-                                                                    <div className="space-y-2">
-                                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Age</label>
-                                                                        <div className="relative">
-                                                                            <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/75" size={18} />
-                                                                            <input
-                                                                                type="number"
-                                                                                value={formData.age}
-                                                                                onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
-                                                                                placeholder="Your Age"
-                                                                            />
-                                                                        </div>
-                                                                    </div>
+                                                                    <BirthDateField value={formData.date_of_birth} onChange={date_of_birth => setFormData(previous => ({ ...previous, date_of_birth }))} />
                                                                 </div>
 
                                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -4175,7 +4192,9 @@ const PlayerProfile = () => {
                                                                             <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-padel-green/75 pointer-events-none" size={20} />
                                                                         </div>
                                                                     </div>
-                                                                    <div className="md:col-span-2"><PlayerPreferenceFields value={formData} onChange={setFormData} desktop /></div>
+                                                                    <div className="md:col-span-2"><PlayerPreferenceFields value={formData} onChange={setFormData} desktop />
+                                            {detailsError && <p role="alert" className="text-sm text-red-300">{detailsError} <button type="button" onClick={() => setDetailsRetry(value => value + 1)} className="underline">Retry</button></p>}
+                                            <PlayerProfileDetailsFields playerId={player?.id} value={formData} onChange={setFormData} disabled={!detailsReady || saving} onBusyChange={setProofUploading} /></div>
                                                                     <div className="space-y-2">
                                                                         <label className="text-[10px] font-black text-padel-green uppercase tracking-[0.2em] ml-2">Racket Brand</label>
                                                                         <div className="relative space-y-3">
@@ -5330,19 +5349,7 @@ const PlayerProfile = () => {
                                                     </div>
                                                 </div>
 
-                                                <div className="space-y-1.5">
-                                                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-3 md:ml-4">Age</label>
-                                                    <div className="relative">
-                                                        <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/75 w-4 h-4 md:w-5 md:h-5" />
-                                                        <input
-                                                            type="number"
-                                                            value={formData.age}
-                                                            onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                                                            className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
-                                                            placeholder="Your Age"
-                                                        />
-                                                    </div>
-                                                </div>
+                                                <BirthDateField value={formData.date_of_birth} onChange={date_of_birth => setFormData(previous => ({ ...previous, date_of_birth }))} />
                                             </div>
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
@@ -5455,6 +5462,8 @@ const PlayerProfile = () => {
                                             </div>
 
                                             <PlayerPreferenceFields value={formData} onChange={setFormData} />
+                                            {detailsError && <p role="alert" className="text-sm text-red-300">{detailsError} <button type="button" onClick={() => setDetailsRetry(value => value + 1)} className="underline">Retry</button></p>}
+                                            <PlayerProfileDetailsFields playerId={player?.id} value={formData} onChange={setFormData} disabled={!detailsReady || saving} onBusyChange={setProofUploading} />
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
                                                 <div className="space-y-1.5">

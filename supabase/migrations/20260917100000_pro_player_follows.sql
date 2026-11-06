@@ -17,4 +17,8 @@ drop policy if exists "Delete own pro follows" on public.pro_player_follows;
 create policy "Read own pro follows" on public.pro_player_follows for select to authenticated using ((select auth.uid()) = user_id);
 create policy "Create own pro follows" on public.pro_player_follows for insert to authenticated with check ((select auth.uid()) = user_id);
 create policy "Delete own pro follows" on public.pro_player_follows for delete to authenticated using ((select auth.uid()) = user_id);
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.pro_player_follows TO service_role;
+
 commit;

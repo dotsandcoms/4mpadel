@@ -32,3 +32,27 @@ test('full export retains the raw registration, payment and refund ledgers', () 
     assert.equal(wb.getWorksheet('Payments ledger').getCell('E2').value, 1200);
     assert.equal(wb.getWorksheet('Refunds ledger').getCell('D2').value, -200);
 });
+
+test('registration exports preserve partner payer, club recipient, paid amounts and the 4M-only fee explanation', async () => {
+    const wb = buildEventFinanceWorkbook({ ...payload, reportType: 'full', registrations: [{
+        registrationId: 'partner', name: 'Jason', paymentStatus: 'Paid by Partner Faiyaad', channel: 'Partner (Faiyaad)',
+        entryAmount: 800, paidTo4M: 0, paidDirectToOrganiser: 800, recipientUnconfirmed: 0, outstanding: 0,
+        collectionRecipient: 'VAPC', note: 'Paid In-store 24/10',
+    }] });
+    const output = new ExcelJS.Workbook(); await output.xlsx.load(await wb.xlsx.writeBuffer());
+    const sheet = output.getWorksheet('Registrations');
+    assert.equal(sheet.getCell('K2').value, 'Paid by Partner Faiyaad');
+    assert.deepEqual(['R2', 'S2', 'T2', 'U2', 'V2'].map(cell => sheet.getCell(cell).value), [0, 800, 0, 0, 'VAPC']);
+    assert.match(output.getWorksheet('Summary').getCell('A5').value || output.getWorksheet('Summary').getCell('A6').value, /Direct organiser collections earn no commission/);
+});
+
+test('the receipts sheet shows the held unallocated credit separately from retained cash', async () => {
+    const wb = buildEventFinanceWorkbook({ ...payload, receiptReport: { ...payload.receiptReport,
+        receipts: [{ ...payload.receiptReport.receipts[0], unallocatedCredit: 800 }],
+    } });
+    const output = new ExcelJS.Workbook(); await output.xlsx.load(await wb.xlsx.writeBuffer());
+    const sheet = output.getWorksheet('4M receipts');
+    assert.equal(sheet.getCell('Q1').value, 'Unallocated credit reserved (ZAR)');
+    assert.equal(sheet.getCell('Q2').value, 800);
+    assert.equal(sheet.getCell('Q3').value.result, 800);
+});

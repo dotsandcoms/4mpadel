@@ -1,3 +1,4 @@
+import { useMessagingInbox } from '@/components/messaging/messaging-provider';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { Platform } from 'react-native';
 
@@ -11,13 +12,14 @@ import { lightBrand as brand } from '@/theme/tokens';
  * Android; drawable names only work for resources bundled into the app.
  *
  * Two constraints to remember before adding anything here:
- *   1. Android caps the bar at five tabs. Four are visible for launch.
+ *   1. Android caps the bar at five tabs. Five are visible, including Messages.
  *   2. Tabs cannot be added or removed at runtime.
  *
  * NativeTabs is still an alpha API. Keeping it wrapped in this one file means
  * a breaking change upstream is a single-file fix.
  */
 export default function TabsLayout() {
+  const { badge } = useMessagingInbox();
   return (
     <AppDrawer>
       <NativeTabs
@@ -62,6 +64,12 @@ export default function TabsLayout() {
         <NativeTabs.Trigger name="rankings">
           <NativeTabs.Trigger.Label>Players</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf="person.2.fill" md="group" />
+        </NativeTabs.Trigger>
+
+        <NativeTabs.Trigger name="messages">
+          <NativeTabs.Trigger.Label>Messages</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Icon sf="bubble.left.and.bubble.right.fill" md="chat" />
+          {badge > 0 ? <NativeTabs.Trigger.Badge>{badge > 99 ? '99+' : String(badge)}</NativeTabs.Trigger.Badge> : null}
         </NativeTabs.Trigger>
 
         {/* Explore is held back from the launch tab bar. */}

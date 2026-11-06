@@ -5,6 +5,8 @@ export function pathFromNotificationData(data: Record<string, unknown> | undefin
   const path = data?.path;
   if (typeof path === 'string') {
     if (Object.values(NOTIFICATION_PATHS).includes(path)) return path;
+    if (path === '/(tabs)/messages') return path;
+    if (/^\/messages\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(path)) return path;
     if (path === '/(tabs)/calendar') return '/calendar';
     const proMatch = /^\/pro\/match\/([1-9]\d*)$/.exec(path);
     if (proMatch && Number(proMatch[1]) <= 2147483647) return path;

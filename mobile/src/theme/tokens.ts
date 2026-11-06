@@ -94,4 +94,5 @@ export const lightBrand = {
   edge: '#DCE2DA',
   glass: '#EAF0E5',
   accent: '#386018',
+  messagingAction: '#27517B',
 } as const;

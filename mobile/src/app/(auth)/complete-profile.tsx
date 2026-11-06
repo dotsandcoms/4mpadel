@@ -54,6 +54,8 @@ import {
   SA_REGIONS,
 } from '@/lib/registration';
 import { supabase } from '@/lib/supabase';
+import { birthDateError, playtomicDetailsError, type PlaytomicExtraction } from '@/lib/profile-details';
+import { PlaytomicProofField } from '@/components/playtomic-proof-field';
 import { FieldColors, profileColors as brand } from '@/components/field-colors';
 
 type Errors = Partial<Record<string, string>>;
@@ -80,6 +82,12 @@ export default function CompleteProfileScreen() {
   const [hasStepped, setHasStepped] = useState(false);
   const [hydrate, setHydrate] = useState<'pending' | 'restoring' | 'ready'>('pending');
   const [busy, setBusy] = useState(false);
+  const [proofSaving, setProofSaving] = useState(false);
+  const [signupUserId, setSignupUserId] = useState('');
+  const [playtomicLevel, setPlaytomicLevel] = useState('');
+  const [playtomicNoProfile, setPlaytomicNoProfile] = useState(false);
+  const [playtomicExtraction, setPlaytomicExtraction] = useState<PlaytomicExtraction | null>(null);
+  const [playtomicProofPath, setPlaytomicProofPath] = useState('');
   const [savingStep, setSavingStep] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Errors>({});
@@ -108,6 +116,7 @@ export default function CompleteProfileScreen() {
   const [gender, setGender] = useState('');
   const [nationality, setNationality] = useState('');
   const [idNumber, setIdNumber] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [region, setRegion] = useState('');
   const [category, setCategory] = useState('');
   const [clubId, setClubId] = useState('');
@@ -125,6 +134,11 @@ export default function CompleteProfileScreen() {
     return {
       firstName,
       lastName,
+      dateOfBirth,
+      playtomicLevel,
+      playtomicProofPath,
+      playtomicNoProfile,
+      playtomicExtraction,
       email,
       contactNumber,
       gender,
@@ -155,6 +169,11 @@ export default function CompleteProfileScreen() {
     customRacketBrand,
     email,
     firstName,
+    dateOfBirth,
+    playtomicLevel,
+    playtomicProofPath,
+    playtomicNoProfile,
+    playtomicExtraction,
     gender,
     idNumber,
     instagramLink,
@@ -174,12 +193,18 @@ export default function CompleteProfileScreen() {
     supabase.auth.getUser().then(async ({ data }) => {
       try {
         const user = data.user;
+        setSignupUserId(user?.id ?? '');
         const saved = await loadProfileDraft(user?.email);
         const names = nameFromUser(user ?? null);
         setEmail(user?.email ?? saved?.email ?? '');
         setFirstName((v) => v || saved?.firstName || names.firstName);
         setLastName((v) => v || saved?.lastName || names.lastName);
         if (saved) {
+          setDateOfBirth((v) => v || saved.dateOfBirth || '');
+          setPlaytomicLevel((v) => v || saved.playtomicLevel || '');
+          setPlaytomicProofPath((v) => v || saved.playtomicProofPath || '');
+          setPlaytomicNoProfile(saved.playtomicNoProfile === true);
+          setPlaytomicExtraction(saved.playtomicExtraction ?? null);
           setContactNumber((v) => v || saved.contactNumber || '');
           setGender((v) => v || saved.gender || '');
           setNationality((v) => v || saved.nationality || '');
@@ -238,9 +263,10 @@ export default function CompleteProfileScreen() {
 
   const clubReady = !!clubId && (clubId !== 'Other' || filled(customClub));
   const racketReady = !!racketBrand && (racketBrand !== 'Other' || filled(customRacketBrand));
-  const step2Complete = !!category && clubReady && filled(bio) && racketReady && accepted;
+  const step2Complete = !!category && clubReady && filled(bio) && racketReady && accepted && !playtomicDetailsError(playtomicLevel, playtomicProofPath, playtomicNoProfile);
 
   const completionChecks = [
+    !playtomicDetailsError(playtomicLevel, playtomicProofPath, playtomicNoProfile),
     filled(firstName),
     filled(lastName),
     !!email,
@@ -265,6 +291,8 @@ export default function CompleteProfileScreen() {
 
   function validateStep1(): Errors {
     const next: Errors = {};
+    const birthIssue = birthDateError(dateOfBirth);
+    if (birthIssue) next.dateOfBirth = birthIssue;
     if (!filled(firstName)) next.firstName = 'Enter your first name.';
     if (!filled(lastName)) next.lastName = 'Enter your surname.';
     return next;
@@ -272,6 +300,8 @@ export default function CompleteProfileScreen() {
 
   function validateStep2(): Errors {
     const next: Errors = {};
+    const levelIssue = playtomicDetailsError(playtomicLevel, playtomicProofPath, playtomicNoProfile);
+    if (levelIssue) next.playtomicLevel = levelIssue;
     if (!category) next.category = 'Select a category.';
     if (!clubId) next.clubId = 'Select a home club.';
     if (clubId === 'Other' && !filled(customClub)) next.customClub = 'Enter your club name.';
@@ -319,6 +349,7 @@ export default function CompleteProfileScreen() {
   }
 
   async function finish() {
+    if (busy || proofSaving) return;
     const next = validateStep2();
     setErrors(next);
     setFormError(null);
@@ -344,7 +375,7 @@ export default function CompleteProfileScreen() {
     }
   }
 
-  const saving = savingStep || busy;
+  const saving = savingStep || busy || proofSaving;
   const ctaMuted = step === 2 && !accepted;
   const ctaLabel = saving
     ? 'Saving details…'
@@ -475,6 +506,7 @@ export default function CompleteProfileScreen() {
                     />
                   </View>
                 </View>
+                <LiquidField label="Date of birth (required, YYYY-MM-DD)" value={dateOfBirth} placeholder="YYYY-MM-DD" error={errors.dateOfBirth} invalid={!!errors.dateOfBirth} valid={!!dateOfBirth && !birthDateError(dateOfBirth)} onChangeText={value => { setDateOfBirth(value); clearError('dateOfBirth'); }} autoComplete="birthdate-full" autoCapitalize="none" maxLength={10} />
                 <LiquidField
                   ref={idRef}
                   label="ID / passport (optional)"
@@ -573,6 +605,8 @@ export default function CompleteProfileScreen() {
                 />
 
                 <SectionLabel first>Level & club</SectionLabel>
+                {!playtomicNoProfile && <LiquidField label="Playtomic Level (required)" value={playtomicLevel} placeholder="e.g. 3.25" keyboardType="decimal-pad" error={errors.playtomicLevel} invalid={!!errors.playtomicLevel} onChangeText={value => { setPlaytomicLevel(value); clearError('playtomicLevel'); }} />}
+                <PlaytomicProofField noProfile={playtomicNoProfile} onNoProfileChange={value => { setPlaytomicNoProfile(value); clearError('playtomicLevel'); if (value) { setPlaytomicLevel(''); setPlaytomicProofPath(''); setPlaytomicExtraction(null); } }} extraction={playtomicExtraction} onExtractionDetected={setPlaytomicExtraction} signupUserId={signupUserId} path={playtomicProofPath} level={playtomicLevel} disabled={busy || !signupUserId} onChange={setPlaytomicProofPath} onLevelDetected={value => { setPlaytomicLevel(value); clearError('playtomicLevel'); }} onBusyChange={setProofSaving} />
                 <SelectField
                   label="Category"
                   value={category}

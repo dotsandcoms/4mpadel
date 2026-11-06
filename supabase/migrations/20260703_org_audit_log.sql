@@ -189,3 +189,8 @@ DROP TRIGGER IF EXISTS trg_audit_org_events ON public.calendar;
 CREATE TRIGGER trg_audit_org_events
 AFTER INSERT OR UPDATE ON public.calendar
 FOR EACH ROW EXECUTE FUNCTION public.audit_org_events();
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+REVOKE ALL ON TABLE public.org_audit_log FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.org_audit_log TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.org_audit_log TO service_role;

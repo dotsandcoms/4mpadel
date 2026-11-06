@@ -44,3 +44,8 @@ VALUES
     ('bradein@dotsandcoms.co.za', 'super_admin', '{}'),
     ('admin@4mpadel.co.za', 'super_admin', '{}')
 ON CONFLICT (email) DO NOTHING;
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+REVOKE ALL ON TABLE public.admin_sidebar_permissions FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.admin_sidebar_permissions TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.admin_sidebar_permissions TO service_role;

@@ -31,3 +31,8 @@ DROP POLICY IF EXISTS "Users delete own schedule events" ON public.player_schedu
 CREATE POLICY "Users delete own schedule events"
     ON public.player_schedule_events FOR DELETE
     USING (lower(user_email) = lower(auth.email()));
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+REVOKE ALL ON TABLE public.player_schedule_events FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, DELETE ON TABLE public.player_schedule_events TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.player_schedule_events TO service_role;

@@ -17,7 +17,7 @@ let browser;
 const mockSupabase = `
 const pad = n => String(n).padStart(4, '0');
 const older = Array.from({length:976}, (_,i) => ({
- id:'r'+pad(i+1), event_id:520, email:'older@example.com', division:'Open',
+ id:'r'+pad(i+1), event_id:520, email:'older'+i+'@example.com', division:'Open',
  payment_status:'paid', status:'registered', tournament_divisions:{entry_fee:600}
 }));
 const target = Array.from({length:100}, (_,i) => ({
@@ -31,9 +31,10 @@ const tables = {
   {id:521,event_name:${JSON.stringify(eventName)},start_date:'2026-10-30',is_manual:true,finance_managed:true},
   {id:522,event_name:'RankedIn event',start_date:'2026-11-01',entry_fee:100,finance_managed:true}
  ],
- event_registrations:[...older,...target,{...target[0],id:'r1077',status:'withdrawn'}],
+ event_registrations:[...older,...target,{...target[0],id:'r1077',status:'withdrawn'},{...target[1],id:'r1078',payment_status:'pending'}],
  payments:[
-  ...Array.from({length:1000},(_,i)=>({id:'p'+pad(i+1),event_id:520,status:'success',metadata:{}})),
+  ...Array.from({length:1000},(_,i)=>({id:'p'+pad(i+1),event_id:520,status:'success',amount:i<975?600:0,payment_type:'event_entry_fee',payment_method:'paystack',reference:'OLD-'+i,metadata:{registration_id:older[i+1]?.id}})),
+  ...target.slice(0,87).map((r,i)=>({id:'p'+pad(1002+i),event_id:521,status:'success',amount:600,payment_type:'event_entry_fee',payment_method:'paystack',reference:'TARGET-'+i,metadata:{registration_id:r.id,email:r.email}})),
   {id:'p1001',event_id:520,status:'success',metadata:{registration_id:older[0].id,free_entry:true}}
  ],
  tournament_participants:Array.from({length:1001},(_,i)=>({
@@ -42,7 +43,7 @@ const tables = {
  players, temporary_licenses:[], event_management_completion:[]
 };
 window.__queries=[];
-window.__recordPayment=()=>{ target[87].payment_status='paid'; };
+window.__recordPayment=()=>{ target[87].payment_status='paid'; tables.payments.push({id:'p2088',event_id:521,status:'success',amount:600,payment_type:'event_entry_fee',payment_method:'paystack',reference:'NEW-87',metadata:{registration_id:target[87].id,email:target[87].email}}); };
 export const supabase = {
  from(table) {
   const filters=[]; let ordering=null;
@@ -121,7 +122,7 @@ async function eventRow(page, name) {
         return {
             entries: row.cells[5].querySelector('span').textContent,
             paid: row.cells[5].querySelectorAll('span')[1].textContent.trim(),
-            finances: row.cells[6].querySelector('span').textContent,
+            finances: row.cells[6].querySelector('span').textContent.replace(/\s/g,''),
             licenses: [...row.cells[7].querySelectorAll(':scope > div > div')].map(div => div.firstElementChild.textContent),
         };
     }, name);
@@ -131,9 +132,9 @@ test('overview counts all entries, payments and licenses beyond 1,000 rows, and 
     const page = await openOverview();
     try {
         assert.deepEqual(await eventRow(page, eventName), {
-            entries: '100', paid: '87 Paid', finances: 'R52,200 / R60,000', licenses: ['60', '30', '10'],
+            entries: '100', paid: '87 Paid', finances: 'R52200,00/R60000,00', licenses: ['60', '30', '10'],
         });
-        assert.equal((await eventRow(page, 'Earlier event')).paid, '975 Paid · 1 Comped');
+        assert.equal((await eventRow(page, 'Earlier event')).paid, '975 Paid');
         assert.equal((await eventRow(page, 'RankedIn event')).entries, '1001');
         for (const table of ['event_registrations', 'payments', 'tournament_participants']) {
             assert.deepEqual(await page.evaluate(table => window.__queries.filter(q => q.table === table), table), [
@@ -151,7 +152,7 @@ test('overview counts all entries, payments and licenses beyond 1,000 rows, and 
         });
         await page.waitForFunction(() => document.body.textContent.includes('3 system events tracked'));
         assert.deepEqual(await eventRow(page, eventName), {
-            entries: '100', paid: '88 Paid', finances: 'R52,800 / R60,000', licenses: ['60', '30', '10'],
+            entries: '100', paid: '88 Paid', finances: 'R52800,00/R60000,00', licenses: ['60', '30', '10'],
         });
     } finally {
         await page.close();
@@ -175,3 +176,15 @@ for (const table of ['event_registrations', 'payments', 'tournament_participants
         }
     });
 }
+
+
+test('a failed refresh hides stale financial rows until a successful reload', async () => {
+    const page = await openOverview();
+    try {
+        await page.click(`button[aria-label="Manage registrations for ${eventName}"]`);
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some(b => b.textContent === 'Back to events'));
+        await page.evaluate(() => { window.__failure = 'payments'; [...document.querySelectorAll('button')].find(b => b.textContent === 'Back to events').click(); });
+        await page.waitForSelector('[role="alert"]');
+        assert.equal(await eventRow(page, eventName), null);
+    } finally { await page.close(); }
+});

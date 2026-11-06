@@ -8,6 +8,8 @@
     "prebuild": "node --test tests/privacyPolicy.test.mjs",
     "build": "vite build",
     "lint": "eslint .",
+    "test:data-api": "node --test tests/migrationAccess.test.mjs",
+    "test:data-api:db": "node scripts/test-migration-access.mjs",
     "preview": "vite preview",
     "sync:paystack-edge": "node scripts/sync-paystack-edge.mjs",
     "dev:tournament": "vite --config sandbox/tournament-manager/vite.config.mjs"

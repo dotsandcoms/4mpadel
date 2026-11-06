@@ -267,3 +267,7 @@ REVOKE ALL ON FUNCTION public.remove_event_play_day(bigint,date) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.remove_event_play_day(bigint,date) TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+REVOKE ALL ON TABLE public.draw_player_reviews FROM anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.draw_player_reviews TO service_role;

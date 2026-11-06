@@ -235,3 +235,10 @@ GRANT EXECUTE ON FUNCTION public.set_notification_pref(text, boolean) TO authent
 
 REVOKE ALL ON FUNCTION public.enqueue_push(text, text, text, text, text, jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.enqueue_push(text, text, text, text, text, jsonb) TO service_role;
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+REVOKE ALL ON TABLE public.player_push_tokens FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.player_push_tokens TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.player_push_tokens TO service_role;
+REVOKE ALL ON TABLE public.push_outbox FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.push_outbox TO service_role;

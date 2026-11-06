@@ -1,3 +1,4 @@
+import { EventMessagesButton } from '@/components/messaging/entry-buttons';
 import { trackEvent } from '@/lib/analytics';
 import { requestPushPermission } from '@/lib/notifications';
 import { EventNotificationBell } from '@/components/events/follow-tournament';
@@ -132,6 +133,7 @@ function EventContent() {
   const sponsors = event?.sponsor_logos?.filter(url => url && url !== organisation?.logo_url && url !== event.poster_image_url && url !== event.custom_image_url) || [];
   return <EventAccent value={accent}><View style={{ flex: 1, backgroundColor: '#F5F6F3', paddingTop: insets.top }}>
     <WebsiteHeader />
+    {event && <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}><EventMessagesButton eventId={event.id} /></View>}
     <ScrollView stickyHeaderIndices={event ? [1] : []} refreshControl={<RefreshControl refreshing={loading && !!event} onRefresh={load} tintColor={accent} />} contentContainerStyle={{ paddingBottom: tabPadding, backgroundColor: '#f9fafb' }}>
       {event ? <View style={{ backgroundColor: '#F5F6F3' }}>
         <View style={{ paddingHorizontal: 20, paddingTop: 16, flexDirection: 'row', justifyContent: 'space-between' }}>

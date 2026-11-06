@@ -97,6 +97,41 @@ test('featured local ranks use national category and stable identity, not profil
  assert.ok(hub.rankedLocalPlayers(duplicate,[{name:'Same name',rank:1,points:1}],[]).every(p=>p.rank===null));
 });
 
+test('a player listed in both national tables keeps the rank from their profile category',()=>{
+ const directory=[
+  {id:'403',name:'Debbie van Aswegen',rankedin_id:'R000337233',category:'Ladies Open (Pro/Elite)'},
+  {id:'404',name:'Mikayla Plitt',rankedin_id:'R000050565',category:'Ladies Open (Pro/Elite)'},
+  {id:'405',name:'Linge Steenkamp',rankedin_id:'R000335193',category:'Ladies Open (Pro/Elite)'},
+  {id:'406',name:'Men Player',rankedin_id:'men-id',category:'Men Over 35'},
+ ];
+ const men=[{rankedinId:'R000050565',name:'Mikayla Plitt',rank:818,points:23.667,change:-9},{rankedinId:'men-id',name:'Men Player',rank:2,points:9000,change:3}];
+ const women=[
+  {rankedinId:'R000337233',name:'Debbie Van Aswegen',rank:1,points:12860,change:0},
+  {rankedinId:'R000050565',name:'Mikayla Plitt',rank:2,points:10444,change:1},
+  {rankedinId:'R000335193',name:'Linge Steenkamp',rank:3,points:10228,change:-1},
+  {rankedinId:'men-id',name:'Men Player',rank:500,points:10,change:-5},
+ ];
+ const rows=hub.rankedLocalPlayers(directory,men,women);
+ assert.deepEqual(Array.from(hub.topLocalPlayers(rows,'women'),p=>p.rank),[1,2,3]);
+ const mikayla=rows.find(p=>p.id==='404');
+ assert.equal(mikayla.rank,2);assert.equal(mikayla.points,10444);assert.equal(mikayla.rankChange,1);
+ assert.equal(mikayla.gender,'women');assert.equal(mikayla.key,'4m:404');
+ assert.equal(rows[3].rank,2);assert.equal(rows[3].points,9000);assert.equal(rows[3].rankChange,3);
+});
+
+test('category matching preserves conservative identity and ambiguity checks',()=>{
+ const women=[{rankedinId:'women-id',name:'Shared Name',rank:2,points:100,change:1}];
+ const men=[{rankedinId:'men-id',name:'Shared Name',rank:500,points:5,change:-2}];
+ const profile={id:'1',name:'Shared Name',category:'Ladies Open (Pro/Elite)'};
+ assert.equal(hub.rankedLocalPlayers([profile],men,women)[0].rank,2);
+ assert.equal(hub.rankedLocalPlayers([{...profile,rankedin_id:'different-id'}],men,women)[0].rank,null);
+ assert.equal(hub.rankedLocalPlayers([{...profile,category:null}],men,women)[0].rank,null);
+ assert.equal(hub.rankedLocalPlayers([profile],men,[])[0].rank,null);
+ assert.equal(hub.rankedLocalPlayers([{...profile,rankedin_id:'women-id'}],men,[...women,...women])[0].rank,null);
+ assert.equal(hub.rankedLocalPlayers([{...profile,category:null,rankedin_id:'women-id'}],men,women)[0].rank,2);
+ assert.ok(hub.rankedLocalPlayers([profile,{...profile,id:'2'}],men,women).every(p=>p.rank===null));
+});
+
 test('Home offers local suggestions when only Pro players are followed',()=>{
  const suggestions=[local(1,'Men',1),local(2,'Women',2)];
  const result=hub.homePlayerSelection(true,[],suggestions);

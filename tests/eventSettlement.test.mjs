@@ -4,15 +4,15 @@ import { calculateEventSettlement, loadEventCashVerification } from '../src/util
 
 const reg = (id, extra = {}) => ({ id, email: `${id}@example.com`, division: 'Open', division_id: 'open', status: 'registered', payment_status: 'paid', ...extra });
 const pay = (id, extra = {}) => ({ id, reference: `REGEV-1-${id}`, amount: 600, status: 'success', payment_method: 'paystack', payment_type: 'event_entry_fee', metadata: { covers: [{ type: 'entry', email: `${id}@example.com`, division: 'Open' }] }, ...extra });
-const admin = (id, method = 'eft', note = '') => pay(`admin-${id}`, { reference: `MANUAL-ADMIN-${id}`, payment_method: method, metadata: { source: 'manual_event_admin', registration_id: id, email: `${id}@example.com`, note } });
+const admin = (id, method = 'eft', note = '', recipient = '4m') => pay(`admin-${id}`, { reference: `MANUAL-ADMIN-${id}`, payment_method: method, metadata: { source: 'manual_event_admin', collection_recipient: recipient, registration_id: id, email: `${id}@example.com`, note } });
 const proof = (reference, amount = 600, extra = {}) => ({ reference, amount, status: 'success', verified: true, ...extra });
 const calc = extra => calculateEventSettlement({ event: { id: 1, entry_fee: 600 }, ...extra });
 
-test('all active invoices form the fee base; EFT and unpaid entries never inflate 4M cash', () => {
+test('commission uses collected fees; EFT received by 4M counts, and unpaid invoices do not earn commission', () => {
     const r = calc({ registrations: [reg('a'), reg('b'), reg('c', { payment_status: 'pending' })], payments: [pay('a'), admin('b')] });
     assert.equal(r.totalAmountBilled, 1800);
-    assert.equal(r.netHeld4M, 600); assert.equal(r.collectedManual, 600); assert.equal(r.pendingAmount, 600);
-    assert.equal(r.commission, 90); assert.equal(r.dueToOrg, 510);
+    assert.equal(r.netHeld4M, 1200); assert.equal(r.collectedManual, 600); assert.equal(r.pendingAmount, 600);
+    assert.equal(r.commission, 60); assert.equal(r.dueToOrg, 1140);
 });
 test('external Paystack receipts count even when recorded with an EFT method', () => {
     const r = calc({ registrations: [reg('a')], payments: [admin('a', 'eft', 'Paid T307051974143572')], verification: { receipts: [proof('T307051974143572')], complete: true } });
@@ -28,9 +28,9 @@ test('one shared external reference can fund only one R600 entry', () => {
     assert.equal(r.allocations.find(a => a.registration.id === 'a').holder, '4m');
     assert.ok(r.issues.some(i => i.includes('Multiple entry confirmations')));
 });
-test('genuine extra charges remain cash held, without inflating the entry-fee base', () => {
+test('genuine extra entry collections earn commission and remain in the gross statement', () => {
     const r = calc({ registrations: [reg('a')], payments: [pay('a'), pay('second', { metadata: { email: 'a@example.com' } })] });
-    assert.equal(r.collected4M, 1200); assert.equal(r.totalAmountBilled, 600); assert.equal(r.commission, 30); assert.equal(r.dueToOrg, 1170);
+    assert.equal(r.collected4M, 1200); assert.equal(r.totalAmountBilled, 1200); assert.equal(r.commission, 60); assert.equal(r.dueToOrg, 1140);
 });
 test('gateway and recorded refunds with the same provider ID are counted once; licence refunds stay separate', () => {
     const p = pay('a', { amount: 1200 });
@@ -47,22 +47,22 @@ test('a Paystack refund missing from the local ledger still reduces held funds',
 });
 test('pending refunds are reserved rather than reported as processed', () => {
     const r = calc({ registrations: [reg('a')], payments: [pay('a')], refunds: [{ id: 'f', payment_id: 'a', amount: 200, status: 'processing', metadata: { cover_type: 'entry' } }] });
-    assert.equal(r.entryFeesRefunded, 0); assert.equal(r.refundReserve, 200); assert.equal(r.netHeld4M, 400);
+    assert.equal(r.entryFeesRefunded, 0); assert.equal(r.refundReserve, 200); assert.equal(r.netHeld4M, 600); assert.equal(r.availableForPayout, 370);
 });
 test('old refunded Paystack cash does not make a new club-paid entry into 4M cash', () => {
-    const r = calc({ registrations: [reg('a')], payments: [pay('a'), admin('a', 'manual', 'Card payment at club')], refunds: [{ id: 'f', payment_id: 'a', amount: 600, status: 'processed', metadata: { cover_type: 'entry' } }] });
-    assert.equal(r.netHeld4M, 0); assert.equal(r.paidClub, 1); assert.equal(r.collectedManual, 600);
+    const r = calc({ registrations: [reg('a')], payments: [pay('a'), admin('a', 'manual', 'Card payment at club', 'organiser')], refunds: [{ id: 'f', payment_id: 'a', amount: 600, status: 'processed', metadata: { cover_type: 'entry' } }] });
+    assert.equal(r.netHeld4M, 0); assert.equal(r.paidClub, 1); assert.equal(r.collectedOrganiser, 600);
 });
 test('test receipts, failed receipts, licences and complimentary entries do not create entry cash', () => {
     const r = calc({ registrations: [reg('a'), reg('free')], payments: [pay('test', { is_test: true }), pay('fail', { status: 'failed' }), pay('lic', { payment_type: 'membership', amount: 450 }), pay('free', { metadata: { registration_id: 'free', comp_entry: true }, amount: 0 })] });
     assert.equal(r.netHeld4M, 0); assert.equal(r.compedEntries, 1); assert.equal(r.totalAmountBilled, 600);
 });
-test('confirmed settlement is explicit, retains calculated evidence and applies only to its unchanged invoice snapshot', () => {
+test('legacy aggregate confirmation never invents cash or overrides the receipt-based statement', () => {
     const confirmation = { version: 1, entry_count: 200, total_billed: 120000, held_by_4m: 118200, club_collected: 600, outstanding: 1200, unpaid_count: 2, paystack_entry_count: 197, club_entry_count: 1 };
     const registrations = Array.from({ length: 200 }, (_, i) => reg(String(i)));
     const r = calc({ event: { id: 479, entry_fee: 600, organiser_settlement_confirmation: confirmation }, registrations });
-    assert.equal(r.netHeld4M, 118200); assert.equal(r.commission, 6000); assert.equal(r.dueToOrg, 112200);
-    assert.equal(r.calculated.netHeld4M, 0); assert.equal(r.confirmationAdjustment, 118200);
+    assert.equal(r.netHeld4M, 0); assert.equal(r.commission, 0); assert.equal(r.dueToOrg, 0);
+    assert.equal(r.calculated.netHeld4M, 0); assert.equal(r.confirmationAdjustment, 0); assert.equal(r.confirmation, null);
     assert.equal(calc({ registrations }).confirmation, null);
     assert.equal(calc({ event: { entry_fee: 600, organiser_settlement_confirmation: confirmation }, registrations: registrations.slice(1) }).confirmation, null);
 });

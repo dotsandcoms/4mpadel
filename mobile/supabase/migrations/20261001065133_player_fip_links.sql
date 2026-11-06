@@ -41,3 +41,6 @@ create policy "Players can withdraw their pending request"
 
 grant select on public.player_fip_links to anon;
 grant select, insert, delete on public.player_fip_links to authenticated;
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.player_fip_links TO service_role;

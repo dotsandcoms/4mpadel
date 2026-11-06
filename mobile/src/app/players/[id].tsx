@@ -1,3 +1,4 @@
+import { PlayerMessageButton } from '@/components/messaging/entry-buttons';
 import { trackEvent } from '@/lib/analytics';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, Pressable, RefreshControl, ScrollView, Share, Text, View } from 'react-native';
@@ -75,6 +76,7 @@ export default function PlayerProfile() {
           <Text accessibilityRole="header" style={{ fontSize: 24, fontWeight: '800', color: b.premium, textAlign: 'center' }}>{player.name}</Text>
           <PlayerFollowerCount playerId={player.id} refreshKey={followerRefresh} />
           {!!instagramUrl(player.instagram_link) && <Pressable accessibilityRole="link" accessibilityLabel={`Open ${player.name}'s Instagram`} onPress={() => { const url = instagramUrl(player.instagram_link); if (url) void Linking.openURL(url).catch(() => setShareError('Could not open Instagram. Please try again.')); }} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: b.surface, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="logo-instagram" size={23} color={b.accent} /></Pressable>}
+          <PlayerMessageButton playerId={player.id} />
           <LocalFollowButton playerId={player.id} name={player.name} onFollowChange={() => setFollowerRefresh(value => value + 1)} />
           {!!player.category && <Text style={{ color: b.accent, fontWeight: '600' }}>{player.category}</Text>}
           <Text style={{ color: b.muted, textAlign: 'center', lineHeight: 21 }}>{[player.home_club, player.nationality].filter(Boolean).join(' · ') || '4M Padel player'}</Text>

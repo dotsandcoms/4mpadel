@@ -203,3 +203,32 @@ DROP POLICY IF EXISTS "Public read published native draw standings" ON public.dr
 DROP POLICY IF EXISTS "Managers manage native draw standings" ON public.draw_standings;
 CREATE POLICY "Public read published native draw standings" ON public.draw_standings FOR SELECT USING (EXISTS (SELECT 1 FROM public.draws d WHERE d.id = draw_id AND d.status IN ('published', 'in_progress', 'completed')));
 CREATE POLICY "Managers manage native draw standings" ON public.draw_standings FOR ALL USING (EXISTS (SELECT 1 FROM public.draws d WHERE d.id = draw_id AND public.can_manage_native_draw(d.event_id))) WITH CHECK (EXISTS (SELECT 1 FROM public.draws d WHERE d.id = draw_id AND public.can_manage_native_draw(d.event_id)));
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+REVOKE ALL ON TABLE public.draws FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.draws TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.draws TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.draws TO service_role;
+REVOKE ALL ON TABLE public.draw_entries FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.draw_entries TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.draw_entries TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.draw_entries TO service_role;
+REVOKE ALL ON TABLE public.draw_groups FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.draw_groups TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.draw_groups TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.draw_groups TO service_role;
+REVOKE ALL ON TABLE public.draw_matches FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.draw_matches TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.draw_matches TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.draw_matches TO service_role;
+REVOKE ALL ON TABLE public.draw_match_sets FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.draw_match_sets TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.draw_match_sets TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.draw_match_sets TO service_role;
+REVOKE ALL ON TABLE public.draw_match_audit FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT ON TABLE public.draw_match_audit TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.draw_match_audit TO service_role;
+REVOKE ALL ON TABLE public.draw_standings FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.draw_standings TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.draw_standings TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.draw_standings TO service_role;

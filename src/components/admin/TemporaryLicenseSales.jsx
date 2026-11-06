@@ -1,22 +1,54 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import React, { useEffect, useState } from 'react';
 import { Download } from 'lucide-react';
 import { licenseRpc } from '../../utils/licenses';
-const input = 'rounded-lg border border-white/15 bg-neutral-900 px-3 py-2.5 text-sm text-white focus-visible:outline-padel-green';
-const monthLabel = date => new Date(`${date}T12:00:00+02:00`).toLocaleDateString('en-ZA', {month:'short',year:'numeric',timeZone:'Africa/Johannesburg'});
+import { southAfricanToday } from '../../utils/licenseReporting';
+import { LicenseSalesChart } from './LicenseOverview';
+
+const number = value => Number(value || 0).toLocaleString('en-ZA');
+const monthLabel = date => new Date(`${date}T12:00:00+02:00`).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric', timeZone: 'Africa/Johannesburg' });
+
 export default function TemporaryLicenseSales() {
-    const [from,setFrom]=useState(''),[to,setTo]=useState(''),[metric,setMetric]=useState('sold'),[report,setReport]=useState(null),[error,setError]=useState(''),[loading,setLoading]=useState(false);
-    const load=useCallback(async()=>{setLoading(true);setError('');try{setReport(await licenseRpc('temporary_license_sales_report',{p_from:from||null,p_to:to||null}));}catch(e){setError(e.message);}finally{setLoading(false);}},[from,to]);
-    useEffect(()=>{const timer=setTimeout(()=>void load(),200);return()=>clearTimeout(timer);},[load]);
-    function download(){const rows=[['Month','Paid temporary licenses','Cumulative paid licenses','With completed refunds','Complimentary'],...(report?.series||[]).map(r=>[r.month,r.sold,r.cumulative,r.refunded,r.complimentary])];const url=URL.createObjectURL(new Blob(['\uFEFF'+rows.map(r=>r.join(',')).join('\r\n')],{type:'text/csv;charset=utf-8;'}));const a=document.createElement('a');a.href=url;a.download='4M-temporary-license-sales.csv';a.click();URL.revokeObjectURL(url);}
-    return <section className="space-y-5" aria-label="Temporary license sales over time">
-        <header className="flex flex-wrap justify-between items-start gap-4"><div><h2 className="text-lg font-semibold text-white">Temporary license sales over time</h2><p className="text-sm text-gray-400 mt-1">One paid license per player, per event. Multiple divisions and split payment rows count once.</p></div><button type="button" disabled={!report||loading} onClick={download} className="flex items-center gap-2 text-sm text-padel-green py-2 disabled:opacity-40"><Download size={15}/>Export monthly sales</button></header>
-        <div className="flex flex-wrap items-end gap-3"><label className="grid gap-2 text-xs text-gray-400">From<input type="date" className={input} value={from} onChange={e=>setFrom(e.target.value)}/></label><label className="grid gap-2 text-xs text-gray-400">To<input type="date" className={input} value={to} onChange={e=>setTo(e.target.value)}/></label><button type="button" className="border border-white/15 px-3 py-2.5 rounded-lg text-sm text-gray-300" onClick={()=>{setFrom('');setTo('');}}>All time</button><label className="grid gap-2 text-xs text-gray-400">Chart<select className={input} value={metric} onChange={e=>setMetric(e.target.value)}><option value="sold">Monthly paid licenses</option><option value="cumulative">Cumulative paid licenses</option></select></label></div>
-        {error&&<p role="alert" className="text-red-300 text-sm">{error}</p>}{loading&&<p role="status" className="text-gray-400 text-sm">Loading sales history…</p>}
-        {report&&<><div className="grid grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-4 border-y border-white/10 py-4">{[['All-time sold',report.all_time_sold],['Sold in date range',report.sold],['With completed refunds',report.refunded],['Complimentary in range',report.complimentary]].map(([label,value])=><div key={label} className="py-1"><p className="text-xs text-gray-400">{label}</p><p className="text-xl text-white font-medium mt-2 tabular-nums">{Number(value||0).toLocaleString('en-ZA')}</p></div>)}</div>
-        <div className="h-64 w-full" role="img" aria-label={metric==='sold'?'Paid temporary licenses recorded each month':'Total paid temporary licenses recorded by the end of each month'}><ResponsiveContainer width="100%" height="100%"><BarChart data={report.series} margin={{top:12,right:4,left:-20,bottom:8}}><CartesianGrid stroke="#ffffff12" vertical={false}/><XAxis dataKey="month" tickFormatter={monthLabel} stroke="#888" tick={{fontSize:11}} axisLine={false} tickLine={false}/><YAxis allowDecimals={false} stroke="#888" tick={{fontSize:11}} axisLine={false} tickLine={false}/><Tooltip labelFormatter={monthLabel} contentStyle={{background:'#161616',border:'1px solid #333',borderRadius:8,color:'#fff'}}/><Bar name={metric==='sold'?'Paid licenses':'Cumulative paid licenses'} dataKey={metric} fill="#d4ff00" radius={[3,3,0,0]}/></BarChart></ResponsiveContainer></div>
-        <div className="overflow-x-auto max-h-72"><table className="w-full text-sm text-left"><thead className="text-gray-400"><tr>{['Month','Sold','Cumulative','Refunded','Complimentary'].map(t=><th key={t} className="py-3 pr-4 font-medium">{t}</th>)}</tr></thead><tbody className="divide-y divide-white/10 text-gray-300">{report.series.map(r=><tr key={r.month}><td className="py-3 pr-4 whitespace-nowrap">{monthLabel(r.month)}</td>{['sold','cumulative','refunded','complimentary'].map(k=><td key={k} className="py-3 pr-4 tabular-nums">{r[k]}</td>)}</tr>)}</tbody></table></div>
-        <p className="text-xs text-gray-500 leading-relaxed">Paid sales use successful, non-test payment records and South African dates. Refunded licenses remain in gross sales and are shown separately against their original sale month. Complimentary grants are excluded from paid sales. {report.legacy_without_payment>0&&`${report.legacy_without_payment} legacy player/event records have no matching payment evidence and are excluded.`} {report.unattributed>0&&`${report.unattributed} paid records have incomplete player/event details.`}</p>
-        </>}
-    </section>;
+  const [from, setFrom] = useState(''), [to, setTo] = useState('');
+  const [metric, setMetric] = useState('sold'), [report, setReport] = useState(null);
+  const [error, setError] = useState(''), [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let live = true;
+    setLoading(true); setError('');
+    const timer = setTimeout(async () => {
+      try {
+        if (from && to && to < from) throw new Error('Choose an end date on or after the start date.');
+        const data = await licenseRpc('temporary_license_sales_report', { p_from: from || null, p_to: to || null });
+        if (live) setReport(data);
+      } catch (e) { if (live) { setError(e.message); setReport(null); } }
+      finally { if (live) setLoading(false); }
+    }, 200);
+    return () => { live = false; clearTimeout(timer); };
+  }, [from, to]);
+  function download() {
+    const rows = [['Month', 'Sold this month', 'Total sold by month end (all time)', 'With completed refunds', 'Complimentary'], ...report.series.map(row => [row.month, row.sold, row.cumulative, row.refunded, row.complimentary])];
+    const url = URL.createObjectURL(new Blob(['\uFEFF' + rows.map(row => row.join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8;' }));
+    const a = document.createElement('a'); a.href = url; a.download = '4M-temporary-license-sales.csv'; a.click(); URL.revokeObjectURL(url);
+  }
+  const thisYear = () => { const today = southAfricanToday(); setFrom(`${today.slice(0, 4)}-01-01`); setTo(today); };
+  return <section aria-label="Temporary license sales" aria-busy={loading}>
+    <div className="license-section-heading"><div><h2>Temporary license sales</h2><p>One paid event license per player and event</p></div><button type="button" disabled={!report || loading} onClick={download} className="license-button license-button-secondary"><Download size={16} strokeWidth={1.5} /><span className="hidden sm:inline">Export sales</span></button></div>
+    {error && <p role="alert" className="license-error">{error}</p>}
+    {loading && <p role="status" className="mb-4 text-xs text-gray-400">Loading temporary sales…</p>}
+    {report && <div className="license-metrics">
+      <article className="license-metric license-metric-total"><div className="license-metric-heading"><span>Total sold · all time</span></div><p className="license-metric-value">{number(report.all_time_sold)}</p><p className="license-total-bottom">Across every year and event</p></article>
+      <article className="license-metric license-metric-temporary"><div className="license-metric-heading"><span>Sold in selected dates</span></div><p className="license-metric-value">{number(report.sold)}</p><p className="license-metric-description">{!from && !to ? 'All recorded purchases' : `${monthLabel(report.from)} – ${monthLabel(report.to)}`}</p></article>
+      <article className="license-metric"><div className="license-metric-heading"><span>With refunds</span></div><p className="license-metric-value">{number(report.refunded)}</p><p className="license-metric-description">Still included in paid sales above</p></article>
+      <article className="license-metric"><div className="license-metric-heading"><span>Complimentary</span></div><p className="license-metric-value">{number(report.complimentary)}</p><p className="license-metric-description">Free grants · excluded from sold totals</p></article>
+    </div>}
+    <section className="license-surface">
+      <div className="license-temp-toolbar"><label className="license-field"><span>From</span><input type="date" className="license-input" value={from} onChange={e => setFrom(e.target.value)} /></label><label className="license-field"><span>To</span><input type="date" className="license-input" value={to} onChange={e => setTo(e.target.value)} /></label><button type="button" className="license-text-button" onClick={thisYear}>This year</button><button type="button" className="license-text-button" onClick={() => { setFrom(''); setTo(''); }}>All time</button><div className="license-chart-switch" aria-label="Chart measurement"><button type="button" aria-pressed={metric === 'sold'} onClick={() => setMetric('sold')}>Sold each month</button><button type="button" aria-pressed={metric === 'total'} onClick={() => setMetric('total')}>Total sold so far</button></div></div>
+      <div className="license-panel-heading"><div><h3>{metric === 'sold' ? 'Monthly temporary purchases' : 'Temporary sales to date'}</h3><p>{metric === 'sold' ? 'Paid temporary licenses bought each month' : 'All sales up to that month, including earlier years'}</p></div></div>
+      {report && <LicenseSalesChart series={report.series} temporaryOnly runningTotal={metric === 'total'} />}
+      {!report && !loading && !error && <p className="license-empty">No temporary sales recorded yet.</p>}
+    </section>
+    {report && <>
+      <section className="license-surface mt-5"><div className="license-panel-heading"><div><h3>The monthly breakdown</h3><p>Total sold to date includes this month and all earlier sales</p></div></div><div className="license-table-scroll"><table className="license-table"><thead><tr>{['Month', 'Sold this month', 'Total sold to date', 'With refunds', 'Complimentary'].map((label, i) => <th key={label} className={i ? 'numeric' : ''}>{label}</th>)}</tr></thead><tbody>{report.series.map(row => <tr key={row.month}><td className="whitespace-nowrap">{monthLabel(row.month)}</td>{['sold', 'cumulative', 'refunded', 'complimentary'].map(key => <td key={key} className={`numeric ${key === 'sold' ? 'license-table-emphasis' : 'license-muted'}`}>{number(row[key])}</td>)}</tr>)}</tbody></table></div></section>
+      <p className="license-footnote">Successful, non-test purchases only, using South African dates. Split payments and multiple divisions count as one license per player and event. Refunds appear against the original sale month.{report.legacy_without_payment > 0 && ` ${number(report.legacy_without_payment)} imported player/event records have no matching payment evidence and are excluded.`}{report.unattributed > 0 && ` ${number(report.unattributed)} paid records have incomplete player/event details.`}</p>
+    </>}
+  </section>;
 }

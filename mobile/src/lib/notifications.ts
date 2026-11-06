@@ -26,11 +26,13 @@ let registrationInFlight: Promise<boolean> | null = null;
 
 if (Platform.OS !== 'web') {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
+    handleNotification: async notification => ({
+      // Realtime + the receive listener render the immediate in-app chat banner.
+      // Avoid a second, delayed OS banner while the app is already foregrounded.
+      shouldShowBanner: !(notification.request.content.data?.type === 'chat_message' && AppState.currentState === 'active'),
+      shouldShowList: !(notification.request.content.data?.type === 'chat_message' && AppState.currentState === 'active'),
+      shouldPlaySound: !(notification.request.content.data?.type === 'chat_message' && AppState.currentState === 'active'),
+      shouldSetBadge: true,
     }),
   });
 }

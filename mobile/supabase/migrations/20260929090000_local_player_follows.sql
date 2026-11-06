@@ -14,4 +14,8 @@ drop policy if exists "Delete own local follows" on public.local_player_follows;
 create policy "Read own local follows" on public.local_player_follows for select to authenticated using ((select auth.uid()) = user_id);
 create policy "Create own local follows" on public.local_player_follows for insert to authenticated with check ((select auth.uid()) = user_id and exists (select 1 from public.players_public p where p.id = player_id));
 create policy "Delete own local follows" on public.local_player_follows for delete to authenticated using ((select auth.uid()) = user_id);
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.local_player_follows TO service_role;
+
 commit;

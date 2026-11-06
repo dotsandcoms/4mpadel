@@ -224,3 +224,8 @@ DROP TRIGGER IF EXISTS trg_protect_org_fields ON public.organizations;
 CREATE TRIGGER trg_protect_org_fields
 BEFORE UPDATE ON public.organizations
 FOR EACH ROW EXECUTE FUNCTION public.protect_org_privileged_fields();
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+REVOKE ALL ON TABLE public.organization_members FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.organization_members TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.organization_members TO service_role;

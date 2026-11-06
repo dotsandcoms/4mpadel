@@ -1,7 +1,16 @@
 import {
     findPaymentForRegistration, getRegistrationEntryFeePaid, isLicensePaymentRow,
-    isCompedEntryPayment, normalizePaymentMetadata, paymentStrictlyCoversRegistration,
+    isCompedEntryPayment, isEntryFeeRefund, normalizePaymentMetadata, paymentStrictlyCoversRegistration,
 } from './paymentRegistrationMatch.js';
+import { fetchAllRows } from './fetchAllRows.js';
+
+const fullyRefundedForAnotherRegistration = (payment, reg, refunds) => {
+    const entryRefunds = refunds.filter((refund) => refund.payment_id === payment.id
+        && isEntryFeeRefund(refund, payment));
+    if (entryRefunds.some((refund) => refund.event_registration_id === reg.id)) return false;
+    const refunded = entryRefunds.reduce((total, refund) => total + Number(refund.amount || 0), 0);
+    return Number(payment.amount) > 0 && refunded >= Number(payment.amount) - 0.01;
+};
 
 // Financial reports must not attach an old checkout to a replacement registration.
 export function findFinancePayment(payments, reg, refunds = []) {
@@ -14,7 +23,11 @@ export function findFinancePayment(payments, reg, refunds = []) {
     const candidates = (payments || []).filter((p) => {
         const meta = normalizePaymentMetadata(p.metadata);
         return p.status === 'success' && !isLicensePaymentRow(p)
-            && (!meta.registration_id || meta.registration_id === reg.id);
+            && (!meta.registration_id || meta.registration_id === reg.id)
+            && !(Number(meta.unallocated_credit_amount) > 0 && Number(meta.unallocated_credit_amount) >= Number(p.amount))
+            // Email + division also match a later re-entry. A fully refunded
+            // receipt stays with its original entry, even if the re-entry is pending.
+            && !fullyRefundedForAnotherRegistration(p, reg, refunds);
     });
     const latest = (rows) => [...rows].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0] || null;
     const direct = latest(candidates.filter((p) => normalizePaymentMetadata(p.metadata).registration_id === reg.id));
@@ -33,7 +46,7 @@ export function buildFinanceAllocations(registrations, payments, refunds = []) {
             ? refunds.find((r) => r.event_registration_id === reg.id && r.status !== 'failed'
                 && normalizePaymentMetadata(r.metadata).cover_type !== 'license') : null;
         const payment = (historicalRefund && payments.find((p) => p.id === historicalRefund.payment_id))
-            || findFinancePayment(payments, reg);
+            || findFinancePayment(payments, reg, refunds);
         if (!payment || isLicensePaymentRow(payment) || isCompedEntryPayment(payment)) continue;
         const amount = getRegistrationEntryFeePaid(payment, reg, 0);
         if (amount <= 0) continue;
@@ -60,20 +73,30 @@ export function buildFinanceAllocations(registrations, payments, refunds = []) {
 // Keep URLs bounded and fail explicitly instead of turning failed/hidden refunds into zero.
 export async function loadEventRefunds(client, registrations, payments) {
     const found = new Map();
+    const references = payment => {
+        const meta = normalizePaymentMetadata(payment.metadata);
+        return [payment.reference, meta.paystack_ref, ...(`${meta.note || ''} ${meta.payment_note || ''}`.match(/\bT\d{10,}\b/g) || [])].filter(Boolean);
+    };
     for (const [column, ids] of [
         ['event_registration_id', registrations.map((r) => r.id)],
         ['payment_id', payments.map((p) => p.id)],
+        ['paystack_reference', payments.flatMap(references)],
     ]) {
         const unique = [...new Set(ids.filter(Boolean))];
         for (let i = 0; i < unique.length; i += 30) {
-            const { data, error } = await client.from('payment_refunds').select('*').in(column, unique.slice(i, i + 30));
-            if (error) throw new Error(`Refunds could not be loaded: ${error.message}`);
+            let data;
+            try {
+                data = await fetchAllRows(() => client.from('payment_refunds').select('*')
+                    .in(column, unique.slice(i, i + 30)).order('id', { ascending: true }));
+            } catch (error) { throw new Error(`Refunds could not be loaded: ${error.message}`); }
             for (const row of data || []) found.set(row.id, row);
         }
     }
     const rows = [...found.values()];
     for (const reg of registrations.filter((r) => r.payment_status === 'refunded')) {
-        if (!rows.some((r) => r.event_registration_id === reg.id && r.status !== 'failed')) {
+        if (!rows.some((r) => r.status !== 'failed' && (r.event_registration_id === reg.id
+            || payments.some(p => (p.id === r.payment_id || references(p).includes(r.paystack_reference))
+                && paymentStrictlyCoversRegistration(p, reg))))) {
             throw new Error('Refund records are missing for a refunded entry. Reload with finance access before exporting.');
         }
     }

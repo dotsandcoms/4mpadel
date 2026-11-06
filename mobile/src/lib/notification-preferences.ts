@@ -1,11 +1,13 @@
 import { supabase } from './supabase';
 import type { NotificationType } from './notification-events';
 
-export type NotificationToggle = NotificationType | 'push_enabled' | 'followed_events' | 'quiet_hours_enabled';
-export type NotificationPreferences = Partial<Record<NotificationToggle, boolean>> & { reminder_minutes?: number; quiet_start?: number; quiet_end?: number; timezone?: string };
+export type MessagingNotificationToggle = 'chat_announcements' | 'chat_private' | 'chat_requests';
+export type DiscussionNotifications = 'all' | 'replies' | 'off';
+export type NotificationToggle = NotificationType | MessagingNotificationToggle | 'push_enabled' | 'followed_events' | 'quiet_hours_enabled';
+export type NotificationPreferences = Partial<Record<NotificationToggle, boolean>> & { reminder_minutes?: number; quiet_start?: number; quiet_end?: number; timezone?: string; chat_discussion?: DiscussionNotifications };
 export const NOTIFICATION_GROUPS: { title: string; items: { key: NotificationToggle; label: string; detail: string }[] }[] = [
   { title: '4M Padel updates', items: [
-    { key: 'admin_broadcast', label: 'Announcements', detail: 'Messages and event updates sent by the 4M Padel team.' },
+    { key: 'admin_broadcast', label: '4M Padel announcements', detail: 'News and updates sent by the 4M Padel team.' },
   ] },
   { title: 'Your account and entries', items: [
     { key: 'registration_complete', label: 'Account registration', detail: 'Confirmation when your player profile is created.' },
@@ -53,7 +55,9 @@ export async function fetchNotificationPreferences(): Promise<NotificationPrefer
   return data ?? {};
 }
 export async function saveNotificationPreference(key: NotificationToggle, enabled: boolean) {
-  const { error } = await supabase.rpc('set_notification_pref', { p_type: key, p_enabled: enabled });
+  const { error } = key.startsWith('chat_')
+    ? await supabase.rpc('messaging_api', { p_action: 'notification_preferences', p_data: { [key]: enabled } })
+    : await supabase.rpc('set_notification_pref', { p_type: key, p_enabled: enabled });
   if (error) throw error;
 }
 
@@ -64,5 +68,11 @@ export async function saveNotificationTiming(prefs: NotificationPreferences) {
     p_end: prefs.quiet_end ?? 7,
     p_timezone: prefs.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'Africa/Johannesburg',
   });
+  if (error) throw error;
+}
+
+export async function saveDiscussionNotifications(value: DiscussionNotifications) {
+  if (!['all', 'replies', 'off'].includes(value)) throw new Error('Choose a discussion notification option.');
+  const { error } = await supabase.rpc('messaging_api', { p_action: 'notification_preferences', p_data: { chat_discussion: value } });
   if (error) throw error;
 }

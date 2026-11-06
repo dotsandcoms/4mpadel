@@ -164,3 +164,7 @@ END;
 $$;
 REVOKE ALL ON FUNCTION public.save_americano_draw(bigint, uuid, jsonb, text, timestamptz) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.save_americano_draw(bigint, uuid, jsonb, text, timestamptz) TO authenticated;
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+REVOKE ALL ON TABLE public.draw_player_reviews FROM anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.draw_player_reviews TO service_role;

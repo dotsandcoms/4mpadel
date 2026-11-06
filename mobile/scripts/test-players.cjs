@@ -21,6 +21,7 @@ function signupPreferences({ updateError = null, updatedRow = { id: 42 } } = {})
  const requests = [], updates = [], storage = new Map();
  const api = load('src/lib/profile.ts', {
   '@/lib/player-preferences': preferences,
+  './profile-details': load('src/lib/profile-details.ts', { './supabase': { supabase: {} } }),
   '@/lib/sponsors': {}, './matches': {}, '@/theme/tokens': {},
   '@/lib/welcome-email': { queueWelcomeEmail: async () => requests.push(['welcome']) },
   './signup-source': { resolveSignupSource: () => 'mobile', collectSignupDevice: () => 'ios' },
@@ -35,7 +36,7 @@ function signupPreferences({ updateError = null, updatedRow = { id: 42 } } = {})
    },
   } },
  });
- const draft = { firstName: 'Test', lastName: 'Player', email: 'player@example.com', contactNumber: '0123456789', gender: 'Male', nationality: 'South Africa', idNumber: 'test', region: 'Gauteng', category: 'Men', clubId: '', customClub: '', bio: 'Padel player', instagramLink: '', sponsors: '', racketBrand: 'Adidas', customRacketBrand: '' };
+ const draft = { dateOfBirth: '2000-02-29', playtomicLevel: '3.25', playtomicProofPath:'1/a.jpg', firstName: 'Test', lastName: 'Player', email: 'player@example.com', contactNumber: '0123456789', gender: 'Male', nationality: 'South Africa', idNumber: 'test', region: 'Gauteng', category: 'Men', clubId: '', customClub: '', bio: 'Padel player', instagramLink: '', sponsors: '', racketBrand: 'Adidas', customRacketBrand: '' };
  return { api, draft, requests, updates };
 }
 test('registration persists selected playing preferences and restores them from the account draft', async () => {
@@ -46,7 +47,8 @@ test('registration persists selected playing preferences and restores them from 
  assert.equal(restored.courtSide, 'either'); assert.equal(restored.playingHand, 'left');
  assert.equal(h.api.draftHasProgress({ playingHand: 'left' }), true);
  await h.api.createPlayerProfile(restored, []);
- assert.equal(h.requests[0][0], 'create_player_profile');
+ assert.equal(h.requests[0][0], 'create_player_profile_with_details_v3');
+ assert.equal(h.requests[0][1].p_details.date_of_birth, '2000-02-29');
  assert.deepEqual({ ...h.updates[0] }, { court_side: 'either', playing_hand: 'left' });
  assert.equal(h.requests[1][0], 'welcome');
 });

@@ -2,7 +2,7 @@ import './draw-workflow.css';
 import DrawSideDrawer from './DrawSideDrawer';
 import { DrawDivisionNavigation, DrawWorkflowOverview } from './DrawWorkflowNavigation';
 import { divisionWorkflow } from '../../utils/drawWorkflow';
-import { pairRegistrations } from '../../utils/drawPairing';
+import { dedupePairRegistrations, pairRegistrations } from '../../utils/drawPairing';
 import DrawProgression from './DrawProgression';
 import DrawPlayerReview from './DrawPlayerReview';
 import { reviewFingerprint } from '../../utils/drawPlayerReview';
@@ -48,32 +48,6 @@ const formatPlayDay = (value) => new Date(`${value}T00:00:00Z`).toLocaleDateStri
     month: 'short',
     timeZone: 'UTC',
 });
-
-// A pair can be represented by reciprocal registration rows: A names B as a
-// partner and B names A. Draw generation must treat those as one team.
-const dedupePairRegistrations = (registrations) => {
-    const teams = new Map();
-    registrations.forEach((registration) => {
-        const playerEmail = normaliseEmail(registration.email);
-        const partnerEmail = normaliseEmail(registration.partner_email);
-        const pairEmails = [playerEmail, partnerEmail].filter(Boolean).sort();
-        const key = pairEmails.length === 2
-            ? `pair:${pairEmails.join(':')}`
-            : `single:${registration.id}`;
-        const existing = teams.get(key);
-        // Prefer the row with complete partner information, otherwise retain a
-        // stable oldest record so the preview does not reshuffle on refresh.
-        const existingScore = Number(Boolean(existing?.partner_name)) + Number(Boolean(existing?.partner_email));
-        const candidateScore = Number(Boolean(registration.partner_name)) + Number(Boolean(registration.partner_email));
-        if (!existing || candidateScore > existingScore || (
-            candidateScore === existingScore
-            && String(registration.created_at || '') < String(existing.created_at || '')
-        )) {
-            teams.set(key, registration);
-        }
-    });
-    return [...teams.values()];
-};
 
 const rankedInPairKey = (...players) => players
     .map((player) => String(player?.rankedin_id || '').trim())
@@ -262,11 +236,17 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
     },[divisionId]);
     const reviewValid = Boolean(playerReview && playerReview.fingerprint === reviewFingerprint(divisionRegistrations,playersByEmail,event));
     const eligibleRegistrations = useMemo(() => divisionRegistrations.filter(r => !playerReview?.excluded?.includes(r.id) && (isEligible(r) || playerReview?.exceptions?.[r.id]?.trim())).map(r=>({...r,draw_exception:playerReview?.exceptions?.[r.id]||null})), [divisionRegistrations,playerReview]);
-    const teams = useMemo(() => { if(drawFormat !== 'americano' && playerReview?.pairs?.length){try{return pairRegistrations(eligibleRegistrations,playerReview.pairs);}catch{return dedupePairRegistrations(eligibleRegistrations);}}return dedupePairRegistrations(eligibleRegistrations); }, [eligibleRegistrations,drawFormat,playerReview]);
+    const teams = useMemo(() => {
+        if (drawFormat !== 'americano' && playerReview?.pairs?.length) {
+            try { return pairRegistrations(eligibleRegistrations, playerReview.pairs); }
+            catch { return dedupePairRegistrations(eligibleRegistrations); }
+        }
+        return dedupePairRegistrations(eligibleRegistrations, { keepStandalonePlayers: drawFormat === 'americano' });
+    }, [eligibleRegistrations, drawFormat, playerReview]);
     const participatingPlayers = useMemo(() => teams.flatMap(r => [playersByEmail.get(normaliseEmail(r.email)),playersByEmail.get(normaliseEmail(r.partner_email))]).filter(Boolean), [teams,playersByEmail]);
     const rankingOrganisations = useMemo(() => listRankingOrganisations(participatingPlayers), [participatingPlayers]);
     const rankingCategories = useMemo(() => listRankingCategories(participatingPlayers), [participatingPlayers]);
-    const allReviewEntries = useMemo(() => dedupePairRegistrations(divisionRegistrations).map((r,i)=>registrationToEntry(r,i,playersByEmail,rankingSource,rankedInClassSeedings)),[divisionRegistrations,playersByEmail,rankingSource,rankedInClassSeedings]);
+    const allReviewEntries = useMemo(() => dedupePairRegistrations(divisionRegistrations, { keepStandalonePlayers: drawFormat === 'americano' }).map((r,i)=>registrationToEntry(r,i,playersByEmail,rankingSource,rankedInClassSeedings)),[divisionRegistrations,drawFormat,playersByEmail,rankingSource,rankedInClassSeedings]);
     const entries = useMemo(() => teams.map((r,i) => {
         const entry=registrationToEntry(r,i,playersByEmail,rankingSource,rankedInClassSeedings);
         const seed=playerReview?.seeds?.indexOf(r.id) ?? -1;
@@ -540,7 +520,11 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             return;
         }
         try {
-            if (entries.some(entry => !entry.player_two_name)) { setWorkspace('players'); throw new Error('Select Create fixed pairs in Players, check the partners, then confirm players and seeds.'); }
+            const missingPartners = entries.filter(entry => !entry.player_two_name);
+            if (missingPartners.length) {
+                setWorkspace('players');
+                throw new Error(`Missing partners for: ${missingPartners.map(entry => entry.player_one_name).join(', ')}. Complete their pairs in Registrations, or exclude their standalone entries in Teams & seeds, then confirm again.`);
+            }
             setDraftDirty(true);
             if (drawFormat === 'knockout') {
                 setDraft({ ...generateKnockoutDraft(entries, {

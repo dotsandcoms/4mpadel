@@ -59,12 +59,12 @@ test('duplicated metadata covers and duplicate raw registrations do not split or
     assert.equal(r.withdrawals.find(w => w.name === 'A').amount, 600);
 });
 test('club-confirmed withdrawals remain separate from actual 4M receipts', () => {
-    const p = payment('a', { reference: 'MANUAL-ADMIN-a', payment_method: 'eft', metadata: { registration_id: 'a', email: 'a@example.com', note: 'Paid by partner' } });
+    const p = payment('a', { reference: 'MANUAL-ADMIN-a', payment_method: 'eft', metadata: { registration_id: 'a', email: 'a@example.com', note: 'Paid by partner', collection_recipient: 'organiser' } });
     const r = report({ registrations: [reg('a')], payments: [p] });
     assert.equal(r.receipts.length, 0); assert.equal(r.withdrawals[0].amount, 600); assert.equal(r.withdrawals[0].holder, 'Club / organiser');
 });
 test('one club team confirmation preserves both withdrawn players shares without inflating 4M receipts', () => {
-    const p = payment('a', { amount: 1200, payment_method: 'eft', metadata: { email: 'a@example.com', covers: [cover('a'), cover('b')] } });
+    const p = payment('a', { amount: 1200, payment_method: 'eft', metadata: { collection_recipient: 'organiser', email: 'a@example.com', covers: [cover('a'), cover('b')] } });
     const r = report({ registrations: [reg('a'), reg('b')], payments: [p] });
     assert.equal(r.receipts.length, 0); assert.equal(r.withdrawals.length, 2);
     assert.deepEqual(r.withdrawals.map(w => [w.amount, w.holder]), [[600, 'Club / organiser'], [600, 'Club / organiser']]);
@@ -76,4 +76,13 @@ test('an unallocated team refund is visible at receipt level without inventing a
     } });
     assert.equal(r.receipts[0].refunded, 600); assert.equal(r.receipts[0].retained, 600);
     assert.ok(r.withdrawals.every(w => w.status === 'Refund allocation unresolved' && w.refunded === null && w.retained === null));
+});
+
+test('an identified unallocated credit is visible in receipts without creating another player allocation', () => {
+    const credit = payment('credit', { metadata: { email: 'a@example.com', unallocated_credit_amount: 600 } });
+    const r = report({ registrations: [reg('a', { status: 'registered' })], payments: [payment('a'), credit] });
+    const row = r.receipts.find(p => p.reference === credit.reference);
+    assert.equal(row.unallocatedCredit, 600);
+    assert.match(row.note, /held as unallocated credit/);
+    assert.equal(r.settlement.activeEntries, 1);
 });

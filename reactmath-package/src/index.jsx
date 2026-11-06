@@ -20,7 +20,7 @@ export { default as SEOHead } from './components/SEOHead';
 export { default as SchemaOrg } from './components/SchemaOrg';
 export { default as Breadcrumbs } from './components/Breadcrumbs';
 export { default as ImageSEO } from './components/ImageSEO';
-export { default as GoogleAnalytics } from './components/GoogleAnalytics';
+export { default as GoogleAnalytics } from './components/OptionalMetrics';
 export { default as FourOhFourTracker } from './components/FourOhFourTracker';
 
 // Hooks

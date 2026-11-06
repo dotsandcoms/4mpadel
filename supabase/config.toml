@@ -45,3 +45,8 @@ entrypoint = "./functions/send-email/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/payment-reminders/index.ts"
+
+[functions.extract-playtomic-level]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/extract-playtomic-level/index.ts"

@@ -51,5 +51,9 @@ export async function reserveDivisionPlaces(client, rows, soloLinks = []) {
         p_rows: rows,
         p_solo_links: soloLinks,
     });
+    if (error?.code === '23505'
+        && error.message?.includes('event_registrations_event_id_email_division_key')) {
+        throw new Error('You or your partner already have an entry in this division. Refresh the page to review your entries and continue payment.');
+    }
     if (error) throw error;
 }

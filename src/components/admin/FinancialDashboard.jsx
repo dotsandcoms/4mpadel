@@ -1,38 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { 
-    DollarSign, Users, Award, TrendingUp, Calendar, 
+import {
+    DollarSign, Users, Award, TrendingUp, Calendar,
     ArrowUpRight, ArrowDownRight, CreditCard, ShieldCheck, Trophy
 } from 'lucide-react';
-import { 
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
-    ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area 
+import {
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+    ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area
 } from 'recharts';
 import { supabase } from '../../supabaseClient';
 import { isLicensePaymentRow, normalizePaymentMetadata } from '../../utils/paymentRegistrationMatch';
 import { fetchCommerceConfig, matchLicenseTypeByAmount } from '../../utils/commerce';
+import { fetchAllRows } from '../../utils/fetchAllRows';
+import { buildEventSettlements, summarizeEventSettlements } from '../../utils/eventSettlement';
 
-// Fetch ALL successful payments — supabase caps un-ranged selects at 1000 rows,
-// which silently truncates revenue once payment volume grows.
-const fetchAllSuccessPayments = async () => {
-    const PAGE = 1000;
-    const all = [];
-    for (let from = 0; ; from += PAGE) {
-        const { data, error } = await supabase
-            .from('payments')
-            .select('*, calendar(event_name)')
-            .eq('status', 'success')
-            .order('id', { ascending: true })
-            .range(from, from + PAGE - 1);
-        if (error) throw error;
-        all.push(...(data || []));
-        if (!data || data.length < PAGE) break;
-    }
-    return all;
-};
+const EMPTY_EVENTS = Object.freeze([]);
+const money = n => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const KPICard = ({ title, value, icon: Icon, trend, trendValue, color }) => (
-    <motion.div 
+    <motion.div
         whileHover={{ y: -5 }}
         className="bg-[#1a1a1a]/50 backdrop-blur-md p-6 rounded-3xl border border-white/10 relative overflow-hidden group"
     >
@@ -53,7 +39,7 @@ const KPICard = ({ title, value, icon: Icon, trend, trendValue, color }) => (
     </motion.div>
 );
 
-const FinancialDashboard = ({ allowedEvents = [] }) => {
+const FinancialDashboard = ({ allowedEvents = EMPTY_EVENTS, onSelectEvent }) => {
     const [stats, setStats] = useState({
         totalRevenue: 0,
         rev2026: 0,
@@ -68,182 +54,92 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
     const [chartData, setChartData] = useState([]);
     const [pieData, setPieData] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [retryKey, setRetryKey] = useState(0);
+    const [eventFilter, setEventFilter] = useState('all');
+    const [eventStatements, setEventStatements] = useState([]);
 
     const isRestricted = allowedEvents.length > 0;
 
     useEffect(() => {
+        let cancelled = false;
         const fetchDashboardData = async () => {
-            setLoading(true);
+            setLoading(true); setError('');
             try {
-                // 1. Fetch relevant payments (paginated), refunds and events in parallel
-                const [payments, { data: refundRows, error: rfError }, { error: eError }, commerce] = await Promise.all([
-                    fetchAllSuccessPayments(),
-                    supabase
-                        .from('payment_refunds')
-                        .select('payment_id, amount, status, created_at, processed_at')
-                        .neq('status', 'failed'),
-                    supabase
-                        .from('calendar')
-                        .select('id, event_name, start_date'),
+                const scope = query => isRestricted ? query.in('event_id', allowedEvents) : query;
+                const [payments, refunds, events, registrations, participants, divisions, commerce] = await Promise.all([
+                    fetchAllRows(() => scope(supabase.from('payments').select('*')).order('id', { ascending: true })),
+                    fetchAllRows(() => supabase.from('payment_refunds').select('*').order('id', { ascending: true })),
+                    fetchAllRows(() => {
+                        const query = supabase.from('calendar').select('*').order('id', { ascending: true });
+                        return isRestricted ? query.in('id', allowedEvents) : query;
+                    }),
+                    fetchAllRows(() => scope(supabase.from('event_registrations').select('*')).order('id', { ascending: true })),
+                    fetchAllRows(() => scope(supabase.from('tournament_participants').select('*, players(email)')).order('id', { ascending: true })),
+                    fetchAllRows(() => scope(supabase.from('tournament_divisions').select('*')).order('id', { ascending: true })),
                     fetchCommerceConfig().catch(() => null),
                 ]);
-
-                if (rfError) throw rfError;
-                if (eError) throw eError;
-
-                if (payments) {
-                    // Test-mode payments never count as revenue.
-                    let filteredPayments = (payments || []).filter(p => !p.is_test);
-                    if (isRestricted) {
-                        const allowedIds = allowedEvents.map(Number);
-                        filteredPayments = filteredPayments.filter(p => p.event_id && allowedIds.includes(Number(p.event_id)));
-                    }
-
-                    // Refunds netted against their original payment (matches EventFinance).
-                    const paymentById = new Map(filteredPayments.map(p => [p.id, p]));
-                    const refunds = (refundRows || []).filter(r => paymentById.has(r.payment_id));
-                    const totalRefunded = refunds.reduce((acc, r) => acc + Number(r.amount || 0), 0);
-                    const refundDate = (r) => new Date(r.processed_at || r.created_at);
-
-                    // Entry rows = typed as entry fee AND not actually a license row
-                    // (LIC- refs / all-license covers sneak in under the entry type).
-                    const isEntryRow = (p) => p.payment_type === 'event_entry_fee' && !isLicensePaymentRow(p);
-
-                    const totalRevenue = filteredPayments.reduce((acc, curr) => acc + Number(curr.amount), 0) - totalRefunded;
-
-                    // Yearly Breakdown (Focus on 2026)
-                    const rev2026 = filteredPayments.filter(p => new Date(p.created_at).getFullYear() === 2026)
-                        .reduce((acc, curr) => acc + Number(curr.amount), 0)
-                        - refunds.filter(r => refundDate(r).getFullYear() === 2026)
-                            .reduce((acc, r) => acc + Number(r.amount || 0), 0);
-
-                    // License Breakdown — everything that isn't a true entry row,
-                    // split full vs temp by explicit type, falling back to amount.
-                    const licenseRows = filteredPayments.filter(p => !isEntryRow(p));
-                    const isTypedFull = (p) => {
-                        const meta = normalizePaymentMetadata(p.metadata);
-                        const items = Array.isArray(meta.line_items) ? meta.line_items : [];
-                        return ['full_license', 'membership'].includes(p.payment_type)
-                            || meta.license_type === 'full'
-                            || items.some((item) => item?.type === 'full_license');
+                const statements = buildEventSettlements({ events, registrations, participants, payments, refunds, divisions });
+                const receipts = statements.flatMap(e => e.settlement.receiptRows);
+                const entryRefunds = statements.flatMap(e => e.settlement.processedRefundRows);
+                const licenses = payments.filter(p => p.status === 'success' && !p.is_test && !normalizePaymentMetadata(p.metadata).is_test && isLicensePaymentRow(p));
+                const licenseById = new Map(licenses.map(p => [p.id, p]));
+                const licenseRefunds = [...new Map(refunds.filter(r => r.status === 'processed' && licenseById.has(r.payment_id))
+                    .map(r => [r.paystack_refund_id || r.id, r])).values()];
+                const sum = (rows, key = 'amount') => Math.round(rows.reduce((n, r) => n + Number(r[key] || 0), 0) * 100) / 100;
+                const full = p => ['full_license', 'membership'].includes(p.payment_type)
+                    || normalizePaymentMetadata(p.metadata).license_type === 'full'
+                    || (!['temp_license', 'temporary_license'].includes(p.payment_type) && matchLicenseTypeByAmount(Number(p.amount), commerce) === 'full');
+                const fullLicRev = sum(licenses.filter(full)) - sum(licenseRefunds.filter(r => full(licenseById.get(r.payment_id))));
+                const tempLicRev = sum(licenses.filter(p => !full(p))) - sum(licenseRefunds.filter(r => !full(licenseById.get(r.payment_id))));
+                const totals = summarizeEventSettlements(statements);
+                const eventEntryRev = totals.collected - totals.refunds;
+                const totalRevenue = eventEntryRev + fullLicRev + tempLicRev;
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const monthlyData = months.map((name, i) => {
+                    const inMonth = value => {
+                        const date = new Date(value);
+                        return date.getFullYear() === new Date().getFullYear() && date.getMonth() === i;
                     };
-                    const isTypedTemp = (p) => {
-                        const meta = normalizePaymentMetadata(p.metadata);
-                        const items = Array.isArray(meta.line_items) ? meta.line_items : [];
-                        return ['temporary_license', 'temp_license'].includes(p.payment_type)
-                            || meta.license_type === 'temporary'
-                            || items.some((item) => item?.type === 'temp_license' || item?.type === 'temporary_license');
-                    };
-                    const amountLicenseType = (p) => matchLicenseTypeByAmount(Number(p.amount), commerce);
-                    const fullLicRev = licenseRows.filter(p =>
-                        isTypedFull(p) || (!isTypedTemp(p) && amountLicenseType(p) === 'full')
-                    ).reduce((acc, curr) => acc + Number(curr.amount), 0);
-
-                    const tempLicRev = licenseRows.filter(p =>
-                        isTypedTemp(p) || (!isTypedFull(p) && amountLicenseType(p) === 'temporary')
-                    ).reduce((acc, curr) => acc + Number(curr.amount), 0);
-
-                    // Refunds grouped by the event of the refunded (entry) payment.
-                    const refundByEvent = {};
-                    let entryRefundTotal = 0;
-                    refunds.forEach(r => {
-                        const pay = paymentById.get(r.payment_id);
-                        if (!pay || !isEntryRow(pay)) return;
-                        const eventId = pay.event_id || 'manual';
-                        refundByEvent[eventId] = (refundByEvent[eventId] || 0) + Number(r.amount || 0);
-                        entryRefundTotal += Number(r.amount || 0);
-                    });
-
-                    // Event Entry Breakdown (net of refunds)
-                    const eventEntryRev = filteredPayments.filter(isEntryRow)
-                        .reduce((acc, curr) => acc + Number(curr.amount), 0) - entryRefundTotal;
-
-                    // Revenue by Event (net of refunds)
-                    const eventMap = {};
-                    filteredPayments.filter(isEntryRow).forEach(p => {
-                        const eventName = p.calendar?.event_name || p.metadata?.event_name || 'Unknown Event';
-                        const eventId = p.event_id || 'manual';
-                        if (!eventMap[eventId]) {
-                            eventMap[eventId] = { name: eventName, revenue: 0 };
-                        }
-                        eventMap[eventId].revenue += Number(p.amount);
-                    });
-                    Object.entries(refundByEvent).forEach(([eventId, amount]) => {
-                        if (eventMap[eventId]) eventMap[eventId].revenue -= amount;
-                    });
-                    const eventRevenueList = Object.values(eventMap)
-                        .filter((e) => e.revenue > 0)
-                        .sort((a, b) => b.revenue - a.revenue).slice(0, 10);
-
-                    setStats({
-                        totalRevenue,
-                        rev2026,
-                        fullLicRev,
-                        tempLicRev,
-                        allLicRev: fullLicRev + tempLicRev,
-                        eventEntryRev,
-                        totalTransactions: filteredPayments.length,
-                        activePlayers: new Set(filteredPayments.map(p => p.player_id)).size,
-                        eventRevenueList
-                    });
-
-                    // Prepare Pie Chart
-                    setPieData([
-                        { name: 'Event Entries', value: eventEntryRev, color: '#beff00' },
-                        { name: 'Full Licenses', value: fullLicRev, color: '#3b82f6' },
-                        { name: 'Temp Licenses', value: tempLicRev, color: '#f59e0b' }
-                    ]);
-
-                    // Prepare Bar Chart (by month for current/selected year)
-                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                    const currentYear = new Date().getFullYear();
-                    const monthlyData = months.map((m, i) => {
-                        const inMonth = (dateStr) => {
-                            const d = new Date(dateStr);
-                            return d.getMonth() === i && d.getFullYear() === currentYear;
-                        };
-                        const monthPayments = filteredPayments.filter(p => inMonth(p.created_at));
-                        // Refunds count as negative revenue in the month they were processed,
-                        // attributed to the same bucket as the original payment.
-                        const monthEntryRefunds = refunds
-                            .filter(r => inMonth(r.processed_at || r.created_at))
-                            .reduce((acc, r) => {
-                                const pay = paymentById.get(r.payment_id);
-                                if (!pay || !isEntryRow(pay)) return acc;
-                                return acc + Number(r.amount || 0);
-                            }, 0);
-                        const monthLicenseRefunds = refunds
-                            .filter(r => inMonth(r.processed_at || r.created_at))
-                            .reduce((acc, r) => {
-                                const pay = paymentById.get(r.payment_id);
-                                if (!pay || isEntryRow(pay)) return acc;
-                                return acc + Number(r.amount || 0);
-                            }, 0);
-
-                        const licenseRev = monthPayments.filter(p => !isEntryRow(p))
-                            .reduce((acc, curr) => acc + Number(curr.amount), 0) - monthLicenseRefunds;
-                        const entryRev = monthPayments.filter(isEntryRow)
-                            .reduce((acc, curr) => acc + Number(curr.amount), 0) - monthEntryRefunds;
-
-                        return {
-                            name: m,
-                            revenue: Math.max(0, licenseRev + entryRev),
-                            licenses: Math.max(0, licenseRev),
-                            entries: Math.max(0, entryRev),
-                        };
-                    });
-                    setChartData(monthlyData);
-                }
-
+                    const entries = sum(receipts.filter(p => inMonth(p.created_at))) - sum(entryRefunds.filter(r => inMonth(r.processed_at || r.created_at)));
+                    const licenseTotal = sum(licenses.filter(p => inMonth(p.created_at))) - sum(licenseRefunds.filter(r => inMonth(r.processed_at || r.created_at)));
+                    return { name, revenue: entries + licenseTotal, entries, licenses: licenseTotal };
+                });
+                if (cancelled) return;
+                setEventStatements(statements);
+                setStats({ totalRevenue, fullLicRev, tempLicRev, allLicRev: fullLicRev + tempLicRev, eventEntryRev,
+                    totalTransactions: receipts.length + licenses.length,
+                    activePlayers: new Set([...registrations.filter(r => !['withdrawn', 'cancelled'].includes(r.status)).map(r => r.email), ...participants.map(p => p.email || p.players?.email)].filter(Boolean).map(v => v.toLowerCase())).size });
+                setPieData([{ name: 'Event entries', value: Math.max(0, eventEntryRev), color: '#beff00' },
+                    { name: 'Full licences', value: Math.max(0, fullLicRev), color: '#3b82f6' },
+                    { name: 'Temporary licences', value: Math.max(0, tempLicRev), color: '#f59e0b' }]);
+                setChartData(monthlyData);
             } catch (err) {
-                console.error('Error fetching dashboard data:', err);
+                if (!cancelled) setError(err.message || 'Could not load financial records');
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
         };
-
         fetchDashboardData();
-    }, [allowedEvents, isRestricted]);
+        return () => { cancelled = true; };
+    }, [allowedEvents, isRestricted, retryKey]);
+
+    const displayedEvents = useMemo(() => eventStatements.filter(event => {
+        const balance = event.settlement.dueToOrg;
+        if (eventFilter === 'outstanding') return balance > 0;
+        if (eventFilter === 'settled') return balance === 0 && !event.settlement.issues.length && !event.settlement.refundReserve;
+        if (eventFilter === 'month') {
+            const now = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' }).slice(0, 7);
+            return String(event.start_date || '').slice(0, 7) === now;
+        }
+        return true;
+    }), [eventStatements, eventFilter]);
+    const eventTotals = summarizeEventSettlements(displayedEvents);
+
+    if (error) return <div role="alert" className="rounded-xl border border-red-400/30 p-6 text-red-200">
+        <p>Finance overview unavailable: {error}</p>
+        <button type="button" onClick={() => setRetryKey(n => n + 1)} className="mt-3 text-sm underline">Retry</button>
+    </div>;
 
     if (loading) {
         return (
@@ -257,55 +153,53 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
         <div className="space-y-8 pb-10">
             {/* KPI Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <KPICard 
-                    title="Total Revenue" 
-                    value={`R${stats.totalRevenue.toLocaleString()}`} 
-                    icon={DollarSign} 
-                    trend="up" 
-                    trendValue="100"
+                <KPICard
+                    title="Events"
+                    value={eventTotals.events.toLocaleString()}
+                    icon={DollarSign}
                     color="padel-green"
                 />
-                <KPICard 
-                    title="Revenue 2026" 
-                    value={`R${stats.rev2026.toLocaleString()}`} 
-                    icon={Calendar} 
+                <KPICard
+                    title="Total entries"
+                    value={eventTotals.entries.toLocaleString()}
+                    icon={Calendar}
                     color="blue-500"
                 />
-                <KPICard 
-                    title="Event Entries" 
-                    value={`R${stats.eventEntryRev.toLocaleString()}`} 
-                    icon={Trophy} 
+                <KPICard
+                    title="Total cash collected"
+                    value={money(eventTotals.collected)}
+                    icon={Trophy}
                     color="padel-green"
                 />
-                <KPICard 
-                    title="All Licenses" 
-                    value={`R${stats.allLicRev.toLocaleString()}`} 
-                    icon={Award} 
+                <KPICard
+                    title="Total balance owed"
+                    value={money(eventTotals.balanceOwed)}
+                    icon={Award}
                     color="indigo-500"
                 />
-                
-                <KPICard 
-                    title="Full Licenses" 
-                    value={`R${stats.fullLicRev.toLocaleString()}`} 
-                    icon={ShieldCheck} 
+
+                <KPICard
+                    title="Full Licenses"
+                    value={money(stats.fullLicRev)}
+                    icon={ShieldCheck}
                     color="blue-400"
                 />
-                <KPICard 
-                    title="Temp Licenses" 
-                    value={`R${stats.tempLicRev.toLocaleString()}`} 
-                    icon={CreditCard} 
+                <KPICard
+                    title="Temp Licenses"
+                    value={money(stats.tempLicRev)}
+                    icon={CreditCard}
                     color="amber-500"
                 />
-                <KPICard 
-                    title="Active Players" 
-                    value={stats.activePlayers.toLocaleString()} 
-                    icon={Users} 
+                <KPICard
+                    title="Active Players"
+                    value={stats.activePlayers.toLocaleString()}
+                    icon={Users}
                     color="purple-500"
                 />
-                <KPICard 
-                    title="Transactions" 
-                    value={stats.totalTransactions.toLocaleString()} 
-                    icon={CreditCard} 
+                <KPICard
+                    title="Transactions"
+                    value={stats.totalTransactions.toLocaleString()}
+                    icon={CreditCard}
                     color="orange-500"
                 />
             </div>
@@ -316,7 +210,7 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
                 <div className="lg:col-span-2 bg-[#1a1a1a]/50 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl">
                     <div className="flex justify-between items-center mb-8">
                         <div>
-                            <h3 className="text-xl font-bold text-white">Revenue Growth</h3>
+                            <h3 className="text-xl font-bold text-white">Collections by month</h3>
                             <p className="text-gray-400 text-sm">Monthly overview for {new Date().getFullYear()}</p>
                         </div>
                     </div>
@@ -332,7 +226,7 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
                                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
                                 <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
                                 <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `R${v/1000}k`} />
-                                <Tooltip 
+                                <Tooltip
                                     contentStyle={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px' }}
                                     itemStyle={{ color: '#9AE900', fontWeight: 'bold' }}
                                 />
@@ -344,7 +238,7 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
 
                 {/* Revenue Split Pie Chart */}
                 <div className="bg-[#1a1a1a]/50 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl flex flex-col">
-                    <h3 className="text-xl font-bold text-white mb-2">Revenue Breakdown</h3>
+                    <h3 className="text-xl font-bold text-white mb-2">Collections Breakdown</h3>
                     <p className="text-gray-400 text-sm mb-6">Distribution by payment type</p>
                     <div className="h-[250px] w-full mt-auto relative">
                         <ResponsiveContainer width="100%" height="100%">
@@ -362,7 +256,7 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
                                         <Cell key={`cell-${index}`} fill={entry.color} />
                                     ))}
                                 </Pie>
-                                <Tooltip 
+                                <Tooltip
                                     contentStyle={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px' }}
                                 />
                             </PieChart>
@@ -392,47 +286,45 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
             <div className="bg-[#1a1a1a]/50 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl">
                 <div className="flex justify-between items-center mb-8">
                     <div>
-                        <h3 className="text-xl font-bold text-white uppercase tracking-tighter">Revenue by Event</h3>
-                        <p className="text-gray-400 text-sm">Top performing tournaments and leagues</p>
+                        <h3 className="text-xl font-bold text-white uppercase tracking-tighter">Event finance summary</h3>
+                        <p className="text-gray-400 text-sm">Collections, refunds, commission and organiser settlements</p>
                     </div>
                     <div className="bg-padel-green/10 text-padel-green px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-padel-green/20">
-                        Total Entry Fees: R{stats.eventEntryRev.toLocaleString()}
+                        Balance owed: {money(eventTotals.balanceOwed)}
                     </div>
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {/* Event List Table */}
-                    <div className="space-y-4">
-                        {stats.eventRevenueList?.map((event, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition-all group">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 rounded-xl bg-black/40 flex items-center justify-center text-gray-500 group-hover:text-padel-green transition-colors font-black">
-                                        {idx + 1}
-                                    </div>
-                                    <div>
-                                        <p className="text-white font-bold group-hover:text-padel-green transition-colors">{event.name}</p>
-                                        <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Tournament Entry Fees</p>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-white font-black">R{event.revenue.toLocaleString()}</p>
-                                    <p className="text-[10px] text-padel-green font-bold uppercase tracking-widest">
-                                        {((event.revenue / (stats.eventEntryRev || 1)) * 100).toFixed(1)}%
-                                    </p>
-                                </div>
-                            </div>
-                        ))}
+                    <div className="space-y-4 min-w-0 md:col-span-2">
+                        <label className="text-sm text-gray-400">Events <select aria-label="Filter event reconciliations" value={eventFilter} onChange={e => setEventFilter(e.target.value)} className="ml-2 rounded-lg bg-black/40 border border-white/10 p-2 text-white">
+                            <option value="all">All events</option><option value="outstanding">Outstanding</option><option value="settled">Settled</option><option value="month">This month</option>
+                        </select></label>
+                        <div className="overflow-x-auto">
+                            <table className="w-full min-w-[960px] text-left text-xs">
+                                <thead className="text-gray-400"><tr>{['Event', 'Entries', 'Cash collected', 'Refunds', 'Commission on 4M receipts', 'Direct to organiser', 'Paid out by 4M', 'Balance owed'].map(label => <th key={label} className="p-3">{label}</th>)}</tr></thead>
+                                <tbody className="divide-y divide-white/10">{displayedEvents.map(event => <tr key={event.id}>
+                                    <td className="p-3"><button type="button" onClick={() => onSelectEvent?.(event.id)} className="text-left font-bold text-white hover:text-padel-green">{event.event_name}</button>{event.settlement.issues.length > 0 && <p className="mt-1 text-amber-300">Needs review</p>}{event.settlement.unallocatedCredit4M > 0 && <p className="mt-1 text-amber-300">{money(event.settlement.unallocatedCredit4M)} unallocated credit reserved from payout</p>}</td>
+                                    <td className="p-3 text-white">{event.settlement.activeEntries}</td>
+                                    {['grossEntryFees', 'entryFeesRefunded', 'commission', 'organiserRetained', 'interimPaid', 'dueToOrg'].map(key => <td key={key} className={`p-3 whitespace-nowrap ${key === 'dueToOrg' ? 'font-bold text-padel-green' : 'text-gray-300'}`}>{money(event.settlement[key])}</td>)}
+                                </tr>)}</tbody>
+                                <tfoot className="border-t border-white/20 font-bold text-white"><tr><td className="p-3">Net totals</td><td className="p-3">{eventTotals.entries}</td>{['collected', 'refunds', 'commission', 'direct', 'paid'].map(key => <td key={key} className="p-3 whitespace-nowrap">{money(eventTotals[key])}</td>)}<td className="p-3 whitespace-nowrap text-padel-green">{money(eventTotals.balanceOwed - eventTotals.overpaid)}</td></tr></tfoot>
+                            </table>
+                        </div>
+                        {displayedEvents.length === 0 && <p className="text-sm text-gray-400">No events match this filter.</p>}
+                        {eventTotals.overpaid > 0 && <p className="text-xs text-amber-300">Amounts owed back to 4M: {money(eventTotals.overpaid)}. These remain separate from balances payable to organisers.</p>}
+                        {displayedEvents.some(e => e.settlement.issues.length) && <p className="text-xs text-amber-300">Balances marked Needs review are provisional. Open the event to resolve its receipts before requesting a payout.</p>}
                     </div>
 
                     {/* Stacked Chart for Entries vs Licenses */}
-                    <div className="h-full min-h-[300px]">
+                    <div className="h-full min-h-[300px] md:col-span-2">
                         <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-6">Monthly Revenue Mix ({new Date().getFullYear()})</h4>
                         <ResponsiveContainer width="100%" height={300}>
                             <BarChart data={chartData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
                                 <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
                                 <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R${v/1000}k`} />
-                                <Tooltip 
+                                <Tooltip
                                     contentStyle={{ background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px' }}
                                     itemStyle={{ fontWeight: 'bold' }}
                                 />

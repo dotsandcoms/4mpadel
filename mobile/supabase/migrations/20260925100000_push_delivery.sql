@@ -312,4 +312,9 @@ $$;
 GRANT ALL ON public.push_deliveries TO service_role;
 REVOKE ALL ON FUNCTION public.enqueue_push(text,text,text,text,text,jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.enqueue_push(text,text,text,text,text,jsonb) TO service_role;
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+REVOKE ALL ON TABLE public.push_deliveries FROM anon;
+REVOKE ALL ON TABLE public.push_deliveries FROM authenticated;
+
 COMMIT;

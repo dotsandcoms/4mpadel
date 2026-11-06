@@ -6,6 +6,10 @@ verify_jwt = false
 [functions.deliver-push]
 verify_jwt = false
 
+[functions.app-badge]
+# Validates Auth.getUser and the live own-only session RPC in the handler.
+verify_jwt = false
+
 [functions.native-license-checkout]
 verify_jwt = false
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../../supabaseClient';
 import { Trash2, Edit2, Plus, X, CheckCircle, AlertCircle, Search, Users, CreditCard, Eye, EyeOff, Mail, ShieldAlert, Key, Image as ImageIcon, Upload, MapPin, Download, Calendar, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -6,6 +6,10 @@ import ExcelJS from 'exceljs';
 import logo4m from '../../assets/logo_4m_lowercase.png';
 import { useClubs } from '../../hooks/useClubs';
 import SearchableSelect from '../SearchableSelect';
+import { BirthDateField, PlayerProfileDetailsFields } from '../PlayerProfileDetailsFields';
+import { birthDateError, playtomicDetailsError, getProfileDetails, saveProfileDetails, PROOF_BUCKET, proofFileError } from '../../utils/profileDetails';
+import { adminPlayerForm, adminPlayerPayload, privateProfileForm, privateProfileChanged } from '../../utils/adminPlayerProfile';
+import { COURT_SIDE_OPTIONS, PLAYING_HAND_OPTIONS } from '../../utils/playerPreferences';
 import {
     PieChart,
     Pie,
@@ -69,33 +73,56 @@ const PlayerManager = ({ canManageLicenses = false }) => {
     const itemsPerPage = 50;
     const [showCharts, setShowCharts] = useState(() => {
         const saved = localStorage.getItem('show_admin_charts');
-        return saved !== 'false';
+        return saved === 'true';
     });
 
     // Form State
-    const [formData, setFormData] = useState({
-        name: '',
-        rank_label: '',
-        points: '',
-        win_rate: '',
-        image_url: '',
-        home_club: '',
-        club_id: '',
-        age_group: '',
-        category: '',
-        level: '',
-        nationality: '',
-        bio: '',
-        sponsors: '',
-        contact_number: '',
-        email: '',
-        gender: '',
-        approved: true,
-        paid_registration: true,
-        license_type: 'none',
-        region: '',
-        racket_brand: '',
-    });
+    const [formData, setFormData] = useState(() => adminPlayerForm());
+    const [profileDetails, setProfileDetails] = useState(null);
+    const [detailsLoading, setDetailsLoading] = useState(false);
+    const [detailsReady, setDetailsReady] = useState(false);
+    const [detailsError, setDetailsError] = useState('');
+    const [detailsRetry, setDetailsRetry] = useState(0);
+    const [savingPlayer, setSavingPlayer] = useState(false);
+    const [proofUploading, setProofUploading] = useState(false);
+    const [uploadingGallery, setUploadingGallery] = useState(false);
+    const [formError, setFormError] = useState('');
+    const saveInFlight = useRef(false);
+    const editDialogRef = useRef(null);
+    const busy = savingPlayer || uploadingImage || proofUploading || uploadingGallery;
+
+    useEffect(() => {
+        if (!isEditing || !currentPlayer?.id) return;
+        let active = true;
+        setDetailsLoading(true); setDetailsReady(false); setDetailsError('');
+        getProfileDetails(supabase, currentPlayer.id).then(details => {
+            if (!active) return;
+            setProfileDetails(details);
+            setFormData(previous => ({ ...previous, ...privateProfileForm(details) }));
+            setDetailsReady(true);
+        }).catch(error => {
+            if (active) setDetailsError(error.message);
+        }).finally(() => { if (active) setDetailsLoading(false); });
+        return () => { active = false; };
+    }, [isEditing, currentPlayer?.id, detailsRetry]);
+
+    useEffect(() => {
+        if (!isEditing) return;
+        const previousFocus = document.activeElement;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        editDialogRef.current?.focus();
+        const keydown = event => {
+            if (event.key === 'Escape' && !busy) { event.preventDefault(); setIsEditing(false); }
+            if (event.key !== 'Tab') return;
+            const controls = [...(editDialogRef.current?.querySelectorAll('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]') || [])].filter(control => control.getClientRects().length);
+            const first = controls[0], last = controls.at(-1);
+            if (event.shiftKey && (document.activeElement === first || document.activeElement === editDialogRef.current)) { event.preventDefault(); last?.focus(); }
+            else if (!event.shiftKey && (document.activeElement === last || document.activeElement === editDialogRef.current)) { event.preventDefault(); first?.focus(); }
+        };
+        document.addEventListener('keydown', keydown);
+        return () => { document.removeEventListener('keydown', keydown); document.body.style.overflow = previousOverflow; if (previousFocus?.isConnected) previousFocus.focus(); };
+    }, [isEditing, busy]);
 
 
     useEffect(() => {
@@ -324,54 +351,15 @@ const PlayerManager = ({ canManageLicenses = false }) => {
         setCurrentPage(1);
     }, [searchTerm, filterPaid, filterActive, filterCategory, filterRegion]);
 
+    const resetEditorDetails = () => {
+        setProfileDetails(null); setDetailsLoading(false); setDetailsReady(false); setDetailsError(''); setFormError('');
+    };
     const handleAddNew = () => {
-        setCurrentPlayer(null);
-        setFormData({
-            name: '', rank_label: '', points: '', win_rate: '', image_url: '', home_club: '', age_group: '',
-            category: '', level: '', nationality: '', bio: '', sponsors: '', contact_number: '', email: '',
-            gender: '', approved: true, paid_registration: false, license_type: 'none', region: '', racket_brand: '',
-        });
-        setIsEditing(true);
+        setCurrentPlayer(null); setFormData(adminPlayerForm()); resetEditorDetails(); setIsEditing(true);
     };
-
-    const handleEdit = (player) => {
-        setCurrentPlayer(player);
-        let sponsorsString = '';
-        if (player.sponsors) {
-            try {
-                const parsed = JSON.parse(player.sponsors);
-                sponsorsString = Array.isArray(parsed) ? parsed.join(', ') : player.sponsors;
-            } catch (e) {
-                sponsorsString = player.sponsors;
-            }
-        }
-        setFormData({
-            id: player.id,
-            name: player.name,
-            rank_label: player.rank_label || '',
-            points: player.points ?? '',
-            win_rate: player.win_rate || '',
-            image_url: player.image_url || '',
-            home_club: player.club_id ? '' : (player.home_club || ''),
-            club_id: player.club_id || '',
-            age_group: player.age_group || '',
-            category: player.category || '',
-            level: player.level || '',
-            nationality: player.nationality || '',
-            bio: player.bio || '',
-            sponsors: sponsorsString,
-            contact_number: player.contact_number || '',
-            email: player.email || '',
-            gender: player.gender || '',
-            approved: player.approved !== false,
-            paid_registration: player.paid_registration === true,
-            license_type: player.license_type || 'none',
-            region: player.region || '',
-            racket_brand: player.racket_brand || '',
-        });
-        setIsEditing(true);
+    const handleEdit = player => {
+        setCurrentPlayer(player); setFormData(adminPlayerForm(player)); resetEditorDetails(); setIsEditing(true);
     };
-
 
     const handleDelete = async (id) => {
         if (!window.confirm('Are you sure you want to delete this player?')) return;
@@ -445,44 +433,40 @@ const PlayerManager = ({ canManageLicenses = false }) => {
         }, 1000);
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        let sponsorsArray = [];
-        if (formData.sponsors?.trim()) {
-            sponsorsArray = formData.sponsors.split(',').map(s => s.trim()).filter(Boolean);
-        }
-        const payload = {
-            name: formData.name,
-            rank_label: formData.rank_label,
-            points: parseInt(formData.points) || 0,
-            win_rate: formData.win_rate,
-            image_url: formData.image_url,
-            home_club: formData.club_id === 'Other' ? formData.home_club : (formData.club_id ? clubs.find(c => c.id === formData.club_id)?.name : ''),
-            club_id: formData.club_id === 'Other' ? null : (formData.club_id || null),
-            age_group: formData.age_group,
-            category: formData.category,
-            level: formData.level,
-            nationality: formData.nationality,
-            bio: formData.bio,
-            sponsors: JSON.stringify(sponsorsArray),
-            contact_number: formData.contact_number,
-            email: formData.email,
-            gender: formData.gender,
-            approved: formData.approved,
-            region: formData.region,
-            racket_brand: formData.racket_brand,
-        };
-
-        let error;
+    const handleSubmit = async event => {
+        event.preventDefault();
+        if (saveInFlight.current || busy) return;
+        setFormError('');
+        if (currentPlayer && !detailsReady) { setFormError(detailsError || 'Wait for the private profile details to finish loading.'); return; }
         if (currentPlayer) {
-            const { error: updateError } = await supabase.from('players').update(payload).eq('id', currentPlayer.id);
-            error = updateError;
-        } else {
-            const { error: insertError } = await supabase.from('players').insert([payload]);
-            error = insertError;
+            const levelIssue = playtomicDetailsError(formData);
+            if (levelIssue) { setFormError(levelIssue); return; }
         }
-        if (error) showToast('Error saving: ' + error.message, 'error');
-        else { showToast(currentPlayer ? 'Player updated' : 'Player added'); setIsEditing(false); setCurrentPlayer(null); fetchPlayers(); }
+        const changedDetails = currentPlayer && privateProfileChanged(formData, profileDetails);
+        if (changedDetails) {
+            const issue = birthDateError(formData.date_of_birth) || playtomicDetailsError(formData);
+            if (issue) { setFormError(issue); return; }
+        }
+        saveInFlight.current = true; setSavingPlayer(true);
+        let privateSaved = false;
+        try {
+            if (changedDetails) {
+                const details = await saveProfileDetails(supabase, currentPlayer.id, formData);
+                setProfileDetails(details); privateSaved = true;
+            }
+            const payload = adminPlayerPayload(formData, clubs);
+            const { error } = currentPlayer
+                ? await supabase.from('players').update(payload).eq('id', currentPlayer.id).select('id').single()
+                : await supabase.from('players').insert([payload]);
+            if (error) throw error;
+            if (changedDetails && profileDetails?.playtomic_proof_path && profileDetails.playtomic_proof_path !== formData.playtomic_proof_path) {
+                void supabase.storage.from(PROOF_BUCKET).remove([profileDetails.playtomic_proof_path]);
+            }
+            showToast(currentPlayer ? 'Player updated' : 'Player added');
+            setIsEditing(false); setCurrentPlayer(null); fetchPlayers();
+        } catch (error) {
+            setFormError(`${privateSaved ? 'Private details were saved. Other profile changes could not be saved. ' : ''}${error.message || 'Could not save the player profile.'} Retry to finish saving.`);
+        } finally { saveInFlight.current = false; setSavingPlayer(false); }
     };
 
     // Resizing Utility
@@ -542,7 +526,7 @@ const PlayerManager = ({ canManageLicenses = false }) => {
                 .from('profile-pics')
                 .getPublicUrl(filePath);
 
-            setFormData({ ...formData, image_url: publicUrl });
+            setFormData(previous => ({ ...previous, image_url: publicUrl }));
             showToast('Image uploaded successfully. Remember to save!');
         } catch (error) {
             console.error('Upload error:', error);
@@ -550,6 +534,29 @@ const PlayerManager = ({ canManageLicenses = false }) => {
         } finally {
             setUploadingImage(false);
         }
+    };
+
+    const handleGalleryUpload = async event => {
+        const files = [...(event.target.files || [])]; event.target.value = '';
+        if (!files.length || busy) return;
+        const remaining = Math.max(0, 5 - formData.additional_images.length);
+        if (files.length > remaining) { setFormError(`Choose up to ${remaining} more gallery photos.`); return; }
+        const invalid = files.map(proofFileError).find(Boolean);
+        if (invalid) { setFormError(invalid); return; }
+        setUploadingGallery(true); setFormError('');
+        try {
+            const urls = [];
+            for (const file of files) {
+                const resized = await resizeImage(file);
+                const filePath = `players/${currentPlayer?.id || 'new'}_gallery_${crypto.randomUUID()}.jpg`;
+                const { error } = await supabase.storage.from('profile-pics').upload(filePath, resized, { contentType: 'image/jpeg', upsert: false });
+                if (error) throw error;
+                const { data } = supabase.storage.from('profile-pics').getPublicUrl(filePath);
+                urls.push(data.publicUrl);
+            }
+            setFormData(previous => ({ ...previous, additional_images: [...previous.additional_images, ...urls].slice(0, 5) }));
+        } catch (error) { setFormError(error.message || 'Could not upload gallery photos. Please try again.'); }
+        finally { setUploadingGallery(false); }
     };
 
     const handleExportExcel = async () => {
@@ -695,24 +702,19 @@ const PlayerManager = ({ canManageLicenses = false }) => {
                 <button type="button" onClick={fetchPlayers} disabled={loading} className="border border-red-300/40 rounded-lg px-3 py-2 text-sm disabled:opacity-50">Retry</button>
             </div>}
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="Total Players" value={loading ? '—' : stats.total} subtext="All registered" icon={Users} color="padel-green" delay={0} />
-                <StatCard title="Full License" value={loading ? '—' : stats.full} subtext={`${stats.fullPercentage}% of all registered`} icon={CreditCard} color="green" delay={0.05} />
-                <StatCard title="Male / Female" value={loading ? '—' : `${stats.male} / ${stats.female}`} subtext="Gender breakdown" icon={Users} color="sky" delay={0.1} />
-                <StatCard title="Current Temp License" value={loading ? '—' : stats.temp} subtext="Event specific" icon={CreditCard} color="amber" delay={0.15} />
-            </div>
-
-            {/* Collapsible Charts Section */}
+            {/* Collapsible Stats and Insights */}
             <div className="space-y-4">
                 <div className="flex items-center justify-between border-t border-white/5 pt-4">
                     <button
+                        type="button"
+                        aria-expanded={showCharts}
+                        aria-controls="player-analytics-insights"
                         onClick={() => {
                             const nextVal = !showCharts;
                             setShowCharts(nextVal);
                             localStorage.setItem('show_admin_charts', String(nextVal));
                         }}
-                        className="flex items-center gap-2 group cursor-pointer text-left focus:outline-none"
+                        className="flex min-h-11 items-center gap-2 rounded-lg group cursor-pointer text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-padel-green"
                     >
                         <div className="flex items-center gap-2">
                             <span className="p-1.5 rounded-lg bg-padel-green/10 text-padel-green transition-transform duration-300 group-hover:scale-105">
@@ -731,13 +733,20 @@ const PlayerManager = ({ canManageLicenses = false }) => {
                 <AnimatePresence initial={false}>
                     {showCharts && (
                         <motion.div
+                            id="player-analytics-insights"
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
                             transition={{ duration: 0.3, ease: 'easeInOut' }}
                             className="overflow-hidden"
                         >
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2">
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-2 pb-6">
+                                <StatCard title="Total Players" value={loading ? '—' : stats.total} subtext="All registered" icon={Users} color="padel-green" delay={0} />
+                                <StatCard title="Full License" value={loading ? '—' : stats.full} subtext={`${stats.fullPercentage}% of all registered`} icon={CreditCard} color="green" delay={0.05} />
+                                <StatCard title="Male / Female" value={loading ? '—' : `${stats.male} / ${stats.female}`} subtext="Gender breakdown" icon={Users} color="sky" delay={0.1} />
+                                <StatCard title="Current Temp License" value={loading ? '—' : stats.temp} subtext="Event specific" icon={CreditCard} color="amber" delay={0.15} />
+                            </div>
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                                 <motion.div
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
@@ -1030,7 +1039,7 @@ const PlayerManager = ({ canManageLicenses = false }) => {
                                                 >
                                                     <Calendar size={14} />
                                                 </button>}
-                                                <button onClick={() => handleEdit(player)} className="p-1.5 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white">
+                                                <button aria-label={`Edit ${player.name || 'player'}`} onClick={() => handleEdit(player)} className="p-1.5 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white">
                                                     <Edit2 size={14} />
                                                 </button>
                                                 <button onClick={() => handleDelete(player.id)} className="p-1.5 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white">
@@ -1083,21 +1092,23 @@ const PlayerManager = ({ canManageLicenses = false }) => {
                             initial={{ scale: 0.95, opacity: 0, y: 20 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
                             exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                            ref={editDialogRef} role="dialog" aria-modal="true" aria-labelledby="admin-player-editor-title" tabIndex={-1}
                             className="bg-[#1a1a1a] w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 shadow-2xl"
                         >
                             <div className="flex justify-between items-center p-6 border-b border-white/10 sticky top-0 bg-[#1a1a1a] z-10">
-                                <h3 className="text-xl font-bold text-white">{currentPlayer ? 'Edit Player' : 'New Player'}</h3>
-                                <button onClick={() => setIsEditing(false)} className="text-gray-400 hover:text-white"><X size={24} /></button>
+                                <h3 id="admin-player-editor-title" className="text-xl font-bold text-white">{currentPlayer ? 'Edit Player' : 'New Player'}</h3>
+                                <button type="button" aria-label="Close player editor" disabled={busy} onClick={() => setIsEditing(false)} className="text-gray-400 hover:text-white disabled:opacity-40"><X size={24} /></button>
                             </div>
 
                             <form onSubmit={handleSubmit} className="p-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                                    {['name', 'rank_label', 'points', 'win_rate', 'age_group', 'category', 'region', 'level', 'nationality', 'contact_number', 'email'].map(field => (
+                                {formError && <p role="alert" className="mb-4 rounded-lg border border-red-400/30 p-3 text-sm text-red-300">{formError}</p>}
+                                <fieldset disabled={savingPlayer} className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                    {['name', 'rank_label', 'points', 'win_rate', 'age_group', 'category', 'region', 'level', 'nationality', 'contact_number', 'email', 'id_number', 'instagram_link'].map(field => (
                                         <div key={field}>
-                                            <label className="block text-gray-400 text-sm mb-1 capitalize">{field.replace('_', ' ')}</label>
+                                            <label htmlFor={`admin-player-${field}`} className="block text-gray-400 text-sm mb-1 capitalize">{field === 'id_number' ? 'ID number' : field === 'instagram_link' ? 'Instagram' : field.replace('_', ' ')}</label>
                                             {field === 'category' ? (
                                                 <select
-                                                    value={formData[field] || ''}
+                                                    id={`admin-player-${field}`} name={field} value={formData[field] ?? ''}
                                                     onChange={e => setFormData({ ...formData, [field]: e.target.value })}
                                                     className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none appearance-none cursor-pointer font-bold"
                                                 >
@@ -1119,7 +1130,7 @@ const PlayerManager = ({ canManageLicenses = false }) => {
                                                 </select>
                                             ) : field === 'region' ? (
                                                 <select
-                                                    value={formData[field] || ''}
+                                                    id={`admin-player-${field}`} name={field} value={formData[field] ?? ''}
                                                     onChange={e => setFormData({ ...formData, [field]: e.target.value })}
                                                     className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none appearance-none cursor-pointer font-bold"
                                                 >
@@ -1136,8 +1147,8 @@ const PlayerManager = ({ canManageLicenses = false }) => {
                                                 </select>
                                             ) : (
                                                 <input
-                                                    type={field === 'points' ? 'number' : field === 'email' ? 'email' : 'text'}
-                                                    value={formData[field] || ''}
+                                                    type={field === 'points' ? 'number' : field === 'email' ? 'email' : field === 'contact_number' ? 'tel' : 'text'}
+                                                    id={`admin-player-${field}`} name={field} value={formData[field] ?? ''}
                                                     onChange={e => setFormData({ ...formData, [field]: e.target.value })}
                                                     className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none"
                                                 />
@@ -1147,11 +1158,12 @@ const PlayerManager = ({ canManageLicenses = false }) => {
                                     <div>
                                         <label className="block text-gray-400 text-sm mb-1">Home Club</label>
                                         <div className="space-y-2">
-                                            <SearchableSelect
+                                            <SearchableSelect ariaLabel="Home club"
                                                 options={loadingClubs ? [{ value: '', label: 'Loading clubs...' }] : [...clubs.map(c => ({ value: c.id, label: c.name })), { value: 'Other', label: 'Other (Type your own)' }]}
                                                 value={formData.club_id || (formData.home_club ? 'Other' : '')}
-                                                onChange={(val) => {
-                                                    setFormData({ ...formData, club_id: val });
+                                                onChange={event => {
+                                                    const value = event.target.value;
+                                                    setFormData(previous => ({ ...previous, club_id: value, home_club: value !== 'Other' ? (clubs.find(club => club.id === value)?.name || '') : previous.home_club }));
                                                 }}
                                                 placeholder="Search clubs..."
                                             />
@@ -1168,17 +1180,17 @@ const PlayerManager = ({ canManageLicenses = false }) => {
                                         </div>
                                     </div>
                                     <div>
-                                        <label className="block text-gray-400 text-sm mb-1">Gender</label>
-                                        <select value={formData.gender || ''} onChange={e => setFormData({ ...formData, gender: e.target.value })} className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none">
+                                        <label htmlFor="admin-player-gender" className="block text-gray-400 text-sm mb-1">Gender</label>
+                                        <select id="admin-player-gender" name="gender" value={formData.gender || ''} onChange={e => setFormData({ ...formData, gender: e.target.value })} className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none">
                                             <option value="">Select</option>
                                             <option value="Male">Male</option>
                                             <option value="Female">Female</option>
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-gray-400 text-sm mb-1">Racket Brand</label>
+                                        <label htmlFor="admin-player-racket-brand" className="block text-gray-400 text-sm mb-1">Racket Brand</label>
                                         <div className="space-y-2">
-                                            <select 
+                                            <select id="admin-player-racket-brand" name="racket_brand"
                                                 value={['Adidas', 'Babolat', 'Bull Padel', 'Nox', 'Varlion', 'Oxdog', 'Wilson', 'Head', 'Siux'].includes(formData.racket_brand) ? formData.racket_brand : (formData.racket_brand ? 'Other' : '')} 
                                                 onChange={e => {
                                                     const val = e.target.value;
@@ -1214,9 +1226,26 @@ const PlayerManager = ({ canManageLicenses = false }) => {
                                             )}
                                         </div>
                                     </div>
+                                    {[['playing_hand', 'Playing hand', PLAYING_HAND_OPTIONS], ['court_side', 'Court side', COURT_SIDE_OPTIONS]].map(([field, label, options]) => <div key={field}>
+                                        <label htmlFor={`admin-player-${field}`} className="block text-gray-400 text-sm mb-1">{label}</label>
+                                        <select id={`admin-player-${field}`} name={field} value={formData[field]} onChange={event => setFormData(previous => ({ ...previous, [field]: event.target.value }))} className="w-full min-h-11 bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-padel-green">
+                                            <option value="">Not specified</option>{options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                        </select>
+                                    </div>)}
+                                    <div className="md:col-span-2 space-y-4 rounded-xl border border-white/10 p-4">
+                                        <h4 className="text-sm font-bold text-white">Private profile details</h4>
+                                        {detailsLoading && <p role="status" className="text-sm text-gray-400">Loading private profile details…</p>}
+                                        {detailsError && <div role="alert" className="text-sm text-red-300"><p>{detailsError}</p><button type="button" onClick={() => setDetailsRetry(value => value + 1)} className="mt-2 min-h-11 underline">Retry private details</button></div>}
+                                        {!currentPlayer && <p className="text-sm text-gray-400">Save the new player first, then reopen their profile to add a birth date and Playtomic proof.</p>}
+                                        {currentPlayer && detailsReady && !profileDetails?.date_of_birth && <p className="text-xs text-gray-400">No birth date is recorded. You can update other fields without adding one. A birth date is needed when adding Playtomic details.</p>}
+                                        <fieldset disabled={!currentPlayer || !detailsReady || savingPlayer} className="min-w-0 space-y-4">
+                                            <BirthDateField admin value={formData.date_of_birth} fallbackAge={currentPlayer?.age ?? null} required={Boolean(profileDetails?.date_of_birth || String(formData.playtomic_level).trim() || formData.playtomic_proof_path)} onChange={date => setFormData(previous => ({ ...previous, date_of_birth: date }))} />
+                                            <PlayerProfileDetailsFields key={currentPlayer?.id || 'new'} admin playerId={currentPlayer?.id} value={formData} onChange={setFormData} onBusyChange={setProofUploading} disabled={!currentPlayer || !detailsReady || savingPlayer} />
+                                        </fieldset>
+                                    </div>
                                     <div className="md:col-span-2">
-                                        <label className="block text-gray-400 text-sm mb-1">Sponsors (comma separated)</label>
-                                        <input type="text" value={formData.sponsors || ''} onChange={e => setFormData({ ...formData, sponsors: e.target.value })} className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none" />
+                                        <label htmlFor="admin-player-sponsors" className="block text-gray-400 text-sm mb-1">Sponsors (comma separated)</label>
+                                        <input id="admin-player-sponsors" name="sponsors" type="text" value={formData.sponsors || ''} onChange={e => setFormData({ ...formData, sponsors: e.target.value })} className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none" />
                                     </div>
                                     <div className="md:col-span-2">
                                         <label className="block text-gray-400 text-sm mb-2">Player Photo</label>
@@ -1266,7 +1295,7 @@ const PlayerManager = ({ canManageLicenses = false }) => {
                                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-gray-500 uppercase">URL</span>
                                                     <input
                                                         type="text"
-                                                        placeholder="Or paste external image URL..."
+                                                        name="image_url" aria-label="Player photo URL" placeholder="Or paste external image URL..."
                                                         value={formData.image_url || ''}
                                                         onChange={e => setFormData({ ...formData, image_url: e.target.value })}
                                                         className="w-full bg-black/40 border border-white/5 rounded-lg pl-12 pr-4 py-2 text-[11px] text-gray-400 focus:text-white focus:border-padel-green transition-all outline-none"
@@ -1275,9 +1304,21 @@ const PlayerManager = ({ canManageLicenses = false }) => {
                                             </div>
                                         </div>
                                     </div>
+                                    <div className="md:col-span-2 space-y-3">
+                                        <h4 className="text-sm font-bold text-white">Gallery photos <span className="font-normal text-gray-400">{formData.additional_images.length} / 5</span></h4>
+                                        <p className="text-xs text-gray-400">These photos appear on the player’s profile. Save to apply additions or removals.</p>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">{formData.additional_images.map((url, index) => <div key={`${url}-${index}`} className="space-y-1">
+                                            <img src={url} alt={`Player gallery photo ${index + 1}`} width={200} height={150} className="h-28 w-full rounded-lg object-cover border border-white/10" />
+                                            <button type="button" aria-label={`Remove gallery photo ${index + 1}`} disabled={uploadingGallery} onClick={() => setFormData(previous => ({ ...previous, additional_images: previous.additional_images.filter((_, position) => position !== index) }))} className="min-h-11 text-sm text-gray-300 underline">Remove photo</button>
+                                        </div>)}</div>
+                                        {formData.additional_images.length < 5 && <label className="block text-sm text-gray-400">Add gallery photos
+                                            <input name="gallery_photos" type="file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={handleGalleryUpload} className="mt-2 block w-full min-h-11 rounded-lg border border-white/20 p-2 text-sm text-white file:mr-3 file:rounded file:border-0 file:bg-white file:px-3 file:py-2 file:text-black" />
+                                        </label>}
+                                        {uploadingGallery && <p role="status" className="text-sm text-padel-green">Uploading gallery photos…</p>}
+                                    </div>
                                     <div className="md:col-span-2">
-                                        <label className="block text-gray-400 text-sm mb-1">Bio</label>
-                                        <textarea value={formData.bio || ''} onChange={e => setFormData({ ...formData, bio: e.target.value })} className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none" rows="3" />
+                                        <label htmlFor="admin-player-bio" className="block text-gray-400 text-sm mb-1">Bio</label>
+                                        <textarea id="admin-player-bio" name="bio" value={formData.bio || ''} onChange={e => setFormData({ ...formData, bio: e.target.value })} className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none" rows="3" />
                                     </div>
                                     <div className="md:col-span-2 flex flex-col sm:flex-row items-start sm:items-center gap-6 bg-black/20 p-4 rounded-xl border border-white/5">
                                         <label className="flex items-center gap-2 cursor-pointer group">
@@ -1299,10 +1340,10 @@ const PlayerManager = ({ canManageLicenses = false }) => {
                                             {canManageLicenses ? <a className="inline-block px-4 py-3 rounded-xl border border-padel-green/30 text-padel-green text-sm" href={`/admin?tab=licenses&player=${formData.id || ''}`}>Manage licenses</a> : <p className="text-sm text-gray-400">A Licenses administrator can manage this player’s coverage.</p>}
                                         </div>
                                     </div>
-                                </div>
+                                </fieldset>
                                 <div className="flex gap-3 justify-end pt-4 border-t border-white/10">
-                                    <button type="button" onClick={() => setIsEditing(false)} className="bg-gray-700 text-white px-6 py-2 rounded-lg font-bold hover:bg-gray-600">Cancel</button>
-                                    <button type="submit" className="bg-padel-green text-black px-6 py-2 rounded-lg font-bold hover:bg-white">Save</button>
+                                    <button type="button" disabled={busy} onClick={() => setIsEditing(false)} className="bg-gray-700 text-white px-6 py-2 rounded-lg font-bold hover:bg-gray-600">Cancel</button>
+                                    <button type="submit" disabled={busy || Boolean(currentPlayer && !detailsReady)} className="bg-padel-green text-black px-6 py-2 rounded-lg font-bold hover:bg-white disabled:opacity-40">{savingPlayer ? 'Saving…' : 'Save'}</button>
                                 </div>
                             </form>
                         </motion.div>

@@ -26,6 +26,9 @@ export const LEGAL: Record<LegalKind, { title: string; intro: string; points: st
       'Will not share your personal information with third parties without your consent, except as required by law.',
       'Will notify you of any data breaches affecting your information.',
       'Allow you to access, correct, or request deletion of your personal information.',
+      'Messaging uses your verified account and event participation to limit access. Phone numbers, emails, dates of birth and identity details are excluded from chat profiles. Direct messages are visible to their participants; event discussion is visible to eligible players and authorised organisers.',
+      'Messages are encrypted in transit and storage, with controlled access for reported content and security operations. Direct messages expire after 12 months and event content after 90 days. Reported evidence may be retained separately for moderation or a documented legal hold.',
+      'Junior interactive messaging requires recorded guardian consent. The invited guardian verifies their email, signs in and declares legal authority to consent. Consent can be revoked from their account.',
     ],
   },
 };

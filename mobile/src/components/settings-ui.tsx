@@ -7,11 +7,12 @@ import { lightBrand as brand } from '@/theme/tokens';
 
 export const SETTINGS_BLUE = '#2449D8';
 
-export function SettingsPage({ title, children }: { title: string; children: ReactNode }) {
+export function SettingsPage({ title, children, banner }: { title: string; children: ReactNode; banner?: ReactNode }) {
   const insets = useSafeAreaInsets();
   return <>
     <Stack.Screen options={{ headerShown: true, title, headerBackTitle: 'Back', headerTintColor: brand.premium, headerStyle: { backgroundColor: brand.page }, headerShadowVisible: false }} />
     <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={{ flex: 1, backgroundColor: brand.page }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: insets.bottom + 32 }}>{children}</ScrollView>
+    {banner}
   </>;
 }
 
