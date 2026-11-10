@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { isManageableClubStatus } from '../utils/club';
+import { REHEARSAL_TESTER_EMAIL } from '../utils/privateDrawRehearsal';
 
 export const SUPER_ADMIN_EMAILS = ['bradein@dotsandcoms.co.za', 'brad@dotsandcoms.co.za', 'admin@4mpadel.co.za', 'markstillerman@gmail.com'];
 
@@ -149,6 +150,16 @@ export const useAdminPermissions = (userEmail) => {
             }
 
             try {
+                // Do not add rehearsal testers to admin_sidebar_permissions:
+                // legacy is_4m_admin() treats any row there as live draw access.
+                if (userEmail.trim().toLowerCase() === REHEARSAL_TESTER_EMAIL) {
+                    const { data: allowed, error: rehearsalError } = await supabase.rpc('can_start_private_draw_rehearsal');
+                    if (!rehearsalError && allowed) {
+                        setPermissions({ role: 'private_rehearsal', allowed_tabs: ['event-mgmt'], module_permissions: {} });
+                        setLoading(false);
+                        return;
+                    }
+                }
                 // Super admins get full platform access — also attach any linked org
                 // so they can manage events for organisations they belong to.
                 if (SUPER_ADMIN_EMAILS.includes(userEmail.toLowerCase())) {

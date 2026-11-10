@@ -100,7 +100,7 @@ const registrationToEntry = (registration, index, playersByEmail, rankingSource,
     };
 };
 
-const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, onSaved, onDivisionRankingSourceChange, sandboxTesting = false, onRestartSandbox, onExpandTestCount }) => {
+const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, onSaved, onDivisionRankingSourceChange, sandboxTesting = false, privateRehearsal = false, onRestartSandbox, onExpandTestCount }) => {
     const { getTournamentParticipants } = useRankedin();
     const [divisionId, setDivisionId] = useState('');
     const [overview, setOverview] = useState(true);
@@ -805,7 +805,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             setSavedDraw({ ...savedDraw, status: 'published' });
             setShowDrawSetup(true);
             setWorkspace(typeof destination === 'string' ? destination : 'schedule');
-            toast.success(`${division.name} event draw is published at /native-draws/${event.slug}`);
+            toast.success(privateRehearsal ? `${division.name} rehearsal draw published privately.` : `${division.name} event draw is published at /native-draws/${event.slug}`);
         } catch (error) {
             console.error('Failed to publish native draw', error);
             toast.error(error.message || 'Could not publish the draw');
@@ -1575,7 +1575,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         <div ref={workspaceRef} className="draw-workflow-root scroll-mt-20 p-4 space-y-6 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-5">
                 <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-padel-green">Tournament workspace</p><h1 className="mt-2 text-xl font-bold text-white">{event.title || event.name || event.event_name || 'Manage tournament'}</h1></div>
-                <div className="flex flex-wrap gap-2">{savedDraw && !overview && <a href={`/${savedDraw.status === 'draft' ? 'draws-preview' : 'native-draws'}/${event.slug}`} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-sm text-gray-200"><Eye size={15} />{savedDraw.status === 'draft' ? 'Public preview' : 'Public draw'}</a>}<button type="button" onClick={()=>setDrawer('play-days')} className="min-h-11 rounded-lg border border-white/20 px-3 py-2 text-sm text-gray-200">Play days & courts</button><button type="button" onClick={()=>setDrawer('help')} className="min-h-11 rounded-lg px-3 py-2 text-sm text-gray-400 hover:text-white">Help</button></div>
+                <div className="flex flex-wrap gap-2">{savedDraw && !overview && !privateRehearsal && <a href={`/${savedDraw.status === 'draft' ? 'draws-preview' : 'native-draws'}/${event.slug}`} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-sm text-gray-200"><Eye size={15} />{savedDraw.status === 'draft' ? 'Public preview' : 'Public draw'}</a>}<button type="button" onClick={()=>setDrawer('play-days')} className="min-h-11 rounded-lg border border-white/20 px-3 py-2 text-sm text-gray-200">Play days & courts</button><button type="button" onClick={()=>setDrawer('help')} className="min-h-11 rounded-lg px-3 py-2 text-sm text-gray-400 hover:text-white">Help</button></div>
             </div>
             <div ref={setScheduleAlertHost} className="sticky top-4 z-50 empty:hidden" />
             <div className={overview ? '' : 'draw-workflow-layout'}>
@@ -1704,7 +1704,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             {((workspace === 'schedule' && ['draft', 'published', 'in_progress'].includes(savedDraw?.status) && !draftDirty) || (workspace === 'run' && ['published', 'in_progress'].includes(savedDraw?.status))) && draft && <div className="rounded-2xl border border-white/10 bg-[#101010] p-5">
                 {workspace === 'schedule' && <>
                 <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-gray-400">{playDays.filter(day=>day.is_active).length} active play days · save bookings before publishing</p><button type="button" onClick={()=>setDrawer('play-days')} className="min-h-11 rounded-lg border border-white/20 px-4 py-2 text-sm text-gray-200">Edit play days & courts</button></div>
-                <DrawSchedulingBoard onDirtyChange={setScheduleDirty} divisionConfigs={workflowConfigs} onSaveDivisionPlan={saveDivisionSchedulePlan} divisions={divisions} alertHost={scheduleAlertHost} key={savedDraw.id} eventId={event.id} drawId={savedDraw.id} playDays={playDays} onSaved={(updates) => updates.forEach(({ id, ...values }) => updateLocalMatch(id, values))} />
+                <DrawSchedulingBoard privateRehearsal={privateRehearsal} onDirtyChange={setScheduleDirty} divisionConfigs={workflowConfigs} onSaveDivisionPlan={saveDivisionSchedulePlan} divisions={divisions} alertHost={scheduleAlertHost} key={savedDraw.id} eventId={event.id} drawId={savedDraw.id} playDays={playDays} onSaved={(updates) => updates.forEach(({ id, ...values }) => updateLocalMatch(id, values))} />
                 <div className="mb-5 overflow-hidden rounded-xl border border-sky-300/25 bg-sky-300/[0.04]">
                     <button type="button" onClick={() => setShowBulkMatchSetup((current) => !current)} aria-expanded={showBulkMatchSetup} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-sky-300/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-padel-green">
                         <span className="flex items-center gap-2">

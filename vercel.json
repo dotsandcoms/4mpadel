@@ -21,6 +21,10 @@
   ],
   "rewrites": [
     {
+      "source": "/private-draw-rehearsal/index.html",
+      "destination": "/private-draw-rehearsal/index.html"
+    },
+    {
       "source": "/api/pro-share-image",
       "destination": "/api/pro-share-image"
     },

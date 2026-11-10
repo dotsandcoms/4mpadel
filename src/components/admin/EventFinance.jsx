@@ -1,4 +1,4 @@
-import { calculateEventSettlement, buildEventSettlements, summarizeEventSettlements } from '../../utils/eventSettlement';
+import { calculateEventSettlement, summarizeEventSettlements } from '../../utils/eventSettlement';
 import { hydrateEventLicenses } from '../../utils/licenses';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -10,10 +10,10 @@ import {
 import { supabase } from '../../supabaseClient';
 import { useRankedin } from '../../hooks/useRankedin';
 import { toast } from 'sonner';
-import ExcelJS from 'exceljs';
 import logo4m from '../../assets/logo_4m_lowercase.png';
 import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
 import { fetchAllRows } from '../../utils/fetchAllRows';
+import { loadFinanceOverviewEvents, loadFinanceOverviewSummaries } from '../../utils/eventFinanceOverviewData';
 import { loadManagedEventCompletions, managedEventStage, partitionManagedEvents, setManagedEventCompleted } from '../../utils/eventManagementCompletion';
 import {
     findPaymentForRegistration,
@@ -26,9 +26,10 @@ import {
     registrationIsCompedEntry,
     resolveRegistrationPayer,
 } from '../../utils/paymentRegistrationMatch';
-import { resolveRegistrationLicenseCategory } from '../../utils/registrationLicense';
-import ManualEventRegistrations from './ManualEventRegistrations';
-import EventBuilder from './EventBuilder';
+import { readOverviewCache, writeOverviewCache, invalidateOverviewSummary, clearOverviewCache } from '../../utils/eventFinanceOverviewCache';
+
+const ManualEventRegistrations = React.lazy(() => import('./ManualEventRegistrations'));
+const EventBuilder = React.lazy(() => import('./EventBuilder'));
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const EMPTY_ALLOWED_EVENTS = Object.freeze([]);
@@ -74,17 +75,25 @@ const getParticipantPaidAmount = (p) => {
 
 const isWithdrawnRegistration = (reg) => String(reg?.status || '').toLowerCase() === 'withdrawn';
 
-const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementModule = false, initialEventId = null }) => {
+const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementModule = false, initialEventId = null, onStartRehearsal }) => {
     const [events, setEvents] = useState([]);
     const [selectedEventId, setSelectedEventId] = useState(null);
     const openedInitialEvent = useRef(null);
     const [viewMode, setViewMode] = useState('list'); // 'list' | 'dashboard' | 'table'
     const [localParticipants, setLocalParticipants] = useState([]);
     const [systemProfiles, setSystemProfiles] = useState([]);
-    const [loading, setLoading] = useState({ events: true, matching: false, syncing: false });
+    const systemProfilesPromise = useRef(null);
+    const eventLoadRequest = useRef(0);
+    const cacheScope = useRef('');
+    const [summaryRevision, setSummaryRevision] = useState(0);
+    const [summaryLoadError, setSummaryLoadError] = useState('');
+    const [summaryProgress, setSummaryProgress] = useState({ completed: 0, total: 0 });
+    const [loading, setLoading] = useState({ events: true, matching: false, syncing: false, profiles: false, summaries: false, refreshing: false });
     const [eventLoadError, setEventLoadError] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [eventSearch, setEventSearch] = useState('');
+    const [showBronze, setShowBronze] = useState(false);
+    const allowedEventIdsKey = JSON.stringify(allowedEvents || []);
     const [showCompleted, setShowCompleted] = useState(false);
     const [completionBusyId, setCompletionBusyId] = useState(null);
     const [completionLoadError, setCompletionLoadError] = useState('');
@@ -278,211 +287,129 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
         },
     }), [localParticipants, selectedEvent, eventPayments, refunds]);
 
+    // The full player directory is needed for RankedIn matching/sync only,
+    // never to display the event list. Reuse it across those explicit actions.
+    const loadSystemProfiles = useCallback(() => {
+        if (!systemProfilesPromise.current) {
+            setLoading(prev => ({ ...prev, profiles: true }));
+            systemProfilesPromise.current = fetchAllRows(() => supabase.from('players')
+                .select('id, name, email, contact_number, license_type, paid_registration')
+                .order('id', { ascending: true }))
+                .then((profiles) => { setSystemProfiles(profiles); return profiles; })
+                .catch((error) => { systemProfilesPromise.current = null; throw error; })
+                .finally(() => setLoading(prev => ({ ...prev, profiles: false })));
+        }
+        return systemProfilesPromise.current;
+    }, []);
+
+    useEffect(() => {
+        if (matchingProfile) loadSystemProfiles().catch(() => toast.error('Could not load player profiles. Please try again.'));
+    }, [matchingProfile, loadSystemProfiles]);
+
     const fetchInitialData = useCallback(async () => {
-            setLoading(prev => ({ ...prev, events: true }));
-            setEventLoadError('');
-            setCompletionLoadError('');
-            try {
-                const { data: eData, error: eError } = await supabase
-                    .from('calendar')
-                    .select('id, event_name, start_date, end_date, registration_closes_at, rankedin_id, rankedin_url, entry_fee, category_fees, early_bird_fee, early_bird_ends_at, finance_managed, is_manual, allow_payments, slug, venue, venues, event_status, organisation_id, club_id, organiser_interim_payments, organiser_settlement_confirmation, organiser_name, organiser_email, organisations:organisation_id(id, name, slug), clubs:club_id(id, name, short_name, slug)')
-                    .order('start_date', { ascending: false });
-                if (eError) throw eError;
-
-                let completionByEvent = new Map();
-                if (isEventManagementModule) {
-                    try {
-                        completionByEvent = await loadManagedEventCompletions(supabase);
-                    } catch (error) {
-                        setCompletionLoadError('Could not load completion status. Please retry before changing the event list.');
-                        throw error;
-                    }
+        const request = ++eventLoadRequest.current;
+        setEventLoadError('');
+        setCompletionLoadError('');
+        setSummaryLoadError('');
+        setLoading(prev => ({ ...prev, refreshing: true }));
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (request !== eventLoadRequest.current) return;
+            if (!session?.user?.id) throw new Error('Sign in to view events.');
+            const key = JSON.stringify([session.user.id, allowedEventIdsKey, isEventManagementModule, showBronze]);
+            cacheScope.current = key;
+            const cached = readOverviewCache(key);
+            setEvents(cached || []);
+            setLoading(prev => ({ ...prev, events: !cached }));
+            const eData = await loadFinanceOverviewEvents(supabase, {
+                isEventManagementModule, showBronze, allowedEventIds: JSON.parse(allowedEventIdsKey),
+            });
+            if (request !== eventLoadRequest.current) return;
+            let completions = new Map();
+            if (isEventManagementModule) {
+                try { completions = await loadManagedEventCompletions(supabase, eData.map(event => event.id)); }
+                catch (error) {
+                    if (request === eventLoadRequest.current) setCompletionLoadError('Could not load completion status. Please retry before changing the event list.');
+                    throw error;
                 }
-
-                const pData = await fetchAllRows(() => supabase
-                    .from('players')
-                    .select('id, name, email, contact_number, license_type, paid_registration')
-                    .order('id', { ascending: true }));
-                setSystemProfiles(pData || []);
-
-                const tempLicenses = await fetchAllRows(() => supabase
-                    .from('temporary_licenses')
-                    .select('event_id, player_id')
-                    .is('revoked_at', null)
-                    .order('id', { ascending: true }));
-
-                const playerLicenses = {};
-                const emailToPlayerId = {};
-                (pData || []).forEach(p => {
-                    playerLicenses[p.id] = p.license_type === 'full' ? 'full' : 'none';
-                    if (p.email) emailToPlayerId[p.email.toLowerCase()] = p.id;
-                });
-
-                const manualEventIds = (eData || []).filter(e => e.is_manual).map(e => e.id);
-                const manualEventIdSet = new Set(manualEventIds);
-
-                // Fetch basic global stats for "at a glance" view
-                const allParts = await fetchAllRows(() => supabase
-                    .from('tournament_participants')
-                    .select('id, event_id, class_name, is_paid, profile_id, full_name, email')
-                    .order('id', { ascending: true }), 500);
-
-                const eventLicenses = new Map();
-                const idsByEvent = new Map();
-                allParts.forEach(p=>{if(!p.profile_id)return;const ids=idsByEvent.get(p.event_id)||new Set();ids.add(p.profile_id);idsByEvent.set(p.event_id,ids);});
-                await Promise.all([...idsByEvent].map(async([eventId,ids])=>{const profiles=await hydrateEventLicenses([...ids].map(id=>({id})),eventId);profiles.forEach(p=>eventLicenses.set(`${eventId}:${p.id}`,p.event_license));}));
-                // Aggregate stats
-                const statsByEvent = {};
-                allParts.forEach(p => {
-                    if (manualEventIdSet.has(p.event_id)) return;
-
-                    if (!statsByEvent[p.event_id]) {
-                        statsByEvent[p.event_id] = { 
-                            entries: 0, billed: 0, collected: 0, paidCount: 0, compedCount: 0,
-                            uniqueProfiles: new Set(),
-                            licenses: { full: 0, temp: 0, none: 0 }
-                        };
-                    }
-                    
-                    const eventStats = statsByEvent[p.event_id];
-                    eventStats.entries += 1;
-                    if (p.is_paid) eventStats.paidCount += 1;
-
-                    const profileKey = p.profile_id || (p.full_name || '').toLowerCase().trim();
-                    if (profileKey && !eventStats.uniqueProfiles.has(profileKey)) {
-                        eventStats.uniqueProfiles.add(profileKey);
-                        
-                        let lic = 'none';
-                        if (p.profile_id) {
-                            if (eventLicenses.get(`${p.event_id}:${p.profile_id}`)?.full) {
-                                lic = 'full';
-                            } else {
-                                const hasTemp = eventLicenses.get(`${p.event_id}:${p.profile_id}`)?.temporary;
-                                if (hasTemp) lic = 'temp';
-                            }
-                        }
-                        eventStats.licenses[lic]++;
-                    }
-                });
-
-                // ── Manual events: pull stats from event_registrations ──────────────────
-                const [manualRegs, allPayments, allRefunds, allDivisions] = await Promise.all([
-                    manualEventIds.length ? fetchAllRows(() => supabase.from('event_registrations')
-                        .select('*, tournament_divisions(entry_fee)').in('event_id', manualEventIds).order('id', { ascending: true }), 500) : [],
-                    fetchAllRows(() => supabase.from('payments').select('*').order('id', { ascending: true }), 500),
-                    fetchAllRows(() => supabase.from('payment_refunds').select('*').order('id', { ascending: true }), 500),
-                    fetchAllRows(() => supabase.from('tournament_divisions').select('*').order('id', { ascending: true }), 500),
-                ]);
-                const statements = buildEventSettlements({ events: eData || [], registrations: manualRegs,
-                    participants: allParts, payments: allPayments, refunds: allRefunds, divisions: allDivisions });
-                const settlementByEvent = new Map(statements.map(e => [e.id, e.settlement]));
-                const manualLicenseCounted = {};
-                if (manualEventIds.length > 0) {
-                    const manualEmails = [...new Set(
-                        (manualRegs || [])
-                            .map((r) => (r.email || '').toLowerCase().trim())
-                            .filter(Boolean),
-                    )];
-                    const manualPlayers = manualEmails.length > 0
-                        ? await fetchPlayersByEmails(
-                            supabase,
-                            manualEmails,
-                            'id, email, license_type, paid_registration, temporary_licenses(id, event_id)',
-                        )
-                        : [];
-                    const manualPlayersByEmail = buildPlayersByEmailMap(manualPlayers);
-                    const manualEligibility = new Map();
-                    await Promise.all([...new Set((manualRegs||[]).map(r=>r.event_id))].map(async eid=>{const ids=new Set((manualRegs||[]).filter(r=>r.event_id===eid).map(r=>manualPlayersByEmail.get((r.email||'').toLowerCase().trim())?.id).filter(Boolean));const profiles=await hydrateEventLicenses([...ids].map(id=>({id})),eid);profiles.forEach(p=>manualEligibility.set(`${eid}:${p.id}`,p.event_license));}));
-
-
-                    const manualPayments = allPayments.filter(p => manualEventIdSet.has(p.event_id));
-                    const paymentsByEvent = {};
-                    (manualPayments || []).forEach((pay) => {
-                        if (!paymentsByEvent[pay.event_id]) paymentsByEvent[pay.event_id] = [];
-                        paymentsByEvent[pay.event_id].push(pay);
-                    });
-
-                    (manualRegs || []).forEach(r => {
-                        if (['withdrawn', 'cancelled'].includes(r.status)) return;
-                        const eid = r.event_id;
-                        if (!statsByEvent[eid]) {
-                            statsByEvent[eid] = {
-                                entries: 0, billed: 0, collected: 0, paidCount: 0, compedCount: 0,
-                                uniqueProfiles: new Set(),
-                                licenses: { full: 0, temp: 0, none: 0 },
-                                _manualCollected: 0, _manualBilled: 0,
-                            };
-                        }
-                        const es = statsByEvent[eid];
-                        const fee = Number(r.tournament_divisions?.entry_fee || 0);
-                        // Count registrant row
-                        es.entries++;
-                        const isComped = registrationIsCompedEntry(r, paymentsByEvent[eid] || []);
-                        if (isComped) {
-                            es.compedCount = (es.compedCount || 0) + 1;
-                        } else {
-                            es._manualBilled = (es._manualBilled || 0) + fee;
-                        }
-                        if (!isComped && registrationCountsAsPaid(r)) {
-                            es.paidCount++;
-                            es._manualCollected = (es._manualCollected || 0) + fee;
-                        }
-                        const profileKey = (r.email || '').toLowerCase().trim();
-                        if (profileKey) {
-                            es.uniqueProfiles.add(profileKey);
-
-                            if (!manualLicenseCounted[eid]) manualLicenseCounted[eid] = new Set();
-                            if (!manualLicenseCounted[eid].has(profileKey)) {
-                                manualLicenseCounted[eid].add(profileKey);
-                                const player = manualPlayersByEmail.get(profileKey);
-                                const lic = resolveRegistrationLicenseCategory(
-                                    profileKey,
-                                    eid,
-                                    player ? {...player,event_license:manualEligibility.get(`${eid}:${player.id}`)} : null,
-                                    paymentsByEvent[eid] || [],
-                                );
-                                es.licenses[lic]++;
-                            }
-                        }
-                    });
-                }
-                // ────────────────────────────────────────────────────────────────────────
-
-                const eventsWithStats = (eData || []).map(event => {
-                    const stats = statsByEvent[event.id] || { 
-                        entries: 0, billed: 0, collected: 0, paidCount: 0, compedCount: 0,
-                        uniqueProfiles: new Set(),
-                        licenses: { full: 0, temp: 0, none: 0 }
-                    };
-                    
-                    return {
-                        ...event,
-                        settlement: settlementByEvent.get(event.id),
-                        stats: {
-                            entries: settlementByEvent.get(event.id).activeEntries,
-                            billed: settlementByEvent.get(event.id).totalAmountBilled,
-                            collected: settlementByEvent.get(event.id).grossEntryFees,
-                            outstanding: settlementByEvent.get(event.id).pendingAmount,
-                            paidCount: settlementByEvent.get(event.id).paid4M + settlementByEvent.get(event.id).paidClub,
-
-                            compedCount: settlementByEvent.get(event.id).compedEntries,
-                            uniquePlayersCount: stats.uniqueProfiles.size,
-                            licenses: stats.licenses
-                        }
-                    };
-                });
-
-                setEvents(eventsWithStats.map((event) => ({ ...event, management_completed_at: completionByEvent.get(Number(event.id)) || null })));
-            } catch (err) {
-                console.error("Fetch initial error", err);
-                setEventLoadError(err.message || 'Could not load event data.');
-            } finally {
-                setLoading(prev => ({ ...prev, events: false }));
             }
-    }, [isEventManagementModule]);
+            if (request !== eventLoadRequest.current) return;
+            const cachedById = new Map((cached || []).map(event => [Number(event.id), event]));
+            const rows = eData.map(event => ({ ...event,
+                management_completed_at: completions.get(Number(event.id)) || null,
+                stats: cachedById.get(Number(event.id))?.stats,
+                settlement: cachedById.get(Number(event.id))?.settlement,
+            }));
+            writeOverviewCache(key, rows);
+            setEvents(rows);
+            setSummaryRevision(revision => revision + 1);
+        } catch (error) {
+            if (request !== eventLoadRequest.current) return;
+            setEventLoadError(error.message || 'Could not load event data.');
+        } finally {
+            if (request === eventLoadRequest.current) setLoading(prev => ({ ...prev, events: false, refreshing: false }));
+        }
+    }, [isEventManagementModule, showBronze, allowedEventIdsKey]);
+
+    // Only visible rows need summaries. Completed events join this set when
+    // expanded/searched; event-detail screens perform their own fresh reads.
+    const summaryTargets = isEventManagementModule
+        ? [...activeEvents, ...((showCompleted || eventSearch) ? completedEvents : [])]
+        : filteredEvents;
+    const summaryIdsKey = JSON.stringify(summaryTargets.map(event => Number(event.id)));
+    useEffect(() => {
+        if (loading.events || loading.refreshing || eventLoadError || completionLoadError) return;
+        const ids = JSON.parse(summaryIdsKey);
+        setSummaryLoadError('');
+        if (!ids.length) {
+            setLoading(prev => ({ ...prev, summaries: false }));
+            return;
+        }
+        let current = true;
+        const scope = cacheScope.current;
+        setLoading(prev => ({ ...prev, summaries: true }));
+        let completed = 0;
+        setSummaryProgress({ completed: 0, total: ids.length });
+        loadFinanceOverviewSummaries(supabase, ids, summaries => {
+            if (!current) return;
+            completed += summaries.length;
+            setSummaryProgress({ completed, total: ids.length });
+            const byId = new Map(summaries.map(row => [Number(row.id), row]));
+            setEvents(rows => {
+                if (!current || cacheScope.current !== scope) return rows;
+                const next = rows.map(row => byId.has(Number(row.id)) ? { ...row, ...byId.get(Number(row.id)) } : row);
+                writeOverviewCache(scope, next);
+                return next;
+            });
+        }).catch(error => {
+            if (!current || cacheScope.current !== scope) return;
+            // Failed refreshes must never leave old financial figures looking current.
+            setEvents(rows => current && cacheScope.current === scope ? rows.map(row => ids.includes(Number(row.id)) ? { ...row, stats: undefined, settlement: undefined } : row) : rows);
+            ids.forEach(invalidateOverviewSummary);
+            setSummaryLoadError(error.message || 'Could not load event summaries.');
+        }).finally(() => { if (current && cacheScope.current === scope) setLoading(prev => ({ ...prev, summaries: false })); });
+        return () => { current = false; };
+    }, [summaryIdsKey, summaryRevision, loading.events, loading.refreshing, eventLoadError, completionLoadError]);
+
+    const refreshAfterDetails = () => {
+        invalidateOverviewSummary(selectedEventId);
+        fetchInitialData();
+    };
+
+    useEffect(() => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(event => {
+            if (event === 'SIGNED_OUT') {
+                clearOverviewCache();
+                setEvents([]);
+                eventLoadRequest.current += 1;
+            }
+        });
+        return () => subscription.unsubscribe();
+    }, []);
 
     useEffect(() => {
         fetchInitialData();
+        return () => { eventLoadRequest.current += 1; };
     }, [fetchInitialData]);
 
     useEffect(() => {
@@ -499,8 +426,11 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
         setCompletionBusyId(event.id);
         try {
             const result = await setManagedEventCompleted(supabase, event, completing);
-            setEvents((current) => current.map((row) => row.id === event.id
-                ? { ...row, management_completed_at: result.completed_at } : row));
+            setEvents(current => {
+                const next = current.map(row => row.id === event.id ? { ...row, management_completed_at: result.completed_at } : row);
+                writeOverviewCache(cacheScope.current, next);
+                return next;
+            });
             toast.success(completing ? `${event.event_name} moved to Completed Events` : `${event.event_name} returned to the main list`);
         } catch (error) {
             toast.error(error.message || 'Could not change completion status.', {
@@ -610,7 +540,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                 // Try to link players profiles by email
                 const emails = [...new Set(mapped.map(m => m.email).filter(Boolean))];
                 if (emails.length > 0) {
-                    const profiles = await hydrateEventLicenses(await fetchPlayersByEmails(supabase, emails), selectedEventId);
+                    const profiles = await hydrateEventLicenses(await fetchPlayersByEmails(supabase, emails), eventId);
                     const profileByEmail = buildPlayersByEmailMap(profiles);
 
                     mapped.forEach(m => {
@@ -766,7 +696,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
             });
 
             setEventPayments(payData || []);
-            const hydratedProfiles = await hydrateEventLicenses(enriched.map(row=>row.players).filter(Boolean), selectedEventId);
+            const hydratedProfiles = await hydrateEventLicenses(enriched.map(row=>row.players).filter(Boolean), eventId);
             const hydratedById = new Map(hydratedProfiles.map(p=>[p.id,p]));
             setLocalParticipants(enriched.map(row=>({...row,players:hydratedById.get(row.players?.id)||row.players})));
         } catch (err) {
@@ -778,13 +708,8 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
     }, []);
 
     useEffect(() => {
-        if (selectedEventId) {
-            fetchParticipants(selectedEventId);
-        } else if (allowedEvents && allowedEvents.length > 0 && filteredEvents.length > 0 && !selectedEventId) {
-            // Auto-select first event if locked by permissions
-            setSelectedEventId(filteredEvents[0].id);
-        }
-    }, [selectedEventId, fetchParticipants, allowedEvents, filteredEvents]);
+        if (selectedEventId && viewMode !== 'list' && !selectedEvent?.is_manual) fetchParticipants(selectedEventId);
+    }, [selectedEventId, selectedEvent?.is_manual, viewMode, fetchParticipants]);
 
     // 3. Sync from Rankedin (Core Engine)
     const runSyncForEvent = async (eventId, rId, eventName) => {
@@ -793,6 +718,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
         let errorCount = 0;
 
         try {
+            const syncProfiles = await loadSystemProfiles();
             // Step 1: Get all class tabs for this tournament.
             // forceRefresh bypasses the rankedin_cache so a manual sync always reflects
             // the live RankedIn state (e.g. divisions/players that were just removed).
@@ -911,7 +837,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                 // Auto-match system profile
                 let autoProfileId = null;
                 let matchedEmail = null;
-                const matchedProfile = systemProfiles.find(sp => {
+                const matchedProfile = syncProfiles.find(sp => {
                     if (!sp.name) return false;
                     const spClean = sp.name.toLowerCase().replace(/\s+/g, ' ').trim();
                     return spClean.includes(cleanNameLower) || cleanNameLower.includes(spClean);
@@ -1013,7 +939,6 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                 }
             }
 
-            fetchParticipants(eventId);
             toast.success(`Sync complete: ${createdCount} new entries, ${successCount} updated. ${errorCount > 0 ? `${errorCount} failed.` : ''}`);
             return { success: successCount + createdCount, error: errorCount };
         } catch (err) {
@@ -1045,9 +970,9 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
 
         setLoading(prev => ({ ...prev, syncing: false }));
         // If it was the currently selected event, refresh the participant list
-        if (selectedEventId === eventToSync.id) {
-            fetchParticipants(selectedEventId);
-        }
+        invalidateOverviewSummary(eventToSync.id);
+        setSummaryRevision(revision => revision + 1);
+        if (selectedEventId === eventToSync.id && viewMode !== 'list') fetchParticipants(selectedEventId);
     };
 
     const handleBulkSync = async () => {
@@ -1075,7 +1000,9 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
 
         toast.success(`Bulk Sync Complete: ${totalSuccess} players updated across ${syncableFiltered.length} events.`);
         setLoading(prev => ({ ...prev, syncing: false }));
-        if (selectedEventId) fetchParticipants(selectedEventId);
+        syncableFiltered.forEach(event => invalidateOverviewSummary(event.id));
+        setSummaryRevision(revision => revision + 1);
+        if (selectedEventId && viewMode !== 'list') fetchParticipants(selectedEventId);
     };
 
     // Remove an event from the Event Manager. This only clears the
@@ -1251,6 +1178,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                 a.full_name.localeCompare(b.full_name)
             );
 
+            const { default: ExcelJS } = await import('exceljs');
             const workbook = new ExcelJS.Workbook();
             const sheet = workbook.addWorksheet('Event Finance');
 
@@ -1494,14 +1422,14 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                 </td>
                 <td className="px-2.5 py-2.5 text-center whitespace-nowrap">
                     <div className="flex flex-col">
-                        <span className="text-lg font-black leading-none text-white">{e.stats?.entries || 0}</span>
-                        <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{e.stats?.paidCount || 0} Paid</span>
+                        <span className="text-lg font-black leading-none text-white">{e.stats ? e.stats.entries : '—'}</span>
+                        <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{e.stats ? `${e.stats.paidCount} Paid` : summaryLoadError ? 'Unavailable' : 'Loading…'}</span>
                         {e.stats?.compedCount > 0 && <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{e.stats.compedCount} Comped</span>}
                     </div>
                 </td>
                 <td className="px-2.5 py-2.5">
                     <div className="flex flex-col">
-                        <span className="text-padel-green font-bold text-[11px]">{fmtR(e.stats?.collected)} / {fmtR(e.stats?.billed)}</span>
+                        <span className={`${e.stats ? 'text-padel-green' : 'text-gray-400'} font-bold text-[11px]`}>{e.stats ? `${fmtR(e.stats.collected)} / ${fmtR(e.stats.billed)}` : summaryLoadError ? 'Unavailable' : 'Loading…'}</span>
                         {!isEventManagementModule && e.settlement && <>
                             <span className="text-[9px] text-gray-400">Fee {fmtR(e.settlement.commission)} · Paid {fmtR(e.settlement.interimPaid)}</span>
                             <span className="text-[9px] text-gray-400">Direct {fmtR(e.settlement.organiserRetained)} · Refunds {fmtR(e.settlement.entryFeesRefunded)}</span>
@@ -1514,7 +1442,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                     </div>
                 </td>
                 <td className="px-2.5 py-2.5">
-                    {e.stats?.uniquePlayersCount > 0 ? (
+                    {!e.stats ? <span className="text-[10px] text-gray-400">{summaryLoadError ? 'Unavailable' : 'Loading…'}</span> : e.stats.uniquePlayersCount > 0 ? (
                         <div className="flex items-center gap-3">
                             <div className="flex flex-col items-center min-w-[28px]">
                                 <span className="text-[#BFFF00] font-black text-sm">{e.stats.licenses?.full || 0}</span>
@@ -1595,11 +1523,16 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                                 onClick={(event) => { event.stopPropagation(); changeEventCompletion(e); }}
                                 disabled={completionBusyId !== null || loading.events || Boolean(completionLoadError)}
                                 aria-label={`${isCompleted ? 'Reopen' : 'Mark as completed'}: ${e.event_name}`}
-                                className="mt-1 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-padel-green/25 bg-padel-green/5 px-2 py-1.5 text-[9px] font-bold text-padel-green hover:bg-padel-green hover:text-black focus-visible:outline-2 focus-visible:outline-padel-green disabled:cursor-wait disabled:opacity-50">
+                                className="mt-1 inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-padel-green/25 bg-padel-green/5 px-2 py-1.5 text-[9px] font-bold text-padel-green hover:bg-padel-green hover:text-black focus-visible:outline-2 focus-visible:outline-padel-green disabled:cursor-wait disabled:opacity-50">
                                 {completionBusyId === e.id ? <Loader2 size={12} className="animate-spin" /> : isCompleted ? <RefreshCcw size={12} /> : <CheckCircle size={12} />}
                                 {isCompleted ? 'Reopen' : 'Mark as completed'}
                             </button>
                         )}
+                        {onStartRehearsal && e.is_manual && <button type="button"
+                            onClick={event => { event.stopPropagation(); onStartRehearsal(e.id); }}
+                            className="mt-1 inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-amber-300/40 bg-amber-300/10 px-2 py-1.5 text-[9px] font-bold text-amber-200 hover:bg-amber-300/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200">
+                            Start private rehearsal
+                        </button>}
                     </div>
                 </td>
             </tr>
@@ -1607,7 +1540,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6" data-summary-state={summaryLoadError ? 'error' : loading.events || loading.refreshing || loading.summaries || summaryTargets.some(event => !event.stats) ? 'loading' : 'ready'}>
             {/* Header & Managed Events List - Only visible in 'list' mode */}
             {viewMode === 'list' && (
             <div className="bg-[#1a1a1a]/50 backdrop-blur-md p-8 rounded-3xl border border-white/10">
@@ -1636,7 +1569,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                         </div>
                         <button
                             onClick={handleBulkSync}
-                            disabled={loading.syncing}
+                            disabled={loading.syncing || loading.events || loading.refreshing}
                             className="flex items-center gap-2 bg-padel-green/10 hover:bg-padel-green text-padel-green hover:text-black px-8 py-3.5 rounded-2xl border border-padel-green/20 transition-all font-black uppercase tracking-widest text-[10px] disabled:opacity-30 whitespace-nowrap"
                         >
                             {loading.syncing ? <Loader2 className="animate-spin" size={16} /> : <RefreshCcw size={16} />}
@@ -1654,7 +1587,34 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                     <p>{completionLoadError}</p>
                     <button type="button" onClick={fetchInitialData} disabled={loading.events} className="rounded-lg border border-red-300/40 px-3 py-2 text-sm disabled:opacity-50">Retry</button>
                 </div>}
-                {isEventManagementModule && <p className="mb-4 text-xs text-gray-400">Events stay in this list until you mark them as completed. Completed events can be reopened at any time.</p>}
+                {summaryLoadError && <div role="alert" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300/30 p-4 text-amber-200">
+                    <p>Event totals are unavailable. {summaryLoadError}</p>
+                    <button type="button" onClick={() => setSummaryRevision(revision => revision + 1)} className="min-h-11 rounded-lg border border-amber-300/40 px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-amber-200">Retry totals</button>
+                </div>}
+                {!loading.events && !eventLoadError && !summaryLoadError && (loading.summaries || loading.refreshing) && <div role="status" aria-live="polite" className="mb-5 flex items-start gap-4 rounded-2xl border border-padel-green/25 bg-padel-green/5 p-5">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-padel-green/10 text-padel-green">
+                        <Loader2 aria-hidden="true" size={20} className="motion-safe:animate-spin" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <h4 className="text-sm font-bold text-white">Loading event totals…</h4>
+                        <p className="mt-1 text-xs leading-relaxed text-gray-400">Updating entries, payments and licence counts. You can open an event while this finishes.</p>
+                        <progress aria-label="Event totals loading" max={summaryProgress.total || 1} value={summaryProgress.total ? summaryProgress.completed : undefined} className="mt-3 block h-1.5 w-full accent-padel-green" />
+                        {summaryProgress.total > 0 && <p className="mt-2 text-[11px] text-gray-400">{summaryProgress.completed} of {summaryProgress.total} events updated</p>}
+                    </div>
+                </div>}
+                {isEventManagementModule && <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+                    <div className="space-y-1 text-xs text-gray-400">
+                        <p>Silver, Gold, Super Gold and Major events{showBronze ? ', including Bronze' : ''}.</p>
+                        <p>Events stay in this list until you mark them as completed. Completed events can be reopened at any time.</p>
+                    </div>
+                    <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-semibold text-gray-300">
+                        <input type="checkbox" role="switch" checked={showBronze}
+                            onChange={(event) => setShowBronze(event.target.checked)}
+                            className="peer sr-only" />
+                        <span aria-hidden="true" className="relative h-6 w-11 rounded-full border border-white/20 bg-white/10 peer-checked:border-padel-green peer-checked:bg-padel-green peer-focus-visible:outline-2 peer-focus-visible:outline-offset-4 peer-focus-visible:outline-padel-green after:absolute after:left-0.5 after:top-0.5 after:h-[18px] after:w-[18px] after:rounded-full after:bg-gray-300 peer-checked:after:translate-x-5 peer-checked:after:bg-black" />
+                        <span>Show Bronze events</span>
+                    </label>
+                </div>}
 
                 {/* High-Density Event List */}
                 <div className="bg-black/20 rounded-2xl border border-white/5 overflow-hidden">
@@ -1695,13 +1655,13 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                                     </tr>
                                 )}
                             </tbody>
-                            {!isEventManagementModule && !loading.events && !eventLoadError && <tfoot className="border-t border-white/10 text-xs text-white"><tr><td colSpan={5} className="px-4 py-4 font-bold">Totals for displayed events</td><td className="text-center">{summarizeEventSettlements(filteredEvents).entries}</td><td colSpan={3} className="px-3 py-4">Collected {fmtR(summarizeEventSettlements(filteredEvents).collected)} · Fees {fmtR(summarizeEventSettlements(filteredEvents).commission)} · Paid {fmtR(summarizeEventSettlements(filteredEvents).paid)} · Balance owed {fmtR(summarizeEventSettlements(filteredEvents).balanceOwed)}</td></tr></tfoot>}
+                            {!isEventManagementModule && !loading.events && !loading.summaries && !summaryLoadError && !eventLoadError && filteredEvents.every(event => event.stats) && <tfoot className="border-t border-white/10 text-xs text-white"><tr><td colSpan={5} className="px-4 py-4 font-bold">Totals for displayed events</td><td className="text-center">{summarizeEventSettlements(filteredEvents).entries}</td><td colSpan={3} className="px-3 py-4">Collected {fmtR(summarizeEventSettlements(filteredEvents).collected)} · Fees {fmtR(summarizeEventSettlements(filteredEvents).commission)} · Paid {fmtR(summarizeEventSettlements(filteredEvents).paid)} · Balance owed {fmtR(summarizeEventSettlements(filteredEvents).balanceOwed)}</td></tr></tfoot>}
                         </table>
                     </div>
                 </div>
 
                 {/* Manually completed events - Event Manager only */}
-                {isEventManagementModule && !completionLoadError && !eventLoadError && completedEvents.length > 0 && (
+                {isEventManagementModule && !loading.events && !completionLoadError && !eventLoadError && completedEvents.length > 0 && (
                     <div className="mt-4 bg-black/20 rounded-2xl border border-white/5 overflow-hidden">
                         <button
                             onClick={() => setShowCompleted(s => !s)}
@@ -1740,19 +1700,22 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
             )}
 
             {selectedEventId && viewMode !== 'list' && selectedEvent?.is_manual ? (
+                <React.Suspense fallback={<p role="status" className="py-8 text-gray-400">Loading event manager…</p>}>
                 <ManualEventRegistrations
                     variant="inline"
                     isOpen
                     event={selectedEvent}
+                    onStartRehearsal={onStartRehearsal ? () => onStartRehearsal(selectedEvent.id) : undefined}
                     onEventCancelled={(updatedEvent) => {
                         setEvents((prev) => prev.map((item) => item.id === updatedEvent.id ? { ...item, ...updatedEvent } : item));
                     }}
                     onBack={() => {
                         setSelectedEventId(null);
                         setViewMode('list');
-                        fetchInitialData();
+                        refreshAfterDetails();
                     }}
                 />
+                </React.Suspense>
             ) : selectedEventId && viewMode !== 'list' && (
                 <React.Fragment>
                 <div className="space-y-6 text-white pt-2">
@@ -1762,7 +1725,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                             onClick={() => {
                                 setSelectedEventId(null);
                                 setViewMode('list');
-                                fetchInitialData();
+                                refreshAfterDetails();
                             }}
                             className="text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-white flex items-center gap-2 transition-colors"
                         >
@@ -2458,6 +2421,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                         >
                             <h3 className="text-2xl font-black text-white mb-2">Link 4m Padel Profile</h3>
                             <p className="text-gray-400 text-sm mb-6">Linking: <span className="text-padel-green font-bold">{matchingProfile.full_name}</span></p>
+                            {loading.profiles && <p role="status" className="mb-4 text-sm text-gray-400">Loading player profiles…</p>}
                             
                             <div className="space-y-4 max-h-[400px] overflow-y-auto no-scrollbar">
                                 {systemProfiles
@@ -2519,7 +2483,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                         </div>
                     )}
             </AnimatePresence>
-            <EventBuilder
+            {isEventBuilderOpen && <React.Suspense fallback={<p role="status">Loading event editor…</p>}><EventBuilder
                 isOpen={isEventBuilderOpen}
                 editingEvent={editingCalendarEvent}
                 onClose={() => {
@@ -2527,7 +2491,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                     setEditingCalendarEvent(null);
                 }}
                 onSaved={fetchInitialData}
-            />
+            /></React.Suspense>}
         </div>
     );
 };

@@ -50,3 +50,10 @@ entrypoint = "./functions/payment-reminders/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/extract-playtomic-level/index.ts"
+
+[functions.event-finance-summary]
+enabled = true
+# The handler validates the user's token with Auth and retains caller RLS.
+# The legacy gateway verifier does not support this project's ES256/new keys.
+verify_jwt = false
+entrypoint = "./functions/event-finance-summary/index.ts"

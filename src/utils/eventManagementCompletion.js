@@ -27,9 +27,13 @@ export function managedEventStage(event, now = new Date()) {
     return end >= today ? 'In progress' : 'Awaiting completion';
 }
 
-export async function loadManagedEventCompletions(client) {
-    const rows = await fetchAllRows(() => client.from('event_management_completion')
-        .select('event_id, completed_at').order('event_id', { ascending: true }));
+export async function loadManagedEventCompletions(client, eventIds = null) {
+    if (eventIds?.length === 0) return new Map();
+    const rows = await fetchAllRows(() => {
+        let query = client.from('event_management_completion').select('event_id, completed_at');
+        if (eventIds) query = query.in('event_id', eventIds);
+        return query.order('event_id', { ascending: true });
+    });
     return new Map(rows.map((row) => [Number(row.event_id), row.completed_at]));
 }
 

@@ -186,7 +186,7 @@ const TeamPlayerRows = ({ players, children }) => (
     </div>
 );
 
-const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEventCancelled, event, variant = 'modal', backLabel = '← Back to Events List' }) => {
+const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEventCancelled, onStartRehearsal, event, variant = 'modal', backLabel = '← Back to Events List' }) => {
     const [showCancelDivision, setShowCancelDivision] = useState(false);
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
     const [cancelledEventId, setCancelledEventId] = useState(null);
@@ -3069,6 +3069,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                         />
                     )}
                     {/* Header */}
+                    {onStartRehearsal && <div className="px-6 py-3"><button type="button" onClick={onStartRehearsal}
+                        className="min-h-11 rounded-xl border border-amber-300/40 bg-amber-300/10 px-4 py-3 text-sm font-bold text-amber-200 hover:bg-amber-300/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200">
+                        Start private rehearsal
+                    </button><p className="mt-2 text-xs text-gray-400">Practise draws, scheduling and results in a private copy of this event.</p></div>}
                     <div className={`${isInline ? 'bg-[#1a1a1a]/50 backdrop-blur-md rounded-3xl border border-white/10' : ''} px-6 pt-4 ${isInline ? 'pb-0' : 'border-b border-white/10'}`}>
                         {isInline && onBack && (
                             <button

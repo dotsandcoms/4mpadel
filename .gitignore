@@ -57,6 +57,7 @@ scripts/reports/
 # Local work products and Supabase CLI state
 /.tmp/
 /outputs/
+/public/private-draw-rehearsal/
 /supabase/.temp/
 /mobile/supabase/.temp/
 /4M_Padel_Admin_UI_Concept.pptx
