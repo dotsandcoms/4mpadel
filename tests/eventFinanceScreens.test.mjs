@@ -16,7 +16,16 @@ const pay=(id,amount,method='paystack',recipient='4m')=>({id,event_id:1,amount,r
 const event={id:1,is_manual:true,event_name:'Reconciliation test',entry_fee:600,start_date:'2026-10-01',end_date:'2026-10-02',organiser_interim_payments:[{id:'request-1',amount:200,paid_at:'2026-10-02'}]};
 const tables={calendar:[event],event_registrations:[reg('a'),reg('b'),reg('c'),reg('d',{payment_status:'pending'}),reg('old',{status:'withdrawn',payment_status:'refunded'})],payments:[pay('a',600),pay('b',600,'eft'),pay('c',600,'eft','organiser'),pay('old',550)],tournament_divisions:[{id:'open',event_id:1,name:'Open',entry_fee:600}],payment_refunds:[{id:'refund-old',event_registration_id:'old',payment_id:'old',amount:550,status:'processed',metadata:{cover_type:'entry'},processed_at:'2026-10-02'}],tournament_participants:[]};
 window.__tables=tables;window.__writes=[];
-export const supabase={auth:{getUser:async()=>({data:{user:{email:'admin@example.com'}}})},functions:{invoke:async(name)=>{
+export const supabase={async rpc(name,args){
+ if(name!=='correct_manual_event_payment')throw new Error('Unexpected RPC '+name);
+ window.__rpcCalls=(window.__rpcCalls||[]).concat({name,args});
+ if(window.__failCorrection)return {error:{message:'Payment correction denied.'}};
+ const receipt=tables.payments.find(p=>p.id===args.p_payment),entry=tables.event_registrations.find(r=>r.id===args.p_registration);
+ const metadata={...receipt.metadata,collection_recipient:args.p_recipient,note:args.p_note,payment_note:args.p_note};
+ Object.assign(receipt,{payment_method:args.p_method,metadata});entry.payment_method=args.p_method;
+ window.__writes.push({table:'payments',operation:'update',values:{metadata}});
+ return {data:{paymentId:receipt.id,method:args.p_method,recipient:args.p_recipient},error:null};
+},auth:{getUser:async()=>({data:{user:{email:'admin@example.com'}}})},functions:{invoke:async(name)=>{
  if(name!=='event-cash-receipts') throw new Error('Unexpected endpoint '+name);
  return {data:{receipts:tables.payments.filter(p=>p.payment_method==='paystack').map(p=>({reference:p.reference,status:'success',amount:p.amount,currency:'ZAR'})),non_receipts:[],unresolved:[],next_offset:null}};
 }},from(table){
@@ -207,6 +216,7 @@ test('editing the existing payment recipient updates the payout without insertin
         assert.equal(writes[0].operation, 'update');
         assert.equal(await page.evaluate(() => window.__tables.payments.find(p => p.id === 'b').amount), 600);
         assert.equal(writes[0].values.metadata.collection_recipient, 'organiser');
+        assert.deepEqual(await page.evaluate(() => window.__rpcCalls.map(c=>c.name)), ['correct_manual_event_payment']);
     } finally { await page.close(); }
 });
 
@@ -258,5 +268,42 @@ test('recording a manual payout cannot overwrite a payment recorded concurrently
         await page.waitForFunction(() => window.__writes.some(w => w.table === 'calendar'));
         const rows = await page.evaluate(() => window.__tables.calendar[0].organiser_interim_payments);
         assert.deepEqual(rows.map(r => r.amount), [200, 50]);
+    } finally { await page.close(); }
+});
+
+
+test('correcting a paid manual method updates the linked entry and keeps money and status unchanged', async () => {
+    const page = await open();
+    try {
+        await clickText(page, 'Registrations List');
+        await page.evaluate(() => { const row=[...document.querySelectorAll('tr')].find(r=>r.textContent.includes('b@example.com')); [...row.querySelectorAll('button')].find(b=>b.textContent.trim()==='Edit payment').click(); });
+        await page.waitForSelector('#entry-payment-method');
+        assert.equal(await page.$eval('#entry-payment-method', el=>el.disabled), false);
+        assert.equal(await page.$eval('#entry-payment-method', el=>[...el.options].some(o=>o.value==='paystack'||o.value==='comp')), false);
+        await page.select('#entry-payment-method', 'cash');
+        await page.select('#entry-payment-recipient', 'organiser');
+        await clickText(page, 'Save payment');
+        await page.waitForFunction(()=>!document.querySelector('#entry-payment-method'));
+        const result=await page.evaluate(()=>({receipt:window.__tables.payments.find(p=>p.id==='b'),entry:window.__tables.event_registrations.find(r=>r.id==='b'),calls:window.__rpcCalls}));
+        assert.equal(result.calls.length,1);assert.equal(result.calls[0].args.p_method,'cash');
+        assert.equal(result.receipt.payment_method,'cash');assert.equal(result.entry.payment_method,'cash');
+        assert.equal(result.receipt.amount,600);assert.equal(result.receipt.status,'success');
+        assert.equal(result.receipt.reference,'MANUAL-ADMIN-b');assert.equal(result.entry.payment_status,'paid');
+    } finally { await page.close(); }
+});
+
+test('a rejected paid-method correction leaves the editor open and records no change', async () => {
+    const page = await open();
+    try {
+        await clickText(page, 'Registrations List');
+        await page.evaluate(() => { window.__failCorrection=true; const row=[...document.querySelectorAll('tr')].find(r=>r.textContent.includes('b@example.com')); [...row.querySelectorAll('button')].find(b=>b.textContent.trim()==='Edit payment').click(); });
+        await page.waitForSelector('#entry-payment-method');
+        await page.select('#entry-payment-method','cash');
+        await page.evaluate(()=>{window.__correctionWritesBefore=window.__writes.length;});
+        await clickText(page,'Save payment');
+        await page.waitForFunction(()=>window.__rpcCalls?.length===1);
+        assert.equal(await page.$eval('#entry-payment-method',el=>el.value),'cash');
+        assert.equal(await page.evaluate(()=>window.__tables.payments.find(p=>p.id==='b').payment_method),'eft');
+        assert.equal(await page.evaluate(()=>window.__writes.length-window.__correctionWritesBefore),0);
     } finally { await page.close(); }
 });

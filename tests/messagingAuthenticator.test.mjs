@@ -31,3 +31,11 @@ test('verification remains disabled for an incomplete code or while a request is
  const ready=render({factor:'verified-factor',code:'123456'});assert.doesNotMatch(ready,/<button type="submit"[^>]*disabled/);
  const busy=render({factor:'verified-factor',code:'123456',busy:true});assert.match(busy,/<input[^>]*disabled/);assert.match(busy,/<button type="submit"[^>]*disabled/);assert.match(busy,/Verifying…/);
 });
+
+
+test('setup clearly belongs to the current email and supports multiple logins in one app',()=>{
+ const html=render({accountEmail:'organiser@example.test'});assert.match(html,/Signed in as/);assert.match(html,/organiser@example.test/);assert.match(html,/Each login email needs its own setup/);assert.match(html,/same authenticator app/);
+});
+test('returning users see the exact account and first-time guidance without an MFA bypass',()=>{
+ const html=render({factor:'verified-factor',accountEmail:'second@example.test'});assert.match(html,/second@example.test/);assert.match(html,/First time setting up this email/);assert.match(html,/another email will not work/);assert.match(html,/already has an authenticator connected/);assert.doesNotMatch(html,/>Set up authenticator<\/button>/);
+});

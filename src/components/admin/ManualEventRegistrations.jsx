@@ -1,3 +1,4 @@
+import { canCorrectManualPayment } from '../../utils/manualPaymentCorrection';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -747,8 +748,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             || normalizePaymentMetadata(existingPayment?.metadata).payment_note
             || '',
         );
-        setMarkPaidMethod(reg.payment_method || existingPayment?.payment_method || 'manual');
-        setMarkPaidRecipient(collectionRecipient(existingPayment) || '');
+        setMarkPaidMethod(existingPayment?.payment_method || reg.payment_method || 'manual');
+        setMarkPaidRecipient(collectionRecipient(existingPayment) || (existingPayment?.payment_method === 'paystack' ? '4m' : ''));
     };
 
     const closeMarkPaidModal = () => {
@@ -1014,18 +1015,26 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         setMarkingId(reg.id);
         if (editingReceipt) {
             try {
-                const { error } = await supabase.from('payments').update({ metadata: {
-                    ...normalizePaymentMetadata(editingReceipt.metadata), collection_recipient: markPaidRecipient,
-                    note, payment_note: note,
-                } }).eq('id', editingReceipt.id).eq('event_id', event.id);
-                if (error) throw error;
-                await logEventActivity({ eventId: event.id, action: 'payment_recipient_updated', category: 'FINANCE',
-                    summary: `Confirmed payment received by ${markPaidRecipient === '4m' ? '4M' : 'club / organiser'}`,
-                    details: { payment_id: editingReceipt.id, collection_recipient: markPaidRecipient, note } }).catch(() => {});
+                if (canCorrectManualPayment(editingReceipt, reg)) {
+                    const { error } = await supabase.rpc('correct_manual_event_payment', {
+                        p_event: event.id, p_registration: reg.id, p_payment: editingReceipt.id,
+                        p_method: markPaidMethod, p_recipient: markPaidMethod === 'paystack' ? '4m' : markPaidRecipient, p_note: note,
+                    });
+                    if (error) throw error;
+                } else {
+                    const { error } = await supabase.from('payments').update({ metadata: {
+                        ...normalizePaymentMetadata(editingReceipt.metadata), collection_recipient: markPaidRecipient,
+                        note, payment_note: note,
+                    } }).eq('id', editingReceipt.id).eq('event_id', event.id);
+                    if (error) throw error;
+                    await logEventActivity({ eventId: event.id, action: 'payment_recipient_updated', category: 'FINANCE',
+                        summary: `Confirmed payment received by ${markPaidRecipient === '4m' ? '4M' : 'club / organiser'}`,
+                        details: { payment_id: editingReceipt.id, collection_recipient: markPaidRecipient, note } }).catch(() => {});
+                }
                 closeMarkPaidModal();
                 await load();
-                toast.success('Payment recipient updated');
-            } catch (error) { toast.error(error.message || 'Could not update payment recipient'); }
+                toast.success('Payment details updated');
+            } catch (error) { toast.error(error.message || 'Could not update payment details'); }
             finally { setMarkPaidBusy(false); setMarkingId(null); }
             return;
         }
@@ -2229,7 +2238,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         const editableReceipt = details?.payment || payments.find(p => normalizePaymentMetadata(p.metadata).registration_id === reg.id
             && ['success', 'refunded'].includes(p.status) && p.payment_type === 'event_entry_fee' && !isCompedEntryPayment(p))
             || findFinancePayment(payments, reg, refunds);
-        const canEditRecipient = editableReceipt && !isPaystackPaymentMethod(editableReceipt.payment_method)
+        const canEditRecipient = editableReceipt && (canCorrectManualPayment(editableReceipt, reg) || !isPaystackPaymentMethod(editableReceipt.payment_method))
             && !isLicensePaymentRow(editableReceipt) && !isCompedEntryPayment(editableReceipt);
         const channelLabel = details ? (
             details.isExpectedPayment ? (
@@ -4375,15 +4384,17 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                             {editingReceipt ? 'Edit payment for ' : markPaidMethod === 'comp' ? 'Comp ' : 'Mark '}{markPaidTarget.full_name}{editingReceipt ? '' : markPaidMethod === 'comp' ? '?' : ' as paid'}
                                         </h3>
                                         <p className="text-xs text-gray-400 mt-0.5">
-                                            {markPaidTarget.division} · {markPaidMethod === 'comp' ? 'Free / complimentary entry (R 0)' : fmtR(divFee(markPaidTarget))}
+                                            {markPaidTarget.division} · {markPaidMethod === 'comp' ? 'Free / complimentary entry (R 0)' : fmtR(editingReceipt?.amount ?? divFee(markPaidTarget))}
                                         </p>
                                     </div>
                                 </div>
 
-                                <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">Payment received via</label>
+                                {editingReceipt && canCorrectManualPayment(editingReceipt, markPaidTarget) && <p className="mb-4 text-xs leading-5 text-gray-400">Correct the recorded method below. The paid status and amount stay the same; your correction is recorded in the event audit.</p>}
+                                <label htmlFor="entry-payment-method" className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">Payment received via</label>
                                 <select
+                                    id="entry-payment-method"
                                     value={markPaidMethod}
-                                    disabled={Boolean(editingReceipt)}
+                                    disabled={Boolean(editingReceipt) && !canCorrectManualPayment(editingReceipt, markPaidTarget)}
                                     onChange={(e) => setMarkPaidMethod(e.target.value)}
                                     className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 mb-3"
                                 >
@@ -4391,8 +4402,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                     <option value="external">External payment provider</option>
                                     <option value="manual">Other manual payment</option>
                                     <option value="cash">Cash</option>
-                                    <option value="paystack">Paystack (offline fix)</option>
-                                    <option value="comp">Comp (free entry)</option>
+                                    {(!editingReceipt || editingReceipt.payment_method === 'paystack') && <option value="paystack">Paystack (offline fix)</option>}
+                                    {!editingReceipt && <option value="comp">Comp (free entry)</option>}
                                 </select>
 
                                 {!['comp', 'paystack'].includes(markPaidMethod) && <>

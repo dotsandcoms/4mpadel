@@ -66,6 +66,7 @@ alter default privileges in schema public revoke all on tables from public,anon,
 grant select,insert,update,delete on public.push_outbox to anon,authenticated;
 create policy account_must_exist on public.push_outbox for all to authenticated using(true) with check(true);
 \ir ../supabase/migrations/20261110101140_notification_inbox_access_contract.sql
+\ir ../supabase/migrations/20261111082951_messaging_super_admin_event_intervention.sql
 
 create function pg_temp.expect(ok boolean,label text) returns void language plpgsql as $$begin if ok is distinct from true then raise exception 'FAIL: %',label; end if; end$$;
 create function pg_temp.reject(query text,pattern text) returns void language plpgsql as $$begin
@@ -155,14 +156,14 @@ update public.admin_sidebar_permissions set role='super_admin' where email='staf
 set local role authenticated;
 select pg_temp.login(4,'aal2');
 select public.messaging_api('pin',jsonb_build_object('conversationId',:'announcements','messageId',:'announcement'::jsonb->>'id'));
-select pg_temp.reject($q$select public.messaging_api('open_event','{"eventId":200}')$q$,'Register');
+select pg_temp.expect(jsonb_array_length(public.messaging_api('open_event','{"eventId":200}'))=2,'Super Admin can open an unrelated event without an assignment');
 select pg_temp.expect(public.messaging_event_directory('4M Open')->0->>'title'='4M Open','server event search finds authorised event');
 select pg_temp.expect(public.messaging_event_analytics(100)->'summary'->>'announcements'='1','dashboard reads actual announcement count');
 select pg_temp.expect(public.messaging_event_analytics(100)->'announcements'->0->'sender'->>'role'='admin','announcement analytics identifies verified publisher role');
 select pg_temp.expect(not (public.messaging_event_analytics(100)->'announcements'->0->'sender' ? 'email'),'announcement publisher DTO excludes contact fields');
 select pg_temp.expect(public.messaging_event_analytics(100)->'announcements'->0->'sender' ? 'image','publisher photo uses existing authorised sender data');
 select pg_temp.expect(public.messaging_event_analytics(100)->'announcements'->0->>'body'='Check-in at 08:00','event analytics scoped announcement body');
-select pg_temp.reject($q$select public.messaging_event_analytics(200)$q$,'access');
+select pg_temp.expect(public.messaging_event_analytics(200)->'summary'->>'announcements'='0','Super Admin can inspect another event without mixing analytics');
 reset role;
 select pg_temp.login(2);
 -- Simulate a client-controlled legacy flag: it must not confer discussion access.
@@ -345,6 +346,7 @@ select pg_temp.expect(not exists(select 1 from pg_proc p join pg_namespace n on 
 \ir messaging-divisions.sql
 \ir messaging-notifications.sql
 \ir messaging-groups.sql
+\ir messaging-super-admin.sql
 \ir notification-read-badges.sql
 -- Account deletion erases authored content before the account reference disappears.
 delete from auth.users where id='00000000-0000-0000-0000-000000000002';

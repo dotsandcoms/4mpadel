@@ -428,3 +428,4 @@ select pg_temp.reject($q$update public.event_registrations set registered_by='ac
 select pg_temp.reject($q$update public.event_registrations set payment_status='paid' where id='80000000-0000-0000-0000-000000000041'$q$,'legacy retry cannot manufacture a paid entry');
 reset role;
 select 'Payment security DB: '||count(*)||' assertions passed (legacy own-entry retries)' from checks;
+\ir payment-method-correction.sql

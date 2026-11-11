@@ -26,17 +26,21 @@ export default function EventMessaging() {
     const directoryEpoch = useRef(0), audienceEpoch = useRef(0);
     const [targetDivisions, setTargetDivisions] = useState(null), [audience, setAudience] = useState(null), [audienceLoading, setAudienceLoading] = useState(false);
     const [reports, setReports] = useState([]), [entrants, setEntrants] = useState([]), [approval, setApproval] = useState('');
+    const [accountEmail, setAccountEmail] = useState(''), [authReady, setAuthReady] = useState(false);
     const [factor, setFactor] = useState(''), [secret, setSecret] = useState(''), [qrCode, setQrCode] = useState(''), [code, setCode] = useState(''), [verified, setVerified] = useState(false);
     const version = useRef(0), alive = useRef(true), sending = useRef(false), retry = useRef(null), owner = useRef(null);
     const conversation = channels.find(c => c.kind === kind);
-    const clear = useCallback(() => { version.current++; directoryEpoch.current++; audienceEpoch.current++; setAudience(null); setTargetDivisions(null); setAnalytics(null); setPage(null); setBody(''); setReply(null); setReports([]); setSupport([]); setEntrants([]); setChannels([]); setReview(false); setSecret(''); setQrCode(''); setCode(''); retry.current = null; }, []);
+    const clear = useCallback(() => { version.current++; directoryEpoch.current++; audienceEpoch.current++; setAudience(null); setTargetDivisions(null); setAnalytics(null); setPage(null); setBody(''); setReply(null); setReports([]); setSupport([]); setEntrants([]); setChannels([]); setReview(false); setSecret(''); setQrCode(''); setCode(''); setFactor(''); setVerified(false); setAuthReady(false); setBusy(false); setError(''); setFeedback(''); retry.current = null; }, []);
     const load = useCallback(async () => {
         const epoch = ++version.current;
+        setAuthReady(false);
         try {
             const s = await rpc('status');
 
-            const [assurance, factors] = await Promise.all([supabase.auth.mfa.getAuthenticatorAssuranceLevel(), supabase.auth.mfa.listFactors()]);
+            const [assurance, factors, session] = await Promise.all([supabase.auth.mfa.getAuthenticatorAssuranceLevel(), supabase.auth.mfa.listFactors(), supabase.auth.getSession()]);
+            if (assurance.error || factors.error || session.error) throw new Error('Could not check this account’s authenticator. Refresh and try again.');
             if (!alive.current || epoch !== version.current) return;
+            setAccountEmail(session.data?.session?.user?.email || ''); setAuthReady(true);
             setStatus(s); if (!s.supportAllowed) setSupport([]); setError('');
             setVerified(assurance.data?.currentLevel === 'aal2'); setFactor(factors.data?.totp?.find(f => f.status === 'verified')?.id || '');
         } catch (e) { if (alive.current && epoch === version.current) setError(e.message); }
@@ -44,7 +48,7 @@ export default function EventMessaging() {
     useEffect(() => {
         alive.current = true;
         const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-            if (owner.current !== session?.user.id) { owner.current = session?.user.id; clear(); setEvents([]); setStatus(null); setEventId(''); setWorkspace('events'); }
+            if (owner.current !== session?.user.id) { owner.current = session?.user.id; setAccountEmail(session?.user.email || ''); clear(); setEvents([]); setStatus(null); setEventId(''); setWorkspace('events'); }
             setTimeout(() => { if (alive.current) void load(); }, 0);
         });
         void load();
@@ -141,23 +145,24 @@ export default function EventMessaging() {
         finally { sending.current = false; if (alive.current) setBusy(false); }
     };
     const verify = async () => {
+        const verifyingOwner = owner.current;
         setError(''); setBusy(true);
         try {
             const result = await supabase.auth.mfa.challengeAndVerify({ factorId: factor, code: code.trim() });
             if (result.error) throw new Error('The authenticator code could not be verified.');
-            if (alive.current) { setVerified(true); setSecret(''); setQrCode(''); setCode(''); void load(); }
-        } catch (e) { if (alive.current) setError(e.message); }
-        finally { if (alive.current) setBusy(false); }
+            if (alive.current && owner.current === verifyingOwner) { setVerified(true); setSecret(''); setQrCode(''); setCode(''); void load(); }
+        } catch (e) { if (alive.current && owner.current === verifyingOwner) setError(e.message); }
+        finally { if (alive.current && owner.current === verifyingOwner) setBusy(false); }
     };
     const enrol = async () => {
-        const epoch = version.current;
+        const enrollingOwner = owner.current, epoch = version.current;
         setBusy(true); setError('');
         try {
             const { data, error: issue } = await supabase.auth.mfa.enroll({ factorType: 'totp', issuer: '4M Padel', friendlyName: `4M messaging ${Date.now()}` });
             if (issue) throw new Error('Could not set up an authenticator.');
             if (alive.current && epoch === version.current) { setFactor(data.id); setSecret(data.totp.secret); setQrCode(data.totp.qr_code); }
-        } catch (e) { if (alive.current) setError(e.message); }
-        finally { if (alive.current) setBusy(false); }
+        } catch (e) { if (alive.current && owner.current === enrollingOwner) setError(e.message); }
+        finally { if (alive.current && owner.current === enrollingOwner) setBusy(false); }
     };
     const loadReports = async () => { const epoch = version.current; try { const rows = await rpc('reports', { conversationId: conversation.id }); if (alive.current && epoch === version.current) setReports(rows); } catch (e) { if (alive.current && epoch === version.current) setError(e.message); } };
     const loadEntrants = async () => { const epoch = version.current; try { const rows = await rpc('entrants', { conversationId: conversation.id }); if (alive.current && epoch === version.current) setEntrants(rows); } catch (e) { if (alive.current && epoch === version.current) setError(e.message); } };
@@ -171,7 +176,8 @@ export default function EventMessaging() {
 
             {status.needsBirthDate && <div className="rounded-2xl border border-white/10 p-5 space-y-3"><h3 className="font-semibold">Complete your private profile</h3><p className="text-sm text-gray-400">Add your date of birth before publishing messages. It stays private and is used for messaging eligibility.</p><a className={`${button} inline-block`} href="/profile">Update my profile</a></div>}
             {!status.rulesAccepted && <div className="rounded-2xl border border-white/10 p-5 space-y-3"><h3 className="font-semibold">Messaging community rules</h3><p className="text-sm text-gray-400">Respect players. Harassment, threats, sexual exploitation, scams, spam and sharing private contact or identity details are prohibited. Event messages are visible to eligible players and authorised organisers. Reports are reviewed by the relevant moderation team.</p><button type="button" className={button} disabled={busy} onClick={() => void act('accept_rules', { version: '2026-11-05' }, 'Messaging rules accepted.')}>Accept messaging rules</button></div>}
-            {!verified && <MessagingAuthenticator factor={factor} secret={secret} qrCode={qrCode} code={code} busy={busy} onSetup={() => void enrol()} onCode={setCode} onVerify={() => void verify()} buttonClass={button} fieldClass={field} />}
+            {!verified && !authReady && <p role="status" className="text-sm text-gray-400">Checking authenticator setup for your signed-in account…</p>}
+            {!verified && authReady && <MessagingAuthenticator accountEmail={accountEmail} factor={factor} secret={secret} qrCode={qrCode} code={code} busy={busy} onSetup={() => void enrol()} onCode={setCode} onVerify={() => void verify()} buttonClass={button} fieldClass={field} />}
             {verified && status.groupsEnabled && <nav className="em-tabs" aria-label="Messaging workspace"><button type="button" aria-pressed={workspace === 'events'} onClick={() => setWorkspace('events')}>Event messages</button><button type="button" aria-pressed={workspace === 'players'} onClick={() => setWorkspace('players')}>Player messages</button></nav>}
             {verified && workspace === 'players' && status.groupsEnabled && <PlayerMessaging key={owner.current} rpc={rpc} owner={owner.current} />}
             {verified && workspace === 'events' && <EventMessagingWorkspace events={events} selected={analytics?.event || events.find(event => String(event.id) === eventId)} directoryLoading={directoryLoading}
