@@ -136,7 +136,15 @@
       "@config-plugins/react-native-blob-util",
       "@config-plugins/react-native-pdf",
       "expo-maps",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow 4M Padel to use your location to find nearby padel clubs.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

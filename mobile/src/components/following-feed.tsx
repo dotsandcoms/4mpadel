@@ -3,11 +3,11 @@ import { ActivityIndicator, AppState, Pressable, Text, View } from 'react-native
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
-import { feedActors, feedCountdown, feedDeadline, feedEventPhoto, feedMatchResult, feedParticipants, feedScheduleLabel, feedScores, feedTime, type FeedItem, type FeedFilter, type FeedPlayer } from '@/lib/following-feed';
+import { feedActors, feedCountdown, feedDeadline, feedEventPhoto, feedMatchResult, feedParticipants, feedRankingChange, feedScheduleLabel, feedScores, feedTime, type FeedItem, type FeedFilter, type FeedPlayer } from '@/lib/following-feed';
 import { playerCountryFlag } from '@/lib/player-hub';
 import type { useFollowingFeed } from '@/hooks/use-following-feed';
 import { HomeAccordion } from '@/components/home-accordion';
-import { lightBrand as b } from '@/theme/tokens';
+import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 const labels = { entry: 'TOURNAMENT ENTRY', result: 'MATCH RESULT', profile: 'PLAYER UPDATE', ranking: 'RANKING UPDATE', match_live: 'MATCH STARTED', tournament: 'TOURNAMENT UPDATE' };
 const icons = { entry: 'calendar-outline', result: 'trophy-outline', profile: 'person-outline', ranking: 'trending-up-outline', match_live: 'play-circle-outline', match_schedule: 'time-outline', tournament: 'calendar-outline' } as const;
 const card = { backgroundColor: b.elevated, borderColor: b.edge, borderWidth: 1, borderRadius: 16, padding: 16 } as const;
@@ -42,7 +42,8 @@ export const ActivityCard = memo(function ActivityCard({ item }: { item: FeedIte
   const result = item.path === '/match-result' ? feedMatchResult(item) : null;
   const open = () => { if (item.path === '/match-result') { if (result) router.push({ pathname: '/match-result', params: { match: result, context: 'following' } }); } else router.push(item.path as Href); };
   const headline = score && score.winner !== null ? `${score.teams[score.winner ?? 0]} ${item.payload.result_type === 'walkover' ? 'advanced by walkover' : 'won'}` : item.kind === 'tournament' && item.payload.update_type === 'details' && typeof item.payload.event_name === 'string' ? item.payload.event_name : item.title;
-  const rank = item.payload.rank, previousRank = item.payload.before_rank, points = item.payload.points;
+  const ranking = feedRankingChange(item);
+  const rank = ranking?.rank, previousRank = ranking?.beforeRank, points = ranking?.points;
   const pointNumber = typeof points === 'number' && Number.isFinite(points) ? points : null;
   const actors = feedActors(item), participants = feedParticipants(item), eventPhoto = feedEventPhoto(item), deadline = feedDeadline(item);
   const person = actors[0];
@@ -78,9 +79,12 @@ export const ActivityCard = memo(function ActivityCard({ item }: { item: FeedIte
       {actors.length > 1 && <Portrait player={actors[1]} size={32} />}
     </View>}
     {!!deadline && <DeadlinePanel deadline={deadline} />}
-    {item.kind === 'ranking' && <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderColor: b.edge, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+    {ranking && <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderColor: b.edge, gap: 8 }}>
+      <Text style={{ color: b.muted, fontSize: 11 }}>{ranking.label} · at update</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
       {rank != null && <><Text style={{ color: b.muted, fontSize: 18, fontWeight: '600' }}>{previousRank != null ? `#${String(previousRank).replace(/^#/, '')}` : '—'}</Text><Ionicons name="arrow-forward" size={17} color={b.faint} /><Text style={{ color: b.accent, fontSize: 22, fontWeight: '800' }}>#{String(rank).replace(/^#/, '')}</Text></>}
       {pointNumber !== null && <Text style={{ marginLeft: 'auto', color: b.muted, fontSize: 12 }}>{pointNumber.toLocaleString('en-ZA')} points</Text>}
+      </View>
     </View>}
   </Pressable>;
 });
@@ -96,7 +100,7 @@ export function FollowingPreview({ state }: { state: State }) {
   const badge = !count && (state.loading || state.error) ? undefined : [{ label: `${count}${state.hasMore ? '+' : ''}`, count: true }];
   return <HomeAccordion title="Following" open={open} onToggle={() => setOpen(value => !value)} badges={badge} showBadgesWhenOpen>
     <View style={{ marginBottom: 12, gap: 10 }}>
-      {state.loading ? <View style={{ ...card, minHeight: 90, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={b.accent} accessibilityLabel="Loading Following updates" /></View> : <>{state.error && <FeedError message={state.error} onRetry={() => void state.refresh()} />}{state.items.slice(0, 3).map(item => <ActivityCard key={item.id} item={item} />)}{!state.items.length && !state.error && <FeedEmpty signedIn={!!state.userId} />}</>}
+      {state.loading ? <View style={{ ...card, minHeight: 90, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={loadingBlue} accessibilityLabel="Loading Following updates" /></View> : <>{state.error && <FeedError message={state.error} onRetry={() => void state.refresh()} />}{state.items.slice(0, 3).map(item => <ActivityCard key={item.id} item={item} />)}{!state.items.length && !state.error && <FeedEmpty signedIn={!!state.userId} />}</>}
       <Pressable accessibilityRole="button" accessibilityLabel="View all Following updates" onPress={() => router.push('/following')} style={{ minHeight: 44, minWidth: 70, alignSelf: 'flex-end', alignItems: 'flex-end', justifyContent: 'center' }}><Text style={{ color: b.accent, fontSize: 12, fontWeight: '700' }}>View all →</Text></Pressable>
     </View>
   </HomeAccordion>;

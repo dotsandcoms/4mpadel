@@ -7,7 +7,8 @@ import { useMessagingInbox } from '@/components/messaging/messaging-provider';
 import { ChatAvatar, ChatButton, ChatNotice } from '@/components/messaging/ui';
 import { ErrorBanner } from '@/components/error-banner';
 import { usePrivateMessagingScreen } from '@/hooks/use-private-messaging-screen';
-import { lightBrand as b } from '@/theme/tokens';
+import { HomeAction } from '@/components/home-action';
+import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 type Player = { id: string; name: string; image_url: string | null; home_club: string | null };
 export default function NewMessage() {
   const { playerId } = useLocalSearchParams<{ playerId?: string }>(), router = useRouter(), inbox = useMessagingInbox(), active = usePrivateMessagingScreen();
@@ -46,6 +47,7 @@ export default function NewMessage() {
     finally { if (current === epoch.current) setBusy(false); }
   }, [selected, busy, body, inbox.owner, inbox.refresh, router]);
   return <View style={{ flex: 1, backgroundColor: b.page, padding: 20 }}><Stack.Screen options={{ headerShown: true, headerBackButtonDisplayMode: 'minimal', title: 'New message', headerTintColor: b.premium, headerStyle: { backgroundColor: b.page }, headerShadowVisible: false }} />
+    {active && inbox.status?.groupsEnabled && inbox.status.interactive && !selected && <View style={{ marginBottom: 16 }}><HomeAction label="New group chat" icon="people" kind="outline" fullWidth onPress={() => router.push('/messages/group')} /></View>}
     {!active ? null : !inbox.status?.interactive ? <><ChatNotice title="A quick check before you chat">Verify your profile and accept the community rules before sending a message request.</ChatNotice><ChatButton onPress={() => router.push('/settings/messaging')}>Messaging setup</ChatButton></> : selected ? <View style={{ gap: 20 }}>
       <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}><ChatAvatar name={selected.name} image={selected.image_url} /><View style={{ flex: 1 }}><Text style={{ fontSize: 20, fontWeight: '700', color: b.premium }}>{selected.name}</Text><Text style={{ color: b.muted }}>{selected.home_club || '4M Padel player'}</Text></View><Pressable accessibilityRole="button" onPress={() => setSelected(null)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: b.accent }}>Change</Text></Pressable></View>
       <Text style={{ color: b.muted, fontSize: 15, lineHeight: 23 }}>Send a short introduction. {selected.name.split(' ')[0]} decides whether to accept before the conversation continues.</Text>
@@ -53,7 +55,7 @@ export default function NewMessage() {
       <Text style={{ color: b.muted, textAlign: 'right', fontSize: 12 }}>{Array.from(body).length}/300</Text>
       <ChatButton disabled={busy || !body.trim()} onPress={() => void send()}>{busy ? 'Sending…' : 'Send request'}</ChatButton>
     </View> : <><TextInput accessibilityLabel="Find a player by name" placeholder="Search players by name" placeholderTextColor={b.placeholder} value={query} onChangeText={setQuery} style={{ minHeight: 50, backgroundColor: b.elevated, color: b.premium, borderRadius: 14, paddingHorizontal: 16, borderWidth: 1, borderColor: b.edge }} />
-      {loading && <ActivityIndicator style={{ margin: 20 }} color={b.accent} />}
+      {loading && <ActivityIndicator style={{ margin: 20 }} color={loadingBlue} />}
       <FlatList keyboardShouldPersistTaps="handled" data={players} keyExtractor={p => p.id} renderItem={({ item }) => <Pressable accessibilityRole="button" onPress={() => setSelected(item)} style={{ flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 16, borderBottomWidth: 1, borderColor: b.edge }}><ChatAvatar name={item.name} image={item.image_url} /><View><Text style={{ color: b.premium, fontSize: 16, fontWeight: '600' }}>{item.name}</Text><Text style={{ color: b.muted, marginTop: 4 }}>{item.home_club || '4M Padel player'}</Text></View></Pressable>} ListEmptyComponent={loading ? null : <ChatNotice title="Find your next playing partner">Search by name to send a private introduction. Your phone number and email stay private.</ChatNotice>} /></>}
     <ErrorBanner message={active ? error : null} />
   </View>;

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Keyboard, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Image } from 'expo-image';
 import { supabase } from '@/lib/supabase';
-import { lightBrand as brand } from '@/theme/tokens';
+import { loadingBlue, lightBrand as brand } from '@/theme/tokens';
 import { Chip } from './event-ui';
 import { type Division, type EventDetail } from '@/lib/events';
 import { entryFee, formatMoney, registrationState } from '@/lib/event-rules';
@@ -41,7 +41,7 @@ function DivisionOption({ event, division: d, selected, registered, value, onTog
 }) {
   const [expanded, setExpanded] = useState(true);
   const closed = registrationState(event, d) !== 'open';
-  return <View style={{ borderWidth: 1, borderColor: selected ? brand.padel : brand.edge, backgroundColor: brand.elevated, borderRadius: 16, padding: 16, gap: 14 }}>
+  return <View style={{ borderWidth: 1, borderColor: selected ? brand.accent : brand.edge, backgroundColor: brand.elevated, borderRadius: 16, padding: 16, gap: 14 }}>
     <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
       <Pressable accessibilityRole="checkbox" accessibilityLabel={`Select ${d.name}`} accessibilityState={{ checked: selected, disabled: busy || closed || registered || lockEntry }} disabled={busy || closed || registered || lockEntry} onPress={onToggle} style={{ minHeight: 44, minWidth: 32, justifyContent: 'center' }}><Text style={{ fontSize: 22, color: selected ? brand.accent : brand.muted }}>{selected ? '☑' : '☐'}</Text></Pressable>
       <Pressable accessibilityRole="button" accessibilityState={{ expanded: selected && expanded }} onPress={() => selected ? setExpanded(v => !v) : !registered && !closed && !busy && onToggle()} style={{ flex: 1, gap: 5 }}>
@@ -192,7 +192,7 @@ function PartnerSearch({ value, onChange, profileId, eventId, divisionId, divisi
     </View> : <>
       <TextInput accessibilityLabel="Search partner name or email" placeholder="Search partner name or email" placeholderTextColor={brand.faint} value={query} onChangeText={q => { seq.current++; setSearching(false); setQuery(q); setResults([]); setError(''); }} autoCapitalize="none" autoCorrect={false} editable={!busy} style={{ color: brand.premium, borderWidth: 1, borderColor: brand.edge, borderRadius: 10, padding: 12 }} />
       {searching && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <ActivityIndicator size="small" color={brand.accent} />
+        <ActivityIndicator size="small" color={loadingBlue} />
         <Text accessibilityLiveRegion="polite" style={{ color: brand.muted, fontSize: 12 }}>Searching partners…</Text>
       </View>}
       {query.trim().length < 2 && <Text style={{ color: brand.muted, fontSize: 12 }}>Type at least 2 characters to find your partner.</Text>}

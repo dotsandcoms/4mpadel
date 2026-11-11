@@ -76,7 +76,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     timer = setTimeout(repair, 15000 + Math.random() * 15000);
     return () => { alive = false; epoch.current++; data.subscription.unsubscribe(); app.remove(); notification.remove(); clearTimeout(timer); if (signalTimer.current) clearTimeout(signalTimer.current); };
   }, [refresh, signal]);
-  const topics = rows.map(row => row.id).sort().join(',');
+  // Private/group sends signal the own-account topic; only events need shared thread topics.
+  const topics = rows.filter(row => row.kind === 'event_announcements' || row.kind === 'event_discussion').map(row => row.id).sort().join(',');
   useEffect(() => {
     if (!owner || !status?.enabled) return;
     let cancelled = false;

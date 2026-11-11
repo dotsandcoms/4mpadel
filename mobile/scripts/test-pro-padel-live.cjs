@@ -9,6 +9,7 @@ function load(file, overrides = {}) {
   const originalRequire = overrides.require || (() => ({}));
   const requireFn = name => {
     if (name.includes('padel-api.')) return load('supabase/functions/_shared/padel-api.mjs', { fetch: overrides.fetch || fetch, crypto, TextEncoder, setTimeout });
+    if (name.includes('padel-prediction.')) return load('supabase/functions/_shared/padel-prediction.mjs');
     const dependency = originalRequire(name);
     return dependency.createClient ? { ...dependency, createClient: (...args) => {
       const client = dependency.createClient(...args);
@@ -295,12 +296,12 @@ test('official FIP coach lookup is distinct from Padel API player data', async (
   assert.equal(body.sourceUrl, 'https://www.padelfip.com/player/richard-ashforth/');
 });
 
-test('prediction proxy validates teams and returns only model probabilities', async () => {
+test('prediction proxy verifies returned players and projects only probabilities and public model identity', async () => {
   let handler, call;
   load('supabase/functions/pro-padel-explore/index.ts', {
     Deno: { env: { get: key => key }, serve: fn => { handler = fn; } },
     require: () => ({ createClient: () => ({ auth: { getUser: async () => ({ data: { user: { id: 'model-user' } } }) } }) }),
-    fetch: async (url, options) => { call = { url: String(url), method: options.method, body: JSON.parse(options.body) }; return Response.json({ probability: { team_1: 56.44, team_2: 43.56 }, elo_diff: 23, players: { private: true } }); },
+    fetch: async (url, options) => { call = { url: String(url), method: options.method, body: JSON.parse(options.body) }; const person = id => ({id,self:`/api/players/${id}`,category:'men',email:'must-not-be-projected@example.test'}); return Response.json({ probability: { team_1: 56.44, team_2: 43.56 }, elo_diff: 23, played_at:'2026-09-13',players:{team_1:[person(65),person(66)],team_2:[person(114),person(115)]} }); },
   });
   const request = body => ({ method: 'POST', headers: new Headers(), json: async () => body });
   assert.equal((await handler(request({ kind: 'prediction', id: 12294, team_1: [66, 66], team_2: [115, 114], played_at: '2026-09-13' }))).status, 400);
@@ -313,6 +314,25 @@ test('prediction proxy validates teams and returns only model probabilities', as
   assert.equal(body.probability.team_1, 56.44);
   assert.equal(body.eloDiff, 23);
   assert.equal('players' in body, false);
+  assert.deepEqual(body.teams.team_1,[65,66]);assert.equal(body.referenceDate,'2026-09-13');assert.equal(body.source,'padel-api');assert.equal(body.model,'elo');assert.equal(body.category,'men');
+});
+
+test('provider simulation for Alfonso/Libaak stays 95.38 and rejects any mismatch in subjects or date',()=>{
+  const {projectPadelPrediction}=load('supabase/functions/_shared/padel-prediction.mjs');
+  const player=id=>({id,self:`/api/players/${id}`,category:'men'});
+  const input={team_1:[65,66],team_2:[18,93],played_at:'2026-11-08'};
+  const payload={probability:{team_1:95.38,team_2:4.62},elo_diff:263,played_at:'2026-11-08',players:{team_1:[player(66),player(65)],team_2:[player(93),player(18)]}};
+  assert.equal(projectPadelPrediction(payload,input).probability.team_1,95.38);
+  for(const bad of [
+    {...payload,players:{...payload.players,team_2:[player(17),player(98)]}},
+    {...payload,players:{team_1:payload.players.team_2,team_2:payload.players.team_1}},
+    {...payload,played_at:'2026-11-09'},
+    {...payload,probability:{team_1:101,team_2:-1}},
+    {...payload,probability:{team_1:95.38,team_2:20}},
+    {...payload,players:{...payload.players,team_2:[{...player(18),self:'/api/pairs/18'},player(93)]}},
+    {...payload,players:{...payload.players,team_2:[{...player(18),category:'women'},player(93)]}},
+    {...payload,players:{private:true}},
+  ]) assert.throws(()=>projectPadelPrediction(bad,input),/could not be matched/);
 });
 
 test('missing deployed explorer reports unavailable coverage instead of a retryable feed error', async () => {
@@ -432,4 +452,31 @@ test('saved live status never queues a match-start push',async()=>{
  const {refreshProMatchAlerts}=load('supabase/functions/deliver-push/pro-match-alerts.ts');
  const query={select(){return this;},eq(){return this;},is(){return this;},gt(){return this;},limit:async()=>({data:[{match_id:4}]})};
  await refreshProMatchAlerts({from:()=>query,rpc:()=>assert.fail('Historical live status cannot notify')},'server-secret',async()=>Response.json({data:[{id:4,status:'live'}],meta:{last_page:1}},{headers:{'x-4m-cache':'stale'}}));
+});
+
+test('new player and pair insight routes validate identity namespaces and authenticate every request', async () => {
+  let handler; const paths=[];
+  load('supabase/functions/pro-padel-explore/index.ts', {
+    Deno: { env: { get: key => key }, serve: fn => { handler=fn; } },
+    require: () => ({ createClient: () => ({ auth: { getUser: async () => ({ data: { user: { id: 'insight-user' } } }) } }) }),
+    fetch: async url => { paths.push(new URL(url).pathname); return Response.json({ id: 65, matches_played: 4 }); },
+  });
+  const request = body => ({method:'POST',headers:new Headers(),json:async()=>body});
+  for(const [kind,id,path] of [['player-rivals',65,'players/65/rivals'],['player-form',65,'players/65/form'],['pair-rivals','1-2','pairs/1-2/rivals'],['pair-synergy','1-2','pairs/1-2/synergy']]) {
+    assert.equal((await handler(request({kind,id}))).status,200); assert.equal(paths.at(-1),`/api/${path}`);
+  }
+  for(const [kind,id] of [['pair-synergy',65],['player-rivals','1-2'],['pair-rivals','1-2/../../../private']]) assert.equal((await handler(request({kind,id}))).status,400);
+});
+
+test('portrait batch endpoint validates professional IDs and projects no private cached fields',async()=>{
+ let handler,reads=0;
+ load('supabase/functions/pro-padel-explore/index.ts',{
+  Deno:{env:{get:key=>key},serve:fn=>handler=fn},
+  require:()=>({createClient:()=>({auth:{getUser:async()=>({data:{user:{id:'portrait-user'}}})},rpc:async(name,args)=>{assert.equal(name,'cached_padel_players');reads++;assert.deepEqual(Array.from(args.p_ids),[1,2,3]);return{data:[{id:1,self:'/api/players/1',photo_url:'https://example.test/1.jpg',nationality:'ES',email:'private@test',token:'never-expose'},{id:2,self:'/api/matches/2',photo_url:'https://wrong-namespace.test/a'},{id:3,self:'/api/players/3',photo_url:'http://bad.test/a',nationality:'bad'},{id:999,photo_url:'https://example.test/999.jpg'}]};}})}),fetch:()=>assert.fail('Pictures must use the shared public-player cache, never the provider')
+ });
+ const request=body=>({method:'POST',headers:new Headers(),json:async()=>body});
+ for(const ids of [[],[0],[1,'2'],Array.from({length:33},(_,i)=>i+1)])assert.equal((await handler(request({kind:'player-portraits',player_ids:ids}))).status,400);
+ const response=await handler(request({kind:'player-portraits',player_ids:[3,2,1,1]}));assert.equal(response.status,200);
+ const value=await response.json();assert.equal(value.players.length,2);assert.equal(value.players[0].id,1);assert.equal(value.players[1].photo_url,null);assert.doesNotMatch(JSON.stringify(value),/email|token|999/);
+ assert.equal((await handler(request({kind:'player-portraits',player_ids:[1,2,3]}))).status,200);assert.equal(reads,1);
 });

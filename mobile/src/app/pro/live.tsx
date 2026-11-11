@@ -4,7 +4,7 @@ import { ProTournamentScreen } from '@/components/pro-tournament-screen';
 import { playerCountryFlag, searchProPlayers } from '@/lib/player-hub';
 import { fetchLiveMatches, fetchMatchDetails, fetchTournamentDetails, fetchTournamentMatches, withLiveScores, type MatchDetails } from '@/lib/pro-padel-live';
 import { fetchProSnapshot, proDate, proRound, type ProPlayer, type ProTournament } from '@/lib/pro-padel';
-import { lightBrand as b } from '@/theme/tokens';
+import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 import { startForegroundTask } from '@/lib/foreground-task';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -182,7 +182,7 @@ function LiveMatchesScreen() {
     {eventMode && event && <Text style={{ color: b.muted, lineHeight: 21 }}>{[event.venue, event.location, event.country, event.startDate && event.endDate ? `${labelDate(event.startDate)} – ${labelDate(event.endDate)}` : null].filter(Boolean).join(' · ')}</Text>}
     <Text style={{ color: b.muted, lineHeight: 21 }}>{eventMode ? `${count} matches · ${counts.live} live · ${counts.upcoming} upcoming · ${counts.results} results. Open a match for set statistics and point coverage.` : 'Follow the scores as they happen. Open a match for set statistics and point-by-point coverage.'}</Text>
     <Pressable accessibilityRole="button" onPress={() => void load()} style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 9 }}><Ionicons name="refresh" size={17} color={b.accent} /><Text style={{ color: b.accent, fontWeight: '700' }}>Refresh scores</Text></Pressable>
-    {loading && <ActivityIndicator color={b.accent} />}
+    {loading && <ActivityIndicator color={loadingBlue} />}
     {!!error && <Text accessibilityRole="alert" style={{ color: b.danger }}>{error}</Text>}
     {eventMode && !complete && <Text style={{ color: b.danger, fontSize: 12 }}>Some match pages could not be loaded. Refresh to try again.</Text>}
     {eventMode && rows.length > 0 && <>

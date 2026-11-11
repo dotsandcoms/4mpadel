@@ -35,6 +35,8 @@ test('push routes reject external, auth and prototype payloads', () => {
   assert.equal(native.pathFromNotificationData({ type: '__proto__' }), null);
   assert.equal(native.pathFromNotificationData({ type: 'event_cancelled' }), '/calendar');
   assert.equal(native.pathFromNotificationData({ path: '/(tabs)/calendar' }), '/calendar');
+  assert.equal(native.pathFromNotificationData({ path: '/(tabs)' }), '/(tabs)');
+  for (const path of ['/(tabs)?redirect=evil', '/(tabs)/../reset-password', '/(tabs)//']) assert.equal(native.pathFromNotificationData({ path }), null);
 });
 test('starred match alerts open only valid native match paths', () => {
   assert.equal(native.pathFromNotificationData({ path: '/pro/match/13744' }), '/pro/match/13744');

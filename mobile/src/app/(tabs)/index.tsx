@@ -1,685 +1,166 @@
-import { compareEventDates } from '@/lib/event-rules';
-import { SymbolView } from 'expo-symbols';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { Observe } from 'expo-observe';
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
-import {
-  AppState,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  Text,
-  View,
-} from 'react-native';
-import Animated, {
-  Easing,
-  cancelAnimation,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
+import { HomeShortcuts } from '@/components/home-shortcuts';
+import { type Href, useRouter } from 'expo-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-import { Notice } from '@/components/events/event-ui';
-import { FadeUp } from '@/components/fade-up';
-import { HomeAccordion } from '@/components/home-accordion';
-import {
-  EmptyBlock,
-  EventRow,
-  FeaturedCard,
-  MatchRow,
-  NextMatchCard,
-  NowOnCard,
-  PendingRow,
-  RecentResultCard,
-} from '@/components/home-event-card';
+import { ErrorBanner } from '@/components/error-banner';
+import { HomeAction } from '@/components/home-action';
 import { HomeHeader } from '@/components/home-header';
+import { HomeSourcePicker } from '@/components/home-source-picker';
+import { FeedSection, FollowingRail, HomeIdentity, LocalNowRail, LocalResults, MediaRail, OfficialFipRail, SectionState, SpotlightRail, TourLiveRail, TourResults, TourSpotlight, UpcomingEntries } from '@/components/home-feed';
 import { ObserveReady } from '@/components/observe-ready';
-import { FollowingPreview } from '@/components/following-feed';
-import { useFollowingFeed } from '@/hooks/use-following-feed';
-import { ProPadelFeed } from '@/components/pro-padel-feed';
-import { OfficialFipFeed } from '@/components/official-fip-feed';
-import { usePlayerHub } from '@/hooks/use-player-hub';
+import { useHomeFeed, type HomeSource } from '@/hooks/use-home-feed';
+import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
+import { EMPTY_HOME, profileGaps, resolveFeaturedCta, resolveScheduleEntryCta, type CalendarEvent, type PendingAction } from '@/lib/home';
+import { homeEventState, homeOfficialFipEvents, homeTourEvents, tourPath } from '@/lib/home-feed';
+import { upcomingTourEvents } from '@/lib/home-tour-presentation';
+import { selectProMatches, type ProTournament } from '@/lib/pro-padel';
 import { makeCompanionSchedule } from '@/lib/companion-schedule';
 import { publishCompanionSchedule } from '@/lib/companion';
-import { HomeGreeting, HomePlayerCard } from '@/components/home-player-card';
-import { useReducedMotion } from '@/hooks/use-reduced-motion';
-import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
-import {
-  EMPTY_HOME,
-  eventPath,
-  fetchHomeBundle,
-  fetchHomePlayerExtras,
-  resolveFeaturedCta,
-  type CalendarEvent,
-  type HomeBundle,
-  type PendingAction,
-} from '@/lib/home';
-import { matchKey } from '@/lib/matches';
-import {
-  markPushPromptSeen,
-  requestPushPermission,
-  shouldPromptForPush,
-} from '@/lib/notifications';
+import { markPushPromptSeen, requestPushPermission, shouldPromptForPush } from '@/lib/notifications';
 import { openSitePath } from '@/lib/site';
-import { supabase } from '@/lib/supabase';
-import { lightBrand as brand, motion } from '@/theme/tokens';
+import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 
-const MATCH_ORANGE = '#F97316';
-
-type OpenMap = {
-  pending: boolean;
-  schedule: boolean;
-  featured: boolean;
-  results: boolean;
-};
+type Section = 'spotlight' | 'shortcuts' | 'now' | 'following' | 'upcoming' | 'results' | 'media' | 'fip';
 
 export default function HomeScreen() {
-  const playerHub = usePlayerHub();
-  const following = useFollowingFeed('all', 3);
-  const proPadel = playerHub.pro;
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const tabPad = useTabScenePadding();
-  const [bundle, setBundle] = useState<HomeBundle>(EMPTY_HOME);
-  const [loadError, setLoadError] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [open, setOpen] = useState<OpenMap>({
-    pending: false,
-    schedule: false,
-    featured: true,
-    results: false,
-  });
-  const [schedulePast, setSchedulePast] = useState(false);
-  const [scheduleKind, setScheduleKind] = useState<'matches' | 'events'>('events');
-  const scheduleKindTouched = useRef(false);
-  const loadId = useRef(0);
+  const router = useRouter(), insets = useSafeAreaInsets(), tabPadding = useTabScenePadding();
+  const [source, setSource] = useState<HomeSource>('4m'), [refreshing, setRefreshing] = useState(false);
+  const feed = useHomeFeed(source);
+  const list = useRef<FlatList<Section>>(null), mounted = useRef(true);
+  const local = source === '4m';
+  const followedPlayers = (feed.following.data?.followedPlayers ?? []).filter(player => player.source === (local ? 'local' : 'pro'));
+  const pending = useMemo(() => [...(feed.payments.data ?? []), ...profileGaps(feed.profile.data ?? null)], [feed.payments.data, feed.profile.data]);
+  const registrationState = feed.schedule.data?.registrationByEvent;
+  const decorate = (event: CalendarEvent) => homeEventState(event, registrationState, feed.payments.data);
+  const spotlight = (feed.spotlight.data ?? []).map(decorate);
+  const upcoming = (feed.schedule.data?.upcoming ?? []).map(event => ({ ...decorate(event), fromSchedule: event.fromSchedule }));
+  const internationalEvents = homeTourEvents([...(feed.fixtures.data?.tournament ? [feed.fixtures.data.tournament] : []), ...(feed.tour.data?.tournaments ?? [])]);
+  const presentTour = (event: ProTournament) => ({ ...event, ...(feed.tourPresentation.data?.[event.id] ? { photoUrl: feed.tourPresentation.data[event.id].photoUrl || event.photoUrl, name: feed.tourPresentation.data[event.id].name } : {}) });
+  const liveEvents = (feed.live.data || []).map(presentTour);
+  const comingUpEvents = upcomingTourEvents(internationalEvents, liveEvents).map(presentTour);
+  const officialEvents = homeOfficialFipEvents(feed.fip.data?.tournaments ?? []);
+  const internationalResults = selectProMatches(feed.tour.data?.matches ?? [], null).filter(match => match.status === 'finished' && match.score.length > 0);
+  const sections: Section[] = local ? ['spotlight', 'shortcuts', 'now', 'following', 'upcoming', 'results', 'media'] : ['now', 'shortcuts', 'spotlight', 'following', 'results', 'fip'];
 
-  const load = useCallback(async (soft?: boolean) => {
-    const currentLoad = ++loadId.current;
-    if (!soft) setLoading(true);
-    setLoadError(false);
-    try {
-      const { data } = await supabase.auth.getUser();
-      if (currentLoad !== loadId.current) return;
-      const next = await fetchHomeBundle(data.user?.email, {
-        strictSchedule: true,
-        deferPlayerExtras: true,
-        onPlayer: player => {
-          if (currentLoad === loadId.current) {
-            setBundle(previous => ({ ...previous, player }));
-          }
-        },
-      });
-      if (currentLoad !== loadId.current) return;
-      setBundle(next);
-      if (next.player?.rankedin_id) {
-        void fetchHomePlayerExtras(next.player).then(extras => {
-          if (currentLoad !== loadId.current) return;
-          const enriched: HomeBundle = {
-            ...next,
-            player: next.player ? { ...next.player, winLoss: extras.winLoss, rankingChange: extras.rankingChange } : null,
-            upcomingMatches: extras.upcomingMatches,
-            pastMatches: extras.pastMatches,
-          };
-          setBundle(enriched);
-          if (data.user) void publishCompanionSchedule(data.user.id, makeCompanionSchedule(enriched));
-        }).catch(error => console.warn('[home] Optional player details', error));
-      } else if (data.user) {
-        void publishCompanionSchedule(data.user.id, makeCompanionSchedule(next));
-      }
-    } catch (err) {
-      if (currentLoad === loadId.current) {
-        Observe.reportError(new Error('Home data load failed'));
-        setLoadError(true);
-      }
-      console.warn('[home]', err);
-    } finally {
-      if (currentLoad === loadId.current) {
-        setLoading(false);
-        setRefreshing(false);
-      }
-    }
-  }, []);
-
-  useFocusEffect(useCallback(() => {
-    void load(true);
-    const foreground = AppState.addEventListener('change', state => {
-      if (state === 'active') void load(true);
-    });
-    return () => {
-      loadId.current += 1;
-      foreground.remove();
-    };
-  }, [load]));
-
-  useEffect(() => {
-    if (loading || scheduleKindTouched.current) return;
-    setScheduleKind(bundle.upcomingMatches.length > 0 ? 'matches' : 'events');
-  }, [loading, bundle.upcomingMatches.length]);
-
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => { list.current?.scrollToOffset({ offset: 0, animated: false }); }, [source]);
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       if (!(await shouldPromptForPush()) || cancelled) return;
       await requestPushPermission();
       if (!cancelled) await markPushPromptSeen();
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
+  // Keep the Watch/widget schedule without loading career results or the player directory.
+  useEffect(() => {
+    if (!feed.active || !feed.owner?.id || !feed.schedule.data || !feed.payments.data || feed.schedule.error || feed.payments.error || feed.matches.loading || feed.matches.error) return;
+    void publishCompanionSchedule(feed.owner.id, makeCompanionSchedule({ ...EMPTY_HOME,
+      player: feed.profile.data ?? null, upcomingSchedule: upcoming, pending,
+      upcomingMatches: feed.matches.data?.upcoming ?? [],
+    }));
+  }, [feed.active, feed.owner?.id, feed.schedule.data, feed.payments.data, feed.profile.data, feed.matches.data, feed.matches.loading, feed.matches.error]);
 
-  const schedule = useMemo(() => [...(schedulePast ? bundle.pastSchedule : bundle.upcomingSchedule)]
-    .sort((a, b) => compareEventDates(a, b, schedulePast)), [schedulePast, bundle.pastSchedule, bundle.upcomingSchedule]);
-  const matches = schedulePast ? bundle.pastMatches : bundle.upcomingMatches;
-
-  async function openEvent(event: CalendarEvent) {
-    await openSitePath(eventPath(event));
-  }
-
-  function openFeaturedAction(event: CalendarEvent) {
-    const cta = resolveFeaturedCta(event);
-    if (event.is_manual && (cta.action === 'pay' || cta.action === 'register')) {
+  const open = (path: string) => router.push(path as Href);
+  const openEvent = (event: CalendarEvent, results = false) => router.push({ pathname: '/events/[id]', params: { id: event.slug || String(event.id), ...(results ? { tab: 'Results' } : {}) } });
+  const openAction = (event: CalendarEvent, schedule = false) => {
+    const balance = feed.payments.data?.find(action => action.eventId === event.id && (action.balanceDue ?? 0) > 0);
+    if (event.hasEntryBalance && balance) { void openSitePath(balance.path); return; }
+    const cta = schedule ? resolveScheduleEntryCta(event) : resolveFeaturedCta(event);
+    if (event.is_manual && (cta.action === 'register' || cta.action === 'pay')) {
       router.push({ pathname: '/events/register', params: { id: String(event.id), ...(cta.action === 'pay' ? { mode: 'pay' } : {}) } });
-    } else {
-      void openEvent(event);
+    } else openEvent(event);
+  };
+  const openPending = (action: PendingAction) => action.kind === 'profile' ? open('/(tabs)/profile') : void openSitePath(action.path);
+  const openTour = (event: ProTournament) => open(tourPath(event));
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try { await feed.refresh(); } finally { if (mounted.current) setRefreshing(false); }
+  };
+  const errors = [feed.profile, feed.schedule, feed.payments, feed.following, ...(local ? [feed.spotlight, feed.happening, feed.results, feed.media] : [feed.tour, feed.fixtures, feed.live, feed.fip])].some(resource => resource.error);
+  const state = (resource: { loading: boolean; error: boolean; refresh: (force?: boolean) => Promise<void> }, empty: string) => <SectionState loading={resource.loading} error={resource.error} empty={empty} onRetry={() => void resource.refresh(true)} />;
+
+  function renderSection(section: Section) {
+    switch (section) {
+      case 'spotlight':
+        if (local) return <View style={{ marginBottom: 24 }}>
+          {spotlight.length ? <SpotlightRail events={spotlight} onOpen={openEvent} onAction={event => openAction(event)} /> : state(feed.spotlight, 'New spotlight events will appear here.')}
+        </View>;
+        if (!comingUpEvents.length) return null;
+        return <FeedSection title="Coming up" onMore={() => open('/calendar?circuit=pro')}>
+          <TourSpotlight events={comingUpEvents} onOpen={openTour} />
+        </FeedSection>;
+      case 'shortcuts':
+        return <View style={s.shortcuts}><HomeShortcuts source={source} onOpen={open} /></View>;
+      case 'now':
+        if (local && feed.happening.data?.length === 0 && !feed.happening.loading && !feed.happening.error) return null;
+        if (!local && feed.live.data?.length === 0 && !feed.live.loading && !feed.live.error) return null;
+        return local ? <FeedSection title="On now" onMore={() => open('/calendar')}>
+          {feed.happening.data?.length ? <LocalNowRail events={feed.happening.data} onOpen={openEvent} /> : state(feed.happening, 'No 4M events are on court right now.')}
+        </FeedSection> : <FeedSection title="Live now" onMore={() => open('/pro/live')}>
+          {liveEvents.length ? <TourLiveRail events={liveEvents} matches={[...(feed.fixtures.data?.matches || []), ...(feed.tour.data?.matches || [])]} onOpen={event => router.push({ pathname: '/pro/tournament/[id]', params: { id: String(event.id), tab: 'matches' } })} /> : state(feed.live, 'No live tournaments at the latest update.')}
+        </FeedSection>;
+      case 'following':
+        return <FeedSection title="Following" onMore={() => open(`/rankings?view=Following&source=${local ? '4m' : 'pro'}`)}>
+          {followedPlayers.length ? <FollowingRail players={followedPlayers} onPlayer={player => open(`${player.source === 'pro' ? '/pro/player' : '/players'}/${player.id}`)} /> : state(feed.following, feed.signedIn ? 'Follow players to see their current rankings here.' : 'Sign in to follow players.')}
+        </FeedSection>;
+      case 'upcoming':
+        if (!feed.signedIn) return null;
+        return <FeedSection title="My next events" onMore={() => open('/my-entries')}>
+          {upcoming.length ? <UpcomingEntries events={upcoming} onOpen={openEvent} onAction={event => openAction(event, true)} /> : state(feed.schedule, 'Your upcoming entries and saved events will appear here.')}
+        </FeedSection>;
+      case 'results':
+        return local ? <FeedSection title="Latest results" onMore={() => open('/calendar')}>
+          {feed.results.data?.length ? <LocalResults events={feed.results.data} onOpen={event => openEvent(event, true)} /> : state(feed.results, 'Results will appear after events finish.')}
+        </FeedSection> : <FeedSection title="Latest results" onMore={() => open('/calendar?circuit=pro&timing=past')}>
+          {internationalResults.length ? <TourResults matches={internationalResults} onOpen={match => open(`/pro/match/${match.id}`)} /> : state(feed.tour, 'Published tour results will appear here.')}
+        </FeedSection>;
+      case 'media':
+        return <FeedSection title="Around the courts" onMore={() => open('/media')}>
+          {feed.media.data?.some(album => !!album.cover_image_url) ? <MediaRail albums={feed.media.data} onOpen={album => open(`/media/${album.id}`)} /> : state(feed.media, 'Event photos and highlights will appear here.')}
+        </FeedSection>;
+      case 'fip':
+        return <FeedSection title="FIP Promises & Bronze">
+          {officialEvents.length ? <OfficialFipRail events={officialEvents} updatedAt={feed.fip.data?.updatedAt} onOpen={openTour} /> : state(feed.fip, 'New FIP Promises and Bronze events will appear here.')}
+        </FeedSection>;
     }
   }
 
-  function openPending(action: PendingAction) {
-    if (action.kind === 'profile') {
-      router.push('/(tabs)/profile');
-      return;
-    }
-    openSitePath(action.path);
-  }
-
-  function toggle(key: keyof OpenMap) {
-    setOpen((current) => ({ ...current, [key]: !current[key] }));
-  }
-
-  return (
-    <View className="flex-1 bg-court-page">
-      <ObserveReady ready={!loading} />
-      <View
-        className="bg-court-page"
-        style={{ paddingTop: insets.top, zIndex: 30, elevation: 30 }}>
-        <HomeHeader
-          onSearch={() => router.push('/search')}
-          onNotifications={() => router.push('/notifications')}
-          noticeCount={bundle.pending.length}
-        />
-      </View>
-
-      <ScrollView
-        className="flex-1 bg-court-page"
-        contentContainerStyle={{
-          paddingBottom: Platform.OS === 'ios' ? 16 : tabPad,
-        }}
-        contentInsetAdjustmentBehavior="automatic"
-        keyboardShouldPersistTaps="handled"
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing || proPadel.loading}
-            onRefresh={() => {
-              setRefreshing(true);
-              void Promise.all([load(true), playerHub.refresh(), following.refresh()]);
-            }}
-            tintColor={brand.accent}
-          />
-        }>
-        <View style={{ overflow: 'hidden' }}>
-          <View className="px-4 pt-3 pb-2">
-            <FadeUp>
-              <HomeGreeting player={bundle.player} />
-              <HomePlayerCard
-                player={bundle.player}
-                loading={loading}
-                fipLinked={playerHub.fipLinks.some(link => link.local_player_id === bundle.player?.id && link.status === 'verified')}
-                onPress={() => router.push('/(tabs)/profile')}
-              />
-            </FadeUp>
-          </View>
-        </View>
-
-        <View className="px-4 bg-court-page">
-        <Pressable accessibilityRole="button" accessibilityLabel="Find and enter a tournament" onPress={() => router.push('/calendar')}
-          style={{ marginTop: 16, marginBottom: 20, backgroundColor: brand.padel, padding: 20, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 16, minHeight: 104 }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: '#386018', fontSize: 11, fontWeight: '700', letterSpacing: 1.4 }}>GET ON COURT</Text>
-            <Text style={{ color: brand.premium, fontSize: 26, fontWeight: '800', letterSpacing: -0.8, marginTop: 5 }}>Your next tournament.</Text>
-            <Text style={{ color: '#34473D', fontSize: 13, lineHeight: 19, marginTop: 5 }}>Find an event. Pick your partner. Play.</Text>
-          </View>
-          <SymbolView name={{ ios: 'arrow.up.right', android: 'north_east', web: 'north_east' }} size={23} tintColor={brand.premium} />
-        </Pressable>
-        {loadError && <Notice title="Your latest activity couldn’t load" onRetry={() => void load(true)}>Please try again to refresh your entries, payments and schedule.</Notice>}
-        {bundle.happeningNow.length ? (
-          <FadeUp delay={motion.stagger * 6} className="mt-6">
-            {bundle.happeningNow.slice(0, 3).map((event, i) => (
-              <View key={event.id} className={i > 0 ? 'mt-3' : undefined}>
-                <NowOnCard
-                  event={event}
-                  showLabel={i === 0}
-                  onPress={() => openEvent(event)}
-                />
-              </View>
-            ))}
-          </FadeUp>
-        ) : null}
-
-        <FadeUp delay={motion.stagger * 8} className="mt-4">
-          {bundle.pending.length ? (
-            <HomeAccordion
-              title="Complete your entry"
-              countColor={brand.danger}
-              open={open.pending}
-              onToggle={() => toggle('pending')}
-              badges={[{ label: String(bundle.pending.length), count: true, color: brand.danger }]}>
-              {bundle.pending.map((action) => (
-                <PendingRow
-                  key={action.key}
-                  title={action.title}
-                  subtitle={action.subtitle}
-                  detail={action.detail}
-                  kind={action.kind}
-                  onPress={() => openPending(action)}
-                />
-              ))}
-            </HomeAccordion>
-          ) : null}
-
-          <HomeAccordion
-            title="My Schedule"
-            open={open.schedule}
-            onToggle={() => toggle('schedule')}
-            badges={[
-              bundle.upcomingSchedule.length
-                ? {
-                    label: `${bundle.upcomingSchedule.length} ${
-                      bundle.upcomingSchedule.length === 1 ? 'Event' : 'Events'
-                    }`,
-                  }
-                : null,
-              bundle.upcomingMatches.length
-                ? {
-                    label: `${bundle.upcomingMatches.length} ${
-                      bundle.upcomingMatches.length === 1 ? 'Match' : 'Matches'
-                    }`,
-                  }
-                : null,
-            ].filter(Boolean) as { label: string }[]}>
-            <View className="mb-3 flex-row items-center">
-              <View accessibilityRole="tablist" className="min-w-0 flex-1 flex-row items-center">
-                <KindTab
-                  label="Matches"
-                  icon="trophy"
-                  count={bundle.upcomingMatches.length}
-                  badgeColor={MATCH_ORANGE}
-                  selected={scheduleKind === 'matches'}
-                  onPress={() => {
-                    scheduleKindTouched.current = true;
-                    setScheduleKind('matches');
-                  }}
-                />
-                <KindTab
-                  label="Events"
-                  icon="calendar"
-                  count={bundle.upcomingSchedule.length}
-                  badgeColor={brand.padel}
-                  selected={scheduleKind === 'events'}
-                  onPress={() => {
-                    scheduleKindTouched.current = true;
-                    setScheduleKind('events');
-                  }}
-                />
-              </View>
-              <View className="ml-auto shrink-0 flex-row rounded-lg border border-court-edge p-0.5">
-                {(
-                  [
-                    { key: false, label: 'Upcoming' },
-                    { key: true, label: 'Past' },
-                  ] as const
-                ).map((tab) => (
-                  <Pressable
-                    key={String(tab.key)}
-                    onPress={() => setSchedulePast(tab.key)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: schedulePast === tab.key }}
-                    hitSlop={6}
-                    className={`min-h-8 justify-center px-2 ${
-                      schedulePast === tab.key ? 'rounded-md bg-court-surface' : ''
-                    }`}>
-                    <Text
-                      className={`text-[10px] font-normal ${
-                        schedulePast === tab.key ? 'text-court-ink' : 'text-court-muted'
-                      }`}>
-                      {tab.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+  return <View style={s.page}>
+    <ObserveReady ready={local ? !feed.spotlight.loading : !feed.tour.loading} />
+    <View style={{ paddingTop: insets.top, backgroundColor: b.page }}><HomeHeader onSearch={() => open(local ? '/search' : '/search?source=international')} onNotifications={() => open('/notifications')} noticeCount={pending.length} /></View>
+    <FlatList ref={list} data={sections} extraData={feed} keyExtractor={section => `${source}:${section}`} renderItem={({ item }) => renderSection(item)}
+      initialNumToRender={3} maxToRenderPerBatch={2} windowSize={5} showsVerticalScrollIndicator={false}
+      contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 32 : tabPadding }}
+      refreshControl={<RefreshControl colors={[loadingBlue]} refreshing={refreshing} onRefresh={() => void refresh()} tintColor={loadingBlue} />}
+      ListHeaderComponent={<View style={{ flexShrink: 0 }}>
+        <HomeIdentity player={feed.profile.data} loading={feed.profile.loading} onProfile={() => open('/(tabs)/profile')} onRankings={() => open('/rankings?view=Rankings&source=4m')} />
+        <View style={{ marginBottom: 16, flexShrink: 0 }}><HomeSourcePicker value={source} onChange={setSource} /></View>
+        {pending.length > 0 && <Pressable accessibilityRole="button" accessibilityLabel={`${pending.length} pending actions. ${pending[0].title}. ${pending.length > 1 ? 'Review all actions' : 'Review action'}`} onPress={() => pending.length > 1 ? open('/notifications') : openPending(pending[0])} style={s.pending}>
+          <View style={{ flex: 1, gap: 6 }}>
+            <View style={s.pendingHeading}>
+              <Text style={s.pendingTitle}>{pending[0].title}</Text>
+              {pending.length > 1 && <View style={s.pendingBadge}><Text style={s.pendingBadgeText}>+{pending.length - 1} more {pending.length === 2 ? 'action' : 'actions'}</Text></View>}
             </View>
-
-            {scheduleKind === 'matches' ? (
-              matches.length ? (
-                <View>
-                  {!schedulePast ? (
-                    <NextMatchCard
-                      match={matches[0]}
-                      onPress={() => router.push('/(tabs)/profile')}
-                    />
-                  ) : null}
-                  {(schedulePast ? matches : matches.slice(1)).length ? (
-                    <View
-                      className={`overflow-hidden rounded-2xl border border-court-edge bg-court-elevated ${
-                        schedulePast ? '' : 'mt-3'
-                      }`}>
-                      {(schedulePast ? matches : matches.slice(1)).map((match, i) => (
-                        <View key={matchKey(match, i)}>
-                          {i > 0 ? <View className="h-px bg-court-edge" /> : null}
-                          <MatchRow
-                            match={match}
-                            showResult={schedulePast}
-                            onPress={() => router.push('/(tabs)/profile')}
-                          />
-                        </View>
-                      ))}
-                    </View>
-                  ) : null}
-                </View>
-              ) : (
-                <EmptyBlock
-                  icon="trophy"
-                  title={
-                    schedulePast ? 'No past matches yet.' : 'You have no upcoming matches.'
-                  }
-                  body={
-                    schedulePast
-                      ? 'Your match history will appear here.'
-                      : 'Your next match will appear here when draws are published.'
-                  }
-                />
-              )
-            ) : schedule.length ? (
-              <View className="overflow-hidden rounded-2xl border border-court-edge bg-court-elevated">
-                {schedule.map((event, i) => (
-                  <View key={event.id}>
-                    {i > 0 ? <View className="h-px bg-court-edge" /> : null}
-                    <EventRow
-                      event={event}
-                      showStartCountdown={!schedulePast}
-                      onPress={() => openEvent(event)}
-                    />
-                  </View>
-                ))}
-              </View>
-            ) : (
-              <EmptyBlock
-                icon="calendar"
-                title={schedulePast ? 'No past events yet.' : 'You have no upcoming events.'}
-                body={
-                  schedulePast
-                    ? 'Your completed events will appear here.'
-                    : 'Explore the calendar to find your next event.'
-                }
-                actionLabel={schedulePast ? undefined : 'Explore Calendar'}
-                onAction={schedulePast ? undefined : () => router.push('/calendar')}
-              />
-            )}
-          </HomeAccordion>
-
-          <HomeAccordion
-            title="Tournament spotlight"
-            open={open.featured}
-            onToggle={() => toggle('featured')}
-            badges={
-              bundle.featured.length
-                ? [{ label: String(bundle.featured.length), count: true }]
-                : undefined
-            }>
-            {bundle.featured.length ? (
-              <EventSlide events={bundle.featured} onOpen={openEvent} onAction={openFeaturedAction} />
-            ) : (
-              <EmptyBlock
-                title="No featured events right now"
-                body="Spotlight tournaments will appear here when they are announced."
-                actionLabel="Browse calendar"
-                onAction={() => router.push('/calendar')}
-              />
-            )}
-          </HomeAccordion>
-
-          <HomeAccordion
-            title="Recent Results"
-            open={open.results}
-            onToggle={() => toggle('results')}
-            badges={
-              bundle.recentResults.length
-                ? [{ label: String(bundle.recentResults.length), count: true }]
-                : undefined
-            }>
-            {bundle.recentResults.length ? (
-              <ResultSwipe events={bundle.recentResults} onOpen={openEvent} />
-            ) : (
-              <EmptyBlock
-                title="Results will appear here"
-                body="Finished Gold, Super Gold and Major events appear here."
-              />
-            )}
-          </HomeAccordion>
-
-          <FollowingPreview state={following} />
-
-          <ProPadelFeed state={proPadel} localState={playerHub} showInternationalResults={false} />
-          <OfficialFipFeed />
-
-        </FadeUp>
-
-        </View>
-      </ScrollView>
-    </View>
-  );
-}
-
-function EventSlide({
-  events,
-  onOpen,
-  onAction,
-}: {
-  events: CalendarEvent[];
-  onOpen: (event: CalendarEvent) => void;
-  onAction: (event: CalendarEvent) => void;
-}) {
-  const [width, setWidth] = useState(0);
-  const rail = useRef<ScrollView>(null);
-  const ids = events.map(event => event.id).join(',');
-  const cardWidth = events.length > 1 ? Math.min(340, width * 0.86) : width;
-  const step = cardWidth + 12;
-  useEffect(() => { rail.current?.scrollTo({ x: 0, animated: false }); }, [ids, width]);
-  return <View onLayout={event => setWidth(event.nativeEvent.layout.width)}>
-    {width > 0 && <ScrollView ref={rail} horizontal showsHorizontalScrollIndicator={false}
-      decelerationRate="fast" snapToInterval={step} snapToAlignment="start"
-      disableIntervalMomentum directionalLockEnabled
-      contentContainerStyle={{ gap: 12, paddingRight: Math.max(0, width - cardWidth) }}>
-      {events.map(event => <View key={event.id} style={{ width: cardWidth }}>
-        <FeaturedCard event={event} onPress={() => onOpen(event)} onCta={() => onAction(event)} />
-      </View>)}
-    </ScrollView>}
+            <Text numberOfLines={1} style={s.pendingText}>{pending[0].subtitle}</Text>
+          </View>
+          <Text style={[s.pendingTitle, { flexShrink: 0 }]}>{pending.length > 1 ? 'Review all →' : 'Review →'}</Text>
+        </Pressable>}
+      </View>} />
+    <ErrorBanner message={errors ? 'Some Home updates couldn’t load. Pull to refresh or retry a section.' : null} top={insets.top + 56} bottom={tabPadding} />
   </View>;
 }
 
-function ResultSwipe({
-  events,
-  onOpen,
-}: {
-  events: CalendarEvent[];
-  onOpen: (event: CalendarEvent) => void;
-}) {
-  const reduced = useReducedMotion();
-  const scroller = useRef<ScrollView>(null);
-  const nudge = useSharedValue(0);
-  const [width, setWidth] = useState(0);
-  const [page, setPage] = useState(0);
-  const many = events.length > 1;
-  const ids = events.map((event) => event.id).join(',');
-
-  useEffect(() => {
-    setPage(0);
-    scroller.current?.scrollTo({ x: 0, animated: false });
-  }, [ids]);
-
-  useEffect(() => {
-    if (reduced || !many) return;
-    nudge.value = 0;
-    nudge.value = withSequence(
-      withDelay(
-        320,
-        withTiming(16, { duration: 180, easing: Easing.out(Easing.cubic) })
-      ),
-      withTiming(-12, { duration: 150 }),
-      withTiming(8, { duration: 140 }),
-      withTiming(0, { duration: 180, easing: Easing.out(Easing.cubic) })
-    );
-    return () => cancelAnimation(nudge);
-  }, [many, nudge, reduced]);
-
-  const jiggle = useAnimatedStyle(() => ({
-    transform: [{ translateX: nudge.value }],
-  }));
-
-  const dots = Math.min(3, events.length);
-  const activeDot =
-    events.length <= 3
-      ? page
-      : page === 0
-        ? 0
-        : page >= events.length - 1
-          ? dots - 1
-          : 1;
-
-  return (
-    <View
-      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
-      accessibilityLabel={`Recent results, card ${page + 1} of ${events.length}. Swipe for more.`}>
-      <Animated.View style={jiggle}>
-        <ScrollView
-          ref={scroller}
-          horizontal
-          pagingEnabled
-          nestedScrollEnabled
-          directionalLockEnabled
-          decelerationRate="fast"
-          showsHorizontalScrollIndicator={false}
-          onScrollBeginDrag={() => cancelAnimation(nudge)}
-          onMomentumScrollEnd={(e) => {
-            const w = e.nativeEvent.layoutMeasurement.width;
-            if (!w) return;
-            setPage(Math.round(e.nativeEvent.contentOffset.x / w));
-          }}
-          accessibilityRole="adjustable"
-          accessibilityActions={
-            many
-              ? [
-                  { name: 'increment', label: 'Next result' },
-                  { name: 'decrement', label: 'Previous result' },
-                ]
-              : undefined
-          }
-          onAccessibilityAction={(e) => {
-            if (!width) return;
-            if (e.nativeEvent.actionName === 'increment') {
-              const next = Math.min(events.length - 1, page + 1);
-              scroller.current?.scrollTo({ x: next * width, animated: true });
-              setPage(next);
-            }
-            if (e.nativeEvent.actionName === 'decrement') {
-              const next = Math.max(0, page - 1);
-              scroller.current?.scrollTo({ x: next * width, animated: true });
-              setPage(next);
-            }
-          }}>
-          {events.map((event) => (
-            <View key={event.id} style={{ width: width || undefined }}>
-              <RecentResultCard event={event} onPress={() => onOpen(event)} />
-            </View>
-          ))}
-        </ScrollView>
-      </Animated.View>
-
-      {many ? (
-        <View
-          className="mt-2.5 flex-row items-center justify-center"
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants">
-          {Array.from({ length: dots }).map((_, i) => (
-            <View
-              key={i}
-              style={{
-                width: i === activeDot ? 7 : 6,
-                height: i === activeDot ? 7 : 6,
-                borderRadius: 4,
-                marginHorizontal: 4,
-                backgroundColor: i === activeDot ? brand.padel : 'rgba(204,255,0,0.28)',
-              }}
-            />
-          ))}
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-function KindTab({
-  label,
-  icon,
-  count,
-  badgeColor,
-  selected,
-  onPress,
-}: {
-  label: string;
-  icon: ComponentProps<typeof SymbolView>['name'];
-  count: number;
-  badgeColor: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="tab"
-      accessibilityState={{ selected }}
-      hitSlop={6}
-      className={`mr-1.5 min-h-8 shrink-0 flex-row items-center rounded-lg px-2 ${
-        selected ? 'border border-court-edge bg-court-surface' : ''
-      }`}>
-      <SymbolView
-        name={icon}
-        size={14}
-        tintColor={selected ? brand.premium : 'rgba(22,37,31,0.5)'}
-      />
-      <Text
-        className={`ml-1.5 text-[12px] font-normal ${
-          selected ? 'text-court-ink' : 'text-court-muted'
-        }`}>
-        {label}
-      </Text>
-      {count > 0 ? (
-        <View
-          className="ml-1.5 min-h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5"
-          style={{ backgroundColor: badgeColor }}>
-          <Text
-            className="text-[9px] font-normal text-black"
-            style={{ fontVariant: ['tabular-nums'] }}>
-            {count}
-          </Text>
-        </View>
-      ) : null}
-    </Pressable>
-  );
-}
+const s = StyleSheet.create({
+  page: { flex: 1, backgroundColor: b.page },
+  shortcuts: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: b.elevated, borderRadius: 16, paddingHorizontal: 4, marginBottom: 20 },
+  pending: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, marginBottom: 16, backgroundColor: '#FFF5DD', borderRadius: 12 },
+  pendingHeading: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+  pendingBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: '#78521A' },
+  pendingBadgeText: { fontSize: 11, lineHeight: 16, fontWeight: '600', color: '#FFFFFF' },
+  pendingTitle: { fontSize: 12, lineHeight: 18, fontWeight: '600', color: '#78521A' },
+  pendingText: { fontSize: 11, lineHeight: 16, color: '#78521A' },
+});

@@ -1,0 +1,23 @@
+export const homeIcons = {
+  refresh: { ios: 'arrow.clockwise', android: 'refresh', web: 'refresh' },
+  entry: { ios: 'ticket', android: 'confirmation_number', web: 'confirmation_number' },
+  calendar: { ios: 'calendar', android: 'calendar_month', web: 'calendar_month' },
+  people: { ios: 'person.2', android: 'group', web: 'group' },
+  rankings: { ios: 'chart.bar', android: 'bar_chart', web: 'bar_chart' },
+  license: { ios: 'person.text.rectangle', android: 'badge', web: 'badge' },
+  media: { ios: 'photo.on.rectangle', android: 'photo_library', web: 'photo_library' },
+  bell: { ios: 'bell', android: 'notifications', web: 'notifications' },
+  search: { ios: 'magnifyingglass', android: 'search', web: 'search' },
+  filters: { ios: 'line.3.horizontal.decrease', android: 'tune', web: 'tune' },
+  scheduleAdd: { ios: 'plus', android: 'add', web: 'add' },
+  scheduleCheck: { ios: 'checkmark', android: 'check', web: 'check' },
+  menu: { ios: 'line.3.horizontal', android: 'menu', web: 'menu' },
+  clubs: { ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' },
+  live: { ios: 'play.circle', android: 'play_circle', web: 'play_circle' },
+  following: { ios: 'heart', android: 'favorite_border', web: 'favorite_border' },
+  followed: { ios: 'heart.fill', android: 'favorite', web: 'favorite' },
+  previous: { ios: 'chevron.left', android: 'chevron_left', web: 'chevron_left' },
+  next: { ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' },
+  close: { ios: 'xmark', android: 'close', web: 'close' },
+} as const;
+export type HomeActionProps = { label: string; accessibilityLabel?: string; onPress: () => void; disabled?: boolean; compact?: boolean; fullWidth?: boolean; accentColor?: string; icon?: keyof typeof homeIcons; iconPosition?: 'leading' | 'trailing'; kind?: 'icon' | 'shortcut' | 'link' | 'outline' | 'primary' };

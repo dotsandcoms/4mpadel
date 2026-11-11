@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LiquidField } from '@/components/liquid-field';
 import { ObserveReady } from '@/components/observe-ready';
 import { supabase } from '@/lib/supabase';
-import { lightBrand as brand } from '@/theme/tokens';
+import { loadingBlue, lightBrand as brand } from '@/theme/tokens';
 
 export default function ResetPasswordScreen() {
   const { code } = useLocalSearchParams<{ code?: string }>();
@@ -67,7 +67,7 @@ export default function ResetPasswordScreen() {
       <ScrollView style={{ flex: 1 }} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 28, paddingTop: 32, paddingBottom: 24 }}>
         <Text accessibilityRole="header" className="text-[28px] font-extrabold text-court-ink">{done ? 'Password updated' : 'Set a new password'}</Text>
         <Text className="mb-7 mt-3 text-[16px] leading-6 text-court-muted">{done ? 'Your new password is ready to use.' : 'Choose a password you haven’t used before.'}</Text>
-        {!ready && !error && <ActivityIndicator color={brand.accent} accessibilityLabel="Verifying reset link" />}
+        {!ready && !error && <ActivityIndicator color={loadingBlue} accessibilityLabel="Verifying reset link" />}
         {ready && !done && <View>
           <LiquidField label="New password" value={password} onChangeText={setPassword} secureTextEntry autoComplete="new-password" textContentType="newPassword" editable={!saving} />
           <Text className="mb-4 text-[12px] leading-5 text-court-muted">Use 6+ characters with uppercase, lowercase, a number and a symbol.</Text>

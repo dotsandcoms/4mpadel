@@ -19,6 +19,10 @@ try {
 const required = ['EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_ANON_KEY'];
 if (process.env.EAS_BUILD_PLATFORM === 'android') required.push('EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY');
 const missing = required.filter(name => !process.env[name]?.trim());
+if (process.env.EAS_BUILD_PLATFORM === 'ios' && !/^\d+(?:\.\d+){0,2}$/.test(process.env.EAS_BUILD_IOS_BUILD_NUMBER?.trim() || '')) {
+  console.error('EAS_BUILD_IOS_BUILD_NUMBER is required to keep the iPhone app, widgets and watch targets on the same release build.');
+  process.exit(1);
+}
 if (missing.length) {
   console.error(`Build configuration missing: ${missing.join(', ')}. Configure these in the EAS environment selected by eas.json before rebuilding.`);
   process.exit(1);

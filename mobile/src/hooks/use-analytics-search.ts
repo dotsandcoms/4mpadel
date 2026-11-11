@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { trackEvent } from '@/lib/analytics';
 
 /** Count settled searches, including live search without keyboard submission. Never send the text. */
-export function useAnalyticsSearch(query: string, resultCount: number, contentType: 'events' | 'players' | 'rankings' | 'media', ready = true) {
+export function useAnalyticsSearch(query: string, resultCount: number, contentType: 'all' | 'events' | 'players' | 'rankings' | 'media', ready = true) {
   const last = useRef('');
   useEffect(() => {
     const value = query.trim();

@@ -46,3 +46,7 @@ verify_jwt = false
 [functions.delete-account]
 # Also verifies the token with Auth.getUser before using its authoritative ID.
 verify_jwt = true
+
+[functions.native-club-places]
+# Auth.getUser validates the caller; public club lookup also uses the caller's RLS.
+verify_jwt = false

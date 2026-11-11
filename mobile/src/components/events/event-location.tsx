@@ -1,3 +1,4 @@
+import { loadingBlue } from '@/theme/tokens';
 import { requireOptionalNativeModule } from 'expo';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, View } from 'react-native';
@@ -76,7 +77,7 @@ export function EventLocation({ event, selectedVenue, onSelectVenue, onDirection
         {supported && query && <Pressable accessibilityRole="button" onPress={() => setAttempt(value => value + 1)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: '#2563eb' }}>Retry map</Text></Pressable>}
       </View> : point && android && GoogleMap ? <GoogleMap key={`${query}:${attempt}`} colorScheme={maps?.GoogleMaps.MapColorScheme.LIGHT} uiSettings={{ myLocationButtonEnabled: false, mapToolbarEnabled: true, zoomControlsEnabled: true }} style={{ width: '100%', height: 220 }} cameraPosition={{ coordinates: point, zoom: 15 }} markers={[{ id: 'venue', coordinates: point, title: venue || 'Event venue' }]} properties={{ isMyLocationEnabled: false }} onMapLoaded={() => setLoadedQuery(query)} />
         : point && AppleMap ? <AppleMap key={query} colorScheme={maps?.AppleMaps.MapColorScheme.LIGHT} uiSettings={{ myLocationButtonEnabled: false }} style={{ width: '100%', height: 220 }} cameraPosition={{ coordinates: point, zoom: 15 }} markers={[{ id: 'venue', coordinates: point, title: venue || 'Event venue', tintColor: accent }]} properties={{ isMyLocationEnabled: false }} />
-          : <ActivityIndicator color={accent} />}
+          : <ActivityIndicator color={loadingBlue} />}
     </View>
   </View>;
 }

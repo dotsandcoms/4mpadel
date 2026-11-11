@@ -40,7 +40,7 @@ export function playerRankLabel(p: HubPlayer): string {
   return p.source === '4m' && (p.fipPlayerId || p.fipProfileUrl) ? `${first} · ${p.fipRank ? `FIP #${p.fipRank}` : 'FIP rank not listed'}` : first;
 }
 export function localHubPlayer(p: DirectoryPlayer): HubPlayer {
-  const category = (p.category || '').toLowerCase();
+  const category = (p.gender || p.category || '').toLowerCase();
   const gender = /women|ladies|female/.test(category) ? 'women' : /men|male/.test(category) ? 'men' : 'unknown';
   const rank = Number(String(p.rank_label || '').replace(/^#/, ''));
   return { key: `4m:${p.id}`, source: '4m', id: p.id, rankedinId: p.rankedin_id ? String(p.rankedin_id) : undefined, name: p.name, photo: p.image_url, nationality: p.nationality, gender, rank: rank > 0 && Number.isFinite(rank) ? rank : null, points: p.points, subtitle: p.home_club || p.category || '4M player' };
@@ -71,8 +71,8 @@ export function filterHubPlayers(rows: HubPlayer[], query: string, source: strin
 export function topLocalPlayers(rows: HubPlayer[], gender: 'men' | 'women') {
   return rows.filter(p => p.source === '4m' && p.gender === gender && p.rank !== null).sort((a, b) => a.rank! - b.rank! || a.name.localeCompare(b.name)).slice(0, 20);
 }
-async function invokePlayerSearch(body: Record<string, unknown>) {
-  const { data, error } = await supabase.functions.invoke('player-search', { body });
+async function invokePlayerSearch(body: Record<string, unknown>, signal?: AbortSignal) {
+  const { data, error } = await supabase.functions.invoke('player-search', { body, signal });
   if (error || data?.error) {
     let message = data?.error;
     if (!message && error?.context instanceof Response) { try { message = (await error.context.json()).error; } catch {} }
@@ -80,8 +80,8 @@ async function invokePlayerSearch(body: Record<string, unknown>) {
   }
   return data;
 }
-export async function searchProPlayers(query: string, category = 'all', page = 1, id?: number): Promise<{ players: ProPlayer[]; officialProfiles: OfficialFipProfile[]; hasMore: boolean; total: number | null }> {
-  const data = await invokePlayerSearch({ query, category, page, id });
+export async function searchProPlayers(query: string, category = 'all', page = 1, id?: number, signal?: AbortSignal): Promise<{ players: ProPlayer[]; officialProfiles: OfficialFipProfile[]; hasMore: boolean; total: number | null }> {
+  const data = await invokePlayerSearch({ query, category, page, id }, signal);
   if (!Array.isArray(data?.players)) throw new Error('Invalid player search response.');
   return { ...data, officialProfiles: Array.isArray(data.officialProfiles) ? data.officialProfiles : [] };
 }
@@ -124,7 +124,7 @@ export function rankedLocalPlayers(players: DirectoryPlayer[], men: RankingPlaye
     const exact = p.rankedin_id ? categoryRankings.filter(r => r.rankedinId === String(p.rankedin_id)) : [];
     const matchingNames = categoryRankings.filter(r => normalizeName(r.name) === normalizeName(p.name));
     const match = exact.length === 1 ? exact[0] : !p.rankedin_id && matchingNames.length === 1 && names.get(normalizeName(p.name)) === 1 ? matchingNames[0] : undefined;
-    return { ...local, rank: match?.rank || null, rankChange: match && match.changeKnown !== false && Number.isFinite(match.change) ? match.change : null, points: match?.points ?? p.points, ...(match ? { gender: match.gender } : {}) };
+    return { ...local, rank: match?.rank || null, rankChange: match && match.changeKnown !== false && Number.isFinite(match.change) ? match.change : null, points: match?.points ?? null, ...(match ? { gender: match.gender } : {}) };
   });
 }
 

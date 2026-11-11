@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { choosePlaytomicProof } from '@/lib/playtomic-proof';
 import { extractPlaytomicProfile, PROOF_BUCKET, type PlaytomicExtraction } from '@/lib/profile-details';
 import { supabase } from '@/lib/supabase';
-import { lightBrand as brand } from '@/theme/tokens';
+import { loadingBlue, lightBrand as brand } from '@/theme/tokens';
 
 export function PlaytomicProofField({ playerId, signupUserId, path, level, disabled, onChange, onBusyChange, onLevelDetected, extraction, onExtractionDetected, noProfile, onNoProfileChange }: {
   extraction: PlaytomicExtraction | null; onExtractionDetected: (value: PlaytomicExtraction | null) => void; noProfile: boolean; onNoProfileChange: (value: boolean) => void;
@@ -102,7 +102,7 @@ export function PlaytomicProofField({ playerId, signupUserId, path, level, disab
     <Modal visible={(reading || !!success) && !progressDismissed} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setProgressDismissed(true)}>
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         <View accessibilityViewIsModal style={{ width: '100%', maxWidth: 380, borderRadius: 20, borderWidth: 1, borderColor: brand.edge, backgroundColor: brand.elevated, padding: 24, alignItems: 'center', gap: 16 }}>
-          {success ? <Text accessibilityLabel="Extraction complete" style={{ color: '#15803d', fontSize: 44, lineHeight: 52 }}>✓</Text> : <ActivityIndicator size="large" color={brand.accent} accessibilityLabel="Extracting Playtomic level" />}
+          {success ? <Text accessibilityLabel="Extraction complete" style={{ color: '#15803d', fontSize: 44, lineHeight: 52 }}>✓</Text> : <ActivityIndicator size="large" color={loadingBlue} accessibilityLabel="Extracting Playtomic level" />}
           <Text accessibilityRole="header" style={{ color: brand.premium, fontSize: 21, lineHeight: 28, fontWeight: '800', textAlign: 'center' }}>{success ? 'Playtomic details extracted' : 'We’re extracting your Playtomic level'}</Text>
           <Text accessibilityLiveRegion="polite" style={{ color: brand.muted, fontSize: 14, lineHeight: 22, textAlign: 'center' }}>{success ? 'Check the suggested details before saving.' : '4M is processing the screenshot. Check the suggested level before saving.'}</Text>
           {success ? <ExtractionSummary result={success} /> : null}
@@ -118,7 +118,7 @@ export function PlaytomicProofField({ playerId, signupUserId, path, level, disab
     <Text style={{ color: brand.premium, fontSize: 13, fontWeight: '700', lineHeight: 19 }}>Upload a screenshot of your Playtomic profile (required)</Text>
     <Text style={{ color: brand.muted, fontSize: 13, lineHeight: 19 }}>Only you and authorized admins can see your screenshot.</Text>
     <Pressable accessibilityRole="button" accessibilityState={{ busy, disabled: busy || disabled }} disabled={busy || disabled} onPress={() => void choose()} style={{ minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: brand.edge, alignItems: 'center', justifyContent: 'center', padding: 12 }}>
-      {busy ? <ActivityIndicator color={brand.accent} /> : <Text style={{ color: brand.accent, fontWeight: '700' }}>{path ? 'Replace screenshot' : 'Choose screenshot'}</Text>}
+      {busy ? <ActivityIndicator color={loadingBlue} /> : <Text style={{ color: brand.accent, fontWeight: '700' }}>{path ? 'Replace screenshot' : 'Choose screenshot'}</Text>}
     </Pressable>
     {url ? <Pressable accessibilityRole="link" accessibilityLabel="View Playtomic screenshot" onPress={() => void Linking.openURL(url).catch(() => setError('Unable to open the screenshot. Try again.'))}>
       <Image source={{ uri: url }} style={{ width: '100%', height: 180, borderRadius: 12 }} contentFit="contain" cachePolicy="none" accessibilityLabel="Your Playtomic level proof" />

@@ -7,7 +7,7 @@ import { fetchPlayerTrophies, fetchPlayerTournamentResults, savedRankingResults 
 import { playerPoints, sapaMainRanking, type PublicPlayer, type PublicRanking } from '@/lib/players';
 import type { PointResult, TrophyGroup } from '@/lib/rankings';
 import { lightSapaTone } from '@/theme/sapa';
-import { lightBrand as b } from '@/theme/tokens';
+import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 import { profileCard } from './profile-sections';
 import { useForegroundClock } from '@/hooks/use-foreground-clock';
 
@@ -31,7 +31,7 @@ function TrophyCabinet({ player, refreshKey }: { player: PublicPlayer; refreshKe
   }, [player, retry, refreshKey]);
   return <View style={{ gap: 12 }}>
     <Text accessibilityRole="header" style={heading}>Trophy cabinet</Text>
-    {loading ? <ActivityIndicator accessibilityLabel="Loading trophy cabinet" color={b.accent} />
+    {loading ? <ActivityIndicator accessibilityLabel="Loading trophy cabinet" color={loadingBlue} />
       : error ? <Pressable accessibilityRole="button" onPress={() => setRetry(value => value + 1)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ ...body, color: b.danger }}>Could not load trophies. Tap to retry.</Text></Pressable>
         : groups.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {groups.map(item => {
@@ -78,7 +78,7 @@ function TournamentResults({ ranking, rankedinId, refreshKey }: { ranking: Publi
         </Pressable>)}
       </View>
     </View>
-    {loading && <ActivityIndicator accessibilityLabel="Loading tournament results" color={b.accent} />}
+    {loading && <ActivityIndicator accessibilityLabel="Loading tournament results" color={loadingBlue} />}
     {!!error && <View style={{ gap: 4 }}><Text accessibilityRole="alert" style={{ ...body, color: b.danger }}>{error}</Text><Pressable accessibilityRole="button" onPress={() => setRetry(value => value + 1)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: b.accent, fontWeight: '600' }}>Retry results</Text></Pressable></View>}
     {!loading && !rows.length && <View style={profileCard}><Text style={body}>{error && !best ? 'All results are currently unavailable.' : 'No tournament results published for this ranking yet.'}</Text></View>}
     {rows.slice(0, limit).map((result, index) => <View key={`${result.date}-${result.name}-${index}`} style={{ ...profileCard, gap: 8 }}>

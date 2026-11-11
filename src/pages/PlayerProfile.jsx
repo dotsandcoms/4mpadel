@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { MAX_PLAYER_GALLERY_PHOTOS } from '../utils/playerGallery';
 // eslint-disable-next-line no-unused-vars
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -1398,10 +1399,10 @@ const PlayerProfile = () => {
 
             const files = Array.from(event.target.files);
             const currentGallery = formData.additional_images || [];
-            const remainingSlots = 5 - currentGallery.length;
+            const remainingSlots = MAX_PLAYER_GALLERY_PHOTOS - currentGallery.length;
 
             if (remainingSlots <= 0) {
-                throw new Error('You can only have up to 5 gallery images.');
+                throw new Error(`You can only have up to ${MAX_PLAYER_GALLERY_PHOTOS} gallery images.`);
             }
 
             // Take only what fits
@@ -1430,7 +1431,7 @@ const PlayerProfile = () => {
             });
 
             const urls = await Promise.all(uploadPromises);
-            const newGallery = [...currentGallery, ...urls].slice(0, 5);
+            const newGallery = [...currentGallery, ...urls].slice(0, MAX_PLAYER_GALLERY_PHOTOS);
 
             setFormData(prev => ({
                 ...prev,
@@ -1449,7 +1450,7 @@ const PlayerProfile = () => {
             setPlayer(prev => ({ ...prev, additional_images: newGallery }));
 
             if (files.length > remainingSlots) {
-                showMessage(`Uploaded ${urls.length} images. Some images were ignored because the gallery is limited to 5 images.`, 'success');
+                showMessage(`Uploaded ${urls.length} images. Some images were ignored because the gallery is limited to ${MAX_PLAYER_GALLERY_PHOTOS} images.`, 'success');
             } else {
                 showMessage(`Uploaded ${urls.length} gallery image(s) successfully!`, 'success');
             }
@@ -3157,7 +3158,7 @@ const PlayerProfile = () => {
                                         Player Gallery
                                     </h4>
                                     <span className="bg-white/5 border border-white/10 text-white/50 px-2 py-0.5 rounded-full text-[8px] font-bold">
-                                        {(formData.additional_images || []).length} / 5
+                                        {(formData.additional_images || []).length} / {MAX_PLAYER_GALLERY_PHOTOS}
                                     </span>
                                 </div>
                                 {uploadingGalleryImage && (
@@ -3193,7 +3194,7 @@ const PlayerProfile = () => {
                                 ))}
 
                                 {/* Upload slot card */}
-                                {(formData.additional_images || []).length < 5 && (
+                                {(formData.additional_images || []).length < MAX_PLAYER_GALLERY_PHOTOS && (
                                     <div
                                         onClick={() => document.getElementById('galleryImageUploadMobile').click()}
                                         className="w-18 h-18 shrink-0 rounded-2xl border border-dashed border-white/20 hover:border-padel-green bg-white/5 flex flex-col items-center justify-center cursor-pointer transition-all gap-0.5 group"
@@ -3683,7 +3684,7 @@ const PlayerProfile = () => {
                                             Player Gallery
                                         </h4>
                                         <span className="bg-white/5 border border-white/10 text-white/50 px-2 py-0.5 rounded-full text-[8px] font-bold">
-                                            {(formData.additional_images || []).length} / 5
+                                            {(formData.additional_images || []).length} / {MAX_PLAYER_GALLERY_PHOTOS}
                                         </span>
                                     </div>
                                     {uploadingGalleryImage && (
@@ -3719,7 +3720,7 @@ const PlayerProfile = () => {
                                     ))}
 
                                     {/* Upload slot card */}
-                                    {(formData.additional_images || []).length < 5 && (
+                                    {(formData.additional_images || []).length < MAX_PLAYER_GALLERY_PHOTOS && (
                                         <div
                                             onClick={() => document.getElementById('galleryImageUploadDashboard').click()}
                                             className="w-20 h-20 sm:w-24 sm:h-24 shrink-0 rounded-2xl border border-dashed border-white/20 hover:border-[#beff00] bg-white/5 hover:bg-white/10 flex flex-col items-center justify-center cursor-pointer transition-all gap-1 group"

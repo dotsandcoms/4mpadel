@@ -569,7 +569,7 @@ function EmailCta({
       style={{ height: CONTROL_H, borderRadius: CONTROL_R }}>
       <Animated.View
         style={[
-          { backgroundColor: brand.padel },
+          { backgroundColor: brand.accent },
           {
             height: CONTROL_H,
             borderRadius: CONTROL_R,
@@ -579,14 +579,14 @@ function EmailCta({
             elevation: 0,
           },
         ]}>
-        {busy ? <LimeStrokeSpinner /> : null}
-        <Text className="text-base font-bold text-court-ink">{label}</Text>
+        {busy ? <EmailCtaSpinner /> : null}
+        <Text className="text-base font-bold" style={{ color: '#FFFFFF' }}>{label}</Text>
       </Animated.View>
     </PressableScale>
   );
 }
 
-function LimeStrokeSpinner() {
+function EmailCtaSpinner() {
   const spin = useSharedValue(0);
 
   useEffect(() => {
@@ -605,7 +605,7 @@ function LimeStrokeSpinner() {
         height: 20,
         marginRight: 10,
         borderRadius: 10,
-        backgroundColor: 'rgba(10,10,10,0.32)',
+        backgroundColor: 'transparent',
         alignItems: 'center',
         justifyContent: 'center',
       }}>
@@ -616,8 +616,8 @@ function LimeStrokeSpinner() {
             height: 14,
             borderRadius: 7,
             borderWidth: 2,
-            borderColor: 'rgba(204,255,0,0.22)',
-            borderTopColor: brand.padel,
+            borderColor: 'rgba(255,255,255,0.28)',
+            borderTopColor: '#FFFFFF',
           },
           style,
         ]}

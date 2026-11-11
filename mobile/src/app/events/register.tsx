@@ -1,3 +1,4 @@
+import { withSapaMainRanking } from '@/lib/sapa-main-ranking';
 import { recordAnalyticsCheckout, trackConfirmedPurchase, trackEvent } from '@/lib/analytics';
 import { EntrySavedBanner } from '@/components/events/entry-saved-banner';
 import { Toast } from '@/components/toast';
@@ -23,7 +24,7 @@ import { entryFee, formatMoney, registrationState, registrationPaymentClosed } f
 import { openSitePath } from '@/lib/site';
 import { supabase } from '@/lib/supabase';
 import { parsePaymentReturn } from '@/lib/payment-return';
-import { lightBrand as brand } from '@/theme/tokens';
+import { loadingBlue, lightBrand as brand } from '@/theme/tokens';
 import { requestPushPermission } from '@/lib/notifications';
 
 export default function RegisterScreen() {
@@ -116,9 +117,9 @@ function RegistrationFlow() {
       const email = await currentEmail();
       let restoredPartnerPayment = payForPartner;
       if (email) {
-        const { data: player, error: profileError } = await supabase.from('players').select('id,name,email,contact_number,license_type,paid_registration,points,image_url,rankedin_id,temporary_licenses(event_id,event_date)').ilike('email', email).maybeSingle();
+        const { data: player, error: profileError } = await supabase.from('players').select('id,name,email,contact_number,license_type,paid_registration,points,rankings,gender,category,image_url,rankedin_id,temporary_licenses(event_id,event_date)').ilike('email', email).maybeSingle();
         if (profileError) throw profileError;
-        setProfile(player);
+        setProfile(player ? withSapaMainRanking(player) : null);
         const { data: eligibility, error: licenseError } = await supabase.rpc('player_license_eligibility', { p_player_id: player?.id, p_event_id: row.id });
         if (licenseError) throw licenseError;
         setHasLicence(!!(eligibility?.full || eligibility?.temporary));
@@ -238,7 +239,7 @@ function RegistrationFlow() {
     setReference(result.reference);
     setCheckoutUrl(result.authorizationUrl);
     if (storageKey.current) await AsyncStorage.setItem(storageKey.current, JSON.stringify({ reference: result.reference, url: result.authorizationUrl, payForPartner, selected, paymentChoices, quote: result.quote }));
-    const browser = await WebBrowser.openBrowserAsync(result.authorizationUrl, { controlsColor: brand.padel });
+    const browser = await WebBrowser.openBrowserAsync(result.authorizationUrl, { controlsColor: brand.accent });
     void trackEvent('checkout_outcome', { item_category: 'event_registration', status: browser.type === 'opened' ? 'opened' : 'browser_returned' });
     setReturnedFromCheckout(true);
   });
@@ -284,11 +285,11 @@ function RegistrationFlow() {
       <Text accessibilityRole="header" style={{ color: brand.premium, fontSize: 30, fontWeight: '800', letterSpacing: -0.8 }}>{event?.event_name || 'Registration'}</Text>
       {event?.is_manual && !showPaymentStatus && <View style={{ flexDirection: 'row', gap: 6 }}>
         {['Profile', event?.is_weekly ? 'Dates' : 'Division', event?.is_weekly ? 'Entry' : 'Partner', 'Review & Pay', 'Confirmed'].map((label, index) => <View key={label} style={{ flex: 1, gap: 8 }}>
-          <View style={{ height: 3, borderRadius: 2, backgroundColor: index < (done && !paymentPending ? 5 : done ? 4 : step) ? brand.padel : brand.edge }} />
+          <View style={{ height: 3, borderRadius: 2, backgroundColor: index < (done && !paymentPending ? 5 : done ? 4 : step) ? brand.accent : brand.edge }} />
           <Text style={{ color: index === (done && !paymentPending ? 4 : done ? 3 : step - 1) ? brand.accent : brand.muted, fontSize: 10 }}>{index < (done && !paymentPending ? 4 : done ? 3 : step - 1) ? '✓' : index + 1}. {label}</Text>
         </View>)}
       </View>}
-      {loading && <View style={{ gap: 12, alignItems: 'center', padding: 24 }}><ActivityIndicator color={brand.accent} /><Text style={{ color: brand.muted }}>{payOnly ? 'Loading your existing entry and outstanding fees…' : 'Loading registration details…'}</Text></View>}
+      {loading && <View style={{ gap: 12, alignItems: 'center', padding: 24 }}><ActivityIndicator color={loadingBlue} /><Text style={{ color: brand.muted }}>{payOnly ? 'Loading your existing entry and outstanding fees…' : 'Loading registration details…'}</Text></View>}
       {!event && !loading && <ActionButton label="Try again" secondary onPress={load} />}
       {done ? <>
         <Notice title={paymentPending ? 'Registration received — payment pending' : 'Your entry is confirmed'}>
@@ -315,7 +316,7 @@ function RegistrationFlow() {
         {checkoutUrl && <ActionButton label="Continue to checkout" secondary={returnedFromCheckout} busy={busy} onPress={() => run(async () => {
           const url = new URL(checkoutUrl);
           if (url.protocol !== 'https:' || url.hostname !== 'checkout.paystack.com') throw new Error('This saved checkout address is invalid.');
-          await WebBrowser.openBrowserAsync(url.href, { controlsColor: brand.padel });
+          await WebBrowser.openBrowserAsync(url.href, { controlsColor: brand.accent });
           setReturnedFromCheckout(true);
         })} />}
         <ActionButton label="Check payment status" secondary={!!checkoutUrl && !returnedFromCheckout} busy={busy} onPress={verify} />
@@ -412,9 +413,9 @@ function RegistrationFlow() {
               <Image source={eventImage(event)} style={{ width: '100%', height: 140 }} contentFit="cover" />
               <View style={{ padding: 16, gap: 8 }}><Text style={{ color: brand.premium }}>{formatEventRange(event.start_date, event.end_date)}</Text><Text style={{ color: brand.muted }}>{[event.venue, event.city].filter(Boolean).join(' · ')}</Text></View>
             </View>
-            <View style={{ padding: 18, gap: 14, backgroundColor: brand.elevated, borderRadius: 16, borderWidth: 1, borderColor: brand.padel }}>
+            <View style={{ padding: 18, gap: 14, backgroundColor: brand.elevated, borderRadius: 16, borderWidth: 1, borderColor: brand.edge }}>
               <Text style={{ color: brand.premium, fontSize: 18, fontWeight: '600' }}>My 4M Profile</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}><Image source={profile?.image_url ? { uri: profile.image_url } : undefined} style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: brand.edge }} /><View style={{ flex: 1, gap: 5 }}><Text style={{ color: brand.premium }}>{profile?.name || 'Complete your profile'}</Text><Text style={{ color: brand.muted, fontSize: 12 }}>SAPA Points</Text></View><Text style={{ color: brand.accent, fontSize: 21, fontWeight: '600' }}>{profile?.points?.toLocaleString('en-ZA') || '—'}</Text></View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}><Image source={profile?.image_url ? { uri: profile.image_url } : undefined} style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: brand.edge }} /><View style={{ flex: 1, gap: 5 }}><Text style={{ color: brand.premium }}>{profile?.name || 'Complete your profile'}</Text><Text style={{ color: brand.muted, fontSize: 12 }}>SAPA Points</Text></View><Text style={{ color: brand.accent, fontSize: 21, fontWeight: '600' }}>{profile?.points == null ? '—' : profile.points.toLocaleString('en-ZA')}</Text></View>
             </View>
             <Field label="What is your current Playtomic level?" value={playtomic} onChangeText={setPlaytomic} />
             <Notice title="SAPA licence status">{hasLicence ? '✓ Your SAPA licence is active.' : 'You do not have an active SAPA licence. If one is required for this tournament, add a temporary or annual licence when sales are open.'}</Notice>
@@ -472,7 +473,7 @@ function RegistrationFlow() {
           {!!partnerName && <Text style={{ color: brand.accent, fontWeight: '700' }}>{partnerName}</Text>}
           {!!partnerEmail.trim() && <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text style={{ color: brand.premium, fontSize: 15 }}>Pay my partner’s entry too</Text>
-            <Switch value={payForPartner ?? quote?.entries?.some(entry => (entry.playerCount || 0) > 1) ?? false} onValueChange={value => { setPartnerPayAccepted(false); setPayForPartner(value); }} accessibilityLabel="Pay for partner" trackColor={{ true: brand.padel }} />
+            <Switch value={payForPartner ?? quote?.entries?.some(entry => (entry.playerCount || 0) > 1) ?? false} onValueChange={value => { setPartnerPayAccepted(false); setPayForPartner(value); }} accessibilityLabel="Pay for partner" trackColor={{ true: brand.accent }} />
           </View>}
           {needsPartnerPaymentAcknowledgment && <PartnerPaymentRequirement checked={partnerPayAccepted} onPress={() => setPartnerPayAccepted(v => !v)} />}
           {event.collect_tshirt_size && <>

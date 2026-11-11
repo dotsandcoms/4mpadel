@@ -13,7 +13,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { MenuButton } from '@/components/app-drawer';
+import { useDrawerOptional } from '@/components/app-drawer';
+import { HomeAction } from '@/components/home-action';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { useScreenActive } from '@/hooks/use-screen-active';
 import { hapticLight } from '@/lib/haptics';
@@ -30,6 +31,7 @@ type Props = {
  * lives on the parent — this row is 52pt of tappable header only.
  */
 export function HomeHeader({ onSearch, onNotifications, noticeCount = 0 }: Props) {
+  const drawer = useDrawerOptional();
   const noticeLabel =
     noticeCount > 0
       ? `Notifications, ${noticeCount} waiting`
@@ -47,21 +49,15 @@ export function HomeHeader({ onSearch, onNotifications, noticeCount = 0 }: Props
           contentFit="contain"
           accessibilityLabel="4M Padel"
         />
-        <Text
-          accessibilityLabel="South Africa"
-          className="ml-2 text-[15px] leading-[18px]">
-          🇿🇦
-        </Text>
       </View>
 
       <View className="flex-row items-center">
-          <NotificationBell
-            label={noticeLabel}
-            onPress={onNotifications}
-            ringing={noticeCount > 0}
-          />
-        <HeaderIcon name="magnifyingglass" label="Search" onPress={onSearch} />
-        <MenuButton />
+        <View>
+          <HomeAction label={noticeLabel} icon="bell" kind="icon" onPress={onNotifications} />
+          {noticeCount > 0 && <View pointerEvents="none" style={{ position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: 4, backgroundColor: '#B7352D' }} />}
+        </View>
+        <HomeAction label="Search" icon="search" kind="icon" onPress={onSearch} />
+        {drawer && <HomeAction label="Menu" icon="menu" kind="icon" onPress={drawer.openDrawer} />}
       </View>
     </View>
   );

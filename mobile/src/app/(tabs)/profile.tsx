@@ -51,7 +51,7 @@ import {
 import { openSitePath } from '@/lib/site';
 import { addGalleryPhoto, MAX_PLAYER_GALLERY_PHOTOS } from '@/lib/profile-photos';
 import { supabase } from '@/lib/supabase';
-import { lightBrand as brand } from '@/theme/tokens';
+import { loadingBlue, lightBrand as brand } from '@/theme/tokens';
 
 const EMPTY_PROFILE: ProfileBundle = {
   player: null,
@@ -453,7 +453,7 @@ function GalleryBlock({
             accessibilityHint="Choose a photo from your library"
             accessibilityState={{ busy, disabled: busy }}
             className="h-[72px] w-[72px] items-center justify-center rounded-2xl border border-dashed border-court-edge bg-court-surface">
-            {busy ? <ActivityIndicator color={brand.accent} /> : <SymbolView name="plus" size={18} tintColor={brand.faint} />}
+            {busy ? <ActivityIndicator color={loadingBlue} /> : <SymbolView name="plus" size={18} tintColor={brand.faint} />}
           </Pressable>
         ) : null}
       </ScrollView>

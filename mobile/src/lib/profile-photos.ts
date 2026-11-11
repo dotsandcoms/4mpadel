@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
 import { galleryOf, updateGallery } from './profile';
 import { supabase } from './supabase';
 
-export const MAX_PLAYER_GALLERY_PHOTOS = 5;
+export const MAX_PLAYER_GALLERY_PHOTOS = 15;
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 type PhotoKind = 'profile' | 'gallery';
 

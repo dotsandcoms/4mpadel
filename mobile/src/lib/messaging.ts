@@ -3,8 +3,8 @@ import { supabase } from './supabase';
 
 export const MESSAGING_RULES_VERSION = '2026-11-05';
 export const MESSAGE_LIMIT = 4000;
-export type ChatKind = 'direct' | 'event_announcements' | 'event_discussion';
-export type ChatCard = { eventId: number; title: string; date: string; tab: 'Overview' | 'Draws' | 'Results' };
+export type ChatKind = 'direct' | 'group' | 'event_announcements' | 'event_discussion';
+export type ChatCard = { eventId: number; title: string; date: string; tab: 'Overview' | 'Draws' | 'Results'; poster?: string | null; venue?: string | null; city?: string | null; tier?: string | null };
 export type EventSenderRole = 'admin' | 'organiser' | 'player';
 export function eventRoleLabel(role: unknown) { return role === 'admin' ? 'Admin' : role === 'organiser' ? 'Organiser' : role === 'player' ? 'Player' : 'Participant'; }
 export type ChatMessage = {
@@ -17,11 +17,12 @@ export type Conversation = {
   state: 'pending' | 'accepted' | 'declined'; incoming: boolean; muted: boolean; archived: boolean;
   unread: number; preview: string; updatedAt: string; canSend: boolean; reason: string | null;
   manager: boolean; paused: boolean; pinned: ChatMessage | null;
+  group?: boolean; official?: boolean; memberCount?: number; organisation?: string | null;
   lastMessageId?: string | null; lastMessageMine?: boolean; lastMessageSeq?: number | null;
   notificationMessageId?: string | null; notificationSeq?: number | null; notificationIsReply?: boolean;
 };
 export type MessagingStatus = {
-  enabled: boolean; interactive: boolean; rulesAccepted: boolean; needsBirthDate: boolean; junior: boolean;
+  enabled: boolean; groupsEnabled?: boolean; interactive: boolean; rulesAccepted: boolean; needsBirthDate: boolean; junior: boolean;
   juniorsEnabled: boolean; allowRequests: boolean; supportAllowed?: boolean; consents: { id: string; name: string; active: boolean }[];
 };
 export type MessagePage = { conversation: Conversation; messages: ChatMessage[]; next: number | null };
@@ -79,7 +80,7 @@ export function messagingFailure(error: { code?: string; message?: string }) {
   if (error.code === 'PGRST202' || error.code === '42883') return new MessagingError('Messaging is getting ready. Please check back soon.', true);
   // Never surface SQL details, raw requests or private data through native alerts.
   const text = error.message || '';
-  const allowed = /^(Sign in again|Complete your player profile|Messaging is |Complete messaging setup|Introduce yourself|Write a message|You cannot send|This conversation|This event conversation|That reply|Choose a published|You’re sending|You have reached|Please try again|Register for this event|Verify your account|Event messaging access|This request|Choose Accept|This message could not|Enter a separate guardian|Guardian consent is|This consent invitation|Sign in again and confirm|Consent not found|Confirm your event entry|Please review the latest)/;
+  const allowed = /^(Sign in again|Complete your player profile|Messaging is |Complete messaging setup|Introduce yourself|Write a message|You cannot send|This conversation|This event conversation|That reply|Choose a published|You’re sending|You have reached|Please try again|Register for this event|Verify your account|Event messaging access|This request|Choose Accept|This message could not|Enter a separate guardian|Guardian consent is|This consent invitation|Sign in again and confirm|Consent not found|Confirm your event entry|Please review the latest|Update the app|Choose up to|Choose at least|Write a group|This group)/;
   return new MessagingError(allowed.test(text) && text.length < 240 ? text : 'Messages could not be loaded or saved. Please try again.', error.code === '42501');
 }
 export async function messaging<T = Record<string, never>>(action: string, data: Record<string, unknown> = {}): Promise<T> {

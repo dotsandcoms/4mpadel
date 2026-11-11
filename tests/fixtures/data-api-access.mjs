@@ -25,6 +25,9 @@ group('push_outbox tournament_access tournament_workspace tournament_confirmatio
 // project accidentally exposes the schema through PostgREST. Checked by the
 // messaging PostgreSQL fixture; these are deliberately outside public contracts.
 export const privateMessagingContracts = new Map(
-  'configuration accounts conversations members messages blocks event_approvals entry_confirmations guardian_consents reports audit deliveries badge_cache push_budget'
+  'configuration accounts conversations members messages blocks event_approvals entry_confirmations guardian_consents reports audit deliveries badge_cache push_budget groups group_members admin_batches'
     .split(' ').map(table => [`messaging.${table}`, { anon: [], authenticated: [], service_role: CRUD }])
 );
+
+// Additional group metadata is RPC-only even for workers.
+for (const table of ['groups','group_members','admin_batches']) privateMessagingContracts.set(`messaging.${table}`, { anon: [], authenticated: [], service_role: [] });

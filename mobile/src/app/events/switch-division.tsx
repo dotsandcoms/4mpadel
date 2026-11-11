@@ -4,7 +4,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '@/lib/supabase';
 import { formatMoney } from '@/lib/event-rules';
-import { lightBrand as brand } from '@/theme/tokens';
+import { loadingBlue, lightBrand as brand } from '@/theme/tokens';
 
 type Quote = { eventId: number; eventName: string; registrationId: string; targetDivisionId: string; fromName: string; targetName: string; oldFee: number; newFee: number; total: number; partnerName: string | null };
 export default function DivisionSwitchScreen() {
@@ -60,7 +60,7 @@ export default function DivisionSwitchScreen() {
     await WebBrowser.openBrowserAsync(url);
     await verify(ref);
   });
-  const button = (label: string, onPress: () => void, secondary = false) => <Pressable accessibilityRole="button" disabled={busy} onPress={onPress} style={{ minHeight: 52, borderRadius: 14, padding: 16, backgroundColor: secondary ? brand.elevated : brand.padel, opacity: busy ? 0.5 : 1, alignItems: 'center' }}><Text style={{ color: brand.premium, fontWeight: '600' }}>{label}</Text></Pressable>;
+  const button = (label: string, onPress: () => void, secondary = false) => <Pressable accessibilityRole="button" disabled={busy} onPress={onPress} style={{ minHeight: 52, borderRadius: 14, padding: 16, backgroundColor: secondary ? brand.elevated : brand.accent, borderWidth: secondary ? 1 : 0, borderColor: brand.edge, opacity: busy ? 0.5 : 1, alignItems: 'center' }}><Text style={{ color: secondary ? brand.premium : '#FFFFFF', fontWeight: '600' }}>{label}</Text></Pressable>;
   return <View style={{ flex: 1, backgroundColor: brand.page }}>
     <Stack.Screen options={{ title: 'Switch division', headerShown: true }} />
     <ScrollView contentContainerStyle={{ padding: 24, gap: 20, paddingBottom: 48 }}>
@@ -79,7 +79,7 @@ export default function DivisionSwitchScreen() {
           {!!quote.partnerName && <Text style={{ color: brand.muted, lineHeight: 22 }}>This moves only your entry. {quote.partnerName} stays in the original division and your partner link is removed.</Text>}
         </View>}
         {!!message && <Text accessibilityRole="alert" style={{ color: brand.muted, lineHeight: 22 }}>{message}</Text>}
-        {busy && <ActivityIndicator color={brand.accent} />}
+        {busy && <ActivityIndicator color={loadingBlue} />}
         {quote && button(reference ? 'Resume payment' : `Pay ${formatMoney(quote.total)} & switch`, () => void pay())}
         {!!reference && button('Check payment status', () => void run(() => verify()), true)}
         {!quote && !reference && !busy && button('Retry', () => void load(), true)}

@@ -2,7 +2,7 @@ export function validBadgeTotal(value: unknown): number | null {
   if (!value || typeof value !== 'object') return null;
   const { unread, pending, total } = value as Record<string, unknown>;
   if (![unread, pending, total].every(n => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0)) return null;
-  return total === Math.min(99999, (unread as number) + (pending as number)) ? total as number : null;
+  return pending === 0 && total === Math.min(99999, unread as number) ? total as number : null;
 }
 
 /** Serial writes and identity epochs prevent old-account counts surviving sign-out. */

@@ -72,7 +72,7 @@ test('published text removes scripts and keeps paragraph breaks', () => {
 const rankingResolver = load('src/lib/website/player-ranking-selection.js');
 const teamCode = ts.transpileModule(fs.readFileSync('src/lib/event-teams.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
 const teamModule = { exports: {} };
-vm.runInNewContext(teamCode, { module: teamModule, exports: teamModule.exports, require: () => rankingResolver, Map, Set });
+vm.runInNewContext(teamCode, { module: teamModule, exports: teamModule.exports, require: name => name.includes('sapa-main-ranking') ? load('src/lib/sapa-main-ranking.ts') : rankingResolver, Map, Set });
 const { buildEventTeams } = teamModule.exports;
 test('each player keeps their own payment status and never inherits a paid partner status', () => {
   const division = { id: 'open', name: 'Open' };
@@ -102,7 +102,7 @@ test('teams combine mirrored entries, exclude withdrawn partners, and stay withi
     { id: 'd', full_name: 'Withdrawn', status: 'withdrawn', email_hash: 'w', division_id: 'open' },
     { id: 'e', full_name: 'Martin', division_id: '40' },
   ];
-  const result = buildEventTeams(divisions, entries, [{ name: 'Martin', points: 2692 }, { name: 'James', points: 2782 }]);
+  const result = buildEventTeams(divisions, entries, [{ name: 'Martin', rankings: [{ org: 'SAPA ranking', age_group: 'Men-Main', points: 2692 }] }, { name: 'James', rankings: [{ org: 'SAPA ranking', age_group: 'Men-Main', points: 2782 }] }]);
   assert.equal(result[0].teams.length, 2);
   assert.equal(result[0].teams[0].total, 5474);
   assert.equal(result[0].teams[0].seed, 1);
@@ -111,7 +111,7 @@ test('teams combine mirrored entries, exclude withdrawn partners, and stay withi
 });
 test('division-specific ranking source does not silently fall back to unrelated points', () => {
   const result = buildEventTeams([{ id: 'open', name: 'Open', seeding_ranking_source: 'category:Missing|Main|Men-Doubles' }], [{ id: 'a', division_id: 'open', full_name: 'Player' }], [{ name: 'Player', points: 999 }]);
-  assert.equal(result[0].teams[0].total, 0);
+  assert.equal(result[0].teams[0].total, null);
   assert.equal(result[0].teams[0].seed, null);
 });
 test('event player rows link only an unambiguous public profile', () => {

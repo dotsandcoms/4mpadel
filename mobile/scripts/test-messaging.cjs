@@ -106,9 +106,9 @@ test('private schema table contracts are reviewed and no public message table is
   const names = [...sql.matchAll(/create table (messaging\.\w+)/g)].map(match => match[1]).sort();
   assert.deepEqual(names, [...privateMessagingContracts.keys()].sort());
   assert.doesNotMatch(sql, /create table public\./i);
-  for (const contract of privateMessagingContracts.values()) {
+  for (const [table, contract] of privateMessagingContracts) {
     assert.equal(contract.authenticated.length, 0); assert.equal(contract.anon.length, 0);
-    assert.deepEqual(contract.service_role, ['delete', 'insert', 'select', 'update']);
+    assert.deepEqual(contract.service_role, ['messaging.groups', 'messaging.group_members', 'messaging.admin_batches'].includes(table) ? [] : ['delete', 'insert', 'select', 'update']);
   }
 });
 function draftsFixture(platform = 'ios') {
@@ -157,8 +157,8 @@ test('badge writes clear zero and ignore results from a previous signed-in accou
   writer.switchOwner('bob'); const bob = writer.ticket(); await writer.apply(alice, 99); await writer.apply(bob, 0);
   writer.switchOwner(null); await writer.apply(bob, 7); await Promise.resolve(); await Promise.resolve();
   assert.equal(writes.at(-1), 0); assert.ok(!writes.includes(99)); assert.ok(!writes.includes(7));
-  assert.equal(validBadgeTotal({ unread: 2, pending: 3, total: 5 }), 5);
-  for (const value of [{ unread: 2, pending: 3, total: 1 }, { unread: -1, pending: 3, total: 2 }, { unread: 0, pending: 0, total: '0' }]) assert.equal(validBadgeTotal(value), null);
+  assert.equal(validBadgeTotal({ unread: 5, pending: 0, total: 5 }), 5);
+  for (const value of [{ unread: 2, pending: 3, total: 5 }, { unread: 2, pending: 0, total: 1 }, { unread: -1, pending: 0, total: 0 }, { unread: 0, pending: 0, total: '0' }]) assert.equal(validBadgeTotal(value), null);
 });
 test('notification navigation permits only an exact conversation UUID route', () => {
   const catalog = load('src/lib/notification-events.ts');

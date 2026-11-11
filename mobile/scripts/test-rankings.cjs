@@ -5,6 +5,26 @@ test('empty fresh cache does not hide live standings',async()=>{let calls=0;cons
 test('malformed service response is an error, not an empty league',async()=>{const api=load(null,async()=>({ok:true,json:async()=>({error:'Unavailable'})}));await assert.rejects(api.fetchRankings(15809,api.categoriesFor(15809)[0]),/temporarily unavailable/);});
 test('verified Grand Tour age groups differ from national main categories',()=>{const api=load(null,null);assert.equal(api.categoriesFor(16482)[0].age,2);assert.equal(api.categoriesFor(16482)[4].age,6);assert.equal(api.categoriesFor(15809)[1].age,83);assert.equal(api.categoriesFor(15809)[1].type,4);});
 
+test('photos and follow actions use exact ranking identities without replacing national rank, points or movement',()=>{
+ const api=load(null,null);
+ const [row]=api.attachRankingProfiles([{id:'leaderboard',rankedinId:'R000336892',name:'Charl Vos',rank:18,points:3381,change:-1,changeKnown:true}],
+  [{id:'wrong',name:'Charl Vos',rankedin_id:'Rother'}, {id:'right',name:'Charl Vos',rankedin_id:'R000336892',rankings:[{org:'SA Grand Tour',points:180,rank:9}]}]);
+ assert.equal(row.profile.id,'right'); assert.equal(row.rank,18); assert.equal(row.points,3381); assert.equal(row.change,-1);
+ const players=[{id:'unknown',rankedinId:'Runlinked',name:'Same Name'},{id:'legacy',name:'Same Name'}];
+ const matches=api.attachRankingProfiles(players,[{id:'1',name:'Same Name',rankedin_id:'Rother'},{id:'2',name:'Same Name',rankedin_id:'Ranother'}]);
+ assert.ok(matches.every(player=>!player.profile));
+});
+
+test('unknown or unchanged ranking movement is distinct from a real move',()=>{
+ const api=load(null,null);
+ const rows=api.normalizeRankings([
+  {Name:'Unknown',Standing:1},{Name:'Unchanged',Standing:2,StandingDiff:0},
+  {Name:'Up',Standing:3,StandingDiff:3},{Name:'Down',Standing:4,StandingDiff:-1},
+ ]);
+ assert.equal(rows[0].changeKnown,false);assert.equal(rows[1].changeKnown,true);assert.equal(rows[1].change,0);
+ assert.equal(rows[2].change,3);assert.equal(rows[3].change,-1);
+});
+
 const pointPayload = rows => ({ ParticipantWithPoints: { EventPoints: { Payload: rows } } });
 const event = (name, points, id, standing=1, type=4) => ({ EventName: name, EventUrl: `/en/tournament/${id}/event`, EventPoint: { Date: '18/10/2026', EventName: `${name} | Class: Men's Open`, Standing: standing, EventType: type, Points: points } });
 const response = payload => ({ ok:true, json:async()=>payload });

@@ -49,6 +49,9 @@ export const licenseDate = (date: string) => !date ? '—' : new Date(`${String(
   timeZone: 'Africa/Johannesburg'
 });
 export async function invokeLicense(body: Record<string, unknown>) {
+  // This app endpoint is for standalone annual purchases. Event checkout owns temporary licences.
+  // Verification remains available for legitimate payments started in older app versions.
+  if (body.action !== 'verify' && body.licenseType != null && body.licenseType !== 'full') throw Object.assign(new Error('Temporary licences are purchased during event registration and payment.'), { code: 'EVENT_CHECKOUT_REQUIRED' });
   const {
     data,
     error

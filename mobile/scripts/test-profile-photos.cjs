@@ -101,10 +101,15 @@ test('gallery appends to saved JSON data and preserves the existing four photos'
 });
 
 test('a full gallery rejects additions before uploading or replacing saved photos', async () => {
-  const h = photoHarness({ gallery: ['one', 'two', 'three', 'four', 'five'] });
+  const h = photoHarness({ gallery: Array.from({length:15},(_,i)=>`photo-${i}`) });
   await assert.rejects(h.addGalleryPhoto(42), /gallery is full/);
   assert.equal(h.uploads.length, 0);
   assert.equal(h.updates.length, 0);
+});
+test('phone uploads can fill the fifteenth gallery slot', async () => {
+  const h = photoHarness({ gallery: Array.from({length:14},(_,i)=>`photo-${i}`) });
+  const saved = await h.addGalleryPhoto(42);
+  assert.equal(saved.length,15); assert.equal(h.uploads.length,1);
 });
 
 test('upload failures never update the player and release temporary images', async () => {

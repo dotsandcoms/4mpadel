@@ -1,9 +1,10 @@
 /** Shared by mobile, web and cron. Provider credentials never enter cache keys. */
 export function padelCacheSeconds(url, payload) {
   if (payload && ['finished', 'retired', 'walkover'].includes(payload.status)) return 604800;
-  if (url.pathname === '/api/live' || /\/matches\/\d+\/live$/.test(url.pathname)) return 120;
-  if (/\/matches\/\d+$/.test(url.pathname)) return 300;
-  if (/\/tournaments\/\d+\/matches$/.test(url.pathname)) return 600;
+  if (url.pathname === '/api/live' || /\/matches\/\d+\/live$/.test(url.pathname)) return 60;
+  if (/\/matches\/\d+$/.test(url.pathname)) return payload && ['live', 'ongoing'].includes(payload.status) ? 90 : 300;
+  if (/\/tournaments\/\d+\/matches$/.test(url.pathname)) return payload?.data?.some(row => ['live', 'ongoing'].includes(row.status)) ? 90 : 600;
+  if (/\/(?:rivals|form|synergy)$/.test(url.pathname)) return payload?.unavailable ? 600 : 21600;
   if (/\/players\/\d+\/matches$|\/pairs\/[^/]+\/matches$/.test(url.pathname)) return 21600;
   if (/\/players(?:\/|$)/.test(url.pathname)) return 86400;
   if (url.pathname === '/api/tournaments' || url.pathname === '/api/seasons') return 21600;
@@ -70,6 +71,14 @@ export function createPadelFetch(client, fetcher = fetch, options = {}) {
       limit = Number(response.headers.get('x-ratelimit-limit')) || null;
       remaining = response.headers.has('x-ratelimit-remaining') ? Number(response.headers.get('x-ratelimit-remaining')) : null;
       if (response.status === 429 || remaining != null && remaining <= 5) await checked(client, 'pause_padel_api', { p_until: retryAfterDate(response) });
+      // Optional paid insights must not consume quota repeatedly when unavailable.
+      if (/\/(?:rivals|form|synergy)$/.test(url.pathname) && [402, 404, 422].includes(response.status)) {
+        const originalStatus = response.status;
+        const payload = { unavailable: true, reason: originalStatus === 402 ? 'subscription' : 'coverage' };
+        await checked(client, 'save_padel_response', { p_key: key, p_payload: payload, p_seconds: 600 });
+        await checked(client, 'finish_padel_request', { p_key: key, p_lease: state.lease_id, p_request: state.request_id, p_status: originalStatus, p_limit: limit, p_remaining: remaining });
+        return Response.json(payload, { headers: { 'x-4m-fetched-at': new Date().toISOString(), 'x-4m-cache': 'fresh' } });
+      }
       if (response.ok) {
         const payload = await response.clone().json();
         await checked(client, 'save_padel_response', { p_key: key, p_payload: payload, p_seconds: padelCacheSeconds(url, payload) });

@@ -22,7 +22,7 @@ test('the follower RPC returns only the public player fields used by the list', 
     return { data: { followers: [{ id: '11', name: ' Test Player ', image_url: 'https://example.test/photo.jpg', home_club: 'Club', email: 'private@example.test', user_id: 'private' }], total: 2, has_more: false }, error: null };
   } } } });
   const page = await api.fetchPlayerFollowers('407', 50);
-  assert.deepEqual(calls, [['get_my_player_followers', { p_player_id: '407', p_limit: 50, p_offset: 50 }]]);
+  assert.deepEqual(calls, [['get_player_followers', { p_player_id: '407', p_limit: 50, p_offset: 50 }]]);
   assert.deepEqual(plain(page), { followers: [{ id: '11', name: 'Test Player', imageUrl: 'https://example.test/photo.jpg', homeClub: 'Club' }], total: 2, hasMore: false });
 });
 test('bad IDs, pages, denied reads and malformed responses never become an empty success', async () => {
@@ -98,7 +98,7 @@ test('tapping a follower row opens that player profile with a photo or initials 
     '@expo/vector-icons': { Ionicons: 'Ionicons' }, 'expo-image': { Image: 'Image' },
     'expo-router': { Stack: { Screen: 'Stack.Screen' }, useLocalSearchParams: () => ({ playerId: '407' }), useRouter: () => ({ push: route => navigations.push(plain(route)) }) },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0 }) },
-    '@/hooks/use-player-followers': { usePlayerFollowers: () => state }, '@/theme/tokens': { lightBrand: {} },
+    '@/hooks/use-player-followers': { usePlayerFollowers: () => state }, '@/theme/tokens': { lightBrand: {} }, '@/components/error-banner': { ErrorBanner: 'ErrorBanner' },
   });
   const tree = screen.default(), list = tree.props.children.find(child => child.type === 'FlatList');
   const row = list.props.renderItem({ item: follower() });

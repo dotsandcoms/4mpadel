@@ -10,16 +10,35 @@ export type MediaPhoto = { id: string; image_url: string; thumbnail_url: string 
 const albumFields = 'id,title,description,cover_image_url,album_date,created_at,is_featured,photographer_name,photographer_instagram,youtube_playlist_url,event_id';
 export const PHOTO_PAGE_SIZE = 60;
 
-export async function fetchMediaAlbums(parentId?: string): Promise<MediaAlbum[]> {
+/** Album credits may contain a handle or a profile URL. Only open Instagram profiles. */
+export function photographerInstagramUrl(value: string | null | undefined): string | null {
+  if (!value?.trim()) return null;
+  let handle = value.trim().replace(/^@/, '');
+  if (/^(?:https?:\/\/|(?:www\.)?instagram\.com\/)/i.test(handle)) {
+    try {
+      const url = new URL(/^https?:\/\//i.test(handle) ? handle : `https://${handle}`);
+      if (url.protocol !== 'https:' || !['instagram.com', 'www.instagram.com', 'm.instagram.com'].includes(url.hostname) || url.username || url.password || url.port) return null;
+      handle = url.pathname.replace(/^\//, '').replace(/\/$/, '');
+    } catch { return null; }
+  }
+  if (!/^[a-zA-Z0-9._]{1,30}$/.test(handle) || ['p', 'reel', 'reels', 'explore', 'stories', 'accounts', 'direct'].includes(handle.toLowerCase())) return null;
+  return `https://www.instagram.com/${handle}/`;
+}
+
+export async function fetchMediaAlbums(parentId?: string, limit?: number): Promise<MediaAlbum[]> {
   let query = supabase.from('albums').select(albumFields).eq('is_active', true);
   query = parentId ? query.eq('parent_album_id', parentId) : query.is('parent_album_id', null);
-  const { data, error } = await query.order('is_featured', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
+  query = query.order('is_featured', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
+  if (limit) query = query.limit(limit);
+  const { data, error } = await query;
   if (error) throw error;
   return data ?? [];
 }
 
 export async function fetchMediaAlbum(id: string) {
-  const { data, error } = await supabase.from('albums').select(albumFields).eq('id', id).eq('is_active', true).single();
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,150}$/.test(id)) throw new Error('This album is unavailable.');
+  const key = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? 'id' : 'slug';
+  const { data, error } = await supabase.from('albums').select(albumFields).eq(key, id).eq('is_active', true).single();
   if (error) throw error;
   const album = data as MediaAlbum;
   if (!album.youtube_playlist_url && album.event_id) {
@@ -36,4 +55,15 @@ export async function fetchMediaPhotos(albumId: string, offset = 0): Promise<Med
     .range(offset, offset + PHOTO_PAGE_SIZE - 1);
   if (error) throw error;
   return data ?? [];
+}
+
+/** Slug links resolve once; every child/photo query then uses the canonical album UUID. */
+export async function fetchMediaContent(idOrSlug?: string) {
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const resolved = idOrSlug && !uuid.test(idOrSlug) ? await fetchMediaAlbum(idOrSlug) : null;
+  const id = resolved?.id || idOrSlug;
+  const [albums, album, photos] = await Promise.all([
+    fetchMediaAlbums(id), resolved || (id ? fetchMediaAlbum(id) : null), id ? fetchMediaPhotos(id) : [],
+  ]);
+  return { albums, album, photos };
 }

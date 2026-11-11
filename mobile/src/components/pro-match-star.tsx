@@ -2,7 +2,7 @@ import { refreshMatchBookmarks, saveMatchBookmark, subscribeMatchBookmarks, getM
 import { fetchNotificationPreferences, saveNotificationPreference } from '@/lib/notification-preferences';
 import { getPushPermissionStatus, requestPushPermission } from '@/lib/notifications';
 import type { MatchDetails } from '@/lib/pro-padel-live';
-import { lightBrand as b } from '@/theme/tokens';
+import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ActivityIndicator, Alert, Linking, Modal, Platform, Pressable, Text, View } from 'react-native';
@@ -47,7 +47,7 @@ export function ProMatchStar({ row, dark = false }: { row: MatchDetails; dark?: 
     finally { lock.current = false; setBusy(false); }
   }
   return <>
-    <Pressable accessibilityRole="button" accessibilityLabel={saved ? `Unstar match${saved.notify ? ', start alert on' : ''}` : 'Star match and get a start alert'} accessibilityState={{ selected: !!saved, disabled: busy }} disabled={busy} onPress={event => { event.stopPropagation(); void toggle(); }} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>{busy ? <ActivityIndicator size="small" color={b.accent} /> : <Ionicons name={saved ? 'star' : 'star-outline'} size={24} color={saved ? '#D39316' : dark ? '#D2DED4' : b.muted} />}</Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel={saved ? `Unstar match${saved.notify ? ', start alert on' : ''}` : 'Star match and get a start alert'} accessibilityState={{ selected: !!saved, disabled: busy }} disabled={busy} onPress={event => { event.stopPropagation(); void toggle(); }} style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>{busy ? <ActivityIndicator size="small" color={loadingBlue} /> : <Ionicons name={saved ? 'star' : 'star-outline'} size={24} color={saved ? '#D39316' : dark ? '#D2DED4' : b.muted} />}</Pressable>
     <Modal visible={prompt} transparent animationType="slide" onRequestClose={() => !busy && setPrompt(false)}>
       <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(10,25,16,0.4)' }}><Pressable accessibilityRole="button" accessibilityLabel="Close match alert" disabled={busy} onPress={() => setPrompt(false)} style={{ flex: 1 }} /><View style={{ backgroundColor: b.elevated, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 27, paddingBottom: 45, gap: 18, alignItems: 'center' }}>
         <View style={{ width: 58, height: 58, borderRadius: 18, backgroundColor: '#EAF3DD', alignItems: 'center', justifyContent: 'center' }}><Ionicons name="notifications-outline" size={29} color={b.accent} /></View>

@@ -3,7 +3,7 @@ import { useFocusEffect } from 'expo-router';
 import { AppState } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { fetchFollowingWindow, type FeedFilter, type FeedPage } from '@/lib/following-feed';
-const empty: FeedPage = { items: [], hasMore: false, cursor: null };
+const empty: FeedPage = { items: [], hasMore: false, cursor: null, followedPlayers: [] };
 export function useFollowingFeed(filter: FeedFilter = 'all', limit = 20) {
   const [userId, setUserId] = useState<string | null>(null);
   const [page, setPage] = useState<FeedPage>(empty);

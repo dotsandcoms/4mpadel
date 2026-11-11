@@ -132,6 +132,20 @@ export async function verifyPaystackReference(
     return { ok: false, status: lastStatus, message: lastMessage };
 }
 
+/** Provider success is insufficient: bind it to the saved checkout. */
+export function assertPaystackPayment(payment: Record<string, unknown>, transaction: Record<string, unknown>): void {
+    const expected = Math.round(Number(payment.amount) * 100);
+    const received = Number(transaction.amount);
+    const currency = String(payment.currency || 'ZAR').toUpperCase();
+    const mode = payment.is_test === true ? 'test' : 'live';
+    if (!Number.isSafeInteger(expected) || expected <= 0 || !Number.isSafeInteger(received)
+        || received !== expected || String(transaction.currency || '').toUpperCase() !== currency
+        || String(transaction.reference || '') !== String(payment.reference || '')
+        || transaction.status !== 'success' || transaction.domain !== mode) {
+        throw new Error('The verified transaction does not match the saved checkout. Contact support with your payment reference.');
+    }
+}
+
 async function hmacSha512Hex(key: string, message: string): Promise<string> {
     const enc = new TextEncoder();
     const cryptoKey = await crypto.subtle.importKey(

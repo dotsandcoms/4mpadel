@@ -1,17 +1,17 @@
-import { Chip } from '@/components/events/event-ui';
-import { EventIcon } from '@/components/events/website-ui';
-import { addToCalendar } from '@/lib/device-calendar';
+import { ErrorBanner } from '@/components/error-banner';
+import { HomeAction } from '@/components/home-action';
+import { NativeSegmentedControl } from '@/components/native-segmented-control';
+import { DiscoveryChoices, DiscoverySearch, discoveryStyles as d } from './discovery-controls';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fetchProSnapshot, proDate, proStale, type ProTour, type ProFixtures, type ProTournament } from '@/lib/pro-padel';
-import { fetchProSeasons, fetchSeasonTournaments, fetchTournamentMatches, type MatchDetails, type ProSeason } from '@/lib/pro-padel-live';
-import { MatchCard } from '@/components/pro-padel-feed';
+import { fetchProSnapshot, proDate, type ProTour, type ProTournament } from '@/lib/pro-padel';
+import { fetchProSeasons, fetchSeasonTournaments, type ProSeason } from '@/lib/pro-padel-live';
+import { proTournamentDestination } from '@/lib/pro-tournament';
 import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
-import { lightBrand as brand } from '@/theme/tokens';
+import { loadingBlue, lightBrand as brand } from '@/theme/tokens';
 
 const premierLevels = ['', 'major', 'p1', 'p2', 'finals'];
 const currentTourSeasons = (items: ProSeason[]) => items.filter(item => {
@@ -27,22 +27,15 @@ const dateDay = (date: string) => date.slice(0, 10);
 const today = () => new Date().toISOString().slice(0, 10);
 const finished = (event: ProTournament) => event.status === 'finished' || dateDay(event.endDate) < today();
 const levelName = (value?: string | null) => value ? value === 'major' ? 'Major' : value === 'finals' ? 'Finals' : value.replaceAll('_', ' ').toUpperCase() : 'International';
-function Button({ label, onPress, selected = false }: { label: string; onPress: () => void; selected?: boolean }) {
-  return <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={[s.button, selected && { backgroundColor: brand.padel, borderColor: brand.padel }]}>
-    <Text style={[s.buttonText, selected && { color: '#000' }]}>{label}</Text>
-  </Pressable>;
-}
-function Artwork({ event, large = false }: { event: ProTournament; large?: boolean }) {
+function Artwork({ event }: { event: ProTournament }) {
   const [failed, setFailed] = useState(false);
   return <Image source={event.photoUrl && !failed ? { uri: event.photoUrl } : require('@/assets/images/calendar-hero.png')}
-    onError={() => setFailed(true)} contentFit="cover" style={large ? s.cover : s.thumbnail} />;
+    onError={() => setFailed(true)} contentFit="contain" cachePolicy="memory-disk" style={s.thumbnail} />;
 }
 
-export function ProTourCalendar() {
+export function ProTourCalendar({ initialTiming = 'upcoming' }: { initialTiming?: 'upcoming' | 'past' } = {}) {
   const router = useRouter();
   const bottom = useTabScenePadding();
-  const insets = useSafeAreaInsets();
-  const [showFilters, setShowFilters] = useState(false);
   const [official, setOfficial] = useState<ProTournament[]>([]);
   const [officialUpdated, setOfficialUpdated] = useState('');
   const [tour, setTour] = useState<ProTour | null>(null);
@@ -54,31 +47,21 @@ export function ProTourCalendar() {
   const [seasonLoading, setSeasonLoading] = useState(false);
   const [seasonError, setSeasonError] = useState('');
   const [seasonReload, setSeasonReload] = useState(0);
-  const [fixtures, setFixtures] = useState<ProFixtures | null>(null);
   const [error, setError] = useState('');
-  const [fixtureError, setFixtureError] = useState('');
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [level, setLevel] = useState('');
-  const [timing, setTiming] = useState<'upcoming' | 'past'>('upcoming');
-  const [selected, setSelected] = useState<ProTournament | null>(null);
-  const [matchOpen, setMatchOpen] = useState(false);
-  const [allMatches, setAllMatches] = useState<MatchDetails[]>([]);
-  const [matchesPage, setMatchesPage] = useState(0);
-  const [matchesMore, setMatchesMore] = useState(false);
-  const [matchesLoading, setMatchesLoading] = useState(false);
-  const [matchesError, setMatchesError] = useState('');
+  const [timing, setTiming] = useState<'upcoming' | 'past'>(initialTiming);
+  useEffect(() => { setTiming(initialTiming); }, [initialTiming]);
   const request = useRef(0);
   const seasonRequest = useRef(0);
   const load = useCallback(async () => {
     const id = ++request.current;
     setLoading(true);
-    const [tourResult, fixtureResult, seasonsResult, officialResult] = await Promise.allSettled([fetchProSnapshot('tour'), fetchProSnapshot('fixtures'), fetchProSeasons(), fetchProSnapshot('fip-calendar')]);
+    const [tourResult, seasonsResult, officialResult] = await Promise.allSettled([fetchProSnapshot('tour'), fetchProSeasons(), fetchProSnapshot('fip-calendar')]);
     if (id !== request.current) return;
     if (tourResult.status === 'fulfilled') { setTour(tourResult.value); setError(''); }
     else setError('Could not refresh the tour calendar. Please try again.');
-    if (fixtureResult.status === 'fulfilled') { setFixtures(fixtureResult.value); setFixtureError(''); }
-    else setFixtureError('Published fixtures could not refresh.');
     if (officialResult.status === 'fulfilled') { setOfficial(officialResult.value.tournaments); setOfficialUpdated(officialResult.value.updatedAt); }
     if (seasonsResult.status === 'fulfilled') {
       const currentSeasons = [...currentTourSeasons(seasonsResult.value), initialSeasons.find(item => item.id === -1)!];
@@ -88,11 +71,6 @@ export function ProTourCalendar() {
     setLoading(false);
   }, []);
   useFocusEffect(useCallback(() => { void load(); return () => { request.current++; }; }, [load]));
-  useFocusEffect(useCallback(() => { setMatchOpen(false); }, []));
-  const openMatch = (id: number) => {
-    setMatchOpen(true);
-    router.push({ pathname: '/pro/match/[id]', params: { id: String(id), from: 'calendar' } });
-  };
   useEffect(() => {
     let active = true;
     const version = ++seasonRequest.current;
@@ -134,143 +112,61 @@ export function ProTourCalendar() {
     .filter(e => (timing === 'past' ? finished(e) : !finished(e)) && (!level || e.level?.toLowerCase() === level)
       && `${e.name} ${e.location || ''} ${e.country || ''} ${e.venue || ''}`.toLowerCase().includes(search.trim().toLowerCase()))
     .sort((a, b) => timing === 'past' ? b.startDate.localeCompare(a.startDate) : a.startDate.localeCompare(b.startDate)), [availableEvents, timing, level, search]);
-  const resultMatches = selected ? tour?.matches.filter(m => m.tournamentId === selected.id) || [] : [];
-  const fixtureMatches = selected ? fixtures?.matches.filter(m => m.tournamentId === selected.id) || [] : [];
-  const lookup = useMemo(() => new Map(), []);
-  useEffect(() => {
-    if (!selected) return;
-    let active = true;
-    setAllMatches([]); setMatchesPage(0); setMatchesMore(false); setMatchesError(''); setMatchesLoading(true);
-    if (selected.matchesAvailable === false) { setMatchesLoading(false); return; }
-    void fetchTournamentMatches(selected.id).then(result => {
-      if (!active) return;
-      setAllMatches(result.matches); setMatchesPage(1); setMatchesMore(result.hasMore);
-    }).catch(e => { if (active) setMatchesError(e instanceof Error ? e.message : 'Matches could not be loaded.'); })
-      .finally(() => { if (active) setMatchesLoading(false); });
-    return () => { active = false; };
-  }, [selected?.id]);
-  const loadMoreMatches = async () => {
-    if (!selected || matchesLoading || !matchesMore) return;
-    setMatchesLoading(true); setMatchesError('');
-    try {
-      const result = await fetchTournamentMatches(selected.id, matchesPage + 1);
-      setAllMatches(previous => [...previous, ...result.matches]);
-      setMatchesPage(matchesPage + 1); setMatchesMore(result.hasMore);
-    } catch (e) { setMatchesError(e instanceof Error ? e.message : 'More matches could not be loaded.'); }
-    finally { setMatchesLoading(false); }
-  };
+  const timings = [{ value: 'upcoming', label: 'Upcoming' }, { value: 'past', label: 'Past' }];
+  const changeTiming = (value: string) => { if (value === 'upcoming' || value === 'past') setTiming(value); };
+  const clear = () => { setSearch(''); setLevel(''); setTiming('upcoming'); };
   return <View style={{ flex: 1 }}>
-    <FlatList data={rows} keyExtractor={e => String(e.id)} refreshing={loading || seasonLoading} onRefresh={() => { void load(); setSeasonReload(value => value + 1); }}
+    <FlatList style={{ flex: 1 }} data={rows} keyExtractor={e => String(e.id)} refreshing={loading || seasonLoading} onRefresh={() => { void load(); setSeasonReload(value => value + 1); }}
       keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: bottom }}
-      ListHeaderComponent={<View style={s.header}>
-        <Text style={s.kicker}>INTERNATIONAL TOUR</Text>
-        <Text accessibilityRole="header" style={s.heading}>{season?.name.toUpperCase() || 'INTERNATIONAL TOUR'}</Text>
-        <Text style={s.body}>Explore seasons, upcoming tournaments and published matches across the international tour.</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-          {seasons.map(item => <Button key={item.id} label={item.name} selected={seasonId === item.id} onPress={() => { setSeasonId(item.id); setLevel(''); setTiming('upcoming'); }} />)}
-        </ScrollView>
-        {!seasons.length && <Text style={s.body}>No current tour season has been published yet.</Text>}
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          <View style={[s.search, { flex: 1 }]}>
-            <Ionicons name="search" size={18} color={brand.faint} />
-            <TextInput accessibilityLabel="Search tour tournaments or locations" value={search} onChangeText={setSearch} placeholder="Search tournaments or locations" placeholderTextColor={brand.faint} autoCorrect={false} style={s.input} />
+      ListHeaderComponent={<>
+        <View style={d.headingBlock}>
+          <Text accessibilityRole="header" style={d.heading}>International events</Text>
+          <Text style={d.description}>Seasons, tournaments and published matches</Text>
+        </View>
+        <DiscoveryChoices label="Season" value={String(seasonId)} options={seasons.map(item => ({ value: String(item.id), label: item.name }))}
+          onChange={value => { setSeasonId(Number(value)); setLevel(''); setTiming('upcoming'); }} />
+        {!seasons.length && <Text style={[d.caption, { marginHorizontal: 16 }]}>No current tour season has been published yet</Text>}
+        <View style={[d.searchBlock, { paddingTop: 4 }]}><DiscoverySearch value={search} onChange={setSearch} placeholder="Tournament or location" /></View>
+        <DiscoveryChoices label="Level" value={level} options={levels.map(value => ({ value, label: value ? levelName(value) : 'All levels' }))} onChange={setLevel} />
+        <View style={d.timing}><NativeSegmentedControl label="Tournament dates" value={timing} options={timings} onChange={changeTiming} /></View>
+        <View style={d.results}>
+          <Text accessibilityLiveRegion="polite" style={d.caption}>{rows.length} {rows.length === 1 ? 'tournament' : 'tournaments'}{seasonMore ? ' · More available' : ''}</Text>
+          <Text style={s.source}>{seasonId === -1 ? `Official FIP calendar · Updated ${proDate(officialUpdated)}` : seasonEvents ? `${season?.name || 'Tour'} · Shared season directory` : tour && seasonId === 5 ? `Snapshot updated ${proDate(tour.updatedAt)}` : season?.name}</Text>
+        </View>
+        {!!seasonError && <View style={d.empty}><Text style={d.caption}>{seasonError}{seasonId === 5 && !seasonEvents ? ' Showing the last published Premier Padel calendar.' : ''}</Text><HomeAction label="Retry season" onPress={() => setSeasonReload(value => value + 1)} /></View>}
+        {!!error && <View style={d.empty}><Text style={d.caption}>{error}</Text><HomeAction label="Retry" onPress={() => void load()} /></View>}
+      </>}
+      ListEmptyComponent={seasonLoading ? <ActivityIndicator color={loadingBlue} style={{ margin: 32 }} /> : !seasonError && !error ? <View style={d.empty}>
+        <Text style={d.emptyTitle}>No matching tournaments</Text><Text style={d.caption}>Try another search or season, or clear your filters</Text><HomeAction label="Clear filters" onPress={clear} />
+      </View> : null}
+      ListFooterComponent={seasonMore ? <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 24 }}>
+        {seasonLoading ? <ActivityIndicator color={loadingBlue} /> : <HomeAction label="Load more tournaments" fullWidth onPress={() => void loadMoreSeason()} />}
+      </View> : null}
+      renderItem={({ item }) => {
+        const live = !finished(item) && (item.status === 'ongoing' || item.status === 'live');
+        return <Pressable accessibilityRole="button" accessibilityLabel={`View ${item.name}, ${proDate(item.startDate)}${live ? ', in progress' : ''}`}
+          onPress={() => router.push(proTournamentDestination(item))} android_ripple={{ color: brand.surface }} style={s.card}>
+          <Artwork key={item.id} event={item} />
+          <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+            <View style={s.metadata}><Text style={s.level}>{levelName(item.level)}</Text>{finished(item) ? <Text style={d.caption}>Completed</Text> : live ? <Text style={s.live}>In progress</Text> : null}</View>
+            <Text style={s.name}>{item.name}</Text>
+            <Text style={s.date}>{proDate(item.startDate)} – {proDate(item.endDate)}</Text>
+            <Text style={d.caption}>{[item.location, item.country].filter(Boolean).join(' · ') || 'Location to be confirmed'}</Text>
           </View>
-          <Pressable onPress={() => setShowFilters(true)} accessibilityRole="button" accessibilityLabel={`Filters, 1 active, ${timing}`} style={s.filterButton}>
-            <EventIcon name="line.3.horizontal.decrease" color="#65726B" />
-            <View style={s.filterBadge}><Text style={{ color: '#000', fontSize: 10, fontWeight: '800' }}>1</Text></View>
-          </Pressable>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-          {levels.map(value => <Button key={value} label={value ? levelName(value) : 'All levels'} selected={level === value} onPress={() => setLevel(value)} />)}
-        </ScrollView>
-        {!!seasonError && <Text style={{ color: brand.danger }}>{seasonError}{seasonId === 5 && !seasonEvents ? ' Showing the last published Premier Padel calendar.' : ''}</Text>}
-        <Text style={{ color: brand.premium, fontSize: 11, fontWeight: '600', letterSpacing: 0.7 }}>{timing === 'past' ? 'PAST TOURNAMENTS' : 'UPCOMING TOURNAMENTS'}</Text>
-        <Text style={s.caption}>{rows.length} tournaments{seasonMore ? ' · More available' : ''}{seasonId === -1 ? ` · Official FIP calendar · Updated ${proDate(officialUpdated)}` : seasonEvents ? ' · Shared season directory' : tour && seasonId === 5 ? ` · Snapshot updated ${proDate(tour.updatedAt)}` : ''}</Text>
-        {!!error && <View style={{ gap: 8 }}><Text style={{ color: brand.danger }}>{error}</Text><Button label="Retry" onPress={() => void load()} /></View>}
-      </View>}
-      ListEmptyComponent={seasonLoading ? <ActivityIndicator color={brand.accent} style={{ margin: 30 }} /> : <View style={s.header}><Text style={s.body}>{seasonError ? 'This season is unavailable. Pull to retry.' : 'No tournaments match these filters in this season.'}</Text></View>}
-      ListFooterComponent={seasonMore && !seasonLoading ? <View style={{ paddingHorizontal: 20, paddingBottom: 24 }}><Button label="Load more tournaments" onPress={() => { void loadMoreSeason(); }} /></View> : null}
-      renderItem={({ item }) => <Pressable accessibilityRole="button" accessibilityLabel={`View ${item.name}, ${proDate(item.startDate)}`} onPress={() => item.matchesAvailable === false ? router.push({ pathname: '/pro/fip/[id]', params: { id: String(item.id) } }) : setSelected(item)} style={s.card}>
-        <Artwork key={item.id} event={item} />
-        <View style={{ flex: 1, gap: 7 }}>
-          <Text style={s.kicker}>{levelName(item.level)}{finished(item) ? ' · Completed' : item.status === 'ongoing' || item.status === 'live' ? ' · In progress' : ''}</Text>
-          <Text style={s.name} numberOfLines={3}>{item.name}</Text>
-          <Text style={s.date}>{proDate(item.startDate)} – {proDate(item.endDate)}</Text>
-          <Text style={s.caption} numberOfLines={2}>{[item.location, item.country].filter(Boolean).join(' · ') || 'Location to be confirmed'}</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={16} color={brand.accent} />
-      </Pressable>} />
-    <Modal visible={showFilters} animationType="slide" transparent onRequestClose={() => setShowFilters(false)}>
-      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#0009' }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Close filters" onPress={() => setShowFilters(false)} style={{ flex: 1 }} />
-        <View accessibilityViewIsModal style={{ maxHeight: '85%', backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: insets.bottom + 24, gap: 20 }}>
-          <Text accessibilityRole="header" style={{ color: brand.premium, fontSize: 20, fontWeight: '700' }}>Filters</Text>
-          <ScrollView contentContainerStyle={{ gap: 18 }}>
-            <Text style={{ color: '#65726B', fontSize: 12 }}>WHEN</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{(['upcoming', 'past'] as const).map(value => <Chip key={value} label={value === 'past' ? 'Past' : 'Upcoming'} selected={timing === value} onPress={() => setTiming(value)} />)}</View>
-          </ScrollView>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <Pressable accessibilityRole="button" onPress={() => { setSearch(''); setLevel(''); setTiming('upcoming'); }} style={{ padding: 14 }}><Text style={{ color: brand.premium }}>Clear</Text></Pressable>
-            <Pressable accessibilityRole="button" onPress={() => setShowFilters(false)} style={{ flex: 1, backgroundColor: brand.padel, padding: 14, alignItems: 'center', borderRadius: 12 }}><Text style={{ color: '#000', fontWeight: '700' }}>Show Results</Text></Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
-    <Modal visible={!!selected && !matchOpen} presentationStyle="fullScreen" animationType="slide" onRequestClose={() => setSelected(null)}>
-      <SafeAreaProvider><SafeAreaView style={s.modal}>
-        <View style={{ paddingHorizontal: 20, paddingVertical: 8, alignItems: 'flex-start' }}><Button label="Back to tour calendar" onPress={() => setSelected(null)} /></View>
-        {selected && <ScrollView contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 40 }}>
-          <Artwork key={selected.id} event={selected} large />
-          <Text style={s.kicker}>{levelName(selected.level)} · {season?.name.toUpperCase() || 'INTERNATIONAL TOUR'}</Text>
-          <Text accessibilityRole="header" style={s.detailTitle}>{selected.name}</Text>
-          <Text style={s.date}>{proDate(selected.startDate)} – {proDate(selected.endDate)}</Text>
-          <Text style={s.body}>{[selected.venue, selected.location, selected.country].filter(Boolean).join(' · ') || 'Venue to be confirmed'}</Text>
-          <Button label="Add to calendar" selected onPress={() => {
-            void addToCalendar({ title: selected.name, startDate: selected.startDate, endDate: selected.endDate,
-              location: [selected.venue, selected.location, selected.country].filter(Boolean).join(' · '),
-            }).catch(error => Alert.alert('Calendar unavailable', error instanceof Error ? error.message : 'Please try again.'));
-          }} />
-          <Text style={s.caption}>Tour information only. Entry registration is not available through 4M for this tournament.</Text>
-          {selected.matchesAvailable === false ? <><Text style={s.body}>Official FIP tournament information.</Text><Button label="Open event centre" onPress={() => { setSelected(null); router.push({ pathname: '/pro/fip/[id]', params: { id: String(selected.id) } }); }} /></> : <>
-          <Text style={s.section}>Full published draw</Text>
-          <Text style={s.caption}>Main draw and qualifying · Men and women · Tap Match details for points and stats.</Text>
-          {matchesLoading && <ActivityIndicator color={brand.accent} />}
-          {!!matchesError && <Text style={{ color: brand.danger }}>{matchesError}</Text>}
-          {allMatches.map(row => <MatchCard key={row.match.id} match={row.match} lookup={lookup} onPlayer={() => {}} onOpenMatch={openMatch} />)}
-          {matchesMore && <Button label="Load more matches" onPress={() => { void loadMoreMatches(); }} />}
-          {!matchesLoading && !matchesError && !allMatches.length && <Text style={s.body}>The draw has not been published yet.</Text>}
-          {!allMatches.length && <><Text style={s.section}>Saved schedule</Text>
-          {!!fixtureError && <View style={{ gap: 8 }}><Text style={{ color: brand.danger }}>{fixtureError}</Text><Button label="Retry fixtures" onPress={() => void load()} /></View>}
-          {fixtures && <Text style={s.caption}>Updated {proDate(fixtures.updatedAt)}{proStale(fixtures.updatedAt) ? ' · Update overdue' : ''}</Text>}
-          {fixtureMatches.length ? fixtureMatches.map(m => <MatchCard key={m.id} match={m} lookup={lookup} onPlayer={() => {}} onOpenMatch={openMatch} />)
-            : <Text style={s.body}>{fixtures?.tournament?.id === selected.id && !fixtures.drawPublished ? 'The main draw has not been published yet.' : 'No fixtures available in the current feed. Fixture coverage is limited to the next tour event.'}</Text>}
-          <Text style={s.section}>Results</Text>
-          {tour && <Text style={s.caption}>{tour.coverage} · Updated {proDate(tour.updatedAt)}</Text>}
-          {resultMatches.length ? resultMatches.map(m => <MatchCard key={m.id} match={m} lookup={lookup} onPlayer={() => {}} onOpenMatch={openMatch} />)
-            : <Text style={s.body}>No results for this tournament in the current feed.</Text>}</>}
-          </>}
-        </ScrollView>}
-      </SafeAreaView></SafeAreaProvider>
-    </Modal>
+          <Ionicons name="chevron-forward" size={16} color={brand.faint} accessible={false} />
+        </Pressable>;
+      }} />
+    <ErrorBanner message={seasonError || error || null} top={8} />
   </View>;
 }
 
 const s = StyleSheet.create({
-  header: { padding: 20, gap: 14 }, modal: { flex: 1, backgroundColor: brand.page },
-  kicker: { color: brand.accent, fontSize: 10, fontWeight: '700', letterSpacing: 1 },
-  heading: { color: brand.premium, fontSize: 36, fontWeight: '800', letterSpacing: -1 },
-  detailTitle: { color: brand.premium, fontSize: 28, fontWeight: '700' },
-  body: { color: brand.muted, fontSize: 14, lineHeight: 21 },
-  caption: { color: brand.muted, fontSize: 11, lineHeight: 17 },
-  search: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, borderRadius: 24, backgroundColor: brand.elevated, alignItems: 'center' },
-  filterButton: { paddingHorizontal: 20, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#16251f0d', borderRadius: 30 },
-  filterBadge: { backgroundColor: brand.padel, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  input: { flex: 1, minHeight: 48, fontSize: 13, color: brand.premium },
-  button: { minHeight: 44, borderRadius: 22, paddingHorizontal: 16, justifyContent: 'center', borderWidth: 1, borderColor: brand.edge },
-  buttonText: { color: brand.premium, fontSize: 12, fontWeight: '600' },
-  card: { marginHorizontal: 20, marginBottom: 12, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: brand.elevated, borderRadius: 20, borderColor: brand.edge, borderWidth: 1 },
-  thumbnail: { width: 66, height: 90, borderRadius: 10 }, cover: { width: '100%', height: 190, borderRadius: 20 },
-  name: { color: brand.premium, fontSize: 16, lineHeight: 21, fontWeight: '700' },
-  date: { color: brand.accent, fontSize: 12, lineHeight: 18, fontWeight: '600' },
-  section: { color: brand.premium, fontSize: 20, fontWeight: '700' },
+  card: { marginHorizontal: 16, marginBottom: 12, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: brand.elevated, borderRadius: 16, borderColor: brand.edge, borderWidth: StyleSheet.hairlineWidth },
+  thumbnail: { width: 72, height: 100, borderRadius: 8, backgroundColor: brand.surface },
+  metadata: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' },
+  level: { color: brand.accent, backgroundColor: brand.glass, fontSize: 11, lineHeight: 16, fontWeight: '500', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  live: { color: brand.danger, fontSize: 12, lineHeight: 18, fontWeight: '600' },
+  name: { color: brand.premium, fontSize: 16, lineHeight: 21, fontWeight: '600' },
+  date: { color: brand.accent, fontSize: 12, lineHeight: 18, fontWeight: '500', fontVariant: ['tabular-nums'] },
+  source: { color: brand.faint, fontSize: 11, lineHeight: 16 },
 });

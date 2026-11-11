@@ -9,7 +9,7 @@ import type { EventDrawStatus } from '@/lib/event-draws';
 import { drawMatchWhen, type DrawChoice, type DrawMatch, type DrawPerson, type DrawSection, type DrawTeam } from '@/lib/tournament-draw';
 import { fetchTournamentDraw, fetchTournamentDrawChoices } from '@/lib/tournament-draw-data';
 import { localPlayerCountryFlag } from '@/lib/player-hub';
-import { lightBrand as b } from '@/theme/tokens';
+import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 import { supabase } from '@/lib/supabase';
 
 const BLUE = '#2449D8';
@@ -83,7 +83,7 @@ export function TournamentDrawBoard({ sections, results = false, matchId }: { se
     </>}
   </View>;
 }
-export function TournamentDraw({ event, source, directory, results = false, divisionId, matchId, refreshKey }: { event: EventDetail; source: EventDrawStatus['source']; directory: RankedPlayer[]; results?: boolean; divisionId?: string; matchId?: string; refreshKey: number }) {
+export function TournamentDraw({ event, source, directory, results = false, divisionId, choiceId, matchId, refreshKey }: { event: EventDetail; source: EventDrawStatus['source']; directory: RankedPlayer[]; results?: boolean; divisionId?: string; choiceId?: string; matchId?: string; refreshKey: number }) {
   const [choices, setChoices] = useState<DrawChoice[]>([]), [selected, setSelected] = useState(''), [sections, setSections] = useState<DrawSection[]>([]);
   const [loading, setLoading] = useState(true), [error, setError] = useState(''), [retry, setRetry] = useState(0), [stale, setStale] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
@@ -100,9 +100,9 @@ export function TournamentDraw({ event, source, directory, results = false, divi
   useEffect(() => {
     let active = true;
     setLoading(true); setError('');
-    void fetchTournamentDrawChoices(event, source, matchId).then(list => { if (active) { setChoices(list); setSelected(previous => list.some(c => c.id === previous) ? previous : list.find(c => c.classId === divisionId)?.id || list[0]?.id || ''); if (!list.length) setLoading(false); } }).catch(() => { if (active) { setError('Draws could not load. Please try again.'); setLoading(false); } });
+    void fetchTournamentDrawChoices(event, source, matchId).then(list => { if (active) { setChoices(list); setSelected(previous => list.find(c => c.id === choiceId)?.id || list.find(c => c.classId === divisionId)?.id || (list.some(c => c.id === previous) ? previous : list[0]?.id || '')); if (!list.length) setLoading(false); } }).catch(() => { if (active) { setError('Draws could not load. Please try again.'); setLoading(false); } });
     return () => { active = false; };
-  }, [event.id, source, divisionId, matchId, refreshKey, retry]);
+  }, [event.id, source, divisionId, choiceId, matchId, refreshKey, retry]);
   const choice = choices.find(c => c.id === selected);
   const load = useCallback(() => {
     if (!choice) return () => {};
@@ -119,10 +119,10 @@ export function TournamentDraw({ event, source, directory, results = false, divi
   }, []);
   return <View style={{ gap: 16 }}>
     {points.map(award => <View key={award.division} style={s.points}><Text style={s.sectionTitle}>Your points · {award.division}</Text><Text style={s.retryText}>{award.points} points · {award.round.replaceAll('_', ' ')}</Text></View>)}
-    <View style={s.heading}><Ionicons name={results ? 'trophy-outline' : 'git-branch-outline'} size={22} color={b.accent} /><Text accessibilityRole="header" style={s.headingText}>{results ? 'Tournament results' : 'Tournament draws'}</Text><Pressable disabled={loading} accessibilityRole="button" accessibilityLabel="Refresh tournament draws" onPress={() => setRetry(n => n + 1)} style={s.arrow}>{loading ? <ActivityIndicator color={b.accent} /> : <Ionicons name="refresh-outline" size={20} color={b.accent} />}</Pressable></View>
+    <View style={s.heading}><Ionicons name={results ? 'trophy-outline' : 'git-branch-outline'} size={22} color={b.accent} /><Text accessibilityRole="header" style={s.headingText}>{results ? 'Tournament results' : 'Tournament draws'}</Text><Pressable disabled={loading} accessibilityRole="button" accessibilityLabel="Refresh tournament draws" onPress={() => setRetry(n => n + 1)} style={s.arrow}>{loading ? <ActivityIndicator color={loadingBlue} /> : <Ionicons name="refresh-outline" size={20} color={b.accent} />}</Pressable></View>
     {!!choices.length && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>{choices.map(c => <Pressable key={c.id} accessibilityRole="button" accessibilityState={{ selected: c.id === selected }} onPress={() => { setSelected(c.id); setSections([]); }} style={[s.divisionChip, c.id === selected && s.activeDivision]}><Text style={[s.divisionText, c.id === selected && { color: '#FFF' }]}>{c.name}</Text></Pressable>)}</ScrollView>}
     {!!error && <View style={s.error}><Text accessibilityRole="alert" style={s.emptyCopy}>{error}</Text><Pressable accessibilityRole="button" onPress={() => setRetry(n => n + 1)} style={s.retry}><Text style={s.retryText}>Retry</Text></Pressable></View>}
-    {loading && !sections.length ? <ActivityIndicator accessibilityLabel="Loading tournament draw" color={b.accent} style={{ paddingVertical: 40 }} /> : !error && <TournamentDrawBoard key={choice?.id} sections={sections} results={results} matchId={matchId} />}
+    {loading && !sections.length ? <ActivityIndicator accessibilityLabel="Loading tournament draw" color={loadingBlue} style={{ paddingVertical: 40 }} /> : !error && <TournamentDrawBoard key={choice?.id} sections={sections} results={results} matchId={matchId} />}
     {!loading && !!updatedAt && <Text style={s.updated}>{stale ? 'Showing last available draw · ' : 'Updated '}{new Intl.DateTimeFormat('en-ZA', { timeZone: 'Africa/Johannesburg', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(updatedAt))} SAST</Text>}
   </View>;
 }

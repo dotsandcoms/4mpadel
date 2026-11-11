@@ -1,37 +1,58 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { Check, ChevronDown, LoaderCircle, Search } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, LoaderCircle, Search, X } from 'lucide-react';
+
+function eventDate(value) {
+    const date = value ? new Date(value) : null;
+    return date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Africa/Johannesburg' }) : '';
+}
 
 export default function EventMessagingPicker({ events, selected, onSelect, onSearch, loading }) {
-    const id = useId(), root = useRef(null), input = useRef(null);
+    const id = useId(), root = useRef(null), input = useRef(null), trigger = useRef(null);
     const [open, setOpen] = useState(false), [query, setQuery] = useState(''), [active, setActive] = useState(0);
+    const visible = loading ? [] : events;
+    const highlighted = visible[active];
     useEffect(() => {
         const outside = event => { if (!root.current?.contains(event.target)) setOpen(false); };
         document.addEventListener('pointerdown', outside);
         return () => document.removeEventListener('pointerdown', outside);
     }, []);
-    useEffect(() => { if (open) root.current?.querySelector(`[data-event-option="${active}"]`)?.scrollIntoView({ block: 'nearest' }); }, [active, open]);
-    const choose = event => { onSelect(String(event.id)); setOpen(false); setQuery(''); onSearch(''); input.current?.focus(); };
-    const keyDown = event => {
-        if (event.key === 'Escape' || event.key === 'Tab') { setOpen(false); return; }
-        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-            event.preventDefault(); setOpen(true); setActive(index => Math.max(0, Math.min(events.length - 1, open ? index + (event.key === 'ArrowDown' ? 1 : -1) : 0)));
-        }
-        if (event.key === 'Enter' && open && events[active]) { event.preventDefault(); choose(events[active]); }
+    useEffect(() => { if (open) input.current?.focus(); }, [open]);
+    useEffect(() => { setActive(0); }, [events, query]);
+    useEffect(() => { if (open && highlighted) root.current?.querySelector(`[data-event-option="${active}"]`)?.scrollIntoView({ block: 'nearest' }); }, [active, open, highlighted]);
+    const close = () => { setOpen(false); trigger.current?.focus(); };
+    const choose = event => {
+        if (loading) return;
+        onSelect(String(event.id)); setOpen(false); setQuery(''); onSearch(''); trigger.current?.focus();
     };
-    return <div className="em-picker" ref={root}>
-        <label htmlFor={id}>Event workspace</label>
-        <div className="em-picker-control"><Search size={18} aria-hidden="true" />
-            <input id={id} ref={input} role="combobox" aria-expanded={open} aria-controls={`${id}-list`} aria-autocomplete="list" aria-activedescendant={open && events[active] ? `${id}-${active}` : undefined} autoComplete="off" maxLength={120}
-                value={open ? query : selected?.title || ''} placeholder="Search events you manage…"
-                onFocus={() => { setOpen(true); setActive(0); }} onClick={() => setOpen(true)} onKeyDown={keyDown}
-                onChange={event => { setQuery(event.target.value); onSearch(event.target.value); setActive(0); setOpen(true); }} />
-            <button type="button" aria-label={open ? 'Close event search' : 'Open event search'} onClick={() => { if (open) setOpen(false); else { setOpen(true); input.current?.focus(); } }}>{loading ? <LoaderCircle size={17} className="em-spin" /> : <ChevronDown size={18} />}</button>
-        </div>
-        {open && <div className="em-picker-popover"><div className="em-picker-caption" role="status">{loading ? 'Searching authorised events…' : `${events.length} authorised ${events.length === 1 ? 'event' : 'events'}`}</div>
-            <div role="listbox" id={`${id}-list`} aria-label="Events you manage">{events.map((event, index) => <button type="button" role="option" aria-selected={String(event.id) === String(selected?.id)} id={`${id}-${index}`} data-event-option={index} key={event.id}
+    const keyDown = event => {
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            setActive(index => Math.max(0, Math.min(visible.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1))));
+        }
+        if (event.key === 'Enter') { event.preventDefault(); if (highlighted) choose(highlighted); }
+    };
+    return <div className="em-picker" ref={root} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }} onKeyDown={event => {
+        if (event.key === 'Escape' && open) { event.preventDefault(); event.stopPropagation(); close(); }
+    }}>
+        <label id={`${id}-label`} htmlFor={id}>Event</label>
+        <button ref={trigger} id={id} type="button" className={`em-picker-trigger${open ? ' is-open' : ''}`} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? `${id}-popup` : undefined} aria-labelledby={`${id}-label ${id}-value`} aria-describedby={`${id}-help`}
+            onClick={() => setOpen(value => !value)} onKeyDown={event => { if (['ArrowDown', 'ArrowUp'].includes(event.key)) { event.preventDefault(); setOpen(true); } }}>
+            <CalendarDays size={20} aria-hidden="true" />
+            <span className="em-picker-value"><strong id={`${id}-value`}>{selected?.title || 'Select an event'}</strong>{selected && <small>{[selected.organisation, eventDate(selected.date)].filter(Boolean).join(' · ')}</small>}</span>
+            <span className="em-picker-change"><span>{selected ? 'Change' : 'Choose'}</span><ChevronDown size={20} aria-hidden="true" /></span>
+        </button>
+        <p id={`${id}-help`} className="em-picker-help">Your organisation and profile permissions determine which events appear.</p>
+        {open && <div id={`${id}-popup`} className="em-picker-popover" role="dialog" aria-label="Choose an event">
+            <div className="em-picker-search"><Search size={18} aria-hidden="true" />
+                <input ref={input} role="combobox" aria-label="Search events you manage" aria-expanded="true" aria-controls={`${id}-list`} aria-autocomplete="list" aria-activedescendant={highlighted ? `${id}-${active}` : undefined} autoComplete="off" maxLength={120}
+                    value={query} placeholder="Search event, organisation or venue" onKeyDown={keyDown} onChange={event => { setQuery(event.target.value); onSearch(event.target.value); setActive(0); }} />
+                <button type="button" aria-label="Close event selector" onClick={close}><X size={18} aria-hidden="true" /></button>
+            </div>
+            <div className="em-picker-caption" role="status">{loading ? <><LoaderCircle size={14} className="em-spin" aria-hidden="true" />Searching your authorised events…</> : `${events.length} available ${events.length === 1 ? 'event' : 'events'} · Within your access`}</div>
+            <div role="listbox" id={`${id}-list`} aria-label="Events you manage" aria-busy={loading}>{visible.map((event, index) => <button type="button" role="option" tabIndex={-1} aria-selected={String(event.id) === String(selected?.id)} id={`${id}-${index}`} data-event-option={index} key={event.id}
                 className={active === index ? 'is-active' : ''} onMouseEnter={() => setActive(index)} onMouseDown={event => event.preventDefault()} onClick={() => choose(event)}>
-                <span><strong>{event.title}</strong><small>{[event.organisation, event.date?.slice(0, 10), event.venue].filter(Boolean).join(' · ')}</small></span>{String(event.id) === String(selected?.id) && <Check size={17} />}
-            </button>)}{!loading && !events.length && <p className="em-empty-search">No matching events within your access.</p>}</div>
+                <span><strong>{event.title}</strong><small>{[event.organisation, eventDate(event.date), event.venue].filter(Boolean).join(' · ')}</small></span>{String(event.id) === String(selected?.id) && <Check size={17} aria-hidden="true" />}
+            </button>)}{!loading && !events.length && <div className="em-empty-search"><strong>{query ? 'No matching events' : 'No events available for this profile'}</strong><p>{query ? 'Try another event name, organisation or venue.' : 'Ask your organisation admin to check your event access.'}</p></div>}</div>
         </div>}
     </div>;
 }

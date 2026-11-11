@@ -312,12 +312,13 @@ Deno.serve(async req => {
       division_names: quote.divisionNames.join(', '), primary_partner_name: [...new Set(partnerNames)].join(', ') || 'TBD',
       event_dates: event.event_dates || '', event_venue: [event.venue, event.city].filter(Boolean).join(', '),
       division_entry_fees: divisionFees, commerce, reference };
-    const existing = await checked(admin.from('payments').select('status, amount, metadata, is_test').eq('reference', reference).maybeSingle());
+    const existing = await checked(admin.from('payments').select('status, amount, metadata, is_test, player_id, event_id').eq('reference', reference).maybeSingle());
     if (existing) {
+      if (existing.player_id !== profile.id || existing.event_id !== eventId || norm(existing.metadata?.registrant_email) !== email) fail('This checkout belongs to another account. Start again.');
+      if (existing.status === 'success') return json({ registered: true, quote });
       if (existing.amount !== total || existing.is_test !== (input.isTest === true)
         || JSON.stringify(existing.metadata?.registration_rows) !== JSON.stringify(rows)
         || JSON.stringify(existing.metadata?.covers) !== JSON.stringify(covers)) fail('This checkout attempt has changed. Start again.');
-      if (existing.status === 'success') return json({ registered: true, quote });
       if (existing.metadata?.native_authorization_url) return json({ authorizationUrl: existing.metadata.native_authorization_url, reference, quote });
     } else await checked(admin.from('payments').insert({ player_id: profile.id, event_id: eventId, amount: total,
       currency: 'ZAR', status: 'processing', payment_type: 'event_entry_fee', payment_method: 'paystack',

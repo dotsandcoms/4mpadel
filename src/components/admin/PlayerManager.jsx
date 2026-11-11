@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../../supabaseClient';
+import { MAX_PLAYER_GALLERY_PHOTOS } from '../../utils/playerGallery';
 import { Trash2, Edit2, Plus, X, CheckCircle, AlertCircle, Search, Users, CreditCard, Eye, EyeOff, Mail, ShieldAlert, Key, Image as ImageIcon, Upload, MapPin, Download, Calendar, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ExcelJS from 'exceljs';
@@ -539,7 +540,7 @@ const PlayerManager = ({ canManageLicenses = false }) => {
     const handleGalleryUpload = async event => {
         const files = [...(event.target.files || [])]; event.target.value = '';
         if (!files.length || busy) return;
-        const remaining = Math.max(0, 5 - formData.additional_images.length);
+        const remaining = Math.max(0, MAX_PLAYER_GALLERY_PHOTOS - formData.additional_images.length);
         if (files.length > remaining) { setFormError(`Choose up to ${remaining} more gallery photos.`); return; }
         const invalid = files.map(proofFileError).find(Boolean);
         if (invalid) { setFormError(invalid); return; }
@@ -554,7 +555,7 @@ const PlayerManager = ({ canManageLicenses = false }) => {
                 const { data } = supabase.storage.from('profile-pics').getPublicUrl(filePath);
                 urls.push(data.publicUrl);
             }
-            setFormData(previous => ({ ...previous, additional_images: [...previous.additional_images, ...urls].slice(0, 5) }));
+            setFormData(previous => ({ ...previous, additional_images: [...previous.additional_images, ...urls].slice(0, MAX_PLAYER_GALLERY_PHOTOS) }));
         } catch (error) { setFormError(error.message || 'Could not upload gallery photos. Please try again.'); }
         finally { setUploadingGallery(false); }
     };
@@ -1305,13 +1306,13 @@ const PlayerManager = ({ canManageLicenses = false }) => {
                                         </div>
                                     </div>
                                     <div className="md:col-span-2 space-y-3">
-                                        <h4 className="text-sm font-bold text-white">Gallery photos <span className="font-normal text-gray-400">{formData.additional_images.length} / 5</span></h4>
+                                        <h4 className="text-sm font-bold text-white">Gallery photos <span className="font-normal text-gray-400">{formData.additional_images.length} / {MAX_PLAYER_GALLERY_PHOTOS}</span></h4>
                                         <p className="text-xs text-gray-400">These photos appear on the player’s profile. Save to apply additions or removals.</p>
                                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">{formData.additional_images.map((url, index) => <div key={`${url}-${index}`} className="space-y-1">
                                             <img src={url} alt={`Player gallery photo ${index + 1}`} width={200} height={150} className="h-28 w-full rounded-lg object-cover border border-white/10" />
                                             <button type="button" aria-label={`Remove gallery photo ${index + 1}`} disabled={uploadingGallery} onClick={() => setFormData(previous => ({ ...previous, additional_images: previous.additional_images.filter((_, position) => position !== index) }))} className="min-h-11 text-sm text-gray-300 underline">Remove photo</button>
                                         </div>)}</div>
-                                        {formData.additional_images.length < 5 && <label className="block text-sm text-gray-400">Add gallery photos
+                                        {formData.additional_images.length < MAX_PLAYER_GALLERY_PHOTOS && <label className="block text-sm text-gray-400">Add gallery photos
                                             <input name="gallery_photos" type="file" multiple accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={handleGalleryUpload} className="mt-2 block w-full min-h-11 rounded-lg border border-white/20 p-2 text-sm text-white file:mr-3 file:rounded file:border-0 file:bg-white file:px-3 file:py-2 file:text-black" />
                                         </label>}
                                         {uploadingGallery && <p role="status" className="text-sm text-padel-green">Uploading gallery photos…</p>}

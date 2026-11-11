@@ -1,3 +1,4 @@
+import { withSapaMainRanking } from './sapa-main-ranking';
 import { queueWelcomeEmail } from '@/lib/welcome-email';
 import { parseSponsors } from '@/lib/sponsors';
 import { courtSideLabel, playingHandLabel } from '@/lib/player-preferences';
@@ -409,7 +410,7 @@ async function fetchPlayerRow(email: string): Promise<PlayerRow | null> {
       .ilike('email', email)
       .maybeSingle();
     if (error || !data) return null;
-    return data as PlayerRow;
+    return withSapaMainRanking(data) as PlayerRow;
   } catch {
     return null;
   }

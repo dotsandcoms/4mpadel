@@ -4,6 +4,9 @@
  * that need raw values — native tab bars, status bar, splash, Reanimated.
  */
 
+/** App loading/refresh feedback uses blue independently of event tier colours. */
+export const loadingBlue = '#27517B';
+
 export const brand = {
   /** Electric lime. The only accent. One per screen, ideally. */
   padel: '#CCFF00',

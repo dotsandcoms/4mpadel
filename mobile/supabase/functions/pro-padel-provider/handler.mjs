@@ -14,7 +14,7 @@ export function validateProviderRequest(input) {
   const url = new URL(input.url);
   if (url.origin !== 'https://padelapi.org' || url.username || url.password || url.hash) throw new Error('Invalid resource');
   const method = input.method || 'GET';
-  const getPath = /^\/api\/(?:live|rankings|players(?:\/[1-9]\d*(?:\/(?:stats|matches|pairs|rankings))?)?|seasons(?:\/[1-9]\d*\/tournaments)?|tournaments(?:\/[1-9]\d*(?:\/matches)?)?|matches\/[1-9]\d*(?:\/(?:live|stats|headtohead))?|pairs\/[1-9]\d*-[1-9]\d*\/(?:stats|matches))$/;
+  const getPath = /^\/api\/(?:live|rankings|players(?:\/[1-9]\d*(?:\/(?:stats|matches|pairs|rankings|rivals|form))?)?|seasons(?:\/[1-9]\d*\/tournaments)?|tournaments(?:\/[1-9]\d*(?:\/matches)?)?|matches\/[1-9]\d*(?:\/(?:live|stats|headtohead))?|pairs\/[1-9]\d*-[1-9]\d*\/(?:stats|matches|rivals|synergy))$/;
   if (method === 'GET' ? !getPath.test(url.pathname) : method !== 'POST' || !/^\/api\/matches\/(?:headtohead|simulate)$/.test(url.pathname)) throw new Error('Invalid resource');
   if ([...url.searchParams].some(([key, value]) => !/^[a-z_]+$/.test(key) || value.length > 500)) throw new Error('Invalid filters');
   for (const [key, maximum] of [['page', 10000], ['per_page', 50]]) {

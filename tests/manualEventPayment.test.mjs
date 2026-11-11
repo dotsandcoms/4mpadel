@@ -58,6 +58,18 @@ for (const path of paths) {
     const { code } = await transform(source, { loader: 'ts', format: 'esm' });
     const helpers = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 
+    if (!path.startsWith('outputs/')) {
+        test(`${path}: client snapshots cannot grant extra paid entries or administrative fields`, () => {
+            const rows=helpers.buildPersistedRegistrationRows([{...snapshot,email:'uncovered@example.com',payment_status:'paid',refund_amount:300,whatsapp_added:true,pay_token:'forged',approved:true}],covers,snapshot.email);
+            assert.equal(rows[0].payment_status,'pending');
+            for(const field of ['refund_amount','whatsapp_added','pay_token','approved']) assert.equal(rows[0][field],undefined);
+        });
+        test(`${path}: only a server-priced free entry can be marked paid without an entry cover`, () => {
+            const rows=helpers.buildPersistedRegistrationRows([snapshot],[],snapshot.email,[{event_id:snapshot.event_id,email:snapshot.email,division:snapshot.division}]);
+            assert.equal(rows[0].payment_status,'paid');
+            assert.equal(helpers.buildPersistedRegistrationRows([snapshot],[],snapshot.email)[0].payment_status,'pending');
+        });
+    }
     test(`${path}: renamed division keeps one original entry, token and partner payment`, async () => {
         const client = database([original, partner]);
         const result = await helpers.persistManualEventRegistrations(client, payment, meta, covers);

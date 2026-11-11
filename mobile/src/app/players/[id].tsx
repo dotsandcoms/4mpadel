@@ -2,7 +2,7 @@ import { PlayerMessageButton } from '@/components/messaging/entry-buttons';
 import { trackEvent } from '@/lib/analytics';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, Pressable, RefreshControl, ScrollView, Share, Text, View } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,14 +15,14 @@ import { LocalFollowButton } from '@/components/players/local-follow-button';
 import { PlayerFollowerCount } from '@/components/players/player-follower-count';
 import { PlayerOverview, PlayerForm, PlayerMatchCard } from '@/components/players/profile-sections';
 import { PlayerTournamentResults } from '@/components/players/player-tournament-results';
-import { lightBrand as b } from '@/theme/tokens';
+import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 import { fetchMyFipLink } from '@/lib/player-fip-link';
 import { lookupOfficialFipProfile, searchProPlayers, type OfficialFipProfile, type PlayerFipLink } from '@/lib/player-hub';
 import type { ProPlayer } from '@/lib/pro-padel';
 
 const card = { padding: 16, gap: 10, backgroundColor: b.elevated, borderRadius: 16, borderWidth: 1, borderColor: b.edge } as const;
 export default function PlayerProfile() {
-  const { id } = useLocalSearchParams<{ id: string }>(); const safe = useSafeAreaInsets();
+  const { id } = useLocalSearchParams<{ id: string }>(); const safe = useSafeAreaInsets(); const router = useRouter();
   const [player, setPlayer] = useState<PublicPlayer | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [shareError, setShareError] = useState('');
   const [tab, setTab] = useState('Overview'); const [ranking, setRanking] = useState<number | null>(null); const [photo, setPhoto] = useState<string | null>(null);
   const [matches, setMatches] = useState<MatchLists | null>(null); const [matchError, setMatchError] = useState(''); const request = useRef(0);
@@ -66,15 +66,15 @@ export default function PlayerProfile() {
   const share = async () => { if (!player) return; try { setShareError(''); const result = await Share.share({ title: player.name, message: `${player.name} on 4M Padel\n${siteUrl(`/players?id=${player.id}`)}` }); if (result.action === Share.sharedAction) void trackEvent('share', { content_type: 'local_player', method: 'native' }); } catch { setShareError('Could not open sharing. Please try again.'); } };
   return <View style={{ flex: 1, backgroundColor: b.page }}>
     <Stack.Screen options={{ headerShown: true, headerBackButtonDisplayMode: 'minimal', title: 'Player profile', headerTintColor: b.premium, headerStyle: { backgroundColor: b.page }, headerShadowVisible: false, headerRight: () => <Pressable accessibilityRole="button" accessibilityLabel="Share player profile" disabled={!player} onPress={share} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="share-outline" size={23} color={b.premium} /></Pressable> }} />
-    <ScrollView refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={b.accent} />} contentContainerStyle={{ padding: 16, paddingBottom: safe.bottom + 24, gap: 16 }}>
-      {loading && !player && <ActivityIndicator color={b.accent} />}
+    <ScrollView refreshControl={<RefreshControl colors={[loadingBlue]} refreshing={loading} onRefresh={load} tintColor={loadingBlue} />} contentContainerStyle={{ padding: 16, paddingBottom: safe.bottom + 24, gap: 16 }}>
+      {loading && !player && <ActivityIndicator color={loadingBlue} />}
       {!!error && <View style={card}><Text accessibilityRole="alert" style={{ color: b.danger }}>{error}</Text><Pressable accessibilityRole="button" onPress={load} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: b.accent }}>Try again</Text></Pressable></View>}
       {!!shareError && <Text accessibilityRole="alert" style={{ color: b.danger }}>{shareError}</Text>}
       {player && <>
         <View style={{ alignItems: 'center', gap: 8, paddingVertical: 4 }}>
           <Pressable accessibilityRole="button" accessibilityLabel={`View ${player.name}'s photo`} disabled={!player.image_url} onPress={() => setPhoto(player.image_url)} style={{ width: 88, height: 88, borderRadius: 44, overflow: 'hidden', backgroundColor: b.surface, justifyContent: 'center', alignItems: 'center' }}>{player.image_url ? <Image source={{ uri: player.image_url }} style={{ width: 88, height: 88 }} contentFit="cover" /> : <Text style={{ fontSize: 38, fontWeight: '700', color: b.accent }}>{player.name.charAt(0)}</Text>}</Pressable>
           <Text accessibilityRole="header" style={{ fontSize: 24, fontWeight: '800', color: b.premium, textAlign: 'center' }}>{player.name}</Text>
-          <PlayerFollowerCount playerId={player.id} refreshKey={followerRefresh} />
+          <PlayerFollowerCount playerId={player.id} playerName={player.name} refreshKey={followerRefresh} onPress={() => router.push({ pathname: '/followers', params: { playerId: player.id, playerName: player.name } })} />
           {!!instagramUrl(player.instagram_link) && <Pressable accessibilityRole="link" accessibilityLabel={`Open ${player.name}'s Instagram`} onPress={() => { const url = instagramUrl(player.instagram_link); if (url) void Linking.openURL(url).catch(() => setShareError('Could not open Instagram. Please try again.')); }} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: b.surface, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="logo-instagram" size={23} color={b.accent} /></Pressable>}
           <PlayerMessageButton playerId={player.id} />
           <LocalFollowButton playerId={player.id} name={player.name} onFollowChange={() => setFollowerRefresh(value => value + 1)} />
@@ -103,7 +103,7 @@ export default function PlayerProfile() {
         {tab === 'Form' && <PlayerForm player={player} />}
         {tab === 'Results' && displayedPlayer && <PlayerTournamentResults key={player.id} player={displayedPlayer} />}
         {tab === 'Rankings' && <>{!player.rankings.length && <Empty>No published rankings for this player yet.</Empty>}{(displayedPlayer || player).rankings.map((r, index) => <View key={index} style={card}><Pressable accessibilityRole="button" accessibilityState={{ expanded: ranking === index }} onPress={() => setRanking(ranking === index ? null : index)} style={{ minHeight: 48, flexDirection: 'row', gap: 12, alignItems: 'center' }}><View style={{ flex: 1, gap: 5 }}><Text style={{ color: b.accent, fontWeight: '700' }}>{r.org || 'Ranking'}</Text><Text style={{ color: b.premium }}>{[r.age_group || r.division, r.match_type].filter(Boolean).join(' · ')}</Text></View><View style={{ alignItems: 'flex-end', gap: 5 }}><Text style={{ color: b.premium, fontWeight: '700' }}>{publicRank(r.rank)}</Text><Text style={{ color: b.muted }}>{playerPoints(r.points)} pts</Text></View><Ionicons name={ranking === index ? 'chevron-up' : 'chevron-down'} size={18} color={b.muted} /></Pressable>{ranking === index && <><Text style={{ color: b.muted, fontSize: 12 }}>TOURNAMENT RESULTS</Text>{r.details?.length ? r.details.map((result, i) => <View key={i} style={{ paddingVertical: 12, borderTopWidth: 1, borderColor: b.edge, flexDirection: 'row', gap: 12 }}><View style={{ flex: 1, gap: 5 }}><Text style={{ color: b.premium, fontWeight: '600' }}>{result.name || 'Tournament'}</Text><Text style={{ color: b.muted, fontSize: 12 }}>{[result.date, result.class, result.place ? `Place ${result.place}` : ''].filter(Boolean).join(' · ')}</Text></View><Text style={{ color: b.accent }}>{pointsGain(result.points)}</Text></View>) : <Text style={{ color: b.muted }}>No points breakdown published.</Text>}</>}</View>)}</>}
-        {tab === 'Matches' && <>{!player.rankedin_id ? <Empty>No linked match history is available.</Empty> : matchError ? <Empty>{matchError}</Empty> : !matches ? <ActivityIndicator color={b.accent} /> : <>{[['Upcoming', matches.upcoming], ['Recent results', matches.past]].map(([label, rows]) => <View key={String(label)} style={{ gap: 12 }}><Heading>{String(label)}</Heading>{typeof rows !== 'string' && (rows.length ? rows.map((match, index) => <PlayerMatchCard key={matchKey(match, index)} match={match} upcoming={label === 'Upcoming'} />) : <Text style={{ color: b.muted }}>No published matches.</Text>)}</View>)}</>}</>}
+        {tab === 'Matches' && <>{!player.rankedin_id ? <Empty>No linked match history is available.</Empty> : matchError ? <Empty>{matchError}</Empty> : !matches ? <ActivityIndicator color={loadingBlue} /> : <>{[['Upcoming', matches.upcoming], ['Recent results', matches.past]].map(([label, rows]) => <View key={String(label)} style={{ gap: 12 }}><Heading>{String(label)}</Heading>{typeof rows !== 'string' && (rows.length ? rows.map((match, index) => <PlayerMatchCard key={matchKey(match, index)} match={match} upcoming={label === 'Upcoming'} />) : <Text style={{ color: b.muted }}>No published matches.</Text>)}</View>)}</>}</>}
         {tab === 'Gallery' && <>{!gallery.length ? <Empty>No photos added yet.</Empty> : <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>{gallery.map((uri, index) => <Pressable key={uri} accessibilityRole="button" accessibilityLabel={`Open photo ${index + 1}`} onPress={() => setPhoto(uri)} style={{ width: '47%', aspectRatio: 1, borderRadius: 16, overflow: 'hidden', backgroundColor: b.surface }}><Image source={{ uri }} style={{ width: '100%', height: '100%' }} contentFit="cover" /></Pressable>)}</View>}</>}
       </>}
     </ScrollView>

@@ -39,7 +39,7 @@ import EventActivityLog from './EventActivityLog';
 import { logEventActivity } from '../../utils/eventActivityLog';
 import { parseEventDate } from '../../utils/eventEntryFee';
 import { findFinancePayment, buildFinanceAllocations, loadEventRefunds } from '../../utils/eventFinanceReconciliation';
-import { calculateEventSettlement, collectionBucket, collectionRecipient, eventPayoutRequestLimit } from '../../utils/eventSettlement';
+import { calculateEventSettlement, loadEventCashVerification, collectionBucket, collectionRecipient, eventPayoutRequestLimit } from '../../utils/eventSettlement';
 import { fetchAllRows } from '../../utils/fetchAllRows';
 import { downloadEventFinanceWorkbook } from '../../utils/eventFinanceExport';
 import { buildEventReceiptReport } from '../../utils/eventReceiptReport';
@@ -2502,11 +2502,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         };
     }, [activeRegistrations, payments, divFee, formatLicenseForExport, refundByReg, refunds, interimPayments, earlyBirdMeta, registrations, divisions, event]);
 
-    const incomeStatementRows = useMemo(() => {
+    const buildIncomeStatementRows = useCallback((reportStats) => {
         const rows = [];
         const usedPaymentIds = new Set();
         const teamLabel = (r) => [r.full_name, r.partner_name].filter(Boolean).join(' / ') || r.email || '—';
-        overviewStats.receiptRows.forEach(payment => {
+        reportStats.receiptRows.forEach(payment => {
             payment.paymentIds.forEach(id => usedPaymentIds.add(id));
             const matched = registrations.filter(r => payment.claims.some(p => p.metadata?.registration_id === r.id
                 || paymentMatchesRegistration(p, r)));
@@ -2519,7 +2519,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                 paymentId: payment.id,
                 reference: payment.reference || '', note: payment.metadata?.note || payment.metadata?.payment_note || '' });
         });
-        overviewStats.allocations.forEach(allocation => {
+        reportStats.allocations.forEach(allocation => {
             const r = allocation.registration;
             if (!allocation.comped && allocation.outstanding <= 0) return;
             rows.push({ id: `uncollected-${r.id}`, date: r.created_at,
@@ -2529,7 +2529,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                 division: r.division, amount: allocation.outstanding || 0, status: allocation.comped ? 'comped' : 'pending',
                 method: allocation.comped ? 'Comped' : '—', reference: '', note: '' });
         });
-        [...overviewStats.processedRefundRows, ...overviewStats.reservedRefundRows].forEach(rf => {
+        [...reportStats.processedRefundRows, ...reportStats.reservedRefundRows].forEach(rf => {
             const reg = registrations.find(r => r.id === rf.event_registration_id);
             const processed = rf.status === 'processed';
             rows.push({ id: `refund-${rf.id}`, date: rf.processed_at || rf.created_at,
@@ -2596,7 +2596,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             });
         });
 
-        if (overviewStats.commission > 0) {
+        if (reportStats.commission > 0) {
             rows.push({
                 id: 'platform-fee',
                 date: null,
@@ -2607,7 +2607,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                 player: '—',
                 email: '',
                 division: '',
-                amount: -overviewStats.commission,
+                amount: -reportStats.commission,
                 status: 'processed',
                 method: '—',
                 reference: '',
@@ -2615,15 +2615,15 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             });
         }
 
-        if (overviewStats.organiserRetained !== 0) rows.push({
+        if (reportStats.organiserRetained !== 0) rows.push({
             id: 'organiser-receipts-retained', date: null,
             description: 'Entry fees already retained by organiser', category: 'Direct organiser receipts retained',
             bucket: 'Organiser retained', type: 'organiser_receipts', player: event?.organiser_name || 'Organiser',
-            email: '', division: '', amount: -overviewStats.organiserRetained, status: 'processed',
+            email: '', division: '', amount: -reportStats.organiserRetained, status: 'processed',
             method: 'Direct collection', reference: '',
             note: 'Included in gross collections; already held by the organiser, so deducted from the transfer due from 4M.',
         });
-        overviewStats.payoutRows.forEach((p) => {
+        reportStats.payoutRows.forEach((p) => {
             const amount = Math.max(0, Number(p.amount || 0));
             if (amount <= 0) return;
             rows.push({
@@ -2654,7 +2654,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         });
 
         return rows;
-    }, [payments, refunds, registrations, overviewStats, event?.organiser_name, event?.organiser_email]);
+    }, [payments, refunds, registrations, event?.organiser_name, event?.organiser_email]);
+
+    const incomeStatementRows = useMemo(() => buildIncomeStatementRows(overviewStats), [buildIncomeStatementRows, overviewStats]);
 
     const filteredIncomeStatementRows = useMemo(() => {
         const q = statementSearch.trim().toLowerCase();
@@ -2819,13 +2821,17 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         setExportMenuOpen(false);
         setExportingFinance(true);
         try {
+            const verification = await loadEventCashVerification(supabase, event.id);
+            if (!verification.complete) throw new Error('Payment verification is incomplete. Refresh and try the export again.');
+            const reportStats = { ...overviewStats, ...calculateEventSettlement({ event, registrations, divisions, payments, refunds, interimPayments, verification }) };
+
             const eventDate = event?.start_date
                 ? new Date(event.start_date).toLocaleDateString('en-ZA', {
                     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
                 })
                 : '';
-            const billedCompositionRows = overviewStats.billedTierBreakdown.map((tier, index) => {
-                const label = index === 0 && overviewStats.billedTierBreakdown.length > 1
+            const billedCompositionRows = reportStats.billedTierBreakdown.map((tier, index) => {
+                const label = index === 0 && reportStats.billedTierBreakdown.length > 1
                     ? 'Early bird'
                     : 'Regular';
                 return {
@@ -2837,77 +2843,77 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             });
 
             const summary = [
-                { section: 'Reconciliation', label: 'Status', value: overviewStats.issues.length ? 'Needs review' : 'Reconciled', note: overviewStats.issues.join('; ') },
+                { section: 'Reconciliation', label: 'Status', value: reportStats.issues.length ? 'Needs review' : 'Reconciled', note: reportStats.issues.join('; ') },
                 { section: 'Entries', label: 'Total entries', value: dashboardStats.totalEntries },
                 { section: 'Entries', label: 'Unique players', value: dashboardStats.uniquePlayers },
                 { section: 'Entries', label: 'Paid', value: dashboardStats.paidCount },
-                { section: 'Entries', label: 'Pending / unpaid', value: overviewStats.pendingCount, note: fmtR(overviewStats.pendingAmount) },
-                { section: 'Entries', label: 'Comped (free)', value: overviewStats.compedEntries },
-                { section: 'Entries', label: 'Withdrawn', value: overviewStats.withdrawnCount },
-                { section: 'Entries', label: 'Early bird sign-ups', value: overviewStats.earlyBirdSignups },
-                { section: 'Entries', label: 'Normal sign-ups', value: overviewStats.normalSignups },
+                { section: 'Entries', label: 'Pending / unpaid', value: reportStats.pendingCount, note: fmtR(reportStats.pendingAmount) },
+                { section: 'Entries', label: 'Comped (free)', value: reportStats.compedEntries },
+                { section: 'Entries', label: 'Withdrawn', value: reportStats.withdrawnCount },
+                { section: 'Entries', label: 'Early bird sign-ups', value: reportStats.earlyBirdSignups },
+                { section: 'Entries', label: 'Normal sign-ups', value: reportStats.normalSignups },
 
-                { section: 'Billed vs collected (all channels)', label: 'Total amount billed', value: overviewStats.totalAmountBilled, money: true, note: 'Gross entry collections plus outstanding entry fees' },
-                { section: 'Billed vs collected (all channels)', label: 'Gross entry fees collected', value: overviewStats.grossEntryFees, money: true, note: 'All successful Paystack and manual/EFT entry payments, including later refunds' },
-                { section: 'Billed vs collected (all channels)', label: '  of which Paystack to 4M', value: overviewStats.paystackCollected, money: true },
-                { section: 'Billed vs collected (all channels)', label: '  of which Manual / EFT to 4M', value: overviewStats.collectedManual, money: true },
-                { section: 'Billed vs collected (all channels)', label: '  of which direct to organiser', value: overviewStats.collectedOrganiser, money: true },
-                { section: 'Billed vs collected (all channels)', label: '  of which recipient unconfirmed', value: overviewStats.unconfirmedCollected, money: true },
-                { section: 'Billed vs collected (all channels)', label: 'Net entry income', value: overviewStats.entryFeeBalance, money: true, note: 'Gross entry collections less entry refunds' },
-                { section: 'Billed vs collected (all channels)', label: 'Outstanding', value: overviewStats.pendingAmount, money: true },
+                { section: 'Billed vs collected (all channels)', label: 'Total amount billed', value: reportStats.totalAmountBilled, money: true, note: 'Gross entry collections plus outstanding entry fees' },
+                { section: 'Billed vs collected (all channels)', label: 'Gross entry fees collected', value: reportStats.grossEntryFees, money: true, note: 'All successful Paystack and manual/EFT entry payments, including later refunds' },
+                { section: 'Billed vs collected (all channels)', label: '  of which Paystack to 4M', value: reportStats.paystackCollected, money: true },
+                { section: 'Billed vs collected (all channels)', label: '  of which Manual / EFT to 4M', value: reportStats.collectedManual, money: true },
+                { section: 'Billed vs collected (all channels)', label: '  of which direct to organiser', value: reportStats.collectedOrganiser, money: true },
+                { section: 'Billed vs collected (all channels)', label: '  of which recipient unconfirmed', value: reportStats.unconfirmedCollected, money: true },
+                { section: 'Billed vs collected (all channels)', label: 'Net entry income', value: reportStats.entryFeeBalance, money: true, note: 'Gross entry collections less entry refunds' },
+                { section: 'Billed vs collected (all channels)', label: 'Outstanding', value: reportStats.pendingAmount, money: true },
 
                 ...billedCompositionRows,
 
-                { section: 'Refunds', label: 'Pending entry refund reserve', value: overviewStats.refundReserve, money: true, note: 'Reserved from payout cash; not a completed refund' },
-                { section: 'Refunds', label: 'Entry fee refunds', value: overviewStats.entryFeesRefunded, money: true },
-                { section: 'Unallocated credit', label: 'Unallocated credit held by 4M', value: overviewStats.unallocatedCredit4M, money: true, note: 'Included in collections; held out of available payout until allocated.' },
-                { section: 'Unallocated credit', label: 'Available for payout after reserves', value: overviewStats.availableForPayout, money: true },
-                { section: 'Refunds', label: 'License refunds (stay with 4M)', value: overviewStats.licenseRefunds, money: true },
+                { section: 'Refunds', label: 'Pending entry refund reserve', value: reportStats.refundReserve, money: true, note: 'Reserved from payout cash; not a completed refund' },
+                { section: 'Refunds', label: 'Entry fee refunds', value: reportStats.entryFeesRefunded, money: true },
+                { section: 'Unallocated credit', label: 'Unallocated credit held by 4M', value: reportStats.unallocatedCredit4M, money: true, note: 'Included in collections; held out of available payout until allocated.' },
+                { section: 'Unallocated credit', label: 'Available for payout after reserves', value: reportStats.availableForPayout, money: true },
+                { section: 'Refunds', label: 'License refunds (stay with 4M)', value: reportStats.licenseRefunds, money: true },
 
-                { section: 'Organiser settlement (all entry channels)', label: 'Total amount billed', value: overviewStats.totalAmountBilled, money: true },
-                { section: 'Organiser settlement (all entry channels)', label: 'Minus entry refunds', value: -overviewStats.entryFeesRefunded, money: true },
-                { section: 'Organiser settlement (all entry channels)', label: 'Minus outstanding entry fees', value: -overviewStats.pendingAmount, money: true },
-                { section: 'Organiser settlement (all entry channels)', label: 'Net entry income', value: overviewStats.entryFeeBalance, money: true, note: 'Billed less refunds and outstanding entry fees' },
-                { section: 'Organiser settlement (all entry channels)', label: 'Commission base: entry fees received by 4M', value: overviewStats.commissionBase, money: true },
-                { section: 'Organiser settlement (all entry channels)', label: `Minus platform fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}% of 4M collections)`, value: -overviewStats.commission, money: true, note: 'Charged on gross 4M entry collections before refunds. Direct organiser payments earn no commission.' },
-                { section: 'Organiser settlement (all entry channels)', label: 'Organiser entitlement', value: overviewStats.organiserEntitlement, money: true },
-                { section: 'Organiser settlement (all entry channels)', label: 'Minus direct organiser receipts retained', value: -overviewStats.organiserRetained, money: true },
-                { section: 'Organiser settlement (all entry channels)', label: 'Minus interim paid', value: -overviewStats.interimPaid, money: true },
-                { section: 'Organiser settlement (all entry channels)', label: 'Net due to organiser', value: overviewStats.dueToOrg, money: true },
+                { section: 'Organiser settlement (all entry channels)', label: 'Total amount billed', value: reportStats.totalAmountBilled, money: true },
+                { section: 'Organiser settlement (all entry channels)', label: 'Minus entry refunds', value: -reportStats.entryFeesRefunded, money: true },
+                { section: 'Organiser settlement (all entry channels)', label: 'Minus outstanding entry fees', value: -reportStats.pendingAmount, money: true },
+                { section: 'Organiser settlement (all entry channels)', label: 'Net entry income', value: reportStats.entryFeeBalance, money: true, note: 'Billed less refunds and outstanding entry fees' },
+                { section: 'Organiser settlement (all entry channels)', label: 'Commission base: entry fees received by 4M', value: reportStats.commissionBase, money: true },
+                { section: 'Organiser settlement (all entry channels)', label: `Minus platform fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}% of 4M collections)`, value: -reportStats.commission, money: true, note: 'Charged on gross 4M entry collections before refunds. Direct organiser payments earn no commission.' },
+                { section: 'Organiser settlement (all entry channels)', label: 'Organiser entitlement', value: reportStats.organiserEntitlement, money: true },
+                { section: 'Organiser settlement (all entry channels)', label: 'Minus direct organiser receipts retained', value: -reportStats.organiserRetained, money: true },
+                { section: 'Organiser settlement (all entry channels)', label: 'Minus interim paid', value: -reportStats.interimPaid, money: true },
+                { section: 'Organiser settlement (all entry channels)', label: 'Net due to organiser', value: reportStats.dueToOrg, money: true },
 
-                { section: 'Retained by 4M', label: 'License revenue', value: overviewStats.licenseRevenue4M, money: true },
-                { section: 'Retained by 4M', label: 'Platform / commission fees', value: overviewStats.commission, money: true },
+                { section: 'Retained by 4M', label: 'License revenue', value: reportStats.licenseRevenue4M, money: true },
+                { section: 'Retained by 4M', label: 'Platform / commission fees', value: reportStats.commission, money: true },
             ];
 
             const organiserSummary = [
-                { section: 'Reconciliation', label: 'Status', value: overviewStats.issues.length ? 'Needs review' : 'Reconciled', note: overviewStats.issues.join('; ') },
+                { section: 'Reconciliation', label: 'Status', value: reportStats.issues.length ? 'Needs review' : 'Reconciled', note: reportStats.issues.join('; ') },
                 { section: 'Entries', label: 'Total entries', value: dashboardStats.totalEntries },
                 { section: 'Entries', label: 'Unique players', value: dashboardStats.uniquePlayers },
                 { section: 'Entries', label: 'Paid', value: dashboardStats.paidCount },
-                { section: 'Entries', label: 'Pending / unpaid', value: overviewStats.pendingCount, note: fmtR(overviewStats.pendingAmount) },
-                { section: 'Entries', label: 'Comped (free)', value: overviewStats.compedEntries },
-                { section: 'Entries', label: 'Withdrawn', value: overviewStats.withdrawnCount },
+                { section: 'Entries', label: 'Pending / unpaid', value: reportStats.pendingCount, note: fmtR(reportStats.pendingAmount) },
+                { section: 'Entries', label: 'Comped (free)', value: reportStats.compedEntries },
+                { section: 'Entries', label: 'Withdrawn', value: reportStats.withdrawnCount },
 
                 ...billedCompositionRows,
 
-                { section: 'Organiser settlement', label: 'Total amount billed', value: overviewStats.totalAmountBilled, money: true, note: 'Gross entry collections plus outstanding entry fees' },
-                { section: 'Organiser settlement', label: 'Entry fees received by 4M', value: overviewStats.collected4M, money: true },
-                { section: 'Organiser settlement', label: 'Entry fees received directly by organiser', value: overviewStats.collectedOrganiser, money: true, note: 'No 4M commission applies to these collections.' },
-                { section: 'Organiser settlement', label: 'Collection recipient unconfirmed', value: overviewStats.unconfirmedCollected, money: true },
-                { section: 'Organiser settlement', label: 'Minus entry refunds', value: -overviewStats.entryFeesRefunded, money: true },
-                { section: 'Organiser settlement', label: 'Minus outstanding entry fees', value: -overviewStats.pendingAmount, money: true },
-                { section: 'Organiser settlement', label: 'Net entry income', value: overviewStats.entryFeeBalance, money: true },
-                { section: 'Organiser settlement', label: 'Commission base: entry fees received by 4M', value: overviewStats.commissionBase, money: true },
-                { section: 'Organiser settlement', label: `Minus platform fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}% of 4M collections)`, value: -overviewStats.commission, money: true, note: 'Direct club / organiser payments earn no commission.' },
-                { section: 'Organiser settlement', label: 'Organiser entitlement', value: overviewStats.organiserEntitlement, money: true },
-                { section: 'Organiser settlement', label: 'Minus direct organiser receipts retained', value: -overviewStats.organiserRetained, money: true },
-                { section: 'Organiser settlement', label: 'Minus interim paid', value: -overviewStats.interimPaid, money: true },
-                { section: 'Organiser settlement', label: 'Net due to organiser', value: overviewStats.dueToOrg, money: true },
-                { section: 'Organiser settlement', label: 'Unallocated credit held by 4M', value: overviewStats.unallocatedCredit4M, money: true, note: 'Included in received funds; reserved from payout until allocated.' },
-                { section: 'Organiser settlement', label: 'Available for payout after reserves', value: overviewStats.availableForPayout, money: true },
+                { section: 'Organiser settlement', label: 'Total amount billed', value: reportStats.totalAmountBilled, money: true, note: 'Gross entry collections plus outstanding entry fees' },
+                { section: 'Organiser settlement', label: 'Entry fees received by 4M', value: reportStats.collected4M, money: true },
+                { section: 'Organiser settlement', label: 'Entry fees received directly by organiser', value: reportStats.collectedOrganiser, money: true, note: 'No 4M commission applies to these collections.' },
+                { section: 'Organiser settlement', label: 'Collection recipient unconfirmed', value: reportStats.unconfirmedCollected, money: true },
+                { section: 'Organiser settlement', label: 'Minus entry refunds', value: -reportStats.entryFeesRefunded, money: true },
+                { section: 'Organiser settlement', label: 'Minus outstanding entry fees', value: -reportStats.pendingAmount, money: true },
+                { section: 'Organiser settlement', label: 'Net entry income', value: reportStats.entryFeeBalance, money: true },
+                { section: 'Organiser settlement', label: 'Commission base: entry fees received by 4M', value: reportStats.commissionBase, money: true },
+                { section: 'Organiser settlement', label: `Minus platform fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}% of 4M collections)`, value: -reportStats.commission, money: true, note: 'Direct club / organiser payments earn no commission.' },
+                { section: 'Organiser settlement', label: 'Organiser entitlement', value: reportStats.organiserEntitlement, money: true },
+                { section: 'Organiser settlement', label: 'Minus direct organiser receipts retained', value: -reportStats.organiserRetained, money: true },
+                { section: 'Organiser settlement', label: 'Minus interim paid', value: -reportStats.interimPaid, money: true },
+                { section: 'Organiser settlement', label: 'Net due to organiser', value: reportStats.dueToOrg, money: true },
+                { section: 'Organiser settlement', label: 'Unallocated credit held by 4M', value: reportStats.unallocatedCredit4M, money: true, note: 'Included in received funds; reserved from payout until allocated.' },
+                { section: 'Organiser settlement', label: 'Available for payout after reserves', value: reportStats.availableForPayout, money: true },
             ];
 
-            const allocationById = new Map(overviewStats.allocations.map(a => [a.registration.id, a]));
+            const allocationById = new Map(reportStats.allocations.map(a => [a.registration.id, a]));
             const registrationRows = registrations.map((r) => {
                 const allocation = allocationById.get(r.id);
                 const shares = allocation?.shares || [];
@@ -2963,10 +2969,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                 eventName: event?.event_name || 'Event',
                 eventDate,
                 summary: normalizedReportType === 'organiser' ? organiserSummary : summary,
-                lineItems: incomeStatementRows,
+                lineItems: buildIncomeStatementRows(reportStats),
                 registrations: registrationRows,
-                activeRegistrationIds: overviewStats.allocations.map(a => a.registration.id),
-                receiptReport: buildEventReceiptReport({ registrations, divisions, refunds, settlement: overviewStats }),
+                activeRegistrationIds: reportStats.allocations.map(a => a.registration.id),
+                receiptReport: buildEventReceiptReport({ registrations, divisions, refunds, settlement: reportStats }),
                 payments: normalizedReportType === 'full'
                     ? (payments || []).map((p) => ({
                         ...p,

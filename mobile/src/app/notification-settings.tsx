@@ -4,12 +4,13 @@ import { ActivityIndicator, AppState, Linking, Pressable, ScrollView, Switch, Te
 import { SelectField } from '@/components/select-field';
 import { NotificationSection } from '@/components/notification-section';
 import { ErrorBanner } from '@/components/error-banner';
+import { HomeAction } from '@/components/home-action';
 import { useMessagingInbox } from '@/components/messaging/messaging-provider';
-import { Stack } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchNotificationPreferences, NOTIFICATION_GROUPS, saveNotificationPreference, saveNotificationTiming, saveDiscussionNotifications, type DiscussionNotifications, type NotificationToggle, type NotificationPreferences } from '@/lib/notification-preferences';
 import { getPushPermissionStatus, requestPushPermission } from '@/lib/notifications';
-import { lightBrand as brand } from '@/theme/tokens';
+import { loadingBlue, lightBrand as brand } from '@/theme/tokens';
 
 function within<T>(task: Promise<T>, milliseconds: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
@@ -17,7 +18,7 @@ function within<T>(task: Promise<T>, milliseconds: number): Promise<T> {
 }
 const discussionLabels = { all: 'All messages', replies: 'Replies to my messages', off: 'Off' };
 export default function NotificationSettings() {
-  const insets = useSafeAreaInsets(), inbox = useMessagingInbox();
+  const insets = useSafeAreaInsets(), inbox = useMessagingInbox(), router = useRouter();
   const [prefs, setPrefs] = useState<NotificationPreferences>({}), [loaded, setLoaded] = useState(false);
   const [permission, setPermission] = useState<Awaited<ReturnType<typeof getPushPermissionStatus>> | 'loading' | 'error'>('loading');
   const [busy, setBusy] = useState<string | null>(null), [error, setError] = useState('');
@@ -72,12 +73,15 @@ export default function NotificationSettings() {
   const mode = prefs.chat_discussion || 'all';
   const scope = inbox.owner || 'signed-out';
   return <>
-    <Stack.Screen options={{ headerShown: true, title: 'Notification settings', headerBackTitle: 'Back' }} />
+    <View collapsable={false} style={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 8, minHeight: 60, flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: brand.page }}>
+      <HomeAction label="Back" onPress={() => router.back()} />
+      <Text accessibilityRole="header" style={{ flex: 1, minWidth: 0, fontSize: 18, lineHeight: 24, fontWeight: '600', color: brand.premium }}>Notification settings</Text>
+    </View>
     <ScrollView style={{ flex: 1, backgroundColor: brand.page }} contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32 }}>
       <Text style={{ color: brand.muted, fontSize: 15, lineHeight: 22, marginBottom: 20 }}>Choose the alerts you want. Your choices apply across your signed-in devices.</Text>
-      {busy && <ActivityIndicator accessibilityLabel="Saving notification preference" style={{ marginBottom: 16 }} />}
+      {busy && <ActivityIndicator color={loadingBlue} accessibilityLabel="Saving notification preference" style={{ marginBottom: 16 }} />}
       {!!error && !loaded && <Pressable onPress={() => void load()} accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center', marginBottom: 16 }}><Text style={{ color: brand.accent }}>Retry</Text></Pressable>}
-      {!loaded && !error && <ActivityIndicator accessibilityLabel="Loading notification preferences" style={{ margin: 20 }} />}
+      {!loaded && !error && <ActivityIndicator color={loadingBlue} accessibilityLabel="Loading notification preferences" style={{ margin: 20 }} />}
       <NotificationSection key={`${scope}:delivery`} title="Push notifications" summary={`${prefs.push_enabled === false ? 'Off' : 'On'} · ${deviceLabel}`}>
         {toggle('push_enabled', 'Allow push notifications', 'The main switch for 4M Padel alerts. Turning this off also silences messaging banners in the app.')}
         <View style={{ padding: 16 }}><Text style={{ color: brand.premium, fontSize: 14 }}>{deviceLabel}</Text>{permission !== 'unavailable' && <Pressable accessibilityRole="button" disabled={busy !== null || permission === 'loading'} onPress={() => void (permission === 'error' ? refreshPermission() : enableDevice())} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: brand.accent, fontWeight: '600', fontSize: 15 }}>{permission === 'error' ? 'Retry device check' : permission === 'denied' || permission === 'granted' ? 'Open device settings' : 'Enable on this device'}</Text></Pressable>}</View>
@@ -86,7 +90,7 @@ export default function NotificationSettings() {
         <Text style={{ color: brand.muted, padding: 16, fontSize: 13, lineHeight: 20 }}>Choose push notifications and in-app banners. Messages and unread counts stay in your inbox. A muted chat stays silent.</Text>
         {toggle('chat_announcements', 'Event announcements', 'Official organiser updates, including announcements for your divisions.')}
         <View pointerEvents={disabled ? 'none' : 'auto'} style={{ padding: 16, opacity: disabled ? 0.5 : 1, borderBottomWidth: 0.5, borderColor: brand.edge }}><SelectField label="Event discussions" disabled={disabled} value={mode} options={Object.entries(discussionLabels).map(([value, label]) => ({ value, label }))} onChange={value => void saveDiscussion(value as DiscussionNotifications)} /><Text style={{ color: brand.muted, fontSize: 13, lineHeight: 20, marginTop: 9 }}>Replies means a player uses Reply on one of your messages. Other discussion posts stay silent.</Text></View>
-        {toggle('chat_private', 'Private messages', 'New messages in private chats you have accepted.')}
+        {toggle('chat_private', 'Private & group messages', 'New messages in private and group chats you have accepted.')}
         {toggle('chat_requests', 'New chat requests', 'Notify when a player sends you an introduction. Who can send requests is controlled in Messaging settings.')}
       </NotificationSection>
       <NotificationSection key={`${scope}:timing`} title="Timing & quiet hours" summary={`Quiet hours ${prefs.quiet_hours_enabled ? 'on' : 'off'} · Match reminders ${prefs.reminder_minutes ?? 30} minutes before`}>

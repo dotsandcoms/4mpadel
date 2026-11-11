@@ -1,3 +1,4 @@
+import { loadingBlue } from '@/theme/tokens';
 import { EventMessagesButton } from '@/components/messaging/entry-buttons';
 import { trackEvent } from '@/lib/analytics';
 import { requestPushPermission } from '@/lib/notifications';
@@ -34,10 +35,13 @@ import { lightSapaTone as sapaTone } from '@/theme/sapa';
 
 export default function EventScreen() { return <EventContent />; }
 function EventContent() {
-  const { id, division, match, tab: initialTab, drawSource } = useLocalSearchParams<{ id: string; division?: string; match?: string; tab?: string; drawSource?: string }>();
+  const { id, division, match, tab: initialTab, drawSource, drawChoice } = useLocalSearchParams<{ id: string; division?: string; match?: string; tab?: string; drawSource?: string; drawChoice?: string }>();
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const divisionId = division && uuid.test(division) ? division : undefined;
-  const matchId = match && uuid.test(match) ? match : undefined;
+  const rankedinChoice = /^[1-9]\d*(?::[1-9]\d*)?$/;
+  const divisionId = division && (uuid.test(division) || drawSource === 'rankedin' && rankedinChoice.test(division)) ? division : undefined;
+  const matchId = match && (uuid.test(match) || drawSource === 'rankedin' && /^[1-9]\d*$/.test(match)) ? match : undefined;
+  const preferNativeDraw = drawSource === 'native' || drawSource !== 'rankedin' && !!(divisionId && uuid.test(divisionId) || matchId && uuid.test(matchId));
+  const drawChoiceId = drawChoice && (uuid.test(drawChoice) || drawSource === 'rankedin' && rankedinChoice.test(drawChoice)) ? drawChoice : undefined;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const tabPadding = useTabScenePadding();
@@ -71,7 +75,7 @@ function EventContent() {
       const divs = row.is_manual && !row.is_weekly ? await fetchDivisions(row.id) : [];
       if (current !== request.current) return;
       setEvent(row); setDivisions(divs);
-      const publicResults = await Promise.allSettled([row.is_manual ? fetchPublicEntries(row.id) : Promise.resolve([]), fetchEventOrganisation(row.organisation_id), fetchDrawStatus(row, !!(divisionId || matchId || drawSource === 'native')), fetchEventPlayerRankings()]);
+      const publicResults = await Promise.allSettled([row.is_manual ? fetchPublicEntries(row.id) : Promise.resolve([]), fetchEventOrganisation(row.organisation_id), fetchDrawStatus(row, preferNativeDraw), fetchEventPlayerRankings()]);
       if (current !== request.current) return;
       if (publicResults[0].status === 'fulfilled') setEntries(publicResults[0].value);
       if (publicResults[1].status === 'fulfilled') setOrganisation(publicResults[1].value);
@@ -134,7 +138,7 @@ function EventContent() {
   return <EventAccent value={accent}><View style={{ flex: 1, backgroundColor: '#F5F6F3', paddingTop: insets.top }}>
     <WebsiteHeader />
     {event && <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}><EventMessagesButton eventId={event.id} /></View>}
-    <ScrollView stickyHeaderIndices={event ? [1] : []} refreshControl={<RefreshControl refreshing={loading && !!event} onRefresh={load} tintColor={accent} />} contentContainerStyle={{ paddingBottom: tabPadding, backgroundColor: '#f9fafb' }}>
+    <ScrollView stickyHeaderIndices={event ? [1] : []} refreshControl={<RefreshControl colors={[loadingBlue]} refreshing={loading && !!event} onRefresh={load} tintColor={loadingBlue} />} contentContainerStyle={{ paddingBottom: tabPadding, backgroundColor: '#f9fafb' }}>
       {event ? <View style={{ backgroundColor: '#F5F6F3' }}>
         <View style={{ paddingHorizontal: 20, paddingTop: 16, flexDirection: 'row', justifyContent: 'space-between' }}>
           <CircleAction name="arrow.left" label="Back to calendar" onPress={back} />
@@ -168,7 +172,7 @@ function EventContent() {
           {!!(actionError || accountError || publicError) && <View style={{ marginTop: 12 }}><Notice title="Please try again" onRetry={load}>{actionError || accountError || publicError}</Notice></View>}
           {state === 'cancelled' && <View style={{ marginTop: 12 }}><Notice title="Event cancelled">This event is no longer taking place.</Notice></View>}
         </View>
-      </View> : <View style={{ backgroundColor: '#F5F6F3', padding: 30 }}>{loading ? <ActivityIndicator color={accent} /> : <Notice title="Event unavailable" onRetry={load}>{error}</Notice>}</View>}
+      </View> : <View style={{ backgroundColor: '#F5F6F3', padding: 30 }}>{loading ? <ActivityIndicator color={loadingBlue} /> : <Notice title="Event unavailable" onRetry={load}>{error}</Notice>}</View>}
       {event && <View><View style={{ flexDirection: 'row', backgroundColor: '#fff', paddingHorizontal: 16, borderBottomColor: '#e5e7eb', borderBottomWidth: 1 }}>
         {['Overview', 'Activity', 'Players', 'Draws', 'Results', 'Media'].map(label => <Pressable key={label} accessibilityRole="tab" accessibilityState={{ selected: label === tab }} onPress={() => { void trackEvent('feature_interaction', { feature: 'event_details', action: 'tab', selection: label.toLowerCase() }); setTab(label); }} style={{ flex: 1, paddingVertical: 16, borderBottomWidth: 2, borderBottomColor: label === tab ? '#0a0a0a' : 'transparent', alignItems: 'center' }}><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ color: label === tab ? '#0a0a0a' : '#65726B', fontSize: 12, fontWeight: label === tab ? '500' : '400' }}>{label}</Text></Pressable>)}
       </View></View>}
@@ -198,12 +202,12 @@ function EventContent() {
         </>}
         {tab === 'Players' && <>{publicError ? <LightEmpty title="Players could not load" text={publicError} /> : !event.is_manual ? <LightButton label="View entry list on website" onPress={() => void runAction(() => openSitePath(`/calendar/${event.slug || event.id}?tab=players`, { forceBrowser: true }))} /> : teams.length ? teams.map(group => <TeamDivisionCard key={group.division.id} group={group} />) : <LightEmpty title="No players yet" text="Registered players will appear here." />}</>}
         {(tab === 'Draws' || tab === 'Results') && <>
-          {loading ? <ActivityIndicator accessibilityLabel="Loading published draws" color={accent} /> : drawError ? <LightEmpty title="Tournament draws unavailable" text={drawError} /> : <>
-            {drawStatus.source !== 'none' ? <TournamentDraw event={event} source={drawStatus.source} directory={profiles} divisionId={divisionId} matchId={matchId} results={tab === 'Results'} refreshKey={request.current} /> : <LightEmpty icon={tab === 'Draws' ? 'point.3.connected.trianglepath.dotted' : 'trophy'} title={tab === 'Draws' ? 'Draws Coming Soon' : 'No Results Yet'} text={tab === 'Draws' ? 'Draws will be released shortly before the tournament begins.' : 'Tournament results will appear here once matches are completed.'} />}
+          {loading ? <ActivityIndicator accessibilityLabel="Loading published draws" color={loadingBlue} /> : drawError ? <LightEmpty title="Tournament draws unavailable" text={drawError} /> : <>
+            {drawStatus.source !== 'none' ? <TournamentDraw event={event} source={drawStatus.source} directory={profiles} divisionId={divisionId} choiceId={drawChoiceId} matchId={matchId} results={tab === 'Results'} refreshKey={request.current} /> : <LightEmpty icon={tab === 'Draws' ? 'point.3.connected.trianglepath.dotted' : 'trophy'} title={tab === 'Draws' ? 'Draws Coming Soon' : 'No Results Yet'} text={tab === 'Draws' ? 'Draws will be released shortly before the tournament begins.' : 'Tournament results will appear here once matches are completed.'} />}
           </>}
         </>}
         {tab === 'Media' && <EventMedia key={event.id} event={event} onAction={runAction} />}
-        {tab === 'Activity' && <EventActivity eventId={event.id} refreshKey={request.current} />}
+        {tab === 'Activity' && <EventActivity event={event} directory={profiles} refreshKey={request.current} />}
 
       </View>}
     </ScrollView>

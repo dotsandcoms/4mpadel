@@ -142,82 +142,62 @@ const fetchWithTimeout = async (url, options = {}, timeout = 8000) => {
 };
 
 /**
- * Generic fetch helper that implements a standard timeout, abort signal merging,
- * and caches the response in Supabase `rankedin_cache` for high availability and sub-second loads.
+ * Reads the trusted shared cache, falls back to the provider, and keeps a bounded
+ * browser memory cache. Shared cache writes belong to authorised sync workers.
  */
-const fetchWithCache = async (url, options = {}, cacheDurationMs = 1000 * 60 * 60 * 6, forceRefresh = false) => { // Default 6 hours cache
-    // RankedIn can briefly return empty leaderboards during its weekly rollover.
-    // Never let those responses replace or mask a populated leaderboard for six hours.
+const fetchWithCache = async (url, options = {}, cacheDurationMs = 1000 * 60 * 60 * 6, forceRefresh = false) => {
     const isLeaderboard = /\/ranking\/getrankingsasync\?/i.test(url);
-    // Rankings can change throughout the day, independently of the scheduled sync.
     const maxCacheAgeMs = isLeaderboard ? Math.min(cacheDurationMs, 5 * 60 * 1000) : cacheDurationMs;
-    const isUsablePayload = (payload) => !isLeaderboard || (
-        Array.isArray(payload?.Payload) && payload.Payload.length > 0
-    );
-    // 1. Attempt to read from Supabase cache first (skipped when forceRefresh is requested,
-    //    e.g. an admin clicking "Sync" expects live data so removals propagate immediately).
+    // Retire leaderboard entries written by the old public-write cache path.
+    const separator = url.includes('?') ? '&' : '?';
+    const cacheKey = isLeaderboard ? url + separator + '_4m_cache_version=2' : url;
+    const liveUrl = isLeaderboard
+        ? url + separator + '_4m_refresh=' + Math.floor(Date.now() / (5 * 60 * 1000))
+        : url;
+    const usable = payload => !isLeaderboard || (Array.isArray(payload?.Payload) && payload.Payload.length > 0);
+    // Workers own shared cache writes. Browser results stay in this bounded cache.
+    const memory = fetchWithCache.memoryCache ??= new Map();
+    const remember = (payload, updatedAt = Date.now()) => {
+        if (!memory.has(cacheKey) && memory.size >= 200) memory.delete(memory.keys().next().value);
+        memory.set(cacheKey, { payload, updatedAt });
+        return payload;
+    };
     if (!forceRefresh) {
+        const saved = memory.get(cacheKey);
+        if (saved && usable(saved.payload) && Date.now() - saved.updatedAt >= 0
+            && Date.now() - saved.updatedAt < maxCacheAgeMs) return saved.payload;
         try {
-            const { data, error } = await supabase
-                .from('rankedin_cache')
-                .select('payload, updated_at')
-                .eq('url', url)
-                .maybeSingle();
-
-            if (data && isUsablePayload(data.payload)) {
-                const ageMs = Date.now() - new Date(data.updated_at).getTime();
-                if (ageMs < maxCacheAgeMs) {
-                    console.log(`[Cache HIT - Fresh]: ${url}`);
-                    return data.payload;
-                }
-                console.log(`[Cache HIT - Stale, age: ${Math.round(ageMs / 1000)}s]: ${url}`);
+            const { data } = await supabase.from('rankedin_cache')
+                .select('payload, updated_at').eq('url', cacheKey).maybeSingle();
+            const updatedAt = Date.parse(data?.updated_at);
+            if (data && usable(data.payload) && Number.isFinite(updatedAt)
+                && Date.now() - updatedAt >= 0 && Date.now() - updatedAt < maxCacheAgeMs) {
+                return remember(data.payload, updatedAt);
             }
-        } catch (e) {
-            console.error("Cache read error:", e);
+        } catch (error) {
+            console.warn('RankedIn cache read failed:', error.message);
         }
     }
-
-    // 2. Fetch live from RankedIn API
     try {
-        const response = await fetchWithTimeout(url, options);
-        if (!response.ok) throw new Error(`Rankedin API status ${response.status}`);
-        const data = await response.json();
-        if (!isUsablePayload(data)) {
-            throw new Error('RankedIn rankings are temporarily unavailable');
-        }
-
-        // 3. Save to Supabase cache asynchronously so we don't block the client
-        supabase
-            .from('rankedin_cache')
-            .upsert({ url, payload: data, updated_at: new Date().toISOString() }, { onConflict: 'url' })
-            .then(({ error }) => {
-                if (error) console.error("Cache write error:", error.message);
-            });
-
-        return data;
+        const response = await fetchWithTimeout(liveUrl, options);
+        if (!response.ok) throw new Error('Rankedin API status ' + response.status);
+        const payload = await response.json();
+        if (!usable(payload)) throw new Error('RankedIn rankings are temporarily unavailable');
+        return remember(payload);
     } catch (liveError) {
-        console.warn(`[Rankedin Offline/Timeout]: ${liveError.message}. Attempting stale cache fallback...`);
-
-        // 4. Fallback to stale cache if Rankedin is offline
+        const saved = memory.get(cacheKey);
+        if (saved && usable(saved.payload)) return saved.payload;
         try {
-            const { data } = await supabase
-                .from('rankedin_cache')
-                .select('payload')
-                .eq('url', url)
-                .maybeSingle();
-
-            if (data && data.payload && isUsablePayload(data.payload)) {
-                console.warn(`[Offline Mode]: Successfully served stale cache for ${url}`);
-                return data.payload;
-            }
-        } catch (cacheErr) {
-            console.error("Fallback cache read error:", cacheErr);
+            const { data } = await supabase.from('rankedin_cache')
+                .select('payload').eq('url', cacheKey).maybeSingle();
+            if (data?.payload && usable(data.payload)) return data.payload;
+        } catch (error) {
+            console.warn('RankedIn fallback cache read failed:', error.message);
         }
-
-        // If no cache at all and live fetch failed, throw the original error
         throw liveError;
     }
 };
+
 
 export const useRankedin = () => {
     const [loading, setLoading] = useState(false);
@@ -781,24 +761,8 @@ export const useRankedin = () => {
                 payload = sortUpcomingMatchesSoonestFirst(payload);
             }
 
-            // Step 4: Save result to player_matches (both upcoming and history now share
-            // this cache, kept warm by scripts/syncPlayerMatches.js on its schedule).
-            {
-                const columnToUpdate = takeHistory ? 'past_matches' : 'upcoming_matches';
-                const timestampColumnToUpdate = takeHistory ? 'past_matches_updated_at' : 'upcoming_matches_updated_at';
-                const now = new Date().toISOString();
-                supabase
-                    .from('player_matches')
-                    .upsert({
-                        rankedin_id: rankedinId,
-                        [columnToUpdate]: payload,
-                        [timestampColumnToUpdate]: now,
-                        updated_at: now // kept for admin/debug visibility of "last touched"
-                    }, { onConflict: 'rankedin_id' })
-                    .then(({ error }) => {
-                        if (error) console.error("player_matches write error:", error);
-                    });
-            }
+            // The trusted syncPlayerMatches worker owns shared cache writes.
+            // Browser-fetched match data is returned only to this caller.
 
             return payload;
         } catch (err) {

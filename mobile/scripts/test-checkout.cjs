@@ -367,3 +367,16 @@ test('late-payment switch leaves pre-deadline payments and a later division over
     assert.equal((await app.call({ mode: 'pay' })).status, 200);
   }
 });
+test('checkout reference cannot resume another player or event payment',async()=>{
+ for(const patch of [{player_id:99},{event_id:99},{metadata:{registrant_email:'foreign@example.com'}}]){
+  const payment={player_id:3,event_id:1,status:'processing',amount:367.5,is_test:false,metadata:{registrant_email:'player@example.com',native_authorization_url:'https://checkout.paystack.com/foreign'},...patch};
+  const app=server({gateway:true,tables:{payments:payment}});
+  const r=await app.call({action:'checkout',agreed:true,acceptedTotal:367.5,attemptId:'00000000-0000-0000-0000-000000000001'});
+  assert.equal(r.status,400);assert.match(r.body.error,/another account/);assert.equal(app.gatewayCalls.length,0);
+ }
+});
+test('completed own checkout remains resumable after licence ledger split',async()=>{
+ const app=server({gateway:true,tables:{payments:{player_id:3,event_id:1,status:'success',amount:350,is_test:false,metadata:{registrant_email:'player@example.com',split_recorded:true,covers:[]}}}});
+ const r=await app.call({action:'checkout',agreed:true,acceptedTotal:367.5,attemptId:'00000000-0000-0000-0000-000000000001'});
+ assert.equal(r.status,200);assert.equal(r.body.registered,true);assert.equal(app.gatewayCalls.length,0);assert.equal(app.writes.length,0);
+});

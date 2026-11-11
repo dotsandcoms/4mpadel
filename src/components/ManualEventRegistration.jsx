@@ -33,7 +33,7 @@ import { usePaidPartnerReplacements } from '../hooks/usePaidPartnerReplacements'
 import { useMembersOnly } from '../context/MembersOnlyContext';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
 import { isRegistrationClosed, isRegistrationPaymentClosed } from '../utils/registrationClose';
-import { resolvePartnerPaid } from '../utils/partnerPaymentStatus';
+import { resolvePartnerPaid, isPartnerBookingOwner } from '../utils/partnerPaymentStatus';
 import { isEarlyBirdActive, resolveDivisionEntryFee } from '../utils/eventEntryFee';
 import {
     WEEKLY_OPEN_DIVISION,
@@ -825,7 +825,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 partnerStatusClassName: partnerPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
                 canAddPartner,
                 canReplacePartner: !regClosed && replacements.some((item) => item.owner_registration_id === reg.id),
-                isBookingOwner: !reversePartnerReg && !wasAddedByPartner,
+                isBookingOwner: isPartnerBookingOwner(reg, userEmail),
                 canWithdraw: reg.status !== 'withdrawn' && !regClosed,
             };
         }),
@@ -1047,7 +1047,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 },
                 openRemovePartner: (regId) => {
                     const reg = myRegs.find((r) => r.id === regId);
-                    if (!reg) return;
+                    const entry = registrationEntries.find((item) => item.id === regId);
+                    if (!reg || !entry?.isBookingOwner) return;
                     const div = divisions.find((d) => d.id === reg.division_id || d.name === reg.division);
                     const closed = isWeeklyEvent
                         ? isRegistrationClosed(null, event)
@@ -1056,7 +1057,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         toast.error('Registration has closed — partner changes are no longer available.');
                         return;
                     }
-                    setRemovePartnerTarget(reg);
+                    setRemovePartnerTarget({ ...reg, partner_payment_status: entry.partnerPaid ? 'paid' : 'pending' });
                 },
                 openReplacePartner: (regId) => {
                     const entry = registrationEntries.find((item) => item.id === regId);
@@ -3143,7 +3144,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
         setRemovingPartner(true);
         try {
+            if (!isPartnerBookingOwner(reg, userEmail)) throw new Error('Only the booking owner can remove a partner.');
             const result = await invokePaystackRefund({ action: 'remove_partner', registration_id: reg.id });
+            if (!result?.processed || result.refunds?.some(item => String(item.status || '').startsWith('skipped'))) throw new Error('Partner entry could not be cancelled. Please refresh and try again.');
             const refunded = Number(result?.total_refunded_rands || 0);
             if (refunded > 0) {
                 toast.success(`Partner removed — R ${refunded.toLocaleString('en-ZA')} refund initiated.`);
@@ -5332,7 +5335,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                             onPay={needsPay && !hasPendingPayment ? openPayWizard : undefined}
                                             onWithdraw={reg && entry.canWithdraw ? () => { setWithdrawAll(false); setSwitchMode(false); setSwitchTargetDivId(''); setWithdrawTarget(reg); } : undefined}
                                             onSwitch={reg && entry.canWithdraw && !isWeeklyEvent ? () => { setWithdrawAll(false); setSwitchMode(true); setSwitchWholeTeam(false); setSwitchTargetDivId(''); setWithdrawTarget(reg); } : undefined}
-                                            onRemovePartner={reg && entry.canWithdraw ? () => setRemovePartnerTarget(reg) : undefined}
+                                            onRemovePartner={reg && entry.canWithdraw && entry.isBookingOwner ? () => setRemovePartnerTarget({ ...reg, partner_payment_status: entry.partnerPaid ? 'paid' : 'pending' }) : undefined}
                                             onReplacePartner={reg && entry.canReplacePartner ? () => setReplacePartnerTarget(reg) : undefined}
                                             withdrawLabel={entry.wasAddedByPartner && !entry.isPaid ? 'Decline' : 'Withdraw'}
                                         />
@@ -5815,6 +5818,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             initial={{ opacity: 0, scale: 0.95, y: 12 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 12 }}
+                            role="dialog" aria-modal="true" aria-label="Remove partner"
                             className="relative w-full max-w-md bg-white rounded-2xl border border-gray-100 shadow-xl overflow-hidden"
                             onClick={(e) => e.stopPropagation()}
                         >
@@ -5824,12 +5828,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 </div>
                                 <div className="min-w-0">
                                     <h3 className="text-base font-semibold text-slate-900">
-                                        Remove {removePartnerTarget.partner_name || 'your partner'}?
+                                        {removePartnerTarget.partner_payment_status === 'paid' ? `Remove ${removePartnerTarget.partner_name || 'your partner'}?` : 'Cancel pending partner entry?'}
                                     </h3>
                                     <p className="text-xs text-slate-600 mt-1 font-normal leading-snug">
                                         {removePartnerTarget.partner_payment_status === 'paid'
-                                            ? `${removePartnerTarget.partner_name || 'Your partner'}'s entry will be withdrawn and, if it was paid, refunded automatically to whoever paid for it. Your entry stays active.`
-                                            : `${removePartnerTarget.partner_name || 'Your partner'}'s entry will be removed. Your entry stays active.`}
+                                            ? `${removePartnerTarget.partner_name || 'Your partner'}'s entry will be withdrawn and, if it was paid, refunded automatically to whoever paid for it. Your entry and payment stay active.`
+                                            : `${removePartnerTarget.partner_name || 'Your partner'}'s pending entry will be removed. Your entry and payment stay active.`}
                                     </p>
                                 </div>
                                 <button
@@ -5849,7 +5853,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     disabled={removingPartner}
                                     className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-slate-700 hover:bg-gray-50 disabled:opacity-50"
                                 >
-                                    Cancel
+                                    Keep partner
                                 </button>
                                 <button
                                     type="button"
@@ -5858,7 +5862,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     className="flex-1 py-3 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
                                 >
                                     {removingPartner ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                                    {removingPartner ? 'Removing…' : 'Remove partner'}
+                                    {removingPartner ? 'Removing…' : removePartnerTarget.partner_payment_status === 'paid' ? 'Remove partner' : 'Cancel pending entry'}
                                 </button>
                             </div>
                         </motion.div>

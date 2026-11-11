@@ -16,7 +16,10 @@ const pay=(id,amount,method='paystack',recipient='4m')=>({id,event_id:1,amount,r
 const event={id:1,is_manual:true,event_name:'Reconciliation test',entry_fee:600,start_date:'2026-10-01',end_date:'2026-10-02',organiser_interim_payments:[{id:'request-1',amount:200,paid_at:'2026-10-02'}]};
 const tables={calendar:[event],event_registrations:[reg('a'),reg('b'),reg('c'),reg('d',{payment_status:'pending'}),reg('old',{status:'withdrawn',payment_status:'refunded'})],payments:[pay('a',600),pay('b',600,'eft'),pay('c',600,'eft','organiser'),pay('old',550)],tournament_divisions:[{id:'open',event_id:1,name:'Open',entry_fee:600}],payment_refunds:[{id:'refund-old',event_registration_id:'old',payment_id:'old',amount:550,status:'processed',metadata:{cover_type:'entry'},processed_at:'2026-10-02'}],tournament_participants:[]};
 window.__tables=tables;window.__writes=[];
-export const supabase={auth:{getUser:async()=>({data:{user:{email:'admin@example.com'}}})},from(table){
+export const supabase={auth:{getUser:async()=>({data:{user:{email:'admin@example.com'}}})},functions:{invoke:async(name)=>{
+ if(name!=='event-cash-receipts') throw new Error('Unexpected endpoint '+name);
+ return {data:{receipts:tables.payments.filter(p=>p.payment_method==='paystack').map(p=>({reference:p.reference,status:'success',amount:p.amount,currency:'ZAR'})),non_receipts:[],unresolved:[],next_offset:null}};
+}},from(table){
  let operation='select',values,filters=[],ordering=null;
  const execute=(from=0,to=Infinity)=>{
   if(window.__fail===table)return {data:null,error:{message:table+' unavailable'}};

@@ -282,16 +282,6 @@ const GalleryManager = ({ permissions }) => {
         });
     };
 
-    // Helper for sanitizing title to folder name
-    const sanitizeFolderName = (title) => {
-        return (title || 'unnamed-album')
-            .toLowerCase()
-            .trim()
-            .replace(/[^a-z0-9]/g, '-')
-            .replace(/-+/g, '-')
-            .replace(/^-|-$/g, '');
-    };
-
     const generateSlug = (text) => {
         return text
             .toString()
@@ -315,8 +305,8 @@ const GalleryManager = ({ permissions }) => {
             let uploadedCount = 0;
             let dbErrorCount = 0;
 
-            // Sanitize album title for folder name
-            const folderName = sanitizeFolderName(selectedAlbum.title);
+            // Stable ownership prefix enforced by the Storage row policy.
+            const folderName = 'albums/' + selectedAlbum.id;
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];

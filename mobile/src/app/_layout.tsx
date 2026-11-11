@@ -47,10 +47,9 @@ Observe.configure({
  * App chrome uses the dark 4M identity. Event overview content follows the
  * website’s white tabs and light accordion surfaces.
  *
- * Launch runs as: static native splash (near-black) → in-app AnimatedSplash
- * (full-bleed court, lime line, wordmark) → app. Native cannot animate, so
- * the overlay is the wow moment. The lime rule then reappears under the mark
- * on onboarding and sign-in so the first screen feels like a continuation.
+ * Launch runs as a static native splash, then a matching light overlay with the
+ * 4M wordmark and one short court/ball animation. The overlay never delays data
+ * loading; it hands off once the startup and routing gates below are ready.
  *
  * The overlay stays up until three things are true:
  *   - the animation has run its course (so it never truncates mid-motion),
@@ -93,8 +92,9 @@ function RootLayout() {
   const onSplashFinish = useCallback(() => setAnimDone(true), []);
 
   const resolvePath = useCallback(async (seen: boolean, session: Session | null) => {
-    // Replay the introduction in development; production keeps first-launch onboarding.
-    if (__DEV__ || !seen) return '/(auth)/onboarding' as const;
+    // UI work should retain the normal saved-session flow across dev reloads.
+    // Set the public dev-only flag when deliberately reviewing the introduction.
+    if ((__DEV__ && process.env.EXPO_PUBLIC_REPLAY_ONBOARDING === '1') || !seen) return '/(auth)/onboarding' as const;
     if (!session) return '/(auth)/sign-in' as const;
     return withStartupDeadline(destinationAfterAuth(session));
   }, []);
@@ -226,6 +226,7 @@ function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="events/register" />
+        <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
         <Stack.Screen
           name="search"
           options={{
@@ -249,6 +250,7 @@ function RootLayout() {
         <Stack.Screen
           name="notifications"
           options={{
+            headerShown: false,
             presentation: 'formSheet',
             sheetAllowedDetents: [0.42, 0.78],
             sheetGrabberVisible: true,

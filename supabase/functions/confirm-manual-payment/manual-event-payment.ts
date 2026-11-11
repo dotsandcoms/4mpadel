@@ -22,41 +22,23 @@ export function buildPersistedRegistrationRows(
     rows: ManualRegistrationRow[],
     covers: ManualPaymentCover[],
     registrantEmail: string,
+    freeEntries: ManualRegistrationRow[] = [],
 ): ManualRegistrationRow[] {
-    const registrant = registrantEmail.toLowerCase();
-    const entryCoverSet = new Set(
-        covers
-            .filter((c) => c.type === 'entry')
-            .map((c) => `${String(c.email).toLowerCase()}|${c.division}`),
-    );
-
-    return rows.map((row) => {
-        const email = String(row.email || '').toLowerCase();
-        const key = `${email}|${row.division}`;
-        const isRegistrant = email === registrant;
-
-        let payment_status = String(row.payment_status || 'pending');
-        if (isRegistrant || entryCoverSet.has(key) || payment_status === 'paid') {
-            payment_status = 'paid';
-        } else {
-            payment_status = 'pending';
-        }
-
-        let partner_payment_status = row.partner_payment_status as string | null | undefined;
-        if (row.partner_email) {
-            const partnerKey = `${String(row.partner_email).toLowerCase()}|${row.division}`;
-            if (entryCoverSet.has(partnerKey)) {
-                partner_payment_status = 'paid';
-            }
-        }
-
-        return {
-            ...row,
-            payment_status,
-            partner_payment_status,
-            status: 'registered',
-        };
-    });
+    const entryCoverSet = new Set(covers.filter((c) => c.type === 'entry')
+        .map((c) => `${String(c.event_id || '')}|${String(c.email).toLowerCase()}|${c.division}`));
+    const free = new Set(freeEntries.map(row => `${String(row.event_id || '')}|${String(row.email || '').toLowerCase()}|${row.division}`));
+    const covered = (event: unknown, email: unknown, division: unknown) =>
+        free.has(`${String(event || '')}|${String(email || '').toLowerCase()}|${division}`) || entryCoverSet.has(`${String(event || '')}|${String(email || '').toLowerCase()}|${division}`)
+        || entryCoverSet.has(`|${String(email || '').toLowerCase()}|${division}`);
+    const permitted = ['event_id','division_id','division','full_name','email','phone','partner_name','partner_email',
+        'payment_method','tshirt_size','tshirt_sponsor_name','tshirt_logo_url','access_grant_id'];
+    return rows.map((row) => ({
+        ...Object.fromEntries(permitted.filter(key => row[key] !== undefined).map(key => [key,row[key]])),
+        registered_by: registrantEmail.toLowerCase(),
+        payment_status: covered(row.event_id,row.email,row.division) ? 'paid' : 'pending',
+        partner_payment_status: row.partner_email ? covered(row.event_id,row.partner_email,row.division) ? 'paid' : 'pending' : null,
+        status: 'registered',
+    }));
 }
 
 export async function persistManualEventRegistrations(
@@ -73,7 +55,7 @@ export async function persistManualEventRegistrations(
     }
 
     const registrantEmail = String(meta.registrant_email || '').toLowerCase();
-    const toUpsert = buildPersistedRegistrationRows(rows, covers, registrantEmail);
+    const toUpsert = buildPersistedRegistrationRows(rows, covers, registrantEmail, Array.isArray(meta.server_free_entries) ? meta.server_free_entries as ManualRegistrationRow[] : []);
     const entryCoverSet = new Set(
         covers
             .filter((c) => c.type === 'entry')
@@ -96,7 +78,8 @@ export async function persistManualEventRegistrations(
         // token instead of inserting another row under the new display name.
         const existing = active.find((candidate) => row.division_id && candidate.division_id === row.division_id)
             || active.find((candidate) => (!row.division_id || !candidate.division_id) && candidate.division === row.division);
-        const values = { ...row };
+        const values: Record<string, any> = { ...row, is_test: payment.is_test === true };
+        if (existing) values.registered_by = existing.registered_by;
         delete values.id;
         if (existing?.payment_status === 'paid') {
             values.payment_status = 'paid';
@@ -123,7 +106,7 @@ export async function persistManualEventRegistrations(
         const updates: Record<string, unknown> = {
             partner_name: link.partner_name,
             partner_email: link.partner_email,
-            partner_payment_status: link.partner_payment_status ?? null,
+            ...(link.partner_email == null ? { partner_payment_status: null } : {}),
         };
         const soloKey = `${String(link.email).toLowerCase()}|${link.division}`;
         if (entryCoverSet.has(soloKey)) {
@@ -216,8 +199,11 @@ export async function recordLicensePaymentSplit(
         : [];
     const isLicenseLabel = (label: unknown) => /licen[cs]e/i.test(String(label || ''));
     const config = await fetchCommerceConfig(supabaseAdmin);
-    const stdFee = (c: ManualPaymentCover) =>
-        licenseQuote(c.license === 'full' ? 'full' : 'temporary', config).total;
+    const serverItems = Array.isArray(meta.server_license_items) ? meta.server_license_items as Record<string, unknown>[] : [];
+    const stdFee = (c: ManualPaymentCover) => {
+        const saved = serverItems.find(item => String(item.email).toLowerCase() === c.email.toLowerCase() && item.license === c.license);
+        return saved ? Number(saved.amount) : licenseQuote(c.license === 'full' ? 'full' : 'temporary', config).total;
+    };
 
     // License total: prefer the explicit license line item(s); fall back to the
     // standard fee for the license type when the breakdown is unavailable.
@@ -225,7 +211,7 @@ export async function recordLicensePaymentSplit(
         .filter((li) => isLicenseLabel(li.label))
         .reduce((sum, li) => sum + Number(li.amount || 0), 0);
     const fallbackLicenseTotal = licenseCovers.reduce((sum, c) => sum + stdFee(c), 0);
-    const licenseTotal = licenseLineTotal > 0 ? licenseLineTotal : fallbackLicenseTotal;
+    const licenseTotal = serverItems.length ? fallbackLicenseTotal : licenseLineTotal > 0 ? licenseLineTotal : fallbackLicenseTotal;
 
     // Bail out rather than corrupt totals if the numbers don't make sense.
     if (licenseTotal <= 0 || licenseTotal >= total) {

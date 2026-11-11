@@ -1,0 +1,12 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import { transform } from 'esbuild';
+const path=new URL('../supabase/functions/_shared/paystack.ts',import.meta.url);
+const {code}=await transform(await fs.readFile(path,'utf8'),{loader:'ts',format:'esm'});
+const mod=await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const payment={amount:300,reference:'checkout-1',currency:'ZAR',is_test:false};
+const trx={amount:30000,reference:'checkout-1',currency:'ZAR',domain:'live',status:'success'};
+test('matching verified live/test transactions are accepted',()=>{mod.assertPaystackPayment(payment,trx);mod.assertPaystackPayment({...payment,is_test:true},{...trx,domain:'test'});});
+for(const [field,value] of [['amount',1],['currency','NGN'],['reference','another-checkout'],['domain','test'],['status','pending']])test(`verified success must match saved ${field}`,()=>assert.throws(()=>mod.assertPaystackPayment(payment,{...trx,[field]:value}),/does not match/));
+test('non-finite and fractional provider amounts are rejected',()=>{for(const amount of [NaN,Infinity,30000.5])assert.throws(()=>mod.assertPaystackPayment(payment,{...trx,amount}));});

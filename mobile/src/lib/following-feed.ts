@@ -6,7 +6,8 @@ export type FeedFilter = typeof FEED_FILTERS[number];
 export type ActivityKind = 'entry' | 'result' | 'profile' | 'ranking' | 'match_live' | 'match_schedule' | 'tournament';
 export type FeedItem = { id: string; kind: ActivityKind; title: string; body: string; photo: string | null; path: string; payload: Record<string, unknown>; occurredAt: string };
 export type FeedCursor = { at: string; id: string };
-export type FeedPage = { items: FeedItem[]; hasMore: boolean; cursor: FeedCursor | null };
+export type FeedPage = { items: FeedItem[]; hasMore: boolean; cursor: FeedCursor | null; followedPlayers: FeedPlayer[] };
+export type MainRanking = { scope: 'sapa:15809:3:82' | 'sapa:15809:4:83'; label: 'Men-Main' | 'Women-Main'; rank: number; points: number | null; editionDate: string | null };
 export function feedScheduleLabel(item: FeedItem): string {
   switch (item.payload.schedule_update) {
     case 'time': return 'MATCH TIME CHANGED';
@@ -23,6 +24,26 @@ function rankingPosition(value: unknown): number | null {
   const raw = typeof value === 'number' ? String(value) : text(value).trim().replace(/^#/, '');
   const rank = /^\d+$/.test(raw) ? Number(raw) : NaN;
   return Number.isSafeInteger(rank) && rank > 0 ? rank : null;
+}
+function mainRanking(value: unknown): MainRanking | null {
+  if (!object(value) || Number(value.ranking_id) !== 15809 || !['sapa', 'sapa ranking'].includes(text(value.org).trim().toLowerCase())) return null;
+  const men = value.ranking_scope === 'sapa:15809:3:82', women = value.ranking_scope === 'sapa:15809:4:83';
+  if ((!men && !women) || Number(value.age_group_id) !== (men ? 82 : 83) || Number(value.ranking_type) !== (men ? 3 : 4)
+    || value.age_group !== (men ? 'Men-Main' : 'Women-Main') || value.match_type !== (men ? 'Men-Doubles' : 'Women-Doubles')) return null;
+  const rank = rankingPosition(value.rank);
+  if (rank === null) return null;
+  const points = typeof value.points === 'number' && Number.isFinite(value.points) && value.points >= 0 ? value.points : null;
+  return { scope: value.ranking_scope as MainRanking['scope'], label: men ? 'Men-Main' : 'Women-Main', rank, points,
+    editionDate: /^\d{4}-\d{2}-\d{2}$/.test(text(value.edition_date)) ? text(value.edition_date) : null };
+}
+/** A display rank is not a ranking identity. Unscoped local history stays hidden. */
+export function feedRankingChange(item: Pick<FeedItem, 'kind' | 'path' | 'payload'>) {
+  if (item.kind !== 'ranking') return null;
+  const beforeRank = rankingPosition(item.payload.before_rank), rank = rankingPosition(item.payload.rank);
+  if (beforeRank === null || rank === null || beforeRank === rank) return null;
+  if (item.path.startsWith('/pro/player/')) return { beforeRank, rank, label: 'FIP ranking', points: typeof item.payload.points === 'number' && Number.isFinite(item.payload.points) ? item.payload.points : null, scope: 'fip' };
+  const main = item.payload.ranking_source === 'sapa_main_v1' ? mainRanking(item.payload) : null;
+  return main ? { beforeRank, rank, label: `SAPA ${main.label}`, points: main.points, scope: main.scope } : null;
 }
 function photo(v: unknown) { try { const url = new URL(text(v)); return url.protocol === 'https:' ? url.href : null; } catch { return null; } }
 export function feedPath(value: unknown): string | null {
@@ -45,13 +66,11 @@ export function parseFeedPage(value: unknown): FeedPage {
     if (seen.has(text(row.id))) continue;
     seen.add(text(row.id));
     const payload = object(row.payload) ? row.payload : {};
-    if (row.kind === 'ranking') {
-      const before = rankingPosition(payload.before_rank), rank = rankingPosition(payload.rank);
-      if (before === null || rank === null || before === rank) continue;
-    }
+    if (row.kind === 'ranking' && !feedRankingChange({ kind: 'ranking', path: text(row.path), payload })) continue;
     items.push({ id: text(row.id), kind: row.kind as ActivityKind, title: text(row.title), body: text(row.body), photo: photo(row.photo_url), path: feedPath(row.path)!, payload, occurredAt: text(row.occurred_at) });
   }
-  return { items, hasMore: value.has_more && !!cursor, cursor };
+  const followedPlayers = Array.isArray(value.followed_players) ? value.followed_players.map(feedPlayer).filter((p): p is FeedPlayer => !!p && p.source !== undefined && p.id !== undefined).slice(0, 24) : [];
+  return { items, hasMore: value.has_more && !!cursor, cursor, followedPlayers };
 }
 export async function fetchFollowingFeed(filter: FeedFilter, limit = 20, cursor: FeedCursor | null = null): Promise<FeedPage> {
   const { data, error } = await supabase.rpc('get_following_feed', { p_filter: filter, p_limit: limit, p_before: cursor?.at ?? null, p_before_id: cursor?.id ?? null });
@@ -74,11 +93,17 @@ export function feedScores(item: FeedItem): { teams: [string, string]; scores: (
   const valid = Array.isArray(scores) ? scores.filter((v): v is (number | string)[] => Array.isArray(v) && v.length === 2 && v.every(n => typeof n === 'number' ? Number.isInteger(n) && n >= 0 && n <= 99 : typeof n === 'string' && /^\d{1,2}(\(\d{1,2}\))?$/.test(n))).slice(0, 5) : [];
   return { teams: teams as [string, string], scores: valid, winner: winner === 0 || winner === 1 ? winner : null, summary: item.payload.is_summary === true, points: item.payload.score_unit === 'points' };
 }
-export type FeedPlayer = { name: string; photo: string | null; country: string | null };
+export type FeedPlayer = { name: string; photo: string | null; country: string | null; id?: number; source?: 'local' | 'pro'; mainRankings?: MainRanking[]; proRanking?: { category: 'men' | 'women'; rank: number; points: number | null } };
 function feedPlayer(value: unknown): FeedPlayer | null {
   if (!object(value) || !text(value.name).trim()) return null;
   const country = text(value.nationality).trim().toUpperCase();
-  return { name: text(value.name).trim().slice(0, 200), photo: photo(value.photo_url), country: /^[A-Z]{2}$/.test(country) ? country : null };
+  const mainRankings = value.source === 'local' && Array.isArray(value.main_rankings) ? value.main_rankings.map(mainRanking).filter((rank): rank is MainRanking => !!rank).slice(0, 2) : [];
+  const pro = value.source === 'pro' && object(value.pro_ranking) ? value.pro_ranking : null;
+  const proRank = pro ? rankingPosition(pro.rank) : null;
+  const proRanking: FeedPlayer['proRanking'] | null = pro && proRank !== null && (pro.category === 'men' || pro.category === 'women') ? { category: pro.category, rank: proRank, points: typeof pro.points === 'number' && Number.isFinite(pro.points) && pro.points >= 0 ? pro.points : null } : null;
+  return { name: text(value.name).trim().slice(0, 200), photo: photo(value.photo_url), country: /^[A-Z]{2}$/.test(country) ? country : null,
+    ...(Number.isSafeInteger(value.id) && Number(value.id) > 0 ? { id: Number(value.id) } : {}),
+    ...(value.source === 'local' || value.source === 'pro' ? { source: value.source } : {}), ...(mainRankings.length ? { mainRankings } : {}), ...(proRanking ? { proRanking } : {}) };
 }
 export function feedActors(item: FeedItem): FeedPlayer[] {
   return Array.isArray(item.payload.actors) ? item.payload.actors.map(feedPlayer).filter((p): p is FeedPlayer => !!p).slice(0, 4) : [];

@@ -1,6 +1,13 @@
+import { ProMatchScoreboard } from '@/components/pro-match-scoreboard';
+import { useProPlayerPortraits } from '@/hooks/use-pro-player-portraits';
+import { newestPointFeed } from '@/lib/pro-live-feed';
+import { useProLiveFeed } from '@/hooks/use-pro-live-feed';
 import { trackEvent } from '@/lib/analytics';
-import { fetchHeadToHead, fetchMatchDetails, fetchMatchPrediction, fetchMatchStats, fetchPlayerStats, fetchPointFeed, liveScoreFromPointFeed, type HeadToHead, type MatchDetails, type MatchPrediction, type MatchStats, type PlayerStats, type PointFeed, type PointSet } from '@/lib/pro-padel-live';
+import { fetchHeadToHead, fetchMatchDetails, fetchMatchPrediction, fetchMatchStats, fetchPlayerStats, fetchPointFeed, liveScoreFromPointFeed, type HeadToHead, type MatchDetails, type MatchPrediction, type MatchStats, type PlayerStats, type PointFeed } from '@/lib/pro-padel-live';
 import { ProMatchStar } from '@/components/pro-match-star';
+import { ProLiveFeed } from '@/components/pro-live-feed';
+import { NativeSegmentedControl } from '@/components/native-segmented-control';
+import { ErrorBanner } from '@/components/error-banner';
 import { ProMatchJourney } from '@/components/pro-match-journey';
 import { fetchProSnapshot, proDate, proRound, type ProPerson, type ProPlayer } from '@/lib/pro-padel';
 import { playerCountryFlag, searchProPlayers } from '@/lib/player-hub';
@@ -8,7 +15,7 @@ import { tournamentRoundLabel } from '@/lib/pro-tournament';
 import { siteUrl } from '@/lib/site';
 import { startForegroundTask } from '@/lib/foreground-task';
 import { useForegroundClock } from '@/hooks/use-foreground-clock';
-import { lightBrand as b } from '@/theme/tokens';
+import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -26,17 +33,6 @@ const statGroups = [
   { title: 'SERVE', keys: ['won_on_1st_serve', 'won_on_2nd_serve', 'total_won_on_serve', 'service_games', 'aces', 'double_faults'] },
   { title: 'RETURN', keys: ['won_on_1st_return', 'won_on_2nd_return', 'total_won_on_return', 'return_games'] },
 ];
-const scorePair = (value: string | null) => { const found = /^(\d+)\s*[-:]\s*(\d+)/.exec(value || ''); return found ? [Number(found[1]), Number(found[2])] as const : null; };
-function gameWinner(set: PointSet, index: number): 0 | 1 | null {
-  const game = set.games[index];
-  if (!game?.points.length) return null;
-  const before = scorePair(game.game_score);
-  const after = scorePair(set.games[index + 1]?.game_score || set.set_score);
-  if (!before || !after) return null;
-  if (after[0] > before[0] && after[1] === before[1]) return 0;
-  if (after[1] > before[1] && after[0] === before[0]) return 1;
-  return null;
-}
 const teamKey = (team: ProPerson[]) => team.map(player => player.id).sort((a, b) => a - b).join(':');
 
 function PlayerPortrait({ player, photo, size = 36 }: { player: ProPerson; photo?: string; size?: number }) {
@@ -101,7 +97,7 @@ export default function ProMatchScreen() {
   const [error, setError] = useState('');
   const [tab, setTab] = useState<'summary' | 'points' | 'players' | 'h2h'>('summary');
   const [statsPeriod, setStatsPeriod] = useState<'match' | 'set_1' | 'set_2' | 'set_3'>('match');
-  const [pointSet, setPointSet] = useState(0);
+  const initialTab = useRef<number | null>(null);
   const [photos, setPhotos] = useState<Record<number, string>>({});
   const [profiles, setProfiles] = useState<Record<number, ProPlayer>>({});
   const [playerStats, setPlayerStats] = useState<Record<number, PlayerStats>>({});
@@ -112,6 +108,14 @@ export default function ProMatchScreen() {
   const [h2hLoaded, setH2hLoaded] = useState(false);
   const [prediction, setPrediction] = useState<MatchPrediction | null>(null);
   const sequence = useRef(0);
+  const reloadRef = useRef<() => void>(() => {});
+  const streamSeen = useRef(false);
+  const lastMetadata = useRef(0);
+  const lastStreamAt = useRef(0);
+  const stream = useProLiveFeed(id, points?.channel, !terminal.has(detail?.match.status || '') && ['live', 'ongoing', 'ended'].includes(points?.status || detail?.match.status || ''), feed => {
+    streamSeen.current = true; lastStreamAt.current = Date.now(); setPoints(feed);
+    if (['ended', 'finished'].includes(feed.status)) setDetail(previous => previous ? { ...previous, match: { ...previous.match, status: feed.status } } : previous);
+  }, () => { streamSeen.current = false; reloadRef.current(); });
   const load = useCallback(async () => {
     if (!Number.isSafeInteger(id) || id <= 0) { setError('Invalid match.'); setLoading(false); return; }
     const current = ++sequence.current;
@@ -121,26 +125,33 @@ export default function ProMatchScreen() {
       if (current !== sequence.current) return;
       if (!match) { setError('This match is unavailable.'); return; }
       setDetail(match); setError('');
+      if (initialTab.current !== id) { initialTab.current = id; setTab(['live', 'ongoing'].includes(match.match.status) ? 'points' : 'summary'); }
       void fetchMatchPrediction(match).then(value => { if (current === sequence.current) setPrediction(value); }).catch(() => {});
-      const [pointResult, statResult] = await Promise.allSettled([fetchPointFeed(id), fetchMatchStats(id)]);
+      const [pointResult, statResult] = await Promise.allSettled([stream.connected.current && streamSeen.current && Date.now() - lastStreamAt.current < 90000 ? Promise.resolve(null) : fetchPointFeed(id), fetchMatchStats(id)]);
       if (current !== sequence.current) return;
-      setPoints(pointResult.status === 'fulfilled' ? pointResult.value : null);
+      if (pointResult.status === 'fulfilled' && pointResult.value) {
+        const snapshot = pointResult.value;
+        setPoints(previous => newestPointFeed(previous, snapshot));
+      }
+      lastMetadata.current = Date.now();
       setStats(statResult.status === 'fulfilled' ? statResult.value : null);
     } catch (e) { if (current === sequence.current) setError(e instanceof Error ? e.message : 'Match details could not be loaded.'); }
     finally { if (current === sequence.current) setLoading(false); }
   }, [id]);
+  reloadRef.current = () => { void load(); };
   useFocusEffect(useCallback(() => {
     // Load once for every status; only live scores need recurring requests.
     let initial = true;
     const stop = startForegroundTask(() => {
       if (initial || detail?.match.status === 'live' || detail?.match.status === 'ongoing') {
+        if (!initial && stream.connected.current && streamSeen.current && Date.now() - lastStreamAt.current < 90000 && Date.now() - lastMetadata.current < 180000) return;
         initial = false;
         return load();
       }
     }, 30000);
     return () => { sequence.current++; stop(); };
   }, [load, detail?.match.status]));
-  useEffect(() => { setHeadToHead(null); setH2hLoaded(false); setPrediction(null); setPlayerStats({}); setPlayerStatsLoaded(false); setProfiles({}); setTab('summary'); setPointSet(0); setStatsPeriod('match'); }, [id]);
+  useEffect(() => { setHeadToHead(null); setH2hLoaded(false); setPrediction(null); setPlayerStats({}); setPlayerStatsLoaded(false); setProfiles({}); streamSeen.current = false; setPoints(null); initialTab.current = null; setTab('summary'); setStatsPeriod('match'); }, [id]);
   const match = detail?.match;
   useEffect(() => { if (match?.id) void trackEvent('content_view', { content_type: 'pro_match', content_id: `pro_match:${match.id}` }); }, [match?.id]);
   const rosterKey = match?.teams.flat().map(player => player.id).join(',') ?? '';
@@ -217,45 +228,32 @@ export default function ProMatchScreen() {
     if (params.from === 'tournament' && router.canGoBack()) router.back();
     else router.push({ pathname: '/pro/tournament/[id]', params: { id: String(match.tournamentId) } });
   };
-  const currentScore = liveScoreFromPointFeed(points);
-  const sets = match?.score.length ? match.score : currentScore?.sets || detail?.liveScore?.sets || [];
-  const live = match && ['live', 'ongoing'].includes(match.status);
+  const effectiveStatus = terminal.has(match?.status || '') ? match?.status : points?.status || match?.status;
+  const displayFeed = points ? { ...points, status: effectiveStatus || points.status } : null;
+  const publicPhotos = useProPlayerPortraits(match?.teams.flat().map(player => player.id) || []);
+  const matchPhotos = { ...publicPhotos, ...photos };
+  const currentScore = liveScoreFromPointFeed(displayFeed);
+  const live = match && ['live', 'ongoing'].includes(effectiveStatus || '');
   return <SafeAreaView style={{ flex: 1, backgroundColor: b.page }} edges={['top']}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: b.edge }}>
       <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={goBack} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: b.elevated, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="arrow-back" size={22} color={b.premium} /></Pressable>
-      <Text style={{ flex: 1, color: b.accent, fontSize: 11, fontWeight: '800', letterSpacing: 1.2 }}>MATCH CENTRE</Text>
+      <Text style={{ flex: 1, color: b.premium, fontSize: 14, fontWeight: '600' }}>Match centre</Text>
       {detail && <ProMatchStar row={detail} />}
       <Pressable accessibilityRole="button" accessibilityLabel="Share match" disabled={!match} onPress={() => void Share.share({ message: `${names.join(' vs ')}\n${match?.tournamentName} · ${match ? proRound(match) : ''}\n${siteUrl(`/pro/results?event=${match?.tournamentId}`)}` }).then(result => { if (result.action === Share.sharedAction) void trackEvent('share', { content_type: 'pro_match', method: 'native' }); }).catch(() => {})} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: b.elevated, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="share-outline" size={22} color={b.premium} /></Pressable>
     </View>
-    <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60, gap: 18 }}>
+    <ErrorBanner message={error} top={60} />
+    <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 12 }}>
     {detail?.freshness?.stale && <Text accessibilityLiveRegion="polite" style={{ color: b.muted, fontSize: 13 }}>Showing saved match data · Updated {new Intl.DateTimeFormat('en-ZA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Johannesburg' }).format(new Date(detail.freshness.updatedAt))} SAST. Live refresh is paused.</Text>}
     {!!error && <View style={{ gap: 8 }}><Text accessibilityRole="alert" style={{ color: b.danger }}>{error}</Text><Pressable accessibilityRole="button" onPress={() => void load()} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: b.accent, fontWeight: '800' }}>Retry</Text></Pressable></View>}
-    {loading && !match && <ActivityIndicator color={b.accent} />}
+    {loading && !match && <ActivityIndicator color={loadingBlue} />}
     {match && <>
       <Pressable accessibilityRole="button" accessibilityLabel={`Open ${match.tournamentName} tournament`} onPress={openTournament} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <View style={{ flex: 1, gap: 5 }}><Text style={{ color: b.muted, fontSize: 10, fontWeight: '800', letterSpacing: 1 }}>TOURNAMENT</Text><Text style={{ color: b.premium, fontSize: 20, fontWeight: '800' }}>{playerCountryFlag(detail?.tournament?.country)}{detail?.tournament?.country ? ' ' : ''}{match.tournamentName}</Text></View><Ionicons name="chevron-forward" size={20} color={b.accent} />
+        <View style={{ flex: 1 }}><Text style={{ color: b.premium, fontSize: 18, fontWeight: '600' }}>{playerCountryFlag(detail?.tournament?.country)}{detail?.tournament?.country ? ' ' : ''}{match.tournamentName}</Text></View><Ionicons name="chevron-forward" size={20} color={b.accent} />
       </Pressable>
-      <View style={{ padding: 20, backgroundColor: '#16251F', borderRadius: 23, gap: 17 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}><Text style={{ color: live ? '#FF6678' : b.padel, fontSize: 11, fontWeight: '800', letterSpacing: 1 }}>{live ? '● LIVE NOW' : match.status === 'scheduled' ? 'UP NEXT' : terminal.has(match.status) ? match.status === 'finished' ? 'FINAL SCORE' : match.status.replaceAll('_', ' ').toUpperCase() : match.status.toUpperCase()}</Text><Text style={{ color: '#CAD8CE', fontSize: 11 }}>{match.category === 'men' ? 'Men' : 'Women'} · {detail ? tournamentRoundLabel(detail) : proRound(match)}</Text></View>
-        <Text style={{ color: '#CAD8CE', fontSize: 12 }}>{match.court || 'Court to be announced'}{detail?.draw === 'qualy' ? ' · Qualifying draw' : ''}</Text>
-        {!!sets.length && <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>{sets.map((_, index) => <Text key={index} style={{ width: 27, textAlign: 'center', color: '#CAD8CE', fontSize: 9, fontWeight: '800' }}>SET {index + 1}</Text>)}</View>}
-        {match.teams.map((team, index) => <View key={index} style={{ gap: 15 }}>
-          {index === 1 && <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}><View style={{ flex: 1, height: 1, backgroundColor: '#3A4D40' }} /><Text style={{ color: '#CAD8CE', fontSize: 10, fontWeight: '800', letterSpacing: 2 }}>VS</Text><View style={{ flex: 1, height: 1, backgroundColor: '#3A4D40' }} /></View>}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <View style={{ flex: 1, gap: 10 }}>{detail?.seeds[index] && <Text style={{ color: b.padel, fontSize: 10, fontWeight: '800' }}>SEED {detail.seeds[index]}</Text>}{team.length ? team.map(player => <Pressable key={player.id} accessibilityRole="button" accessibilityLabel={`View ${player.name} player details`} onPress={() => setTab('players')} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 54 }}>
-              <PlayerPortrait player={player} photo={photos[player.id]} size={54} />
-              <View style={{ flex: 1, gap: 5 }}><Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700', lineHeight: 20 }}>{playerCountryFlag(player.nationality)}{player.nationality ? ' ' : ''}{player.name}</Text>{profiles[player.id]?.rank > 0 && <Text style={{ color: b.padel, fontSize: 10, fontWeight: '800' }}>WORLD #{profiles[player.id].rank}</Text>}</View>
-            </Pressable>) : <Text style={{ color: '#CAD8CE' }}>Pair to be confirmed</Text>}</View>
-            <View style={{ flexDirection: 'row', gap: 6 }}>{sets.map((set, setIndex) => <Text key={setIndex} adjustsFontSizeToFit numberOfLines={1} style={{ width: 27, color: match.winner === `team_${index + 1}` ? b.padel : '#FFFFFF', fontSize: 24, fontWeight: '800', textAlign: 'center', fontVariant: ['tabular-nums'] }}>{set[index] ?? '–'}</Text>)}</View>
-          </View>
-          {match.winner === `team_${index + 1}` && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Ionicons name="checkmark-circle" size={16} color={b.padel} /><Text style={{ color: b.padel, fontSize: 10, fontWeight: '800', letterSpacing: 1 }}>WINNERS</Text></View>}
-        </View>)}
-        {!!detail?.scoreText && !sets.length && <Text style={{ color: '#CAD8CE' }}>{detail.scoreText}</Text>}
-        {!!detail?.duration && <Text style={{ color: '#CAD8CE', fontSize: 11 }}>Match duration · {detail.duration}</Text>}
-        {live && currentScore?.points && <Text style={{ color: b.padel, fontSize: 13, fontWeight: '800' }}>Current game · {currentScore.points.replace(':', ' – ')}</Text>}
-      </View>
+      <ProMatchScoreboard row={{ ...detail!, match: { ...match, status: effectiveStatus || match.status }, liveScore: currentScore }} round={tournamentRoundLabel(detail!)} hero photos={matchPhotos} onPlayers={() => setTab('players')} />
+      {live && <Text accessibilityLiveRegion="polite" style={{ color: b.muted, fontSize: 12 }}>{stream.state === 'connected' && points?.channel ? '● Live connection · updates as points arrive' : points?.channel ? 'Reconnecting · saved scores refresh automatically' : 'Scores refresh automatically when available'}</Text>}
       {match.status === 'scheduled' && <StartTime value={match.scheduledAt} scheduleLabel={match.scheduleLabel} />}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 7 }}>{(['summary', 'points', 'players', 'h2h'] as const).map(value => <Pressable key={value} accessibilityRole="tab" accessibilityState={{ selected: tab === value }} onPress={() => { void trackEvent('feature_interaction', { feature: 'match_detail', action: 'tab', selection: value }); setTab(value); }} style={{ minWidth: value === 'points' ? 116 : 80, paddingHorizontal: 13, paddingVertical: 12, borderRadius: 12, backgroundColor: tab === value ? b.padel : b.elevated, alignItems: 'center' }}><Text style={{ color: b.premium, fontWeight: '800', fontSize: 13 }}>{value === 'summary' ? 'Overview' : value === 'points' ? 'Point by point' : value === 'h2h' ? 'H2H' : 'Players'}</Text></Pressable>)}</ScrollView>
+      <NativeSegmentedControl label="Match view" value={tab} onChange={value => setTab(value as typeof tab)} options={[{ value: 'points', label: 'Live feed' }, { value: 'summary', label: 'Stats' }, { value: 'players', label: 'Players' }, { value: 'h2h', label: 'H2H' }]} />
       {tab === 'summary' && <View style={{ gap: 16 }}>
         <ProMatchJourney feed={points} names={names} />
         {prediction && <View style={{ backgroundColor: b.elevated, borderWidth: 1, borderColor: b.edge, borderRadius: 18, padding: 16, gap: 10 }}>
@@ -275,24 +273,12 @@ export default function ProMatchScreen() {
           <StatRows value={stats?.[statsPeriod]} />
         </View>
       </View>}
-      {tab === 'points' && <View style={{ gap: 14 }}>
-        <Text style={{ color: b.muted, fontSize: 12 }}>{points?.coverage === 'full' ? 'Full recorded point history' : points?.coverage === 'partial' ? 'Partial coverage · some games may be missing' : points?.coverage === 'tracking' ? 'Live tracking · subject to correction' : 'Point coverage not available'}</Text>
-        {!!points?.sets.length && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 7 }}>{[0, ...points.sets.map(set => set.set_number)].map(value => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: pointSet === value }} onPress={() => setPointSet(value)} style={{ paddingHorizontal: 13, paddingVertical: 9, borderRadius: 10, backgroundColor: pointSet === value ? b.padel : b.elevated }}><Text style={{ color: b.premium, fontWeight: '700' }}>{value ? `Set ${value}` : 'All sets'}</Text></Pressable>)}</ScrollView>}
-        {points?.sets.filter(set => !pointSet || set.set_number === pointSet).map((set, i) => <View key={set.set_number || i} style={{ backgroundColor: b.elevated, borderRadius: 18, padding: 17, gap: 12 }}><Text style={{ color: b.premium, fontSize: 17, fontWeight: '800' }}>Set {set.set_number || i + 1}{set.set_score ? ` · ${set.set_score}` : ''}</Text>
-          {set.games.map((game, j) => { const winner = gameWinner(set, j); const broken = winner !== null && game.serving === (winner === 0 ? 'team_2' : 'team_1'); return <View key={j} style={{ borderTopWidth: 1, borderTopColor: b.edge, paddingTop: 12, gap: 8 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}><Text style={{ color: b.premium, fontWeight: '800' }}>Game {game.game_number || j + 1} · {game.game_score || 'Score pending'}</Text>{winner !== null && <Text style={{ color: b.accent, fontWeight: '700', fontSize: 11 }}>{broken ? 'BREAK · ' : ''}{names[winner]} won</Text>}</View>
-            <Text style={{ color: b.muted, fontSize: 12 }}>Serving: {game.serving === 'team_1' ? names[0] : game.serving === 'team_2' ? names[1] : 'TBC'}</Text>
-            {game.points.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{game.points.map((point, pointIndex) => <View key={pointIndex} style={{ backgroundColor: b.panel, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 6 }}><Text style={{ color: b.premium, fontSize: 12, fontWeight: '700' }}>{point.replace(':', ' – ')}</Text></View>)}</View> : <Text style={{ color: b.muted, fontSize: 12 }}>Points not recorded</Text>}
-          </View>; })}
-        </View>)}
-        {!points?.sets.length && <Text style={{ color: b.muted }}>Point-by-point data has not been published for this match.</Text>}
-        <Text style={{ color: b.muted, fontSize: 11 }}>Recorded point scores are shown in order. A game-winning point may appear only in the following game score.</Text>
-      </View>}
-      {tab === 'players' && <View style={{ gap: 14 }}>{playerStatsLoading && <ActivityIndicator color={b.accent} />}{match.teams.map((team, teamIndex) => <View key={teamIndex} style={{ gap: 10 }}><Text style={{ color: b.muted, fontWeight: '800', fontSize: 11 }}>TEAM {teamIndex + 1}</Text>{team.map(player => { const profile = profiles[player.id]; const career = playerStats[player.id]; return <Pressable key={player.id} accessibilityRole="button" accessibilityLabel={`Find ${player.name} in Players`} onPress={() => router.push({ pathname: '/rankings', params: { view: 'Discover', source: 'pro', gender: match.category, query: player.name } })} style={{ backgroundColor: b.elevated, borderRadius: 16, borderWidth: 1, borderColor: b.edge, padding: 14, flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+      {tab === 'points' && <ProLiveFeed key={id} feed={displayFeed} names={names} teams={match.teams} photos={matchPhotos} />}
+      {tab === 'players' && <View style={{ gap: 14 }}>{playerStatsLoading && <ActivityIndicator color={loadingBlue} />}{match.teams.map((team, teamIndex) => <View key={teamIndex} style={{ gap: 10 }}><Text style={{ color: b.muted, fontWeight: '800', fontSize: 11 }}>TEAM {teamIndex + 1}</Text>{team.map(player => { const profile = profiles[player.id]; const career = playerStats[player.id]; return <Pressable key={player.id} accessibilityRole="button" accessibilityLabel={`Find ${player.name} in Players`} onPress={() => router.push({ pathname: '/rankings', params: { view: 'Discover', source: 'pro', gender: match.category, query: player.name } })} style={{ backgroundColor: b.elevated, borderRadius: 16, borderWidth: 1, borderColor: b.edge, padding: 14, flexDirection: 'row', gap: 12, alignItems: 'center' }}>
           <PlayerPortrait player={player} photo={photos[player.id]} /><View style={{ flex: 1, gap: 4 }}><Text style={{ color: b.premium, fontSize: 15, fontWeight: '800' }}>{player.name}</Text><Text style={{ color: b.muted, fontSize: 12 }}>{[profile?.rank ? `World #${profile.rank}` : null, profile?.nationality, profile?.side].filter(Boolean).join(' · ') || 'FIP player'}</Text><Text style={{ color: b.accent, fontSize: 12 }}>{career ? `${career.winPercentage ?? '—'}% wins · ${career.matchesPlayed ?? '—'} matches · ${career.titles ?? '—'} titles` : 'Career stats unavailable'}</Text>{career?.coverage === 'partial' && career.since && <Text style={{ color: b.muted, fontSize: 10 }}>Recorded since {proDate(career.since)}</Text>}</View><Ionicons name="chevron-forward" size={16} color={b.muted} />
         </Pressable>; })}</View>)}<Text style={{ color: b.muted, fontSize: 11 }}>Career totals reflect PadelAPI’s available match coverage.</Text></View>}
       {tab === 'h2h' && <View style={{ gap: 14 }}>
-        {h2hLoading && <ActivityIndicator color={b.accent} />}
+        {h2hLoading && <ActivityIndicator color={loadingBlue} />}
         {headToHead && <><View style={{ backgroundColor: b.elevated, borderRadius: 18, borderWidth: 1, borderColor: b.edge, padding: 18, gap: 8 }}><Text style={{ color: b.premium, fontSize: 17, fontWeight: '800' }}>Previous meetings</Text><Text style={{ color: b.muted }}>{headToHead.total} recorded matches before this one</Text>{headToHead.complete && <Text style={{ color: b.accent, fontSize: 20, fontWeight: '800' }}>{h2hWins[0]} – {h2hWins[1]}</Text>}{headToHead.complete && <Text style={{ color: b.muted, fontSize: 11 }}>{names[0]} · {names[1]}</Text>}</View>
           {headToHead.matches.slice(0, 8).map(previous => <View key={previous.match.id} style={{ backgroundColor: b.elevated, borderRadius: 14, padding: 14, gap: 5 }}><Text style={{ color: b.muted, fontSize: 12 }}>{proDate(previous.match.playedAt)} · {proRound(previous.match)}</Text><Text style={{ color: b.premium, fontWeight: '700' }}>{previous.match.score.map(set => `${set[0] ?? '–'}–${set[1] ?? '–'}`).join('  ·  ') || 'Result unavailable'}</Text><Text style={{ color: b.muted, fontSize: 12 }}>{previous.match.winner ? `${previous.match.teams[previous.match.winner === 'team_1' ? 0 : 1].map(player => player.name).join(' / ')} won` : 'Winner not recorded'}</Text></View>)}
         </>}

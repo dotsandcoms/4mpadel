@@ -9,6 +9,46 @@ const model = load('supabase/functions/deliver-push/following-model.ts');
 const routing = load('src/lib/notification-routing.ts', () => ({ NOTIFICATION_PATHS: {} }));
 const feed = load('src/lib/following-feed.ts', () => routing);
 const now = Date.parse('2026-10-07T12:00:00Z');
+const mainScope = { ranking_source: 'sapa_main_v1', org: 'SAPA', ranking_id: 15809, age_group_id: 82, ranking_type: 3, age_group: 'Men-Main', match_type: 'Men-Doubles', ranking_scope: 'sapa:15809:3:82' };
+
+test('local ranking posts require a verified SAPA Main source, not the displayed rank', () => {
+  const row = { id: '00000000-0000-4000-8000-000000000001', kind: 'ranking', title: 'Charl moved', path: '/players/191', occurred_at: '2026-11-09T06:00:00Z' };
+  for (const payload of [
+    { before_rank: 17, rank: 9, points: 180 },
+    { ...mainScope, ranking_id: 16482, org: 'SA Grand Tour', before_rank: 17, rank: 9 },
+    { ...mainScope, age_group_id: 2, before_rank: 17, rank: 9 },
+    { ...mainScope, ranking_type: 4, before_rank: 17, rank: 9 },
+    { ...mainScope, match_type: 'Men-Singles', before_rank: 17, rank: 9 },
+    { ...mainScope, before_rank: 17, rank: 17, points: 4000 },
+  ]) {
+    const page = feed.parseFeedPage({ items: [{ ...row, payload }], has_more: true });
+    assert.equal(page.items.length, 0); assert.equal(page.cursor.id, row.id); assert.equal(page.hasMore, true);
+  }
+  const page = feed.parseFeedPage({ items: [{ ...row, payload: { ...mainScope, before_rank: 18, rank: 17, points: 3381 } }], has_more: false });
+  assert.equal(page.items.length, 1);
+  const change = feed.feedRankingChange(page.items[0]);
+  assert.equal(change.label, 'SAPA Men-Main'); assert.equal(change.rank, 17); assert.equal(change.points, 3381);
+});
+test('Women-Main identity cannot be labelled as Men-Main or borrowed from another circuit', () => {
+  const payload = { ...mainScope, age_group_id: 83, ranking_type: 4, age_group: 'Women-Main', match_type: 'Women-Doubles', ranking_scope: 'sapa:15809:4:83', before_rank: 8, rank: 6, points: 2000 };
+  assert.equal(feed.feedRankingChange({ kind: 'ranking', path: '/players/192', payload }).label, 'SAPA Women-Main');
+  assert.equal(feed.feedRankingChange({ kind: 'ranking', path: '/players/192', payload: { ...payload, age_group: 'Men-Main' } }), null);
+});
+test('Home player data is a separate followed-player list with independent local and FIP identities', () => {
+  const page = feed.parseFeedPage({ items: [], has_more: false, followed_players: [
+    { id: 191, name: 'Charl Vos', source: 'local', photo_url: 'https://test/charl.jpg', nationality: 'ZA', rank_label: 9, points: 180, email: 'private', main_rankings: [{ ...mainScope, rank: 17, points: 3381 }] },
+    { id: 191, name: 'FIP player', source: 'pro', photo_url: 'https://test/fip.jpg', nationality: 'ES', pro_ranking: { category: 'men', rank: 7, points: 1555 } },
+  ] });
+  assert.equal(page.items.length, 0); assert.equal(page.followedPlayers.length, 2);
+  assert.equal(page.followedPlayers[0].mainRankings[0].rank, 17); assert.equal(page.followedPlayers[0].mainRankings[0].points, 3381);
+  assert.equal(page.followedPlayers[1].proRanking.rank, 7); assert.equal(page.followedPlayers[1].mainRankings, undefined);
+  assert.equal(page.followedPlayers[0].proRanking, undefined); assert.ok(!JSON.stringify(page.followedPlayers).includes('private'));
+});
+test('ranking notification deep links keep the main division and reject extra or duplicate parameters', () => {
+  const path = '/(tabs)/rankings?view=Rankings&source=4m&gender=women';
+  assert.equal(routing.pathFromNotificationData({ path }), path);
+  for (const bad of [path + '&gender=men', path + '&org=16482', path.replace('source=4m','source=pro')]) assert.equal(routing.pathFromNotificationData({ path: bad }), null);
+});
 const match = { id: 77, status: 'scheduled', scheduled_at: '2026-10-07T14:00:00Z', court: 'Court 2', players: { team_1: [{ id: 1, name: 'Mark' }, { id: 2, name: 'Paul' }], team_2: [{ id: 3, name: 'Brad' }, { id: 4, name: 'Jason' }] }, tournament: { name: 'SA Nationals' }, played_at: '2026-10-07', score: [{ team_1: 6, team_2: 0 }, { team_1: 6, team_2: 0 }], winner: 'team_1' };
 test('two and three-set pro results preserve tie-break sets through the worker and feed', () => {
   for (const scores of [

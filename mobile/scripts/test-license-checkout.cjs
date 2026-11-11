@@ -74,3 +74,23 @@ test('playing preferences are optional when quoting a completed profile',async()
   const app=server();const r=await app.call({action:'quote',licenseYear:2027});
   assert.equal(r.status,200);assert.equal(r.body.code,undefined);
 });
+
+function appLicenseClient() {
+  const calls = [], mod = { exports: {} };
+  const clientCode = ts.transpileModule(fs.readFileSync('src/lib/licenses.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  vm.runInNewContext(clientCode, { module: mod, exports: mod.exports, require: () => ({ supabase: { functions: { invoke: async (name, options) => { calls.push({name,body:options.body}); return { data: { paid: true, quote: {} } }; } } } }) });
+  return { ...mod.exports, calls };
+}
+test('standalone app licence screen refuses temporary quote and checkout before network access', async () => {
+  const api = appLicenseClient();
+  for (const action of ['quote','checkout']) await assert.rejects(api.invokeLicense({ action, licenseType: 'temporary', eventId: 10 }), { code: 'EVENT_CHECKOUT_REQUIRED' });
+  assert.equal(api.calls.length, 0);
+});
+test('annual app purchases and verification of an older temporary payment still reach checkout', async () => {
+  const api = appLicenseClient();
+  await api.invokeLicense({ action: 'quote', licenseType: 'full', licenseYear: 2027 });
+  await api.invokeLicense({ action: 'checkout', licenseType: 'full', licenseYear: 2027 });
+  await api.invokeLicense({ action: 'verify', licenseType: 'temporary', reference: 'existing-reference' });
+  assert.equal(api.calls.length, 3); assert.equal(api.calls[2].body.action, 'verify');
+  assert.ok(api.calls.every(call => call.name === 'native-license-checkout'));
+});

@@ -215,6 +215,7 @@ function followerComponent() {
   },
   'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }), Fragment: 'Fragment' },
   'react-native': { Text: 'Text', Pressable: 'Pressable' }, '@/theme/tokens': { lightBrand: {} },
+  '@expo/vector-icons': { Ionicons: 'Ionicons' },
   'expo-router': { useFocusEffect(callback) { if (callback.key !== dependencyKey) { dependencyKey = callback.key; effect = callback.fn; cleanup?.(); cleanup = effect(); } } },
   '@/lib/player-hub': { fetchLocalFollowerCount: id => new Promise((resolve, reject) => requests.push({ id, resolve, reject })) },
  };

@@ -14,7 +14,7 @@ create function auth.uid() returns uuid language sql stable as $$select nullif(a
 create function auth.email() returns text language sql stable as $$select auth.jwt()->>'email'$$;
 create table public.players(id bigint primary key,email text,name text,image_url text,region text,racket_brand text,notification_prefs jsonb default '{}');
 create table public.player_profile_details(player_id bigint primary key references public.players,date_of_birth date);
-create table public.calendar(id bigint primary key,event_name text,start_date date,end_date date,event_status text,is_visible boolean default true,sanction_status text,organisation_id uuid,organiser_email text,event_co_admins text[],venue text,entry_fee numeric,early_bird_fee numeric,early_bird_ends_at timestamptz);
+create table public.calendar(id bigint primary key,event_name text,start_date date,end_date date,event_status text,is_visible boolean default true,sanction_status text,organisation_id uuid,organiser_email text,event_co_admins text[],venue text,city text,poster_image_url text,custom_image_url text,image_url text,sapa_status text,entry_fee numeric,early_bird_fee numeric,early_bird_ends_at timestamptz);
 create table public.payments(id uuid primary key default gen_random_uuid(),event_id bigint,email text,status text);
 create table public.tournament_divisions(id uuid primary key default gen_random_uuid(),event_id bigint,entry_fee numeric,name text);
 create table public.organisations(id uuid primary key,created_by bigint references public.players,name text);
@@ -22,6 +22,10 @@ create table public.organisation_members(organisation_id uuid references public.
 create table public.event_registrations(id uuid primary key default gen_random_uuid(),event_id bigint references public.calendar,division_id uuid,email text,partner_email text,payment_status text,partner_payment_status text,status text default 'registered');
 create table public.tournament_participants(id uuid primary key default gen_random_uuid(),event_id bigint,email text,class_name text);
 create table public.player_push_tokens(id uuid primary key default gen_random_uuid(),email text,token text,token_kind text default 'expo');
+create table public.push_outbox(id uuid primary key default gen_random_uuid(),email text,type text,title text,body text,path text,created_at timestamptz default now(),not_before timestamptz default now(),obsolete boolean default false,expanded_at timestamptz);
+alter table public.push_outbox enable row level security;
+revoke all on public.push_outbox from public,anon,authenticated;
+grant select,insert,update,delete on public.push_outbox to service_role;
 -- Include unscoped legacy admins from the start, so cached SQL plans use the
 -- same legacy permission model throughout every tenant-isolation assertion.
 create function public.can_manage_event(bigint) returns boolean language sql stable as $$
@@ -54,6 +58,14 @@ alter default privileges in schema public revoke all on tables from public,anon,
 \ir ../supabase/migrations/20261105122906_messaging_publisher_avatars.sql
 \ir ../supabase/migrations/20261106052656_messaging_division_announcements.sql
 \ir ../supabase/migrations/20261106074607_messaging_notification_preferences.sql
+\ir ../supabase/migrations/20261110084130_messaging_player_groups_and_admin_outreach.sql
+\ir ../supabase/migrations/20261110095535_messaging_admin_inbox_scope_qualification.sql
+\ir ../supabase/migrations/20261110114014_messaging_group_event_attachments.sql
+\ir ../supabase/migrations/20261110100044_notification_read_state_and_unread_badges.sql
+-- Reproduce hosted legacy drift; the correction must close even broad policies/grants.
+grant select,insert,update,delete on public.push_outbox to anon,authenticated;
+create policy account_must_exist on public.push_outbox for all to authenticated using(true) with check(true);
+\ir ../supabase/migrations/20261110101140_notification_inbox_access_contract.sql
 
 create function pg_temp.expect(ok boolean,label text) returns void language plpgsql as $$begin if ok is distinct from true then raise exception 'FAIL: %',label; end if; end$$;
 create function pg_temp.reject(query text,pattern text) returns void language plpgsql as $$begin
@@ -230,7 +242,8 @@ do $$declare relation record; privilege text; begin
     foreach privilege in array array['SELECT','INSERT','UPDATE','DELETE'] loop
       perform pg_temp.expect(not has_table_privilege('anon','messaging.'||relation.tablename,privilege),'anonymous private table denied');
       perform pg_temp.expect(not has_table_privilege('authenticated','messaging.'||relation.tablename,privilege),'player private table denied');
-      perform pg_temp.expect(has_table_privilege('service_role','messaging.'||relation.tablename,privilege),'explicit worker private table grant');
+      perform pg_temp.expect(has_table_privilege('service_role','messaging.'||relation.tablename,privilege)
+        = (relation.tablename not in ('groups','group_members','admin_batches')),'reviewed worker private table grant');
     end loop;
   end loop;
 end $$;
@@ -328,9 +341,11 @@ select pg_temp.expect(public.messaging_api('status')->>'needsBirthDate'='true','
 select pg_temp.expect(public.messaging_api('status')->>'interactive'='false','missing birth date cannot unlock interactive messaging');
 reset role;
 select pg_temp.expect(not exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-  where n.nspname='messaging' and p.proname not in ('api','own_unread_total','event_directory','event_analytics','mark_unread','snapshot','realtime_can_read') and has_function_privilege('authenticated',p.oid,'EXECUTE')),'all other private helpers deny client execution');
+  where n.nspname='messaging' and p.proname not in ('api','own_unread_total','event_directory','event_analytics','mark_unread','snapshot','realtime_can_read','notification_api') and has_function_privilege('authenticated',p.oid,'EXECUTE')),'all other private helpers deny client execution');
 \ir messaging-divisions.sql
 \ir messaging-notifications.sql
+\ir messaging-groups.sql
+\ir notification-read-badges.sql
 -- Account deletion erases authored content before the account reference disappears.
 delete from auth.users where id='00000000-0000-0000-0000-000000000002';
 select pg_temp.expect(not exists(select 1 from messaging.messages where body='Hello Alice' or body='Now confirmed'),'account erasure purges authored live messages');

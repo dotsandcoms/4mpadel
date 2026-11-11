@@ -6,6 +6,7 @@ import { AppState, Platform } from 'react-native';
 
 import { NOTIFICATION_PATHS, type NotificationType } from './notification-events';
 import { supabase } from './supabase';
+import { markNotificationFromPush } from './notification-read-state';
 
 export type { NotificationType } from './notification-events';
 export { NOTIFICATION_PATHS, NOTIFICATION_TYPES, pushCopy } from './notification-events';
@@ -205,7 +206,7 @@ export function addNotificationResponseListener(
   const sub = Notifications.addNotificationResponseReceivedListener((response) => {
     const data = response.notification.request.content.data as Record<string, unknown> | undefined;
     const path = pathFromNotificationData(data);
-    if (path) { void trackEvent('notification_open'); onPath(path); }
+    if (path) { void markNotificationFromPush(data).catch(() => {}); void trackEvent('notification_open'); onPath(path); }
   });
   return sub;
 }
@@ -214,7 +215,9 @@ export function addNotificationResponseListener(
 export function consumeInitialNotificationPath(): string | null {
   const response = Notifications.getLastNotificationResponse();
   if (!response) return null;
-  const path = pathFromNotificationData(response.notification.request.content.data);
+  const data = response.notification.request.content.data;
+  const path = pathFromNotificationData(data);
+  if (path) void markNotificationFromPush(data).catch(() => {});
   if (path) void trackEvent('notification_open');
   Notifications.clearLastNotificationResponse();
   return path;

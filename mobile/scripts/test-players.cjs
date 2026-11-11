@@ -5,7 +5,7 @@ const ts = require('typescript');
 const vm = require('node:vm');
 function load(file, modules) {
  const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
- const exports = {}; vm.runInNewContext(source, { exports, require: name => modules[name], URL }); return exports;
+ const exports = {}; vm.runInNewContext(source, { exports, require: name => name === './sapa-main-ranking' ? load('src/lib/sapa-main-ranking.ts', {}) : modules[name], URL }); return exports;
 }
 const players = load('src/lib/players.ts', { '@/lib/supabase': { supabase: {} } });
 const preferences = load('src/lib/player-preferences.ts', {});

@@ -57,7 +57,17 @@ test('a cache outage fails closed instead of bypassing the shared provider gover
 });
 test('non-provider traffic is unaffected, completed matches persist and live checks are bounded',async()=>{
  let calls=0;const read=api.createPadelFetch(database(),async()=>{calls++;return Response.json({ok:true});});await read('https://api.rankedin.com/v1/test');assert.equal(calls,1);
- assert.equal(api.padelCacheSeconds(new URL('https://padelapi.org/api/live')),120);
+ assert.equal(api.padelCacheSeconds(new URL('https://padelapi.org/api/live')),60);
  assert.equal(api.padelCacheSeconds(new URL('https://padelapi.org/api/matches/1'),{status:'finished'}),604800);
  assert.equal(api.padelCacheSeconds(new URL('https://padelapi.org/api/players?name=Mark')),86400);
+});
+
+test('active scores refresh faster, finished data remains long-lived and optional failures back off',async()=>{
+ assert.equal(api.padelCacheSeconds(new URL('https://padelapi.org/api/matches/14773'),{status:'live'}),90);
+ assert.equal(api.padelCacheSeconds(new URL('https://padelapi.org/api/tournaments/750/matches'),{data:[{status:'live'}]}),90);
+ assert.equal(api.padelCacheSeconds(new URL('https://padelapi.org/api/tournaments/750/matches'),{data:[{status:'finished'}]}),600);
+ const db=database();let calls=0;const read=api.createPadelFetch(db,async()=>{calls++;return new Response('',{status:402});});
+ const url='https://padelapi.org/api/players/65/form';
+ assert.equal((await (await read(url)).json()).reason,'subscription');
+ assert.equal((await (await read(url)).json()).unavailable,true);assert.equal(calls,1);
 });

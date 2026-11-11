@@ -15,7 +15,7 @@ import type { ProPadelState } from '@/hooks/use-pro-padel';
 import { proDate, proRound, proStale, proStatus, selectProMatches, type ProTournament, type ProCategory, type ProFollow, type ProMatch, type ProPerson, type ProPlayer, type ProRankings } from '@/lib/pro-padel';
 import { fetchLiveTournaments, fetchMatchDetails, fetchTournamentMatches, withLiveScores, type MatchDetails } from '@/lib/pro-padel-live';
 import { getMatchBookmarks, refreshMatchBookmarks, removeMatchBookmark, subscribeMatchBookmarks } from '@/lib/pro-match-bookmarks';
-import { lightBrand as brand } from '@/theme/tokens';
+import { loadingBlue, lightBrand as brand } from '@/theme/tokens';
 
 type Filter = ProCategory | 'all';
 const followRow = (p: ProPlayer): ProFollow => ({ player_id: p.id, player_name: p.name, category: p.category });
@@ -224,7 +224,7 @@ function LiveTournaments({ fallback }: { fallback?: ProTournament | null }) {
         </Pressable>
       </View>}
     </View>
-    {loading && !liveTours.length && <ActivityIndicator color={brand.accent} />}
+    {loading && !liveTours.length && <ActivityIndicator color={loadingBlue} />}
     {!!liveTours.length && <View onLayout={event => setMeasuredWidth(event.nativeEvent.layout.width)}>
       <ScrollView ref={rail} key={tourIds} horizontal showsHorizontalScrollIndicator={false} decelerationRate="fast"
         snapToInterval={cardWidth + 12} disableIntervalMomentum
@@ -325,7 +325,7 @@ function IntegratedUpNext({ tournament, showLocal, showInternational, message }:
     {showInternational && <LiveTournaments fallback={liveTour} />}
     {showInternational && <StarredMatches />}
     {(cards.length > 0 || loading || error) && <Text style={s.sectionTitle}>Up next</Text>}
-    {loading && <ActivityIndicator color={brand.accent} />}
+    {loading && <ActivityIndicator color={loadingBlue} />}
     {!!error && <Message body={error} retry={() => setRetry(n => n + 1)} />}
     {!cards.length && !loading && !error && !liveTour && <Text style={s.caption}>No upcoming tournaments are published yet.</Text>}
     {cards.length > 0 && <ScrollView horizontal showsHorizontalScrollIndicator={false} decelerationRate="fast" snapToInterval={298} contentContainerStyle={{ gap: 12, alignItems: 'flex-start' }}>
@@ -507,12 +507,12 @@ export function ProPadelFeed({ state, localState, showInternationalResults = tru
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.filterScroll} contentContainerStyle={s.filters}>{(localState ? ['all', '4m', 'pro', 'men', 'women'] as const : ['all', 'men', 'women'] as const).map(v => <Pressable key={v} accessibilityRole="button" accessibilityState={{ selected: filter === v }}
       onPress={() => { setFilter(v); setCount(6); }} style={[s.filter, filter === v && s.activeFilter, v === '4m' && filter === v && { backgroundColor: '#EAF0FF', borderColor: '#2449D8' }]}><Text style={[s.caption, filter === v && { color: v === '4m' ? '#2449D8' : brand.premium }]}>{v === 'all' ? 'All' : v === '4m' ? '4M' : v === 'pro' ? 'FIP' : v === 'men' ? 'Men' : 'Women'}</Text></Pressable>)}</ScrollView>
 
-    {state.loading && !state.rankings.data && !state.tour.data && <View style={s.loading}><ActivityIndicator color={brand.accent} /><Text style={s.body}>Loading the tour…</Text></View>}
+    {state.loading && !state.rankings.data && !state.tour.data && <View style={s.loading}><ActivityIndicator color={loadingBlue} /><Text style={s.body}>Loading the tour…</Text></View>}
     {state.writeError && <Text accessibilityRole="alert" style={s.warning}>{state.writeError}</Text>}
     {state.rankings.error && <Message body={state.rankings.error} retry={retry} />}
     {localState?.error && filter !== 'pro' && <Message body={localState.error} retry={() => { void localState.refresh(); }} />}
     {localState?.followError && <Message body={localState.followError} retry={() => { void localState.refresh(); }} />}
-    {personal && (state.followsLoading || localState?.followLoading || localState?.loading) ? <View style={s.loading}><ActivityIndicator color={brand.accent} /><Text style={s.body}>Loading your players…</Text></View>
+    {personal && (state.followsLoading || localState?.followLoading || localState?.loading) ? <View style={s.loading}><ActivityIndicator color={loadingBlue} /><Text style={s.body}>Loading your players…</Text></View>
       : personal && state.followsError ? <Message body={state.followsError} retry={() => { void state.refreshFollows(); }} />
       : personal && !state.userId ? <View style={s.message}><Text style={s.cardTitle}>Make padel your own</Text><Text style={s.body}>Sign in to follow players and see their results here.</Text><Button label="Sign in" onPress={() => router.push('/(auth)/sign-in')} /></View>
       : personal && !hasFollows ? <View style={s.message}><Text style={s.cardTitle}>Who’s your first pick?</Text><Text style={s.body}>Follow your favourite players for their results, ranking updates and published fixtures.</Text><Button label="Find players" icon="add" onPress={openDirectory} /></View> : null}
@@ -557,7 +557,7 @@ export function ProPadelFeed({ state, localState, showInternationalResults = tru
           <Portrait key={p.id} player={p} size={40} /><View style={{ flex: 1, gap: 4 }}><Text style={s.personName}>{playerCountryFlag(p.nationality)}{p.nationality ? ' ' : ''}{p.name}</Text><Text style={s.caption}>World #{p.rank} · {proDate(p.rankingDate)}</Text></View>
           <View style={{ alignItems: 'flex-end', gap: 4 }}>{p.rankChange != null && Number.isFinite(p.rankChange) && p.rankChange !== 0 && <Text style={[s.movementValue, { color: p.rankChange > 0 ? '#226047' : brand.muted }]}>{p.rankChange > 0 ? '↑' : '↓'} {Math.abs(p.rankChange)}</Text>}
             {p.pointsChange != null && Number.isFinite(p.pointsChange) && p.pointsChange !== 0 && <Text style={s.caption}>{p.pointsChange > 0 ? '+' : ''}{number(p.pointsChange)} pts</Text>}</View>
-        </Pressable>)}</View> : state.loading && !state.rankings.data ? <ActivityIndicator color={brand.accent} /> : <Message title="No FIP ranking changes yet" body={personal ? 'Ranking changes from your followed FIP players will appear here.' : 'Changes will appear after the next official ranking update.'} />}
+        </Pressable>)}</View> : state.loading && !state.rankings.data ? <ActivityIndicator color={loadingBlue} /> : <Message title="No FIP ranking changes yet" body={personal ? 'Ranking changes from your followed FIP players will appear here.' : 'Changes will appear after the next official ranking update.'} />}
       </>}
     </View>}
     {ready && showInternationalResults && <>

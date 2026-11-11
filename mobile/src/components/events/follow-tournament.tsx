@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, View } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { requestPushPermission } from '@/lib/notifications';
-import { lightBrand as brand } from '@/theme/tokens';
+import { loadingBlue, lightBrand as brand } from '@/theme/tokens';
 
 /** The bell follows general tournament updates. Entry and match alerts are sent to entrants independently. */
 export function EventNotificationBell({ eventId, eventName, circle = false }: { eventId: number; eventName: string; circle?: boolean }) {
@@ -58,6 +58,6 @@ export function EventNotificationBell({ eventId, eventName, circle = false }: { 
 
   return <Pressable accessibilityRole="button" accessibilityLabel={loadFailed ? `Retry loading tournament updates for ${eventName}` : `${following ? 'Turn off' : 'Turn on'} tournament updates for ${eventName}`} accessibilityHint={participating ? 'Your entry and match alerts are automatic, subject to your notification settings.' : undefined} accessibilityState={{ selected: following, disabled: loading || busy }} disabled={loading || busy} onPress={() => void toggle()}
     style={{ minWidth: 44, minHeight: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: following ? '#EAF5D9' : circle ? '#FFFFFF' : 'transparent', borderWidth: circle ? 1 : 0, borderColor: following ? brand.accent : '#16251f4d', opacity: loading ? 0.6 : 1 }}>
-    {busy ? <ActivityIndicator size="small" color={brand.accent} /> : <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}><Ionicons name={following ? 'notifications' : 'notifications-outline'} size={20} color={loadFailed ? brand.danger : following ? '#386018' : brand.premium} />{participating && !following && <View style={{ position: 'absolute', width: 6, height: 6, borderRadius: 3, backgroundColor: '#386018', top: 1, right: 0 }} />}</View>}
+    {busy ? <ActivityIndicator size="small" color={loadingBlue} /> : <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}><Ionicons name={following ? 'notifications' : 'notifications-outline'} size={20} color={loadFailed ? brand.danger : following ? '#386018' : brand.premium} />{participating && !following && <View style={{ position: 'absolute', width: 6, height: 6, borderRadius: 3, backgroundColor: '#386018', top: 1, right: 0 }} />}</View>}
   </Pressable>;
 }

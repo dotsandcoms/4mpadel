@@ -37,9 +37,9 @@ export function SizePicker({ label, value, onChange }: { label: string; value: s
               <Text accessibilityRole="header" style={{ color: brand.muted, fontSize: 12, fontWeight: '600', letterSpacing: 1 }}>{group.title.toUpperCase()}</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {group.sizes.map(size => <Pressable key={size} accessibilityRole="radio" accessibilityLabel={`${group.title}: ${size}`} accessibilityState={{ checked: value === size }} onPress={() => { onChange(size); setOpen(false); }}
-                  style={{ width: '30%', minHeight: 60, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: value === size ? brand.padel : brand.edge, backgroundColor: value === size ? brand.padel : brand.page }}>
-                  <Text style={{ color: value === size ? '#16251F' : brand.premium, fontSize: 16, fontWeight: '600' }}>{size.replace('Youth ', '')}</Text>
-                  {value === size && <Ionicons name="checkmark" size={12} color="#16251F" />}
+                  style={{ width: '30%', minHeight: 60, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: value === size ? brand.accent : brand.edge, backgroundColor: value === size ? brand.accent : brand.page }}>
+                  <Text style={{ color: value === size ? '#FFFFFF' : brand.premium, fontSize: 16, fontWeight: '600' }}>{size.replace('Youth ', '')}</Text>
+                  {value === size && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
                 </Pressable>)}
               </View>
             </View>)}

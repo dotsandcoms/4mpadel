@@ -9,6 +9,7 @@ const SearchableSelect = ({
     options,
     onChange,
     emptyLabel,
+    disabled = false,
     searchPlaceholder = 'Search…',
 }) => {
     const rootRef = useRef(null);
@@ -37,11 +38,19 @@ const SearchableSelect = ({
     }, []);
 
     useEffect(() => {
-        if (!isOpen) return;
+        if (disabled) {
+            setIsOpen(false);
+            setQuery('');
+        }
+    }, [disabled]);
+
+    useEffect(() => {
+        if (!isOpen || disabled) return;
         listRef.current?.querySelector(`[data-option-index="${activeIndex}"]`)?.scrollIntoView({ block: 'nearest' });
-    }, [activeIndex, isOpen]);
+    }, [activeIndex, isOpen, disabled]);
 
     const chooseOption = (option) => {
+        if (disabled) return;
         onChange(option.value);
         setIsOpen(false);
         setQuery('');
@@ -49,6 +58,7 @@ const SearchableSelect = ({
     };
 
     const handleKeyDown = (event) => {
+        if (disabled) return;
         if (event.key === 'Escape') {
             setIsOpen(false);
             setQuery('');
@@ -82,7 +92,7 @@ const SearchableSelect = ({
 
     return (
         <div ref={rootRef} className="relative">
-            <div className={`relative rounded-lg border bg-black/40 transition-colors ${isOpen ? 'border-padel-green' : 'border-white/10'}`}>
+            <div className={`relative rounded-lg border bg-black/40 transition-colors ${isOpen && !disabled ? 'border-padel-green' : 'border-white/10'}`}>
                 <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} aria-hidden="true" />
                 <input
                     ref={inputRef}
@@ -90,10 +100,11 @@ const SearchableSelect = ({
                     type="text"
                     role="combobox"
                     aria-autocomplete="list"
-                    aria-expanded={isOpen}
+                    aria-expanded={isOpen && !disabled}
                     aria-controls={listboxId}
-                    aria-activedescendant={isOpen ? activeOptionId : undefined}
+                    aria-activedescendant={isOpen && !disabled ? activeOptionId : undefined}
                     autoComplete="off"
+                    disabled={disabled}
                     value={isOpen ? query : (selectedOption?.label || emptyLabel)}
                     placeholder={searchPlaceholder}
                     onFocus={() => {
@@ -112,6 +123,7 @@ const SearchableSelect = ({
                 />
                 <button
                     type="button"
+                    disabled={disabled}
                     onClick={() => {
                         if (isOpen) {
                             setIsOpen(false);
@@ -121,14 +133,14 @@ const SearchableSelect = ({
                         }
                     }}
                     className="absolute right-1 top-1/2 flex min-h-10 min-w-10 -translate-y-1/2 items-center justify-center text-gray-400 hover:text-white"
-                    aria-label={isOpen ? 'Close options' : 'Open options'}
+                    aria-label={isOpen && !disabled ? 'Close options' : 'Open options'}
                     tabIndex={-1}
                 >
-                    <ChevronDown size={18} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown size={18} className={`transition-transform ${isOpen && !disabled ? 'rotate-180' : ''}`} />
                 </button>
             </div>
 
-            {isOpen && (
+            {isOpen && !disabled && (
                 <div className="absolute left-0 right-0 z-[260] mt-2 overflow-hidden rounded-xl border border-white/10 bg-[#111] shadow-2xl">
                     <div className="border-b border-white/10 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-500" role="status">
                         {filteredOptions.length} {filteredOptions.length === 1 ? 'result' : 'results'}

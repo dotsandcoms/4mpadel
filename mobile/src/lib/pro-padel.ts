@@ -2,7 +2,7 @@ import { trackEvent } from './analytics';
 import { supabase } from '@/lib/supabase';
 
 export type ProCategory = 'men' | 'women';
-export type ProPerson = { id: number; name: string; nationality?: string | null };
+export type ProPerson = { id: number; name: string; shortName?: string | null; nationality?: string | null };
 export type ProPlayer = ProPerson & {
   category: ProCategory; rank: number; points: number | null;
   nationality: string | null; photoUrl: string | null; rankingDate: string | null;

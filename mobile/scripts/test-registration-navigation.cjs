@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const ts = require('typescript');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const mainRankings = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/sapa-main-ranking.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: mainRankings });
 const eventRules = {};
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/event-rules.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -26,6 +28,7 @@ async function screen(mode, eventOptions = {}, savedCheckout = null, quoteError 
   const router = Object.fromEntries(['back', 'push', 'replace', 'dismissTo'].map(k => [k, v => navigation.push([k, v])])); router.canGoBack = () => true;
   const native = Object.fromEntries(['ActivityIndicator', 'Pressable', 'ScrollView', 'Switch', 'Text', 'TextInput', 'View'].map(k => [k, k]));
   const modules = {
+    '@/lib/sapa-main-ranking': mainRankings,
     '@/lib/analytics': { trackEvent() {}, recordAnalyticsCheckout() {}, trackConfirmedPurchase() {} },
     '@/components/events/entry-saved-banner': { EntrySavedBanner: 'EntrySavedBanner' },
     '@/components/toast': { Toast: 'Toast' },

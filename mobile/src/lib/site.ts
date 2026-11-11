@@ -10,6 +10,15 @@ export function siteUrl(path: string) {
 }
 
 export async function openSitePath(path: string, options?: { forceBrowser?: boolean }) {
+  const album = /^\/(?:gallery|media)\/([^/?#]+)(?:[?#].*)?$/.exec(path);
+  if (!options?.forceBrowser && album) {
+    router.push({ pathname: '/media/[id]', params: { id: decodeURIComponent(album[1]) } });
+    return;
+  }
+  if (!options?.forceBrowser && /^\/(?:gallery|media)(?:[?#]|$)/.test(path)) {
+    router.push('/media');
+    return;
+  }
   if (!options?.forceBrowser && /^\/players(?:[?#]|$)/.test(path)) {
     const id = new URL(siteUrl(path)).searchParams.get('id');
     if (id && /^\d+$/.test(id)) router.push({ pathname: '/players/[id]', params: { id } });

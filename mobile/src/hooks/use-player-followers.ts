@@ -36,7 +36,7 @@ export function usePlayerFollowers(playerId: string) {
     } catch {
       if (current === sequence.current) setState(previous => ({ ...previous,
         ...(append ? { moreError: 'Could not load more followers. Please try again.' }
-          : { error: 'Could not load your followers. Please try again.' }) }));
+          : { error: 'Could not load followers. Please try again.' }) }));
     } finally {
       if (current === sequence.current) {
         busy.current = false;

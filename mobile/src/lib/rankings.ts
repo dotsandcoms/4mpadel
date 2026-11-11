@@ -3,7 +3,7 @@ export const organisations = [{id:15809,label:'SAPA'},{id:16317,label:'Broll Pro
 export const categoriesFor = (org:number) => org === 16482 ? [35,40,45,50,55].map((age,i)=>({id:`mo${age}`,label:`Men Over ${age}`,type:3,age:i+2})) : [{id:'men',label:'Men',type:3,age:82},{id:'ladies',label:'Women',type:4,age:83}];
 export type RankingPlayer = { rankedinId?:string; id:string; participantId:string; name:string; rank:number; points:number; change:number; changeKnown?:boolean; profile?:PlayerProfile };
 export type ResultRanking = {org?:string;ranking_id?:number;ranking_participant_id?:number|string;ranking_type?:number;age_group_id?:number;age_group?:string;match_type?:string;details?:PointResult[]};
-type PlayerProfile = {id:string;name:string;image_url?:string;home_club?:string;nationality?:string;rankings?:ResultRanking[]};
+type PlayerProfile = {id:string;name:string;rankedin_id?:string|null;image_url?:string;home_club?:string;nationality?:string;rankings?:ResultRanking[]};
 export type PointResult = {date:string;name:string;class:string;place:string;event_type:string;points:number;eventId?:string};
 async function rankedin(path:string, acceptsCache: (payload: any) => boolean = () => true) {
  const url=`https://api.rankedin.com/v1/${path}`;
@@ -21,8 +21,24 @@ export async function fetchRankings(org:number,category:ReturnType<typeof catego
 }
 export async function fetchRankingProfiles(){
  const profiles:PlayerProfile[]=[];
- for(let start=0;;start+=1000){const {data,error}=await supabase.from('players_public').select('id,name,image_url,home_club,nationality,rankings').range(start,start+999);if(error)throw error;profiles.push(...data);if(data.length<1000)break;}
+ for(let start=0;;start+=1000){const {data,error}=await supabase.from('players_public').select('id,name,rankedin_id,image_url,home_club,nationality,rankings').range(start,start+999);if(error)throw error;profiles.push(...data);if(data.length<1000)break;}
  return profiles;
+}
+
+/** A photo/follow action must belong to the same RankedIn identity as the row. */
+export function attachRankingProfiles(players: RankingPlayer[], profiles: PlayerProfile[]): RankingPlayer[] {
+ const linked = new Map<string, PlayerProfile[]>(), names = new Map<string, PlayerProfile[]>();
+ for (const profile of profiles) {
+  const id = profile.rankedin_id?.trim().toUpperCase();
+  if (id) linked.set(id, [...(linked.get(id) || []), profile]);
+  const name = profile.name.trim().toLocaleLowerCase();
+  names.set(name, [...(names.get(name) || []), profile]);
+ }
+ return players.map(player => {
+  const id = player.rankedinId?.trim().toUpperCase();
+  const matches = id ? linked.get(id) : names.get(player.name.trim().toLocaleLowerCase());
+  return { ...player, profile: matches?.length === 1 ? matches[0] : undefined };
+ });
 }
 // Result lists can change before the next six-hour leaderboard sync. Share only
 // concurrent requests; each new visit/refresh asks the provider for current data.
@@ -134,11 +150,11 @@ export async function fetchTournamentWins(player: RankingPlayer): Promise<Trophy
 }
 
 /** Match movement to the displayed national rank; never substitute another player. */
-export async function fetchHomeRankingChange(player: { rankedin_id: string | null; rank_label: string | null; category: string | null }): Promise<number | null> {
+export async function fetchHomeRankingChange(player: { rankedin_id: string | null; rank_label: string | null; category: string | null; sapa_main_label?: string | null }): Promise<number | null> {
  if (!player.rankedin_id || !player.rank_label || player.rank_label === 'Unranked') return null;
- const women = /women|ladies|female/i.test(player.category || '');
+ const women = player.sapa_main_label === 'SAPA Women-Main' || /women|woman|ladies|lady|female/i.test(player.category || '');
  const categories = categoriesFor(15809);
- const ordered = women ? [categories[1], categories[0]] : categories;
+ const ordered = women ? [categories[1]] : [categories[0]];
  for (const category of ordered) {
   try {
    const data = await rankedin(`Ranking/GetRankingsAsync?rankingId=15809&rankingType=${category.type}&ageGroup=${category.age}&weekFromNow=0&language=en&skip=0&take=1000`, payload => {

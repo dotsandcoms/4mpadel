@@ -30,7 +30,7 @@ export const supabase={
  from:(name)=>{
   let update=false;
   const query={then(resolve,reject){return Promise.resolve({data:update?[]:tables[name]||[],error:null}).then(resolve,reject)}};
-  for(const method of ['select','eq','in','lt','order','limit','neq','ilike','or']) query[method]=()=>query;
+  for(const method of ['select','eq','in','lt','order','limit','range','neq','ilike','or']) query[method]=()=>query;
   query.update=()=>{update=true;return query};
   query.maybeSingle=async()=>({data:tables[name]||null,error:null});
   return query;
@@ -119,8 +119,8 @@ test('event manager loads without reports and offers substitution without paid-p
         await page.evaluate(() => window.__finishVerification());
         await page.waitForFunction(() => window.__workbooks.length === 1);
         const workbook = await page.evaluate(() => window.__workbooks[0]);
-        assert.equal(workbook.summary.find(row => row.label === 'Gross Paystack entry receipts').value, 0, 'export uses fresh gateway evidence');
-        assert.equal(workbook.lineItems.filter(row => row.id.startsWith('cash-')).length, 0, 'line items use the same fresh verification');
+        assert.equal(workbook.summary.find(row => row.label === '  of which Paystack to 4M').value, 0, 'export uses fresh gateway evidence');
+        assert.equal(workbook.lineItems.filter(row => row.type === 'payment').length, 0, 'line items use the same fresh verification');
         assert.deepEqual(errors, []);
     } finally {
         await browser.close();

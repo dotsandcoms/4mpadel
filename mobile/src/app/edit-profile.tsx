@@ -39,7 +39,7 @@ import { ageFromBirthDate, birthDateError, playtomicDetailsError, profileExtract
 import { PlaytomicProofField } from '@/components/playtomic-proof-field';
 import { trackEvent } from '@/lib/analytics';
 import { COURT_SIDE_OPTIONS, PLAYING_HAND_OPTIONS, courtSideLabel, playingHandLabel } from '@/lib/player-preferences';
-import { lightBrand as brand } from '@/theme/tokens';
+import { loadingBlue, lightBrand as brand } from '@/theme/tokens';
 
 type Form = {
   dateOfBirth: string;
@@ -315,7 +315,7 @@ export default function EditProfileScreen() {
         <View
           accessibilityLabel="Loading profile"
           className="flex-1 items-center justify-center">
-          <ActivityIndicator color={brand.padel} />
+          <ActivityIndicator color={loadingBlue} />
         </View>
       ) : !player ? (
         <View className="flex-1 px-6 pt-10">
@@ -335,7 +335,7 @@ export default function EditProfileScreen() {
             <Pressable onPress={changePhoto} disabled={photoSaving || saving} accessibilityRole="button" accessibilityLabel={player.image_url ? 'Change profile photo' : 'Add profile photo'} accessibilityHint="Choose a photo from your library. It saves immediately." accessibilityState={{ busy: photoSaving, disabled: photoSaving || saving }} style={{ padding: 18, borderRadius: 22, backgroundColor: brand.elevated, borderWidth: 1, borderColor: brand.edge, flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 24 }}>
               <View style={{ width: 64, height: 64, borderRadius: 20, overflow: 'hidden', backgroundColor: brand.surface, borderWidth: 1, borderColor: brand.edge, alignItems: 'center', justifyContent: 'center' }}>
                 {player.image_url ? <Image source={{ uri: player.image_url }} style={{ width: 64, height: 64 }} contentFit="cover" accessibilityLabel={`${name} profile photo`} accessibilityIgnoresInvertColors /> : <Text style={{ color: brand.accent, fontSize: 28, fontWeight: '800' }}>{name.charAt(0)}</Text>}
-                {photoSaving && <View style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(255,255,255,0.7)', alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={brand.accent} /></View>}
+                {photoSaving && <View style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(255,255,255,0.7)', alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={loadingBlue} /></View>}
               </View>
               <View style={{ flex: 1, gap: 4 }}>
                 <Text numberOfLines={2} style={{ color: brand.premium, fontSize: 18, lineHeight: 22, fontWeight: '800' }}>{name}</Text>

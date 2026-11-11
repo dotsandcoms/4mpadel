@@ -1,4 +1,4 @@
-import type { ProCategory } from '@/lib/pro-padel';
+import type { ProCategory, ProTournament } from '@/lib/pro-padel';
 import type { MatchDetails } from '@/lib/pro-padel-live';
 
 export type TournamentMatchStatus = 'all' | 'live' | 'upcoming' | 'results';
@@ -13,7 +13,12 @@ export function tournamentMatchDay(row: MatchDetails): string {
   if (!value || !Number.isFinite(Date.parse(value))) return '';
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
 }
-export function tournamentRoundLabel(row: MatchDetails) {
+export function tournamentRoundLabel(row: MatchDetails, context?: MatchDetails[]) {
+  if (row.draw === 'qualy' && context) {
+    const rounds = [...new Set(context.filter(item => item.draw === 'qualy' && item.match.category === row.match.category).map(item => item.match.round))].sort((a, b) => b - a);
+    const index = rounds.indexOf(row.match.round);
+    if (index >= 0) return `Qualifying ${index + 1}`;
+  }
   if (row.draw && row.draw !== 'main') return row.draw === 'qualy' ? 'Qualifying' : row.draw === 'group' ? 'Group stage' : 'Placement';
   return ({ 1: 'Final', 2: 'Semi-finals', 4: 'Quarter-finals' }[row.match.round] || (row.match.round > 0 ? `Round of ${row.match.round * 2}` : row.match.roundName || 'Round TBC'));
 }
@@ -41,12 +46,24 @@ export function tournamentSummary(rows: MatchDetails[], category: ProCategory) {
 }
 export function filterTournamentMatches(rows: MatchDetails[], filters: { category: ProCategory; draw: string; round: string; status: TournamentMatchStatus; day: string }) {
   const priority = { live: 0, upcoming: 1, results: 2 };
-  return rows.filter(row => row.match.category === filters.category && (row.draw || 'main') === filters.draw
+  return rows.filter(row => row.match.category === filters.category && (filters.draw === 'all' || (row.draw || 'main') === filters.draw)
     && (filters.round === 'all' || tournamentRoundKey(row) === filters.round)
     && (filters.status === 'all' || tournamentMatchBucket(row) === filters.status)
     && (filters.day === 'all' || tournamentMatchDay(row) === filters.day)).sort((a, b) => {
       const bucket = tournamentMatchBucket(a), other = tournamentMatchBucket(b);
       const time = (row: MatchDetails) => row.match.scheduledAt || row.match.playedAt || '9999';
-      return priority[bucket] - priority[other] || (bucket === 'results' ? time(b).localeCompare(time(a)) : time(a).localeCompare(time(b))) || a.match.id - b.match.id;
+      return priority[bucket] - priority[other] || (bucket === 'results' ? time(b).localeCompare(time(a)) : time(a).localeCompare(time(b))) || (a.match.court === b.match.court ? (a.courtOrder ?? 999) - (b.courtOrder ?? 999) : (a.match.court || '').localeCompare(b.match.court || '')) || a.match.id - b.match.id;
     });
+}
+
+/** The overview deliberately includes qualifying; it must never hide a live match. */
+export function tournamentNowAndNext(rows: MatchDetails[], category: ProCategory) {
+  const selected = filterTournamentMatches(rows, { category, draw: 'all', round: 'all', status: 'all', day: 'all' });
+  return { live: selected.filter(row => tournamentMatchBucket(row) === 'live'),
+    next: selected.filter(row => tournamentMatchBucket(row) === 'upcoming' && !tournamentMatchPending(row)) };
+}
+
+/** Provider and official-calendar IDs belong to different detail routes. */
+export function proTournamentDestination(event: Pick<ProTournament, 'id' | 'matchesAvailable'>) {
+  return { pathname: event.matchesAvailable === false ? '/pro/fip/[id]' as const : '/pro/tournament/[id]' as const, params: { id: String(event.id) } };
 }

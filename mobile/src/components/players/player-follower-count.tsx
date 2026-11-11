@@ -1,10 +1,11 @@
 import { useCallback, useState } from 'react';
 import { Pressable, Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { fetchLocalFollowerCount } from '@/lib/player-hub';
 import { lightBrand as b } from '@/theme/tokens';
 
-export function PlayerFollowerCount({ playerId, refreshKey = 0, onPress }: { playerId: string; refreshKey?: number; onPress?: () => void }) {
+export function PlayerFollowerCount({ playerId, playerName, refreshKey = 0, onPress }: { playerId: string; playerName?: string; refreshKey?: number; onPress?: () => void }) {
   const [state, setState] = useState<{ id: string; count: number | null; error: boolean }>({ id: playerId, count: null, error: false });
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -24,5 +25,5 @@ export function PlayerFollowerCount({ playerId, refreshKey = 0, onPress }: { pla
   const content = <Text accessibilityLiveRegion="polite" accessibilityLabel={onPress ? undefined : accessibilityLabel} style={{ color: b.muted, fontSize: 13, lineHeight: 20 }}>
     {unavailable ? 'Followers unavailable' : <><Text style={{ color: b.premium, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{count === null ? '…' : count.toLocaleString('en-ZA')}</Text> {label}</>}
   </Text>;
-  return onPress ? <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} accessibilityHint="View people following you" onPress={onPress} style={{ minHeight: 44, minWidth: 44, alignSelf: 'flex-start', justifyContent: 'center' }}>{content}</Pressable> : content;
+  return onPress ? <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} accessibilityHint={playerName ? `View people following ${playerName}` : 'View people following you'} onPress={onPress} style={{ minHeight: 44, minWidth: 44, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: b.edge, backgroundColor: b.elevated, alignSelf: 'center', flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center' }}>{content}<Ionicons name="chevron-forward" size={15} color={b.muted} /></Pressable> : content;
 }
