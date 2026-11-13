@@ -28,6 +28,10 @@ The user explicitly approved uploading mobile source to the existing fourm-padel
 
 https://expo.dev/accounts/fourm-padel/projects/4m-padel/builds/4bb4154c-7b9b-4f20-bc7d-213fcda8a65c
 
-Final installer verification is pending build completion. The source archive above was inspected before adding this release receipt; only release documentation changed before upload.
+Build 43 finished at 11:38:33 SAST. The IPA passes ZIP integrity and strict deep code-signature verification. All four targets are version 1.0.2 / build 43, on Apple team `52RX6X5X2T`, include both registered test iPhones, and disallow debugging. The host has the production push entitlement. SHA-256: `037cc594d9087f93a1b9ff86ef875aee08bbe1ff174d6e0db76c2d434c154cd1`.
+
+The verified installer is `/private/tmp/fourm-iphone-1.0.2-43.ipa`; its local verification receipt is `/private/tmp/fourm-iphone-build-43-verification.json`. Share the EAS build link above and open it on either registered iPhone to install. Physical-phone and paired-Watch testing remain for the user and partner.
+
+The source archive above was inspected before adding this release receipt; only release documentation changed before upload. App and Admin changes were committed and pushed to `brad/mobile-messaging` in commit `3174d95970311fd5c71f01b9875712b456d0e333`. Separate finance edits were left untouched.
 
 Keep the previous verified internal build 42 available during partner testing. Do not activate the deferred raw-table/privacy API cutover. No destructive migrations or account resets are part of this release.
