@@ -75,6 +75,7 @@ create policy account_must_exist on public.push_outbox for all to authenticated 
 alter table public.event_registrations add column full_name text,add column partner_name text,add column division text;
 \ir ../supabase/migrations/20261113070555_help_messages_and_read_receipts.sql
 \ir ../supabase/migrations/20261113091431_help_support_alerts_and_entry_context.sql
+\ir ../supabase/migrations/20261113101314_help_conversation_archive.sql
 
 create function pg_temp.expect(ok boolean,label text) returns void language plpgsql as $$begin if ok is distinct from true then raise exception 'FAIL: %',label; end if; end$$;
 create function pg_temp.reject(query text,pattern text) returns void language plpgsql as $$begin
@@ -143,6 +144,7 @@ select pg_temp.expect(not exists(select 1 from jsonb_array_elements(public.messa
 \ir help-requests.sql
 \ir help-inbox.sql
 \ir help-alerts.sql
+\ir help-archive.sql
 select pg_temp.login(4,'aal2');
 select pg_temp.reject(format('select public.messaging_api(''read'',%L)',jsonb_build_object('conversationId',:'dm')),'unavailable');
 select pg_temp.login(1);

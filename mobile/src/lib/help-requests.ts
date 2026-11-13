@@ -3,7 +3,7 @@ import { supabase } from './supabase';
 import type { SupportRelatedOption } from './support-related';
 
 export type HelpRoute = { entryId?: string | null; entryDetail?: string; supportAlert?: 'queued' | 'sent' | 'needs_review' | null; team: 'organiser' | '4m'; recipient: string; email: string; emailFallback: boolean; eventId: number | null; eventName: string | null; context: string | null };
-export type HelpRequest = HelpRoute & { id: string; reference: string; topic: string; status: 'open' | 'waiting_on_player' | 'resolved'; createdAt: string; updatedAt: string; preview: string; canManage: boolean; isOwner: boolean; unread: number; lastMessageId: string | null; lastSeq: number; requester: { name: string | null; email: string | null } };
+export type HelpRequest = HelpRoute & { id: string; reference: string; topic: string; status: 'open' | 'waiting_on_player' | 'resolved'; archived?: boolean; createdAt: string; updatedAt: string; preview: string; canManage: boolean; isOwner: boolean; unread: number; lastMessageId: string | null; lastSeq: number; requester: { name: string | null; email: string | null } };
 export type HelpReply = { id: string; role: 'player' | 'organiser' | '4m'; body: string; createdAt: string; seq: number; mine: boolean; senderName: string | null };
 export type HelpCursor = { before: string; beforeId: string };
 export type HelpThread = { request: HelpRequest; messages: HelpReply[]; nextMessages: HelpCursor | null };

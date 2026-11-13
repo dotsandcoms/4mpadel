@@ -6,7 +6,7 @@ export function helpConversation(request: HelpRequest): Conversation {
   return {
     id: request.id, kind: 'help', helpRequest: request, eventId: request.eventId,
     title: request.isOwner ? request.eventName || request.recipient : request.requester.name || request.requester.email || 'Player enquiry',
-    image: null, state: 'accepted', incoming: true, muted: false, archived: false,
+    image: null, state: 'accepted', incoming: true, muted: false, archived: request.archived === true,
     unread: Math.max(0, request.unread || 0), preview: request.preview, updatedAt: request.updatedAt,
     canSend: true, reason: null, manager: request.canManage, paused: false, pinned: null,
     lastMessageId: request.lastMessageId, lastMessageSeq: request.lastSeq,

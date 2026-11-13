@@ -1,20 +1,23 @@
-import { Button, Column, Row, FilledTonalButton, OutlinedButton, Host, IconButton, RNHostView, Text, TextButton } from '@expo/ui/jetpack-compose';
-import { fillMaxWidth, semantics } from '@expo/ui/jetpack-compose/modifiers';
+import { Pressable, Text, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { homeIcons, type HomeActionProps } from './home-action.types';
 import { lightBrand as b } from '@/theme/tokens';
 
-export function HomeAction({ label, accessibilityLabel: spokenLabel = label, onPress, icon, iconPosition = 'leading', kind = 'link', disabled = false, compact = false, size = 'regular', fullWidth = false, accentColor = b.accent }: HomeActionProps) {
+/** One Android touch target; decorative icons never intercept the button press. */
+export function HomeAction({ label, shortLabel = label, accessibilityLabel: spokenLabel = label, onPress, icon, iconPosition = 'leading', kind = 'link', disabled = false, compact = false, size = 'regular', fullWidth = false, accentColor = b.messagingAction }: HomeActionProps) {
+  const color = accentColor === b.accent ? b.messagingAction : accentColor;
+  const shortcut = kind === 'shortcut', iconOnly = kind === 'icon', primary = kind === 'primary';
+  const stretch = fullWidth || primary && !compact;
   const small = size === 'small';
-  const graphic = icon ? <RNHostView matchContents><SymbolView name={homeIcons[icon]} size={small ? 16 : kind === 'shortcut' ? 24 : fullWidth && compact ? 18 : 20} tintColor={kind === 'primary' ? '#FFFFFF' : kind === 'outline' || kind === 'link' ? accentColor : b.premium} style={{ width: small ? 20 : 28, height: small ? 20 : 28 }} /></RNHostView> : null;
-  const Control = kind === 'primary' ? Button : kind === 'outline' ? OutlinedButton : kind === 'link' ? FilledTonalButton : TextButton;
-  const Content = kind === 'shortcut' ? Column : Row;
-  return <Host colorScheme="light" seedColor={accentColor} matchContents={!fullWidth && (kind === 'link' || kind === 'outline' || (kind === 'primary' && compact))} style={fullWidth ? { width: '100%', height: compact ? 44 : 48 } : kind === 'icon' ? { width: 48, height: 48 } : kind === 'shortcut' ? { flex: 1, height: 108, minWidth: 0 } : kind === 'primary' ? compact ? { minHeight: 44, flexShrink: 0 } : { width: '100%', height: 52 } : undefined}>
-    {kind === 'icon' ? <IconButton enabled={!disabled} onClick={onPress} modifiers={[semantics({ contentDescription: spokenLabel })]}>{graphic}</IconButton> :
-      <Control enabled={!disabled} onClick={onPress} colors={kind === 'primary' ? { containerColor: accentColor, contentColor: '#FFFFFF' } : kind === 'outline' ? { containerColor: b.elevated, contentColor: accentColor } : kind === 'link' ? { containerColor: fullWidth && /^#[0-9a-f]{6}$/i.test(accentColor) ? `${accentColor}14` : b.glass, contentColor: accentColor } : undefined} contentPadding={{ start: small ? 8 : kind === 'shortcut' ? 2 : 12, end: small ? 8 : kind === 'shortcut' ? 2 : 12, top: small || kind === 'link' ? 4 : 8, bottom: small || kind === 'link' ? 4 : 8 }} modifiers={fullWidth || kind === 'shortcut' || (kind === 'primary' && !compact) ? [fillMaxWidth(), semantics({ contentDescription: spokenLabel })] : [semantics({ contentDescription: spokenLabel })]}>
-        <Content {...(kind === 'shortcut' ? { horizontalAlignment: 'center' as const, verticalArrangement: { spacedBy: 8 } } : { verticalAlignment: 'center' as const, horizontalArrangement: { spacedBy: small ? 4 : 8 } })}>
-          {iconPosition === 'leading' && graphic}<Text style={{ fontSize: small ? 12 : kind === 'shortcut' ? 11 : compact ? 13 : 14 }} color={kind === 'primary' ? '#FFFFFF' : kind === 'shortcut' ? b.premium : accentColor}>{label}</Text>{iconPosition === 'trailing' && graphic}
-        </Content>
-      </Control>}
-  </Host>;
+  const ink = primary ? '#FFFFFF' : shortcut || iconOnly ? b.premium : color;
+  const graphic = icon ? <SymbolView name={homeIcons[icon]} size={shortcut || iconOnly ? 24 : small ? 16 : 20} tintColor={shortcut ? color : ink} style={{ width: shortcut || iconOnly ? 24 : small ? 16 : 20, height: shortcut || iconOnly ? 24 : small ? 16 : 20 }} /> : null;
+  return <Pressable accessibilityRole="button" accessibilityLabel={spokenLabel} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
+    android_ripple={{ color: `${color}20`, borderless: false }}
+    style={({ pressed }) => ({ minHeight: 48, minWidth: 48, width: iconOnly ? 48 : stretch ? '100%' : undefined, flex: shortcut ? 1 : undefined, flexShrink: shortcut ? 1 : 0, alignSelf: stretch || shortcut ? 'stretch' : 'center', alignItems: 'center', justifyContent: 'center', borderRadius: iconOnly ? 24 : 12, overflow: 'hidden', opacity: disabled ? 0.4 : 1, backgroundColor: pressed && !disabled ? `${color}12` : 'transparent' })}>
+    <View pointerEvents="none" style={{ width: stretch || shortcut ? '100%' : undefined, minHeight: shortcut ? 80 : iconOnly ? 48 : primary && !compact ? 48 : small || compact ? 36 : 40, flexDirection: shortcut ? 'column' : 'row', alignItems: 'center', justifyContent: 'center', gap: shortcut ? 8 : 6, paddingHorizontal: shortcut ? 4 : iconOnly ? 0 : small ? 10 : 12, paddingVertical: shortcut ? 8 : 0, borderRadius: 10, borderWidth: kind === 'outline' ? 1 : 0, borderColor: kind === 'outline' ? '#C8D5DE' : 'transparent', backgroundColor: primary ? color : kind === 'link' ? `${color}12` : kind === 'outline' ? b.elevated : 'transparent' }}>
+      {iconPosition === 'leading' && (shortcut ? <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${color}0D`, alignItems: 'center', justifyContent: 'center' }}>{graphic}</View> : graphic)}
+      {!iconOnly && <Text numberOfLines={shortcut ? 2 : 1} style={{ color: ink, fontSize: shortcut || small ? 12 : compact ? 13 : 14, lineHeight: shortcut || small ? 16 : 20, fontWeight: primary ? '600' : '500', textAlign: 'center', minHeight: shortcut ? 16 : undefined }}>{shortcut ? shortLabel : label}</Text>}
+      {iconPosition === 'trailing' && graphic}
+    </View>
+  </Pressable>;
 }

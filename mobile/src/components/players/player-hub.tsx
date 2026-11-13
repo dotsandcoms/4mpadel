@@ -1,7 +1,7 @@
 import { trackEvent } from '@/lib/analytics';
 import { useAnalyticsSearch } from '@/hooks/use-analytics-search';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useRoute } from 'expo-router/react-navigation';
 import { Image } from 'expo-image';
@@ -125,7 +125,7 @@ export default function PlayerHub() {
   return <View style={{ flex: 1, backgroundColor: b.page, paddingTop: safe.top }}><WebsiteHeader />
     <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, gap: 8 }}>
       <Text accessibilityRole="header" style={{ color: b.premium, fontSize: 24, lineHeight: 30, fontWeight: '600' }}>Players</Text>
-      <NativeSegmentedControl label="Players view" value={view} options={(['Discover', 'Following', 'Rankings'] as ViewName[]).map(value => ({ value, label: value }))} onChange={next => {
+      <NativeSegmentedControl label="Players view" variant="tabs" value={view} options={(['Discover', 'Following', 'Rankings'] as ViewName[]).map(value => ({ value, label: value }))} onChange={next => {
         void trackEvent('feature_interaction', { feature: 'player_hub', action: 'tab', selection: next.toLowerCase() });
         setView(next as ViewName); setBrowse(false);
         if (next === 'Rankings') { if (source === 'all') setSource('4m'); if (gender === 'all') setGender('men'); }
@@ -136,9 +136,9 @@ export default function PlayerHub() {
           <TextInput accessibilityLabel="Search players" placeholder={source === '4m' ? 'Find a 4M player' : source === 'pro' ? 'Find a FIP player' : 'Find a player'} placeholderTextColor={b.muted} value={query} onChangeText={setQuery} autoCorrect={false} style={{ flex: 1, minHeight: 44, paddingHorizontal: 10, color: b.premium, fontSize: 15 }} />
           {!!query && <Pressable accessibilityRole="button" accessibilityLabel="Clear player search" onPress={() => setQuery('')} style={{ padding: 12 }}><Ionicons name="close-circle" size={18} color={b.muted} /></Pressable>}
         </View>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <View style={{ flex: 1, minWidth: 0 }}><NativeSegmentedControl label="Player directory" value={source} options={(view === 'Rankings' ? ['4m', 'pro'] : ['all', '4m', 'pro']).map(value => ({ value, label: value === 'all' ? 'All' : value === '4m' ? view === 'Rankings' ? 'SAPA' : '4M' : 'FIP' }))} onChange={setSource} /></View>
-          {view !== 'Following' && <View style={{ flex: 1, minWidth: 0 }}><NativeSegmentedControl label="Player category" value={gender} options={(view === 'Rankings' ? ['men', 'women'] : ['all', 'men', 'women']).map(value => ({ value, label: value === 'all' ? 'All' : value === 'men' ? 'Men' : 'Women' }))} onChange={setGender} /></View>}
+        <View style={{ flexDirection: Platform.OS === 'android' ? 'column' : 'row', gap: 8 }}>
+          <View style={{ flex: Platform.OS === 'android' ? undefined : 1, minWidth: 0 }}><NativeSegmentedControl label="Player directory" value={source} options={(view === 'Rankings' ? ['4m', 'pro'] : ['all', '4m', 'pro']).map(value => ({ value, label: value === 'all' ? 'All' : value === '4m' ? view === 'Rankings' ? 'SAPA' : '4M' : 'FIP' }))} onChange={setSource} /></View>
+          {view !== 'Following' && <View style={{ flex: Platform.OS === 'android' ? undefined : 1, minWidth: 0 }}><NativeSegmentedControl label="Player category" value={gender} options={(view === 'Rankings' ? ['men', 'women'] : ['all', 'men', 'women']).map(value => ({ value, label: value === 'all' ? 'All' : value === 'men' ? 'Men' : 'Women' }))} onChange={setGender} /></View>}
         </View>
       </>
     </View>

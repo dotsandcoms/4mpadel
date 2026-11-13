@@ -80,4 +80,12 @@ Migration `mobile/supabase/migrations/20261113091431_help_support_alerts_and_ent
 
 Verification covers owned/partner entry routing, forged event/entry rejection, read-only resolved tickets for players and staff, handover deduplication, fixed-recipient delivery, frozen retry payloads, stale leases and retry-window expiry. Data API checks pass 70 public-table contracts and four sequences. The security-advisor delta is one expected no-policy informational result for the new RPC-only queue; pre-existing warning/error counts are unchanged. The mobile suite, worker tests/type-check, web build and simulator build pass.
 
-The neon default is replaced with blue in the native/web theme. Untiered event controls use the app’s blue and choose contrasting icon/text colours; existing SAPA tiers remain data colours. Help keeps its plum category colour. Admin event names use soft green and help types use light plum. Admin web source and preview are updated; publishing the website remains a separate rollout step.
+The neon default is replaced with blue in the native/web theme. Untiered event controls use the app’s blue and choose contrasting icon/text colours; existing SAPA tiers remain data colours. Help keeps its plum category colour. Admin event names use soft green and help types use light plum.
+
+## Live Admin release — 13 November 2026
+
+The user requested publication. Admin Help is live at https://4mpadel.co.za/admin?tab=event-mgmt&section=help on Vercel deployment `dpl_3A4ztWfaXKUkNPxhZRKr3JkUkpbG`, replacing `dpl_49SmcsNpKmrGnKYzYpEiCb6A2snY`. The release was prepared from current production and changes six Help/theme files; 799 other production files are verified unchanged. The candidate's local and Vercel builds pass. Live Home, Admin, profile and calendar routes return the verified candidate asset manifest, with matching compiled Admin/Help bundle hashes and the production backend reference.
+
+Release receipts are in `outputs/help-admin-release-20261113`. Rollback restores the preceding Vercel deployment while retaining the compatible Help data and migrations. Unfinished finance workspace edits were not deployed. Production environment secrets were not downloaded locally; Vercel's build used its existing production settings.
+
+Personal Help archiving is added by `mobile/supabase/migrations/20261113101314_help_conversation_archive.sql`. It preserves ticket status/history and isolates each account's preference. New correspondence restores the conversation; archived items are excluded from unread counts. Mobile controls ship in the replacement test binary.

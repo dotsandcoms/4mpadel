@@ -26,3 +26,13 @@ test('organiser help rows identify the requester and search matches ticket, even
   for (const query of ['4m-123abc', 'brad test', 'ALEX PLAYER', 'event team']) assert.equal(inboxExports.conversationFilter(row, 'Help', query), true);
   assert.equal(inboxExports.conversationFilter(row, 'Help', 'different event'), false);
 });
+test('personal Help archives move between the inbox and Archived without changing the ticket', () => {
+  const archived = inboxExports.helpConversation({ ...request, archived: true });
+  assert.equal(archived.archived, true);
+  assert.equal(archived.helpRequest.id, request.id);
+  for (const filter of ['All', 'Help', 'Players', 'Groups', 'Events']) assert.equal(inboxExports.conversationFilter(archived, filter, ''), false);
+  assert.equal(inboxExports.conversationFilter(archived, 'Archived', ''), true);
+  const restored = inboxExports.helpConversation({ ...request, archived: false });
+  assert.equal(inboxExports.conversationFilter(restored, 'Archived', ''), false);
+  assert.equal(inboxExports.conversationFilter(restored, 'Help', ''), true);
+});

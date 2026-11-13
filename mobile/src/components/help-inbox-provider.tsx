@@ -63,7 +63,9 @@ export function HelpInboxProvider({ children }: { children: ReactNode }) {
     return () => { for (const channel of channels) void supabase.removeChannel(channel); };
   }, [owner, topics, signal]);
   useEffect(() => { void refresh(); }, [pathname, refresh]);
-  return <Context.Provider value={{ ...page, owner, loading, error, revision, refresh: () => refresh(), loadMore: () => refresh(true) }}>{children}</Context.Provider>;
+  const refreshInbox = useCallback(() => refresh(), [refresh]);
+  const loadMore = useCallback(() => refresh(true), [refresh]);
+  return <Context.Provider value={{ ...page, owner, loading, error, revision, refresh: refreshInbox, loadMore }}>{children}</Context.Provider>;
 }
 export function useHelpInbox() {
   const value = useContext(Context);

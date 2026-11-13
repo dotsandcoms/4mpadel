@@ -1,1 +1,1 @@
-export type NativeSegmentedProps = { label: string; disabled?: boolean; value: string; options: { value: string; label: string }[]; onChange: (value: string) => void };
+export type NativeSegmentedProps = { label: string; disabled?: boolean; value: string; options: { value: string; label: string }[]; onChange: (value: string) => void; variant?: 'tabs' | 'segmented' };

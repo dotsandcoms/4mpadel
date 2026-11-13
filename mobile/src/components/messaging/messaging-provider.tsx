@@ -98,7 +98,10 @@ function ChatInboxProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; connected.current = false; for (const channel of channels) void supabase.removeChannel(channel); };
   }, [owner, status?.enabled, topics, signal]);
   useEffect(() => { if (owner) void refresh(); }, [owner, pathname, refresh]);
-  return <Context.Provider value={{ owner, rows: [...rows, ...help.rows.map(helpConversation)].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), status, loading, error, revision, refresh: async () => { await Promise.all([refresh(), help.refresh()]); }, badge: unreadMessages(rows) + help.unread, notice, dismissNotice: () => setNotice(null) }}>{children}</Context.Provider>;
+  // Chat lifecycles depend on this callback. Inbox/badge updates must not replace
+  // it and restart the open conversation's draft and read-status effects.
+  const refreshInbox = useCallback(async () => { await Promise.all([refresh(), help.refresh()]); }, [refresh, help.refresh]);
+  return <Context.Provider value={{ owner, rows: [...rows, ...help.rows.map(helpConversation)].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), status, loading, error, revision, refresh: refreshInbox, badge: unreadMessages(rows) + help.unread, notice, dismissNotice: () => setNotice(null) }}>{children}</Context.Provider>;
 }
 export function useMessagingInbox() {
   const value = useContext(Context);

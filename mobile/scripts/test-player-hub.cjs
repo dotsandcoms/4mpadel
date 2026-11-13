@@ -16,7 +16,7 @@ test('reopening the FIP Players shortcut restores Discover and clears the previo
    useEffect(fn, deps) { const i = effectIndex++; if (!dependencies[i] || deps.some((value, j) => value !== dependencies[i][j])) effects.push(fn); dependencies[i] = deps; },
   },
   'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
-  'react-native': Object.fromEntries(['View', 'Text', 'TextInput', 'Pressable', 'FlatList', 'Modal', 'ActivityIndicator'].map(name => [name, name])),
+  'react-native': { ...Object.fromEntries(['View', 'Text', 'TextInput', 'Pressable', 'FlatList', 'Modal', 'ActivityIndicator'].map(name => [name, name])), Platform: { OS: 'ios' } },
   'expo-router': { useRouter: () => router, useLocalSearchParams: () => params, useFocusEffect: fn => focus.push(fn) },
   'expo-router/react-navigation': { useRoute: () => ({ params }) },
   'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0 }) },

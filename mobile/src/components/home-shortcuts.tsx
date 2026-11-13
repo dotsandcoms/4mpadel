@@ -18,6 +18,8 @@ const international: Shortcut[] = [
   { key: 'following', icon: 'following', label: 'My\nfollowing', path: '/rankings?view=Following&source=pro' },
 ];
 
+const shortLabels: Record<string, string> = { events: 'Events', partner: 'Partners', rankings: 'Rankings', license: 'Licence', clubs: 'Clubs', live: 'Live', players: 'Players', following: 'Following' };
+
 export function HomeShortcuts({ source, onOpen }: { source: HomeSource; onOpen: (path: string) => void }) {
-  return <>{(source === '4m' ? local : international).map(action => <HomeAction key={action.key} kind="shortcut" icon={action.icon} label={action.label} onPress={() => onOpen(action.path)} />)}</>;
+  return <>{(source === '4m' ? local : international).map(action => <HomeAction key={action.key} kind="shortcut" icon={action.icon} label={action.label} shortLabel={shortLabels[action.key]} accessibilityLabel={action.label.replace(/\n/g, ' ')} onPress={() => onOpen(action.path)} />)}</>;
 }

@@ -21,4 +21,4 @@ export const homeIcons = {
   next: { ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' },
   close: { ios: 'xmark', android: 'close', web: 'close' },
 } as const;
-export type HomeActionProps = { label: string; accessibilityLabel?: string; onPress: () => void; disabled?: boolean; compact?: boolean; size?: 'regular' | 'small'; fullWidth?: boolean; accentColor?: string; icon?: keyof typeof homeIcons; iconPosition?: 'leading' | 'trailing'; kind?: 'icon' | 'shortcut' | 'link' | 'outline' | 'primary' };
+export type HomeActionProps = { label: string; shortLabel?: string; accessibilityLabel?: string; onPress: () => void; disabled?: boolean; compact?: boolean; size?: 'regular' | 'small'; fullWidth?: boolean; accentColor?: string; icon?: keyof typeof homeIcons; iconPosition?: 'leading' | 'trailing'; kind?: 'icon' | 'shortcut' | 'link' | 'outline' | 'primary' };
