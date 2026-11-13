@@ -1,5 +1,7 @@
 # Internal iPhone test release — 13 November 2026
 
+Build 43 is superseded by the replacement below because of the shared Messages refresh regression. Use the replacement for partner testing. See `messaging-refresh-hotfix-2026-11-13.md` for the cause, fix and lifecycle regression coverage.
+
 The user requested a fresh app build for partner testing after completing the Help and Admin changes. The existing direct-install workflow uses the EAS `preview` profile and Apple team `52RX6X5X2T`, including the two previously registered test iPhones. This is an internal build, not a TestFlight submission or App Store release.
 
 ## Verified source
@@ -35,3 +37,19 @@ The verified installer is `/private/tmp/fourm-iphone-1.0.2-43.ipa`; its local ve
 The source archive above was inspected before adding this release receipt; only release documentation changed before upload. App and Admin changes were committed and pushed to `brad/mobile-messaging` in commit `3174d95970311fd5c71f01b9875712b456d0e333`. Separate finance edits were left untouched.
 
 Keep the previous verified internal build 42 available during partner testing. Do not activate the deferred raw-table/privacy API cutover. No destructive migrations or account resets are part of this release.
+
+## Replacement build 44
+
+EAS build `daee1f96-06df-473d-8de8-4764209dbc81` completed at 12:39:56 SAST from the reviewed source in commit `a295a5ef`:
+
+https://expo.dev/accounts/fourm-padel/projects/4m-padel/builds/daee1f96-06df-473d-8de8-4764209dbc81
+
+It includes the chat refresh fix, personal Help archives and the revised Android controls. TypeScript and all 762 mobile tests pass. Both local native Release builds pass. iPhone checks confirm a chat and draft stay stable for several minutes, and Help Archive → Archived → Move to inbox works against the live backend; the test archive was restored. No test message was sent. The user chose to visually review Android; the new APK is installed and launched without startup errors.
+
+The mobile-only source audit covers 725 files / 13,758,653 bytes with no local environment files, signing credentials or data exports. Source matching checks cover the exact provider fix, Help options, Android controls and dependency lock. Final release documentation was updated after upload.
+
+Installer verification passes: intact ZIP, strict deep code signatures, Apple team `52RX6X5X2T`, all four targets at version 1.0.2 / build 44, both registered iPhones included, production push entitlement and debugging disabled. The IPA SHA-256 is `2e92208348af7d9b906bb4d05df5024e2088d45770c8607450790ca20c2b3614`. The local installer is `/private/tmp/fourm-iphone-1.0.2-44.ipa`; verification receipt: `/private/tmp/fourm-iphone-build-44-verification.json`.
+
+The updated Android APK SHA-256 is `1a16ee1507128f480622c98e4affaebed22e8c120c05e41975e7b77363473cf9`; APK signature and 16 KB ZIP-alignment checks pass. It remains an emulator test APK signed with the existing Android Debug certificate.
+
+Admin Help is now live on production deployment `dpl_3A4ztWfaXKUkNPxhZRKr3JkUkpbG`; its source and live bundle verification are recorded in `outputs/help-admin-release-20261113`. Personal Help archive migration `20261113101314` is also live.

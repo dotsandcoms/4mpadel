@@ -1,5 +1,7 @@
 # Android emulator testing — 13 November 2026
 
+This records the initial emulator build earlier in the day. It was replaced with the Messages hotfix, personal Help archiving and revised Android controls. The updated APK is installed for the user's visual check; its SHA-256 is `1a16ee1507128f480622c98e4affaebed22e8c120c05e41975e7b77363473cf9`. See `messaging-refresh-hotfix-2026-11-13.md`, `android-controls-2026-11-13.md` and the replacement-build section in `internal-ios-release-2026-11-13.md`.
+
 The latest app is installed and launched on the existing `Medium_Phone_API_35` ARM64 emulator (`emulator-5554`). Installation used `adb install -r`, preserving app data. The activity reports `Status: ok` and remains the resumed activity with a live app process; AndroidRuntime and ReactNativeJS startup error checks are empty. Interactive screen testing remains for the user: computer-use tooling could not attach to the standalone emulator window.
 
 ## Verified build
