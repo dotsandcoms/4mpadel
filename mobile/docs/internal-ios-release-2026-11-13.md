@@ -1,6 +1,6 @@
 # Internal iPhone test release — 13 November 2026
 
-Build 43 is superseded by the replacement below because of the shared Messages refresh regression. Use the replacement for partner testing. See `messaging-refresh-hotfix-2026-11-13.md` for the cause, fix and lifecycle regression coverage.
+Build 45 is the latest verified release for partner testing. Build 44 fixed the shared Messages refresh regression; build 45 adds the requested blue onboarding/account palette. See `messaging-refresh-hotfix-2026-11-13.md` for the cause, fix and lifecycle regression coverage.
 
 The user requested a fresh app build for partner testing after completing the Help and Admin changes. The existing direct-install workflow uses the EAS `preview` profile and Apple team `52RX6X5X2T`, including the two previously registered test iPhones. This is an internal build, not a TestFlight submission or App Store release.
 
@@ -53,3 +53,21 @@ Installer verification passes: intact ZIP, strict deep code signatures, Apple te
 The updated Android APK SHA-256 is `1a16ee1507128f480622c98e4affaebed22e8c120c05e41975e7b77363473cf9`; APK signature and 16 KB ZIP-alignment checks pass. It remains an emulator test APK signed with the existing Android Debug certificate.
 
 Admin Help is now live on production deployment `dpl_3A4ztWfaXKUkNPxhZRKr3JkUkpbG`; its source and live bundle verification are recorded in `outputs/help-admin-release-20261113`. Personal Help archive migration `20261113101314` is also live.
+
+## Blue onboarding — build 45
+
+The user requested another Expo build after finding the neon onboarding button. The NativeWind `padel` alias still held `#CCFF00` independently of the JavaScript palette. It now matches the light blue brand fill (`#8DB9E0`). Primary onboarding, sign-in, profile setup, profile-save and password-reset controls use dark blue (`#27517B`) with white labels. Onboarding indicators, Expo primary colour and notification colour are also blue. The design guidance and a cross-configuration palette test prevent the old split from recurring.
+
+Expo build `d84a37f9-1d84-4d5c-bc13-ee9af8c92a64` completed at 13:01:39 SAST from source commit `d1eb9aef`:
+
+https://expo.dev/accounts/fourm-padel/projects/4m-padel/builds/d84a37f9-1d84-4d5c-bc13-ee9af8c92a64
+
+TypeScript and all 763 tests pass; the compiled NativeWind CSS resolves the expected blue backgrounds and white text. Both local native builds pass. All five onboarding steps were checked in the iPhone simulator, including the blue final profile button. Preview screenshot: `/private/tmp/fourm-onboarding-blue-first.png`.
+
+The inspected archive has 725 files / 13,762,244 bytes and excludes local environment files, signing credentials and data exports. Exact source checks cover onboarding, sign-in, profile setup, app metadata, NativeWind configuration and the messaging providers. The build retains the Messages fix, Help archive/restore and Android controls from build 44. Final release documentation was updated after upload.
+
+The final IPA passes ZIP integrity and strict deep code-signature verification. All four targets are version 1.0.2 / build 45, signed by the expected Apple team, include both registered iPhones, have unexpired profiles and disallow debugging. The host retains its production push entitlement. SHA-256: `ade2ad07a375e75f2d77fc6c10571f4ecf3d524d155d34e6b626ada80a22358f`.
+
+Verified installer: `/private/tmp/fourm-iphone-1.0.2-45.ipa`. Receipt: `/private/tmp/fourm-iphone-build-45-verification.json`. Share the build 45 link above for installation on either registered test phone. No TestFlight submission or App Store release was performed.
+
+The Android APK was rebuilt with the same palette and targeted native colour-resource updates. SHA-256: `7bef48d2ac95a364ecc3eb71893b4475c248a3c6fc7010a034855e03c8366f05`. The emulator had been closed by the time installation was attempted, so this latest APK is ready at the recorded build-output path; its installation was not claimed. The earlier Android update remains documented separately.
