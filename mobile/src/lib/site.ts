@@ -53,6 +53,6 @@ export async function openSitePath(path: string, options?: { forceBrowser?: bool
   }
   await WebBrowser.openBrowserAsync(siteUrl(path), {
     presentationStyle: WebBrowser.WebBrowserPresentationStyle.AUTOMATIC,
-    controlsColor: '#CCFF00',
+    controlsColor: '#27517B',
   });
 }

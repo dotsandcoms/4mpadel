@@ -25,6 +25,7 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
   const freeEntry = (r: EventRegistration) => { const fee = divisions.find(d => d.id === r.division_id)?.entry_fee ?? event.entry_fee; return fee != null && Number(fee) === 0; };
   const paid = (r: EventRegistration) => paymentPresentation(r.payment_status, r.balance, freeEntry(r)).confirmed;
   const statusLabel = (r: EventRegistration) => { const state = paymentPresentation(r.payment_status, r.balance, freeEntry(r)); return state.due != null ? `${formatMoney(state.due)} outstanding` : state.label; };
+  const entryHelp = (r: EventRegistration) => { setManaging(false); router.push({ pathname: '/help', params: { topic: 'entry', eventId: String(event.id), entryId: r.id, compose: '1' } }); };
   const payBalance = (r: EventRegistration) => { setManaging(false); router.push({ pathname: '/events/pay-balance', params: { registrationId: r.id } }); };
   const addPartner = (r: EventRegistration) => { setManaging(false); router.push({ pathname: '/events/register', params: { id: String(event.id), mode: 'add-partner', entry: r.id } }); };
   const payDivision = (r: EventRegistration) => { setManaging(false); router.push({ pathname: '/events/register', params: { id: String(event.id), mode: 'pay', entry: r.id } }); };
@@ -118,6 +119,7 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
                   <ManageActionRow label="Switch division" icon="swap-horizontal" onPress={() => begin('switch_division', r)} />
                   <ManageActionRow label="Withdraw entry" icon="trash-outline" tone="danger" onPress={() => begin('withdraw', r)} />
                 </View>}
+                <ManageActionRow label="Get help with this entry" icon="help-circle-outline" tone="support" onPress={() => entryHelp(r)} />
               </View>
             </View>;
           })}
@@ -137,11 +139,11 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
   </>;
 }
 function Outline({ label, color, onPress }: { label: string; color: string; onPress: () => void }) { return <Pressable accessibilityRole="button" onPress={onPress} style={{ minHeight: 48, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: `${color}40`, backgroundColor: '#fff', justifyContent: 'center' }}><Text style={{ color, fontSize: 12 }}>{label}</Text></Pressable>; }
-function ManageActionRow({ label, icon, tone = 'neutral', onPress }: { label: string; icon: 'card-outline' | 'person-add-outline' | 'person-remove-outline' | 'swap-horizontal' | 'trash-outline'; tone?: 'primary' | 'secondary' | 'neutral' | 'danger'; onPress: () => void }) {
-  const color = tone === 'primary' ? '#FFFFFF' : tone === 'danger' ? brand.danger : brand.premium;
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={{ minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 13, paddingHorizontal: 10, backgroundColor: tone === 'primary' ? brand.accent : tone === 'secondary' ? brand.surface : 'transparent', borderWidth: tone === 'secondary' ? 1 : 0, borderColor: brand.edge }}>
-    <View style={{ width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: tone === 'primary' ? '#FFFFFF1F' : tone === 'secondary' ? brand.elevated : tone === 'danger' ? '#B7352D12' : brand.surface }}><Ionicons name={icon} size={18} color={tone === 'primary' ? '#FFFFFF' : tone === 'danger' ? brand.danger : brand.accent} /></View>
+function ManageActionRow({ label, icon, tone = 'neutral', onPress }: { label: string; icon: 'card-outline' | 'person-add-outline' | 'person-remove-outline' | 'swap-horizontal' | 'trash-outline' | 'help-circle-outline'; tone?: 'primary' | 'secondary' | 'neutral' | 'danger' | 'support'; onPress: () => void }) {
+  const color = tone === 'primary' ? '#FFFFFF' : tone === 'danger' ? brand.danger : tone === 'support' ? brand.supportInk : brand.premium;
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={{ minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 13, paddingHorizontal: 10, backgroundColor: tone === 'primary' ? brand.accent : tone === 'secondary' ? brand.surface : tone === 'support' ? brand.supportTint : 'transparent', borderWidth: tone === 'secondary' ? 1 : 0, borderColor: brand.edge }}>
+    <View style={{ width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: tone === 'primary' ? '#FFFFFF1F' : tone === 'secondary' ? brand.elevated : tone === 'danger' ? '#B7352D12' : brand.surface }}><Ionicons name={icon} size={18} color={tone === 'primary' ? '#FFFFFF' : tone === 'danger' ? brand.danger : tone === 'support' ? brand.supportInk : brand.accent} /></View>
     <Text style={{ color, fontSize: 14, fontWeight: '700', flex: 1 }}>{label}</Text>
-    <EventIcon name="chevron.right" size={15} color={tone === 'primary' ? '#FFFFFF' : tone === 'danger' ? brand.danger : brand.faint} />
+    <EventIcon name="chevron.right" size={15} color={tone === 'primary' ? '#FFFFFF' : tone === 'danger' ? brand.danger : tone === 'support' ? brand.supportInk : brand.faint} />
   </Pressable>;
 }

@@ -1,3 +1,4 @@
+import { useHelpInbox } from '@/components/help-inbox-provider';
 import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
 import { useEffect } from 'react';
@@ -32,6 +33,8 @@ type Props = {
  */
 export function HomeHeader({ onSearch, onNotifications, noticeCount = 0 }: Props) {
   const drawer = useDrawerOptional();
+  const help = useHelpInbox();
+  noticeCount += help.unread;
   const noticeLabel =
     noticeCount > 0
       ? `Notifications, ${noticeCount} waiting`
@@ -54,7 +57,7 @@ export function HomeHeader({ onSearch, onNotifications, noticeCount = 0 }: Props
       <View className="flex-row items-center">
         <View>
           <HomeAction label={noticeLabel} icon="bell" kind="icon" onPress={onNotifications} />
-          {noticeCount > 0 && <View pointerEvents="none" style={{ position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: 4, backgroundColor: '#B7352D' }} />}
+          {noticeCount > 0 && <View pointerEvents="none" style={{ position: 'absolute', top: 8, right: 8, minWidth: 18, height: 18, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: '#B7352D' }}><Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '600' }}>{noticeCount > 99 ? '99+' : noticeCount}</Text></View>}
         </View>
         <HomeAction label="Search" icon="search" kind="icon" onPress={onSearch} />
         {drawer && <HomeAction label="Menu" icon="menu" kind="icon" onPress={drawer.openDrawer} />}

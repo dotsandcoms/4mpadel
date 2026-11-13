@@ -17,7 +17,7 @@ import { PlayerOverview, PlayerForm, PlayerMatchCard } from '@/components/player
 import { PlayerTournamentResults } from '@/components/players/player-tournament-results';
 import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 import { fetchMyFipLink } from '@/lib/player-fip-link';
-import { lookupOfficialFipProfile, searchProPlayers, type OfficialFipProfile, type PlayerFipLink } from '@/lib/player-hub';
+import { lookupOfficialFipProfile, searchProPlayers, localPlayerCountryFlag, type OfficialFipProfile, type PlayerFipLink } from '@/lib/player-hub';
 import type { ProPlayer } from '@/lib/pro-padel';
 
 const card = { padding: 16, gap: 10, backgroundColor: b.elevated, borderRadius: 16, borderWidth: 1, borderColor: b.edge } as const;
@@ -71,15 +71,23 @@ export default function PlayerProfile() {
       {!!error && <View style={card}><Text accessibilityRole="alert" style={{ color: b.danger }}>{error}</Text><Pressable accessibilityRole="button" onPress={load} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: b.accent }}>Try again</Text></Pressable></View>}
       {!!shareError && <Text accessibilityRole="alert" style={{ color: b.danger }}>{shareError}</Text>}
       {player && <>
-        <View style={{ alignItems: 'center', gap: 8, paddingVertical: 4 }}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`View ${player.name}'s photo`} disabled={!player.image_url} onPress={() => setPhoto(player.image_url)} style={{ width: 88, height: 88, borderRadius: 44, overflow: 'hidden', backgroundColor: b.surface, justifyContent: 'center', alignItems: 'center' }}>{player.image_url ? <Image source={{ uri: player.image_url }} style={{ width: 88, height: 88 }} contentFit="cover" /> : <Text style={{ fontSize: 38, fontWeight: '700', color: b.accent }}>{player.name.charAt(0)}</Text>}</Pressable>
-          <Text accessibilityRole="header" style={{ fontSize: 24, fontWeight: '800', color: b.premium, textAlign: 'center' }}>{player.name}</Text>
-          <PlayerFollowerCount playerId={player.id} playerName={player.name} refreshKey={followerRefresh} onPress={() => router.push({ pathname: '/followers', params: { playerId: player.id, playerName: player.name } })} />
-          {!!instagramUrl(player.instagram_link) && <Pressable accessibilityRole="link" accessibilityLabel={`Open ${player.name}'s Instagram`} onPress={() => { const url = instagramUrl(player.instagram_link); if (url) void Linking.openURL(url).catch(() => setShareError('Could not open Instagram. Please try again.')); }} style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: b.surface, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="logo-instagram" size={23} color={b.accent} /></Pressable>}
-          <PlayerMessageButton playerId={player.id} />
-          <LocalFollowButton playerId={player.id} name={player.name} onFollowChange={() => setFollowerRefresh(value => value + 1)} />
-          {!!player.category && <Text style={{ color: b.accent, fontWeight: '600' }}>{player.category}</Text>}
-          <Text style={{ color: b.muted, textAlign: 'center', lineHeight: 21 }}>{[player.home_club, player.nationality].filter(Boolean).join(' · ') || '4M Padel player'}</Text>
+        <View style={{ ...card, gap: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Pressable accessibilityRole="button" accessibilityLabel={`View ${player.name}'s photo`} disabled={!player.image_url} onPress={() => setPhoto(player.image_url)} style={{ width: 72, height: 72, borderRadius: 36, overflow: 'hidden', backgroundColor: b.surface, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#0000001A' }}>
+              {player.image_url ? <Image source={{ uri: player.image_url }} style={{ width: 72, height: 72 }} contentFit="cover" /> : <Text style={{ fontSize: 28, fontWeight: '600', color: b.accent }}>{player.name.split(/\s+/).map(part => part[0]).slice(0, 2).join('')}</Text>}
+            </Pressable>
+            <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+              <Text accessibilityRole="header" style={{ fontSize: 22, lineHeight: 26, fontWeight: '600', color: b.premium }}>{player.name}</Text>
+              {!!player.category && <Text style={{ color: b.accent, fontSize: 12, lineHeight: 16, fontWeight: '500' }}>{player.category}</Text>}
+              <PlayerFollowerCount compact playerId={player.id} playerName={player.name} refreshKey={followerRefresh} onPress={() => router.push({ pathname: '/followers', params: { playerId: player.id, playerName: player.name } })} />
+            </View>
+          </View>
+          <Text style={{ color: b.muted, fontSize: 12, lineHeight: 18 }}>{[localPlayerCountryFlag(player.nationality), player.home_club].filter(Boolean).join(' · ') || '4M Padel player'}</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, paddingTop: 8, borderTopWidth: 1, borderColor: b.edge }}>
+            <PlayerMessageButton compact playerId={player.id} name={player.name} />
+            <LocalFollowButton playerId={player.id} name={player.name} onFollowChange={() => setFollowerRefresh(value => value + 1)} />
+            {!!instagramUrl(player.instagram_link) && <Pressable accessibilityRole="link" accessibilityLabel={`Open ${player.name}'s Instagram`} onPress={() => { const url = instagramUrl(player.instagram_link); if (url) void Linking.openURL(url).catch(() => setShareError('Could not open Instagram. Please try again.')); }} style={{ width: 44, height: 44, marginLeft: 'auto', borderRadius: 12, backgroundColor: b.surface, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="logo-instagram" size={20} color={b.muted} /></Pressable>}
+          </View>
         </View>
         <View style={{ ...card, flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 8 }}>{[['SAPA rank', sapaRanking ? publicRank(sapaRanking.rank) : '—'], ['Points', playerPoints(sapaRanking?.points)], ['Skill rating', player.skill_rating == null ? '—' : String(player.skill_rating)]].map(([label, value]) => {
           const skill = label === 'Skill rating';

@@ -49,9 +49,14 @@ export async function searchDirectory(query: string, international: boolean, sig
   ]);
 }
 
-/** Current/upcoming events lead discovery; past events remain searchable. */
-export function sortSearchEvents(events: CalendarEvent[], today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg' }).format(new Date())) {
+export function isUpcomingSearchEvent(start: string | null | undefined, end: string | null | undefined, today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg' }).format(new Date())) {
+  const day = (end || start || '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) && day >= today;
+}
+
+/** General search retains history; tournament discovery only includes events that haven't ended. */
+export function sortSearchEvents(events: CalendarEvent[], today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg' }).format(new Date()), upcomingOnly = false) {
   const date = (value: string | null | undefined) => value?.slice(0, 10) || '';
   const bucket = (event: CalendarEvent) => date(event.start_date) && date(event.end_date || event.start_date) >= today ? date(event.start_date) <= today ? 0 : 1 : 2;
-  return [...events].sort((a, z) => bucket(a) - bucket(z) || (bucket(a) === 2 ? date(z.start_date).localeCompare(date(a.start_date)) : date(a.start_date).localeCompare(date(z.start_date))));
+  return events.filter(event => !upcomingOnly || isUpcomingSearchEvent(event.start_date, event.end_date, today)).sort((a, z) => bucket(a) - bucket(z) || (bucket(a) === 2 ? date(z.start_date).localeCompare(date(a.start_date)) : date(a.start_date).localeCompare(date(z.start_date))));
 }

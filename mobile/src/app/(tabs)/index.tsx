@@ -1,12 +1,14 @@
 import { HomeShortcuts } from '@/components/home-shortcuts';
-import { type Href, useRouter } from 'expo-router';
+import { type Href, useNavigation, useRouter } from 'expo-router';
+import type { NavigationProp } from 'expo-router/react-navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ErrorBanner } from '@/components/error-banner';
 import { HomeAction } from '@/components/home-action';
 import { HomeHeader } from '@/components/home-header';
-import { HomeSourcePicker } from '@/components/home-source-picker';
+import { HomeSourcePicker, type HomeFeedTab } from '@/components/home-source-picker';
+import { FollowingFeedList } from '@/components/following-feed-list';
 import { FeedSection, FollowingRail, HomeIdentity, LocalNowRail, LocalResults, MediaRail, OfficialFipRail, SectionState, SpotlightRail, TourLiveRail, TourResults, TourSpotlight, UpcomingEntries } from '@/components/home-feed';
 import { ObserveReady } from '@/components/observe-ready';
 import { useHomeFeed, type HomeSource } from '@/hooks/use-home-feed';
@@ -25,8 +27,14 @@ type Section = 'spotlight' | 'shortcuts' | 'now' | 'following' | 'upcoming' | 'r
 
 export default function HomeScreen() {
   const router = useRouter(), insets = useSafeAreaInsets(), tabPadding = useTabScenePadding();
-  const [source, setSource] = useState<HomeSource>('4m'), [refreshing, setRefreshing] = useState(false);
-  const feed = useHomeFeed(source);
+  const navigation = useNavigation<NavigationProp<{
+    '(calendar)': { screen: 'calendar'; params: { circuit: string; timing: string } };
+    rankings: { view: string; source: string; query: string; gender: string };
+  }>>();
+  const [tab, setTab] = useState<HomeFeedTab>('4m'), [refreshing, setRefreshing] = useState(false);
+  const source: HomeSource = tab === 'international' ? 'international' : '4m';
+  const following = tab === 'following';
+  const feed = useHomeFeed(source, !following);
   const list = useRef<FlatList<Section>>(null), mounted = useRef(true);
   const local = source === '4m';
   const followedPlayers = (feed.following.data?.followedPlayers ?? []).filter(player => player.source === (local ? 'local' : 'pro'));
@@ -44,7 +52,7 @@ export default function HomeScreen() {
   const sections: Section[] = local ? ['spotlight', 'shortcuts', 'now', 'following', 'upcoming', 'results', 'media'] : ['now', 'shortcuts', 'spotlight', 'following', 'results', 'fip'];
 
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
-  useEffect(() => { list.current?.scrollToOffset({ offset: 0, animated: false }); }, [source]);
+  useEffect(() => { list.current?.scrollToOffset({ offset: 0, animated: false }); }, [tab]);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -63,7 +71,15 @@ export default function HomeScreen() {
     }));
   }, [feed.active, feed.owner?.id, feed.schedule.data, feed.payments.data, feed.profile.data, feed.matches.data, feed.matches.loading, feed.matches.error]);
 
-  const open = (path: string) => router.push(path as Href);
+  const open = (path: string) => {
+    const [pathname, search = ''] = path.split('?');
+    const params = new URLSearchParams(search);
+    if (pathname === '/calendar') {
+      navigation.navigate('(calendar)', { screen: 'calendar', params: { circuit: params.get('circuit') || 'sa', timing: params.get('timing') || 'upcoming' } });
+    } else if (pathname === '/rankings') {
+      navigation.navigate('rankings', { view: params.get('view') || 'Discover', source: params.get('source') || 'all', query: '', gender: 'all' });
+    } else router.push(path as Href);
+  };
   const openEvent = (event: CalendarEvent, results = false) => router.push({ pathname: '/events/[id]', params: { id: event.slug || String(event.id), ...(results ? { tab: 'Results' } : {}) } });
   const openAction = (event: CalendarEvent, schedule = false) => {
     const balance = feed.payments.data?.find(action => action.eventId === event.id && (action.balanceDue ?? 0) > 0);
@@ -114,7 +130,7 @@ export default function HomeScreen() {
         </FeedSection>;
       case 'results':
         return local ? <FeedSection title="Latest results" onMore={() => open('/calendar')}>
-          {feed.results.data?.length ? <LocalResults events={feed.results.data} onOpen={event => openEvent(event, true)} /> : state(feed.results, 'Results will appear after events finish.')}
+          {feed.results.data?.length ? <LocalResults events={feed.results.data} onOpen={event => openEvent(event, true)} onWinners={event => router.push({ pathname: '/event-winners', params: { id: String(event.id) } })} /> : state(feed.results, 'Results will appear after events finish.')}
         </FeedSection> : <FeedSection title="Latest results" onMore={() => open('/calendar?circuit=pro&timing=past')}>
           {internationalResults.length ? <TourResults matches={internationalResults} onOpen={match => open(`/pro/match/${match.id}`)} /> : state(feed.tour, 'Published tour results will appear here.')}
         </FeedSection>;
@@ -129,17 +145,10 @@ export default function HomeScreen() {
     }
   }
 
-  return <View style={s.page}>
-    <ObserveReady ready={local ? !feed.spotlight.loading : !feed.tour.loading} />
-    <View style={{ paddingTop: insets.top, backgroundColor: b.page }}><HomeHeader onSearch={() => open(local ? '/search' : '/search?source=international')} onNotifications={() => open('/notifications')} noticeCount={pending.length} /></View>
-    <FlatList ref={list} data={sections} extraData={feed} keyExtractor={section => `${source}:${section}`} renderItem={({ item }) => renderSection(item)}
-      initialNumToRender={3} maxToRenderPerBatch={2} windowSize={5} showsVerticalScrollIndicator={false}
-      contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 32 : tabPadding }}
-      refreshControl={<RefreshControl colors={[loadingBlue]} refreshing={refreshing} onRefresh={() => void refresh()} tintColor={loadingBlue} />}
-      ListHeaderComponent={<View style={{ flexShrink: 0 }}>
+  const listHeader = <View style={{ flexShrink: 0 }}>
         <HomeIdentity player={feed.profile.data} loading={feed.profile.loading} onProfile={() => open('/(tabs)/profile')} onRankings={() => open('/rankings?view=Rankings&source=4m')} />
-        <View style={{ marginBottom: 16, flexShrink: 0 }}><HomeSourcePicker value={source} onChange={setSource} /></View>
-        {pending.length > 0 && <Pressable accessibilityRole="button" accessibilityLabel={`${pending.length} pending actions. ${pending[0].title}. ${pending.length > 1 ? 'Review all actions' : 'Review action'}`} onPress={() => pending.length > 1 ? open('/notifications') : openPending(pending[0])} style={s.pending}>
+        <View style={{ marginBottom: 16, flexShrink: 0 }}><HomeSourcePicker following value={tab} onChange={setTab} /></View>
+        {!following && pending.length > 0 && <Pressable accessibilityRole="button" accessibilityLabel={`${pending.length} pending actions. ${pending[0].title}. ${pending.length > 1 ? 'Review all actions' : 'Review action'}`} onPress={() => pending.length > 1 ? open('/notifications') : openPending(pending[0])} style={s.pending}>
           <View style={{ flex: 1, gap: 6 }}>
             <View style={s.pendingHeading}>
               <Text style={s.pendingTitle}>{pending[0].title}</Text>
@@ -149,8 +158,17 @@ export default function HomeScreen() {
           </View>
           <Text style={[s.pendingTitle, { flexShrink: 0 }]}>{pending.length > 1 ? 'Review all →' : 'Review →'}</Text>
         </Pressable>}
-      </View>} />
-    <ErrorBanner message={errors ? 'Some Home updates couldn’t load. Pull to refresh or retry a section.' : null} top={insets.top + 56} bottom={tabPadding} />
+      </View>;
+
+  return <View style={s.page}>
+    <ObserveReady ready={following ? !feed.profile.loading : local ? !feed.spotlight.loading : !feed.tour.loading} />
+    <View style={{ paddingTop: insets.top, backgroundColor: b.page }}><HomeHeader onSearch={() => open(local ? '/search' : '/search?source=international')} onNotifications={() => open('/notifications')} noticeCount={pending.length} /></View>
+    {following ? <FollowingFeedList header={listHeader} horizontalPadding={20} bottomPadding={tabPadding} /> : <FlatList ref={list} data={sections} extraData={feed} keyExtractor={section => `${source}:${section}`} renderItem={({ item }) => renderSection(item)}
+      initialNumToRender={3} maxToRenderPerBatch={2} windowSize={5} showsVerticalScrollIndicator={false}
+      contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 32 : tabPadding }}
+      refreshControl={<RefreshControl colors={[loadingBlue]} refreshing={refreshing} onRefresh={() => void refresh()} tintColor={loadingBlue} />}
+      ListHeaderComponent={listHeader} />}
+    <ErrorBanner message={!following && errors ? 'Some Home updates couldn’t load. Pull to refresh or retry a section.' : null} top={insets.top + 56} bottom={tabPadding} />
   </View>;
 }
 

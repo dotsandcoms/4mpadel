@@ -82,3 +82,17 @@ test('event discovery leads with current and next events, while retaining past e
   assert.deepEqual(Array.from(api.sortSearchEvents(rows, '2026-11-09'), row => row.id), [3,4,2,1]);
   assert.equal(rows[0].id, 1);
 });
+
+test('Find tournaments excludes completed and undated events before a name, city or venue search', () => {
+  const api = setup(), rows = [
+    { id: 1, start_date: '2026-11-08', end_date: '2026-11-11' },
+    { id: 2, start_date: '2026-11-10', end_date: '2026-11-12' },
+    { id: 3, start_date: '2026-11-12', end_date: null },
+    { id: 4, start_date: '2026-11-13', end_date: '2026-11-15' },
+    { id: 5, start_date: null, end_date: null },
+  ];
+  assert.deepEqual(Array.from(api.sortSearchEvents(rows, '2026-11-12', true), row => row.id), [2,3,4]);
+  assert.equal(api.isUpcomingSearchEvent('2026-11-11', '', '2026-11-12'), false);
+  assert.equal(api.isUpcomingSearchEvent('2026-11-13T00:00:00Z', '2026-11-15T00:00:00Z', '2026-11-12'), true);
+  assert.equal(api.isUpcomingSearchEvent('2026-11-13', '2026-11-15', '2026-11-16'), false);
+});

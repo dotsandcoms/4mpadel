@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Alert, Text, View } from 'react-native';
+import { PlayerFollowAction } from './player-follow-action';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { fetchLocalFollows, setLocalFollow } from '@/lib/player-hub';
@@ -38,8 +38,8 @@ export function LocalFollowButton({ playerId, name, iconOnly = false, onSignIn, 
     catch { if (epoch.current === version) setError('Could not save your follow. Reopen this profile to retry.'); }
     finally { lock.current = false; if (epoch.current === version) setBusy(false); }
   };
-  return <View style={{ gap: 6 }}><Pressable accessibilityRole="button" accessibilityLabel={`${following ? 'Unfollow' : 'Follow'} ${name}`} accessibilityState={{ selected: following, busy, disabled: busy }} disabled={busy} onPress={() => { if (error) Alert.alert('Follow unavailable', error); else void toggle(); }} style={{ minHeight: 44, minWidth: 48, paddingHorizontal: iconOnly ? 14 : 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, backgroundColor: '#EAF0FF', opacity: busy ? 0.5 : 1 }}>
-    {iconOnly && busy ? <ActivityIndicator size="small" color="#2449D8" /> : <Ionicons name={following ? 'heart' : 'heart-outline'} size={iconOnly ? 22 : 18} color="#2449D8" />}
-    {!iconOnly && <Text style={{ color: '#2449D8', fontWeight: '700', fontSize: 13 }}>{busy ? 'Loading…' : following ? 'Following' : 'Follow player'}</Text>}
-  </Pressable>{!!error && !iconOnly && <Text accessibilityRole="alert" style={{ color: '#B42318', fontSize: 12 }}>{error}</Text>}</View>;
+  return <View style={{ gap: 6 }}><PlayerFollowAction name={name} following={following} pending={busy} pendingLabel="Loading…" iconOnly={iconOnly} accentColor="#2449D8"
+    onPress={() => { if (error) Alert.alert('Follow unavailable', error); else void toggle(); }} />
+    {!!error && !iconOnly && <Text accessibilityRole="alert" style={{ color: '#B42318', fontSize: 12 }}>{error}</Text>}
+  </View>;
 }

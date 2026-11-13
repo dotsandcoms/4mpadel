@@ -1,3 +1,4 @@
+import { onAccent } from '@/theme/tokens';
 import { loadingBlue } from '@/theme/tokens';
 import { EventMessagesButton } from '@/components/messaging/entry-buttons';
 import { trackEvent } from '@/lib/analytics';
@@ -215,5 +216,5 @@ function EventContent() {
 
   </View></EventAccent>;
 }
-function LightButton({ label, onPress }: { label: string; onPress: () => void }) { const accent = useEventAccent(); return <Pressable accessibilityRole="button" onPress={onPress} style={{ backgroundColor: accent, minHeight: 44, padding: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#000', fontSize: 13, fontWeight: '400' }}>{label}</Text></Pressable>; }
+function LightButton({ label, onPress }: { label: string; onPress: () => void }) { const accent = useEventAccent(); return <Pressable accessibilityRole="button" onPress={onPress} style={{ backgroundColor: accent, minHeight: 44, padding: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: onAccent(accent), fontSize: 13, fontWeight: '400' }}>{label}</Text></Pressable>; }
 function LightEmpty({ title, text, icon }: { title: string; text: string; icon?: EventIconName }) { return <View style={{ padding: 24, paddingVertical: 64, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: '#f3f4f6', alignItems: 'center', gap: 10 }}>{icon && <EventIcon name={icon} color="#e5e7eb" size={48} />}<Text style={{ color: '#0f172a', fontSize: 16, fontWeight: '500' }}>{title}</Text><Text style={{ color: '#65726B', fontSize: 14, lineHeight: 20, textAlign: 'center' }}>{text}</Text></View>; }

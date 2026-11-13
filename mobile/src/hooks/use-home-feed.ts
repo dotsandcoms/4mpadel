@@ -40,8 +40,9 @@ function useHomeResource<T>(owner: Owner | undefined, active: boolean, key: stri
   return { data: current ? state.data : undefined, loading: enabled && (!current || state.loading), error: current ? state.error : false, refresh };
 }
 
-export function useHomeFeed(source: HomeSource) {
-  const active = useScreenActive();
+export function useHomeFeed(source: HomeSource, enabled = true) {
+  const screenActive = useScreenActive();
+  const active = screenActive && enabled;
   const [owner, setOwner] = useState<Owner>();
   useEffect(() => {
     let mounted = true, received = false;
@@ -60,7 +61,7 @@ export function useHomeFeed(source: HomeSource) {
   }, []);
   const email = owner?.email ?? '';
   const signedIn = owner?.id != null && email !== '';
-  const profile = useHomeResource(owner, active, 'profile:sapa-main-v1', 60000, async () => {
+  const profile = useHomeResource(owner, screenActive, 'profile:sapa-main-v1', 60000, async () => {
     const player = await fetchPlayer(email, true);
     return player ? { ...player, winLoss: null } : null;
   }, signedIn);
@@ -72,7 +73,7 @@ export function useHomeFeed(source: HomeSource) {
   const local = source === '4m';
   const spotlight = useHomeResource(owner, active, 'spotlight', 90000, () => fetchFeatured(true), local);
   const happening = useHomeResource(owner, active, 'happening', 60000, () => fetchHappeningNow(true), local);
-  const results = useHomeResource(owner, active, 'results', 180000, () => fetchRecentResults(true), local);
+  const results = useHomeResource(owner, active, 'results:all-divisions', 180000, () => fetchRecentResults(true), local);
   const media = useHomeResource(owner, active, 'media', 300000, () => fetchMediaAlbums(undefined, 6), local);
   const tour = useHomeResource(owner, active, 'tour', 120000, () => fetchProSnapshot('tour'), !local);
   const fixtures = useHomeResource(owner, active, 'fixtures', 60000, () => fetchProSnapshot('fixtures'), !local);

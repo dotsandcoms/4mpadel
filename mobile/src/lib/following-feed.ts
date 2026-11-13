@@ -41,9 +41,10 @@ export function feedRankingChange(item: Pick<FeedItem, 'kind' | 'path' | 'payloa
   if (item.kind !== 'ranking') return null;
   const beforeRank = rankingPosition(item.payload.before_rank), rank = rankingPosition(item.payload.rank);
   if (beforeRank === null || rank === null || beforeRank === rank) return null;
-  if (item.path.startsWith('/pro/player/')) return { beforeRank, rank, label: 'FIP ranking', points: typeof item.payload.points === 'number' && Number.isFinite(item.payload.points) ? item.payload.points : null, scope: 'fip' };
+  const movement = { beforeRank, rank, change: beforeRank - rank };
+  if (item.path.startsWith('/pro/player/')) return { ...movement, label: 'FIP ranking', points: typeof item.payload.points === 'number' && Number.isFinite(item.payload.points) ? item.payload.points : null, scope: 'fip' };
   const main = item.payload.ranking_source === 'sapa_main_v1' ? mainRanking(item.payload) : null;
-  return main ? { beforeRank, rank, label: `SAPA ${main.label}`, points: main.points, scope: main.scope } : null;
+  return main ? { ...movement, label: `SAPA ${main.label}`, points: main.points, scope: main.scope } : null;
 }
 function photo(v: unknown) { try { const url = new URL(text(v)); return url.protocol === 'https:' ? url.href : null; } catch { return null; } }
 export function feedPath(value: unknown): string | null {

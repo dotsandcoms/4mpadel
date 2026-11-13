@@ -3,12 +3,14 @@ import { useAnalyticsSearch } from '@/hooks/use-analytics-search';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useRoute } from 'expo-router/react-navigation';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebsiteHeader } from '@/components/events/website-ui';
 import { LocalRankings } from '@/components/rankings/local-rankings';
 import { ProPlayerProfile } from '@/components/players/pro-player-profile';
+import { PlayerFollowAction } from '@/components/players/player-follow-action';
 import { usePlayerHub } from '@/hooks/use-player-hub';
 import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
 import { filterHubPlayers, playerCountryFlag, localPlayerCountryFlag, proHubPlayer, searchProPlayers, topLocalPlayers, type HubPlayer } from '@/lib/player-hub';
@@ -25,6 +27,7 @@ type ViewName = 'Discover' | 'Following' | 'Rankings';
 export default function PlayerHub() {
   const state = usePlayerHub(), router = useRouter(), safe = useSafeAreaInsets(), bottom = useTabScenePadding();
   const params = useLocalSearchParams<{ view?: string; source?: string; query?: string; gender?: string }>();
+  const route = useRoute();
   const [view, setView] = useState<ViewName>('Discover');
   const [source, setSource] = useState('all'); const [gender, setGender] = useState('all');
   const [query, setQuery] = useState('');
@@ -35,7 +38,14 @@ export default function PlayerHub() {
   const [matchOpen, setMatchOpen] = useState(false);
   const sequence = useRef(0);
   useFocusEffect(useCallback(() => { setMatchOpen(false); }, []));
-  useEffect(() => { if (params.view === 'Tour') { router.replace('/calendar?circuit=pro'); return; } if (['Discover', 'Following', 'Rankings'].includes(params.view || '')) setView(params.view as ViewName); if (['all', '4m', 'pro'].includes(params.source || '')) setSource(params.source!); if (params.query != null) setQuery(params.query); if (['all', 'men', 'women'].includes(params.gender || '')) setGender(params.gender!); }, [params.view, params.source, params.query, params.gender]);
+  // A shortcut can resend the same params after the user changes the screen's filters.
+  useEffect(() => {
+    if (params.view === 'Tour') { router.replace('/calendar?circuit=pro'); return; }
+    if (['Discover', 'Following', 'Rankings'].includes(params.view || '')) setView(params.view as ViewName);
+    if (['all', '4m', 'pro'].includes(params.source || '')) setSource(params.source!);
+    if (params.query != null) setQuery(params.query);
+    if (['all', 'men', 'women'].includes(params.gender || '')) setGender(params.gender!);
+  }, [route.params, params.view, params.source, params.query, params.gender, router]);
   useEffect(() => { if (view === 'Rankings') { if (source === 'all') setSource('4m'); if (gender === 'all') setGender('men'); } }, [view, source, gender]);
   const locals = state.locals;
   const localPlayersById = useMemo(() => new Map(locals.map(player => [player.id, player])), [locals]);
@@ -80,7 +90,9 @@ export default function PlayerHub() {
     setMatchOpen(true);
     router.push({ pathname: '/pro/match/[id]', params: { id: String(id), from } });
   };
-  const followButton = (p: HubPlayer, discovery = false) => <HomeAction compact fullWidth={discovery} icon={discovery ? state.isFollowing(p) ? 'followed' : 'following' : undefined} accentColor={discovery && p.source === '4m' ? LOCAL_BLUE : b.accent} accessibilityLabel={`${state.isFollowing(p) ? 'Unfollow' : 'Follow'} ${p.name}`} label={state.pending === p.key || String(state.pro.pendingId) === p.id && p.source === 'pro' ? 'Saving…' : state.isFollowing(p) ? 'Following' : 'Follow'} disabled={followDisabled(p)} onPress={() => follow(p)} />;
+  const followButton = (p: HubPlayer) => <PlayerFollowAction name={p.name} following={state.isFollowing(p)}
+    pending={state.pending === p.key || String(state.pro.pendingId) === p.id && p.source === 'pro'}
+    accentColor={p.source === '4m' ? LOCAL_BLUE : b.accent} disabled={followDisabled(p)} onPress={() => follow(p)} />;
   const rankLabel = (p: HubPlayer) => p.source === '4m' ? p.rank ? `SAPA ${p.gender === 'women' ? 'Women' : 'Men'}-Main · #${p.rank}` : '4M player' : p.rank ? `FIP · #${p.rank}` : 'FIP player';
   const rail = (title: string, rows: HubPlayer[], local: boolean, category = gender) => <View style={{ gap: 12 }}>
     <Text accessibilityRole="header" style={{ color: b.premium, fontSize: 19, fontWeight: '600' }}>{title}</Text>
@@ -96,7 +108,7 @@ export default function PlayerHub() {
         <Text numberOfLines={1} style={{ color: b.muted, fontSize: 11, lineHeight: 16, marginTop: 4 }}>{local ? p.subtitle : `FIP ${p.gender === 'women' ? 'Women' : 'Men'}`}</Text>
         {p.fipUnverified && <Text style={{ color: b.muted, fontSize: 11, lineHeight: 16 }}>Unverified FIP link</Text>}
       </Pressable>
-      {followButton(p, true)}
+      {followButton(p)}
     </View>} />
   </View>;
   const row = (p: HubPlayer, ranking = false) => <View key={p.key} style={{ ...panel, padding: 12, flexDirection: 'row', gap: 12, alignItems: 'center' }}>

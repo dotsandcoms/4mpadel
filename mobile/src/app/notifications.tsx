@@ -1,3 +1,4 @@
+import { useHelpInbox } from '@/components/help-inbox-provider';
 import { SymbolView } from 'expo-symbols';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -16,7 +17,7 @@ import { openSitePath } from '@/lib/site';
 import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 
 export default function NotificationsSheet() {
-  const router = useRouter(), centre = useNotificationCentre();
+  const router = useRouter(), centre = useNotificationCentre(), help = useHelpInbox();
   const [filter, setFilter] = useState('actions'), [expanded, setExpanded] = useState<Set<string>>(new Set());
   useEffect(() => { setExpanded(new Set()); setFilter('actions'); }, [centre.ownerKey]);
   const groups = useMemo(() => groupNotifications(centre.actions, centre.notifications, centre.events), [centre.actions, centre.notifications, centre.events]);
@@ -81,10 +82,11 @@ export default function NotificationsSheet() {
       refreshControl={<RefreshControl colors={[loadingBlue]} refreshing={centre.loading && groups.length > 0} onRefresh={() => void centre.refresh()} tintColor={loadingBlue} />}
       ListHeaderComponent={<View style={{ gap: 16, paddingTop: 8, paddingBottom: 4 }}>
         <View><Text style={s.summary}>{actionCount ? `${actionCount} ${actionCount === 1 ? 'action' : 'actions'} to review` : 'My event updates'}</Text><Text style={s.meta}>Entries, payments and account updates</Text></View>
-        <NativeSegmentedControl label="Notification view" value={filter} onChange={setFilter} options={[{ value: 'actions', label: actionCount ? `Action needed (${actionCount})` : 'Action needed' }, { value: 'all', label: centre.unread ? `All updates (${centre.unread > 99 ? '99+' : centre.unread})` : 'All updates' }]} />
-        {filter === 'all' && centre.unread > 0 && <HomeAction kind="outline" label="Mark all read" disabled={centre.loading || !centre.through} onPress={() => void centre.markRead()} />}
+        {help.unread > 0 && <Pressable accessibilityRole="button" accessibilityLabel={`Help messages, ${help.unread} unread`} onPress={() => { leave(); router.navigate({ pathname: '/(tabs)/messages', params: { filter: 'Help' } }); }} style={s.following}><Text style={{ flex: 1, color: b.accent, fontSize: 15, fontWeight: '500' }}>Help messages ({help.unread})</Text><Text style={{ color: b.muted }}>View replies ›</Text></Pressable>}
+        <NativeSegmentedControl label="Notification view" value={filter} onChange={setFilter} options={[{ value: 'actions', label: actionCount ? `Action needed (${actionCount})` : 'Action needed' }, { value: 'all', label: centre.unread + help.unread ? `All updates (${centre.unread + help.unread > 99 ? '99+' : centre.unread + help.unread})` : 'All updates' }]} />
+        {filter === 'all' && centre.unread > 0 && <HomeAction kind="outline" label={help.unread ? 'Mark event updates read' : 'Mark all read'} disabled={centre.loading || !centre.through} onPress={() => void centre.markRead()} />}
         {filter === 'all' && <Pressable accessibilityRole="button" onPress={() => { leave(); router.navigate('/following'); }} style={s.following}>
-          <SymbolView name={{ ios: 'person.2', android: 'group', web: 'group' }} size={20} tintColor={b.accent} />
+          <SymbolView name={{ ios: 'heart', android: 'favorite_border', web: 'favorite_border' }} size={20} tintColor={b.accent} />
           <Text style={{ flex: 1, color: b.accent, fontSize: 14, fontWeight: '500' }}>My following activity</Text>
           <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} size={14} tintColor={b.accent} />
         </Pressable>}

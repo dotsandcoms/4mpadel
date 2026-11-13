@@ -1,10 +1,6 @@
 import SwiftUI
 import WidgetKit
 import AppIntents
-#if os(iOS)
-import UIKit
-import ImageIO
-#endif
 
 enum ScheduleCategory: String, AppEnum {
   case all, matches, events
@@ -13,7 +9,7 @@ enum ScheduleCategory: String, AppEnum {
     .all: "Matches & events", .matches: "Matches", .events: "Events"
   ]
   var kind: String? { self == .all ? nil : self == .matches ? "match" : "event" }
-  var heading: String { self == .all ? "NEXT UP" : self == .matches ? "NEXT MATCH" : "NEXT EVENT" }
+  var heading: String { self == .all ? "Next up" : self == .matches ? "Next match" : "Next event" }
   var emptyTitle: String { self == .all ? "Nothing scheduled" : self == .matches ? "No upcoming matches" : "No upcoming events" }
 }
 
@@ -24,19 +20,54 @@ struct ScheduleConfiguration: WidgetConfigurationIntent {
   @Parameter(title: "Show", default: .all) var category: ScheduleCategory
 }
 
+enum WidgetSelection {
+  static func read(_ category: ScheduleCategory, snapshot: ScheduleSnapshot) -> String? {
+    let defaults = UserDefaults(suiteName: ScheduleStore.group)
+    let key = "widget-selection-" + category.rawValue
+    guard defaults?.double(forKey: key + "-snapshot") == snapshot.updatedAt else { return nil }
+    return defaults?.string(forKey: key)
+  }
+  static func save(_ id: String, category: ScheduleCategory, snapshot: ScheduleSnapshot) {
+    let defaults = UserDefaults(suiteName: ScheduleStore.group)
+    let key = "widget-selection-" + category.rawValue
+    defaults?.set(id, forKey: key); defaults?.set(snapshot.updatedAt, forKey: key + "-snapshot")
+  }
+}
+
+#if os(iOS)
+@available(iOS 17.0, *)
+struct NextScheduleItem: AppIntent {
+  static var title: LocalizedStringResource = "Show next 4M item"
+  static var openAppWhenRun = false
+  static var isDiscoverable = false
+  @Parameter(title: "Schedule") var categoryValue: String
+  @Parameter(title: "Current item") var currentID: String
+  init() { categoryValue = "all"; currentID = "" }
+  init(category: ScheduleCategory, currentID: String) { categoryValue = category.rawValue; self.currentID = currentID }
+  func perform() async throws -> some IntentResult {
+    guard let category = ScheduleCategory(rawValue: categoryValue) else { return .result() }
+    let snapshot = ScheduleStore.read()
+    let items = WidgetSchedule.items(snapshot, kind: category.kind, at: Date())
+    guard !items.isEmpty else { return .result() }
+    let index = items.firstIndex { $0.id == currentID } ?? -1
+    WidgetSelection.save(items[(index + 1) % items.count].id, category: category, snapshot: snapshot)
+    WidgetCenter.shared.reloadTimelines(ofKind: "FourMNextUp")
+    return .result()
+  }
+}
+#endif
+
 struct ScheduleEntry: TimelineEntry {
   let date: Date
   let snapshot: ScheduleSnapshot
   var category: ScheduleCategory = .all
-  var artwork: Data? = nil
-  var next: ScheduleItem? {
-    snapshot.upcoming(at: date).first { category.kind == nil || $0.kind == category.kind }
-  }
+  var selectedID: String? = nil
+  var items: [ScheduleItem] { WidgetSchedule.items(snapshot, kind: category.kind, at: date) }
+  var next: ScheduleItem? { WidgetSchedule.selected(items, id: selectedID) }
+  var position: Int { items.firstIndex { $0.id == next?.id } ?? 0 }
   var emptyTitle: String { snapshot.signedIn ? category.emptyTitle : snapshot.emptyTitle }
   var emptyMessage: String {
-    snapshot.signedIn && category == .matches
-      ? "Your scheduled matches appear after syncing with 4M on iPhone."
-      : snapshot.emptyMessage
+    snapshot.signedIn && category == .matches ? "Your scheduled matches appear after syncing with 4M on iPhone." : snapshot.emptyMessage
   }
 }
 
@@ -44,50 +75,25 @@ struct ScheduleEntry: TimelineEntry {
 struct ScheduleTimeline: AppIntentTimelineProvider {
   func recommendations() -> [AppIntentRecommendation<ScheduleConfiguration>] {
     [ScheduleCategory.all, .matches, .events].map { category in
-      let configuration = ScheduleConfiguration()
-      configuration.category = category
+      let configuration = ScheduleConfiguration(); configuration.category = category
       return AppIntentRecommendation(intent: configuration, description: category == .all ? "Matches & events" : category == .matches ? "Matches" : "Events")
     }
   }
   func placeholder(in context: Context) -> ScheduleEntry { ScheduleEntry(date: .now, snapshot: .empty) }
   func snapshot(for configuration: ScheduleConfiguration, in context: Context) async -> ScheduleEntry {
-    var entry = ScheduleEntry(date: .now, snapshot: ScheduleStore.read(), category: configuration.category)
-    entry.artwork = await loadArtwork(entry.next?.imageUrl)
-    return entry
+    let snapshot = ScheduleStore.read()
+    return ScheduleEntry(date: .now, snapshot: snapshot, category: configuration.category, selectedID: WidgetSelection.read(configuration.category, snapshot: snapshot))
   }
   func timeline(for configuration: ScheduleConfiguration, in context: Context) async -> Timeline<ScheduleEntry> {
-    let now = Date()
-    let snapshot = ScheduleStore.read()
-    // Advance past expired events even when the phone has not been opened.
-    let changes = snapshot.items.flatMap { [$0.expiresAt, $0.startAt, $0.registrationOpensAt, $0.registrationClosesAt].compactMap { $0 } }.map { Date(timeIntervalSince1970: $0 / 1000) }
-      .filter { $0 > now && $0 < now.addingTimeInterval(86400) }
-    // Rebuild the day column when the remaining duration crosses a whole day.
-    // SwiftUI's native timer keeps the hours/minutes/seconds ticking between entries.
-    let dayChanges = snapshot.items.compactMap { item -> Date? in
-      guard let countdown = item.countdown(at: now) else { return nil }
-      let remaining = countdown.end.timeIntervalSince(now)
-      guard remaining >= 86400 else { return nil }
-      return now.addingTimeInterval(remaining.truncatingRemainder(dividingBy: 86400) + 1)
-    }
-    let dates = Array(Set([now] + changes + dayChanges)).sorted()
-    let current = ScheduleEntry(date: now, snapshot: snapshot, category: configuration.category)
-    let artwork = await loadArtwork(current.next?.imageUrl)
-    return Timeline(entries: dates.map {
-      var entry = ScheduleEntry(date: $0, snapshot: snapshot, category: configuration.category)
-      if entry.next?.id == current.next?.id { entry.artwork = artwork }
-      return entry
-    }, policy: .after(now.addingTimeInterval(1800)))
+    let now = Date(), snapshot = ScheduleStore.read()
+    let selected = WidgetSelection.read(configuration.category, snapshot: snapshot)
+    let changes = snapshot.items.flatMap { [$0.expiresAt, $0.startAt].compactMap { $0 } }
+      .map { Date(timeIntervalSince1970: $0 / 1000) }.filter { $0 > now && $0 < now.addingTimeInterval(86400) }
+    var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(identifier: "Africa/Johannesburg")!
+    let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))!
+    let dates = Array(Set([now, midnight] + changes)).sorted()
+    return Timeline(entries: dates.map { ScheduleEntry(date: $0, snapshot: snapshot, category: configuration.category, selectedID: selected) }, policy: .after(now.addingTimeInterval(1800)))
   }
-  // Widget views cannot load AsyncImage. Fetch and downsample before producing entries.
-  private func loadArtwork(_ text: String?) async -> Data? {
-    #if os(iOS)
-    guard let thumbnail = await ScheduleArtwork.load(text, maxPixels: 800) else { return nil }
-    return UIImage(cgImage: thumbnail).jpegData(compressionQuality: 0.8)
-    #else
-    return nil
-    #endif
-  }
-
 }
 
 @available(iOS 17.0, watchOS 10.0, *)
@@ -111,15 +117,12 @@ struct ScheduleWidgetView: View {
         }.widgetAccentable()
       } else if family == .accessoryRectangular {
         VStack(alignment: .leading, spacing: 2) {
-          Text(entry.snapshot.isStale(at: entry.date) && entry.snapshot.updatedAt > 0 ? "4M · CHECK IPHONE" : "4M · \(entry.category.heading)").font(.caption2.bold()).widgetAccentable()
+          Text(entry.snapshot.isStale(at: entry.date) && entry.snapshot.updatedAt > 0 ? "4M · Check iPhone" : "4M · \(entry.category.heading)").font(.caption2.weight(.semibold)).widgetAccentable()
           Text(entry.next?.title ?? entry.emptyTitle).font(.headline).lineLimit(1)
           Text(entry.next?.when ?? "Open 4M on iPhone").font(.caption).lineLimit(1)
           if let next = entry.next { Text(next.court.isEmpty ? next.status : next.court).font(.caption2).lineLimit(1) }
         }.frame(maxWidth: .infinity, alignment: .leading)
-      } else {
-        phoneCard
-
-      }
+      } else { phoneCard }
     }
     .privacySensitive()
     #if os(watchOS)
@@ -129,103 +132,20 @@ struct ScheduleWidgetView: View {
     #endif
     .containerBackground(for: .widget) { widgetBackground }
   }
-
   @ViewBuilder private var widgetBackground: some View {
     #if os(iOS)
-    if family == .systemSmall || family == .systemMedium {
-      page
-    } else { Color(red: 0.04, green: 0.04, blue: 0.04) }
+    if family == .systemSmall || family == .systemMedium { page }
+    else { Color(red: 0.04, green: 0.04, blue: 0.04) }
     #else
     Color(red: 0.04, green: 0.04, blue: 0.04)
     #endif
   }
-
   private func datePart(_ item: ScheduleItem, _ pattern: String) -> String {
     guard let date = item.start else { return "TBC" }
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_ZA")
-    formatter.timeZone = TimeZone(identifier: "Africa/Johannesburg")
-    formatter.dateFormat = pattern
+    let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_ZA")
+    formatter.timeZone = TimeZone(identifier: "Africa/Johannesburg"); formatter.dateFormat = pattern
     return formatter.string(from: date)
   }
-
-  private func statusColor(_ item: ScheduleItem) -> Color {
-    item.status == "Payment pending" ? Color(red: 183/255, green: 53/255, blue: 45/255)
-      : item.status == "Saved event" ? muted : accent
-  }
-
-  private func statusBadge(_ item: ScheduleItem) -> some View {
-    Label(item.status, systemImage: item.status == "Payment pending" ? "exclamationmark.circle.fill" : item.status == "Saved event" ? "bookmark.fill" : "checkmark.circle.fill")
-      .font(.system(size: 10, weight: .semibold)).lineLimit(1)
-      .foregroundStyle(statusColor(item))
-      .padding(.horizontal, 8).padding(.vertical, 4)
-      .background(statusColor(item).opacity(0.12), in: Capsule())
-  }
-
-  private var countdownFont: Font {
-    #if os(iOS)
-    Font(UIFont.monospacedSystemFont(ofSize: 14, weight: .semibold))
-    #else
-    .system(size: 14, weight: .semibold, design: .monospaced)
-    #endif
-  }
-
-  private var countdownDigitWidth: CGFloat {
-    #if os(iOS)
-    ("0" as NSString).size(withAttributes: [.font: UIFont.monospacedSystemFont(ofSize: 14, weight: .semibold)]).width
-    #else
-    8.4
-    #endif
-  }
-
-  // Each column displays its two digits from the same native live timer.
-  // Right alignment also handles single-digit hours without shifting minutes/seconds.
-  private func countdownUnit(_ label: String, end: Date, trailingCharacters: Int) -> some View {
-    VStack(spacing: 1) {
-      Text(timerInterval: entry.date...max(entry.date, end), countsDown: true, showsHours: true)
-        .font(countdownFont)
-        .multilineTextAlignment(.trailing)
-        .environment(\.locale, Locale(identifier: "en_US_POSIX"))
-        .frame(width: 200, alignment: .trailing)
-        .offset(x: CGFloat(trailingCharacters) * countdownDigitWidth)
-        .frame(width: countdownDigitWidth * 2, alignment: .trailing)
-        .clipped()
-        .accessibilityHidden(true)
-      Text(label).font(.system(size: 7, weight: .medium))
-    }.frame(maxWidth: .infinity)
-  }
-
-  @ViewBuilder private func eventTiming(_ item: ScheduleItem) -> some View {
-    if item.isLive(at: entry.date) {
-      Text("Tournament underway").lineLimit(1)
-    } else if let countdown = item.countdown(at: entry.date) {
-      let days = max(0, Int(countdown.end.timeIntervalSince(entry.date)) / 86400)
-      let clockEnd = countdown.end.addingTimeInterval(-Double(days * 86400))
-      VStack(alignment: .leading, spacing: 2) {
-        Text(countdown.label == "Starts in" ? countdown.label : "\(countdown.label) in").font(.system(size: 9, weight: .semibold))
-        HStack(spacing: 0) {
-          VStack(spacing: 1) {
-            Text(String(format: "%02d", days)).font(countdownFont)
-            Text("DAYS").font(.system(size: 7, weight: .medium))
-          }.frame(maxWidth: .infinity)
-          countdownUnit("HRS", end: clockEnd, trailingCharacters: 6)
-          countdownUnit("MINS", end: clockEnd, trailingCharacters: 3)
-          countdownUnit("SECS", end: clockEnd, trailingCharacters: 0)
-        }
-        .frame(maxWidth: .infinity)
-        .foregroundStyle(ink)
-        .padding(.horizontal, 6).padding(.vertical, 3)
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(accent.opacity(0.35), lineWidth: 1))
-      }
-      .accessibilityElement(children: .ignore)
-      .accessibilityLabel("\(countdown.label), \(days) days, \(Int(countdown.end.timeIntervalSince(entry.date)) % 86400 / 3600) hours, \(Int(countdown.end.timeIntervalSince(entry.date)) % 3600 / 60) minutes remaining")
-    } else if let closes = item.registrationClosesAt, closes <= entry.date.timeIntervalSince1970 * 1000 {
-      Text("Registration closed").lineLimit(1)
-    } else {
-      Text(item.allDay ? "Start time TBC" : datePart(item, "HH:mm") + " SAST").lineLimit(1)
-    }
-  }
-
   private var isMedium: Bool {
     #if os(watchOS)
     false
@@ -233,72 +153,75 @@ struct ScheduleWidgetView: View {
     family == .systemMedium
     #endif
   }
-
+  @ViewBuilder private func eventTiming(_ item: ScheduleItem) -> some View {
+    if !item.allDay, let start = item.start, start > entry.date, start.timeIntervalSince(entry.date) <= 21600 {
+      HStack(spacing: 4) {
+        Text("Starts in")
+        Text(timerInterval: entry.date...start, countsDown: true, showsHours: true).monospacedDigit()
+      }.lineLimit(1)
+    } else { Text(WidgetSchedule.timing(item, at: entry.date)).lineLimit(1) }
+  }
   private var phoneCard: some View {
     VStack(alignment: .leading, spacing: 4) {
-      HStack(alignment: .center) {
+      HStack(spacing: 8) {
         Text("4M").font(.system(size: 17, weight: .black)).foregroundStyle(ink)
-        Text(entry.category.heading).font(.system(size: 9, weight: .bold)).tracking(1.2).foregroundStyle(muted)
+        Text(entry.category.heading).font(.system(size: 11, weight: .medium)).foregroundStyle(muted)
         Spacer(minLength: 0)
-        if let next = entry.next, next.isLive(at: entry.date) {
-          HStack(spacing: 4) {
-            Circle().fill(accent).frame(width: 5, height: 5)
-            Text("LIVE").font(.system(size: 9, weight: .heavy)).tracking(0.8)
-          }.foregroundStyle(accent).padding(.horizontal, 6).padding(.vertical, 3)
-            .background(accent.opacity(0.1), in: Capsule())
-            .accessibilityLabel("Tournament underway, based on event dates")
-        } else {
-          Image(systemName: entry.next?.kind == "event" ? "calendar" : "tennisball.fill").font(.system(size: 13)).foregroundStyle(accent)
+        #if os(iOS)
+        if let next = entry.next, entry.items.count > 1 {
+          Text("\(entry.position + 1)/\(entry.items.count)").font(.system(size: 10)).monospacedDigit().foregroundStyle(muted)
+          Button(intent: NextScheduleItem(category: entry.category, currentID: next.id)) {
+            Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold))
+              .foregroundStyle(ink).frame(width: 32, height: 24).contentShape(Rectangle())
+          }.buttonStyle(.plain).accessibilityLabel("Show next \(entry.category == .matches ? "match" : entry.category == .events ? "event" : "schedule item")")
         }
+        #endif
       }
       if let next = entry.next {
         if isMedium {
-          HStack(alignment: .top, spacing: 13) {
-            VStack(spacing: 1) {
-              Text(datePart(next, "MMM").uppercased()).font(.system(size: 10, weight: .heavy)).tracking(1.5)
-              Text(datePart(next, "dd")).font(.system(size: 34, weight: .bold, design: .rounded)).monospacedDigit()
-              Text(datePart(next, "EEE").uppercased()).font(.system(size: 9, weight: .bold)).tracking(1)
-            }.foregroundStyle(accent).frame(width: 62, height: 80)
-              .background(accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 13))
-            VStack(alignment: .leading, spacing: 3) {
-              Text(next.title).font(.system(size: 14, weight: .bold)).lineLimit(1)
-                .minimumScaleFactor(0.85)
-              eventTiming(next).font(.system(size: 11, weight: .semibold)).foregroundStyle(accent)
-              if !next.venue.isEmpty {
-                Label(next.venue, systemImage: "mappin.and.ellipse")
-                  .font(.system(size: 10)).foregroundStyle(muted).lineLimit(1)
-              }
-              if !next.court.isEmpty { Text(next.court).font(.system(size: 10)).foregroundStyle(muted).lineLimit(1) }
+          HStack(alignment: .top, spacing: 12) {
+            VStack(spacing: 0) {
+              Text(datePart(next, "MMM")).font(.system(size: 11, weight: .medium))
+              Text(datePart(next, "d")).font(.system(size: 32, weight: .semibold, design: .rounded)).monospacedDigit()
+              Text(datePart(next, "EEE")).font(.system(size: 10, weight: .medium))
+            }.foregroundStyle(accent).frame(width: 56, height: 76)
+              .background(accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+            VStack(alignment: .leading, spacing: 2) {
+              Text(next.title).font(.system(size: 14, weight: .semibold)).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+              eventTiming(next).font(.system(size: 11, weight: .medium)).foregroundStyle(accent)
+              if !next.court.isEmpty { Text(next.court).font(.system(size: 12, weight: .semibold)).foregroundStyle(ink).lineLimit(1) }
+              if !next.venue.isEmpty { Text(next.venue).font(.system(size: 11)).foregroundStyle(muted).lineLimit(1) }
             }.frame(maxWidth: .infinity, alignment: .leading)
           }
         } else {
-          HStack(alignment: .firstTextBaseline, spacing: 5) {
-            Text(datePart(next, "dd")).font(.system(size: 27, weight: .bold, design: .rounded))
-            Text(datePart(next, "MMM").uppercased()).font(.system(size: 11, weight: .bold))
-            Spacer(minLength: 0)
+          HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(datePart(next, "d")).font(.system(size: 26, weight: .semibold, design: .rounded)).monospacedDigit()
+            Text(datePart(next, "MMM")).font(.system(size: 11, weight: .medium))
           }.foregroundStyle(accent)
-          Text(next.title).font(.system(size: 13, weight: .bold)).lineLimit(2)
-          eventTiming(next).font(.system(size: 10)).foregroundStyle(accent)
+          Text(next.title).font(.system(size: 13, weight: .semibold)).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+          eventTiming(next).font(.system(size: 11)).foregroundStyle(accent)
+          if !next.court.isEmpty { Text(next.court).font(.system(size: 11, weight: .semibold)).lineLimit(1) }
         }
         Spacer(minLength: 0)
-        HStack(alignment: .center, spacing: 4) {
-          statusBadge(next)
+        HStack(spacing: 4) {
+          let pending = next.status == "Payment pending"
+          Text(next.status).font(.system(size: 10, weight: .medium))
+            .foregroundStyle(pending ? Color(red: 183/255, green: 53/255, blue: 45/255) : muted).lineLimit(1)
           Spacer(minLength: 0)
           if isMedium {
             Text(entry.snapshot.isStale(at: entry.date) ? "Refresh in app" : "Updated " + entry.snapshot.updated.formatted(date: .omitted, time: .shortened))
-              .font(.system(size: 8)).foregroundStyle(muted).lineLimit(1)
+              .font(.system(size: 9)).foregroundStyle(muted).lineLimit(1)
           }
         }
       } else {
         Spacer(minLength: 0)
-        Label(entry.emptyTitle, systemImage: "calendar.badge.clock").font(.headline)
-        Text(entry.emptyMessage).font(.caption).foregroundStyle(muted).lineLimit(3)
+        Text(entry.emptyTitle).font(.system(size: 15, weight: .semibold))
+        Text(entry.emptyMessage).font(.system(size: 12)).foregroundStyle(muted).lineLimit(3)
         Spacer(minLength: 0)
       }
     }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
       .foregroundStyle(ink).environment(\.colorScheme, .light)
   }
-
 }
 
 @available(iOS 17.0, watchOS 10.0, *)
@@ -313,7 +236,7 @@ struct NextUpWidget: Widget {
   var body: some WidgetConfiguration {
     AppIntentConfiguration(kind: kind, intent: ScheduleConfiguration.self, provider: ScheduleTimeline()) { ScheduleWidgetView(entry: $0) }
       .configurationDisplayName("Next match or event")
-      .description("Choose matches, events, or both from your personal 4M schedule.")
+      .description("Your personal matches, entered events and saved events at a glance.")
       #if os(watchOS)
       .supportedFamilies([.accessoryRectangular, .accessoryCircular, .accessoryInline])
       #else

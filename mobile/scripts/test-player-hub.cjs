@@ -2,6 +2,67 @@ const test = require('node:test'), assert = require('node:assert/strict'), fs = 
 function load(file, env = {}) { const mod={exports:{}}; vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{module:mod,exports:mod.exports,require:()=>({}),...env});return mod.exports; }
 const hub=load('src/lib/player-hub.ts');
 const local=(id,category,rank)=>hub.localHubPlayer({id:String(id),name:`Player ${id}`,category,rank_label:String(rank),image_url:null,points:100,home_club:'Club'});
+
+test('reopening the FIP Players shortcut restores Discover and clears the previous directory filters', () => {
+ const values = [], dependencies = []; let effects = [], effectIndex = 0, cursor = 0, mounted = false, focus = [];
+ let params = { view: 'Discover', source: 'pro', query: '', gender: 'all' };
+ const router = { replace() {} };
+ const state = { locals: [], fipLinks: [], ids: [], isFollowing: () => false, pro: { rankings: { data: null }, follows: [], userId: null } };
+ const modules = {
+  react: {
+   useState(initial) { const i = cursor++; if (!(i in values)) values[i] = initial; return [values[i], value => { values[i] = typeof value === 'function' ? value(values[i]) : value; }]; },
+   useRef(initial) { const i = cursor++; if (!(i in values)) values[i] = { current: initial }; return values[i]; },
+   useMemo: fn => fn(), useCallback: fn => fn,
+   useEffect(fn, deps) { const i = effectIndex++; if (!dependencies[i] || deps.some((value, j) => value !== dependencies[i][j])) effects.push(fn); dependencies[i] = deps; },
+  },
+  'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
+  'react-native': Object.fromEntries(['View', 'Text', 'TextInput', 'Pressable', 'FlatList', 'Modal', 'ActivityIndicator'].map(name => [name, name])),
+  'expo-router': { useRouter: () => router, useLocalSearchParams: () => params, useFocusEffect: fn => focus.push(fn) },
+  'expo-router/react-navigation': { useRoute: () => ({ params }) },
+  'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0 }) },
+  '@/hooks/use-player-hub': { usePlayerHub: () => state },
+  '@/hooks/use-tab-scene-padding': { useTabScenePadding: () => 0 },
+  '@/hooks/use-analytics-search': { useAnalyticsSearch() {} },
+  '@/lib/analytics': { trackEvent() {} }, '@/lib/player-hub': hub,
+  '@/theme/tokens': { lightBrand: {} },
+ };
+ const exports = {};
+ vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/components/players/player-hub.tsx', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText,
+  { exports, require: name => modules[name] || new Proxy({}, { get: (_, key) => key }), setTimeout, clearTimeout });
+ function render() {
+  cursor = 0; effectIndex = 0; focus = []; effects = []; const tree = exports.default();
+  effects.forEach(fn => fn());
+  if (!mounted) { mounted = true; focus.forEach(fn => fn()); }
+  return tree;
+ }
+ function find(tree, label) {
+  if (!tree || typeof tree !== 'object') return;
+  if (Array.isArray(tree)) return tree.map(child => find(child, label)).find(Boolean);
+  if (tree.props?.label === label || tree.props?.accessibilityLabel === label) return tree;
+  return find(tree.props?.children, label);
+ }
+ render();
+ let tree = render();
+ assert.equal(find(tree, 'Player directory').props.value, 'pro');
+ find(tree, 'Players view').props.onChange('Rankings'); tree = render();
+ find(tree, 'Player directory').props.onChange('4m'); tree = render();
+ find(tree, 'Player category').props.onChange('women');
+ find(tree, 'Search players').props.onChangeText('Sam');
+ find(tree, 'Players view').props.onChange('Following'); tree = render();
+ assert.equal(find(tree, 'Players view').props.value, 'Following');
+ assert.equal(find(tree, 'Player directory').props.value, '4m');
+ // Returning from a profile preserves the current filters.
+ focus.forEach(fn => fn()); tree = render();
+ assert.equal(find(tree, 'Players view').props.value, 'Following');
+ assert.equal(find(tree, 'Player directory').props.value, '4m');
+ // An explicit shortcut navigation delivers fresh route params with the same values.
+ params = { ...params }; render(); tree = render();
+ assert.equal(find(tree, 'Players view').props.value, 'Discover');
+ assert.equal(find(tree, 'Player directory').props.value, 'pro');
+ assert.equal(find(tree, 'Player category').props.value, 'all');
+ assert.equal(find(tree, 'Search players').props.value, '');
+});
+
 test('ranking updates require a known nonzero rank change, regardless of points changes',()=>{
  for(const player of [{},{rankChange:null},{rankChange:0,pointsChange:0},{rankChange:NaN},{pointsChange:Infinity},{rankChange:0,pointsChange:40},{pointsChange:-20}])assert.equal(hub.hasRankingUpdate(player),false);
  for(const player of [{rankChange:3},{rankChange:-2},{rankChange:2,pointsChange:0}])assert.equal(hub.hasRankingUpdate(player),true);
@@ -216,6 +277,7 @@ function followerComponent() {
   'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }), Fragment: 'Fragment' },
   'react-native': { Text: 'Text', Pressable: 'Pressable' }, '@/theme/tokens': { lightBrand: {} },
   '@expo/vector-icons': { Ionicons: 'Ionicons' },
+  './player-follow-action': { PlayerFollowAction: 'PlayerFollowAction' },
   'expo-router': { useFocusEffect(callback) { if (callback.key !== dependencyKey) { dependencyKey = callback.key; effect = callback.fn; cleanup?.(); cleanup = effect(); } } },
   '@/lib/player-hub': { fetchLocalFollowerCount: id => new Promise((resolve, reject) => requests.push({ id, resolve, reject })) },
  };
@@ -269,6 +331,7 @@ test('the follow control refreshes the count after successful follows and unfoll
   'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
   'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable', Alert: { alert() {} } },
   '@expo/vector-icons': { Ionicons: 'Ionicons' },
+  './player-follow-action': { PlayerFollowAction: 'PlayerFollowAction' },
   'expo-router': { useRouter: () => ({}), useFocusEffect(fn) { if (!mounted) { mounted = true; fn(); } } },
   '@/lib/supabase': { supabase: { auth: {
    getSession: async () => ({ data: { session: { user: { id: 'u1' } } } }),
@@ -281,11 +344,11 @@ test('the follow control refreshes the count after successful follows and unfoll
  const render = () => { cursor = 0; return exports.LocalFollowButton({ playerId: '407', name: 'Player', onFollowChange: () => changed++ }).props.children[0]; };
  const flush = () => new Promise(resolve => setImmediate(resolve));
  render(); await flush();
- assert.equal(render().props.accessibilityState.selected, false);
+ assert.equal(render().props.following, false);
  render().props.onPress(); await flush();
- assert.equal(render().props.accessibilityState.selected, true); assert.equal(changed, 1);
+ assert.equal(render().props.following, true); assert.equal(changed, 1);
  render().props.onPress(); await flush();
- assert.equal(render().props.accessibilityState.selected, false); assert.equal(changed, 2);
+ assert.equal(render().props.following, false); assert.equal(changed, 2);
  fail = true; render().props.onPress(); await flush();
- assert.equal(render().props.accessibilityState.selected, false); assert.equal(changed, 2);
+ assert.equal(render().props.following, false); assert.equal(changed, 2);
 });

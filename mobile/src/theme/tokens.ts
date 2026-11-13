@@ -8,11 +8,11 @@
 export const loadingBlue = '#27517B';
 
 export const brand = {
-  /** Electric lime. The only accent. One per screen, ideally. */
-  padel: '#CCFF00',
-  /** Lime at 60%. For large areas — borders, fills — where full strength
+  /** Blue brand accent for dark surfaces and light-filled controls. */
+  padel: '#8DB9E0',
+  /** Blue at 60%. For large areas — borders, fills — where full strength
    *  shouts over everything else on the screen. */
-  padelSoft: 'rgba(204,255,0,0.6)',
+  padelSoft: 'rgba(141,185,224,0.6)',
 
   /** Surface ramp, darkest to lightest. */
   page: '#0a0a0a',
@@ -71,14 +71,14 @@ export const motion = {
 } as const;
 
 /**
- * Lime `boxShadow` for Reanimated worklets. Alpha is quantized so JS never
+ * Blue `boxShadow` for Reanimated worklets. Alpha is quantized so JS never
  * interpolates `rgba(..., 7e-7)` — Reanimated's color parser rejects that.
  */
 export function padelGlow(offsetY: number, blur: number, alpha: number): string {
   'worklet';
   const a = Math.round(Math.min(1, Math.max(0, alpha)) * 1000) / 1000;
   if (a <= 0) return 'none';
-  return `0px ${offsetY}px ${blur}px rgba(204, 255, 0, ${a})`;
+  return `0px ${offsetY}px ${blur}px rgba(141, 185, 224, ${a})`;
 }
 
 /** V2 application surfaces. V1 tokens above remain dedicated to onboarding/auth. */
@@ -87,6 +87,8 @@ export const lightBrand = {
   page: '#F5F6F3',
   elevated: '#FFFFFF',
   surface: '#EDF0EB',
+  warning: '#8A5300',
+  warningSurface: '#FFF0CC',
   panel: '#E5EAE2',
   premium: '#16251F',
   muted: '#52625A',
@@ -98,4 +100,15 @@ export const lightBrand = {
   glass: '#EAF0E5',
   accent: '#386018',
   messagingAction: '#27517B',
+  supportInk: '#72508E',
+  supportTint: '#F1EBF6',
 } as const;
+
+/** Legible text/icons on both blue defaults and the preserved SAPA tier fills. */
+export function onAccent(fill: string) {
+  const hex = fill.replace('#', '');
+  if (!/^[0-9a-f]{6}$/i.test(hex)) return '#FFFFFF';
+  const channels = [0, 2, 4].map(index => parseInt(hex.slice(index, index + 2), 16) / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+  const luminance = channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+  return 1.05 / (luminance + 0.05) >= (luminance + 0.05) / 0.0667 ? '#FFFFFF' : '#16251F';
+}

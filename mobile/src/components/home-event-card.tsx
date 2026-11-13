@@ -24,13 +24,13 @@ import {
 } from '@/lib/matches';
 import { formatHomeWhen, matchTiming } from '@/lib/when';
 import { sapaLabel, lightSapaTone as sapaTone } from '@/theme/sapa';
-import { lightBrand as brand } from '@/theme/tokens';
+import { lightBrand as brand, onAccent } from '@/theme/tokens';
 import { EventNotificationBell } from '@/components/events/follow-tournament';
 
 const MATCH_ORANGE = '#F97316';
 
 function contrastOnAccent(accent: string) {
-  return accent === '#CCFF00' || accent === '#EAB308' || accent === '#F59E0B' ? '#0a0a0a' : '#ffffff';
+  return onAccent(accent);
 }
 
 function AccentGradientButton({ label, accent, onPress, compact = false }: {

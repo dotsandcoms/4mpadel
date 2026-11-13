@@ -1,13 +1,70 @@
-# Apple companion — Phase 1
+# Apple companion
 
 Native SwiftUI Apple Watch app, WidgetKit Smart Stack/complications, and iPhone
 Home Screen/Lock Screen widgets. These are separate native targets, not WebViews.
 Android keeps the existing React Native app and safely skips Apple-only calls.
 
+## Watch and widget update — November 2026
+
+The Watch now follows the phone's V2 design system: `#F5F6F3` canvas,
+white cards, `#16251F` text, `#52625A` secondary copy and `#386018` actions.
+Payment warnings use `#B7352D`. The low-contrast toolbar tools circle is removed.
+The approved scope is **schedule, match details and court reminders only**.
+Scoring, workout tracking and followed-player scores are deferred.
+
+Match cards now open the supplied player names, court, start time and venue.
+Complications and reminders open that exact match; removed matches show an
+unavailable state. Court reminders are an explicit Watch opt-in, at 5, 15 or 30
+minutes before confirmed personal match times. Time TBC/date-only items never
+get an invented alert. Reconciliation removes obsolete alerts and clears them
+on sign-out. Changes to the schedule require a sync from iPhone.
+
+The compact iPhone widget gives event titles two lines, replaces the registration
+closed headline with useful start timing, highlights a supplied court, and gives
+entered/paid events and scheduled matches priority over saved events. A native
+App Intent next-item button browses the currently selected category without
+opening the app. Paging is local to the category and resets on a new phone
+snapshot; identical-category widgets share that selection. Taps elsewhere still
+open the shown item. SAST midnight/start/expiry entries keep dates current.
+Date-only items keep Time TBC, and only confirmed starts get a live countdown.
+The text-only widget no longer fetches artwork it does not render.
+
+Reference lock and craft decisions:
+
+| Decision | Source | Role |
+| --- | --- | --- |
+| Existing light canvas, white cards, forest-green date tile | Current Home, `src/theme/tokens.ts`, supplied widget screenshot | Preserve the approved 4M identity |
+| Readable two-line title, aligned compact rows and quiet status | User request and Unslop polish workflow | Put event, time and court before chrome |
+| Semantic status colours, explicit secondary text | Refero bundled colour guidance | Preserve meaning and contrast |
+| Native navigation, WidgetKit controls, timed-only alerts | Existing companion and Apple APIs | Keep actions appropriate to each device |
+
+Direction: personal padel schedule at a glance; calm, practical, precise. The
+product world is the date, court and venue. The date tile and confirmed start
+are the meaningful accents; the forest-green date tile is the signature.
+
+This polish uses **Unslop by Damir Sokolovsky**
+([@heydamir](https://x.com/heydamir), [skill](https://heydamir.design/unslop)),
+licensed **CC BY 4.0**, with Refero craft guidance. No generated imagery is needed.
+
+Simulator verification: the current release app was installed on iPhone 18 Pro.
+The medium widget shows the entered Rockets event first, cycles from 1/6 to 2/6
+without opening the app, and wraps the long SA Grand Open title across two lines.
+The Watch shows the light palette with a legible clock and no toolbar tools circle.
+TypeScript, 75 focused mobile tests, native widget/reminder/navigation/refresh
+checks and both simulator builds passed. Physical notification delivery still
+depends on Watch notification settings and a confirmed scheduled match.
+
+Native reminders/widget regression checks:
+
+```sh
+xcrun swiftc -module-cache-path /tmp/4m-watch-module-cache targets/_shared/Schedule.swift targets/watch/CourtReminder.swift scripts/test-widget-schedule.swift -o /tmp/4m-widget-schedule-tests
+/tmp/4m-widget-schedule-tests
+```
+
 ## What it shows
 
-Watch visual reference: the existing native 4M event screen and bundled calendar hero
-own the dark surfaces, padel photography and lime actions. Compact date tiles make
+Watch visual reference: the current native 4M event screen and bundled calendar hero
+own the light surfaces, padel photography and forest-green actions. Compact date tiles make
 the agenda scannable; red marks payment pending, muted blue-grey marks saved events.
 List titles are capped at three lines, with full event titles in the detail view.
 Agenda cards and event details put the title, date/time, venue and court before artwork
@@ -36,14 +93,14 @@ is the fallback for missing/loading/failed images. Remote graphics need connecti
   Edit Widget → Show. Separate widget instances can use different choices. This also
   applies to Watch widgets; the Watch app's selector remains independent.
 - Watch complication/Smart Stack taps select the corresponding category and open
-  that exact event's native detail card. Match taps open Matches. Missing events show
+  that exact event's native detail card. Match taps open the corresponding native match detail. Missing events show
   the unavailable state until refreshed. Links use `fourmpadel-watch://schedule` with
   encoded `kind` and `id` parameters; iPhone widgets keep their existing phone routes.
   A complication selection applies to the current app session without replacing the
   user's remembered manual category choice.
 - Registration, licence purchase and payments remain on the phone.
 - iPhone widgets show a date-based LIVE tag while an event is underway, and a native
-  ticking countdown to registration opening/closing or a known start time. Timeline
+  ticking countdown to a confirmed start within six hours. Timeline
   entries cover those boundaries and expiry. LIVE is scheduled event progress, not
   live scores. Date-only start times never get a fabricated countdown. WidgetKit
   controls refresh timing; arbitrary continuous badge animations are not used.

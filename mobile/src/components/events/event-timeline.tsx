@@ -1,3 +1,4 @@
+import { onAccent } from '@/theme/tokens';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View, useWindowDimensions, type ViewStyle } from 'react-native';
 import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
@@ -52,7 +53,7 @@ export function RegistrationCountdown({ event, onRegister, label }: { event: Eve
         <Text style={{ fontSize: compact ? 7 : 8, lineHeight: 10, color: '#65726B', marginTop: 3 }}>{['DAYS', 'HRS', 'MINS', 'SECS'][i]}</Text>
       </View>)}
     </View>}
-    {label && <Pressable accessibilityRole="button" onPress={onRegister} hitSlop={{ top: 8, bottom: 8, left: 3, right: 3 }} style={managing ? { flexShrink: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: compact ? 9 : 12, paddingVertical: 8, borderRadius: 12, borderColor: '#B9CDB0', borderWidth: 1, backgroundColor: '#F0F6EA' } : { flexShrink: 0, minHeight: 44, justifyContent: 'center', paddingHorizontal: compact ? 10 : 12, paddingVertical: 8, borderRadius: 24, borderColor: accent, borderWidth: 1, backgroundColor: accent, boxShadow: `0px 1px 6px ${accent}59`, experimental_backgroundImage: `linear-gradient(145deg, ${accent} 0%, ${accent} 50%, ${accent}cc 100%)` } as ViewStyle}><Text style={{ color: managing ? '#244A16' : '#000', fontSize: compact ? 10 : 11, fontWeight: '700' }}>{managing ? 'Manage entry' : label.toUpperCase()}</Text>{managing && <EventIcon name="chevron.right" size={12} color="#244A16" />}</Pressable>}
+    {label && <Pressable accessibilityRole="button" onPress={onRegister} hitSlop={{ top: 8, bottom: 8, left: 3, right: 3 }} style={managing ? { flexShrink: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: compact ? 9 : 12, paddingVertical: 8, borderRadius: 12, borderColor: '#B9CDB0', borderWidth: 1, backgroundColor: '#F0F6EA' } : { flexShrink: 0, minHeight: 44, justifyContent: 'center', paddingHorizontal: compact ? 10 : 12, paddingVertical: 8, borderRadius: 24, borderColor: accent, borderWidth: 1, backgroundColor: accent, boxShadow: `0px 1px 6px ${accent}59`, experimental_backgroundImage: `linear-gradient(145deg, ${accent} 0%, ${accent} 50%, ${accent}cc 100%)` } as ViewStyle}><Text style={{ color: managing ? '#244A16' : onAccent(accent), fontSize: compact ? 10 : 11, fontWeight: '700' }}>{managing ? 'Manage entry' : label.toUpperCase()}</Text>{managing && <EventIcon name="chevron.right" size={12} color="#244A16" />}</Pressable>}
   </View>;
 }
 /** Dates and step ordering mirror website TournamentProgressBar. */

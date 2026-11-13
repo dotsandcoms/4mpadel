@@ -2,6 +2,8 @@ export const CRUD = ['delete', 'insert', 'select', 'update'];
 // Reviewed against browser/native callers, server workers and RLS intent.
 // A new public table needs a deliberate contract here and grants beside CREATE.
 export const contracts = new Map();
+// Help threads are RPC-only for players, organisers and platform staff.
+for (const table of ['help_requests', 'help_replies', 'help_request_reads', 'help_support_alerts']) contracts.set(`public.${table}`, { anon: [], authenticated: [], service_role: [] });
 function group(tables, anon = [], authenticated = []) {
     for (const table of tables.split(' ')) contracts.set(`public.${table}`, { anon, authenticated, service_role: CRUD });
 }

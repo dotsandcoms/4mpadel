@@ -34,6 +34,14 @@ test('Women-Main identity cannot be labelled as Men-Main or borrowed from anothe
   assert.equal(feed.feedRankingChange({ kind: 'ranking', path: '/players/192', payload }).label, 'SAPA Women-Main');
   assert.equal(feed.feedRankingChange({ kind: 'ranking', path: '/players/192', payload: { ...payload, age_group: 'Men-Main' } }), null);
 });
+test('ranking movement directions describe places gained or lost within the same SAPA Main scope', () => {
+  for (const [before, rank, change] of [[40, 41, -1], [41, 39, 2]]) {
+    const movement = feed.feedRankingChange({ kind: 'ranking', path: '/players/1', payload: { ...mainScope, before_rank: before, rank } });
+    assert.equal(movement.change, change);
+    assert.equal(movement.scope, 'sapa:15809:3:82');
+    assert.equal(movement.label, 'SAPA Men-Main');
+  }
+});
 test('Home player data is a separate followed-player list with independent local and FIP identities', () => {
   const page = feed.parseFeedPage({ items: [], has_more: false, followed_players: [
     { id: 191, name: 'Charl Vos', source: 'local', photo_url: 'https://test/charl.jpg', nationality: 'ZA', rank_label: 9, points: 180, email: 'private', main_rankings: [{ ...mainScope, rank: 17, points: 3381 }] },

@@ -1,3 +1,5 @@
+import { HelpInboxProvider, useHelpInbox } from '@/components/help-inbox-provider';
+import { helpConversation } from '@/lib/help-inbox';
 import { activateMessageDrafts, clearMessageDrafts } from '@/lib/messaging-drafts';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
@@ -9,7 +11,8 @@ import { messagingFailure, unreadMessages, incomingChange, type Conversation, ty
 type Notice = { id: string; title: string; detail: string };
 type Inbox = { owner: string | null; rows: Conversation[]; status: MessagingStatus | null; loading: boolean; error: string; revision: number; refresh: () => Promise<void>; badge: number; notice: Notice | null; dismissNotice: () => void };
 const Context = createContext<Inbox | null>(null);
-export function MessagingProvider({ children }: { children: ReactNode }) {
+function ChatInboxProvider({ children }: { children: ReactNode }) {
+  const help = useHelpInbox();
   const pathname = usePathname(), location = useRef(pathname); location.current = pathname;
   const [owner, setOwner] = useState<string | null>(null), [rows, setRows] = useState<Conversation[]>([]);
   const [status, setStatus] = useState<MessagingStatus | null>(null), [loading, setLoading] = useState(false), [error, setError] = useState('');
@@ -95,10 +98,14 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; connected.current = false; for (const channel of channels) void supabase.removeChannel(channel); };
   }, [owner, status?.enabled, topics, signal]);
   useEffect(() => { if (owner) void refresh(); }, [owner, pathname, refresh]);
-  return <Context.Provider value={{ owner, rows, status, loading, error, revision, refresh, badge: unreadMessages(rows), notice, dismissNotice: () => setNotice(null) }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ owner, rows: [...rows, ...help.rows.map(helpConversation)].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), status, loading, error, revision, refresh: async () => { await Promise.all([refresh(), help.refresh()]); }, badge: unreadMessages(rows) + help.unread, notice, dismissNotice: () => setNotice(null) }}>{children}</Context.Provider>;
 }
 export function useMessagingInbox() {
   const value = useContext(Context);
   if (!value) throw new Error('MessagingProvider is required.');
   return value;
+}
+
+export function MessagingProvider({ children }: { children: ReactNode }) {
+  return <HelpInboxProvider><ChatInboxProvider>{children}</ChatInboxProvider></HelpInboxProvider>;
 }

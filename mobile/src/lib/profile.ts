@@ -269,6 +269,8 @@ export type ProfileStats = {
 };
 
 export type ProfileTransaction = {
+  sourceId?: string | number;
+  eventId?: number | null;
   kind: 'payment' | 'refund';
   id: string | number;
   date: string;
@@ -621,6 +623,7 @@ export async function fetchProfileTransactions(email: string): Promise<ProfileTr
   }
 
   type PaymentRow = {
+    event_id?: number | null;
     id: number;
     reference?: string | null;
     amount?: number | null;
@@ -642,6 +645,7 @@ export async function fetchProfileTransactions(email: string): Promise<ProfileTr
     const rawStatus = String(t.status || 'unknown');
     return {
       kind: 'payment' as const,
+      sourceId: t.id, eventId: t.event_id,
       id: t.reference || t.id,
       date: t.metadata?.original_trx?.date || new Date(t.created_at).toLocaleDateString(),
       sortDate: new Date(t.created_at).getTime(),
@@ -664,6 +668,7 @@ export async function fetchProfileTransactions(email: string): Promise<ProfileTr
         : String(rf.status || '');
     return {
       kind: 'refund' as const,
+      sourceId: rf.id as string, eventId: linkedPayment?.event_id,
       id: (rf.paystack_reference as string) || (rf.paystack_refund_id as string) || (rf.id as number),
       date: rf.processed_at
         ? new Date(rf.processed_at as string).toLocaleDateString()

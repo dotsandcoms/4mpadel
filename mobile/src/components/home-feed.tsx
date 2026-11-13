@@ -151,29 +151,28 @@ export function UpcomingEntries({ events, onOpen, onAction }: { events: Calendar
   })}</View>;
 }
 
-export function LocalResults({ events, onOpen }: { events: CalendarEvent[]; onOpen: (event: CalendarEvent) => void }) {
-  return <SwipeCards items={events.slice(0, 6)} itemKey={event => String(event.id)} renderCard={event => {
-    const result = event.resultHighlight;
-    return <Pressable accessibilityRole="button" accessibilityLabel={`${event.event_name}. ${result ? `${result.division} winners, ${result.winners.map(player => player.name).join(' and ')}` : 'View results'}`} onPress={() => onOpen(event)} style={s.resultCard}>
-      <View style={s.personRow}>
-        <EventArtwork uri={artwork(event)} event={event} style={{ width: 40, height: 52, borderRadius: 6 }} />
-        <View style={{ flex: 1, gap: 4 }}><Text numberOfLines={2} style={s.rowTitle}>{event.event_name}</Text><Text style={s.small}>{formatEventRange(event.start_date, event.end_date)} · 4M</Text></View>
+function LocalResult({ event, onOpen, onWinners }: { event: CalendarEvent; onOpen: (event: CalendarEvent) => void; onWinners: (event: CalendarEvent) => void }) {
+  const results = event.resultDivisions ?? (event.resultHighlight ? [event.resultHighlight] : []);
+  const count = new Set(results.map(result => result.division.trim().toLowerCase())).size;
+  return <View style={s.resultCard}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${event.event_name}. View event results.`} onPress={() => onOpen(event)} style={s.personRow}>
+      <EventArtwork uri={artwork(event)} event={event} style={{ width: 44, height: 60, borderRadius: 6 }} />
+      <View style={{ flex: 1, gap: 4 }}><Text numberOfLines={2} style={s.rowTitle}>{event.event_name}</Text><Text style={s.small}>{formatEventRange(event.start_date, event.end_date)} · 4M</Text></View>
+    </Pressable>
+    <View style={s.resultFooter}>
+      <View style={s.resultSummary}>
+        <SymbolView name={{ ios: 'trophy.fill', android: 'trophy', web: 'trophy' }} size={16} tintColor="#875D18" />
+        <Text style={s.small}>{count ? `${count} ${count === 1 ? 'division' : 'divisions'}` : 'Event results'}</Text>
       </View>
-      {result ? <View style={s.winners}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><SymbolView name={{ ios: 'trophy.fill', android: 'trophy', web: 'trophy' }} size={18} tintColor="#875D18" /><Text style={s.winnerLabel}>Winners · {result.division}</Text></View>
-        <View style={{ gap: 8 }}>
-          {result.winners.map((player, index) => <View key={`${player.name}:${index}`} style={s.winnerRow}>
-            <FeedPortrait name={player.name} uri={player.photo} size={36} />
-            <Text style={s.winnerName}>{player.name}</Text>
-          </View>)}
-        </View>
-      </View> : <Text style={s.secondary}>Open the event for division results</Text>}
-      <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-        <Text style={[s.small, { flex: 1 }]}>{result ? result.divisionCount > 1 ? `${result.divisionCount} division results` : 'Final results' : 'Division results'}</Text>
-        <Text style={[s.date, { fontWeight: '600' }]}>View results →</Text>
-      </View>
-    </Pressable>;
-  }} />;
+      <HomeAction label={count ? 'See winners' : 'View results'} kind="outline" size="small" icon="next" iconPosition="trailing"
+        accessibilityLabel={count ? `See winners in all ${count} ${count === 1 ? 'division' : 'divisions'} at ${event.event_name}` : `View results for ${event.event_name}`}
+        onPress={() => count ? onWinners(event) : onOpen(event)} />
+    </View>
+  </View>;
+}
+
+export function LocalResults({ events, onOpen, onWinners }: { events: CalendarEvent[]; onOpen: (event: CalendarEvent) => void; onWinners: (event: CalendarEvent) => void }) {
+  return <SwipeCards items={events.slice(0, 6)} itemKey={event => String(event.id)} renderCard={event => <LocalResult event={event} onOpen={onOpen} onWinners={onWinners} />} />;
 }
 
 export function MediaRail({ albums, onOpen }: { albums: MediaAlbum[]; onOpen: (album: MediaAlbum) => void }) {
@@ -286,11 +285,9 @@ const s = StyleSheet.create({
   scoreTeamWinner: { backgroundColor: b.surface },
   scorePlayer: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 18, color: b.premium },
   setScore: { minWidth: 24, textAlign: 'center', fontSize: 18, lineHeight: 24, fontVariant: ['tabular-nums'], fontWeight: '600', color: b.premium },
-  resultCard: { padding: 16, gap: 12, backgroundColor: b.elevated, borderRadius: 12 },
-  winners: { gap: 12, backgroundColor: '#F8F4E9', borderRadius: 8, padding: 12 },
-  winnerLabel: { flex: 1, color: '#795316', fontSize: 12, lineHeight: 17, fontWeight: '600' },
-  winnerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 40 },
-  winnerName: { flex: 1, minWidth: 0, color: b.premium, fontSize: 16, lineHeight: 21, fontWeight: '600', letterSpacing: -.2 },
+  resultCard: { padding: 12, gap: 12, backgroundColor: b.elevated, borderRadius: 12 },
+  resultFooter: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, borderTopWidth: StyleSheet.hairlineWidth, borderColor: b.edge, paddingTop: 8 },
+  resultSummary: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   officialCard: { backgroundColor: b.elevated, borderRadius: 16, overflow: 'hidden' },
   team: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 });

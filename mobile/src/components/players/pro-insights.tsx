@@ -1,10 +1,33 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { HomeAction } from '@/components/home-action';
 import { ErrorBanner } from '@/components/error-banner';
-import { fetchProInsight, type InsightResult, type Performance, type Rivals } from '@/lib/pro-padel-insights';
+import { ProAvatar, ProPairPortraits } from '@/components/pro-player-identity';
+import { useProPlayerPortraits } from '@/hooks/use-pro-player-portraits';
+import { fetchProInsight, type InsightResult, type Performance, type Rivals, type Rival } from '@/lib/pro-padel-insights';
 import { playerCountryFlag } from '@/lib/player-hub';
 import { loadingBlue, lightBrand as b } from '@/theme/tokens';
+
+function RivalRows({ rivals, onPlayer }: { rivals: Rival[]; onPlayer?: (id: number, name: string) => void }) {
+  const teams = rivals.map(rival => {
+    const ids = typeof rival.id === 'number' ? [rival.id] : rival.id.split('-').map(Number);
+    const names = rival.name.split(/\s*\/\s*/);
+    return ids.map((id, index) => ({ id, name: names[index] || rival.name, nationality: ids.length === 1 ? rival.nationality : null }));
+  });
+  const photos = useProPlayerPortraits(teams.flat().map(player => player.id));
+  return <View>{rivals.map((rival, index) => {
+    const team = teams[index];
+    const canOpen = typeof rival.id === 'number' && !!onPlayer;
+    const record = rival.won !== null && rival.played !== null ? `${rival.won} wins · ${rival.played - rival.won} losses` : 'Record unavailable';
+    return <Pressable key={rival.id} disabled={!canOpen} accessibilityRole={canOpen ? 'button' : undefined} accessibilityLabel={`${rival.name}. ${record}.${rival.winPercentage !== null ? ` ${rival.winPercentage}% wins.` : ''}${canOpen ? ' View player profile.' : ''}`} onPress={() => { if (typeof rival.id === 'number') onPlayer?.(rival.id, rival.name); }} style={s.rival}>
+      {team.length === 1 ? <ProAvatar player={team[0]} photo={photos[team[0].id]} size={36} /> : <ProPairPortraits team={team} photos={photos} size={28} />}
+      <View style={s.identity}><Text numberOfLines={2} style={s.name}>{playerCountryFlag(rival.nationality)}{rival.nationality ? ' ' : ''}{rival.name}</Text><Text style={s.record}>{record}</Text></View>
+      <View style={s.rate}><Text style={s.percentage}>{rival.winPercentage !== null ? `${rival.winPercentage.toLocaleString('en-ZA', { maximumFractionDigits: 2 })}%` : '—'}</Text><Text style={s.caption}>wins</Text></View>
+      {canOpen && <Ionicons name="chevron-forward" size={14} color={b.muted} />}
+    </Pressable>;
+  })}</View>;
+}
 
 export function ProInsights({ subject, onPlayer }: { subject: { player: number } | { pair: string }; onPlayer?: (id: number, name: string) => void }) {
   const [mode, setMode] = useState<'rivals' | 'performance' | null>(null);
@@ -25,19 +48,16 @@ export function ProInsights({ subject, onPlayer }: { subject: { player: number }
   const active = mode === 'rivals' ? rivals : performance;
   const data = performance?.data;
   return <View style={{ gap: 12 }}>
-    <Text style={{ color: b.premium, fontSize: 18, fontWeight: '700' }}>{isPair ? 'Partnership insights' : 'Player insights'}</Text>
-    <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}><HomeAction label={mode === 'rivals' ? 'Close rivals' : 'Rivals'} onPress={() => setMode(value => value === 'rivals' ? null : 'rivals')} /><HomeAction label={mode === 'performance' ? 'Close performance' : isPair ? 'Pair synergy' : 'Player form'} onPress={() => setMode(value => value === 'performance' ? null : 'performance')} /></View>
+    <Text style={{ color: b.premium, fontSize: 18, fontWeight: '600' }}>{isPair ? 'Partnership insights' : 'Player insights'}</Text>
+    <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}><HomeAction label="Rivals" compact size="small" kind={mode === 'rivals' ? 'primary' : 'outline'} accentColor={b.messagingAction} accessibilityLabel={`${mode === 'rivals' ? 'Hide' : 'Show'} rivals`} onPress={() => setMode(value => value === 'rivals' ? null : 'rivals')} /><HomeAction label={isPair ? 'Pair synergy' : 'Player form'} compact size="small" kind={mode === 'performance' ? 'primary' : 'outline'} accentColor={b.messagingAction} accessibilityLabel={`${mode === 'performance' ? 'Hide' : 'Show'} ${isPair ? 'pair synergy' : 'player form'}`} onPress={() => setMode(value => value === 'performance' ? null : 'performance')} /></View>
     <ErrorBanner message={error} top={60} />
     {!!error && <Text style={{ color: b.danger, fontSize: 12 }}>{error}</Text>}
-    {mode && <View style={{ backgroundColor: b.elevated, borderRadius: 18, padding: 16, gap: 14, borderWidth: 1, borderColor: b.edge }}>
+    {mode && <View style={{ backgroundColor: b.elevated, borderRadius: 16, padding: 16, gap: 12, borderWidth: 1, borderColor: b.edge }}>
       {loading && <ActivityIndicator color={loadingBlue} />}
       {active?.unavailable && <Text style={{ color: b.muted, lineHeight: 20 }}>{active.unavailable === 'subscription' ? 'This insight is not included in our current data coverage.' : 'This insight is not available for this player or pair yet.'}</Text>}
       {mode === 'rivals' && rivals?.data && <>
-        <Text style={{ color: b.premium, fontWeight: '700' }}>Most played rivals</Text><Text style={{ color: b.muted, fontSize: 12, lineHeight: 18 }}>Up to 10 rivals · finished or retired main-draw matches. Records are from this {isPair ? 'pair’s' : 'player’s'} perspective.</Text>
-        {rivals.data.rivals.map(rival => <View key={rival.id} style={{ gap: 7, borderTopWidth: 1, borderTopColor: b.edge, paddingTop: 12 }}>
-          {typeof rival.id === 'number' && onPlayer ? <HomeAction label={`${playerCountryFlag(rival.nationality)} ${rival.name}`.trim()} onPress={() => onPlayer(rival.id as number, rival.name)} /> : <Text style={{ color: b.premium, fontWeight: '600' }}>{rival.name}</Text>}
-          <Text style={{ color: b.accent, fontVariant: ['tabular-nums'], fontWeight: '600' }}>{rival.won !== null && rival.played !== null ? `${rival.won} wins · ${rival.played - rival.won} losses` : 'Record unavailable'}{rival.winPercentage !== null ? ` · ${rival.winPercentage}% wins` : ''}</Text>
-        </View>)}
+        <View style={{ gap: 4 }}><Text style={{ color: b.premium, fontWeight: '600', fontSize: 15 }}>Most played rivals</Text><Text style={{ color: b.muted, fontSize: 11, lineHeight: 16 }}>Up to 10 · finished or retired main-draw matches</Text><Text style={{ color: b.muted, fontSize: 11, lineHeight: 16 }}>Records from this {isPair ? 'pair’s' : 'player’s'} perspective</Text></View>
+        <RivalRows rivals={rivals.data.rivals} onPlayer={onPlayer} />
         {!rivals.data.rivals.length && <Text style={{ color: b.muted }}>No recorded main-draw rivalries yet.</Text>}
       </>}
       {mode === 'performance' && data && <>
@@ -52,3 +72,13 @@ export function ProInsights({ subject, onPlayer }: { subject: { player: number }
     </View>}
   </View>;
 }
+
+const s = StyleSheet.create({
+  rival: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, minHeight: 64, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: b.edge },
+  identity: { flex: 1, minWidth: 0, gap: 4 },
+  name: { color: b.premium, fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  record: { color: b.muted, fontSize: 11, lineHeight: 16, fontVariant: ['tabular-nums'] },
+  rate: { alignItems: 'flex-end', gap: 2 },
+  percentage: { color: b.premium, fontSize: 14, lineHeight: 20, fontWeight: '500', fontVariant: ['tabular-nums'] },
+  caption: { color: b.muted, fontSize: 11, lineHeight: 16 },
+});

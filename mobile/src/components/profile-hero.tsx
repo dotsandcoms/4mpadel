@@ -147,8 +147,8 @@ export function ProfileHero({ player, stats, playId = 0, fipLinked = false, stat
             numberOfLines={2}>
             {name}
           </Text>
-          <PlayerFollowerCount playerId={String(player.id)} refreshKey={followerRefreshKey} onPress={onFollowersPress} />
           {(side || hand) && <Text style={{ color: brand.muted, fontSize: 12, lineHeight: 17 }} numberOfLines={2}>{[side && `${side} court`, hand].filter(Boolean).join(' · ')}</Text>}
+          <PlayerFollowerCount compact playerId={String(player.id)} refreshKey={followerRefreshKey} onPress={onFollowersPress} />
 
         </View>
       </View>

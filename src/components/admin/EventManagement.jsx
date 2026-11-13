@@ -1,11 +1,15 @@
+import { helpTicketFromSearch } from '../../utils/helpLinks';
+import { useHelpUnread } from './useHelpUnread';
 import React, { useState } from 'react';
 import EventMessaging from './EventMessaging';
 import EventFinance from './EventFinance';
+import HelpRequestsAdmin from './HelpRequestsAdmin';
 import PrivateDrawRehearsal, { PrivateRehearsalEvents } from './PrivateDrawRehearsal';
 import { canSeePrivateRehearsal } from '../../utils/privateDrawRehearsal';
 
 const EventManagement = ({ allowedEvents, permissions, userEmail }) => {
-    const [section, setSection] = useState('entries');
+    const [section, setSection] = useState(() => new URLSearchParams(window.location.search).get('section') === 'help' ? 'help' : 'entries');
+    const help = useHelpUnread();
     const [rehearsalEventId, setRehearsalEventId] = useState(null);
     const canRehearse = canSeePrivateRehearsal(userEmail, permissions);
     if (rehearsalEventId && canRehearse) return <PrivateDrawRehearsal eventId={rehearsalEventId} onClose={() => setRehearsalEventId(null)} />;
@@ -14,11 +18,11 @@ const EventManagement = ({ allowedEvents, permissions, userEmail }) => {
     </div>;
     return <div className="space-y-6">
         <nav aria-label="Event management sections" className="flex flex-wrap gap-3">
-            {[['entries', 'Entries & finances'], ['messages', 'Event messages']].map(([key, label]) =>
+            {[['entries', 'Entries & finances'], ['messages', 'Event messages'], ['help', 'Help requests']].map(([key, label]) =>
                 <button type="button" key={key} aria-pressed={section === key} onClick={() => setSection(key)}
-                    className={`min-h-11 rounded-xl border px-5 py-3 text-sm font-semibold ${section === key ? 'border-padel-green text-padel-green' : 'border-white/15 text-gray-400'}`}>{label}</button>)}
+                    className={`min-h-11 rounded-xl border px-5 py-3 text-sm font-semibold ${section === key ? 'border-padel-green text-padel-green' : 'border-white/15 text-gray-400'}`}>{label}{key === 'help' && help.unread > 0 ? ` (${help.unread})` : ''}</button>)}
         </nav>
-        {section === 'messages' ? <EventMessaging /> : <EventFinance allowedEvents={allowedEvents} isEventManagementModule={true} onStartRehearsal={canRehearse ? setRehearsalEventId : undefined} />}
+        {section === 'help' ? <HelpRequestsAdmin initialTicket={helpTicketFromSearch(window.location.search)} unread={help.unread} revision={help.revision} onChange={help.refresh} /> : section === 'messages' ? <EventMessaging /> : <EventFinance allowedEvents={allowedEvents} isEventManagementModule={true} onStartRehearsal={canRehearse ? setRehearsalEventId : undefined} />}
     </div>;
 };
 

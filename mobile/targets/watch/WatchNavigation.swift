@@ -2,6 +2,8 @@ import Foundation
 
 enum WatchDestination: Hashable {
   case event(String)
+  case match(String)
+  case reminders
 }
 
 struct WatchScheduleRoute {
@@ -20,7 +22,7 @@ struct WatchScheduleRoute {
     guard kind == nil || kind == "match" || kind == "event" else { return nil }
     if let id, kind == nil || id.isEmpty { return nil }
     category = kind
-    destination = kind == "event" ? id.map(WatchDestination.event) : nil
+    destination = kind == "event" ? id.map(WatchDestination.event) : kind == "match" ? id.map(WatchDestination.match) : nil
   }
 
   static func category(preference: String, snapshot: ScheduleSnapshot, at date: Date) -> String {

@@ -1,4 +1,6 @@
 import { ProInsights } from './pro-insights';
+import { ProRankingList } from './pro-ranking-list';
+import { MatchSetScore, setScoreColumnWidth } from '@/components/match-set-score';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { Image } from 'expo-image';
@@ -48,6 +50,7 @@ function Result({ detail, playerId, onMatch }: { detail: MatchDetails; playerId:
   const opponents = match.teams[1 - myTeam];
   const won = match.winner ? match.winner === `team_${myTeam + 1}` : null;
   const sets = match.score.filter(([first, second]) => first != null && second != null);
+  const setWidths = sets.map(setScoreColumnWidth);
   const teamLabel = (team: typeof myPlayers) => team.map(person => `${playerCountryFlag(person.nationality) ? `${playerCountryFlag(person.nationality)} ` : ''}${person.name}`).join(' / ');
   return <Pressable accessibilityRole="button" accessibilityLabel={`View ${match.tournamentName} match and set scores`} onPress={() => onMatch(match.id)} style={{ ...card, gap: 11 }}>
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
@@ -60,12 +63,12 @@ function Result({ detail, playerId, onMatch }: { detail: MatchDetails; playerId:
     </View>
     <View style={{ borderTopWidth: 1, borderColor: b.edge, paddingTop: 10, gap: 8 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-        <Text numberOfLines={2} style={{ color: b.premium, fontWeight: '800', fontSize: 13, flex: 1 }}>{teamLabel(myPlayers)}</Text>
-        {sets.map((set, index) => <Text key={index} style={{ color: b.premium, width: 26, textAlign: 'center', fontWeight: '800', fontSize: 15 }}>{set[myTeam]}</Text>)}
+        <Text numberOfLines={2} style={{ color: b.premium, fontWeight: '600', fontSize: 12, lineHeight: 18, flex: 1 }}>{teamLabel(myPlayers)}</Text>
+        <View style={{ flexDirection: 'row', flexShrink: 0 }}>{sets.map((set, index) => <MatchSetScore key={index} value={set[myTeam]} width={setWidths[index]} color={b.premium} fontSize={15} />)}</View>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-        <Text numberOfLines={2} style={{ color: b.muted, fontWeight: '700', fontSize: 13, flex: 1 }}>{teamLabel(opponents) || 'Opponents TBC'}</Text>
-        {sets.map((set, index) => <Text key={index} style={{ color: b.muted, width: 26, textAlign: 'center', fontWeight: '700', fontSize: 15 }}>{set[1 - myTeam]}</Text>)}
+        <Text numberOfLines={2} style={{ color: b.muted, fontWeight: '500', fontSize: 12, lineHeight: 18, flex: 1 }}>{teamLabel(opponents) || 'Opponents TBC'}</Text>
+        <View style={{ flexDirection: 'row', flexShrink: 0 }}>{sets.map((set, index) => <MatchSetScore key={index} value={set[1 - myTeam]} width={setWidths[index]} color={b.muted} fontSize={15} />)}</View>
       </View>
       {!sets.length && <Text style={{ color: b.muted, fontSize: 12 }}>{detail.scoreText || 'Score not published'}</Text>}
     </View>
@@ -291,8 +294,9 @@ export function ProPlayerProfile({ player, followButton, onClose, onMatch, onPla
 
       {tab === 'Stats' && <><ProInsights subject={{ player: id }} onPlayer={onPlayer} /><RecentForm matches={matches} playerId={id} year={year} loading={matchesLoading} /><View style={{ ...card, gap: 17 }}><Text style={{ color: b.premium, fontSize: 18, fontWeight: '800' }}>FIP match stats</Text>{loading ? <ActivityIndicator color={loadingBlue} /> : stats ? <><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 18 }}><Field label="Matches played" value={stats.matchesPlayed} /><Field label="Matches won" value={stats.matchesWon} /><Field label="Win rate" value={stats.winPercentage != null ? `${stats.winPercentage}%` : null} /><Field label="Titles" value={stats.titles} /><Field label="Finals" value={stats.finals} /><Field label="Semifinals" value={stats.semifinals} /><Field label="Sets won–lost" value={stats.setsWon != null && stats.setsLost != null ? `${stats.setsWon}–${stats.setsLost}` : null} /><Field label="Games won–lost" value={stats.gamesWon != null && stats.gamesLost != null ? `${stats.gamesWon}–${stats.gamesLost}` : null} /><Field label="Best round" value={stats.bestRound != null ? ({ 1: 'Final', 2: 'Semi-final', 4: 'Quarter-final' } as Record<number, string>)[stats.bestRound] || `Round of ${stats.bestRound * 2}` : null} /></View>{stats.coverage && <Text style={{ color: b.muted, fontSize: 12, lineHeight: 18 }}>These figures cover {stats.matchesPlayed ?? 'published'} tracked FIP matches{stats.since ? ` since ${stats.since}` : ''}. Other tours may have additional results.</Text>}</> : empty(statsError || 'FIP match stats are not published for this player.')}</View></>}
       {tab === 'Rankings' && <>
-        <Text style={{ color: b.premium, fontSize: 18, fontWeight: '800' }}>Published rankings</Text>
-        {rankingsLoading ? <ActivityIndicator color={loadingBlue} /> : rankings.length ? rankings.map((entry, index) => <View key={`${entry.type}-${entry.date}-${index}`} style={{ ...card, gap: 8 }}><Text style={{ color: b.accent, fontWeight: '800', textTransform: 'uppercase' }}>{entry.type}</Text><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}><Field label="World rank" value={entry.rank != null ? `#${entry.rank}` : null} /><Field label="Points" value={entry.points} /><Field label="Rank change" value={entry.rankChange} /><Field label="Points change" value={entry.pointsChange} /></View><Text style={{ color: b.muted, fontSize: 12 }}>{fullDate(entry.date) || 'Current published snapshot'}</Text></View>) : empty(rankingsError || 'No ranking snapshots published for this player.')}
+        <Text style={{ color: b.premium, fontSize: 18, fontWeight: '600' }}>Published rankings</Text>
+        <Text style={{ color: b.muted, fontSize: 12, lineHeight: 18, marginTop: -8 }}>Separate ranking systems · changes since the previous published entry</Text>
+        {rankingsLoading ? <ActivityIndicator color={loadingBlue} /> : rankings.length ? <ProRankingList rankings={rankings} /> : empty(rankingsError || 'No ranking snapshots published for this player.')}
       </>}
     </ScrollView>
   </View>;

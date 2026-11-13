@@ -22,7 +22,7 @@ export function CalendarEventCard({ event, saved, saving = false, onPress, onSav
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${event.event_name}, ${date}. View event and entry options.`}
       android_ripple={{ color: b.surface }} style={s.main}>
       <EventArtwork uri={event.image || event.custom_image_url || event.poster_image_url || event.image_url} event={event} style={s.poster} />
-      <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+      <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
         <View style={s.metadata}>
           {!!tier && <><Text style={[s.tier, { color: tone.text, backgroundColor: tone.bg }]}>{tier === 'FIP event' ? 'FIP' : tier}</Text><Text style={s.meta}>SAPA</Text></>}
           {onNow && <Text style={s.live}>On now</Text>}
@@ -40,7 +40,7 @@ export function CalendarEventCard({ event, saved, saving = false, onPress, onSav
         <Text style={s.meta}>{event.registered_players == null ? 'View event details' : `${event.registered_players.toLocaleString('en-ZA')} players entered`}</Text>
       </View>
       <EventNotificationBell eventId={event.id} eventName={event.event_name || 'Tournament'} />
-      <HomeAction label={saving ? 'Saving…' : saved ? 'Scheduled' : 'Save event'} compact disabled={saving}
+      <HomeAction label={saving ? 'Saving…' : saved ? 'Scheduled' : 'Save event'} compact size="small" disabled={saving}
         kind={saved ? 'primary' : 'link'} icon={saved ? 'scheduleCheck' : 'scheduleAdd'}
         accessibilityLabel={`${saved ? 'Remove from' : 'Add to'} My schedule: ${event.event_name}${saving ? ', saving' : ''}`}
         onPress={onSave} />
@@ -49,16 +49,16 @@ export function CalendarEventCard({ event, saved, saving = false, onPress, onSav
 }
 
 const s = StyleSheet.create({
-  card: { marginHorizontal: 16, marginBottom: 12, borderRadius: 16, backgroundColor: b.elevated, borderColor: b.edge, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
-  main: { flexDirection: 'row', gap: 12, padding: 16, alignItems: 'flex-start' },
-  poster: { width: 72, height: 100, borderRadius: 8 },
+  card: { marginHorizontal: 16, marginBottom: 8, borderRadius: 16, backgroundColor: b.elevated, borderColor: b.edge, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  main: { flexDirection: 'row', gap: 10, padding: 12, alignItems: 'flex-start' },
+  poster: { width: 60, height: 84, borderRadius: 6 },
   metadata: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center' },
-  tier: { fontSize: 11, lineHeight: 16, fontWeight: '500', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  meta: { color: b.muted, fontSize: 12, lineHeight: 18 },
+  tier: { fontSize: 10, lineHeight: 14, fontWeight: '500', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
+  meta: { color: b.muted, fontSize: 11, lineHeight: 16 },
   live: { color: b.danger, fontSize: 12, lineHeight: 18, fontWeight: '600' },
-  name: { color: b.premium, fontSize: 16, lineHeight: 21, fontWeight: '600' },
-  date: { color: b.accent, fontSize: 12, lineHeight: 18, fontWeight: '500', fontVariant: ['tabular-nums'] },
-  location: { color: b.muted, fontSize: 12, lineHeight: 18 },
-  footer: { paddingHorizontal: 12, paddingVertical: 4, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: b.edge, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4 },
-  entries: { flex: 1, minWidth: 108, paddingLeft: 4, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  name: { color: b.premium, fontSize: 15, lineHeight: 20, fontWeight: '600' },
+  date: { color: b.accent, fontSize: 11, lineHeight: 16, fontWeight: '500', fontVariant: ['tabular-nums'] },
+  location: { color: b.muted, fontSize: 11, lineHeight: 16 },
+  footer: { paddingHorizontal: 10, paddingVertical: 2, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: b.edge, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 2 },
+  entries: { flex: 1, minWidth: 96, paddingLeft: 2, flexDirection: 'row', alignItems: 'center', gap: 4 },
 });

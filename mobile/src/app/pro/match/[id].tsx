@@ -24,6 +24,7 @@ import { ActivityIndicator, Pressable, ScrollView, Share, Text, View } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const terminal = new Set(['finished', 'retired', 'walkover', 'bye', 'not_played']);
+const matchAccent = '#27517B';
 const photoCache = new Map<number, string>();
 const stringify = (value: unknown) => typeof value === 'string' || typeof value === 'number' ? String(value) : null;
 const securePhoto = (value: string | null | undefined) => typeof value === 'string' && value.startsWith('https://') ? value : null;
@@ -72,13 +73,13 @@ function StatRows({ value }: { value: unknown }) {
     const ratio = Number.isFinite(first) && Number.isFinite(second) && first + second > 0 ? first / (first + second) : 0.5;
     return <View key={key} style={{ gap: 7, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: b.edge }}>
       <Text style={{ color: b.muted, textAlign: 'center', fontSize: 12 }}>{statLabels[key] || key.replaceAll('_', ' ')}</Text>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}><Text style={{ color: b.accent, fontWeight: '800', fontSize: 17 }}>{left}</Text><Text style={{ color: b.premium, fontWeight: '800', fontSize: 17 }}>{right}</Text></View>
-      <View style={{ height: 5, flexDirection: 'row', borderRadius: 5, overflow: 'hidden' }}><View style={{ flex: Math.max(0.03, ratio), backgroundColor: b.padel }} /><View style={{ flex: Math.max(0.03, 1 - ratio), backgroundColor: b.edge }} /></View>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}><Text style={{ color: matchAccent, fontWeight: '800', fontSize: 17 }}>{left}</Text><Text style={{ color: b.premium, fontWeight: '800', fontSize: 17 }}>{right}</Text></View>
+      <View style={{ height: 5, flexDirection: 'row', borderRadius: 5, overflow: 'hidden' }}><View style={{ flex: Math.max(0.03, ratio), backgroundColor: matchAccent }} /><View style={{ flex: Math.max(0.03, 1 - ratio), backgroundColor: b.edge }} /></View>
     </View>;
   };
   const visible = statGroups.filter(group => group.keys.some(key => display(key) !== null));
   if (!visible.length) return <Text style={{ color: b.muted }}>No statistics have been published for this period.</Text>;
-  return <View style={{ gap: 18 }}>{visible.map(group => <View key={group.title} style={{ gap: 4 }}><Text style={{ color: b.accent, fontSize: 11, letterSpacing: 1.1, fontWeight: '800' }}>{group.title}</Text>{group.keys.map(display)}</View>)}</View>;
+  return <View style={{ gap: 18 }}>{visible.map(group => <View key={group.title} style={{ gap: 4 }}><Text style={{ color: matchAccent, fontSize: 11, letterSpacing: 1.1, fontWeight: '800' }}>{group.title}</Text>{group.keys.map(display)}</View>)}</View>;
 }
 
 export default function ProMatchScreen() {
@@ -259,8 +260,8 @@ export default function ProMatchScreen() {
         {prediction && <View style={{ backgroundColor: b.elevated, borderWidth: 1, borderColor: b.edge, borderRadius: 18, padding: 16, gap: 10 }}>
           <Text style={{ color: b.premium, fontSize: 17, fontWeight: '800' }}>Pre-match outlook</Text>
           <Text style={{ color: b.muted, fontSize: 12 }}>PadelAPI Elo model · Probability before play, not a live forecast</Text>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}><Text numberOfLines={1} style={{ flex: 1, color: b.accent, fontWeight: '800' }}>{names[0]} · {prediction.team1.toFixed(0)}%</Text><Text numberOfLines={1} style={{ flex: 1, color: b.premium, fontWeight: '800', textAlign: 'right' }}>{prediction.team2.toFixed(0)}% · {names[1]}</Text></View>
-          <View style={{ height: 9, borderRadius: 9, overflow: 'hidden', flexDirection: 'row' }}><View style={{ flex: Math.max(0.01, prediction.team1), backgroundColor: b.padel }} /><View style={{ flex: Math.max(0.01, prediction.team2), backgroundColor: b.edge }} /></View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10 }}><Text numberOfLines={2} style={{ flex: 1, color: matchAccent, fontWeight: '600', fontSize: 11, lineHeight: 16 }}>{names[0]} · {prediction.team1.toFixed(0)}%</Text><Text numberOfLines={2} style={{ flex: 1, color: b.premium, fontWeight: '600', fontSize: 11, lineHeight: 16, textAlign: 'right' }}>{prediction.team2.toFixed(0)}% · {names[1]}</Text></View>
+          <View style={{ height: 9, borderRadius: 9, overflow: 'hidden', flexDirection: 'row' }}><View style={{ flex: Math.max(0.01, prediction.team1), backgroundColor: matchAccent }} /><View style={{ flex: Math.max(0.01, prediction.team2), backgroundColor: b.edge }} /></View>
         </View>}
         {!!match.score.length && <View style={{ flexDirection: 'row', gap: 8 }}>{match.score.map((set, index) => <View key={index} style={{ flex: 1, backgroundColor: b.elevated, borderWidth: 1, borderColor: b.edge, borderRadius: 14, padding: 12, alignItems: 'center', gap: 4 }}><Text style={{ color: b.muted, fontSize: 10, fontWeight: '800' }}>SET {index + 1}</Text><Text style={{ color: b.premium, fontSize: 19, fontWeight: '800' }}>{set[0]}–{set[1]}</Text></View>)}</View>}
         <View style={{ backgroundColor: b.elevated, borderWidth: 1, borderColor: b.edge, borderRadius: 18, padding: 17, gap: 12 }}>
@@ -268,8 +269,8 @@ export default function ProMatchScreen() {
           {[['Round', detail ? tournamentRoundLabel(detail) : proRound(match)], ['Draw', detail?.draw === 'qualy' ? 'Qualifying' : 'Main draw'], ['Court', match.court || 'To be announced'], ['Venue', detail?.tournament?.venue], ['Venue timezone', detail?.tournament?.timezone], ['Started', detail?.startedAt ? proDate(detail.startedAt, true) : null], ['Duration', detail?.duration]].filter(([, value]) => value).map(([label, value]) => <View key={label} style={{ flexDirection: 'row', gap: 12, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: b.edge }}><Text style={{ color: b.muted, fontSize: 12, flex: 1 }}>{label}</Text><Text style={{ color: b.premium, fontSize: 12, fontWeight: '700', flex: 1, textAlign: 'right' }}>{value}</Text></View>)}
         </View>
         <View style={{ backgroundColor: b.elevated, borderRadius: 18, padding: 17, gap: 12 }}><Text style={{ color: b.premium, fontSize: 17, fontWeight: '800' }}>Match statistics</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 7 }}>{(['match', 'set_1', 'set_2', 'set_3'] as const).filter(period => period === 'match' || stats?.[period]).map(period => <Pressable key={period} accessibilityRole="button" accessibilityState={{ selected: statsPeriod === period }} onPress={() => setStatsPeriod(period)} style={{ paddingHorizontal: 13, paddingVertical: 9, borderRadius: 9, backgroundColor: statsPeriod === period ? b.padel : b.panel }}><Text style={{ color: b.premium, fontWeight: '700', fontSize: 12 }}>{period === 'match' ? 'Match' : `Set ${period.slice(-1)}`}</Text></Pressable>)}</ScrollView>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}><Text numberOfLines={1} style={{ flex: 1, color: b.accent, fontWeight: '700' }}>{names[0]}</Text><Text numberOfLines={1} style={{ flex: 1, color: b.premium, fontWeight: '700', textAlign: 'right' }}>{names[1]}</Text></View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 7 }}>{(['match', 'set_1', 'set_2', 'set_3'] as const).filter(period => period === 'match' || stats?.[period]).map(period => <Pressable key={period} accessibilityRole="button" accessibilityState={{ selected: statsPeriod === period }} onPress={() => setStatsPeriod(period)} style={{ paddingHorizontal: 13, paddingVertical: 9, borderRadius: 9, backgroundColor: statsPeriod === period ? matchAccent : b.panel }}><Text style={{ color: statsPeriod === period ? '#FFFFFF' : b.premium, fontWeight: '700', fontSize: 12 }}>{period === 'match' ? 'Match' : `Set ${period.slice(-1)}`}</Text></Pressable>)}</ScrollView>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}><Text numberOfLines={2} style={{ flex: 1, color: matchAccent, fontWeight: '600', fontSize: 11, lineHeight: 16 }}>{names[0]}</Text><Text numberOfLines={2} style={{ flex: 1, color: b.premium, fontWeight: '600', fontSize: 11, lineHeight: 16, textAlign: 'right' }}>{names[1]}</Text></View>
           <StatRows value={stats?.[statsPeriod]} />
         </View>
       </View>}

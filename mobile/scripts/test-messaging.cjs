@@ -43,6 +43,15 @@ test('an undeployed backend has a useful, disabled status', async () => {
   const m = api({ data: null, error: { code: 'PGRST202', message: 'RPC not found' } });
   assert.equal((await m.messagingStatus()).enabled, false);
 });
+test('personal chat deletion uses the checked RPC without an impersonated owner or message boundary', async () => {
+  const m = api();
+  await m.messaging('conversation_delete', { conversationId: cid, userId: 'another-user', deletedThrough: 999 });
+  assert.equal(m.calls[0][0], 'messaging_delete_conversation');
+  assert.deepEqual(Object.keys(m.calls[0][1]), ['p_conversation']);
+  assert.equal(m.calls[0][1].p_conversation, cid);
+  await assert.rejects(m.messaging('conversation_delete', { conversationId: 'invalid' }));
+  assert.equal(m.calls.length, 1);
+});
 test('chat avatars reject trackers, signed URLs, credentials and other storage origins', () => {
   const m = api(), origin = 'https://fourm.supabase.co';
   assert.equal(m.messagingImageUrl(origin + '/storage/v1/object/public/profile-pics/1/avatar.jpg?t=123', origin), origin + '/storage/v1/object/public/profile-pics/1/avatar.jpg');
@@ -247,6 +256,7 @@ test('native Messages badge clears at zero using the installed Expo tab option c
     const layout = load('src/app/(tabs)/_layout.tsx', {
       'react/jsx-runtime': require('react/jsx-runtime'),
       '@/components/messaging/messaging-provider': { useMessagingInbox: () => ({ badge }) },
+      'expo-router': { useNavigation: () => ({ dispatch() {} }) },
       'expo-router/unstable-native-tabs': { NativeTabs }, 'react-native': { Platform: { OS: 'ios' } },
       '@/components/app-drawer': { AppDrawer: () => null }, '@/theme/tokens': { lightBrand: {} },
     });

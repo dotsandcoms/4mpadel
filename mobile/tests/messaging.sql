@@ -15,7 +15,10 @@ create function auth.email() returns text language sql stable as $$select auth.j
 create table public.players(id bigint primary key,email text,name text,image_url text,region text,racket_brand text,notification_prefs jsonb default '{}');
 create table public.player_profile_details(player_id bigint primary key references public.players,date_of_birth date);
 create table public.calendar(id bigint primary key,event_name text,start_date date,end_date date,event_status text,is_visible boolean default true,sanction_status text,organisation_id uuid,organiser_email text,event_co_admins text[],venue text,city text,poster_image_url text,custom_image_url text,image_url text,sapa_status text,entry_fee numeric,early_bird_fee numeric,early_bird_ends_at timestamptz);
+alter table public.calendar add column organiser_name text;
 create table public.payments(id uuid primary key default gen_random_uuid(),event_id bigint,email text,status text);
+alter table public.payments add column player_id bigint,add column reference text,add column metadata jsonb default '{}';
+create table public.payment_refunds(id uuid primary key default gen_random_uuid(),payment_id uuid references public.payments(id),metadata jsonb default '{}');
 create table public.tournament_divisions(id uuid primary key default gen_random_uuid(),event_id bigint,entry_fee numeric,name text);
 create table public.organisations(id uuid primary key,created_by bigint references public.players,name text);
 create table public.organisation_members(organisation_id uuid references public.organisations,user_email text,role text);
@@ -67,6 +70,11 @@ grant select,insert,update,delete on public.push_outbox to anon,authenticated;
 create policy account_must_exist on public.push_outbox for all to authenticated using(true) with check(true);
 \ir ../supabase/migrations/20261110101140_notification_inbox_access_contract.sql
 \ir ../supabase/migrations/20261111082951_messaging_super_admin_event_intervention.sql
+\ir ../supabase/migrations/20261112102049_messaging_delete_conversation.sql
+\ir ../supabase/migrations/20261113060150_organiser_help_requests.sql
+alter table public.event_registrations add column full_name text,add column partner_name text,add column division text;
+\ir ../supabase/migrations/20261113070555_help_messages_and_read_receipts.sql
+\ir ../supabase/migrations/20261113091431_help_support_alerts_and_entry_context.sql
 
 create function pg_temp.expect(ok boolean,label text) returns void language plpgsql as $$begin if ok is distinct from true then raise exception 'FAIL: %',label; end if; end$$;
 create function pg_temp.reject(query text,pattern text) returns void language plpgsql as $$begin
@@ -131,6 +139,10 @@ select public.messaging_api('mark_read',jsonb_build_object('conversationId',:'dm
 select pg_temp.expect((public.own_app_badge_unread())=0,'reading clears reminder and zero badge');
 select pg_temp.expect(not exists(select 1 from jsonb_array_elements(public.messaging_snapshot(false)->'rows') r where r->>'preview'<>'' or r->'pinned'<>'null'::jsonb),'non-message routes receive no preview content');
 -- Managers cannot browse unrelated private conversations, including with MFA.
+\ir messaging-delete.sql
+\ir help-requests.sql
+\ir help-inbox.sql
+\ir help-alerts.sql
 select pg_temp.login(4,'aal2');
 select pg_temp.reject(format('select public.messaging_api(''read'',%L)',jsonb_build_object('conversationId',:'dm')),'unavailable');
 select pg_temp.login(1);
@@ -342,7 +354,7 @@ select pg_temp.expect(public.messaging_api('status')->>'needsBirthDate'='true','
 select pg_temp.expect(public.messaging_api('status')->>'interactive'='false','missing birth date cannot unlock interactive messaging');
 reset role;
 select pg_temp.expect(not exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-  where n.nspname='messaging' and p.proname not in ('api','own_unread_total','event_directory','event_analytics','mark_unread','snapshot','realtime_can_read','notification_api') and has_function_privilege('authenticated',p.oid,'EXECUTE')),'all other private helpers deny client execution');
+  where n.nspname='messaging' and p.proname not in ('api','own_unread_total','event_directory','event_analytics','mark_unread','delete_conversation','snapshot','realtime_can_read','notification_api') and has_function_privilege('authenticated',p.oid,'EXECUTE')),'all other private helpers deny client execution');
 \ir messaging-divisions.sql
 \ir messaging-notifications.sql
 \ir messaging-groups.sql

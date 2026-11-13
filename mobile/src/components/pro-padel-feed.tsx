@@ -1,5 +1,7 @@
+import { PlayerFollowAction } from '@/components/players/player-follow-action';
 import { FollowedLocalMatches } from '@/components/followed-local-matches';
 import { ProMatchStar } from '@/components/pro-match-star';
+import { MatchSetScore } from '@/components/match-set-score';
 import { addToCalendar } from '@/lib/device-calendar';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ActivityIndicator, Alert, AppState, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
@@ -411,11 +413,7 @@ export function MatchCard({ match, lookup, onPlayer, onOpenMatch }: { match: Pro
           }) : <Text style={s.body}>Opponents TBC</Text>}
         </View>
         {!upcoming && <View style={s.scores} accessible accessibilityLabel={`${team.map(p => p.name).join(' and ')}${winner ? ', winning pair' : ''}, set scores ${match.score.map(set => set[index] ?? 'unavailable').join(', ')}`}>
-          {match.score.map((set, i) => {
-            const value = String(set[index] ?? '—');
-            const parts = /^(\d+)(\(\d+\))$/.exec(value);
-            return <View key={i} style={s.scoreColumn}><Text style={[s.score, winner && { color: brand.accent }]}>{parts ? parts[1] : value}{parts && <Text style={s.tieBreak}>{parts[2]}</Text>}</Text></View>;
-          })}
+          {match.score.map((set, i) => <MatchSetScore key={i} value={set[index]} width={32} color={winner ? brand.accent : brand.muted} />)}
         </View>}
       </View>;
     })}
@@ -484,7 +482,7 @@ export function ProPadelFeed({ state, localState, showInternationalResults = tru
   function followControl(player: ProPlayer | ProFollow) {
     const row = 'player_id' in player ? player : followRow(player);
     const followed = ids.includes(row.player_id);
-    return <Button label={state.pendingId === row.player_id ? 'Saving…' : followed ? 'Following' : 'Follow'} icon={followed ? 'heart' : 'heart-outline'}
+    return <PlayerFollowAction name={row.player_name} following={followed} pending={state.pendingId === row.player_id}
       disabled={state.followsLoading || !!state.followsError || state.pendingId !== null}
       onPress={() => { if (!state.userId) { setDirectory(false); setSelectedId(null); router.push('/(auth)/sign-in'); } else void state.toggleFollow(row); }} />;
   }
@@ -533,7 +531,7 @@ export function ProPadelFeed({ state, localState, showInternationalResults = tru
             <Text style={[s.caption, player.source === '4m' && { color: '#2449D8' }]}>{playerRankLabel(player)} · {player.gender === 'men' ? 'Men' : player.gender === 'women' ? 'Women' : 'Player'}</Text>
             {player.fipUnverified && <Text style={[s.caption, { color: '#2449D8', fontWeight: '700' }]}>Unverified link</Text>}
           </Pressable>
-          {player.source === '4m' && localState ? <Button local label={localState.pending === player.key ? 'Saving…' : localState.isFollowing(player) ? 'Following' : 'Follow'} icon={localState.isFollowing(player) ? 'heart' : 'heart-outline'} disabled={localState.followLoading || !!localState.followError || !!localState.pending} onPress={() => { if (!state.userId) router.push('/(auth)/sign-in'); else void localState.toggle(player); }} /> : followControl({ player_id: Number(player.id), player_name: player.name, category: player.gender === 'women' ? 'women' : 'men' })}
+          {player.source === '4m' && localState ? <PlayerFollowAction name={player.name} following={localState.isFollowing(player)} pending={localState.pending === player.key} accentColor="#2449D8" disabled={localState.followLoading || !!localState.followError || !!localState.pending} onPress={() => { if (!state.userId) router.push('/(auth)/sign-in'); else void localState.toggle(player); }} /> : followControl({ player_id: Number(player.id), player_name: player.name, category: player.gender === 'women' ? 'women' : 'men' })}
         </View>)}
       </ScrollView>
     </>}
@@ -687,7 +685,7 @@ const s = StyleSheet.create({
   liveMatchTime: { color: '#D5E4D8', fontSize: 11 },
   matchToggle: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderTopWidth: 1, borderBottomWidth: 1, borderColor: brand.edge, marginTop: 8 },
   matchToggleTitle: { color: brand.premium, fontSize: 18, fontWeight: '600' },
-  matchCount: { backgroundColor: '#ccff0014', borderRadius: 12, minWidth: 28, paddingHorizontal: 8, paddingVertical: 4, alignItems: 'center' },
+  matchCount: { backgroundColor: '#8DB9E024', borderRadius: 12, minWidth: 28, paddingHorizontal: 8, paddingVertical: 4, alignItems: 'center' },
   match: { padding: 16, backgroundColor: brand.elevated, borderRadius: 18, borderWidth: 1, borderColor: brand.edge },
   matchHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
   matchKicker: { fontSize: 10, lineHeight: 15, fontWeight: '700', letterSpacing: 1, color: brand.muted },
@@ -704,7 +702,6 @@ const s = StyleSheet.create({
   scores: { flexDirection: 'row', gap: 2, flexShrink: 0, alignItems: 'center' },
   scoreColumn: { width: 32, alignItems: 'center', justifyContent: 'center', textAlign: 'center' },
   score: { color: brand.muted, fontSize: 19, lineHeight: 26, fontWeight: '700', textAlign: 'center', fontVariant: ['tabular-nums'] },
-  tieBreak: { fontSize: 10, fontWeight: '500' },
   resultStatus: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1 },
   matchFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: brand.edge },
   movementList: { paddingHorizontal: 14, borderRadius: 14, backgroundColor: brand.elevated },

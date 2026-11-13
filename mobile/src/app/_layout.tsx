@@ -238,6 +238,16 @@ function RootLayout() {
           }}
         />
         <Stack.Screen
+          name="event-winners"
+          options={{
+            presentation: 'formSheet',
+            sheetAllowedDetents: [0.62, 1],
+            sheetGrabberVisible: true,
+            sheetCornerRadius: 24,
+            contentStyle: { backgroundColor: brand.page },
+          }}
+        />
+        <Stack.Screen
           name="match-result"
           options={{
             presentation: 'formSheet',

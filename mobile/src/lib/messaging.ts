@@ -3,7 +3,7 @@ import { supabase } from './supabase';
 
 export const MESSAGING_RULES_VERSION = '2026-11-05';
 export const MESSAGE_LIMIT = 4000;
-export type ChatKind = 'direct' | 'group' | 'event_announcements' | 'event_discussion';
+export type ChatKind = 'direct' | 'group' | 'event_announcements' | 'event_discussion' | 'help';
 export type ChatCard = { eventId: number; title: string; date: string; tab: 'Overview' | 'Draws' | 'Results'; poster?: string | null; venue?: string | null; city?: string | null; tier?: string | null };
 export type EventSenderRole = 'admin' | 'organiser' | 'player';
 export function eventRoleLabel(role: unknown) { return role === 'admin' ? 'Admin' : role === 'organiser' ? 'Organiser' : role === 'player' ? 'Player' : 'Participant'; }
@@ -13,6 +13,7 @@ export type ChatMessage = {
   createdAt: string; deleted: boolean; reply: { id: string; body: string; name: string; role?: EventSenderRole | null; mine?: boolean } | null; card: ChatCard | null;
 };
 export type Conversation = {
+  helpRequest?: import('./help-requests').HelpRequest;
   id: string; kind: ChatKind; eventId: number | null; title: string; image: string | null;
   state: 'pending' | 'accepted' | 'declined'; incoming: boolean; muted: boolean; archived: boolean;
   unread: number; preview: string; updatedAt: string; canSend: boolean; reason: string | null;
@@ -86,6 +87,8 @@ export function messagingFailure(error: { code?: string; message?: string }) {
 export async function messaging<T = Record<string, never>>(action: string, data: Record<string, unknown> = {}): Promise<T> {
   const { data: result, error } = action === 'mark_unread'
     ? await supabase.rpc('messaging_mark_unread', { p_conversation: conversationId(data.conversationId), p_message: data.messageId || null })
+    : action === 'conversation_delete'
+    ? await supabase.rpc('messaging_delete_conversation', { p_conversation: conversationId(data.conversationId) })
     : await supabase.rpc('messaging_api', { p_action: action, p_data: data });
   if (error) throw messagingFailure(error);
   return result as T;

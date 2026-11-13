@@ -69,10 +69,32 @@ export default function ConversationScreen() {
       await messaging(action, { conversationId: id, ...(conversation?.group ? { groupsVersion: '1' } : {}), ...data });
       if (version !== epoch.current) return;
       setMenu(null); setSelected(null);
+      if (action === 'conversation_delete') {
+        fetchEpoch.current++; textEdited.current = false;
+        setMessages([]); setBody(''); setPending(null); setReply(undefined); setCard(undefined); setNext(null);
+        inbox.dismissNotice();
+        if (inbox.owner) void saveMessageDraft(inbox.owner, id, '').catch(() => {});
+      }
       if (action === 'report') setNotice('Your report has been sent for review.');
-      if (exit) { void inbox.refresh(); if (action === 'mark_unread') router.replace('/(tabs)/messages'); else router.back(); } else { await fetchPage(); void inbox.refresh(); }
+      if (exit) { void inbox.refresh(); if (action === 'mark_unread' || action === 'conversation_delete') router.replace('/(tabs)/messages'); else router.back(); } else { await fetchPage(); void inbox.refresh(); }
     } catch (e) { if (version === epoch.current) setError(e instanceof Error ? e.message : 'Could not save this change.'); }
     finally { if (version === epoch.current) { lock.current = false; setBusy(false); } }
+  };
+  const confirmDelete = () => {
+    if (lock.current) return;
+    const version = epoch.current;
+    Alert.alert('Delete conversation?', 'This removes the conversation and its history for you. Other participants keep their messages. New messages will bring the conversation back.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => { if (version === epoch.current) void run('conversation_delete', {}, true); } },
+    ]);
+  };
+  const confirmBlock = () => {
+    if (lock.current || conversation?.kind !== 'direct') return;
+    const version = epoch.current;
+    Alert.alert(`Block ${conversation.title}?`, 'You won’t be able to message each other. You can unblock this player in Messaging settings.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Block player', style: 'destructive', onPress: () => { if (version === epoch.current) void run('block', {}, true); } },
+    ]);
   };
   const send = async () => {
     if (lock.current || !conversation?.canSend || (!body.trim() && !card)) return;
@@ -126,7 +148,8 @@ export default function ConversationScreen() {
         <ChatButton quiet disabled={busy} onPress={() => void run('mark_unread', {}, true)}>Mark as unread</ChatButton>
         <ChatButton quiet disabled={busy} onPress={() => void run('member_settings', { muted: !conversation.muted })}>{conversation.muted ? 'Unmute conversation' : 'Mute conversation'}</ChatButton>
         <ChatButton quiet disabled={busy} onPress={() => void run('member_settings', { archived: !conversation.archived }, true)}>{conversation.archived ? 'Move to inbox' : 'Archive conversation'}</ChatButton>
-        {conversation.group && <><ChatButton quiet onPress={() => { setMenu(null); router.push({ pathname: '/messages/group-members', params: { conversationId: id } }); }}>Group members</ChatButton><ChatButton danger disabled={busy} onPress={() => Alert.alert('Leave this group?', 'You will lose access to its messages and stop receiving new messages.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Leave group', style: 'destructive', onPress: () => void run('group_leave', {}, true) }])}>Leave group</ChatButton></>}{conversation.kind === 'direct' && <ChatButton danger disabled={busy} onPress={() => void run('block', {}, true)}>Block player</ChatButton>}
+        {(conversation.kind === 'direct' || conversation.kind === 'group') && <ChatButton danger disabled={busy} onPress={confirmDelete}>Delete conversation</ChatButton>}
+        {conversation.group && <><ChatButton quiet onPress={() => { setMenu(null); router.push({ pathname: '/messages/group-members', params: { conversationId: id } }); }}>Group members</ChatButton><ChatButton danger disabled={busy} onPress={() => Alert.alert('Leave this group?', 'You will lose access to its messages and stop receiving new messages.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Leave group', style: 'destructive', onPress: () => void run('group_leave', {}, true) }])}>Leave group</ChatButton></>}{conversation.kind === 'direct' && <ChatButton warning disabled={busy} onPress={confirmBlock}>Block player</ChatButton>}
         {conversation.kind === 'event_discussion' && <ChatButton danger disabled={busy} onPress={() => void run('member_settings', { left: true }, true)}>Leave discussion</ChatButton>}
         {conversation.manager && <><ChatButton quiet disabled={busy} onPress={() => void run('pause', { paused: !conversation.paused })}>{conversation.paused ? 'Resume discussion' : 'Pause discussion'}</ChatButton><ChatButton quiet onPress={() => void openReports()}>Review event reports</ChatButton><ChatButton quiet onPress={() => { const version = epoch.current; void messaging<{ id: string; name: string; confirmed: boolean }[]>('entrants', { conversationId: id }).then(rows => { if (version === epoch.current) { setEntrants(rows); setMenu('entrants'); } }).catch(e => { if (version === epoch.current) setError(e.message); }); }}>Approve discussion access</ChatButton>{conversation.pinned && <ChatButton quiet disabled={busy} onPress={() => void run('pin', { messageId: null })}>Unpin announcement</ChatButton>}</>}
       </>}

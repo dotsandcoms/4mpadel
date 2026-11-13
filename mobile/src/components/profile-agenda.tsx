@@ -34,7 +34,7 @@ import {
 } from '@/lib/matches';
 import type { ProfileTransaction, RankingRow } from '@/lib/profile';
 import { sapaLabel, sapaTone } from '@/theme/sapa';
-import { lightBrand as brand, motion } from '@/theme/tokens';
+import { lightBrand as brand, motion, onAccent } from '@/theme/tokens';
 
 export const PROFILE_SECTIONS = [
   { id: 'events', label: 'Events', icon: { ios: 'calendar', android: 'calendar_today', web: 'calendar_today' } },
@@ -124,7 +124,7 @@ function clubLine(event: CalendarEvent) {
 }
 
 function contrastOnFill(fill: string) {
-  return fill === '#CCFF00' || fill === '#F59E0B' ? '#0a0a0a' : '#ffffff';
+  return onAccent(fill);
 }
 
 type AgendaTag = { label: string; color: string; border: string; bg: string };

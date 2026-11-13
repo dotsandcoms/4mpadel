@@ -4,8 +4,8 @@ import { Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-nat
 import { useState, type ReactNode } from 'react';
 import { messagingImageUrl } from '@/lib/messaging';
 import { lightBrand as b } from '@/theme/tokens';
-export function ChatButton({ children, onPress, disabled, quiet = false, danger = false, style }: { children: ReactNode; onPress: () => void; disabled?: boolean; quiet?: boolean; danger?: boolean; style?: StyleProp<ViewStyle> }) {
-  return <Pressable accessibilityRole="button" disabled={disabled} onPress={onPress} style={[{ minHeight: 48, paddingHorizontal: 18, paddingVertical: 12, borderRadius: 14, justifyContent: 'center', alignItems: 'center', backgroundColor: quiet ? b.surface : danger ? '#FBE8E6' : b.messagingAction, opacity: disabled ? 0.5 : 1 }, style]}><Text style={{ color: danger ? b.danger : quiet ? b.premium : '#FFFFFF', fontSize: 15, fontWeight: '700', textAlign: 'center' }}>{children}</Text></Pressable>;
+export function ChatButton({ children, onPress, disabled, quiet = false, danger = false, warning = false, style }: { children: ReactNode; onPress: () => void; disabled?: boolean; quiet?: boolean; danger?: boolean; warning?: boolean; style?: StyleProp<ViewStyle> }) {
+  return <Pressable accessibilityRole="button" disabled={disabled} onPress={onPress} style={[{ minHeight: 48, paddingHorizontal: 18, paddingVertical: 12, borderRadius: 14, justifyContent: 'center', alignItems: 'center', backgroundColor: quiet ? b.surface : danger ? '#FBE8E6' : warning ? b.warningSurface : b.messagingAction, opacity: disabled ? 0.5 : 1 }, style]}><Text style={{ color: danger ? b.danger : warning ? b.warning : quiet ? b.premium : '#FFFFFF', fontSize: 15, fontWeight: '700', textAlign: 'center' }}>{children}</Text></Pressable>;
 }
 export function ChatAvatar({ name, image, event = false, size = 52 }: { name: string; image?: string | null; event?: boolean; size?: number }) {
   const trustedImage = messagingImageUrl(image, process.env.EXPO_PUBLIC_SUPABASE_URL);
@@ -19,8 +19,8 @@ export function ChatAvatar({ name, image, event = false, size = 52 }: { name: st
 export function ChatNotice({ title, children, icon = 'chatbubble-ellipses-outline' }: { title: string; children: ReactNode; icon?: React.ComponentProps<typeof Ionicons>['name'] }) {
   return <View style={{ alignItems: 'center', paddingHorizontal: 28, paddingVertical: 44, gap: 14 }}><View style={{ height: 68, width: 68, borderRadius: 22, backgroundColor: b.surface, alignItems: 'center', justifyContent: 'center' }}><Ionicons name={icon} size={30} color={b.accent} /></View><Text accessibilityRole="header" style={{ fontSize: 22, fontWeight: '700', color: b.premium, textAlign: 'center' }}>{title}</Text><Text style={{ color: b.muted, lineHeight: 23, fontSize: 15, textAlign: 'center' }}>{children}</Text></View>;
 }
-export function ChatPill({ children, active, onPress }: { children: ReactNode; active: boolean; onPress: () => void }) {
-  return <Pressable accessibilityRole="button" accessibilityState={{ selected: active }} onPress={onPress} style={{ minHeight: 44, paddingHorizontal: 18, paddingVertical: 11, backgroundColor: active ? b.premium : b.elevated, borderWidth: 1, borderColor: active ? b.premium : b.edge, borderRadius: 24 }}><Text style={{ color: active ? b.elevated : b.muted, fontWeight: '600' }}>{children}</Text></Pressable>;
+export function ChatPill({ children, active, onPress, activeColor = b.premium }: { children: ReactNode; active: boolean; onPress: () => void; activeColor?: string }) {
+  return <Pressable accessibilityRole="button" accessibilityState={{ selected: active }} onPress={onPress} style={{ minHeight: 44, paddingHorizontal: 18, paddingVertical: 11, backgroundColor: active ? activeColor : b.elevated, borderWidth: 1, borderColor: active ? activeColor : b.edge, borderRadius: 24 }}><Text style={{ color: active ? b.elevated : b.muted, fontWeight: '600' }}>{children}</Text></Pressable>;
 }
 export function chatDate(value: string) {
   const date = new Date(value); if (!Number.isFinite(date.getTime())) return '';

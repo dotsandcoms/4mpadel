@@ -33,7 +33,7 @@ enum WatchNavigationTests {
     let eventRoute = WatchScheduleRoute(url: event.watchDestination)!
     assert(eventRoute.category == "event" && eventRoute.destination == .event(event.id))
     let matchRoute = WatchScheduleRoute(url: match.watchDestination)!
-    assert(matchRoute.category == "match" && matchRoute.destination == nil)
+    assert(matchRoute.category == "match" && matchRoute.destination == .match(match.id))
     assert(URLComponents(url: match.watchDestination, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "id" }?.value == match.id)
     let encodedEvent = item("event-A & B / é ? #", kind: "event")
     assert(WatchScheduleRoute(url: encodedEvent.watchDestination)?.destination == .event(encodedEvent.id))

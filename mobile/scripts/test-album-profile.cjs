@@ -99,18 +99,18 @@ const tick = async () => { for (let n=0;n<12;n++) await Promise.resolve(); };
 function actionHarness({ read = async()=>[], save = async()=>({gallery:[photoUrl],added:true}) }={}) {
   let index=0,mounted=false;const state=[],refs=[],effects=[],errors=[],calls=[];
   const react = { useState(initial) { const i=index++; if(!(i in state))state[i]=initial; return [state[i],v=>state[i]=typeof v==='function'?v(state[i]):v]; }, useRef(initial) {const i=index++; return refs[i] ||= {current:initial};}, useEffect(fn) {index++; if(!mounted)effects.push(fn);} };
-  const Component=load('src/components/album-photo-profile-action.tsx',{react,'react/jsx-runtime':jsx,'react-native':{Text:'Text',View:'View'},'./home-action':{HomeAction:'HomeAction'},'@/lib/album-profile':{fetchMyPlayerGallery:read,saveAlbumPhotoToProfile:async(...args)=>{calls.push(args);return save(...args);}},'@/lib/profile-photos':{MAX_PLAYER_GALLERY_PHOTOS:LIMIT},'@/lib/haptics':{hapticLight(){}},'@/theme/tokens':{lightBrand:{messagingAction:'#27517B'}}}).AlbumPhotoProfileAction;
+  const Component=load('src/components/album-photo-profile-action.tsx',{react,'react/jsx-runtime':jsx,'react-native':{Text:'Text',View:'View',Pressable:'Pressable',ActivityIndicator:'ActivityIndicator'},'expo-symbols':{SymbolView:'SymbolView'},'@/lib/album-profile':{fetchMyPlayerGallery:read,saveAlbumPhotoToProfile:async(...args)=>{calls.push(args);return save(...args);}},'@/lib/profile-photos':{MAX_PLAYER_GALLERY_PHOTOS:LIMIT},'@/lib/haptics':{hapticLight(){}},'@/theme/tokens':{lightBrand:{messagingAction:'#27517B'}}}).AlbumPhotoProfileAction;
   const render=()=>{index=0;return Component({albumId,photo:{id:photoId,image_url:photoUrl},onError:message=>errors.push(message)})};
   render();mounted=true;effects.forEach(fn=>fn());
-  return {render,errors,calls,button:()=>nodes(render()).find(n=>n.type==='HomeAction').props};
+  return {render,errors,calls,button:()=>{const props=nodes(render()).find(n=>n.type==='Pressable').props;return {...props,label:props.children[1].props.children};}};
 }
 test('photo action blocks repeated taps and a late initial read cannot erase the saved state',async()=>{
   let finishRead,finishSave;const h=actionHarness({read:()=>new Promise(r=>finishRead=r),save:()=>new Promise(r=>finishSave=r)});
   h.button().onPress();h.button().onPress();assert.equal(h.calls.length,1);assert.equal(h.button().disabled,true);
-  finishSave({gallery:[photoUrl],added:true});await tick();finishRead([]);await tick();assert.equal(h.button().label,'On my profile');assert.equal(h.button().disabled,true);
+  finishSave({gallery:[photoUrl],added:true});await tick();finishRead([]);await tick();assert.equal(h.button().label,'On profile');assert.equal(h.button().disabled,true);
 });
 test('photo save errors reach the banner and leave the action available to retry',async()=>{
-  const h=actionHarness({save:async()=>{throw Error('Save failed');}});await tick();h.button().onPress();await tick();assert.equal(h.errors.at(-1),'Save failed');assert.equal(h.button().disabled,false);assert.equal(h.button().label,'Add to my profile');
+  const h=actionHarness({save:async()=>{throw Error('Save failed');}});await tick();h.button().onPress();await tick();assert.equal(h.errors.at(-1),'Save failed');assert.equal(h.button().disabled,false);assert.equal(h.button().label,'Add to profile');
 });
 test('the photographer credit is an accessible link to the saved account; missing accounts stay plain',()=>{
   const media=load('src/lib/media.ts'),opened=[];

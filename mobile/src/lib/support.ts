@@ -9,7 +9,9 @@ export const HELP_TOPICS = [
   { id: 'deletion', title: 'Delete your account', icon: 'trash-outline', answer: 'Open Account & settings, choose Delete account and confirm your choice. Your login, profile and personal photos will be removed. Limited payment and tournament records may be retained for recordkeeping. Deletion does not automatically refund fees.' },
 ] as const;
 export type HelpTopic = (typeof HELP_TOPICS)[number]['id'];
-export function supportEmailUrl({ topic, message, context, name, email }: { topic: string; message: string; context?: string; name?: string; email?: string }) {
+export function supportEmailUrl({ topic, message, context, name, email, recipient = SUPPORT_EMAIL }: { topic: string; message: string; context?: string; name?: string; email?: string; recipient?: string }) {
+  if (!/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(recipient)) throw new Error('This email address is unavailable.');
   const body = [message.trim(), '', context ? `Related item: ${context}` : '', name ? `Name: ${name}` : '', email ? `Account email: ${email}` : '', '', 'Sent from the 4M Padel app'].filter(line => line !== undefined).join('\n');
-  return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(`4M app — ${topic}`)}&body=${encodeURIComponent(body)}`;
+  const address = encodeURIComponent(recipient).replace(/%40/gi, '@');
+  return `mailto:${address}?subject=${encodeURIComponent(`4M app — ${topic}`)}&body=${encodeURIComponent(body)}`;
 }

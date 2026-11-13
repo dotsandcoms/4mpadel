@@ -7,7 +7,7 @@ import { siteUrl } from '@/lib/site';
 import { fetchEntryBalances } from '@/lib/entry-balances';
 import type { EntryBalance } from '@/lib/events';
 import { formatMoney } from '@/lib/event-rules';
-import { resultHighlight, resultPortraits, type ResultHighlight } from './home-results';
+import { resultHighlights, resultPortraits, type ResultHighlight } from './home-results';
 
 const CALENDAR_FIELDS =
   'id, event_name, start_date, end_date, city, venue, sapa_status, slug, registered_players, featured_event, is_spotlight, is_manual, featured_live, live_youtube_url, registration_opens_at, registration_closes_at, rankedin_url, organiser_name, organiser_badge_text, points, entry_fee, category_fees, allow_payments, custom_image_url, poster_image_url, image_url';
@@ -47,6 +47,7 @@ export type CalendarEvent = {
   hasEntryBalance?: boolean;
   winnerName?: string | null;
   resultHighlight?: ResultHighlight | null;
+  resultDivisions?: ResultHighlight[];
   custom_image_url?: string | null;
   poster_image_url?: string | null;
   image_url?: string | null;
@@ -197,18 +198,19 @@ export async function fetchPendingActions(email?: string | null, strict = false)
   return [...payments, ...profileGaps(player)];
 }
 
-export async function fetchSearchEvents(strict = false): Promise<CalendarEvent[]> {
+export async function fetchSearchEvents(strict = false, upcomingOnly = false): Promise<CalendarEvent[]> {
   try {
     const from = new Date();
     from.setDate(from.getDate() - 45);
-    const { data, error } = await supabase
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg' }).format(new Date());
+    const visibility = 'or(sanction_status.eq.approved,sanction_status.is.null)';
+    let query = supabase
       .from('calendar')
       .select(CALENDAR_FIELDS)
-      .or('sanction_status.eq.approved,sanction_status.is.null')
-      .neq('is_visible', false)
-      .gte('start_date', isoDate(from))
-      .order('start_date', { ascending: true })
-      .limit(120);
+      .or(upcomingOnly ? `and(${visibility},or(end_date.gte.${today},and(end_date.is.null,start_date.gte.${today})))` : 'sanction_status.eq.approved,sanction_status.is.null')
+      .neq('is_visible', false);
+    if (!upcomingOnly) query = query.gte('start_date', isoDate(from));
+    const { data, error } = await query.order('start_date', { ascending: true }).limit(120);
     if (error && strict) throw error;
     if (error || !data) return [];
     return await enrichManualCounts(data as CalendarEvent[]);
@@ -537,45 +539,65 @@ export async function fetchRecentResults(strict = false): Promise<CalendarEvent[
 
     if (!merged.length) return [];
 
-    let winnersByEvent = new Map<number, unknown>();
-    try {
-      const { data: cache } = await supabase
-        .from('rankedin_results_cache')
-        .select('event_id, winners')
-        .eq('has_results', true)
-        .in(
-          'event_id',
-          merged.map((event) => event.id)
-        );
-      for (const row of cache ?? []) {
-        const id = (row as { event_id?: number }).event_id;
-        if (typeof id === 'number') {
-          winnersByEvent.set(id, (row as { winners?: unknown }).winners);
-        }
-      }
-    } catch {
-      winnersByEvent = new Map();
-    }
-
-    const highlights = new Map(merged.map(event => [event.id, resultHighlight(winnersByEvent.get(event.id))]));
-    const names = [...new Set([...highlights.values()].flatMap(result => result?.winners.map(player => player.name) ?? []))];
-    let portraits: { id: number; name: string | null; image_url: string | null }[] = [];
-    if (names.length) {
-      // One narrow public-profile batch, independent of Home's other sections.
-      try {
-        const { data, error } = await supabase.from('players_public').select('id, name, image_url').in('name', names);
-        if (!error) portraits = data ?? [];
-      } catch { /* Published winner names remain usable when portraits are offline. */ }
-    }
-    return merged.map((event) => ({
-      ...event,
-      winnerName: mensOpenWinner(winnersByEvent.get(event.id)),
-      resultHighlight: highlights.get(event.id) ? resultPortraits(highlights.get(event.id)!, portraits) : null,
-    }));
+    return await withPublishedResults(merged);
   } catch (error) {
     if (strict) throw error;
     return [];
   }
+}
+
+/** One read path for Home previews and the native all-winners sheet. */
+async function withPublishedResults(events: CalendarEvent[], strict = false): Promise<CalendarEvent[]> {
+  let winnersByEvent = new Map<number, unknown>();
+  try {
+    const { data: cache, error } = await supabase
+      .from('rankedin_results_cache')
+      .select('event_id, winners')
+      .eq('has_results', true)
+      .in(
+        'event_id',
+        events.map((event) => event.id)
+      );
+    if (error && strict) throw error;
+    for (const row of cache ?? []) {
+      const id = (row as { event_id?: number }).event_id;
+      if (typeof id === 'number') {
+        winnersByEvent.set(id, (row as { winners?: unknown }).winners);
+      }
+    }
+  } catch (error) {
+    if (strict) throw error;
+    winnersByEvent = new Map();
+  }
+
+  const highlights = new Map(events.map(event => [event.id, resultHighlights(winnersByEvent.get(event.id))]));
+  const names = [...new Set([...highlights.values()].flatMap(results => results.flatMap(result => result.winners.map(player => player.name))))];
+  let portraits: { id: number; name: string | null; image_url: string | null }[] = [];
+  if (names.length) {
+    // Batch only the public portraits needed by these published results.
+    for (let offset = 0; offset < names.length; offset += 60) {
+      try {
+        const { data, error } = await supabase.from('players_public').select('id, name, image_url').in('name', names.slice(offset, offset + 60));
+        if (!error) portraits.push(...(data ?? []));
+      } catch { /* Published winner names remain usable when portraits are offline. */ }
+    }
+  }
+  return events.map((event) => {
+    const divisions = (highlights.get(event.id) ?? []).map(result => resultPortraits(result, portraits));
+    return { ...event, winnerName: divisions[0]?.winners.map(player => player.name).join(' & ') ?? null,
+      resultHighlight: divisions[0] ?? null, resultDivisions: divisions };
+  });
+}
+
+/** Fallback for a reopened sheet; ordinary Home taps reuse its account-scoped cache. */
+export async function fetchEventWinners(eventId: number): Promise<CalendarEvent | null> {
+  if (!Number.isSafeInteger(eventId) || eventId <= 0) return null;
+  const { data, error } = await supabase.from('calendar').select(CALENDAR_FIELDS)
+    .eq('id', eventId).or('sanction_status.eq.approved,sanction_status.is.null')
+    .neq('is_visible', false).maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return (await withPublishedResults([data as CalendarEvent], true))[0] ?? null;
 }
 
 export type RegistrationState = { isRegistered: boolean; isPaid: boolean; hasOutstandingPayment: boolean };
