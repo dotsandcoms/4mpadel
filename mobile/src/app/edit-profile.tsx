@@ -401,9 +401,9 @@ export default function EditProfileScreen() {
               accessibilityRole="button"
               accessibilityState={{ busy: saving, disabled: saving || photoSaving || proofSaving || !detailsReady }}
               accessibilityLabel="Save changes"
-              className="h-[52px] flex-row items-center justify-center rounded-[14px] bg-padel">
-              {saving ? <ActivityIndicator color={brand.premium} style={{ marginRight: 8 }} /> : null}
-              <Text className="text-[13px] font-black uppercase tracking-widest text-court-ink">
+              className="h-[52px] flex-row items-center justify-center rounded-[14px] bg-court-action">
+              {saving ? <ActivityIndicator color="#FFFFFF" style={{ marginRight: 8 }} /> : null}
+              <Text className="text-[13px] font-black uppercase tracking-widest text-white">
                 {saving ? 'Saving…' : 'Save changes'}
               </Text>
             </PressableScale>

@@ -569,7 +569,7 @@ function EmailCta({
       style={{ height: CONTROL_H, borderRadius: CONTROL_R }}>
       <Animated.View
         style={[
-          { backgroundColor: brand.accent },
+          { backgroundColor: brand.messagingAction },
           {
             height: CONTROL_H,
             borderRadius: CONTROL_R,

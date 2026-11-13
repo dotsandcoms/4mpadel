@@ -740,9 +740,9 @@ export default function CompleteProfileScreen() {
                         borderColor: errors.accepted
                           ? brand.danger
                           : accepted
-                            ? brand.padel
+                            ? brand.messagingAction
                             : brand.edge,
-                        backgroundColor: accepted ? brand.padel : 'transparent',
+                        backgroundColor: accepted ? brand.messagingAction : 'transparent',
                       }}>
                       {accepted ? (
                         <Text className="text-[13px] font-extrabold" style={{ color: '#FFFFFF' }}>✓</Text>
@@ -796,7 +796,7 @@ export default function CompleteProfileScreen() {
             style={{
               height: CONTROL_H,
               borderRadius: CONTROL_R,
-              backgroundColor: ctaMuted ? brand.panel : brand.padel,
+              backgroundColor: ctaMuted ? brand.panel : brand.messagingAction,
             }}>
             {saving ? <CourtLine /> : null}
             <Text

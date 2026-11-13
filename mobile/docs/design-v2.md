@@ -13,7 +13,7 @@ Primary: the user's existing 4M native product and tournament journey, rebuilt a
 
 ## Decisions
 - Off-white canvas, white cards, navy-charcoal text, visible neutral dividers.
-- Keep 4M lime for primary filled actions; use deep green for readable links and selected text.
+- Use the app's dark blue (`#27517B`) with white labels for primary actions. The light blue brand fill (`#8DB9E0`) matches the shared NativeWind/JavaScript palette. Keep event tier colours as data colours.
 - Lead home with tournament discovery and pending actions; surface player feed before secondary history.
 - Preserve native tabs, safe areas, sheets, haptics, refresh and platform navigation.
 - Preserve onboarding, authentication, API contracts, event eligibility, partner selection and payment logic.
@@ -95,7 +95,7 @@ existing tests pass; both iOS and Android exports pass.
 ### Authentication refinements
 
 Apple, Google and email action buttons now share a 52pt height. Email actions
-use the full lime fill while retaining field validation. Signup says “Create
+use a blue fill while retaining field validation. Signup says “Create
 your account” and explains that player profile setup follows. Password guidance
 starts as a short hint, expands when typing begins, and collapses on completion.
 

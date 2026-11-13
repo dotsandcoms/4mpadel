@@ -166,7 +166,7 @@ export default function OnboardingScreen() {
             </View>
             <View className="px-7 pb-2" style={{ minHeight: 222 }}>
               <OnboardingMotion key={`eyebrow-${index}`} direction={direction} reduced={reduced} delay={80}>
-                <Text className="mb-3 text-xs font-bold uppercase text-court-accent" style={{ letterSpacing: 2 }}>{slide.eyebrow}</Text>
+                <Text className="mb-3 text-xs font-bold uppercase text-court-action" style={{ letterSpacing: 2 }}>{slide.eyebrow}</Text>
               </OnboardingMotion>
               <OnboardingMotion key={`title-${index}`} direction={direction} reduced={reduced} delay={130}>
                 <Text accessibilityRole="header" className="mb-4 font-extrabold text-court-ink" style={{ fontSize: 34, lineHeight: 39 }}>{slide.title}</Text>
@@ -201,8 +201,8 @@ export default function OnboardingScreen() {
           onPress={advance}
           accessibilityRole="button"
           accessibilityLabel={isLast ? 'Build my player profile' : 'Next'}
-          className="h-14 items-center justify-center rounded-2xl bg-padel">
-          <Text className="text-base font-bold text-court-ink">
+          className="h-14 items-center justify-center rounded-2xl bg-court-action">
+          <Text className="text-base font-bold text-white">
             {isLast ? 'Build my player profile' : 'Next'}
           </Text>
         </PressableScale>
@@ -216,7 +216,7 @@ export default function OnboardingScreen() {
             className="mt-4 min-h-11 items-center justify-center">
             <Text className="text-[14px] text-court-muted">
               Already have an account?{' '}
-              <Text className="font-semibold text-court-accent">Sign in</Text>
+              <Text className="font-semibold text-court-action">Sign in</Text>
             </Text>
           </Pressable>
         ) : (
@@ -259,7 +259,7 @@ function Dot({
       accessibilityLabel={label}
       accessibilityState={{ selected: active }}
       className="justify-center py-2">
-      <Animated.View style={[style, { height: 8, borderRadius: 4, backgroundColor: brand.accent }]} />
+      <Animated.View style={[style, { height: 8, borderRadius: 4, backgroundColor: brand.messagingAction }]} />
     </Pressable>
   );
 }

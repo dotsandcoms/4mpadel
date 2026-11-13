@@ -72,8 +72,8 @@ export default function ResetPasswordScreen() {
           <LiquidField label="New password" value={password} onChangeText={setPassword} secureTextEntry autoComplete="new-password" textContentType="newPassword" editable={!saving} />
           <Text className="mb-4 text-[12px] leading-5 text-court-muted">Use 6+ characters with uppercase, lowercase, a number and a symbol.</Text>
           <LiquidField label="Confirm password" value={confirm} onChangeText={setConfirm} secureTextEntry autoComplete="new-password" textContentType="newPassword" editable={!saving} onSubmitEditing={() => void save()} />
-          <Pressable accessibilityRole="button" accessibilityState={{ disabled: saving, busy: saving }} disabled={saving} onPress={() => void save()} className="mt-4 min-h-[52px] items-center justify-center rounded-[14px] bg-padel">
-            <Text className="font-bold text-court-ink">{saving ? 'Updating…' : 'Update password'}</Text>
+          <Pressable accessibilityRole="button" accessibilityState={{ disabled: saving, busy: saving }} disabled={saving} onPress={() => void save()} className="mt-4 min-h-[52px] items-center justify-center rounded-[14px] bg-court-action">
+            <Text className="font-bold text-white">{saving ? 'Updating…' : 'Update password'}</Text>
           </Pressable>
         </View>}
         {error && <Text accessibilityRole="alert" className="mt-4 text-[14px] leading-5 text-court-danger">{error}</Text>}
