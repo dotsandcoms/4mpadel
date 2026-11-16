@@ -98,3 +98,25 @@ test('profile summary uses the provider total and rank from the same counted edi
   const row=await h.fetchPlayerRankingSnapshot({ranking_participant_id:201351,age_group_id:82,points:12620,rank:2});
   assert.equal(row.points,14320);assert.equal(row.rank,1);assert.equal(row.details[0].name,'Nationals');
 });
+
+test('season trophies count only dated wins in that year and preserve the full trophy cabinet', () => {
+  const h = resultsApi();
+  const event = (name, date) => ({ name, date, results: [] });
+  const groups = [
+    { tier: 'Gold', count: 2, events: [event('Old gold', '30/12/2025'), event('Gold', '2026-06-21')] },
+    { tier: 'Major', count: 4, events: [event('Major', '15/11/2026'), event('Old major', '15/11/2025'), event('Missing date', ''), event('Invalid date', '31/02/2026')] },
+    { tier: 'Super Gold', count: 1, events: [event('Super Gold', '2026-09-20T00:00:00Z')] },
+    { tier: 'Bronze', count: 1, events: [event('Future bronze', '02/01/2027')] },
+  ];
+  const before = JSON.stringify(groups);
+  const season = h.seasonTrophies(groups, 2026);
+  assert.deepEqual(Array.from(season, group => [group.tier, group.count]), [['Major', 1], ['Super Gold', 1], ['Gold', 1]]);
+  assert.equal(JSON.stringify(groups), before);
+  assert.equal(h.seasonTrophies(groups, 2024).length, 0);
+});
+
+test('the trophy season changes at the South African new year', () => {
+  const h = resultsApi();
+  assert.equal(h.trophySeason(new Date('2026-12-31T21:59:59Z')), 2026);
+  assert.equal(h.trophySeason(new Date('2026-12-31T22:00:00Z')), 2027);
+});

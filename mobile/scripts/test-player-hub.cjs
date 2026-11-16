@@ -3,6 +3,60 @@ function load(file, env = {}) { const mod={exports:{}}; vm.runInNewContext(ts.tr
 const hub=load('src/lib/player-hub.ts');
 const local=(id,category,rank)=>hub.localHubPlayer({id:String(id),name:`Player ${id}`,category,rank_label:String(rank),image_url:null,points:100,home_club:'Club'});
 
+function followLayoutComponents() {
+ const modules = {
+  'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
+  'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable' },
+  '@/theme/tokens': { lightBrand: {} },
+  '@/components/home-action': { HomeAction: 'HomeAction' },
+  '@/components/home-feed': { FeedPortrait: 'FeedPortrait' },
+  './home-action.types': { homeIcons: { followed: { ios: 'heart.fill' }, following: { ios: 'heart' } } },
+  '@expo/ui/swift-ui': Object.fromEntries(['Host', 'Button', 'HStack', 'VStack', 'Image', 'Text'].map(name => [name, name])),
+  '@expo/ui/swift-ui/modifiers': new Proxy({}, { get: (_, name) => name === 'shapes' ? new Proxy({}, { get: (_, shape) => () => ({ shape }) }) : value => ({ name, value }) }),
+ };
+ const read = file => {
+  const mod = { exports: {} };
+  const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { fileName: file, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+  vm.runInNewContext(code, { module: mod, exports: mod.exports, require: name => modules[name] });
+  return mod.exports;
+ };
+ const action = read('src/components/players/player-follow-action.tsx');
+ modules['@/components/players/player-follow-action'] = action;
+ return { ...action, ...read('src/components/rankings/local-ranking-row.tsx'), ...read('src/components/home-action.ios.tsx') };
+}
+test('follow controls keep the same frame while loading, following, saving and returning to Follow', () => {
+ const { PlayerFollowAction, HomeAction } = followLayoutComponents();
+ let pressed = 0;
+ const frames = [];
+ for (const state of [{ pending: true, pendingLabel: 'Loading…' }, {}, { following: true }, { following: true, pending: true }, {}]) {
+  const action = PlayerFollowAction({ name: 'Test Player', following: false, onPress: () => pressed++, ...state });
+  frames.push(JSON.stringify(action.props.style));
+  const control = action.props.children;
+  assert.equal(control.props.disabled, !!state.pending);
+  assert.match(control.props.accessibilityLabel, /Test Player/);
+  const native = HomeAction(control.props);
+  assert.equal(native.props.matchContents, false, 'follow labels must not trigger a delayed intrinsic width measurement');
+  assert.equal(native.props.style.width, '100%');
+  if (!state.pending) control.props.onPress();
+ }
+ assert.equal(new Set(frames).size, 1);
+ assert.equal(pressed, 3);
+});
+test('ranking rows reserve the follow space before a player profile becomes available', () => {
+ const { LocalRankingRow, PlayerFollowAction } = followLayoutComponents();
+ const player = { id: 'r1', name: 'Test Player', rank: 1, points: 1200, change: 0 };
+ for (const iconOnlyFollow of [false, true]) {
+  let opened = 0;
+  const initial = LocalRankingRow({ player, rankingLabel: 'SAPA', onPress: () => opened++, iconOnlyFollow });
+  const action = PlayerFollowAction({ name: player.name, following: true, iconOnly: iconOnlyFollow, onPress() {} });
+  const loaded = LocalRankingRow({ player: { ...player, profile: { id: '407' } }, rankingLabel: 'SAPA', onPress() {}, follow: action, iconOnlyFollow });
+  const slot = tree => tree.props.children.at(-1);
+  assert.equal(JSON.stringify(slot(initial).props.style), JSON.stringify(slot(loaded).props.style));
+  assert.equal(slot(initial).props.style.width, action.props.style.width);
+  initial.props.children[0].props.onPress(); assert.equal(opened, 1);
+ }
+});
+
 test('reopening the FIP Players shortcut restores Discover and clears the previous directory filters', () => {
  const values = [], dependencies = []; let effects = [], effectIndex = 0, cursor = 0, mounted = false, focus = [];
  let params = { view: 'Discover', source: 'pro', query: '', gender: 'all' };

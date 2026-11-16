@@ -44,6 +44,18 @@ test('club approval tags match website status and verified rules without inferri
   const club = api.parseClub(fixture({ verified: false, sapa_registered: true, club_type: 'Padel Club', group_id: 'private-group' }));
   assert.equal(club.approved, false); assert.equal(club.sapaRegistered, true); assert.equal(club.clubType, 'Padel Club'); assert.equal(club.group, null);
 });
+test('a directory load shuffles every club while browsing stays stable and cached data stays untouched', () => {
+  const api = setup();
+  const clubs = ['Zulu', 'Alpha', 'Mike', 'Bravo'].map((name, i) => api.parseClub(fixture({ id: String(i), name })));
+  const original = clubs.map(club => club.id);
+  const first = api.shuffleClubs(clubs, () => 0);
+  const second = api.shuffleClubs(clubs, () => 0.99);
+  assert.notDeepEqual(Array.from(first, club => club.id), Array.from(second, club => club.id));
+  assert.deepEqual(clubs.map(club => club.id), original);
+  assert.deepEqual(Array.from(new Set(first.map(club => club.id))).sort(), [...original].sort());
+  assert.deepEqual(Array.from(api.filterClubs(first, '', null, 25), row => row.club.id), Array.from(first, club => club.id));
+  assert.deepEqual(Array.from(api.filterClubs(first, 'Western Cape', null, 25), row => row.club.name), ['Alpha', 'Bravo', 'Mike', 'Zulu']);
+});
 test('directory search matches city/province and nearby filters and orders using valid coordinates only', () => {
   const api = setup(), origin = { latitude: -33.9249, longitude: 18.4241 };
   const rows = [api.parseClub(fixture()), api.parseClub(fixture({ id: 'far', name: 'Far away', lat: -26.2041, lng: 28.0473 })), api.parseClub(fixture({ id: 'missing', lat: null, name: 'Missing pin' }))];

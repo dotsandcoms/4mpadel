@@ -45,13 +45,22 @@ export function distanceKm(a: Coordinate, z: Coordinate): number {
   return 6371.0088 * 2 * Math.asin(Math.sqrt(Math.min(1, Math.max(0, h))));
 }
 const normalized = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+/** Shuffle a screen's full directory without mutating the shared cache. */
+export function shuffleClubs(clubs: Club[], random = Math.random): Club[] {
+  const shuffled = [...clubs];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
 /** Nearby is a device-side straight-line distance, never a travel estimate. */
 export function filterClubs(clubs: Club[], query: string, origin: Coordinate | null, radius: number) {
   const term = normalized(query.trim());
   return clubs.filter(club => normalized([club.name, club.shortName, club.city, club.province, club.address, club.group?.name || '', club.group?.shortName || ''].join(' ')).includes(term))
     .map(club => ({ club, distance: origin && club.coordinate ? distanceKm(origin, club.coordinate) : null }))
     .filter(row => !origin || row.distance !== null && row.distance <= radius)
-    .sort((a, z) => origin ? a.distance! - z.distance! || a.club.name.localeCompare(z.club.name) : a.club.name.localeCompare(z.club.name));
+    .sort((a, z) => origin ? a.distance! - z.distance! || a.club.name.localeCompare(z.club.name) : term ? a.club.name.localeCompare(z.club.name) : 0);
 }
 let cache: { expires: number; clubs: Club[] } | null = null;
 export async function fetchClubs(signal?: AbortSignal, fresh = false): Promise<Club[]> {

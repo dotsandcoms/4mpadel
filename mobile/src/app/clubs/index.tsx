@@ -9,7 +9,7 @@ import { NativeSegmentedControl } from '@/components/native-segmented-control';
 import { ErrorBanner } from '@/components/error-banner';
 import { ClubIdentity } from '@/components/club-identity';
 import { ClubTags, ClubVerifiedBadge, clubTagsDescription } from '@/components/club-tags';
-import { clubCourts, clubLocation, fetchClubs, fetchClubGroups, filterClubGroups, filterClubs, type ClubGroup, type Club, type Coordinate } from '@/lib/clubs';
+import { clubCourts, clubLocation, fetchClubs, fetchClubGroups, filterClubGroups, filterClubs, shuffleClubs, type ClubGroup, type Club, type Coordinate } from '@/lib/clubs';
 import { locateNearbyClubs } from '@/lib/club-location';
 import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 
@@ -24,7 +24,7 @@ export default function ClubsScreen() {
   useEffect(() => {
     const controller = new AbortController(); setLoading(true); setError(''); setGroupError('');
     void fetchClubGroups(controller.signal, revision > 0).then(value => { if (!controller.signal.aborted) setGroups(value); }).catch(() => { if (!controller.signal.aborted) setGroupError('Club groups couldn’t load. Pull down to retry.'); });
-    void fetchClubs(controller.signal, revision > 0).then(rows => { if (!controller.signal.aborted) setClubs(rows); }).catch(() => { if (!controller.signal.aborted) setError('Clubs couldn’t load. Please try again.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    void fetchClubs(controller.signal, revision > 0).then(rows => { if (!controller.signal.aborted) setClubs(shuffleClubs(rows)); }).catch(() => { if (!controller.signal.aborted) setError('Clubs couldn’t load. Please try again.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [revision]);
   useEffect(() => () => { locationRequest.current++; }, []);

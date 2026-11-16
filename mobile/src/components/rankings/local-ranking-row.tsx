@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { FeedPortrait } from '@/components/home-feed';
+import { playerFollowWidth, playerFollowIconWidth } from '@/components/players/player-follow-action';
 import type { RankingPlayer } from '@/lib/rankings';
 import { lightBrand as b } from '@/theme/tokens';
 
-export function LocalRankingRow({ player, rankingLabel, onPress, follow }: {
-  player: RankingPlayer; rankingLabel: string; onPress: () => void; follow?: ReactNode;
+export function LocalRankingRow({ player, rankingLabel, onPress, follow, iconOnlyFollow = false }: {
+  player: RankingPlayer; rankingLabel: string; onPress: () => void; follow?: ReactNode; iconOnlyFollow?: boolean;
 }) {
   const movement = player.changeKnown !== false && Number.isInteger(player.change) && player.change !== 0;
   const change = movement ? `${player.change > 0 ? 'Up' : 'Down'} ${Math.abs(player.change)} ${Math.abs(player.change) === 1 ? 'place' : 'places'}` : '';
@@ -23,6 +24,7 @@ export function LocalRankingRow({ player, rankingLabel, onPress, follow }: {
         </View>
       </View>
     </Pressable>
-    {follow}
+    {/* Keep the trailing space while the profile directory and follow state load. */}
+    <View style={{ width: iconOnlyFollow ? playerFollowIconWidth : playerFollowWidth, minHeight: 48, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{follow}</View>
   </View>;
 }

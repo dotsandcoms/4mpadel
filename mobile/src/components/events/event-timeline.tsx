@@ -1,6 +1,6 @@
 import { onAccent } from '@/theme/tokens';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, View, useWindowDimensions, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View, useWindowDimensions, type ViewStyle } from 'react-native';
 import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { EventText as Text, EventIcon, useEventAccent, type EventIconName } from './website-ui';
 import type { EventDetail } from '@/lib/events';
@@ -8,6 +8,7 @@ import { isEarlyBirdActive } from '@/lib/event-rules';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { useForegroundClock } from '@/hooks/use-foreground-clock';
 import { useScreenActive } from '@/hooks/use-screen-active';
+import { canDownloadPlayerList } from '@/lib/event-documents';
 const panel = { borderRadius: 16, borderColor: '#DCE2DA', borderWidth: 1, backgroundColor: '#FFFFFF' };
 
 function ActiveStageIcon({ icon, accent }: { icon: EventIconName; accent: string }) {
@@ -26,7 +27,7 @@ function ActiveStageIcon({ icon, accent }: { icon: EventIconName; accent: string
     <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#386018', alignItems: 'center', justifyContent: 'center' }}><EventIcon name={icon} size={16} color="#FFFFFF" /></View>
   </View>;
 }
-export function RegistrationCountdown({ event, onRegister, label }: { event: EventDetail; onRegister: () => void; label: string | null }) {
+export function RegistrationCountdown({ event, onRegister, label, onDownloadPlayers, downloadingPlayers = false }: { event: EventDetail; onRegister: () => void; label: string | null; onDownloadPlayers?: () => void; downloadingPlayers?: boolean }) {
   const accent = useEventAccent();
   const now = useForegroundClock();
   const { width } = useWindowDimensions();
@@ -54,6 +55,7 @@ export function RegistrationCountdown({ event, onRegister, label }: { event: Eve
       </View>)}
     </View>}
     {label && <Pressable accessibilityRole="button" onPress={onRegister} hitSlop={{ top: 8, bottom: 8, left: 3, right: 3 }} style={managing ? { flexShrink: 0, minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: compact ? 9 : 12, paddingVertical: 8, borderRadius: 12, borderColor: '#B9CDB0', borderWidth: 1, backgroundColor: '#F0F6EA' } : { flexShrink: 0, minHeight: 44, justifyContent: 'center', paddingHorizontal: compact ? 10 : 12, paddingVertical: 8, borderRadius: 24, borderColor: accent, borderWidth: 1, backgroundColor: accent, boxShadow: `0px 1px 6px ${accent}59`, experimental_backgroundImage: `linear-gradient(145deg, ${accent} 0%, ${accent} 50%, ${accent}cc 100%)` } as ViewStyle}><Text style={{ color: managing ? '#244A16' : onAccent(accent), fontSize: compact ? 10 : 11, fontWeight: '700' }}>{managing ? 'Manage entry' : label.toUpperCase()}</Text>{managing && <EventIcon name="chevron.right" size={12} color="#244A16" />}</Pressable>}
+    {onDownloadPlayers && canDownloadPlayerList(event, new Date(now)) && <Pressable accessibilityRole="button" accessibilityLabel="Players list. Download PDF" accessibilityState={{ disabled: downloadingPlayers, busy: downloadingPlayers }} disabled={downloadingPlayers} onPress={onDownloadPlayers} hitSlop={4} style={{ minHeight: 36, paddingHorizontal: 10, flexShrink: 0, borderRadius: 10, backgroundColor: '#F0F6EA', flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center' }}>{downloadingPlayers ? <ActivityIndicator size="small" color="#386018" /> : <EventIcon name="arrow.down.document" size={17} color="#386018" />}<Text style={{ color: '#386018', fontSize: 11, fontWeight: '600' }}>{downloadingPlayers ? 'Preparing…' : 'Players list'}</Text></Pressable>}
   </View>;
 }
 /** Dates and step ordering mirror website TournamentProgressBar. */

@@ -7,7 +7,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchPublicPlayer, publicRank, playerPoints, pointsGain, instagramUrl, sapaMainRanking, type PublicPlayer, type PublicRanking } from '@/lib/players';
-import { fetchPlayerRankingSnapshot } from '@/lib/player-results';
+import { fetchPlayerRankingSnapshot, trophySeason } from '@/lib/player-results';
 import { useForegroundClock } from '@/hooks/use-foreground-clock';
 import { fetchPlayerMatches, matchKey, type MatchLists } from '@/lib/matches';
 import { siteUrl } from '@/lib/site';
@@ -15,6 +15,8 @@ import { LocalFollowButton } from '@/components/players/local-follow-button';
 import { PlayerFollowerCount } from '@/components/players/player-follower-count';
 import { PlayerOverview, PlayerForm, PlayerMatchCard } from '@/components/players/profile-sections';
 import { PlayerTournamentResults } from '@/components/players/player-tournament-results';
+import { PlayerTrophyShelf } from '@/components/players/player-trophy-shelf';
+import { usePlayerTrophies } from '@/hooks/use-player-trophies';
 import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 import { fetchMyFipLink } from '@/lib/player-fip-link';
 import { lookupOfficialFipProfile, searchProPlayers, localPlayerCountryFlag, type OfficialFipProfile, type PlayerFipLink } from '@/lib/player-hub';
@@ -33,6 +35,7 @@ export default function PlayerProfile() {
   const [liveRanking, setLiveRanking] = useState<PublicRanking | null>(null);
   const [rankingRefreshError, setRankingRefreshError] = useState(false);
   const refreshKey = useForegroundClock(5 * 60 * 1000);
+  const trophies = usePlayerTrophies(player, refreshKey);
   const load = useCallback(async () => { const current = ++request.current; setLoading(true); setError(''); setPlayer(null); setMatches(null); setMatchError('');
     setFipLink(null); setFipLive(null); setOfficialFip(null); setLiveRanking(null); setRankingRefreshError(false);
     try { const next = await fetchPublicPlayer(id); if (current !== request.current) return; setPlayer(next);
@@ -83,6 +86,7 @@ export default function PlayerProfile() {
             </View>
           </View>
           <Text style={{ color: b.muted, fontSize: 12, lineHeight: 18 }}>{[localPlayerCountryFlag(player.nationality), player.home_club].filter(Boolean).join(' · ') || '4M Padel player'}</Text>
+          <PlayerTrophyShelf key={player.id} playerName={player.name} season={trophySeason(new Date(refreshKey))} trophies={trophies} />
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, paddingTop: 8, borderTopWidth: 1, borderColor: b.edge }}>
             <PlayerMessageButton compact playerId={player.id} name={player.name} />
             <LocalFollowButton playerId={player.id} name={player.name} onFollowChange={() => setFollowerRefresh(value => value + 1)} />
@@ -109,7 +113,7 @@ export default function PlayerProfile() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>{['Overview', 'Form', 'Rankings', 'Results', 'Matches', 'Gallery'].map(label => <Pressable key={label} accessibilityRole="tab" accessibilityState={{ selected: tab === label }} onPress={() => setTab(label)} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 13, borderRadius: 22, backgroundColor: tab === label ? b.premium : b.elevated, borderWidth: 1, borderColor: b.edge }}><Text style={{ color: tab === label ? '#FFFFFF' : b.muted, fontSize: 13, fontWeight: '600' }}>{label}</Text></Pressable>)}</ScrollView>
         {tab === 'Overview' && <PlayerOverview player={player} />}
         {tab === 'Form' && <PlayerForm player={player} />}
-        {tab === 'Results' && displayedPlayer && <PlayerTournamentResults key={player.id} player={displayedPlayer} />}
+        {tab === 'Results' && displayedPlayer && <PlayerTournamentResults key={player.id} player={displayedPlayer} trophies={trophies} />}
         {tab === 'Rankings' && <>{!player.rankings.length && <Empty>No published rankings for this player yet.</Empty>}{(displayedPlayer || player).rankings.map((r, index) => <View key={index} style={card}><Pressable accessibilityRole="button" accessibilityState={{ expanded: ranking === index }} onPress={() => setRanking(ranking === index ? null : index)} style={{ minHeight: 48, flexDirection: 'row', gap: 12, alignItems: 'center' }}><View style={{ flex: 1, gap: 5 }}><Text style={{ color: b.accent, fontWeight: '700' }}>{r.org || 'Ranking'}</Text><Text style={{ color: b.premium }}>{[r.age_group || r.division, r.match_type].filter(Boolean).join(' · ')}</Text></View><View style={{ alignItems: 'flex-end', gap: 5 }}><Text style={{ color: b.premium, fontWeight: '700' }}>{publicRank(r.rank)}</Text><Text style={{ color: b.muted }}>{playerPoints(r.points)} pts</Text></View><Ionicons name={ranking === index ? 'chevron-up' : 'chevron-down'} size={18} color={b.muted} /></Pressable>{ranking === index && <><Text style={{ color: b.muted, fontSize: 12 }}>TOURNAMENT RESULTS</Text>{r.details?.length ? r.details.map((result, i) => <View key={i} style={{ paddingVertical: 12, borderTopWidth: 1, borderColor: b.edge, flexDirection: 'row', gap: 12 }}><View style={{ flex: 1, gap: 5 }}><Text style={{ color: b.premium, fontWeight: '600' }}>{result.name || 'Tournament'}</Text><Text style={{ color: b.muted, fontSize: 12 }}>{[result.date, result.class, result.place ? `Place ${result.place}` : ''].filter(Boolean).join(' · ')}</Text></View><Text style={{ color: b.accent }}>{pointsGain(result.points)}</Text></View>) : <Text style={{ color: b.muted }}>No points breakdown published.</Text>}</>}</View>)}</>}
         {tab === 'Matches' && <>{!player.rankedin_id ? <Empty>No linked match history is available.</Empty> : matchError ? <Empty>{matchError}</Empty> : !matches ? <ActivityIndicator color={loadingBlue} /> : <>{[['Upcoming', matches.upcoming], ['Recent results', matches.past]].map(([label, rows]) => <View key={String(label)} style={{ gap: 12 }}><Heading>{String(label)}</Heading>{typeof rows !== 'string' && (rows.length ? rows.map((match, index) => <PlayerMatchCard key={matchKey(match, index)} match={match} upcoming={label === 'Upcoming'} />) : <Text style={{ color: b.muted }}>No published matches.</Text>)}</View>)}</>}</>}
         {tab === 'Gallery' && <>{!gallery.length ? <Empty>No photos added yet.</Empty> : <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>{gallery.map((uri, index) => <Pressable key={uri} accessibilityRole="button" accessibilityLabel={`Open photo ${index + 1}`} onPress={() => setPhoto(uri)} style={{ width: '47%', aspectRatio: 1, borderRadius: 16, overflow: 'hidden', backgroundColor: b.surface }}><Image source={{ uri }} style={{ width: '100%', height: '100%' }} contentFit="cover" /></Pressable>)}</View>}</>}

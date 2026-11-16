@@ -144,4 +144,70 @@ do $$declare player jsonb;begin
   if player ? 'gender' or player ? 'email' then raise exception 'The selector must not add private attributes to profile cards'; end if;
 end $$;
 reset role;
+\ir ../supabase/migrations/20261116081131_following_meaningful_rankings_and_shuffle.sql
+
+-- Read-time filtering and push generation must agree at the strict boundary,
+-- including small entries into top 10, 20 and 100 and both movement directions.
+do $$declare c record; player_id bigint:=5000; fact public.following_activity; ranks jsonb;begin
+  for c in select * from (values
+    ('394','397',false),('122','127',false),('127','122',false),
+    ('122','128',true),('128','122',true),
+    ('11','10',true),('21','20',true),('101','100',true),
+    ('12','9',true),('22','19',true),('102','99',true),
+    ('10','9',false),('20','19',false),('100','99',false),
+    ('10','11',false),('20','21',false),('100','101',false),('9','9',false),
+    (null,'10',false),('0','10',false),('10',null,false),('unknown','10',false),('99999999999999999999','10',false)
+  ) cases(before_rank,rank,expected) loop
+    if public.following_ranking_change_relevant(c.before_rank,c.rank) is distinct from c.expected then
+      raise exception 'Ranking significance mismatch: % -> %',c.before_rank,c.rank;
+    end if;
+    fact.kind:='ranking'; fact.local_player_ids:='{}'; fact.pro_player_ids:=array[95];
+    fact.payload:=jsonb_build_object('before_rank',c.before_rank,'rank',c.rank);
+    if public.following_ranking_relevant(fact) is distinct from c.expected then raise exception 'FIP significance mismatch: %',fact.payload; end if;
+    if c.before_rank !~ '^[1-9][0-9]{0,8}$' or c.before_rank is null or c.rank is null then continue; end if;
+    player_id:=player_id+1;
+    ranks:=jsonb_set((select rankings from public.players where id=191),'{0,rank}',to_jsonb(c.before_rank));
+    insert into public.players(id,name,email,approved,gender,rankings)
+      values(player_id,'Threshold Test','threshold-'||player_id||'@test.invalid',true,'Male',ranks);
+    update public.players set rankings=jsonb_set(rankings,'{0,rank}',to_jsonb(c.rank)) where id=player_id;
+    if exists(select 1 from public.test_pushes where email='threshold-'||player_id||'@test.invalid') is distinct from c.expected then
+      raise exception 'Push significance mismatch: % -> %',c.before_rank,c.rank;
+    end if;
+    fact.local_player_ids:=array[player_id]; fact.pro_player_ids:='{}';
+    fact.payload:=fact.payload||jsonb_build_object('ranking_source','sapa_main_v1','ranking_id',15809,
+      'ranking_scope','sapa:15809:3:82','age_group_id',82,'ranking_type',3);
+    if public.following_ranking_relevant(fact) is distinct from c.expected then raise exception 'SAPA significance mismatch: %',fact.payload; end if;
+  end loop;
+  if has_function_privilege('authenticated','public.following_ranking_change_relevant(text,text)','EXECUTE')
+    or has_function_privilege('anon','public.following_ranking_change_relevant(text,text)','EXECUTE')
+    or not has_function_privilege('service_role','public.following_ranking_change_relevant(text,text)','EXECUTE') then
+    raise exception 'Ranking helper access contract changed';
+  end if;
+end $$;
+
+-- Sample the full follow set rather than just shuffling its twelve newest rows.
+insert into public.players(id,name,approved,gender,rankings)
+  select id,'Sample '||id,true,'Male','[]'::jsonb from generate_series(10001,10030) id;
+insert into public.local_player_follows(user_id,player_id,created_at)
+  select '00000000-0000-4000-8000-000000000003',id,now()-(id-10000)*interval '1 day' from generate_series(10001,10030) id;
+insert into public.pro_player_follows(user_id,player_id,player_name,category,created_at)
+  select '00000000-0000-4000-8000-000000000003',id,'FIP sample '||id,'men',now()-(id-10000)*interval '1 day' from generate_series(10001,10030) id;
+select set_config('test.user','00000000-0000-4000-8000-000000000003',false);
+set role authenticated;
+do $$declare sample jsonb; first_sample jsonb; seen_local bigint[]:='{}'; seen_pro bigint[]:='{}'; varied boolean:=false;begin
+  perform setseed(0.316);
+  for i in 1..40 loop
+    sample:=public.get_following_feed('all',12)->'followed_players';
+    if jsonb_array_length(sample)<>24 then raise exception 'Rail must retain twelve players per source'; end if;
+    if exists(select 1 from jsonb_array_elements(sample) p where (p->>'id')::bigint not between 10001 and 10030) then raise exception 'Rail leaked another account or unfollowed player'; end if;
+    if (select count(distinct (p->>'source',p->>'id')) from jsonb_array_elements(sample) p)<>24 then raise exception 'Duplicate followed identity'; end if;
+    if first_sample is null then first_sample:=sample; elsif sample<>first_sample then varied:=true; end if;
+    seen_local:=seen_local||array(select (p->>'id')::bigint from jsonb_array_elements(sample) p where p->>'source'='local');
+    seen_pro:=seen_pro||array(select (p->>'id')::bigint from jsonb_array_elements(sample) p where p->>'source'='pro');
+  end loop;
+  if not varied or (select count(distinct id) from unnest(seen_local) id)<>30 or (select count(distinct id) from unnest(seen_pro) id)<>30 then
+    raise exception 'Refresh must sample older follows and vary order in both sources';
+  end if;
+end $$;
+reset role;
 select 'Following main rankings DB: source identity, profile gender, movement, stale editions, baseline, privacy and ownership passed' as result;

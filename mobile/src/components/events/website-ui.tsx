@@ -20,7 +20,7 @@ export function EventIcon({ name, size = 16, color: suppliedColor }: { name: Eve
     rosette: 'award', cloud: 'cloud', envelope: 'mail', person: 'user', camera: 'camera', 'exclamationmark.circle': 'alert-circle', 'point.3.connected.trianglepath.dotted': 'git-branch', calendar: 'calendar', magnifyingglass: 'search', 'mappin.and.ellipse': 'map-pin', map: 'map',
     'person.2': 'users', lock: 'lock', clock: 'clock', 'chevron.right': 'chevron-right',
     'chevron.down': 'chevron-down', plus: 'plus', checkmark: 'check', 'arrow.left': 'arrow-left',
-    'square.and.arrow.up': 'share-2', 'line.3.horizontal.decrease': 'filter', 'doc.text': 'file-text',
+    'square.and.arrow.up': 'share-2', 'line.3.horizontal.decrease': 'filter', 'doc.text': 'file-text', 'arrow.down.document': 'download',
     phone: 'phone', 'info.circle': 'info', bolt: 'zap', star: 'star', 'rectangle.split.2x2': 'layout',
     'person.crop.circle.badge.xmark': 'user-x', 'circle.inset.filled': 'radio',
     'list.bullet.rectangle': 'list', 'chart.bar': 'bar-chart-2', 'square.grid.2x2': 'grid',

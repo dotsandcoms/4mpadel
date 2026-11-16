@@ -137,6 +137,7 @@
       "@config-plugins/react-native-pdf",
       "expo-maps",
       "expo-web-browser",
+      "expo-sharing",
       [
         "expo-location",
         {

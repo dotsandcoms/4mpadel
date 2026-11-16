@@ -9,6 +9,8 @@ import { eventActivityTones } from '@/theme/event-activity';
 import { HomeAction } from '@/components/home-action';
 import { ErrorBanner } from '@/components/error-banner';
 import { EventMatchUpdates } from './event-match-updates';
+import { EventPointsNotice } from './event-points-notice';
+import { useEventPoints } from '@/hooks/use-event-points';
 import type { EventDetail } from '@/lib/events';
 import type { RankedPlayer } from '@/lib/event-teams';
 
@@ -21,6 +23,7 @@ const activityLabel = (item: FeedItem) => item.payload.update_type === 'withdraw
 export function EventActivity({ event, directory, refreshKey = 0 }: { event: EventDetail; directory: RankedPlayer[]; refreshKey?: number }) {
   const eventId = event.id;
   const router = useRouter();
+  const { sheet: pointsSheet } = useEventPoints(event);
   const [filter, setFilter] = useState<EventActivityFilter>('all');
   const [page, setPage] = useState(empty);
   const [loading, setLoading] = useState(true);
@@ -66,6 +69,7 @@ export function EventActivity({ event, directory, refreshKey = 0 }: { event: Eve
   };
   return <View style={{ gap: 12 }}>
     <Text accessibilityRole="header" style={{ color: b.premium, fontSize: 18, fontWeight: '600' }}>Tournament activity</Text>
+    {pointsSheet && (filter === 'all' || filter === 'updates') && <EventPointsNotice event={event} sheet={pointsSheet} />}
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, height: 52 }} contentContainerStyle={{ gap: 8, alignItems: 'center' }}>{EVENT_ACTIVITY_FILTERS.map(value => <HomeAction key={value} label={labels[value]} compact
       kind={filter === value ? 'primary' : 'link'} accentColor={eventActivityTones[value].ink}
       accessibilityLabel={`${labels[value]}${filter === value ? ', selected' : ''}`} onPress={() => setFilter(value)} />)}</ScrollView>
@@ -75,7 +79,7 @@ export function EventActivity({ event, directory, refreshKey = 0 }: { event: Eve
     {filter !== 'matches' && <>
     {loading && !activityItems.length && <ActivityIndicator accessibilityLabel="Loading tournament activity" color={b.messagingAction} />}
     {!!error && <View style={{ gap: 8 }}><Text style={{ color: b.muted, fontSize: 13 }}>{error}</Text><HomeAction label="Retry" onPress={() => void load()} /></View>}
-    {!loading && !error && !activityItems.length && <View style={{ padding: 20, borderRadius: 16, backgroundColor: b.elevated, borderWidth: 1, borderColor: b.edge, gap: 8 }}><Text style={{ color: b.premium, fontWeight: '600' }}>{filter === 'entries' ? 'No player activity yet' : filter === 'updates' ? 'No event updates yet' : 'No player or event updates yet'}</Text><Text style={{ color: b.muted, fontSize: 13, lineHeight: 19 }}>{filter === 'entries' ? 'Confirmed entries and player withdrawals will appear here.' : filter === 'updates' ? 'Published changes to this event will appear here.' : 'Published event changes and confirmed player entries will appear here.'}</Text></View>}
+    {!loading && !error && !activityItems.length && !(pointsSheet && (filter === 'all' || filter === 'updates')) && <View style={{ padding: 20, borderRadius: 16, backgroundColor: b.elevated, borderWidth: 1, borderColor: b.edge, gap: 8 }}><Text style={{ color: b.premium, fontWeight: '600' }}>{filter === 'entries' ? 'No player activity yet' : filter === 'updates' ? 'No event updates yet' : 'No player or event updates yet'}</Text><Text style={{ color: b.muted, fontSize: 13, lineHeight: 19 }}>{filter === 'entries' ? 'Confirmed entries and player withdrawals will appear here.' : filter === 'updates' ? 'Published changes to this event will appear here.' : 'Published event changes and confirmed player entries will appear here.'}</Text></View>}
     {!!activityItems.length && <View style={{ backgroundColor: b.elevated, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: b.edge, overflow: 'hidden' }}>{activityItems.map((item, index) => {
       const tone = eventActivityTones[categoryOf(item)];
       const warning = item.payload.update_type === 'withdrawal' || item.kind === 'match_live';

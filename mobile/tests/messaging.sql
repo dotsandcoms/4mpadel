@@ -372,5 +372,6 @@ select pg_temp.expect(not exists(select 1 from messaging.messages where body='He
 select pg_temp.expect(not exists(select 1 from messaging.conversations where pair_key like '%00000000-0000-0000-0000-000000000002%'),'erasure clears former Auth identifiers from direct-pair metadata');
 \ir messaging-capacity.sql
 select messaging.maintenance();
+\ir notification-retention.sql
 rollback;
 \echo 'Messaging DB: grants, account/session isolation, requests, retries, event history, withdrawal, consent, realtime boundaries and deletion passed.'

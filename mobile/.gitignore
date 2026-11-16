@@ -45,3 +45,6 @@ example
 
 # Generated release binaries and screenshot package.
 release/
+
+# Generated Watchman synchronisation cookies.
+.watchman-cookie-*

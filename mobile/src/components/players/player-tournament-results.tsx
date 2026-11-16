@@ -3,36 +3,25 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TrophyBreakdown } from '@/components/rankings/trophy-breakdown';
 
-import { fetchPlayerTrophies, fetchPlayerTournamentResults, savedRankingResults } from '@/lib/player-results';
+import { fetchPlayerTournamentResults, savedRankingResults } from '@/lib/player-results';
 import { playerPoints, sapaMainRanking, type PublicPlayer, type PublicRanking } from '@/lib/players';
-import type { PointResult, TrophyGroup } from '@/lib/rankings';
+import type { PointResult } from '@/lib/rankings';
+import type { PlayerTrophies } from '@/hooks/use-player-trophies';
 import { lightSapaTone } from '@/theme/sapa';
 import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 import { profileCard } from './profile-sections';
 import { useForegroundClock } from '@/hooks/use-foreground-clock';
 
-const tiers = ['Major', 'Super Gold', 'Gold', 'Silver', 'Bronze', 'Other'];
 const heading = { color: b.premium, fontSize: 18, fontWeight: '700' } as const;
 const body = { color: b.muted, fontSize: 13, lineHeight: 20 } as const;
 
-function TrophyCabinet({ player, refreshKey }: { player: PublicPlayer; refreshKey: number }) {
-  const [groups, setGroups] = useState<TrophyGroup[]>([]);
+function TrophyCabinet({ player, trophies }: { player: PublicPlayer; trophies: PlayerTrophies }) {
+  const { groups, loading, error, retry } = trophies;
   const [selected, setSelected] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [retry, setRetry] = useState(0);
-  useEffect(() => {
-    let live = true;
-    setLoading(true); setError(false);
-    fetchPlayerTrophies(player).then(rows => {
-      if (live) setGroups(rows.sort((a, z) => tiers.indexOf(a.tier) - tiers.indexOf(z.tier)));
-    }).catch(() => { if (live) setError(true); }).finally(() => { if (live) setLoading(false); });
-    return () => { live = false; };
-  }, [player, retry, refreshKey]);
   return <View style={{ gap: 12 }}>
     <Text accessibilityRole="header" style={heading}>Trophy cabinet</Text>
     {loading ? <ActivityIndicator accessibilityLabel="Loading trophy cabinet" color={loadingBlue} />
-      : error ? <Pressable accessibilityRole="button" onPress={() => setRetry(value => value + 1)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ ...body, color: b.danger }}>Could not load trophies. Tap to retry.</Text></Pressable>
+      : error ? <Pressable accessibilityRole="button" onPress={retry} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ ...body, color: b.danger }}>Could not load trophies. Tap to retry.</Text></Pressable>
         : groups.length ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {groups.map(item => {
             const tone = lightSapaTone(item.tier);
@@ -94,11 +83,11 @@ function TournamentResults({ ranking, rankedinId, refreshKey }: { ranking: Publi
   </View>;
 }
 
-export function PlayerTournamentResults({ player }: { player: PublicPlayer }) {
+export function PlayerTournamentResults({ player, trophies }: { player: PublicPlayer; trophies: PlayerTrophies }) {
   const ranking = sapaMainRanking(player);
   const refreshKey = useForegroundClock(5 * 60 * 1000);
   return <>
-    <TrophyCabinet key={player.id} player={player} refreshKey={refreshKey} />
+    <TrophyCabinet player={player} trophies={trophies} />
     {ranking ? <TournamentResults key={player.id} ranking={ranking} rankedinId={player.rankedin_id} refreshKey={refreshKey} />
       : <View style={profileCard}><Text style={body}>No published SAPA tournament results for this player yet.</Text></View>}
   </>;

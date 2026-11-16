@@ -1,5 +1,7 @@
 # Internal iPhone test release — 16 November 2026
 
+**Superseded:** Build 46 omitted mobile changes that were still uncommitted in the shared working copy. Use the replacement release documented in `internal-ios-replacement-2026-11-16.md`.
+
 Version **1.0.2 / build 46** is finished and verified for direct installation on the existing Brad and Mark test iPhones:
 
 https://expo.dev/accounts/fourm-padel/projects/4m-padel/builds/db2eea09-1359-45fc-8b03-f6e48ed49e28

@@ -12,7 +12,7 @@ try {
   run('initdb', ['-D', data, '-A', 'trust', '--no-instructions', '--encoding=UTF8']);
   run('pg_ctl', ['-D', data, '-l', log, '-o', `-k /private/tmp -h '' -p 55446`, '-w', 'start']); started = true;
   run('createdb', [...conn, 'fourm_messaging_test']);
-  process.stdout.write(run('psql', ['-X', '-q', '-v', 'ON_ERROR_STOP=1', ...conn, '-d', 'fourm_messaging_test', '-f', resolve('tests/messaging.sql')]).trim().split('\n').filter(line => /Messaging (DB|capacity):/.test(line)).join('\n') + '\n');
+  process.stdout.write(run('psql', ['-X', '-q', '-v', 'ON_ERROR_STOP=1', ...conn, '-d', 'fourm_messaging_test', '-f', resolve('tests/messaging.sql')]).trim().split('\n').filter(line => /Messaging (DB|capacity):|Notification retention DB:/.test(line)).join('\n') + '\n');
   run('createdb', [...conn, 'fourm_data_api_grant_test']);
   const access = execFileSync('npm', ['run', 'test:data-api:db'], { cwd: resolve('..'), env: { ...process.env, PGHOST: '/private/tmp', PGPORT: '55446' }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   process.stdout.write(access.trim().split('\n').slice(-3).join('\n') + '\n');

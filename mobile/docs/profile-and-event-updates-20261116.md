@@ -1,6 +1,6 @@
 # Profile and event updates — 16 November 2026
 
-Release builds are paused at the user’s request. These changes are available in the development source; they have not been submitted as a new App Store build.
+The user resumed internal iPhone builds after the change pause. The complete mobile release is tracked in `internal-ios-replacement-2026-11-16.md`; no App Store submission is authorised.
 
 Messages and Help chats now allow screenshots and screen recording, as requested. iOS retains its separate app-switcher cover; all platforms still mask inactive message content. Player-to-player messaging needs normal sign-in, with no extra authenticator code. Admin messaging and staff Help access retain their MFA checks.
 
@@ -20,4 +20,4 @@ Results show the Final first, then earlier rounds. Explicit match links still se
 
 ## Validation
 
-Targeted profile, Home, cache, sign-in email, draw/bracket, discovery and notification tests passed, as did TypeScript. The running iPhone 18 Pro preview confirmed that a Region Review action opens Edit profile directly. Club claim/tag changes and their separate native checks are documented in `native-clubs.md`. No release build was started after the pause instruction.
+Targeted profile, Home, cache, sign-in email, draw/bracket, discovery and notification tests passed, as did TypeScript. The running iPhone 18 Pro preview confirmed that a Region Review action opens Edit profile directly. Club claim/tag changes and their separate native checks are documented in `native-clubs.md`. The earlier build pause was lifted by the user’s subsequent request for an internal test build.

@@ -33,6 +33,8 @@ import { EventActivity } from '@/components/events/event-activity';
 import { EventMedia } from '@/components/events/event-media';
 import { RegistrationEntries } from '@/components/events/registration-entries';
 import { lightSapaTone as sapaTone } from '@/theme/sapa';
+import { fetchEventEntrySheet } from '@/lib/event-documents';
+import { entrySheetHtml } from '@/lib/event-pdf-html';
 
 export default function EventScreen() { return <EventContent />; }
 function EventContent() {
@@ -63,6 +65,8 @@ function EventContent() {
   const [accountError, setAccountError] = useState('');
   const [manageRequested, setManageRequested] = useState(false);
   const [posterOpen, setPosterOpen] = useState(false);
+  const [downloadingPlayers, setDownloadingPlayers] = useState(false);
+  const playerDownloadLock = useRef(false);
   const [selectedVenue, setSelectedVenue] = useState('');
   const [tab, setTab] = useState('Overview');
   useEffect(() => { setTab(['Overview', 'Activity', 'Players', 'Draws', 'Results', 'Media'].includes(initialTab || '') ? initialTab! : matchId || divisionId ? 'Draws' : 'Overview'); }, [id, initialTab, matchId, divisionId]);
@@ -121,6 +125,16 @@ function EventContent() {
     router.push({ pathname: '/events/register', params: { id: String(event.id), ...(mode ? { mode } : {}) } });
   };
   const directions = () => event && runAction(async () => { await openEventDirections(eventMapLocation(event, selectedVenue).query, Platform.OS, Linking.openURL); void trackEvent('feature_interaction', { feature: 'event_details', action: 'directions_open' }); });
+  const downloadPlayers = async () => {
+    if (!event || playerDownloadLock.current) return;
+    playerDownloadLock.current = true; setDownloadingPlayers(true);
+    await runAction(async () => {
+      const sheet = await fetchEventEntrySheet(event.id);
+      const { exportEventPdf } = await import('@/lib/event-pdf-export');
+      await exportEventPdf(entrySheetHtml(sheet), sheet.eventName);
+    });
+    playerDownloadLock.current = false; setDownloadingPlayers(false);
+  };
   const state = event ? registrationState(event) : 'closed';
   const count = event?.is_manual ? event.is_weekly ? entries.filter(r => r.status !== 'withdrawn' && (!r.registered_by_hash || !r.email_hash || r.email_hash === r.registered_by_hash)).length : entries.length : event?.registered_players || 0;
   const fees = event ? divisions.map(d => entryFee(event, d)).filter(f => f > 0) : [];
@@ -135,6 +149,9 @@ function EventContent() {
   const teams = useMemo(() => buildEventTeams(divisions, entries, profiles), [divisions, entries, profiles]);
   const pendingPayment = registrations.some(r => r.payment_status !== 'paid' && Number(divisions.find(d => d.id === r.division_id)?.entry_fee || 0) > 0);
   const posterUrl = event?.poster_image_url || event?.custom_image_url;
+  const hasSapa = !!event?.sapa_status && event.sapa_status !== 'None';
+  const titleWords = event?.event_name?.trim().split(/\s+/) || [];
+  const shortTitle = titleWords.slice(0, 3).join(' ') + (titleWords.length > 3 ? '…' : '');
   const sponsors = event?.sponsor_logos?.filter(url => url && url !== organisation?.logo_url && url !== event.poster_image_url && url !== event.custom_image_url) || [];
   return <EventAccent value={accent}><View style={{ flex: 1, backgroundColor: '#F5F6F3', paddingTop: insets.top }}>
     <WebsiteHeader />
@@ -153,8 +170,8 @@ function EventContent() {
         <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 40 }}>
           {!!event.sapa_status && event.sapa_status !== 'None' && <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}><Text style={{ color: sapaTone(event.sapa_status).text, fontSize: 9, fontWeight: '700', letterSpacing: 1, borderWidth: 1, borderColor: sapaTone(event.sapa_status).border, borderRadius: 16, paddingHorizontal: 9, paddingVertical: 4 }}>{event.sapa_status.toUpperCase()}</Text><Text style={{ color: sapaTone(event.sapa_status).text, fontSize: 9, fontWeight: '700', letterSpacing: 1, borderWidth: 1, borderColor: sapaTone(event.sapa_status).border, borderRadius: 16, paddingHorizontal: 9, paddingVertical: 4 }}>SAPA</Text></View>}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-            {!!event.sapa_status && event.sapa_status !== 'None' && <Image source={require('@/assets/sapa-logo.svg')} accessibilityLabel="SAPA" contentFit="contain" style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#fff', borderWidth: 4, borderColor: '#fff' }} />}
-            <View style={{ flex: 1 }}><Text accessibilityRole="header" style={{ fontSize: 26, fontWeight: '700', lineHeight: 32 }}>{event.event_name}</Text></View>
+            {!!posterUrl && <Pressable accessibilityRole="button" accessibilityLabel="View event poster" onPress={() => setPosterOpen(true)} style={{ width: 64, height: 80, borderRadius: 8, overflow: 'hidden' }}><Image source={{ uri: posterUrl }} contentFit="contain" style={{ width: '100%', height: '100%' }} /></Pressable>}
+            <View style={{ flex: 1, minWidth: 0 }}><Text accessibilityRole="header" accessibilityLabel={event.event_name || undefined} numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 26, fontWeight: '700', lineHeight: 32 }}>{shortTitle}</Text></View>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10 }}>
             <EventIcon name="calendar" size={14} /><Text style={{ fontSize: 12, color: '#16251fe6' }}>{event.event_dates || formatEventRange(event.start_date, event.end_date)}</Text>
@@ -163,12 +180,12 @@ function EventContent() {
           <View style={{ marginTop: 8, flexDirection: 'row', borderRadius: 16, borderColor: '#16251f1a', borderWidth: 1, overflow: 'hidden', backgroundColor: '#fff' }}>
             {stats.map((stat, i) => <View key={stat.label} style={{ flex: 1, paddingVertical: 16, paddingHorizontal: 1, alignItems: 'center', borderLeftWidth: i ? 1 : 0, borderColor: '#16251f1a', gap: 4 }}><EventIcon name={stat.icon} /><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ fontSize: 14, fontWeight: '700', textAlign: 'center', alignSelf: 'stretch' }}>{stat.value}</Text><Text style={{ fontSize: 9, color: '#16251f80', letterSpacing: 0.3 }}>{stat.label.toUpperCase()}</Text></View>)}
           </View>
-          {(organisation?.logo_url || posterUrl || sponsors.length > 0) && <View style={{ flexDirection: 'row', marginTop: 12, borderRadius: 16, borderColor: '#16251f1a', borderWidth: 1, backgroundColor: '#fff', overflow: 'hidden' }}>
-            {organisation?.logo_url && <Pressable accessibilityRole="button" accessibilityLabel={organisation.name} onPress={() => organisation.slug && void runAction(() => openSitePath(`/organisations/${organisation.slug}`))} style={{ width: 92, paddingHorizontal: 8, paddingVertical: 12, alignItems: 'center', borderRightWidth: 1, borderColor: '#16251f1a', gap: 8 }}><Text numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 9, color: "#386018" }}>ORGANISATION</Text><Image source={{ uri: organisation.logo_url }} style={{ width: 55, height: 32 }} contentFit="contain" /></Pressable>}
-            {!!posterUrl && <Pressable accessibilityRole="button" accessibilityLabel="View event poster" onPress={() => setPosterOpen(true)} style={{ width: 92, paddingHorizontal: 8, paddingVertical: 12, alignItems: 'center', borderRightWidth: sponsors.length ? 1 : 0, borderColor: '#16251f1a', gap: 8 }}><Text style={{ fontSize: 9, color: '#386018' }}>POSTER</Text><Image source={{ uri: posterUrl }} style={{ width: 58, height: 48 }} contentFit="contain" /></Pressable>}
+          {(hasSapa || organisation?.logo_url || sponsors.length > 0) && <View style={{ flexDirection: 'row', marginTop: 12, borderRadius: 16, borderColor: '#16251f1a', borderWidth: 1, backgroundColor: '#fff', overflow: 'hidden' }}>
+            {hasSapa && <View style={{ width: 92, paddingHorizontal: 8, paddingVertical: 12, alignItems: 'center', borderRightWidth: organisation?.logo_url || sponsors.length ? 1 : 0, borderColor: '#16251f1a', gap: 8 }}><Text style={{ fontSize: 9, color: '#386018' }}>SAPA</Text><Image source={require('@/assets/sapa-logo.svg')} accessibilityLabel="South African Padel Association" contentFit="contain" style={{ width: 48, height: 48 }} /></View>}
+            {organisation?.logo_url && <Pressable accessibilityRole="button" accessibilityLabel={organisation.name} onPress={() => organisation.slug && void runAction(() => openSitePath(`/organisations/${organisation.slug}`))} style={{ width: 92, paddingHorizontal: 8, paddingVertical: 12, alignItems: 'center', borderRightWidth: sponsors.length ? 1 : 0, borderColor: '#16251f1a', gap: 8 }}><Text numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 9, color: "#386018" }}>ORGANISATION</Text><Image source={{ uri: organisation.logo_url }} style={{ width: 55, height: 32 }} contentFit="contain" /></Pressable>}
             {sponsors.length > 0 && <View style={{ flex: 1, padding: 12, gap: 8, alignItems: 'center' }}><Text style={{ fontSize: 9, color: "#386018" }}>SPONSORS</Text><ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ alignSelf: 'stretch' }} contentContainerStyle={{ alignItems: 'center', justifyContent: sponsors.length <= 3 ? 'space-evenly' : 'flex-start', flexGrow: 1, gap: 8 }}>{sponsors.map(url => <Image key={url} source={{ uri: url }} style={{ width: 40, height: 32 }} contentFit="contain" />)}</ScrollView></View>}
           </View>}
-          <RegistrationCountdown event={event} onRegister={() => { if (registrations.length) { setTab('Overview'); setManageRequested(true); } else register(); }} label={registrations.length ? 'Manage Entry' : state === 'open' ? 'Register' : null} />
+          <RegistrationCountdown event={event} onRegister={() => { if (registrations.length) { setTab('Overview'); setManageRequested(true); } else register(); }} label={registrations.length ? 'Manage Entry' : state === 'open' ? 'Register' : null} onDownloadPlayers={() => void downloadPlayers()} downloadingPlayers={downloadingPlayers} />
           <EventTimeline event={event} hasDraw={drawStatus.hasDraw} />
           {!!(actionError || accountError || publicError) && <View style={{ marginTop: 12 }}><Notice title="Please try again" onRetry={load}>{actionError || accountError || publicError}</Notice></View>}
           {state === 'cancelled' && <View style={{ marginTop: 12 }}><Notice title="Event cancelled">This event is no longer taking place.</Notice></View>}

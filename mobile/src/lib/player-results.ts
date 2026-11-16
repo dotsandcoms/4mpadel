@@ -1,5 +1,27 @@
 import type { PublicPlayer, PublicRanking } from './players';
-import { fetchPoints, fetchPointSnapshot, fetchTournamentWins, resolveResultIdentity, type PointResult, type RankingPlayer } from './rankings';
+import { fetchPoints, fetchPointSnapshot, fetchTournamentWins, resolveResultIdentity, type PointResult, type RankingPlayer, type TrophyGroup } from './rankings';
+
+export const trophyTiers = ['Major', 'Super Gold', 'Gold', 'Silver', 'Bronze', 'Other'];
+
+export function trophySeason(now = new Date()): number {
+  return Number(now.toLocaleDateString('en-ZA', { timeZone: 'Africa/Johannesburg', year: 'numeric' }));
+}
+
+/** Provider dates are DD/MM/YYYY; imported results may use ISO dates. */
+export function seasonTrophies(groups: TrophyGroup[], season: number): TrophyGroup[] {
+  const inSeason = (date: string) => {
+    const parts = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(date.trim());
+    const iso = /^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/.exec(date.trim());
+    if (!parts && !iso) return false;
+    const [year, month, day] = parts ? [Number(parts[3]), Number(parts[2]), Number(parts[1])] : [Number(iso![1]), Number(iso![2]), Number(iso![3])];
+    const parsed = new Date(Date.UTC(year, month - 1, day));
+    return year === season && parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
+  };
+  return groups.map(group => {
+    const events = group.events.filter(event => inSeason(event.date));
+    return { ...group, events, count: events.length };
+  }).filter(group => group.count > 0).sort((a, z) => trophyTiers.indexOf(a.tier) - trophyTiers.indexOf(z.tier));
+}
 
 export function savedRankingResults(ranking: PublicRanking): PointResult[] {
   return (ranking.details || []).map(result => ({
