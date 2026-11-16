@@ -3,12 +3,33 @@ export function pointsDetailsUrl(participant, age, all = false, skip = 0) {
     return `https://api.rankedin.com/v1/ranking/getparticipantpointsdetailsasync?id=${participant}&agegroup=${age}&weekfromnow=0&showAll=${all}&language=en&skip=${skip}&take=100`;
 }
 
-export async function fetchCountedResults(participant, age, fetchImpl = fetch) {
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function fetchPointsPage(url, fetchImpl, wait) {
+    for (let attempt = 1; ; attempt++) {
+        try {
+            // Each attempt needs its own timeout, including reading the body.
+            const response = await fetchImpl(url, { signal: AbortSignal.timeout(20000) });
+            if (!response.ok) {
+                const error = new Error(`Points service returned ${response.status}`);
+                error.status = response.status;
+                throw error;
+            }
+            return await response.json();
+        } catch (error) {
+            const retryable = error.name === 'TimeoutError' || error.name === 'AbortError'
+                || error instanceof TypeError || error.status === 408 || error.status === 429
+                || (error.status >= 500 && error.status < 600);
+            if (!retryable || attempt >= 3) throw error;
+            await wait(1000 * 2 ** (attempt - 1));
+        }
+    }
+}
+
+export async function fetchCountedResults(participant, age, fetchImpl = fetch, wait = sleep) {
     const details = [];
     for (let skip = 0; ; skip += 100) {
-        const response = await fetchImpl(pointsDetailsUrl(participant, age, false, skip), { signal: AbortSignal.timeout(20000) });
-        if (!response.ok) throw new Error(`Points service returned ${response.status}`);
-        const json = await response.json();
+        const json = await fetchPointsPage(pointsDetailsUrl(participant, age, false, skip), fetchImpl, wait);
         const page = json?.ParticipantWithPoints?.EventPoints?.Payload;
         if (!Array.isArray(page)) throw new Error('Malformed points breakdown');
         details.push(...page.map(ep => ({

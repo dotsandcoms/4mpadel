@@ -298,7 +298,7 @@ async function run() {
     if (mainOnly) {
         await syncCategory(15809, 3, 82, "SAPA Men's Main");
         await syncCategory(15809, 4, 83, "SAPA Women's Main");
-        console.log('\nMain-only sync finished.');
+        console.log(`\nMain-only sync finished. Failures: ${syncFailures}.`);
         return;
     }
     
@@ -326,7 +326,7 @@ async function run() {
         }
     }
 
-    console.log("\nAll sync tasks finished.");
+    console.log(`\nAll sync tasks finished. Failures: ${syncFailures}.`);
 }
 
 
