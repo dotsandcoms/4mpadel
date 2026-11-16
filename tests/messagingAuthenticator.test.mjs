@@ -6,9 +6,10 @@ import { createRequire } from 'node:module';
 import { transformSync } from 'esbuild';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { authenticatorQrSource } from '../src/utils/messagingAuthenticator.js';
 const file = new URL('../src/components/admin/MessagingAuthenticator.jsx', import.meta.url), module = { exports: {} };
 vm.runInNewContext(transformSync(fs.readFileSync(file, 'utf8'), { loader: 'jsx', format: 'cjs', target: 'es2022' }).code, { module, exports: module.exports, encodeURIComponent, require: createRequire(file) });
-const { default: Authenticator, authenticatorQrSource } = module.exports;
+const { default: Authenticator } = module.exports;
 const defaults = { factor:'', secret:'', qrCode:'', code:'', busy:false, onSetup(){}, onCode(){}, onVerify(){}, buttonClass:'button', fieldClass:'field' };
 const render = props => renderToStaticMarkup(React.createElement(Authenticator, {...defaults,...props}));
 const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="white"/></svg>';
@@ -38,4 +39,13 @@ test('setup clearly belongs to the current email and supports multiple logins in
 });
 test('returning users see the exact account and first-time guidance without an MFA bypass',()=>{
  const html=render({factor:'verified-factor',accountEmail:'second@example.test'});assert.match(html,/second@example.test/);assert.match(html,/First time setting up this email/);assert.match(html,/another email will not work/);assert.match(html,/already has an authenticator connected/);assert.doesNotMatch(html,/>Set up authenticator<\/button>/);
+});
+
+test('a banking enrollment is identified by name and date and works across the staff tools',()=>{
+ const html=render({factor:'banking',accountEmail:'organiser@example.test',factors:[{id:'banking',status:'verified',friendly_name:'4M Banking 1793470748626',created_at:'2026-10-31T18:19:08Z'}]});
+ assert.match(html,/Connected authenticator/);assert.match(html,/4M Banking 1793470748626/);assert.match(html,/Connected 31 Oct 2026/);assert.match(html,/banking, event messages and help requests/);assert.match(html,/use that same account’s code/);assert.doesNotMatch(html,/<img|Set up authenticator<\/button>/);
+});
+test('multiple verified authenticators offer an accessible choice instead of silently requiring the first one',()=>{
+ const html=render({factor:'messages',factors:[{id:'banking',friendly_name:'4M Banking'},{id:'messages',friendly_name:'4M messaging'}],onFactorChange(){}});
+ assert.match(html,/<label[^>]*>Choose your connected authenticator/);assert.match(html,/<option value="messages" selected=""/);assert.match(html,/4M Banking/);
 });

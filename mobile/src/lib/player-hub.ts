@@ -71,6 +71,27 @@ export function filterHubPlayers(rows: HubPlayer[], query: string, source: strin
 export function topLocalPlayers(rows: HubPlayer[], gender: 'men' | 'women') {
   return rows.filter(p => p.source === '4m' && p.gender === gender && p.rank !== null).sort((a, b) => a.rank! - b.rank! || a.name.localeCompare(b.name)).slice(0, 20);
 }
+
+/** Shuffle Discovery's entire eligible pool before limiting its rail. A stable
+ * seed prevents follow actions and identical refresh responses moving the cards. */
+export function discoveryPlayers(rows: HubPlayer[], source: '4m' | 'pro', gender: string, seed: number, limit = 20): HubPlayer[] {
+  const eligible = [...new Map(rows.filter(player => player.source === source && (gender === 'all' || player.gender === gender)
+    && (source !== '4m' || player.rank != null && Number.isFinite(player.rank) && player.rank > 0)).map(player => [player.key, player])).values()]
+    .sort((a, b) => a.key.localeCompare(b.key));
+  let random = seed >>> 0;
+  for (const letter of `${source}:${gender}`) random = Math.imul(random ^ letter.charCodeAt(0), 16777619) >>> 0;
+  const next = () => {
+    random = (random + 0x6D2B79F5) >>> 0;
+    let value = Math.imul(random ^ random >>> 15, 1 | random);
+    value ^= value + Math.imul(value ^ value >>> 7, 61 | value);
+    return ((value ^ value >>> 14) >>> 0) / 4294967296;
+  };
+  for (let index = eligible.length - 1; index > 0; index--) {
+    const other = Math.floor(next() * (index + 1));
+    [eligible[index], eligible[other]] = [eligible[other], eligible[index]];
+  }
+  return eligible.slice(0, Math.max(0, limit));
+}
 async function invokePlayerSearch(body: Record<string, unknown>, signal?: AbortSignal) {
   const { data, error } = await supabase.functions.invoke('player-search', { body, signal });
   if (error || data?.error) {

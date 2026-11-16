@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign, Image as ImageIcon, UserPlus, X, Shield, ExternalLink, Home, User, ChevronLeft, ChevronRight, Mail, Building, Landmark, MapPin } from 'lucide-react';
+import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign, Image as ImageIcon, UserPlus, X, Shield, ExternalLink, Home, User, ChevronLeft, ChevronRight, KeyRound, Mail, Building, Landmark, MapPin } from 'lucide-react';
 import logo from '../../assets/logo_4m_lowercase.png';
 
 const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDesktopCollapsed, setIsDesktopCollapsed, permissions, player, session, badgeCounts = {} }) => {
@@ -19,12 +19,14 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDe
         { id: 'finance', label: 'Finance', icon: DollarSign },
         { id: 'blog', label: 'Blog', icon: FileText },
         { id: 'settings', label: 'Settings', icon: Settings },
+        { id: 'security', label: 'Security', icon: KeyRound },
         { id: 'admin-mgmt', label: 'Permissions', icon: Shield, superAdminOnly: true },
     ];
 
     const menuItems = allMenuItems.filter(item => {
         if (!permissions) return false;
         if (permissions.role === 'super_admin') return true;
+        if (item.id === 'security') return permissions.role !== 'private_rehearsal';
         if (item.superAdminOnly) return false;
 
         // Auto-show Event Manager if they have specific event permissions or legacy Tournament Manager access

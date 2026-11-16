@@ -26,7 +26,7 @@ export default function NotificationsSheet() {
   function leave() { if (router.canDismiss()) router.dismiss(); }
   function openAction(action: PendingAction) {
     leave();
-    if (action.kind === 'profile') router.navigate('/(tabs)/profile'); else void openSitePath(action.path);
+    if (action.kind === 'profile') router.push('/edit-profile'); else void openSitePath(action.path);
   }
   async function openNotification(notification: PlayerNotification) {
     if (notification.read_at === null && !await centre.markRead([notification.id])) return;

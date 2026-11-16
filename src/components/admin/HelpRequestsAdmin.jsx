@@ -2,46 +2,49 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../../supabaseClient';
 import { helpRequestApi, helpStatusText, helpTopicText } from '../../utils/helpRequests';
 import MessagingAuthenticator from './MessagingAuthenticator';
+import { emptyMessagingAuthenticator, resolveMessagingAuthenticator } from '../../utils/messagingAuthenticator';
 
 const button = 'min-h-[52px] rounded-lg border border-[#465155] px-4 py-3 text-sm font-medium transition-colors hover:bg-[#303A3D] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B9D8C7] disabled:cursor-not-allowed disabled:opacity-40';
 const field = 'w-full rounded-lg border border-[#465155] bg-[#20272A] p-3 text-[#F0F3F2] placeholder:text-[#A6B1B4] focus:outline-none focus:ring-2 focus:ring-[#B9D8C7]';
 const eventTitleColor = 'text-[#B9D8C7]';
 const helpTypeColor = 'text-[#D5BDE8]';
 export default function HelpRequestsAdmin({ unread = 0, revision = 0, initialTicket = null, onChange = () => {} }) {
-    const [auth, setAuth] = useState({ ready: false, verified: false, email: '', factor: '', secret: '', qrCode: '' }), [code, setCode] = useState('');
+    const [auth, setAuth] = useState({ ready: false, verified: false, email: '', ...emptyMessagingAuthenticator() }), [code, setCode] = useState('');
     const [rows, setRows] = useState([]), [next, setNext] = useState(null), [status, setStatus] = useState(''), [team, setTeam] = useState(''), [query, setQuery] = useState('');
     const [thread, setThread] = useState(null), [body, setBody] = useState(''), [loading, setLoading] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
     useEffect(() => { if (auth.verified) setBusy(false); }, [auth.verified]);
+    const [cursors, setCursors] = useState([null]);
+    const cursor = cursors.at(-1);
     const pendingTicket = useRef(initialTicket);
     const alive = useRef(true), generation = useRef(0), readGeneration = useRef(0), fetching = useRef(false), sending = useRef(false), owner = useRef(null), retry = useRef(null);
-    const clear = useCallback(() => { generation.current++; readGeneration.current++; setRows([]); setNext(null); setThread(null); setBody(''); setCode(''); setError(''); setBusy(false); setLoading(false); fetching.current = false; sending.current = false; retry.current = null; setAuth({ ready: false, verified: false, email: '', factor: '', secret: '', qrCode: '' }); }, []);
+    const clear = useCallback((keepEnrollment = false) => { generation.current++; readGeneration.current++; setRows([]); setNext(null); setCursors([null]); setThread(null); setBody(''); setCode(''); setError(''); setBusy(false); setLoading(false); fetching.current = false; sending.current = false; retry.current = null; setAuth(previous => keepEnrollment && previous.secret ? { ...previous, ready: false, verified: false } : { ready: false, verified: false, email: '', ...emptyMessagingAuthenticator() }); }, []);
     const authenticate = useCallback(async () => {
         const version = generation.current;
         try {
             const [session, assurance, factors] = await Promise.all([supabase.auth.getSession(), supabase.auth.mfa.getAuthenticatorAssuranceLevel(), supabase.auth.mfa.listFactors()]);
             if (session.error || assurance.error || factors.error) throw new Error('Could not check your authenticator. Try again.');
             if (!alive.current || version !== generation.current || document.hidden) return;
-            setAuth(previous => ({ ...previous, ready: true, verified: assurance.data.currentLevel === 'aal2', email: session.data.session?.user.email || '', factor: factors.data.totp.find(item => item.status === 'verified')?.id || previous.factor }));
+            setAuth(previous => ({ ...previous, ...resolveMessagingAuthenticator(factors.data, previous), ready: true, verified: assurance.data.currentLevel === 'aal2', email: session.data.session?.user.email || '' }));
         } catch (e) { if (alive.current && version === generation.current) setError(e.message); }
     }, []);
     useEffect(() => {
         alive.current = true;
         const { data } = supabase.auth.onAuthStateChange((_event, session) => { if (owner.current !== session?.user.id) { owner.current = session?.user.id; clear(); } setTimeout(() => { if (alive.current) void authenticate(); }, 0); });
         void authenticate();
-        const visibility = () => { if (document.hidden) clear(); else void authenticate(); };
+        const visibility = () => { if (document.hidden) clear(true); else void authenticate(); };
         document.addEventListener('visibilitychange', visibility);
         return () => { alive.current = false; generation.current++; readGeneration.current++; data.subscription.unsubscribe(); document.removeEventListener('visibilitychange', visibility); };
     }, [authenticate, clear]);
-    const load = useCallback(async (append = false, cursor = null) => {
+    const load = useCallback(async () => {
         if (!auth.verified || document.hidden || fetching.current) return;
         fetching.current = true; setLoading(true); const version = generation.current;
         try {
-            const page = await helpRequestApi('list', { staff: true, status, team, query, ...(append && cursor ? cursor : {}) });
+            const page = await helpRequestApi('list', { staff: true, status, team, query, ...(cursor || {}) });
             if (!alive.current || version !== generation.current) return;
-            setRows(previous => append ? [...new Map([...previous, ...page.rows].map(row => [row.id, row])).values()] : page.rows); setNext(page.next); setError('');
+            setRows(page.rows); setNext(page.next); setError('');
         } catch (e) { if (alive.current && version === generation.current) setError(e.message); }
         finally { if (alive.current && version === generation.current) { fetching.current = false; setLoading(false); } }
-    }, [auth.verified, status, team, query]);
+    }, [auth.verified, status, team, query, cursor]);
     useEffect(() => {
         generation.current++; fetching.current = false; setRows([]); setNext(null);
         if (!auth.verified) return;
@@ -118,7 +121,7 @@ export default function HelpRequestsAdmin({ unread = 0, revision = 0, initialTic
     return <section className="rounded-2xl border border-[#303638] bg-[#15191B] p-5 text-[#F0F3F2] sm:p-6 space-y-6">
         <header className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-2xl font-medium">Help requests{unread > 0 && <span className="ml-3 text-base text-[#B9D8C7]">({unread} unread)</span>}</h2><p className="mt-2 text-sm leading-6 text-[#B7C0C2]">Player enquiries for your events and the 4M team</p></div><button className={button} onClick={() => auth.verified ? void load() : void authenticate()} disabled={loading}>Refresh</button></header>
         {error && <p role="alert" className="rounded-lg border border-red-400/30 bg-red-400/10 p-4 text-sm text-red-200">{error}</p>}
-        {!auth.ready ? <p className="text-sm text-[#B7C0C2]">Checking your account…</p> : !auth.verified ? <MessagingAuthenticator accountEmail={auth.email} factor={auth.factor} secret={auth.secret} qrCode={auth.qrCode} code={code} busy={busy} onSetup={setup} onCode={setCode} onVerify={verify} buttonClass={button} fieldClass={field} /> : thread ? <>
+        {!auth.ready ? <p className="text-sm text-[#B7C0C2]">Checking your account…</p> : !auth.verified ? <MessagingAuthenticator accountEmail={auth.email} factor={auth.factor} factors={auth.factors} secret={auth.secret} qrCode={auth.qrCode} code={code} busy={busy} onSetup={setup} onFactorChange={factor => { setAuth(previous => ({ ...previous, factor })); setCode(''); setError(''); }} onCode={setCode} onVerify={verify} buttonClass={button} fieldClass={field} /> : thread ? <>
             <button type="button" className={`${button} inline-flex items-center gap-2`} onClick={back}><span aria-hidden="true">←</span> All requests</button>
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#343B3E] pb-5"><div><p className="font-mono text-sm text-[#B7C0C2]">{thread.request.reference}</p><h3 className={`mt-2 text-xl font-medium ${thread.request.eventName ? eventTitleColor : helpTypeColor}`}>{thread.request.eventName || helpTopicText[thread.request.topic]}</h3><p className={`mt-2 text-sm ${helpTypeColor}`}>{helpTopicText[thread.request.topic]}</p></div>{statusBadge(thread.request.status)}</div>
             <dl className="grid gap-5 text-sm sm:grid-cols-3">
@@ -136,7 +139,7 @@ export default function HelpRequestsAdmin({ unread = 0, revision = 0, initialTic
             </>}
             <div className={`grid gap-3 ${thread.request.status === 'resolved' ? 'grid-cols-1' : thread.request.team === 'organiser' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>{thread.request.status !== 'resolved' && <button className={`${button} bg-[#EAF0EC] text-[#17271F] hover:bg-white`} disabled={busy || !body.trim()} onClick={() => { if (retry.current?.body !== body.trim()) retry.current = { body: body.trim(), key: crypto.randomUUID() }; void act('reply', { body: retry.current.body, clientId: retry.current.key }); }}>{busy ? 'Saving…' : 'Send reply'}</button>}<button className={button} disabled={busy} onClick={() => void act('status', { status: thread.request.status === 'resolved' ? 'open' : 'resolved' })}>{thread.request.status === 'resolved' ? 'Reopen request' : 'Mark resolved'}</button>{thread.request.status !== 'resolved' && thread.request.team === 'organiser' && <button className={button} disabled={busy} onClick={() => void act('escalate')}>Send to 4M support</button>}</div>
         </> : <>
-            <div className="grid gap-4 sm:grid-cols-[minmax(220px,1fr)_180px_180px]"><label className="text-sm text-[#B7C0C2]">Search<input type="search" placeholder="Name, email, event or ticket" value={query} onChange={event => setQuery(event.target.value)} className={`${field} mt-2`} /></label><label className="text-sm text-[#B7C0C2]">Status<select value={status} onChange={event => setStatus(event.target.value)} className={`${field} mt-2`}><option value="">All statuses</option>{Object.entries(helpStatusText).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="text-sm text-[#B7C0C2]">Team<select value={team} onChange={event => setTeam(event.target.value)} className={`${field} mt-2`}><option value="">All teams</option><option value="organiser">Organisers</option><option value="4m">4M support</option></select></label></div>
+            <div className="grid gap-4 sm:grid-cols-[minmax(220px,1fr)_180px_180px]"><label className="text-sm text-[#B7C0C2]">Search<input type="search" placeholder="Name, email, event or ticket" value={query} onChange={event => { setCursors([null]); setQuery(event.target.value); }} className={`${field} mt-2`} /></label><label className="text-sm text-[#B7C0C2]">Status<select value={status} onChange={event => { setCursors([null]); setStatus(event.target.value); }} className={`${field} mt-2`}><option value="">All statuses</option>{Object.entries(helpStatusText).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="text-sm text-[#B7C0C2]">Team<select value={team} onChange={event => { setCursors([null]); setTeam(event.target.value); }} className={`${field} mt-2`}><option value="">All teams</option><option value="organiser">Organisers</option><option value="4m">4M support</option></select></label></div>
             <div className="overflow-x-auto rounded-xl border border-[#343B3E]"><table className="w-full min-w-[960px] border-collapse text-left text-sm"><caption className="sr-only">Help request queue. Open a ticket to read its history and reply.</caption><thead className="bg-[#20272A] text-[#C8CFD1]"><tr>{['Ticket', 'From', 'Event / topic', 'Status', 'Team', 'Updated'].map(label => <th key={label} scope="col" className="px-4 py-3 font-medium">{label}</th>)}</tr></thead><tbody>
                 {rows.map(row => <tr key={row.id} onClick={event => { if (!event.target.closest('button')) void open(row.id); }} className={`cursor-pointer border-t border-[#343B3E] transition-colors hover:bg-[#252D30] ${row.unread > 0 ? 'bg-[#1D2527]' : ''}`}>
                     <td className="max-w-[280px] px-4 py-4"><button type="button" onClick={() => void open(row.id)} className="rounded text-left font-mono font-medium text-[#D0E5D7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#B9D8C7]" aria-label={`Open ${row.reference} from ${row.requester.name || row.requester.email || 'player'}`}>{row.reference}{row.unread > 0 && <span className="ml-2 font-sans text-xs">({row.unread})</span>}</button><p className="mt-1 truncate text-[#B7C0C2]">{row.preview}</p></td>
@@ -146,7 +149,7 @@ export default function HelpRequestsAdmin({ unread = 0, revision = 0, initialTic
                 </tr>)}
                 {!rows.length && <tr><td colSpan={6} className="px-4 py-10 text-center text-[#B7C0C2]">{loading ? 'Loading requests…' : query || status || team ? 'No requests match these filters' : 'No help requests yet'}</td></tr>}
             </tbody></table></div>
-            <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-[#B7C0C2]"><p>{rows.length} requests shown · Organisers see their events; 4M Super Admins see all requests</p>{next && <button className={button} disabled={loading} onClick={() => void load(true, next)}>Load earlier requests</button>}</div>
+            <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-[#B7C0C2]"><p>{rows.length} requests shown · Organisers see their events; 4M Super Admins see all requests</p><nav aria-label="Help request pages" className="flex items-center gap-3"><button className={button} disabled={loading || cursors.length === 1} onClick={() => setCursors(previous => previous.slice(0, -1))}>Previous</button><span aria-live="polite">Page {cursors.length}</span><button className={button} disabled={loading || !next} onClick={() => { if (next) setCursors(previous => [...previous, next]); }}>Next</button></nav></div>
         </>}
     </section>;
 }

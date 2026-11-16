@@ -37,6 +37,13 @@ test('club parsing refuses unpublished rows, unsafe media and invalid map pins',
   assert.equal(api.coordinate('', ''), null);
   assert.equal(api.coordinate(0, 0).latitude, 0);
 });
+test('club approval tags match website status and verified rules without inferring membership', () => {
+  const api = setup();
+  assert.equal(api.parseClub(fixture()).approved, false);
+  for (const value of [{ status: '4m_approved' }, { status: '4m_premium' }, { verified: true }]) assert.equal(api.parseClub(fixture(value)).approved, true);
+  const club = api.parseClub(fixture({ verified: false, sapa_registered: true, club_type: 'Padel Club', group_id: 'private-group' }));
+  assert.equal(club.approved, false); assert.equal(club.sapaRegistered, true); assert.equal(club.clubType, 'Padel Club'); assert.equal(club.group, null);
+});
 test('directory search matches city/province and nearby filters and orders using valid coordinates only', () => {
   const api = setup(), origin = { latitude: -33.9249, longitude: 18.4241 };
   const rows = [api.parseClub(fixture()), api.parseClub(fixture({ id: 'far', name: 'Far away', lat: -26.2041, lng: 28.0473 })), api.parseClub(fixture({ id: 'missing', lat: null, name: 'Missing pin' }))];

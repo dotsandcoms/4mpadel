@@ -303,6 +303,7 @@ export const useAdminPermissions = (userEmail) => {
     const hasPermission = (tabId) => {
         if (!permissions) return false;
         if (tabId === 'tournament-mgmt') return false;
+        if (tabId === 'security') return permissions.role !== 'private_rehearsal';
         if (permissions.role === 'super_admin') return true;
 
         if (tabId === 'event-mgmt' && permissions.module_permissions?.['event-mgmt']?.allowedEvents?.length > 0) return true;

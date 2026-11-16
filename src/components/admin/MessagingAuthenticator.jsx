@@ -1,25 +1,28 @@
 import React, { useId } from 'react';
-
-// Keep enrollment QR codes local: never use a third-party QR image service.
-export function authenticatorQrSource(value) {
-    if (!value) return null;
-    if (/^data:image\/(?:svg\+xml|png)(?:;[^,]*)?,/i.test(value)) return value;
-    if (/^\s*(?:<\?xml[^>]*>\s*)?<svg[\s>]/i.test(value)) return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(value)}`;
-    return null;
-}
+import { authenticatorQrSource } from '../../utils/messagingAuthenticator';
 
 /** Short, state-specific guidance using the existing event-messaging form styles. */
-export default function MessagingAuthenticator({ accountEmail, factor, secret, qrCode, code, busy, onSetup, onCode, onVerify, buttonClass, fieldClass }) {
+export default function MessagingAuthenticator({ accountEmail, factor, factors = [], secret, qrCode, code, busy, onSetup, onFactorChange, onCode, onVerify, buttonClass, fieldClass }) {
     const hintId = useId();
     const settingUp = !factor || !!secret;
     const qr = secret ? authenticatorQrSource(qrCode) : null;
+    const connected = factors.find(item => item.id === factor);
+    const connectedDate = connected?.created_at && !Number.isNaN(Date.parse(connected.created_at)) ? new Date(connected.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
     return <div className="rounded-2xl border border-white/10 bg-white/5 p-5 sm:p-6 space-y-5">
         <div className="space-y-2 max-w-2xl">
             <h3 className="font-semibold">{settingUp ? 'Set up your authenticator' : 'Verify with your authenticator'}</h3>
             <p className="text-sm leading-6 text-gray-400">This extra check protects event messages and player information.</p>
             {accountEmail && <p className="text-sm leading-6 text-gray-300">Signed in as <strong className="font-semibold text-white break-all">{accountEmail}</strong></p>}
-            <p className="text-sm leading-6 text-gray-400">Each login email needs its own setup. You can keep both accounts in the same authenticator app; choose the entry for the email shown here.</p>
+            <p className="text-sm leading-6 text-gray-400">Each login email needs its own setup. You can keep multiple accounts in the same authenticator app; choose the entry for the email shown here.</p>
+            <p className="text-sm leading-6 text-gray-300">One authenticator setup covers banking, event messages and help requests for this email.</p>
+            {settingUp && <p className="text-sm leading-6 text-gray-300">Your authenticator app generates the 6-digit code after you add this account using its QR code or setup key.</p>}
         </div>
+        {!settingUp && connected && <div className="max-w-xl space-y-2 text-sm leading-6 text-gray-300">
+            {factors.length > 1 ? <label className="block">Choose your connected authenticator
+                <select className={`${fieldClass} mt-2 block`} value={factor} disabled={busy} onChange={event => onFactorChange(event.target.value)}>{factors.map(item => <option key={item.id} value={item.id}>{item.friendly_name || 'Authenticator'}</option>)}</select>
+            </label> : <p>Connected authenticator: <strong className="font-semibold text-white break-all">{connected.friendly_name || 'Authenticator app'}</strong></p>}
+            {connectedDate && <p className="text-gray-400">Connected {connectedDate}</p>}
+        </div>}
         <ol className="list-decimal pl-5 space-y-3 text-sm leading-6 text-gray-300 max-w-2xl marker:text-gray-500">
             {settingUp ? <>
                 <li>Open an authenticator app on your phone. If you need one, install <strong className="font-semibold text-white">Google Authenticator</strong> or <strong className="font-semibold text-white">Microsoft Authenticator</strong> from your phone’s app store.</li>
@@ -27,7 +30,7 @@ export default function MessagingAuthenticator({ accountEmail, factor, secret, q
                 <li>Enter the <strong className="font-semibold text-white">6-digit code</strong> from the app here, then select <strong className="font-semibold text-white">Verify code</strong>.</li>
             </> : <>
                 <li>Open the authenticator app you previously set up on your phone.</li>
-                <li>Find <strong className="font-semibold text-white">4M Padel</strong>{accountEmail ? <> for <strong className="font-semibold text-white break-all">{accountEmail}</strong></> : <> for your current login email</>}. A code for another email will not work.</li>
+                <li>Find the entry{accountEmail ? <> for <strong className="font-semibold text-white break-all">{accountEmail}</strong></> : <> for your current login email</>}. It may be labelled <strong className="font-semibold text-white">4M Padel</strong> or <strong className="font-semibold text-white">4M Banking</strong>. A code for another email will not work.</li>
                 <li>Enter its latest <strong className="font-semibold text-white">6-digit code</strong> below, then select <strong className="font-semibold text-white">Verify code</strong>.</li>
             </>}
         </ol>
@@ -52,13 +55,14 @@ export default function MessagingAuthenticator({ accountEmail, factor, secret, q
             </form>
             {!secret && <details className="max-w-xl text-sm text-gray-400">
                 <summary className="cursor-pointer min-h-11 py-3 rounded-lg focus-visible:outline-2 focus-visible:outline-padel-green">First time setting up this email?</summary>
-                <p className="leading-6">For a new login email, sign in with that email, select <strong className="text-white">Set up authenticator</strong>, then add a new account in your authenticator app and scan its QR code. Enter that account’s 6-digit code to finish.</p>
-                <p className="mt-2 leading-6">This email already has an authenticator connected, so it needs its existing code. If you did not set it up or have lost access, contact support to recover the account. Setting up another email does not replace this connection.</p>
+                <p className="leading-6">This email already has an authenticator connected. If you set it up for banking, use that same account’s code here. Your first visit to event messages or help requests does not need another setup.</p>
+                <p className="mt-2 leading-6">An email with no connected authenticator shows a <strong className="text-white">Set up authenticator</strong> button. If you did not connect the authenticator shown here or have lost access, contact support to recover this account.</p>
             </details>}
             {!secret && <details className="max-w-xl text-sm text-gray-400">
                 <summary className="cursor-pointer min-h-11 py-3 rounded-lg focus-visible:outline-2 focus-visible:outline-padel-green">Can’t find your code?</summary>
                 <p className="leading-6">Use the app and phone you originally connected to 4M Padel. If you’ve lost access, <a href="/contact" target="_blank" rel="noopener noreferrer" className="text-white underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-padel-green">contact 4M support</a> for help recovering access.</p>
             </details>}
         </>}
+        <a href="/admin?tab=security" className="inline-block min-h-11 py-3 text-sm text-white underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-padel-green">Manage authenticators and backup access</a>
     </div>;
 }

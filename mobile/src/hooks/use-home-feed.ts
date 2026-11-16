@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fetchProfileDetails } from '@/lib/profile-details';
 import { homeFeedCache } from '@/lib/home-feed-cache';
 import { fetchFeatured, fetchHappeningNow, fetchPendingPayments, fetchPlayer, fetchRecentResults, fetchSchedule } from '@/lib/home';
 import { fetchFollowingFeed } from '@/lib/following-feed';
@@ -65,6 +66,12 @@ export function useHomeFeed(source: HomeSource, enabled = true) {
     const player = await fetchPlayer(email, true);
     return player ? { ...player, winLoss: null } : null;
   }, signedIn);
+  const completionPlayerId = profile.data?.id;
+  const completion = useHomeResource(owner, screenActive, `profile-completion:${completionPlayerId ?? ''}`, 30000, async () => {
+    if (!completionPlayerId) throw new Error('Profile is not ready.');
+    const details = await fetchProfileDetails(completionPlayerId);
+    return { birthDate: !!details?.date_of_birth, playtomic: details?.playtomic_no_profile === true || details?.playtomic_level != null && !!details?.playtomic_proof_path };
+  }, signedIn && !!completionPlayerId);
   const schedule = useHomeResource(owner, active, 'schedule', 60000, () => fetchSchedule(email, true), signedIn);
   const payments = useHomeResource(owner, active, 'payments', 60000, () => fetchPendingPayments(email, true), signedIn);
   const following = useHomeResource(owner, active, 'following', 45000, () => fetchFollowingFeed('all', 12), signedIn);
@@ -88,8 +95,8 @@ export function useHomeFeed(source: HomeSource, enabled = true) {
     return () => clearInterval(timer);
   }, [active, local, live.refresh]);
   const refresh = async () => {
-    await Promise.allSettled([profile, schedule, payments, following, matches,
+    await Promise.allSettled([profile, completion, schedule, payments, following, matches,
       ...(local ? [spotlight, happening, results, media] : [tour, fixtures, live, fip])].map(resource => resource.refresh(true)));
   };
-  return { owner, active, signedIn, profile, schedule, payments, following, matches, spotlight, happening, results, media, tour, fixtures, live, fip, tourPresentation, refresh };
+  return { completion, owner, active, signedIn, profile, schedule, payments, following, matches, spotlight, happening, results, media, tour, fixtures, live, fip, tourPresentation, refresh };
 }

@@ -1,0 +1,66 @@
+\ir banking-database.sql
+alter table auth.mfa_factors add column friendly_name text,add column created_at timestamptz default now();
+alter table public.organisations add column created_by bigint;
+alter table public.calendar add column organiser_email text,add column event_co_admins text[];
+create table public.players(id bigint primary key,email text);
+\ir ../../supabase/migrations/20261116072343_authenticator_backup_and_recovery.sql
+create function pg_temp.expect(ok boolean,label text) returns void language plpgsql as $$begin if not coalesce(ok,false) then raise exception 'FAILED: %',label; end if; end$$;
+create function pg_temp.reject(query text,expected text) returns void language plpgsql as $$begin begin execute query; exception when others then if position(expected in sqlerrm)>0 then return; end if; raise; end;raise exception 'Expected rejection: %',expected;end$$;
+create function pg_temp.login(n int,level text default 'aal2',age int default 0) returns void language sql as $$
+ select set_config('request.jwt.claims',jsonb_build_object('sub',('00000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid,'email',n||'@test.test','role','authenticated','session_id',('10000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid,'aal',level,'amr',jsonb_build_array(jsonb_build_object('method','totp','timestamp',extract(epoch from now())-age)))::text,true)::text;
+$$;
+begin;
+insert into auth.users(id,email,email_confirmed_at) select ('00000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid,n||'@test.test',now() from generate_series(1,5)n;
+insert into auth.mfa_factors(id,user_id,factor_type,status,friendly_name) select ('20000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid,id,'totp','verified','Synthetic authenticator' from auth.users u join generate_series(1,5)n on email=n||'@test.test';
+insert into auth.sessions(id,user_id,factor_id) select ('10000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid,user_id,id from auth.mfa_factors f join generate_series(1,5)n on id=('20000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid;
+insert into public.admin_sidebar_permissions(email,role) values('1@test.test','super_admin'),('2@test.test','super_admin');
+insert into public.organisations(id,name,status) values('30000000-0000-0000-0000-000000000001','Synthetic organisation','approved');
+insert into public.organisation_members values('30000000-0000-0000-0000-000000000001','3@test.test','admin');
+set local role anon;
+select pg_temp.reject($q$select public.authenticator_recovery_action('lookup','{"email":"2@test.test"}')$q$,'permission denied');
+set local role authenticated;
+select pg_temp.login(1,'aal1');
+select pg_temp.reject($q$select public.authenticator_recovery_action('lookup','{"email":"2@test.test"}')$q$,'RECOVERY_MFA_REQUIRED');
+select pg_temp.login(1,'aal2',301);
+select pg_temp.reject($q$select public.authenticator_recovery_action('lookup','{"email":"2@test.test"}')$q$,'RECOVERY_MFA_REQUIRED');
+select pg_temp.login(3);
+select pg_temp.reject($q$select public.authenticator_recovery_action('lookup','{"email":"2@test.test"}')$q$,'RECOVERY_SUPER_ADMIN_REQUIRED');
+select set_config('request.jwt.claims',(auth.jwt()||'{"user_metadata":{"role":"super_admin"}}')::text,true);
+select pg_temp.reject($q$select public.authenticator_recovery_action('lookup','{"email":"2@test.test"}')$q$,'RECOVERY_SUPER_ADMIN_REQUIRED');
+select pg_temp.login(1);
+select pg_temp.expect(public.authenticator_recovery_action('lookup','{"email":"2@test.test"}')->>'email'='2@test.test','Super Admin can find another admin');
+select pg_temp.expect(public.authenticator_recovery_action('lookup','{"email":"3@test.test"}')->>'email'='3@test.test','Super Admin can recover an organisation admin');
+select pg_temp.expect(public.authenticator_recovery_action('lookup','{"email":"2@test.test"}')->'factors'->0->>'friendly_name'='Synthetic authenticator','lookup returns recognisable factor metadata');
+select pg_temp.expect(not (public.authenticator_recovery_action('lookup','{"email":"2@test.test"}')->'factors'->0 ? 'secret'),'lookup never returns authenticator secrets');
+select pg_temp.reject($q$select public.authenticator_recovery_action('lookup','{"email":"4@test.test"}')$q$,'RECOVERY_STAFF_UNAVAILABLE');
+select pg_temp.reject($q$select public.authenticator_recovery_action('lookup','{"email":"1@test.test"}')$q$,'RECOVERY_USE_OWN_SETTINGS');
+select pg_temp.reject($q$select * from public.authenticator_recovery_audit$q$,'permission denied');
+select pg_temp.reject($q$select public.finish_authenticator_recovery(gen_random_uuid(),'{}',true)$q$,'permission denied');
+select '{"email":"2@test.test","requestId":"40000000-0000-0000-0000-000000000001","factorIds":["20000000-0000-0000-0000-000000000002"],"reason":"Identity confirmed directly by phone","identityConfirmed":true}' as request \gset
+select pg_temp.reject(format('select public.authenticator_recovery_action(''prepare'',%L)',(:'request'::jsonb-'identityConfirmed')),'RECOVERY_CONFIRM_IDENTITY');
+select pg_temp.reject(format('select public.authenticator_recovery_action(''prepare'',%L)',(:'request'::jsonb||'{"reason":"short"}')),'RECOVERY_REASON_REQUIRED');
+select pg_temp.reject(format('select public.authenticator_recovery_action(''prepare'',%L)',(:'request'::jsonb||'{"factorIds":["20000000-0000-0000-0000-000000000003"]}')),'RECOVERY_FACTORS_CHANGED');
+select pg_temp.expect((public.authenticator_recovery_action('prepare',:'request')->>'execute')::boolean,'first approval creates durable permission for exact factors');
+select pg_temp.expect(not (public.authenticator_recovery_action('prepare',:'request')->>'execute')::boolean,'a retry cannot repeat Auth mutations');
+select pg_temp.reject(format('select public.authenticator_recovery_action(''prepare'',%L)',(:'request'::jsonb||'{"reason":"Changed recovery reason for the same request"}')),'RECOVERY_RETRY_CHANGED');
+select pg_temp.reject(format('select public.authenticator_recovery_action(''prepare'',%L)',(:'request'::jsonb||'{"requestId":"40000000-0000-0000-0000-000000000002"}')),'RECOVERY_IN_PROGRESS');
+select pg_temp.expect(jsonb_array_length(public.authenticator_recovery_action('history'))=1,'actor can inspect recovery status');
+select pg_temp.login(2);
+select pg_temp.expect(jsonb_array_length(public.authenticator_recovery_action('history'))=0,'another Super Admin does not inherit actor history');
+reset role;
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
+set local role service_role;
+select pg_temp.reject($q$select * from public.authenticator_recovery_audit$q$,'permission denied');
+select pg_temp.reject($q$select public.authenticator_recovery_action('history')$q$,'permission denied');
+select public.finish_authenticator_recovery('40000000-0000-0000-0000-000000000001',array['20000000-0000-0000-0000-000000000002']::uuid[],true);
+reset role;
+select pg_temp.expect((select state='completed' and finished_at is not null and cardinality(removed_factor_ids)=1 from public.authenticator_recovery_audit),'worker records successful reset');
+select pg_temp.login(1);
+set local role authenticated;
+select pg_temp.expect(public.authenticator_recovery_action('prepare',:'request')->>'state'='completed','completed approval remains idempotent');
+reset role;
+delete from auth.sessions where user_id='00000000-0000-0000-0000-000000000001';
+set local role authenticated;
+select pg_temp.reject($q$select public.authenticator_recovery_action('history')$q$,'RECOVERY_SIGN_IN');
+rollback;
+\echo 'Authenticator recovery DB: live-session validation, fresh MFA, staff scope, exact factor ownership, audit isolation and retry safety passed.'

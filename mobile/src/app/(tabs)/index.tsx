@@ -1,3 +1,6 @@
+import { HomeActionBanner, ProfileCompletionBanner } from '@/components/home-reminders';
+import { useHomeBannerDismissal } from '@/hooks/use-home-banner-dismissal';
+import { missingProfileFields } from '@/lib/profile-completion';
 import { HomeShortcuts } from '@/components/home-shortcuts';
 import { type Href, useNavigation, useRouter } from 'expo-router';
 import type { NavigationProp } from 'expo-router/react-navigation';
@@ -32,6 +35,7 @@ export default function HomeScreen() {
     rankings: { view: string; source: string; query: string; gender: string };
   }>>();
   const [tab, setTab] = useState<HomeFeedTab>('4m'), [refreshing, setRefreshing] = useState(false);
+  const banner = useHomeBannerDismissal();
   const source: HomeSource = tab === 'international' ? 'international' : '4m';
   const following = tab === 'following';
   const feed = useHomeFeed(source, !following);
@@ -39,6 +43,8 @@ export default function HomeScreen() {
   const local = source === '4m';
   const followedPlayers = (feed.following.data?.followedPlayers ?? []).filter(player => player.source === (local ? 'local' : 'pro'));
   const pending = useMemo(() => [...(feed.payments.data ?? []), ...profileGaps(feed.profile.data ?? null)], [feed.payments.data, feed.profile.data]);
+  const profileMissing = missingProfileFields(feed.profile.data, feed.completion.data);
+  const actionReminders = pending.filter(action => action.kind !== 'profile');
   const registrationState = feed.schedule.data?.registrationByEvent;
   const decorate = (event: CalendarEvent) => homeEventState(event, registrationState, feed.payments.data);
   const spotlight = (feed.spotlight.data ?? []).map(decorate);
@@ -89,14 +95,14 @@ export default function HomeScreen() {
       router.push({ pathname: '/events/register', params: { id: String(event.id), ...(cta.action === 'pay' ? { mode: 'pay' } : {}) } });
     } else openEvent(event);
   };
-  const openPending = (action: PendingAction) => action.kind === 'profile' ? open('/(tabs)/profile') : void openSitePath(action.path);
+  const openPending = (action: PendingAction) => action.kind === 'profile' ? router.push('/edit-profile') : void openSitePath(action.path);
   const openTour = (event: ProTournament) => open(tourPath(event));
   const refresh = async () => {
     if (refreshing) return;
     setRefreshing(true);
     try { await feed.refresh(); } finally { if (mounted.current) setRefreshing(false); }
   };
-  const errors = [feed.profile, feed.schedule, feed.payments, feed.following, ...(local ? [feed.spotlight, feed.happening, feed.results, feed.media] : [feed.tour, feed.fixtures, feed.live, feed.fip])].some(resource => resource.error);
+  const errors = [feed.profile, feed.completion, feed.schedule, feed.payments, feed.following, ...(local ? [feed.spotlight, feed.happening, feed.results, feed.media] : [feed.tour, feed.fixtures, feed.live, feed.fip])].some(resource => resource.error);
   const state = (resource: { loading: boolean; error: boolean; refresh: (force?: boolean) => Promise<void> }, empty: string) => <SectionState loading={resource.loading} error={resource.error} empty={empty} onRetry={() => void resource.refresh(true)} />;
 
   function renderSection(section: Section) {
@@ -148,16 +154,8 @@ export default function HomeScreen() {
   const listHeader = <View style={{ flexShrink: 0 }}>
         <HomeIdentity player={feed.profile.data} loading={feed.profile.loading} onProfile={() => open('/(tabs)/profile')} onRankings={() => open('/rankings?view=Rankings&source=4m')} />
         <View style={{ marginBottom: 16, flexShrink: 0 }}><HomeSourcePicker following value={tab} onChange={setTab} /></View>
-        {!following && pending.length > 0 && <Pressable accessibilityRole="button" accessibilityLabel={`${pending.length} pending actions. ${pending[0].title}. ${pending.length > 1 ? 'Review all actions' : 'Review action'}`} onPress={() => pending.length > 1 ? open('/notifications') : openPending(pending[0])} style={s.pending}>
-          <View style={{ flex: 1, gap: 6 }}>
-            <View style={s.pendingHeading}>
-              <Text style={s.pendingTitle}>{pending[0].title}</Text>
-              {pending.length > 1 && <View style={s.pendingBadge}><Text style={s.pendingBadgeText}>+{pending.length - 1} more {pending.length === 2 ? 'action' : 'actions'}</Text></View>}
-            </View>
-            <Text numberOfLines={1} style={s.pendingText}>{pending[0].subtitle}</Text>
-          </View>
-          <Text style={[s.pendingTitle, { flexShrink: 0 }]}>{pending.length > 1 ? 'Review all →' : 'Review →'}</Text>
-        </Pressable>}
+        {feed.signedIn && <ProfileCompletionBanner missing={profileMissing} onEdit={() => router.push('/edit-profile')} />}
+        {!following && banner.ready && !banner.hidden && <HomeActionBanner actions={actionReminders} onReview={() => actionReminders.length > 1 ? open('/notifications') : openPending(actionReminders[0])} onDismiss={banner.dismiss} />}
       </View>;
 
   return <View style={s.page}>

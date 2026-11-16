@@ -5,6 +5,8 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ClubIdentity } from '@/components/club-identity';
+import { ClubTags, ClubVerifiedBadge } from '@/components/club-tags';
+import { clubHasOwner } from '@/lib/club-claims';
 import { HomeAction } from '@/components/home-action';
 import { ErrorBanner } from '@/components/error-banner';
 import { EventArtwork } from '@/components/event-artwork';
@@ -32,6 +34,12 @@ export default function ClubScreen() {
   const [coaches, setCoaches] = useState<ClubCoach[]>([]), [community, setCommunity] = useState<ClubCommunity | null>(null);
   const [relatedError, setRelatedError] = useState(''), [allEvents, setAllEvents] = useState(false), [photo, setPhoto] = useState<{ url: string; caption: string } | null>(null);
   const [place, setPlace] = useState<ClubPlace | null>(null), [placeLoading, setPlaceLoading] = useState(false), [placeError, setPlaceError] = useState(''), [placeRevision, setPlaceRevision] = useState(0);
+  const [claimAvailable, setClaimAvailable] = useState<boolean | null>(null), [claimError, setClaimError] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController(); setClaimAvailable(null); setClaimError(false);
+    if (club) void clubHasOwner(club.id, controller.signal).then(hasOwner => { if (!controller.signal.aborted) setClaimAvailable(!hasOwner); }).catch(() => { if (!controller.signal.aborted) setClaimError(true); });
+    return () => controller.abort();
+  }, [club]);
   useEffect(() => {
     const controller = new AbortController(); setLoading(true); setClub(null); setError(''); setPhoto(null); setAllEvents(false);
     void fetchClub(slug, controller.signal).then(value => { if (!controller.signal.aborted) setClub(value); }).catch(() => { if (!controller.signal.aborted) setError('This club couldn’t load. Please try again.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -70,7 +78,16 @@ export default function ClubScreen() {
       {!!error && <HomeAction label="Retry club" onPress={() => setRevision(value => value + 1)} />}
       {club ? <>
         {photos.length ? <ClubPhotoRail photos={photos} onError={() => setError('This photo link couldn’t open.')} /> : placeLoading ? <View style={{ height: 208, borderRadius: 16, backgroundColor: b.surface, alignItems: 'center', justifyContent: 'center', gap: 12 }}><ActivityIndicator color={b.muted} /><Text style={s.meta}>Loading venue photos…</Text></View> : null}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}><ClubIdentity club={club} size={48} /><View style={{ flex: 1, gap: 4 }}><Text accessibilityRole="header" style={s.title}>{club.name}</Text><Text style={s.body}>{clubLocation(club)}</Text></View></View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <ClubIdentity club={club} size={48} />
+          <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><Text accessibilityRole="header" style={[s.title, { flexShrink: 1 }]}>{club.name}</Text>{club.approved && <ClubVerifiedBadge />}</View>
+            <Text style={s.body}>{clubLocation(club)}</Text>
+          </View>
+          {claimAvailable === true && <HomeAction size="small" label="Claim Club" accessibilityLabel={`Claim ${club.name}`} onPress={() => router.push({ pathname: '/claim-club', params: { slug: club.slug } })} />}
+        </View>
+        <ClubTags club={club} onGroup={() => router.push({ pathname: '/club-groups/[slug]', params: { slug: club.group!.slug } })} />
+        {claimError && <HomeAction size="small" label="Retry club ownership check" onPress={() => setRevision(value => value + 1)} />}
         {place?.rating && <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}><Text style={{ color: b.premium, fontSize: 16, fontWeight: '600' }}>{place.rating.toFixed(1)}</Text><RatingStars rating={place.rating} /><Text style={{ color: '#5E5E5E', fontSize: 12 }}>Google Maps · {place.reviewCount ?? '—'} reviews</Text>{place.openNow !== null && <Text style={{ ...s.meta, color: place.openNow ? b.accent : b.muted }}>{place.openNow ? 'Open now' : 'Closed now'}</Text>}</View>}
         {place?.businessStatus && place.businessStatus !== 'OPERATIONAL' && <Text style={{ ...s.body, color: b.danger }}>{place.businessStatus === 'CLOSED_PERMANENTLY' ? 'Google lists this venue as permanently closed' : 'Google lists this venue as temporarily closed'}</Text>}
         {!!club.tagline && <Text style={{ ...s.body, color: b.premium }}>{club.tagline}</Text>}

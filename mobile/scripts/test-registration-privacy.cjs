@@ -40,7 +40,7 @@ async function screen({ os = 'ios', saved = null, edit = false, playerOverrides 
   };
   const supabase = {
     auth: { getUser: async () => ({ data: { user: { email: 'player@example.com', user_metadata: {} } } }) },
-    rpc: async (name, payload) => { requests.push([name, payload]); return { error: null, data: name === 'get_player_profile_details' ? (birthDate ? { date_of_birth: birthDate, playtomic_level: 3.25,playtomic_proof_path:'1/a.jpg' } : null) : name === 'save_player_profile_details_v3' ? payload.p_details : 42 }; },
+    rpc: async (name, payload) => { requests.push([name, payload]); return { error: null, data: name === 'get_player_profile_details' ? (birthDate ? { date_of_birth: birthDate, playtomic_level: 3.25,playtomic_proof_path:'1/a.jpg' } : null) : ['save_player_profile_details_v3', 'save_player_profile_details_v4'].includes(name) ? payload.p_details : 42 }; },
   };
   const profileDetails = load('src/lib/profile-details.ts', { './supabase': { supabase } });
   const profile = load('src/lib/profile.ts', {
@@ -74,6 +74,7 @@ async function screen({ os = 'ios', saved = null, edit = false, playerOverrides 
     '@/lib/supabase': { supabase },
     '@/lib/analytics': { trackEvent: async () => {} },
     '@/lib/profile-details': profileDetails,
+    '@/lib/home-feed-cache': { homeFeedCache: { invalidate() {} } },
     '@/lib/profile': {
       ...profile,
       fetchClubs: async () => [{ id: 'club-1', name: 'Test Club' }],
@@ -215,12 +216,14 @@ test('date of birth is required at signup and future dates cannot advance', asyn
   assert.equal(h.drafts.length, 0);
 });
 
-test('an existing player must add a birth date before saving profile changes', async () => {
+test('an existing player can save public profile details before adding a birth date', async () => {
   const h = await screen({ edit: true, birthDate: '' });
   h.change('About your game', 'New bio');
   await h.press('Save changes');
-  assert.equal(h.field('Date of birth (required, YYYY-MM-DD)').error, 'Enter your date of birth.');
-  assert.equal(h.updates.length, 0);
+  assert.equal(h.field('Date of birth (YYYY-MM-DD)').error, undefined);
+  assert.equal(h.updates.length, 1);
+  assert.equal(h.updates[0].bio, 'New bio');
+  assert.equal(h.requests.some(([name]) => name === 'save_player_profile_details_v4'), false);
 });
 
 test('a Playtomic level saves with its required screenshot', async () => {
@@ -229,17 +232,17 @@ test('a Playtomic level saves with its required screenshot', async () => {
   await h.press('Save changes');
   assert.equal(h.field('Playtomic Level (required)').error, undefined);
   assert.equal(h.updates.length, 1);
-  assert.equal(h.requests.find(([name]) => name === 'save_player_profile_details_v3')[1].p_details.playtomic_proof_path, '1/a.jpg');
+  assert.equal(h.requests.find(([name]) => name === 'save_player_profile_details_v4')[1].p_details.playtomic_proof_path, '1/a.jpg');
 });
 
 test('profile age is read-only and recalculates immediately when the birth date changes', async () => {
   const h = await screen({ edit: true });
-  h.change('Date of birth (required, YYYY-MM-DD)', '2000-01-01');
+  h.change('Date of birth (YYYY-MM-DD)', '2000-01-01');
   const older = Number(h.field('Age (calculated)').value);
   assert.equal(h.field('Age (calculated)').editable, false);
-  h.change('Date of birth (required, YYYY-MM-DD)', '2010-01-01');
+  h.change('Date of birth (YYYY-MM-DD)', '2010-01-01');
   assert.equal(Number(h.field('Age (calculated)').value), older - 10);
-  h.change('Date of birth (required, YYYY-MM-DD)', '');
+  h.change('Date of birth (YYYY-MM-DD)', '');
   assert.equal(h.field('Age (calculated)').value, '');
 });
 
@@ -267,7 +270,7 @@ test('no-profile confirmation allows saving unknown level without screenshot',as
  const h=await screen({edit:true});
  h.find(h.render(),p=>typeof p.onNoProfileChange==='function').props.onNoProfileChange(true);
  await h.press('Save changes');
- const data=h.requests.find(([name])=>name==='save_player_profile_details_v3')[1].p_details;
+ const data=h.requests.find(([name])=>name==='save_player_profile_details_v4')[1].p_details;
  assert.equal(data.playtomic_no_profile,true);assert.equal(data.playtomic_level,null);assert.equal(data.playtomic_proof_path,null);
 });
 test('removing required screenshot prevents saving until no-profile confirmation or replacement',async()=>{

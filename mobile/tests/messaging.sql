@@ -15,7 +15,7 @@ create function auth.email() returns text language sql stable as $$select auth.j
 create table public.players(id bigint primary key,email text,name text,image_url text,region text,racket_brand text,notification_prefs jsonb default '{}');
 create table public.player_profile_details(player_id bigint primary key references public.players,date_of_birth date);
 create table public.calendar(id bigint primary key,event_name text,start_date date,end_date date,event_status text,is_visible boolean default true,sanction_status text,organisation_id uuid,organiser_email text,event_co_admins text[],venue text,city text,poster_image_url text,custom_image_url text,image_url text,sapa_status text,entry_fee numeric,early_bird_fee numeric,early_bird_ends_at timestamptz);
-alter table public.calendar add column organiser_name text;
+alter table public.calendar add column organiser_name text,add column address text;
 create table public.payments(id uuid primary key default gen_random_uuid(),event_id bigint,email text,status text);
 alter table public.payments add column player_id bigint,add column reference text,add column metadata jsonb default '{}';
 create table public.payment_refunds(id uuid primary key default gen_random_uuid(),payment_id uuid references public.payments(id),metadata jsonb default '{}');
@@ -76,6 +76,8 @@ alter table public.event_registrations add column full_name text,add column part
 \ir ../supabase/migrations/20261113070555_help_messages_and_read_receipts.sql
 \ir ../supabase/migrations/20261113091431_help_support_alerts_and_entry_context.sql
 \ir ../supabase/migrations/20261113101314_help_conversation_archive.sql
+\ir ../../supabase/migrations/20261116083323_messaging_admin_inbox_and_org_search.sql
+\ir ../../supabase/migrations/20261116090058_messaging_super_admin_org_outreach_and_event_cutoff.sql
 
 create function pg_temp.expect(ok boolean,label text) returns void language plpgsql as $$begin if ok is distinct from true then raise exception 'FAIL: %',label; end if; end$$;
 create function pg_temp.reject(query text,pattern text) returns void language plpgsql as $$begin
@@ -360,6 +362,8 @@ select pg_temp.expect(not exists(select 1 from pg_proc p join pg_namespace n on 
 \ir messaging-divisions.sql
 \ir messaging-notifications.sql
 \ir messaging-groups.sql
+\ir messaging-admin-inbox.sql
+\ir messaging-super-admin-outreach.sql
 \ir messaging-super-admin.sql
 \ir notification-read-badges.sql
 -- Account deletion erases authored content before the account reference disappears.

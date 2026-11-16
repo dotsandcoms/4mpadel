@@ -73,6 +73,8 @@ export type HomePlayer = {
   paid_registration: boolean | null;
   winLoss: string | null;
   rankingChange?: number | null;
+  contact_number?: string | null; gender?: string | null; nationality?: string | null;
+  home_club?: string | null; bio?: string | null; court_side?: string | null; playing_hand?: string | null;
 };
 
 export type PendingKind = 'payment' | 'profile';
@@ -404,9 +406,9 @@ export async function fetchPlayer(email: string, strict = false): Promise<Omit<H
     const { data, error } = await supabase
       .from('players')
       .select(
-        'id, name, rank_label, points, region, racket_brand, rankedin_id, category, gender, rankings, image_url, license_type, paid_registration'
+        'id, name, rank_label, points, region, racket_brand, rankedin_id, category, gender, rankings, image_url, license_type, paid_registration, contact_number, nationality, home_club, bio, court_side, playing_hand'
       )
-      .ilike('email', email)
+      .ilike('email', email.trim().replace(/[\\%_]/g, '\\$&'))
       .maybeSingle();
     if (error && strict) throw error;
     if (error || !data) return null;
@@ -722,8 +724,8 @@ export function profileGaps(player: Omit<HomePlayer, 'winLoss'> | null): Pending
       kind: 'profile',
       title: 'Region missing',
       subtitle: 'Select your home region.',
-      detail: 'Required to continue',
-      path: '/(tabs)/profile',
+      detail: 'Complete your profile',
+      path: '/edit-profile',
     });
   }
   if (!filled(player.racket_brand)) {
@@ -733,7 +735,7 @@ export function profileGaps(player: Omit<HomePlayer, 'winLoss'> | null): Pending
       title: 'Racket brand missing',
       subtitle: 'Select your racket brand.',
       detail: 'Complete your profile',
-      path: '/(tabs)/profile',
+      path: '/edit-profile',
     });
   }
   return actions;

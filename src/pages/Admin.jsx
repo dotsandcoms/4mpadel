@@ -11,6 +11,7 @@ const GalleryManager = React.lazy(() => import('../components/admin/GalleryManag
 const FinanceManager = React.lazy(() => import('../components/admin/FinanceManager'));
 const CoachManager = React.lazy(() => import('../components/admin/CoachManager'));
 const SettingsManager = React.lazy(() => import('../components/admin/SettingsManager'));
+const AccountSecurity = React.lazy(() => import('../components/admin/AccountSecurity'));
 const AdminManager = React.lazy(() => import('../components/admin/AdminManager'));
 const EventManagement = React.lazy(() => import('../components/admin/EventManagement'));
 const EmailBroadcastManager = React.lazy(() => import('../components/admin/EmailBroadcastManager'));
@@ -216,7 +217,7 @@ const Admin = () => {
 
     useEffect(() => {
         if (!permissionsLoading && permissions && !hasPermission(activeTab)) {
-            const allTabs = ['dashboard', 'federations', 'organisations', 'clubs', 'players', 'licenses', 'coaches', 'calendar', 'event-mgmt', 'gallery', 'email-broadcast', 'finance', 'blog', 'settings', 'admin-mgmt'];
+            const allTabs = ['dashboard', 'federations', 'organisations', 'clubs', 'players', 'licenses', 'coaches', 'calendar', 'event-mgmt', 'gallery', 'email-broadcast', 'finance', 'blog', 'settings', 'security', 'admin-mgmt'];
             const firstAllowed = allTabs.find(tab => hasPermission(tab));
             if (firstAllowed) {
                 setActiveTab(firstAllowed);
@@ -496,6 +497,7 @@ const Admin = () => {
                                 </div>
                             ) : (
                                 <React.Suspense fallback={<p role="status" className="py-8 text-gray-400">Loading module…</p>}>
+                                    {activeTab === 'security' && <AccountSecurity key={session.user.id} userId={session.user.id} canRecover={permissions?.role === 'super_admin'} />}
                                     {activeTab === 'dashboard' && <DashboardHome onTabChange={setActiveTab} />}
                                     {activeTab === 'federations' && (
                                         <FederationManager permissions={permissions} />

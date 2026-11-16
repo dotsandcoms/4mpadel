@@ -8,6 +8,7 @@ import { HomeAction } from '@/components/home-action';
 import { NativeSegmentedControl } from '@/components/native-segmented-control';
 import { ErrorBanner } from '@/components/error-banner';
 import { ClubIdentity } from '@/components/club-identity';
+import { ClubTags, ClubVerifiedBadge, clubTagsDescription } from '@/components/club-tags';
 import { clubCourts, clubLocation, fetchClubs, fetchClubGroups, filterClubGroups, filterClubs, type ClubGroup, type Club, type Coordinate } from '@/lib/clubs';
 import { locateNearbyClubs } from '@/lib/club-location';
 import { loadingBlue, lightBrand as b } from '@/theme/tokens';
@@ -85,9 +86,15 @@ export default function ClubsScreen() {
         {loading && clubs.length === 0 && <ActivityIndicator color={loadingBlue} accessibilityLabel="Loading clubs" />}
         {!!error && <HomeAction label="Retry clubs" onPress={() => setRevision(value => value + 1)} />}
       </View>}
-      renderItem={({ item: { club, distance } }) => <Pressable accessibilityRole="button" accessibilityLabel={`${club.name}. ${clubLocation(club)}${distance !== null ? `. Approximately ${distance.toFixed(1)} kilometres away` : ''}. View club`} onPress={() => router.push({ pathname: '/clubs/[slug]', params: { slug: club.slug } })} style={{ padding: 12, borderRadius: 12, backgroundColor: b.elevated, flexDirection: 'row', gap: 12, alignItems: 'center', minHeight: 100 }}>
+      renderItem={({ item: { club, distance } }) => <Pressable accessibilityRole="button" accessibilityLabel={`${club.name}. ${clubLocation(club)}${distance !== null ? `. Approximately ${distance.toFixed(1)} kilometres away` : ''}${clubTagsDescription(club) ? `. ${clubTagsDescription(club)}` : ''}. View club`} onPress={() => router.push({ pathname: '/clubs/[slug]', params: { slug: club.slug } })} style={{ padding: 12, borderRadius: 12, backgroundColor: b.elevated, flexDirection: 'row', gap: 12, alignItems: 'center', minHeight: 100 }}>
         {club.cover ? <Image source={{ uri: club.cover }} contentFit="cover" style={{ width: 88, height: 88, borderRadius: 8 }} /> : <ClubIdentity club={club} size={56} />}
-        <View style={{ flex: 1, minWidth: 0, gap: 4 }}><Text style={{ color: b.premium, fontSize: 15, lineHeight: 21, fontWeight: '600' }}>{club.name}</Text><Text style={{ color: b.muted, fontSize: 12, lineHeight: 17 }}>{clubLocation(club)}</Text>{clubCourts(club) && <Text style={{ color: b.muted, fontSize: 12 }}>{clubCourts(club)}</Text>}{distance !== null && <Text style={{ color: b.accent, fontSize: 12, fontWeight: '600' }}>{distance < 1 ? 'Less than 1 km' : `${distance.toFixed(1)} km`} away</Text>}</View>
+        <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><Text style={{ color: b.premium, fontSize: 15, lineHeight: 21, fontWeight: '600', flexShrink: 1 }}>{club.name}</Text>{club.approved && <ClubVerifiedBadge size={16} />}</View>
+          <Text style={{ color: b.muted, fontSize: 12, lineHeight: 17 }}>{clubLocation(club)}</Text>
+          {clubCourts(club) && <Text style={{ color: b.muted, fontSize: 12 }}>{clubCourts(club)}</Text>}
+          {distance !== null && <Text style={{ color: b.accent, fontSize: 12, fontWeight: '600' }}>{distance < 1 ? 'Less than 1 km' : `${distance.toFixed(1)} km`} away</Text>}
+          <ClubTags club={club} compact />
+        </View>
         <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} size={14} tintColor={b.muted} />
       </Pressable>}
       ListEmptyComponent={directory === 'venues' && !loading && !error && !groupMatches.length ? <View style={{ paddingVertical: 16, gap: 8 }}><Text style={{ color: b.premium, fontSize: 16, fontWeight: '600' }}>No clubs found</Text><Text style={{ color: b.muted, fontSize: 14, lineHeight: 21 }}>{origin ? 'Try a wider radius or show all clubs. Some clubs do not have a map location yet.' : 'Try a different club name, city or province.'}</Text>{origin && <HomeAction label="Show all clubs" onPress={showAll} />}</View> : null} />

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Linking, Pressable, Text, View } from 'react-native';
 import { HomeAction } from '@/components/home-action';
 import { ClubIdentity } from '@/components/club-identity';
+import { ClubTags, ClubVerifiedBadge, clubTagsDescription } from '@/components/club-tags';
 import { ErrorBanner } from '@/components/error-banner';
 import { clubLocation, fetchClubGroup, fetchGroupVenues, type ClubGroup, type Club } from '@/lib/clubs';
 import { loadingBlue, lightBrand as b } from '@/theme/tokens';
@@ -33,7 +34,15 @@ export default function ClubGroupScreen() {
         {loading && <ActivityIndicator color={loadingBlue} />}
         {!!error && <HomeAction label="Retry group" onPress={() => setRevision(value => value + 1)} />}
       </View>}
-      renderItem={({ item: club }) => <Pressable accessibilityRole="button" accessibilityLabel={`${club.name}. ${clubLocation(club)}. View club`} onPress={() => router.push({ pathname: '/clubs/[slug]', params: { slug: club.slug } })} style={{ padding: 16, backgroundColor: b.elevated, borderRadius: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}><ClubIdentity club={club} /><View style={{ flex: 1, gap: 4 }}><Text style={{ color: b.premium, fontSize: 15, lineHeight: 21, fontWeight: '600' }}>{club.name}</Text><Text style={{ color: b.muted, fontSize: 12, lineHeight: 17 }}>{clubLocation(club)}</Text></View><SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} size={14} tintColor={b.muted} /></Pressable>}
+      renderItem={({ item: club }) => <Pressable accessibilityRole="button" accessibilityLabel={`${club.name}. ${clubLocation(club)}${clubTagsDescription(club) ? `. ${clubTagsDescription(club)}` : ''}. View club`} onPress={() => router.push({ pathname: '/clubs/[slug]', params: { slug: club.slug } })} style={{ padding: 16, backgroundColor: b.elevated, borderRadius: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <ClubIdentity club={club} />
+        <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><Text style={{ color: b.premium, fontSize: 15, lineHeight: 21, fontWeight: '600', flexShrink: 1 }}>{club.name}</Text>{club.approved && <ClubVerifiedBadge size={16} />}</View>
+          <Text style={{ color: b.muted, fontSize: 12, lineHeight: 17 }}>{clubLocation(club)}</Text>
+          <ClubTags club={club} compact />
+        </View>
+        <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} size={14} tintColor={b.muted} />
+      </Pressable>}
       ListEmptyComponent={!loading && !error ? <Text style={{ color: b.muted, fontSize: 14, lineHeight: 21 }}>{group ? 'No published venues are available yet.' : 'This group is not available in the public directory.'}</Text> : null} />
     <ErrorBanner message={error || null} top={8} />
   </>;

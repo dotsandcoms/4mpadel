@@ -64,7 +64,7 @@ function RootLayout() {
   const pathname = usePathname();
   const isAuth = segments[0] === '(auth)';
   const recoveryRoute = useRef(false);
-  recoveryRoute.current = segments[0] === 'reset-password';
+  recoveryRoute.current = segments[0] === 'reset-password' || segments[0] === 'email-change';
   const brand = lightBrand;
   const navigationTheme = DefaultTheme;
   const [dataReady, setDataReady] = useState(false);

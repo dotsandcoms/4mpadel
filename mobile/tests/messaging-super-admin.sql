@@ -10,10 +10,9 @@ select pg_temp.login(4,'aal2');
 select public.messaging_api('open_event','{"eventId":3100}') as intervention_channels \gset
 select (select value->>'id' from jsonb_array_elements(:'intervention_channels'::jsonb) where value->>'kind'='event_announcements') as intervention_announcements \gset
 select pg_temp.expect(jsonb_array_length(:'intervention_channels'::jsonb)=2,'Super Admin opens both channels in another organisation');
-select pg_temp.expect(public.messaging_event_directory('Cancelled intervention')->0->>'accessMode'='super_admin','directory labels server-verified global access');
-select pg_temp.expect((public.messaging_event_analytics(3100)->'event'->>'postingOpen')::boolean,'analytics exposes the same intervention posting state');
-select public.messaging_api('send',jsonb_build_object('conversationId',:'intervention_announcements','body','Event team support update','clientId',gen_random_uuid())) as intervention_post \gset
-select pg_temp.expect(:'intervention_post'::jsonb->'sender'->>'role'='admin','intervention keeps the actual sender and Admin role');
+select pg_temp.expect(jsonb_array_length(public.messaging_event_directory('Cancelled intervention'))=0,'past events are absent from the send picker, including for Super Admin');
+select pg_temp.expect(not (public.messaging_event_analytics(3100)->'event'->>'postingOpen')::boolean,'past event analytics correctly reports read-only');
+select pg_temp.reject(format('select public.messaging_api(''send'',%L)',jsonb_build_object('conversationId',:'intervention_announcements','body','Cannot send to past event','clientId',gen_random_uuid())),'read-only');
 reset role;
 select pg_temp.expect(exists(select 1 from messaging.audit where actor_id='00000000-0000-0000-0000-000000000004' and action='event_admin_access' and event_id=3100),'cross-organisation access is audited against the event');
 set local role authenticated;

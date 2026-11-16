@@ -13,7 +13,7 @@ import { ProPlayerProfile } from '@/components/players/pro-player-profile';
 import { PlayerFollowAction } from '@/components/players/player-follow-action';
 import { usePlayerHub } from '@/hooks/use-player-hub';
 import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
-import { filterHubPlayers, playerCountryFlag, localPlayerCountryFlag, proHubPlayer, searchProPlayers, topLocalPlayers, type HubPlayer } from '@/lib/player-hub';
+import { discoveryPlayers, filterHubPlayers, playerCountryFlag, localPlayerCountryFlag, proHubPlayer, searchProPlayers, type HubPlayer } from '@/lib/player-hub';
 import { playerPoints } from '@/lib/players';
 import { HomeAction } from '@/components/home-action';
 import { NativeSegmentedControl } from '@/components/native-segmented-control';
@@ -36,6 +36,7 @@ export default function PlayerHub() {
   const [browse, setBrowse] = useState(false), [reload, setReload] = useState(0);
   const [selected, setSelected] = useState<HubPlayer | null>(null);
   const [matchOpen, setMatchOpen] = useState(false);
+  const [discoverySeed, setDiscoverySeed] = useState(() => Math.floor(Math.random() * 4294967296));
   const sequence = useRef(0);
   useFocusEffect(useCallback(() => { setMatchOpen(false); }, []));
   // A shortcut can resend the same params after the user changes the screen's filters.
@@ -76,9 +77,13 @@ export default function PlayerHub() {
   const candidates = view === 'Following' ? followed : all;
   const results = filterHubPlayers(candidates, query, source, view === 'Following' ? 'all' : gender);
   useAnalyticsSearch(query, view === 'Rankings' ? filterHubPlayers(remote.length ? remote : pros, query, 'pro', gender).length : results.length, view === 'Rankings' ? 'rankings' : 'players', !state.loading && !state.pro.loading && !state.error && !searching && !searchError && (view !== 'Rankings' || source === 'pro'));
-  const localTop = topLocalPlayers(locals, gender === 'women' ? 'women' : 'men');
-  const verifiedFipIds = new Set(state.fipLinks.filter(link => link.status === 'verified').map(link => link.fip_player_id).filter((id): id is number => id != null));
-  const proTop = pros.filter(p => !verifiedFipIds.has(Number(p.id)) && (gender === 'all' || p.gender === gender)).sort((a, z) => (a.rank ?? Infinity) - (z.rank ?? Infinity)).slice(0, 20);
+  const localMen = useMemo(() => discoveryPlayers(locals, '4m', 'men', discoverySeed), [locals, discoverySeed]);
+  const localWomen = useMemo(() => discoveryPlayers(locals, '4m', 'women', discoverySeed), [locals, discoverySeed]);
+  const localDiscovery = gender === 'women' ? localWomen : localMen;
+  const proDiscovery = useMemo(() => {
+    const verified = new Set(state.fipLinks.filter(link => link.status === 'verified').map(link => link.fip_player_id));
+    return discoveryPlayers(pros.filter(player => !verified.has(Number(player.id))), 'pro', gender, discoverySeed);
+  }, [pros, state.fipLinks, gender, discoverySeed]);
   const signIn = () => router.push('/(auth)/sign-in');
   const follow = (p: HubPlayer) => { if (!state.pro.userId) signIn(); else void state.toggle(p); };
   const followDisabled = (p: HubPlayer) => !!state.pending || state.pro.pendingId !== null || (p.source === '4m' ? state.followLoading || !!state.followError : state.pro.followsLoading || !!state.pro.followsError);
@@ -128,6 +133,7 @@ export default function PlayerHub() {
       <NativeSegmentedControl label="Players view" variant="tabs" value={view} options={(['Discover', 'Following', 'Rankings'] as ViewName[]).map(value => ({ value, label: value }))} onChange={next => {
         void trackEvent('feature_interaction', { feature: 'player_hub', action: 'tab', selection: next.toLowerCase() });
         setView(next as ViewName); setBrowse(false);
+        if (next === 'Discover' && view !== 'Discover') setDiscoverySeed(Math.floor(Math.random() * 4294967296));
         if (next === 'Rankings') { if (source === 'all') setSource('4m'); if (gender === 'all') setGender('men'); }
       }} />
       <>
@@ -142,15 +148,15 @@ export default function PlayerHub() {
         </View>
       </>
     </View>
-    {view === 'Rankings' && source !== 'pro' ? <LocalRankings embedded query={query} gender={gender} renderFollow={id => { const player = localPlayersById.get(id); return player ? followButton(player) : null; }} /> : <FlatList data={view === 'Rankings' ? filterHubPlayers(remote.length ? remote : pros, query, 'pro', gender).sort((a, z) => (a.rank ?? Infinity) - (z.rank ?? Infinity)) : searchingDirectory || view === 'Following' ? results : []} keyExtractor={p => p.key} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ padding: 16, paddingBottom: bottom, gap: 10 }} refreshing={state.loading && locals.length > 0} onRefresh={() => { setReload(n => n + 1); void state.refresh(); }} renderItem={({ item }) => row(item, view === 'Rankings')}
+    {view === 'Rankings' && source !== 'pro' ? <LocalRankings embedded query={query} gender={gender} renderFollow={id => { const player = localPlayersById.get(id); return player ? followButton(player) : null; }} /> : <FlatList data={view === 'Rankings' ? filterHubPlayers(remote.length ? remote : pros, query, 'pro', gender).sort((a, z) => (a.rank ?? Infinity) - (z.rank ?? Infinity)) : searchingDirectory || view === 'Following' ? results : []} keyExtractor={p => p.key} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ padding: 16, paddingBottom: bottom, gap: 10 }} refreshing={state.loading && locals.length > 0} onRefresh={() => { setDiscoverySeed(Math.floor(Math.random() * 4294967296)); setReload(n => n + 1); void state.refresh(); }} renderItem={({ item }) => row(item, view === 'Rankings')}
       ListHeaderComponent={<View style={{ gap: 20 }}>
         {[state.error, state.followError, state.pro.followsError, state.pro.writeError, searchError].filter(Boolean).map((e, i) => <Pressable key={i} accessibilityRole="button" onPress={() => { setReload(n => n + 1); void state.refresh(); }}><Text style={{ color: b.danger }}>{e} Tap to retry.</Text></Pressable>)}
         {!state.pro.userId && <Pressable onPress={signIn} style={panel}><Text style={{ color: b.premium, fontWeight: '700' }}>Build your follow list</Text><Text style={{ color: b.muted, marginTop: 6 }}>Sign in to follow players and search the full FIP directory.</Text></Pressable>}
 
         {view === 'Discover' && !searchingDirectory && <>
-          {source !== 'pro' && localTop.length > 0 && rail(gender === 'women' ? 'SAPA Women-Main' : 'SAPA Men-Main', localTop, true, gender === 'all' ? 'men' : gender)}
-          {source !== 'pro' && gender === 'all' && topLocalPlayers(locals, 'women').length > 0 && rail('SAPA Women-Main', topLocalPlayers(locals, 'women'), true, 'women')}
-          {source !== '4m' && rail('On the FIP tour', proTop, false)}
+          {source !== 'pro' && localDiscovery.length > 0 && rail(gender === 'women' ? 'SAPA Women-Main' : 'SAPA Men-Main', localDiscovery, true, gender === 'all' ? 'men' : gender)}
+          {source !== 'pro' && gender === 'all' && localWomen.length > 0 && rail('SAPA Women-Main', localWomen, true, 'women')}
+          {source !== '4m' && rail('On the FIP tour', proDiscovery, false)}
           <View style={{ gap: 8 }}><Text style={{ color: b.muted, fontSize: 13, lineHeight: 19 }}>Looking for a partner? Open a 4M player’s profile to send a message request.</Text><HomeAction label="Browse all players" onPress={() => setBrowse(true)} /></View>
         </>}
         {view === 'Following' && <Text style={{ color: b.premium, fontSize: 18, fontWeight: '600' }}>My following</Text>}

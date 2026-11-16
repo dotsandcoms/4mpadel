@@ -47,6 +47,16 @@ Near me requests foreground access only after a user tap, then takes one balance
 
 The simulator’s permission was reset to “Ask Next Time Or When I Share” after verification, so the next Near me tap can show the native dialog. The simulator did not provide a usable GPS fix in this session; manual browsing and the timeout outcome were verified. Real-device GPS and Android visual testing remain to be done.
 
+## Club claims and identity tags (16 November 2026)
+
+The club title has a compact **Claim Club** action on its right when the public ownership view confirms that no owner exists. Unknown ownership fails closed and has a retry action. The native claim page uses the signed-in player account, prefills its name and phone, collects the same club role and notes as the website, and provides a review step before submission.
+
+Submission uses the existing `club_claim_requests` RLS and inserts only a `pending` request. The requester email and player ID come from the current account; the contact email is not an editable recipient. It invokes the existing `club_claim_applied` and `admin_club_claim_applied` transactional email templates after a successful insert. Approval, rejection and dashboard access stay in the existing Club Manager review process. Existing pending claims and duplicate inserts do not send another set of emails. Email delivery failure reports that the request was saved, instead of inviting another submission. Ownership is checked again at submission; a claim never directly writes club membership or grants access.
+
+The title's verification seal and **4M Approved** tag follow the website rule: `verified = true`, `4m_approved` or `4m_premium`. The SAPA and club-type tags require their corresponding public fields. **Part of [group]** only uses a published group relation and opens its native group page. The main directory and group venue cards show the same verification seal and compact applicable tags. Card tags are informational so the whole card remains a single navigation target, and its accessible label includes the recorded tags. These treatments follow the user’s club screenshots and the current light mobile tokens; the website’s neon fill is not introduced into the mobile form palette.
+
+Validation: six claim/tag regressions cover own-account identity, pending review, duplicate suppression, owned/unavailable clubs, failed inserts and email delivery, review-before-submit, double taps and account changes. Club parsing also checks the website approval rules. iPhone 18 Pro dev-preview verification opened the Net Set Nottingham Road claim form from the title action and showed the group tag. No real claim was submitted and no test email was sent. Release builds remain paused at the user’s request.
+
 ## Validation
 
 - TypeScript and all 660 mobile tests passed. New coverage includes group/name normalization, public projections, inherited identity, unsafe links, approved coaches/public team records, standalone temporary-licence rejection and preserved legacy verification.

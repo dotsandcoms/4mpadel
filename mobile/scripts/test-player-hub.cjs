@@ -10,7 +10,7 @@ test('reopening the FIP Players shortcut restores Discover and clears the previo
  const state = { locals: [], fipLinks: [], ids: [], isFollowing: () => false, pro: { rankings: { data: null }, follows: [], userId: null } };
  const modules = {
   react: {
-   useState(initial) { const i = cursor++; if (!(i in values)) values[i] = initial; return [values[i], value => { values[i] = typeof value === 'function' ? value(values[i]) : value; }]; },
+   useState(initial) { const i = cursor++; if (!(i in values)) values[i] = typeof initial === 'function' ? initial() : initial; return [values[i], value => { values[i] = typeof value === 'function' ? value(values[i]) : value; }]; },
    useRef(initial) { const i = cursor++; if (!(i in values)) values[i] = { current: initial }; return values[i]; },
    useMemo: fn => fn(), useCallback: fn => fn,
    useEffect(fn, deps) { const i = effectIndex++; if (!dependencies[i] || deps.some((value, j) => value !== dependencies[i][j])) effects.push(fn); dependencies[i] = deps; },
@@ -271,7 +271,7 @@ function followerComponent() {
  let cursor = 0, dependencyKey, cleanup, effect;
  const modules = {
   react: {
-   useState(initial) { const i = cursor++; if (!(i in values)) values[i] = initial; return [values[i], value => { values[i] = value; }]; },
+   useState(initial) { const i = cursor++; if (!(i in values)) values[i] = typeof initial === 'function' ? initial() : initial; return [values[i], value => { values[i] = value; }]; },
    useCallback(fn, deps) { const key = JSON.stringify(deps); return { fn, key }; },
   },
   'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }), Fragment: 'Fragment' },
@@ -324,7 +324,7 @@ test('the follow control refreshes the count after successful follows and unfoll
  const values = []; let cursor = 0, mounted = false, changed = 0, fail = false;
  const modules = {
   react: {
-   useState(initial) { const i = cursor++; if (!(i in values)) values[i] = initial; return [values[i], value => { values[i] = value; }]; },
+   useState(initial) { const i = cursor++; if (!(i in values)) values[i] = typeof initial === 'function' ? initial() : initial; return [values[i], value => { values[i] = value; }]; },
    useRef(initial) { const i = cursor++; if (!(i in values)) values[i] = { current: initial }; return values[i]; },
    useCallback: fn => fn,
   },
@@ -351,4 +351,16 @@ test('the follow control refreshes the count after successful follows and unfoll
  assert.equal(render().props.following, false); assert.equal(changed, 2);
  fail = true; render().props.onPress(); await flush();
  assert.equal(render().props.following, false); assert.equal(changed, 2);
+});
+
+test('Discovery shuffles the full Men, Women and FIP pools before limiting cards',()=>{
+ const men=Array.from({length:50},(_,i)=>local(i+1,'Men',i+1)),women=Array.from({length:50},(_,i)=>local(i+101,'Women',i+1));
+ const pros=Array.from({length:50},(_,i)=>hub.proHubPlayer({id:i+1,name:'FIP '+i,category:i%2?'women':'men',rank:i+1,points:500-i}));
+ const all=[...men,...women,...pros],before=JSON.stringify(all);
+ for(const [source,gender]of [['4m','men'],['4m','women'],['pro','all'],['pro','women']]){
+  const first=hub.discoveryPlayers(all,source,gender,123),again=hub.discoveryPlayers([...all].reverse(),source,gender,123),other=hub.discoveryPlayers(all,source,gender,987);
+  assert.equal(first.length,20);assert.equal(new Set(first.map(p=>p.key)).size,20);assert(first.every(p=>p.source===source&&(gender==='all'||p.gender===gender)));
+  assert.deepEqual(Array.from(first,p=>p.key),Array.from(again,p=>p.key));assert.notDeepEqual(Array.from(first,p=>p.key),Array.from(other,p=>p.key));assert(first.some(p=>p.rank>20));
+ }
+ assert.equal(JSON.stringify(all),before);assert.deepEqual(Array.from(hub.topLocalPlayers(all,'men'),p=>p.rank),Array.from({length:20},(_,i)=>i+1));
 });

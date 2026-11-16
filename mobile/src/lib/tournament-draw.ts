@@ -10,6 +10,12 @@ export type DrawStanding = { id: string; position: number; team: DrawTeam; playe
 export type DrawSection = { id: string; name: string; kind: 'knockout' | 'group'; rounds: DrawRound[]; standings: DrawStanding[] };
 export type DrawChoice = { id: string; classId: string; name: string; stage: number; strength: number };
 
+/** Results run from the final backwards. Draw/bracket source order is untouched. */
+export function orderedResultRounds(rounds: DrawRound[]): DrawRound[] {
+  const finalPriority = (name: string) => /(?:3rd|third|place|playoff)/i.test(name) ? 1 : /\bfinals?\b/i.test(name) ? 0 : 2;
+  return [...rounds].sort((a, b) => (b.matches[0]?.round ?? 0) - (a.matches[0]?.round ?? 0) || finalPriority(a.name) - finalPriority(b.name));
+}
+
 const rows = (value: unknown): Row[] => Array.isArray(value) ? value.filter(row => row && typeof row === 'object') : [];
 const key = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
 const country = (value: unknown) => typeof value === 'string' && /^[a-z]{2}$/i.test(value.trim()) ? value.trim().toUpperCase() : null;

@@ -296,6 +296,7 @@ export type ProfileBundle = {
 };
 
 export type PlayerDetailsUpdate = {
+  name?: string; gender?: string | null; nationality?: string | null; sponsors?: string | null;
   contact_number: string | null;
   region: string | null;
   category: string;

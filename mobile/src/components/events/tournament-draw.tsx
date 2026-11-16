@@ -6,11 +6,12 @@ import { useRouter } from 'expo-router';
 import type { EventDetail } from '@/lib/events';
 import type { RankedPlayer } from '@/lib/event-teams';
 import type { EventDrawStatus } from '@/lib/event-draws';
-import { drawMatchWhen, type DrawChoice, type DrawMatch, type DrawPerson, type DrawSection, type DrawTeam } from '@/lib/tournament-draw';
+import { drawMatchWhen, orderedResultRounds, type DrawChoice, type DrawMatch, type DrawPerson, type DrawSection, type DrawTeam } from '@/lib/tournament-draw';
 import { fetchTournamentDraw, fetchTournamentDrawChoices } from '@/lib/tournament-draw-data';
 import { localPlayerCountryFlag } from '@/lib/player-hub';
 import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 import { supabase } from '@/lib/supabase';
+import { TournamentBracket } from './tournament-bracket';
 
 const BLUE = '#2449D8';
 function Player({ player, winner = false }: { player: DrawPerson; winner?: boolean }) {
@@ -55,9 +56,11 @@ export function TournamentDrawMatch({ match, roundLabel, highlighted = false }: 
 export function TournamentDrawBoard({ sections, results = false, matchId }: { sections: DrawSection[]; results?: boolean; matchId?: string }) {
   const [sectionId, setSectionId] = useState(''), [roundId, setRoundId] = useState(''), [visible, setVisible] = useState(24);
   const [showPending, setShowPending] = useState(false);
-  const available = useMemo(() => results ? sections.map(section => ({ ...section, rounds: section.rounds.map(round => ({ ...round, matches: round.matches.filter(m => m.completed) })).filter(round => round.matches.length) })).filter(section => section.rounds.length || section.standings.length) : sections, [sections, results]);
-  const section = available.find(x => x.id === sectionId) || available.find(x => x.rounds.some(r => r.matches.some(m => m.id === matchId))) || available[0];
-  const round = section?.rounds.find(x => x.id === roundId) || section?.rounds.find(r => r.matches.some(m => m.id === matchId)) || section?.rounds[0];
+  const [view, setView] = useState<'list' | 'bracket'>('list'), [selectedMatch, setSelectedMatch] = useState('');
+  const focusMatch = selectedMatch || matchId;
+  const available = useMemo(() => results ? sections.map(section => ({ ...section, rounds: orderedResultRounds(section.rounds.map(round => ({ ...round, matches: round.matches.filter(m => m.completed) })).filter(round => round.matches.length)) })).filter(section => section.rounds.length || section.standings.length) : sections, [sections, results]);
+  const section = available.find(x => x.id === sectionId) || available.find(x => x.rounds.some(r => r.matches.some(m => m.id === focusMatch))) || available[0];
+  const round = section?.rounds.find(x => x.id === roundId) || section?.rounds.find(r => r.matches.some(m => m.id === focusMatch)) || section?.rounds[0];
   useEffect(() => { setSectionId(''); setRoundId(''); }, [matchId]);
   useEffect(() => {
     setSectionId(previous => available.some(item => item.id === previous) ? previous : '');
@@ -65,20 +68,21 @@ export function TournamentDrawBoard({ sections, results = false, matchId }: { se
   }, [sections, results]);
   useEffect(() => { setVisible(24); setShowPending(false); }, [section?.id, round?.id]);
   const pending = round?.matches.filter(m => !m.completed && !m.one.players.length && !m.two.players.length && !m.scores.length && m.status !== 'Live') || [];
-  const displayed = round?.matches.filter(m => showPending || !pending.includes(m) || m.id === matchId) || [];
+  const displayed = round?.matches.filter(m => showPending || !pending.includes(m) || m.id === focusMatch) || [];
   if (!section) return <View style={s.empty}><Ionicons name="trophy-outline" size={32} color={b.faint} /><Text style={s.emptyTitle}>{results ? 'No results yet' : 'Draw being prepared'}</Text><Text style={s.emptyCopy}>{results ? 'Completed matches will appear here as results are published.' : 'This draw will appear here when the organiser publishes it.'}</Text></View>;
   return <View style={s.board}>
     {available.length > 1 && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>{available.map(item => <Pressable key={item.id} accessibilityRole="button" accessibilityState={{ selected: item.id === section.id }} onPress={() => { setSectionId(item.id); setRoundId(''); }} style={[s.chip, item.id === section.id && s.selectedChip]}><Text style={[s.chipText, item.id === section.id && s.selectedChipText]}>{item.name}</Text></Pressable>)}</ScrollView>}
     <View style={s.sectionHeader}><Text accessibilityRole="header" style={s.sectionTitle}>{section.name}</Text><Text style={s.matchCount}>{section.rounds.reduce((sum, r) => sum + r.matches.length, 0)} {section.rounds.reduce((sum, r) => sum + r.matches.length, 0) === 1 ? 'match' : 'matches'}</Text></View>
     {!!section.standings.length && <View style={s.standings}><View style={s.standingHeader}><Text style={[s.columnLabel, { flex: 1 }]}>STANDINGS</Text>{['P', 'W', 'L', 'PTS'].map(label => <Text key={label} style={s.tableNumber}>{label}</Text>)}</View>{section.standings.map(row => <View key={row.id} style={s.standingRow}><Text style={s.position}>{row.position}</Text><View style={s.people}>{row.team.players.map(p => <Text key={p.name} style={s.standingName}>{localPlayerCountryFlag(p.country)} {p.name}</Text>)}</View>{[row.played, row.won, row.lost, row.points].map((value, i) => <Text key={i} style={[s.tableNumber, i === 3 && s.winningScore]}>{value}</Text>)}</View>)}</View>}
-    {!!round && <>
+    {!results && section.kind === 'knockout' && <View style={{ flexDirection: 'row', gap: 8 }}>{(['list', 'bracket'] as const).map(mode => <Pressable key={mode} accessibilityRole="button" accessibilityState={{ selected: view === mode }} onPress={() => setView(mode)} style={[s.chip, view === mode && s.selectedChip]}><Text style={[s.chipText, view === mode && s.selectedChipText]}>{mode === 'list' ? 'List view' : 'Bracket view'}</Text></Pressable>)}</View>}
+    {!results && section.kind === 'knockout' && view === 'bracket' ? <TournamentBracket section={section} highlighted={focusMatch} onMatch={(match, drawRound) => { setRoundId(drawRound.id); setSelectedMatch(match.id); setView('list'); }} /> : !!round && <>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>{section.rounds.map(item => <Pressable key={item.id} accessibilityRole="button" accessibilityState={{ selected: item.id === round.id }} onPress={() => setRoundId(item.id)} style={[s.roundChip, item.id === round.id && s.activeRound]}><Text style={[s.roundText, item.id === round.id && s.activeRoundText]}>{item.name}</Text></Pressable>)}</ScrollView>
       <View style={s.roundHeader}><Text accessibilityRole="header" style={s.roundTitle}>{round.name}</Text><View style={s.arrows}>{[-1, 1].map(direction => {
         const index = section.rounds.indexOf(round), next = index + direction, disabled = next < 0 || next >= section.rounds.length;
-        return <Pressable key={direction} disabled={disabled} accessibilityRole="button" accessibilityLabel={direction < 0 ? 'Previous round' : 'Next round'} onPress={() => setRoundId(section.rounds[next].id)} style={[s.arrow, disabled && { opacity: .3 }]}><Ionicons name={direction < 0 ? 'chevron-back' : 'chevron-forward'} size={19} color={b.accent} /></Pressable>;
+        return <Pressable key={direction} disabled={disabled} accessibilityRole="button" accessibilityLabel={results ? direction < 0 ? 'Later round' : 'Earlier round' : direction < 0 ? 'Previous round' : 'Next round'} onPress={() => setRoundId(section.rounds[next].id)} style={[s.arrow, disabled && { opacity: .3 }]}><Ionicons name={direction < 0 ? 'chevron-back' : 'chevron-forward'} size={19} color={b.accent} /></Pressable>;
       })}</View></View>
       {!!pending.length && <Pressable accessibilityRole="button" accessibilityState={{ expanded: showPending }} onPress={() => setShowPending(value => !value)} style={{ padding: 16, backgroundColor: b.panel, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}><Ionicons name={showPending ? 'chevron-up' : 'chevron-down'} size={18} color={b.accent} /><Text style={{ flex: 1, color: b.accent, fontSize: 13, fontWeight: '700' }}>{pending.length} {pending.length === 1 ? 'match awaiting players' : 'matches awaiting players'}</Text></Pressable>}
-      <View style={{ gap: 12 }}>{displayed.slice(0, Math.max(visible, displayed.findIndex(m => m.id === matchId) + 1)).map(item => <TournamentDrawMatch key={item.id} match={item} roundLabel={round.name} highlighted={item.id === matchId} />)}</View>
+      <View style={{ gap: 12 }}>{displayed.slice(0, Math.max(visible, displayed.findIndex(m => m.id === focusMatch) + 1)).map(item => <TournamentDrawMatch key={item.id} match={item} roundLabel={round.name} highlighted={item.id === focusMatch} />)}</View>
       {displayed.length > visible && <Pressable accessibilityRole="button" onPress={() => setVisible(n => n + 24)} style={s.retry}><Text style={s.retryText}>Show more matches</Text></Pressable>}
     </>}
   </View>;

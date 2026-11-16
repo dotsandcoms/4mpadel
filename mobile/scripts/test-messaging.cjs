@@ -216,19 +216,21 @@ function privateScreenFixture({ dev = false, os = 'ios', device = true, enabled 
   return { calls, states, stop: () => cleanup(), background: () => { AppState.currentState = 'background'; onState(); } };
 }
 const flushPrivateScreen = () => new Promise(resolve => setImmediate(resolve));
-test('screenshot exception requires explicit opt-in, Debug, iOS and an actual simulator', async () => {
+test('messaging allows screenshots on physical devices and Release while retaining the iOS switcher cover', async () => {
   for (const options of [{}, { dev: false, device: false }, { dev: true, device: true }, { dev: true, device: false, enabled: '' }, { dev: true, device: false, enabled: '0' }, { dev: true, device: false, os: 'android' }]) {
     const fixture = privateScreenFixture(options); await flushPrivateScreen();
-    assert.ok(fixture.calls.includes('preventScreenCaptureAsync'), JSON.stringify(options));
+    assert.ok(!fixture.calls.includes('preventScreenCaptureAsync'), JSON.stringify(options));
+    assert.equal(fixture.calls.includes('enableAppSwitcherProtectionAsync'), options.os !== 'android');
+    assert.equal(fixture.states.at(-1), true);
     fixture.stop(); await flushPrivateScreen();
-    assert.ok(fixture.calls.includes('allowScreenCaptureAsync'));
+    assert.equal(fixture.calls.includes('disableAppSwitcherProtectionAsync'), options.os !== 'android');
   }
 });
-test('opted-in Debug simulator supports screenshots while still hiding inactive message screens', async () => {
+test('screenshots stay available while backgrounding still hides message content', async () => {
   const fixture = privateScreenFixture({ dev: true, device: false }); await flushPrivateScreen();
-  assert.deepEqual(fixture.calls, []); assert.equal(fixture.states.at(-1), true);
+  assert.deepEqual(fixture.calls, ['enableAppSwitcherProtectionAsync']); assert.equal(fixture.states.at(-1), true);
   fixture.background(); assert.equal(fixture.states.at(-1), false);
-  fixture.stop(); await flushPrivateScreen(); assert.deepEqual(fixture.calls, []);
+  fixture.stop(); await flushPrivateScreen(); assert.deepEqual(fixture.calls, ['enableAppSwitcherProtectionAsync', 'disableAppSwitcherProtectionAsync']);
 });
 
 test('foreground reply marker survives an unrelated newer post and respects off settings', () => {
