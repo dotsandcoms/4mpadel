@@ -32,3 +32,8 @@ CREATE POLICY "Authenticated users can insert invites"
 CREATE POLICY "Allow public read by token"
     ON public.club_claim_invites FOR SELECT
     USING (true);
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+REVOKE ALL ON TABLE public.club_claim_invites FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.club_claim_invites TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.club_claim_invites TO service_role;

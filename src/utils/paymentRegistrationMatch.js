@@ -436,11 +436,29 @@ export function isCompedEntryPayment(payment) {
 
 export function registrationIsCompedEntry(reg, payments) {
     if (!reg) return false;
-    const payment = findPaymentForRegistration(
-        (payments || []).filter((p) => p.status === 'success'),
-        reg,
-    );
+    const candidates = (payments || []).filter((p) => {
+        if (p.status !== 'success') return false;
+        if (!isCompedEntryPayment(p)) return true;
+        const meta = normalizePaymentMetadata(p.metadata);
+        if (meta.registration_id && meta.registration_id !== reg.id) return paymentStrictlyCoversRegistration(p, reg);
+        if (!meta.registration_id && meta.division && reg.division && meta.division !== reg.division) return paymentStrictlyCoversRegistration(p, reg);
+        return true;
+    });
+    // A later paid or complimentary decision for this exact entry supersedes
+    // its older admin mark. Other divisions must not supply that decision.
+    const direct = candidates.filter(p => normalizePaymentMetadata(p.metadata).registration_id === reg.id)
+        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    const payment = direct[0] || findPaymentForRegistration(candidates, reg);
     return isCompedEntryPayment(payment);
+}
+
+/** A registration can be accepted as paid on credit while its cash is still due.
+ * Only the pending receipt for this exact entry can record that expectation. */
+export function findExpectedEntryPayment(payments, reg) {
+    return (payments || []).find(payment => payment.status === 'pending'
+        && payment.payment_type === 'event_entry_fee'
+        && normalizePaymentMetadata(payment.metadata).payment_expected === true
+        && normalizePaymentMetadata(payment.metadata).registration_id === reg?.id) || null;
 }
 
 /**
@@ -450,6 +468,7 @@ export function registrationIsCompedEntry(reg, payments) {
 export function paymentPayerEmailFor(payment) {
     const meta = normalizePaymentMetadata(payment?.metadata);
     const { top, inner } = getPaymentMetadataLayers(meta);
+    if (isExplicitAdminMarkedPayment(payment) && top.paid_by_email) return norm(top.paid_by_email);
     return norm(
         top.registrant_email || inner.registrant_email
         || top.paid_by_email || inner.paid_by_email
@@ -483,16 +502,18 @@ export function paymentExplicitlyCoversEmail(payment, email) {
  */
 export function resolveRegistrationPayer(payment, reg) {
     if (!payment || !reg) return { isPartnerPaid: false, payerEmail: null };
-    // Admin marked-as-paid rows record the covered player, not a payer
-    if (isExplicitAdminMarkedPayment(payment)) return { isPartnerPaid: false, payerEmail: null };
+    const meta = normalizePaymentMetadata(payment.metadata);
+    // Admin rows identify the covered player in email. Only an explicitly
+    // recorded payer can establish that a partner paid an offline entry.
+    const adminMarked = isExplicitAdminMarkedPayment(payment);
+    if (adminMarked && !meta.paid_by_email) return { isPartnerPaid: false, payerEmail: null };
 
     const selfEmail = norm(reg.email);
-    const payerEmail = paymentPayerEmailFor(payment);
+    const payerEmail = adminMarked ? norm(meta.paid_by_email) : paymentPayerEmailFor(payment);
     if (!selfEmail || !payerEmail || payerEmail === selfEmail) {
         return { isPartnerPaid: false, payerEmail: payerEmail || null };
     }
 
-    const meta = normalizePaymentMetadata(payment.metadata);
     const explicitlyCovers = meta.registration_id === reg.id
         || paymentStrictlyCoversRegistration(payment, reg)
         || paymentExplicitlyCoversEmail(payment, selfEmail);

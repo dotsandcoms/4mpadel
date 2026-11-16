@@ -32,3 +32,8 @@ CREATE POLICY "Managers manage event play days"
 
 COMMENT ON TABLE public.event_play_days IS
     'Per-day event availability and court capacity used by native draw auto-scheduling.';
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+REVOKE ALL ON TABLE public.event_play_days FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.event_play_days TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.event_play_days TO service_role;

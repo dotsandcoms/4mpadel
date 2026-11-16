@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node --test tests/privacyPolicy.test.mjs",
+    "predev": "node scripts/build-private-draw-rehearsal.mjs",
+    "prebuild": "node --test tests/privacyPolicy.test.mjs && node scripts/build-private-draw-rehearsal.mjs && node scripts/build-event-finance-summary.mjs",
     "build": "vite build",
     "lint": "eslint .",
+    "test:data-api": "node --test tests/migrationAccess.test.mjs",
+    "test:data-api:db": "node scripts/test-migration-access.mjs",
     "preview": "vite preview",
     "sync:paystack-edge": "node scripts/sync-paystack-edge.mjs",
     "dev:tournament": "vite --config sandbox/tournament-manager/vite.config.mjs"
@@ -50,6 +53,7 @@
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "esbuild": "0.28.1",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",

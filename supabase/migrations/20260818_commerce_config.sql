@@ -56,3 +56,6 @@ CREATE TRIGGER commerce_config_touch
 BEFORE UPDATE ON public.commerce_config
 FOR EACH ROW
 EXECUTE FUNCTION public.touch_commerce_config();
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.commerce_config TO service_role;

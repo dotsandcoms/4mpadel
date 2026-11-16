@@ -67,3 +67,8 @@ USING (
 
 -- No INSERT/UPDATE/DELETE policies are defined, so non-service-role clients
 -- cannot write. The service role (used by edge functions) bypasses RLS.
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+REVOKE ALL ON TABLE public.payment_refunds FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.payment_refunds TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.payment_refunds TO service_role;

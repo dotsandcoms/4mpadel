@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Bell, Check, Loader, RefreshCw, Search, Send, Users, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../supabaseClient';
+import BroadcastHistory from './BroadcastHistory';
 
 const panel = 'bg-[#0a0a0a] border border-white/5 p-5 sm:p-6 rounded-2xl';
 const field = 'w-full bg-black/50 border border-white/15 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green';
@@ -38,7 +39,8 @@ export default function PushBroadcastManager({ onBusyChange }) {
     const [destination, setDestination] = useState('/calendar');
     const [destinationEvent, setDestinationEvent] = useState('');
     const [busy, setBusy] = useState(false);
-    const [history, setHistory] = useState([]);
+    const [history, setHistory] = useState({ items: [], page: 1, pages: 1, total: 0 });
+    const historyEpoch = useRef(0);
     const [historyError, setHistoryError] = useState('');
     const [historyLoading, setHistoryLoading] = useState(false);
     const requestRef = useRef(null);
@@ -59,14 +61,15 @@ export default function PushBroadcastManager({ onBusyChange }) {
         catch (error) { setEventsError(error.message || 'Could not load events.'); }
         finally { setEventsLoading(false); }
     }, []);
-    const loadHistory = useCallback(async () => {
+    const loadHistory = useCallback(async (targetPage = 1) => {
+        const epoch = ++historyEpoch.current;
         setHistoryLoading(true);
         setHistoryError('');
-        try { setHistory(await rpc('list_push_broadcasts') || []); }
-        catch (error) { setHistoryError(error.message || 'Could not load broadcast history.'); }
-        finally { setHistoryLoading(false); }
+        try { const result = await rpc('list_push_broadcasts_page', { p_page: targetPage }); if (epoch === historyEpoch.current) setHistory(result); }
+        catch (error) { if (epoch === historyEpoch.current) setHistoryError(error.message || 'Could not load broadcast history.'); }
+        finally { if (epoch === historyEpoch.current) setHistoryLoading(false); }
     }, []);
-    useEffect(() => { void loadEvents(); void loadHistory(); }, [loadEvents, loadHistory]);
+    useEffect(() => { void loadEvents(); void loadHistory(); return () => { historyEpoch.current++; }; }, [loadEvents, loadHistory]);
 
     useEffect(() => {
         let active = true;
@@ -116,13 +119,13 @@ export default function PushBroadcastManager({ onBusyChange }) {
                 if (!me) throw new Error('Your admin email needs a player profile to receive a test push.');
                 target = { p_event_ids: [], p_player_ids: [me.id], p_payment: 'all', p_partner: 'all', p_excluded_emails: [] };
                 const testPreview = await rpc('preview_push_broadcast', target);
-                if (!testPreview.ready) throw new Error('Enable notifications in the app on your signed-in admin account before sending a test.');
+                if (!testPreview.ready) throw new Error(testPreview.disabled ? `Broadcast notifications are disabled for ${user.email}. Turn them on in the app’s notification settings.` : `No app device is registered to ${user.email}. Sign into the phone app with this same admin account and allow notifications, then retry.`);
                 fingerprint = testPreview.fingerprint;
             }
             const message = { p_title: test ? `Test: ${title.trim()}`.slice(0, 80) : title.trim(), p_body: body.trim(), p_path: path, ...target };
             const signature = JSON.stringify(message);
             // Keep the request ID after uncertain network failures; a retry cannot resend it.
-            if (test || requestRef.current?.signature !== signature) requestRef.current = { signature, id: crypto.randomUUID() };
+            if (requestRef.current?.signature !== signature) requestRef.current = { signature, id: crypto.randomUUID() };
             const result = await rpc('send_push_broadcast', { p_request_id: requestRef.current.id, p_fingerprint: fingerprint, ...message });
             requestRef.current = null;
             toast.success(test ? 'Test notification queued for your account.' : `Broadcast queued for ${result.queued} players.`);
@@ -185,7 +188,7 @@ export default function PushBroadcastManager({ onBusyChange }) {
                         <div className="space-y-4 mt-5">
                             <label className="block text-sm text-white">Title<input className={`${field} mt-2`} value={title} onChange={e => setTitle(e.target.value)} maxLength={80} placeholder="e.g. Tomorrow’s tournament update" /><span className="block text-xs text-gray-500 text-right mt-1">{title.length}/80</span></label>
                             <label className="block text-sm text-white">Message<textarea className={`${field} mt-2 resize-y min-h-32`} value={body} onChange={e => setBody(e.target.value)} maxLength={500} rows={4} placeholder="Write a short update for your players…" /><span className="block text-xs text-gray-500 text-right mt-1">{body.length}/500</span></label>
-                            <label className="block text-sm text-white">Open when tapped<select className={`${field} mt-2`} value={destination} onChange={e => setDestination(e.target.value)}><option value="/calendar">Tournament calendar</option><option value="event">A specific event</option><option value="/(tabs)/rankings">Rankings</option><option value="/(tabs)/explore">Explore</option><option value="/(tabs)/profile">Player profile</option><option value="/pro/live">International matches</option></select></label>
+                            <label className="block text-sm text-white">Open when tapped<select className={`${field} mt-2`} value={destination} onChange={e => setDestination(e.target.value)}><option value="/(tabs)">Dashboard / Home</option><option value="/calendar">Tournament calendar</option><option value="event">A specific event</option><option value="/(tabs)/rankings">Rankings</option><option value="/(tabs)/explore">Explore</option><option value="/(tabs)/profile">Player profile</option><option value="/pro/live">International matches</option></select></label>
                             {destination === 'event' && <label className="block text-sm text-white">Event to open<select className={`${field} mt-2`} value={destinationEvent} onChange={e => setDestinationEvent(e.target.value)}><option value="">Choose an event</option>{events.map(event => <option key={event.id} value={event.id}>{event.event_name}</option>)}</select><span className="text-xs text-gray-400 block mt-2">Choose a published event that players can view in the app.</span></label>}
                         </div>
                     </section>
@@ -215,11 +218,7 @@ export default function PushBroadcastManager({ onBusyChange }) {
                     </section>
                 </aside>
             </div>
-            <section className={panel}>
-                <div className="flex items-center justify-between gap-3"><h2 className="text-lg text-white font-bold">Recent push broadcasts</h2><button type="button" onClick={loadHistory} disabled={historyLoading} className={`${action} text-gray-300 hover:text-white`}><RefreshCw size={16} className={historyLoading ? 'animate-spin' : ''} /><span className="hidden sm:inline">Refresh</span></button></div>
-                {historyError ? <p role="alert" className="text-sm text-amber-300 mt-3">{historyError}</p> : history.length === 0 ? <p className="text-sm text-gray-400 mt-3">{historyLoading ? 'Loading broadcasts…' : 'Your sent push broadcasts will appear here.'}</p> : <ul className="mt-3 divide-y divide-white/10">{history.map(item => <li key={item.id} className="py-4"><div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="font-bold text-sm text-white">{item.title}</h3><time className="text-xs text-gray-500">{date(item.created_at)} SAST</time></div><p className="text-sm text-gray-400 mt-1 whitespace-pre-wrap break-words">{item.body}</p><p className="text-xs text-gray-500 mt-2">{item.recipient_count} recipients · {item.pending} pending · {item.sent} delivered · {item.skipped} skipped · {item.failed} failed</p></li>)}</ul>}
-                <p className="text-[11px] text-gray-500 mt-3">Delivered means the push provider accepted delivery. It does not confirm the player opened the message.</p>
-            </section>
+            <BroadcastHistory history={history} loading={historyLoading} error={historyError} onPage={page => void loadHistory(page)} onRefresh={() => void loadHistory(history.page)} />
         </div>
     );
 }

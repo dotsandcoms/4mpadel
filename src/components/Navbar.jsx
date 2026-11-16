@@ -9,6 +9,7 @@ import { useSearch } from '../context/SearchContext';
 import { usePendingPayments } from '../hooks/usePendingPayments';
 import AuthModal from './AuthModal';
 import { isManageableClubStatus, clubStatusLabel, normalizeClubStatus } from '../utils/club';
+import { REHEARSAL_TESTER_EMAIL } from '../utils/privateDrawRehearsal';
 
 const managedClubSubtitle = (club) => {
   const status = normalizeClubStatus(club?.status);
@@ -52,6 +53,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
   const targetEmail = sessionStorage.getItem('admin_test_login_email') || session?.user?.email;
   const isLoggedIn = !!targetEmail;
   const isSuperAdmin = targetEmail ? SUPER_ADMINS.includes(targetEmail.toLowerCase()) : false;
+  const isRehearsalTester = targetEmail?.trim().toLowerCase() === REHEARSAL_TESTER_EMAIL;
   const [managedClubs, setManagedClubs] = useState([]);
   const [managedOrgs, setManagedOrgs] = useState([]);
   const [managePagesTab, setManagePagesTab] = useState('clubs');
@@ -519,6 +521,11 @@ const Navbar = ({ isDark = false, accentColor }) => {
                         <ShieldAlert className="w-3.5 h-3.5" />Admin Panel
                       </a>
                     )}
+                    {isRehearsalTester && (
+                      <a href="/admin?tab=event-mgmt" className="flex items-center gap-2 px-4 py-2 text-[10px] font-black text-amber-200 hover:bg-white/5 uppercase tracking-widest">
+                        <Trophy className="w-3.5 h-3.5" />Event Manager
+                      </a>
+                    )}
                     {hasManagedOrgs && (
                       <a href="/admin?tab=organisations&view=host" target="_blank" className="flex items-center gap-2 px-4 py-2 text-[10px] font-black text-gray-300 hover:text-padel-green hover:bg-white/5 transition-colors uppercase tracking-widest">
                         <Building className="w-3.5 h-3.5" />Org Dashboard
@@ -875,6 +882,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
                         <ShieldAlert className="w-4 h-4" />Admin Panel
                       </a>
                     )}
+                    {isRehearsalTester && <a href="/admin?tab=event-mgmt" onClick={() => setIsMobileMenuOpen(false)} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-amber-200/30 py-3 text-xs font-bold text-amber-200"><Trophy className="h-4 w-4" />Event Manager</a>}
                     <button onClick={() => { setIsMobileMenuOpen(false); handleLogout(); }} className="w-full py-2.5 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:border-transparent active:scale-95 transition-all cursor-pointer">
                       <LogOut className="w-4 h-4" />Logout
                     </button>

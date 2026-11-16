@@ -8,7 +8,7 @@ import { divisionColorMap } from '../../utils/divisionColors';
 import DivisionSchedulePlanner from './DivisionSchedulePlanner';
 import { orderedScheduleDivisions, schedulePlayerKeys, validateDivisionSchedulePlan } from '../../utils/divisionSchedulePlan';
 
-export default function DrawSchedulingBoard({ eventId, drawId, playDays, onSaved, onSaveDivisionPlan, onDirtyChange, alertHost, divisions = [], divisionConfigs = {} }) {
+export default function DrawSchedulingBoard({ eventId, drawId, playDays, onSaved, onSaveDivisionPlan, onDirtyChange, alertHost, divisions = [], divisionConfigs = {}, privateRehearsal = false }) {
     const dialogRef = useRef(null);
     const [calendarOpen, setCalendarOpen] = useState(false);
     const [allDays, setAllDays] = useState(true);
@@ -318,7 +318,7 @@ export default function DrawSchedulingBoard({ eventId, drawId, playDays, onSaved
                 <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-4">
                     <button type="button" onClick={save} disabled={!count || saving || planSaving || planDirty || errors.length > 0} className="rounded-lg bg-sky-300 px-4 py-3 text-sm font-black text-black disabled:opacity-40">{saving ? 'Saving…' : `Save schedule (${count})`}</button>
                     <button type="button" disabled={saving} onClick={() => { setChanges({}); setScheduleEdits({}); setSelected(''); setNotice('Preview discarded.'); setRefresh((value) => value + 1); }} className="rounded-lg border border-white/20 px-4 py-3 text-sm text-gray-300">Discard / reload</button>
-                    <p className="text-xs text-gray-400">Saving updates the connected database, including live if shared with localhost.</p>
+                    <p className="text-xs text-gray-400">{privateRehearsal ? 'Saving changes only this browser’s private rehearsal.' : 'Saving updates the connected database, including live if shared with localhost.'}</p>
                 </div>
             </>}
             <p role="status" className="text-sm text-sky-200">{notice}</p>

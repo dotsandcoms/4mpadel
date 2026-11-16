@@ -5,6 +5,7 @@ END IF; END $$;
 BEGIN;
 CREATE ROLE anon;
 CREATE ROLE authenticated;
+CREATE ROLE service_role BYPASSRLS;
 CREATE SCHEMA auth;
 CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
     SELECT (NULLIF(current_setting('request.jwt.claims', true), '')::jsonb->>'sub')::uuid;

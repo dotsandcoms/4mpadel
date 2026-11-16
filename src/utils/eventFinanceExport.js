@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import FileSaver from 'file-saver';
+import { ENTRY_COMMISSION_RATE, summarizeRegistrationFinance } from './registrationFinance.js';
 
 const { saveAs } = FileSaver;
 
@@ -48,7 +49,7 @@ const autosize = (sheet, min = 12, max = 46) => {
     sheet.columns.forEach((column) => {
         let widest = min;
         column.eachCell({ includeEmpty: true }, (cell) => {
-            const text = cell.value == null ? '' : String(cell.value);
+            const text = cell.text || '';
             widest = Math.max(widest, Math.min(max, text.length + 2));
         });
         column.width = widest;
@@ -63,26 +64,6 @@ const styleHeader = (row) => {
         fgColor: { argb: 'FFBEFF00' },
     };
     row.alignment = { vertical: 'middle', wrapText: true };
-};
-
-const addSectionTitle = (sheet, text) => {
-    const row = sheet.addRow([text]);
-    row.font = { bold: true, size: 12, color: { argb: 'FFFFFFFF' } };
-    row.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF1A1A1A' },
-    };
-    return row;
-};
-
-const addMetric = (sheet, label, value, { money = false, note = '', bold = false } = {}) => {
-    const row = sheet.addRow([label, value, note]);
-    if (bold) row.font = { bold: true };
-    if (money && typeof value === 'number') {
-        row.getCell(2).numFmt = MONEY_FMT;
-    }
-    return row;
 };
 
 /**
@@ -112,44 +93,79 @@ export function buildEventFinanceWorkbook(payload) {
         receiptReport = null,
         activeRegistrationIds = null,
         reportType = 'full',
+        interimPaid = 0,
+        refundFundingAdjustment = 0,
     } = payload;
 
     const workbook = new ExcelJS.Workbook();
     workbook.creator = '4M Padel';
     workbook.created = new Date();
+    workbook.calcProperties.fullCalcOnLoad = true;
 
     const isOrganiserReport = reportType === 'organiser';
+    const currentIds = activeRegistrationIds && new Set(activeRegistrationIds.map(String));
+    const isCurrent = r => currentIds ? currentIds.has(String(r.registrationId))
+        : !['withdrawn', 'cancelled'].includes(String(r.registrationStatus || '').toLowerCase());
+    const exportedRegistrations = isOrganiserReport ? registrations.filter(isCurrent) : registrations;
+    const currentRegistrations = exportedRegistrations.filter(isCurrent);
+    const current = summarizeRegistrationFinance(currentRegistrations, { interimPaid, refundFundingAdjustment });
+    const lastRegistrationRow = exportedRegistrations.length + 1;
+    const registrationTotalsRow = lastRegistrationRow + 1;
     const wsSummary = workbook.addWorksheet('Summary');
-    wsSummary.addRow([isOrganiserReport ? '4M Padel — Organiser Consolidated Event Report' : '4M Padel — Event Finance Export']).font = { bold: true, size: 16 };
-    wsSummary.addRow(['Event', eventName || '—']);
-    if (eventDate) wsSummary.addRow(['Event date', eventDate]);
-    wsSummary.addRow(['Generated', new Date().toLocaleString('en-ZA')]);
+    wsSummary.views = [{ showGridLines: false }];
+    wsSummary.mergeCells('A1:C1');
+    wsSummary.getCell('A1').value = eventName || 'Event';
+    wsSummary.getCell('A1').font = { bold: true, size: 14 };
+    wsSummary.mergeCells('A2:C2');
+    wsSummary.getCell('A2').value = 'Payment summary';
+    wsSummary.mergeCells('A3:C3');
+    wsSummary.getCell('A3').value = eventDate || new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Africa/Johannesburg' });
+    wsSummary.getCell('A3').font = { color: { argb: 'FF666666' }, size: 10 };
     wsSummary.addRow([]);
-    wsSummary.addRow([
-        isOrganiserReport
-            ? 'Registrations lists current entries. Withdrawals shows previous payments and refunds separately. 4M receipts lists each Paystack entry receipt once, including external links. Withdrawal amounts are a breakdown of those receipts, not extra income. Club collections and licence fees are excluded from 4M receipts.'
-            : 'How to read this file: Summary totals must match the Line items sheet. '
-                + 'The balance due from 4M is Paystack entry funds after refunds, plus any explicit confirmed settlement adjustment, less 5% of active entry fees and interim payments. Club / organiser collections are excluded. '
-                + 'License fees stay with 4M.',
-    ]);
-    wsSummary.mergeCells(`A${wsSummary.rowCount}:C${wsSummary.rowCount}`);
-    wsSummary.getRow(wsSummary.rowCount).alignment = { wrapText: true };
-    wsSummary.getRow(wsSummary.rowCount).height = isOrganiserReport ? 66 : 42;
-    wsSummary.addRow([]);
-
-    let currentSection = '';
-    summary.forEach((row) => {
-        if (row.section && row.section !== currentSection) {
-            currentSection = row.section;
-            wsSummary.addRow([]);
-            addSectionTitle(wsSummary, row.section);
-            const header = wsSummary.addRow(['Metric', 'Value', 'Notes']);
-            styleHeader(header);
-        }
-        addMetric(wsSummary, row.label, row.value, { money: row.money, bold: row.bold, note: row.note || '' });
+    const header = wsSummary.addRow(['', 'Entries / rate', 'Amount (ZAR)']);
+    header.font = { bold: true };
+    for (let col = 1; col <= 3; col++) {
+        header.getCell(col).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
+    }
+    const currentRange = `'Registrations'!W2:W${lastRegistrationRow}`;
+    const count = col => exportedRegistrations.length ? `COUNTIFS(${currentRange},"Yes",'Registrations'!${col}2:${col}${lastRegistrationRow},">0")` : '0';
+    const link = col => `'Registrations'!${col}${registrationTotalsRow}`;
+    const paymentRow = (label, entries, amount) => {
+        const row = wsSummary.addRow([label, entries, amount]);
+        row.height = 24;
+        row.getCell(3).numFmt = MONEY_FMT;
+        return row;
+    };
+    paymentRow('Total entry fees', { formula: exportedRegistrations.length ? `COUNTIF(${currentRange},"Yes")` : '0', result: currentRegistrations.length }, { formula: link('M'), result: current.totalAmountBilled });
+    paymentRow('Paid direct to organiser', { formula: count('S'), result: currentRegistrations.filter(r => r.paidDirectToOrganiser > 0).length }, { formula: link('S'), result: current.collectedOrganiser });
+    const paid4MRow = paymentRow('Paid to 4M', { formula: count('R'), result: currentRegistrations.filter(r => r.paidTo4M > 0).length }, { formula: link('R'), result: current.collected4M });
+    if (current.unconfirmedCollected > 0) paymentRow('Recipient unconfirmed', { formula: count('T'), result: currentRegistrations.filter(r => r.recipientUnconfirmed > 0).length }, { formula: link('T'), result: current.unconfirmedCollected });
+    const outstanding = Math.round(currentRegistrations.reduce((n, r) => n + Number(r.outstanding || 0), 0) * 100) / 100;
+    if (outstanding > 0) paymentRow('Outstanding entry fees', { formula: count('U'), result: currentRegistrations.filter(r => r.outstanding > 0).length }, { formula: link('U'), result: outstanding });
+    const feeRow = paymentRow('4M fee', ENTRY_COMMISSION_RATE, null);
+    feeRow.getCell(2).numFmt = '0%';
+    feeRow.getCell(3).value = { formula: `-ROUND(C${paid4MRow.number}*B${feeRow.number},2)`, result: -current.commission };
+    const dueCells = [`C${paid4MRow.number}`, `C${feeRow.number}`];
+    if (refundFundingAdjustment) dueCells.push(`C${paymentRow('Refund funding adjustment', null, refundFundingAdjustment).number}`);
+    if (interimPaid) dueCells.push(`C${paymentRow('Already paid to organiser', null, -interimPaid).number}`);
+    const dueRow = paymentRow('Amount due to organiser', null, { formula: `SUM(${dueCells.join(',')})`, result: current.dueToOrg });
+    dueRow.font = { bold: true, size: 12 };
+    dueRow.eachCell({ includeEmpty: true }, cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2F0D9' } };
+        cell.border = { top: { style: 'thin', color: { argb: 'FF999999' } } };
     });
-    autosize(wsSummary, 18, 70);
-    wsSummary.getColumn(2).width = 22;
+    const review = summary.find(row => row.section === 'Reconciliation' && row.value === 'Needs review');
+    if (review) {
+        const row = wsSummary.addRow(['Payment review needed', null, null]);
+        wsSummary.mergeCells(`A${row.number}:C${row.number}`);
+        row.getCell(1).note = review.note || 'Review the registration payment records before requesting payout.';
+        row.font = { color: { argb: 'FF92400E' } };
+    }
+    wsSummary.getColumn(1).width = 40;
+    wsSummary.getColumn(2).width = 18;
+    wsSummary.getColumn(3).width = 22;
+    wsSummary.getColumn(2).alignment = { horizontal: 'right' };
+    wsSummary.getColumn(3).alignment = { horizontal: 'right' };
 
     if (reportType === 'full') {
     const wsLines = workbook.addWorksheet('Line items');
@@ -196,10 +212,10 @@ export function buildEventFinanceWorkbook(payload) {
         'T-shirt Size', 'T-shirt Sponsor', 'T-shirt Logo', 'License',
         'Payment Status', 'Payment Channel', 'Entry Amount (ZAR)', 'Comped',
         'Registration Status', 'Registered At', 'Payment Note',
+        'Paid to 4M (ZAR)', 'Paid direct to organiser (ZAR)', 'Recipient unconfirmed (ZAR)', 'Outstanding (ZAR)', 'Payment recipient',
+        'Current entry',
     ];
     styleHeader(wsRegs.addRow(regHeaders));
-    const exportedRegistrations = isOrganiserReport && activeRegistrationIds
-        ? registrations.filter(r => activeRegistrationIds.includes(r.registrationId)) : registrations;
     exportedRegistrations.forEach((r) => {
         const row = wsRegs.addRow([
             r.name || '',
@@ -219,9 +235,16 @@ export function buildEventFinanceWorkbook(payload) {
             r.registrationStatus || '',
             r.registeredAt ? new Date(r.registeredAt) : '',
             r.note || '',
+            Number(r.paidTo4M || 0),
+            Number(r.paidDirectToOrganiser || 0),
+            Number(r.recipientUnconfirmed || 0),
+            Number(r.outstanding || 0),
+            r.collectionRecipient || '',
+            isCurrent(r) ? 'Yes' : 'No',
         ]);
         row.getCell(13).numFmt = MONEY_FMT;
         row.getCell(16).numFmt = 'dd mmm yyyy hh:mm';
+        for (const index of [18, 19, 20, 21]) row.getCell(index).numFmt = MONEY_FMT;
         styleStatusRow(row, r.paymentStatus);
         styleStatus(row.getCell(11), r.paymentStatus);
         if (r.tshirtLogoUrl) {
@@ -235,6 +258,15 @@ export function buildEventFinanceWorkbook(payload) {
     wsRegs.views = [{ state: 'frozen', ySplit: 1 }];
     autosize(wsRegs, 12, 36);
     wsRegs.getColumn(9).width = 15;
+    const totals = wsRegs.addRow(['Totals (current entries)']);
+    styleHeader(totals);
+    for (const [col, key] of [['M', 'entryAmount'], ['R', 'paidTo4M'], ['S', 'paidDirectToOrganiser'], ['T', 'recipientUnconfirmed'], ['U', 'outstanding']]) {
+        totals.getCell(col).value = {
+            formula: exportedRegistrations.length ? `SUMIF($W$2:$W$${lastRegistrationRow},"Yes",${col}2:${col}${lastRegistrationRow})` : '0',
+            result: Math.round(currentRegistrations.reduce((n, r) => n + Number(r[key] || 0), 0) * 100) / 100,
+        };
+        totals.getCell(col).numFmt = MONEY_FMT;
+    }
 
     if (receiptReport) {
         const addHistorySheet = (name, columns, rows) => {
@@ -302,6 +334,7 @@ export function buildEventFinanceWorkbook(payload) {
             { key: 'reference', label: 'Paystack receipt reference' },
             { key: 'refundedAt', label: 'Last refund date', date: true }, { key: 'refundReferences', label: 'Refund references' },
             { key: 'status', label: 'Receipt evidence' }, { key: 'note', label: 'Notes' },
+            { key: 'unallocatedCredit', label: 'Unallocated credit reserved (ZAR)', money: true },
         ], receiptReport.receipts || []);
     }
 

@@ -177,3 +177,12 @@ END $$;
 REVOKE ALL ON FUNCTION public.tm_require(bigint,text),public.tm_log(bigint,text,jsonb),public.tm_player_fingerprint(uuid),public.tm_source_fingerprint(bigint),public.tm_result_fingerprint(uuid) FROM PUBLIC,anon,authenticated;
 REVOKE ALL ON FUNCTION public.tm_capabilities(bigint),public.tm_list_events(),public.tm_snapshot(bigint),public.tm_save_settings(bigint,jsonb,jsonb,integer),public.tm_confirm(bigint,uuid,text,jsonb,integer),public.tm_set_access(bigint,text,text[]) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.tm_capabilities(bigint),public.tm_list_events(),public.tm_snapshot(bigint),public.tm_save_settings(bigint,jsonb,jsonb,integer),public.tm_confirm(bigint,uuid,text,jsonb,integer),public.tm_set_access(bigint,text,text[]) TO authenticated;
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.tournament_access TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.tournament_workspace TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.tournament_confirmations TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.tournament_schedules TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.tournament_finalisations TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.tournament_audit TO service_role;
+GRANT USAGE ON SEQUENCE public.tournament_audit_id_seq TO service_role;

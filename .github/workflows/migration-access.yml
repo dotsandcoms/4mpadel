@@ -1,0 +1,62 @@
+name: Database access grants
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'mobile/supabase/migrations/**'
+      - 'scripts/lib/migration-access.mjs'
+      - 'scripts/test-migration-access.mjs'
+      - 'tests/migrationAccess.test.mjs'
+      - 'tests/fixtures/data-api-access.mjs'
+      - 'tests/refundReadAuthorization.sql'
+      - '.github/workflows/migration-access.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'mobile/supabase/migrations/**'
+      - 'scripts/lib/migration-access.mjs'
+      - 'scripts/test-migration-access.mjs'
+      - 'tests/migrationAccess.test.mjs'
+      - 'tests/fixtures/data-api-access.mjs'
+      - 'tests/refundReadAuthorization.sql'
+      - '.github/workflows/migration-access.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  explicit-grants:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fourm_data_api_grant_test
+        ports:
+          - 55443:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test tests/migrationAccess.test.mjs
+      - run: node scripts/test-migration-access.mjs
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: '55443'
+          PGUSER: postgres
+          PGPASSWORD: postgres
+      - run: psql -X -q -v ON_ERROR_STOP=1 -d fourm_data_api_grant_test -f tests/refundReadAuthorization.sql
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: '55443'
+          PGUSER: postgres
+          PGPASSWORD: postgres

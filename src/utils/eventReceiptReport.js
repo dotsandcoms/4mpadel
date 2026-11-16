@@ -1,6 +1,6 @@
 import {
-    getPaymentMetadataLayers, getRegistrationEntryFeePaid, isCompedEntryPayment,
-    isLicensePaymentRow, isLicenseRefund, normalizePaymentMetadata, paymentEntryCoversFor,
+    getPaymentMetadataLayers, getRegistrationEntryFeePaid,
+    isLicenseRefund, normalizePaymentMetadata, paymentEntryCoversFor, paymentPayerEmailFor,
 } from './paymentRegistrationMatch.js';
 import { resolveRegistrationDivision } from './registrationDivision.js';
 
@@ -13,7 +13,7 @@ const unique = values => [...new Set(values.filter(Boolean))];
 
 /** Reporting only: canonical receipts remain the cash authority; historical
  * player allocations are a breakdown of those receipts, never extra income. */
-export function buildEventReceiptReport({ registrations = [], divisions = [], payments = [], refunds = [], settlement = {} } = {}) {
+export function buildEventReceiptReport({ registrations = [], divisions = [], refunds = [], settlement = {} } = {}) {
     const withdrawalRows = [];
     const receiptRows = [];
     const linkedWithdrawals = new Set();
@@ -23,9 +23,10 @@ export function buildEventReceiptReport({ registrations = [], divisions = [], pa
     const payer = (receipt, payment) => {
         const meta = normalizePaymentMetadata(payment.metadata);
         const { inner } = getPaymentMetadataLayers(meta);
-        const email = receipt.gateway?.payer_email || meta.registrant_email || meta.email || payment.player_email || inner.registrant_email || '';
+        const email = receipt.gateway?.payer_email || paymentPayerEmailFor(payment) || payment.player_email || '';
         const snapshot = [...(meta.registration_rows || []), ...(inner.registration_rows || [])].find(r => norm(r.email) === norm(email));
-        const name = (norm(meta.registrant_email || meta.email) === norm(email) ? meta.registrant_name : '')
+        const name = (norm(meta.paid_by_email) === norm(email) ? meta.paid_by_name : '')
+            || (norm(meta.registrant_email || meta.email) === norm(email) ? meta.registrant_name : '')
             || snapshot?.full_name || registrations.find(r => norm(r.email) === norm(email))?.full_name || '';
         return { payerName: name, payerEmail: email };
     };
@@ -35,7 +36,7 @@ export function buildEventReceiptReport({ registrations = [], divisions = [], pa
     });
     const makeWithdrawal = (reg, receipt, payment, amount, returned, reserved, refundRows, note = '') => {
         const retained = money(amount - returned - reserved);
-        const applied = receipt.payment_method === 'paystack' ? Math.min(retained, sum((settlement.allocations || [])
+        const applied = receipt.recipient === '4m' ? Math.min(retained, sum((settlement.allocations || [])
             .filter(a => a.receipt?.reference === receipt.reference && a.registration.id !== reg.id
                 && norm(a.registration.email) === norm(reg.email)).map(a => a.amount))) : 0;
         linkedWithdrawals.add(reg.id);
@@ -46,18 +47,13 @@ export function buildEventReceiptReport({ registrations = [], divisions = [], pa
             status: reserved > 0 ? 'Refund pending' : returned >= amount ? 'Refunded'
                 : applied > 0 ? 'Applied to current entry' : returned > 0 ? 'Partly refunded'
                     : receipt.payment_method === 'paystack' ? 'Payment retained' : 'Club payment recorded',
-            holder: receipt.payment_method === 'paystack' ? '4M' : 'Club / organiser',
+            holder: receipt.recipient === '4m' ? '4M' : receipt.recipient === 'organiser' ? 'Club / organiser' : 'Recipient unconfirmed',
             method: receipt.payment_method, reference: receipt.reference,
             ...refundDetails(refundRows), note,
         });
     };
 
-    const clubPayments = payments.filter(p => norm(p.status) === 'success' && !p.is_test
-        && norm(p.payment_type) === 'event_entry_fee' && !normalizePaymentMetadata(p.metadata).is_test
-        && !isLicensePaymentRow(p) && !isCompedEntryPayment(p) && norm(p.payment_method) !== 'paystack'
-        && !/\bT\d{10,}\b/.test(JSON.stringify(normalizePaymentMetadata(p.metadata))) && Number(p.amount) > 0);
-    const uniqueClub = [...new Map(clubPayments.map(p => [p.reference || p.id, p])).values()];
-    const sources = [...(settlement.receiptRows || []), ...uniqueClub.map(p => ({ ...p, club: true, claims: [p], paymentIds: [p.id] }))];
+    const sources = (settlement.receiptRows || []).map(r => ({ ...r, club: r.recipient !== '4m' }));
     for (const receipt of sources) {
         // Prefer the original checkout to later admin confirmations of the same money.
         const source = receipt.claims?.find(p => p.reference === receipt.reference && !/^MANUAL-ADMIN-/.test(p.reference))
@@ -130,9 +126,11 @@ export function buildEventReceiptReport({ registrations = [], divisions = [], pa
             players: unique([...shares.map(s => s.reg.full_name), ...(settlement.allocations || []).filter(a => a.receipt?.reference === receipt.reference).map(a => a.registration.full_name)]).join('; '),
             divisions: unique(shares.map(s => s.reg.division)).join('; '),
             amount: receipt.amount, refunded: receipt.refunded || 0, reserved: receipt.reserved || 0, retained: receipt.net,
-            reference: receipt.reference, holder: '4M', method: 'Paystack', ...refundDetails(allRefunds),
+            unallocatedCredit: receipt.unallocatedCredit || 0,
+            reference: receipt.reference, holder: '4M', method: receipt.payment_method, ...refundDetails(allRefunds),
             status: receipt.gateway?.verified ? 'Verified' : 'Ledger record',
-            note: [available > 0 ? `R${available.toFixed(2)} not allocated to a historical entry.` : '',
+            note: [receipt.unallocatedCredit > 0 ? `R${receipt.unallocatedCredit.toFixed(2)} held as unallocated credit; reserved from payout.` : '',
+                available > 0 ? `R${available.toFixed(2)} not allocated to a historical entry.` : '',
                 (receipt.claims?.length || 0) > 1 ? 'Multiple ledger confirmations; this receipt is counted once.' : '',
                 !receipt.gateway?.verified ? 'Gateway verification unavailable at export.' : ''].filter(Boolean).join(' '),
         });

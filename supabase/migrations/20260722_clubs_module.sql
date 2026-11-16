@@ -166,3 +166,16 @@ CREATE POLICY "Authenticated manage club members"
     TO authenticated
     USING (true)
     WITH CHECK (true);
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+REVOKE ALL ON TABLE public.clubs FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.clubs TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.clubs TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.clubs TO service_role;
+REVOKE ALL ON TABLE public.club_members FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.club_members TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.club_members TO service_role;
+REVOKE ALL ON TABLE public.club_organisations FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.club_organisations TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.club_organisations TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.club_organisations TO service_role;

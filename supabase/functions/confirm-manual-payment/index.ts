@@ -4,6 +4,7 @@ import {
     parseMetadata,
     resolvePaystackVerifySecrets,
     verifyPaystackReference,
+    assertPaystackPayment,
 } from './paystack.ts';
 import { persistManualEventRegistrations, recordLicensePaymentSplit, markManualEventEntryCoversPaid } from './manual-event-payment.ts';
 
@@ -39,7 +40,7 @@ async function finalizeManualEventPayment(
     supabaseAdmin: SupabaseClient,
     payment: Record<string, unknown>,
 ) {
-    const meta = parseMetadata(payment.metadata);
+    let meta = parseMetadata(payment.metadata);
     if (meta.source !== 'manual_event') {
         return { processed: false, skipped: true, reason: 'not_manual_event' };
     }
@@ -61,7 +62,7 @@ async function finalizeManualEventPayment(
         .update({ status: 'success' })
         .eq('id', paymentId)
         .neq('status', 'success')
-        .select('id');
+        .select('*');
     if (claimError) throw claimError;
     if (!claimed || claimed.length === 0) {
         // Re-run the canonical finalizer after verified delivery even if a
@@ -72,6 +73,8 @@ async function finalizeManualEventPayment(
         return { processed: false, alreadyProcessed: true };
     }
 
+    meta = parseMetadata(claimed[0].metadata);
+    payment = claimed[0];
     try {
     const { savedRows, persisted } = await persistManualEventRegistrations(
         supabaseAdmin,
@@ -289,6 +292,9 @@ serve(async (req: Request) => {
             });
         }
 
+        const { data: binding, error: bindingError } = await supabaseAdmin.rpc('payment_verification_context', { p_reference: payment.reference });
+        if (bindingError || !binding) throw new Error('The saved checkout could not be verified. Please try again.');
+        assertPaystackPayment(binding, verification.data);
         const result = await finalizeManualEventPayment(supabaseAdmin, payment);
 
         return new Response(JSON.stringify({ ...result, paystackMode }), {

@@ -1,3 +1,4 @@
+import { canCorrectManualPayment } from '../../utils/manualPaymentCorrection';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -24,11 +25,13 @@ import {
     isLicensePaymentRow,
     isPaystackPaymentMethod,
     normalizePaymentMetadata,
+    paymentMatchesRegistration,
     registrationCountsAsPaid,
     registrationHasPaystackEntryPayment,
     registrationIsCompedEntry,
     resolveRegistrationPaymentMethod,
     resolveRegistrationPayer,
+    findExpectedEntryPayment,
 } from '../../utils/paymentRegistrationMatch';
 import { createPendingRegistrations, searchRegistrationPlayers } from '../../utils/adminEventRegistration';
 import { sendEmail } from '../../utils/emails';
@@ -37,7 +40,11 @@ import EventActivityLog from './EventActivityLog';
 import { logEventActivity } from '../../utils/eventActivityLog';
 import { parseEventDate } from '../../utils/eventEntryFee';
 import { findFinancePayment, buildFinanceAllocations, loadEventRefunds } from '../../utils/eventFinanceReconciliation';
+import { calculateEventSettlement, loadEventCashVerification, collectionBucket, collectionRecipient, eventPayoutRequestLimit } from '../../utils/eventSettlement';
+import { fetchAllRows } from '../../utils/fetchAllRows';
 import { downloadEventFinanceWorkbook } from '../../utils/eventFinanceExport';
+import { ENTRY_COMMISSION_RATE, registrationFinanceAmounts } from '../../utils/registrationFinance';
+import { buildEventReceiptReport } from '../../utils/eventReceiptReport';
 import { useAdminPermissions } from '../../hooks/useAdminPermissions';
 import { organisationBanking, formatBankingDestination } from '../../utils/organisationBanking';
 import BankingVerification from './BankingVerification';
@@ -62,7 +69,7 @@ import {
     resolveRegistrationDivision,
 } from '../../utils/registrationDivision';
 
-const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
+const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const normEmail = (value) => String(value || '').trim().toLowerCase();
 
 const successPaymentsOnly = (payments) => (payments || []).filter((p) => p.status === 'success');
@@ -108,8 +115,7 @@ const dedupeRegistrationsByEmailDivision = (regs, divisions) => {
     return [...preferred.values(), ...noEmail];
 };
 
-const PLATFORM_COMMISSION_RATE = 0.05;
-const PAYOUT_REQUEST_MAX_RATE = 0.5;
+const PLATFORM_COMMISSION_RATE = ENTRY_COMMISSION_RATE;
 const PAYOUT_ADMIN_EMAIL = 'markstillerman@gmail.com';
 
 const ABANDONED_CHECKOUT_AFTER_MS = 24 * 60 * 60 * 1000;
@@ -123,7 +129,6 @@ const PAYMENT_METHOD_LABELS = {
     cash: 'Cash',
     system: 'System',
 };
-const OFF_PLATFORM_PAYMENT_METHODS = new Set(['manual', 'eft', 'external', 'cash']);
 
 const labelPaymentMethod = (method) => {
     if (!method) return '';
@@ -183,7 +188,7 @@ const TeamPlayerRows = ({ players, children }) => (
     </div>
 );
 
-const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEventCancelled, event, variant = 'modal', backLabel = '← Back to Events List' }) => {
+const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEventCancelled, onStartRehearsal, event, variant = 'modal', backLabel = '← Back to Events List' }) => {
     const [showCancelDivision, setShowCancelDivision] = useState(false);
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
     const [cancelledEventId, setCancelledEventId] = useState(null);
@@ -203,8 +208,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const [licenseFilter, setLicenseFilter] = useState('all'); // all | full | temp | none
     const [markingId, setMarkingId] = useState(null);
     const [markPaidTarget, setMarkPaidTarget] = useState(null);
+    const [editingReceipt, setEditingReceipt] = useState(null);
     const [markPaidNote, setMarkPaidNote] = useState('');
     const [markPaidMethod, setMarkPaidMethod] = useState('manual');
+    const [markPaidRecipient, setMarkPaidRecipient] = useState('');
     const [markPaidBusy, setMarkPaidBusy] = useState(false);
     const [unmarkTarget, setUnmarkTarget] = useState(null);
     const [unmarkBusy, setUnmarkBusy] = useState(false);
@@ -299,6 +306,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const [adminEmail, setAdminEmail] = useState(null);
     const [syncingRankedin, setSyncingRankedin] = useState(false);
     const [interimPayments, setInterimPayments] = useState([]);
+    const interimSnapshot = useRef(event?.organiser_interim_payments ?? null);
     const [interimAmount, setInterimAmount] = useState('');
     const [interimDate, setInterimDate] = useState(() => new Date().toISOString().slice(0, 10));
     const [interimNote, setInterimNote] = useState('');
@@ -356,21 +364,24 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             ? event.organiser_interim_payments
             : [];
         setInterimPayments(rows);
+        interimSnapshot.current = event?.organiser_interim_payments ?? null;
     }, [event?.id, event?.organiser_interim_payments]);
 
     const persistInterimPayments = useCallback(async (nextRows) => {
         if (!event?.id) throw new Error('Missing event');
-        const { error } = await supabase
-            .from('calendar')
-            .update({ organiser_interim_payments: nextRows })
-            .eq('id', event.id);
+        let query = supabase.from('calendar').update({ organiser_interim_payments: nextRows }).eq('id', event.id);
+        query = interimSnapshot.current == null ? query.is('organiser_interim_payments', null)
+            : query.eq('organiser_interim_payments', JSON.stringify(interimSnapshot.current));
+        const { data, error } = await query.select('organiser_interim_payments').maybeSingle();
         if (error) throw error;
-        setInterimPayments(nextRows);
+        if (!data) throw new Error('Payout history changed. Refresh the event before recording this payment again.');
+        interimSnapshot.current = data.organiser_interim_payments;
+        setInterimPayments(data.organiser_interim_payments || []);
     }, [event?.id]);
 
     const handleAddInterimPayment = async () => {
         const amount = Number(String(interimAmount).replace(/[^0-9.]/g, ''));
-        if (!Number.isFinite(amount) || amount <= 0) {
+        if (!Number.isFinite(amount) || amount <= 0 || Math.round(amount * 100) / 100 !== amount) {
             toast.error('Enter a valid interim payment amount');
             return;
         }
@@ -415,6 +426,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const handleRemoveInterimPayment = async (paymentId) => {
         const target = interimPayments.find((p) => p.id === paymentId);
         if (!target) return;
+        if (target.request_id || String(target.note || '').startsWith('Manual payout request ')) {
+            toast.error('This completed payout is linked to a payout request and cannot be removed here.');
+            return;
+        }
         if (!window.confirm(`Remove interim payment of ${fmtR(target.amount)}?`)) return;
         setSavingInterim(true);
         try {
@@ -452,13 +467,14 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             .lt('created_at', abandonCutoff);
 
         const [regRes, payRes, divRes, eventRes] = await Promise.all([
-            supabase.from('event_registrations').select('*').eq('event_id', event.id).order('created_at', { ascending: false }),
-            supabase.from('payments').select('*').eq('event_id', event.id),
-            supabase.from('tournament_divisions').select('*').eq('event_id', event.id),
+            fetchAllRows(() => supabase.from('event_registrations').select('*').eq('event_id', event.id).order('id', { ascending: true })).then(data => ({ data })),
+            fetchAllRows(() => supabase.from('payments').select('*').eq('event_id', event.id).order('id', { ascending: true })).then(data => ({ data })),
+            fetchAllRows(() => supabase.from('tournament_divisions').select('*').eq('event_id', event.id).order('id', { ascending: true })).then(data => ({ data })),
             supabase.from('calendar').select('organiser_interim_payments').eq('id', event.id).maybeSingle(),
         ]);
-        if (eventRes?.data && Array.isArray(eventRes.data.organiser_interim_payments)) {
-            setInterimPayments(eventRes.data.organiser_interim_payments);
+        if (eventRes?.data) {
+            interimSnapshot.current = eventRes.data.organiser_interim_payments ?? null;
+            setInterimPayments(eventRes.data.organiser_interim_payments || []);
         }
         for (const result of [regRes, payRes, divRes, eventRes]) {
             if (result.error) throw new Error(result.error.message);
@@ -722,23 +738,27 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         };
     };
 
-    const openMarkPaidModal = (reg) => {
+    const openMarkPaidModal = (reg, receipt = null) => {
         const reference = `MANUAL-ADMIN-${reg.id}`;
-        const existingPayment = payments.find((p) => p.reference === reference)
-            || payments.find((p) => p.status === 'success' && p.metadata?.registration_id === reg.id);
+        const existingPayment = receipt || payments.find((p) => p.reference === reference)
+            || payments.find((p) => p.status === 'success' && normalizePaymentMetadata(p.metadata).registration_id === reg.id);
+        setEditingReceipt(receipt);
         setMarkPaidTarget(reg);
         setMarkPaidNote(
-            existingPayment?.metadata?.note
-            || existingPayment?.metadata?.payment_note
+            normalizePaymentMetadata(existingPayment?.metadata).note
+            || normalizePaymentMetadata(existingPayment?.metadata).payment_note
             || '',
         );
-        setMarkPaidMethod(reg.payment_method || existingPayment?.payment_method || 'manual');
+        setMarkPaidMethod(existingPayment?.payment_method || reg.payment_method || 'manual');
+        setMarkPaidRecipient(collectionRecipient(existingPayment) || (existingPayment?.payment_method === 'paystack' ? '4m' : ''));
     };
 
     const closeMarkPaidModal = () => {
         setMarkPaidTarget(null);
+        setEditingReceipt(null);
         setMarkPaidNote('');
         setMarkPaidMethod('manual');
+        setMarkPaidRecipient('');
         setMarkPaidBusy(false);
     };
 
@@ -980,6 +1000,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         const reg = markPaidTarget;
         const note = markPaidNote.trim();
         const isComp = markPaidMethod === 'comp';
+        if (!isComp && markPaidMethod !== 'paystack' && !markPaidRecipient) {
+            toast.error('Select who received this payment');
+            return;
+        }
         if (!note) {
             toast.error(isComp ? 'A note is required for complimentary entries' : 'A payment note is required for manual payments');
             return;
@@ -990,6 +1014,31 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         }
         setMarkPaidBusy(true);
         setMarkingId(reg.id);
+        if (editingReceipt) {
+            try {
+                if (canCorrectManualPayment(editingReceipt, reg)) {
+                    const { error } = await supabase.rpc('correct_manual_event_payment', {
+                        p_event: event.id, p_registration: reg.id, p_payment: editingReceipt.id,
+                        p_method: markPaidMethod, p_recipient: markPaidMethod === 'paystack' ? '4m' : markPaidRecipient, p_note: note,
+                    });
+                    if (error) throw error;
+                } else {
+                    const { error } = await supabase.from('payments').update({ metadata: {
+                        ...normalizePaymentMetadata(editingReceipt.metadata), collection_recipient: markPaidRecipient,
+                        note, payment_note: note,
+                    } }).eq('id', editingReceipt.id).eq('event_id', event.id);
+                    if (error) throw error;
+                    await logEventActivity({ eventId: event.id, action: 'payment_recipient_updated', category: 'FINANCE',
+                        summary: `Confirmed payment received by ${markPaidRecipient === '4m' ? '4M' : 'club / organiser'}`,
+                        details: { payment_id: editingReceipt.id, collection_recipient: markPaidRecipient, note } }).catch(() => {});
+                }
+                closeMarkPaidModal();
+                await load();
+                toast.success('Payment details updated');
+            } catch (error) { toast.error(error.message || 'Could not update payment details'); }
+            finally { setMarkPaidBusy(false); setMarkingId(null); }
+            return;
+        }
         try {
             // Comp is stored as a plain manual payment of R0 — 'comp' is a UI-only
             // selection that flags the payment row as complimentary via metadata.
@@ -1003,19 +1052,22 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                 .eq('id', reg.id);
             if (error) throw error;
 
-            const reference = isComp ? `MANUAL-ADMIN-COMP-${reg.id}` : `MANUAL-ADMIN-${reg.id}`;
-            const amount = isComp ? 0 : divFee(reg);
+            const recorded = payments.find(p => p.status === 'success' && normalizePaymentMetadata(p.metadata).registration_id === reg.id && isExplicitAdminMarkedPayment(p));
+            const reference = recorded?.reference || (isComp ? `MANUAL-ADMIN-COMP-${reg.id}` : `MANUAL-ADMIN-${reg.id}`);
+            const amount = isComp ? 0 : Number(recorded?.amount ?? divFee(reg));
             const paymentMetadata = {
                 source: isComp ? 'admin_add_player' : 'manual_event_admin',
                 division: reg.division,
                 email: reg.email,
                 registration_id: reg.id,
                 marked_by_admin: true,
+                collection_recipient: markPaidMethod === 'paystack' ? '4m' : markPaidRecipient,
                 note,
                 payment_note: note,
                 ...(isComp ? { free_entry: true, comp_entry: true } : {}),
             };
-            const { data: existing } = await supabase.from('payments').select('id, metadata').eq('reference', reference).maybeSingle();
+            const { data: existing, error: existingError } = await supabase.from('payments').select('id, metadata').eq('reference', reference).maybeSingle();
+            if (existingError) throw existingError;
             if (existing) {
                 const { error: payErr } = await supabase
                     .from('payments')
@@ -1023,7 +1075,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                         status: 'success',
                         payment_method: storedMethod,
                         amount,
-                        metadata: { ...(existing.metadata || {}), ...paymentMetadata },
+                        metadata: { ...normalizePaymentMetadata(existing.metadata), ...paymentMetadata },
                     })
                     .eq('id', existing.id);
                 if (payErr) throw payErr;
@@ -1735,14 +1787,16 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const getPaymentDetails = useCallback((reg) => {
         if (!registrationCountsAsPaid(reg, refundByReg, payments)) return null;
 
-        let payment = findPaymentForReg(reg);
+        let payment = findPaymentForReg(reg) || findExpectedEntryPayment(payments, reg);
         // Never surface LIC-* split ledger rows as the entry payment (wrong Manual note).
         if (payment && isLicensePaymentRow(payment)) {
             payment = findParentEntryPayment(payments, payment) || payment;
         }
         const { isPartnerPaid, payerName } = resolvePaymentPayer(reg, payment);
         const method = resolveRegistrationPaymentMethod(reg, payment) || (isPartnerPaid ? 'partner' : 'paystack');
-        const rawNote = payment?.metadata?.note || payment?.metadata?.payment_note || null;
+        const isExpectedPayment = payment?.status === 'pending' && normalizePaymentMetadata(payment.metadata).payment_expected === true;
+        const rawNote = (isExpectedPayment && normalizePaymentMetadata(payment.metadata).payment_expected_note)
+            || payment?.metadata?.note || payment?.metadata?.payment_note || null;
         const note = (rawNote && /license portion split/i.test(String(rawNote)))
             ? null
             : rawNote;
@@ -1756,6 +1810,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
 
         return {
             isPartnerPaid,
+            isExpectedPayment,
             payerName,
             method,
             note,
@@ -1775,7 +1830,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         const details = getPaymentDetails(reg);
         if (!details) return null;
 
-        const channelLabel = details.isPartnerPaid ? (
+        const channelLabel = details.isExpectedPayment ? (
+            <span className="text-[9px] font-bold text-amber-300">Payment due to 4M</span>
+        ) : details.isPartnerPaid ? (
             <span className="text-[9px] font-bold text-sky-300">
                 Paid by {details.payerName || 'partner'}
             </span>
@@ -1798,6 +1855,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         return (
             <div className="mt-1 flex items-center gap-1 flex-wrap">
                 {channelLabel}
+                {collectionRecipient(details.payment) === 'organiser' && (
+                    <span className="text-[9px] font-bold text-amber-300">
+                        Paid direct to {normalizePaymentMetadata(details.payment.metadata).collection_recipient_name || 'club / organiser'}
+                    </span>
+                )}
                 <PaymentNoteButton
                     note={details.note}
                     regId={reg.id}
@@ -2174,8 +2236,15 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
 
     const renderPaymentCell = useCallback((reg) => {
         const details = getPaymentDetails(reg);
+        const editableReceipt = details?.payment || payments.find(p => normalizePaymentMetadata(p.metadata).registration_id === reg.id
+            && ['success', 'refunded'].includes(p.status) && p.payment_type === 'event_entry_fee' && !isCompedEntryPayment(p))
+            || findFinancePayment(payments, reg, refunds);
+        const canEditRecipient = editableReceipt && (canCorrectManualPayment(editableReceipt, reg) || !isPaystackPaymentMethod(editableReceipt.payment_method))
+            && !isLicensePaymentRow(editableReceipt) && !isCompedEntryPayment(editableReceipt);
         const channelLabel = details ? (
-            details.isPartnerPaid ? (
+            details.isExpectedPayment ? (
+                <span className="text-[9px] font-bold text-amber-300">Payment due to 4M</span>
+            ) : details.isPartnerPaid ? (
                 <span className="text-[9px] font-bold text-sky-300">
                     Paid by {details.payerName || 'partner'}
                 </span>
@@ -2212,6 +2281,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                 ) : (
                     <>
                         {channelLabel}
+                        {details && collectionRecipient(details.payment) === 'organiser' && (
+                            <span className="text-[9px] font-bold text-amber-300">
+                                Paid direct to {normalizePaymentMetadata(details.payment.metadata).collection_recipient_name || 'club / organiser'}
+                            </span>
+                        )}
                         {details && (
                             <PaymentNoteButton
                                 note={details.note}
@@ -2233,9 +2307,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                         )}
                     </>
                 )}
+                {canEditRecipient && <button type="button" onClick={() => openMarkPaidModal(reg, editableReceipt)} className="text-[9px] font-bold text-sky-400 px-2 py-0.5 border border-sky-500/25 rounded-md">Edit payment</button>}
             </div>
         );
-    }, [paymentBadge, canMarkRegistrationPaid, canUnmarkAdminPaid, markingId, getPaymentDetails, openPaymentNoteId]);
+    }, [paymentBadge, canMarkRegistrationPaid, canUnmarkAdminPaid, markingId, getPaymentDetails, openPaymentNoteId, payments, refunds]);
 
     const renderWhatsAppToggle = useCallback((reg) => (
         <button
@@ -2376,119 +2451,17 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     }, [registrations, payments, refunds]);
 
     const overviewStats = useMemo(() => {
-        let paid4M = 0;
-        let paidClub = 0;
-        let collectedManual = 0;
-        let pendingCount = 0;
-        let pendingAmount = 0;
-        let compedEntries = 0;
-        let grossCollected4M = 0;
-        let licenseRevenue4M = 0;
-        const unique = new Set(activeRegistrations.map((r) => r.email)).size;
-        let fullLicenses = 0;
-        let tempLicenses = 0;
-        let noLicenses = 0;
-
-        activeRegistrations.forEach((r) => {
-            if (!registrationCountsAsPaid(r, refundByReg, payments)) return;
-
+        const settlement = calculateEventSettlement({ event, registrations, divisions, payments, refunds,
+            interimPayments });
+        const unique = new Set(activeRegistrations.map(r => normEmail(r.email))).size;
+        let fullLicenses = 0, tempLicenses = 0, noLicenses = 0;
+        activeRegistrations.filter(r => registrationCountsAsPaid(r, refundByReg, payments)).forEach(r => {
             const license = formatLicenseForExport(r);
             if (license.includes('Full')) fullLicenses++;
             else if (license.includes('Temporary')) tempLicenses++;
             else noLicenses++;
-
-            if (registrationIsCompedEntry(r, payments)) {
-                compedEntries++;
-                return;
-            }
-
-            const method = formatPaymentMethodForExport(r);
-            if (method === 'Paystack') {
-                paid4M++;
-            } else {
-                paidClub++;
-            }
         });
-
-        // Settlement must be driven from successful entry-payment records, not
-        // only registrations still marked paid. A refunded registration is no
-        // longer "paid", but its original collection remains part of gross
-        // event income and must be offset by its refund below.
-        let grossEntryFees = 0;
-        payments.forEach((p) => {
-            if (
-                p.status !== 'success'
-                || String(p.payment_type || '').toLowerCase() !== 'event_entry_fee'
-                || isLicensePaymentRow(p)
-                || isCompedEntryPayment(p)
-            ) return;
-            const amount = Math.max(0, Number(p.amount || 0));
-            if (amount <= 0) return;
-            grossEntryFees += amount;
-            if (OFF_PLATFORM_PAYMENT_METHODS.has(String(p.payment_method || '').toLowerCase())) {
-                collectedManual += amount;
-            } else {
-                grossCollected4M += amount;
-            }
-        });
-
-        payments.forEach((p) => {
-            if (p.status !== 'success') return;
-            if (OFF_PLATFORM_PAYMENT_METHODS.has(String(p.payment_method || '').toLowerCase())) return;
-            if (isLicensePaymentRow(p)) {
-                licenseRevenue4M += Number(p.amount || 0);
-            }
-        });
-
-        activeRegistrations.forEach((r) => {
-            if (registrationIsCompedEntry(r, payments)) return;
-            if (registrationCountsAsPaid(r, refundByReg, payments)) return;
-            const ps = String(r.payment_status || '').toLowerCase();
-            if (ps === 'refunded' || hasBlockingProcessedRefund(r, refundByReg, payments)) return;
-            pendingCount += 1;
-            pendingAmount += divFee(r);
-        });
-
-        const withdrawnCount = registrations.filter((r) => isWithdrawnRegistration(r)).length;
-
-        // Entry-fee refunds only — temp/full license refunds stay with 4M and must not reduce organiser due.
-        const paymentById = new Map((payments || []).map((p) => [p.id, p]));
-        const entryFeesRefunded = refunds
-            .filter((r) => isEntryFeeRefund(r, paymentById.get(r.payment_id)))
-            .reduce((sum, r) => sum + Number(r.amount || 0), 0);
-        const licenseRefunds = refunds
-            .filter((r) => isLicenseRefund(r, paymentById.get(r.payment_id)) && r.status !== 'failed')
-            .reduce((sum, r) => sum + Number(r.amount || 0), 0);
-
-        const entryFeeBalance = Math.max(0, grossEntryFees - entryFeesRefunded);
-        const totalAmountBilled = grossEntryFees + pendingAmount;
-
-        // Build the billed amount from the registration-level fee snapshots so
-        // the organiser can see exactly which entry-price tiers make up the
-        // total. Withdrawn entries count only when a successful payment exists;
-        // an unpaid withdrawal was never billed.
-        const billedTiers = new Map();
         const successPays = successPaymentsOnly(payments);
-        const allocations = financeReconciliation.allocations;
-        allocations.forEach(({ amount }) => {
-            const rate = Math.round(amount * 100) / 100;
-            const tier = billedTiers.get(rate) || { rate, count: 0, total: 0 };
-            tier.count += 1;
-            tier.total += rate;
-            billedTiers.set(rate, tier);
-        });
-        const billedTierBreakdown = [...billedTiers.values()].sort((a, b) => a.rate - b.rate);
-        // The organiser settlement is based on total event income: Paystack and
-        // manual/EFT entry collections, before refunds. Refunds are deducted as
-        // their own line so gross cash movement remains auditable.
-        const commission = grossEntryFees * PLATFORM_COMMISSION_RATE;
-        const interimPaid = (interimPayments || []).reduce((sum, p) => sum + Math.max(0, Number(p.amount || 0)), 0);
-        // Manual / EFT collections are paid to 4M alongside Paystack receipts,
-        // so they remain part of the organiser settlement rather than a direct
-        // payment to deduct from the balance due.
-        const dueBeforeInterim = Math.max(0, entryFeeBalance - commission);
-        const dueToOrg = Math.max(0, dueBeforeInterim - interimPaid);
-
         // Early bird vs normal sign-ups — prefer paid amount (survives after early bird ends),
         // then registration time vs deadline. Infer early-bird fee from payment tiers if unset.
         const earlyBirdEnds = parseEventDate(earlyBirdMeta?.early_bird_ends_at);
@@ -2528,26 +2501,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         });
 
         return {
+            ...settlement,
             unique,
-            paid4M,
-            paidClub,
-            collectedManual,
-            pendingCount,
-            pendingAmount,
-            withdrawnCount,
-            compedEntries,
-            collected4M: grossCollected4M,
-            totalAmountBilled,
-            billedTierBreakdown,
-            entryFeesRefunded,
-            licenseRefunds,
-            grossEntryFees,
-            entryFeeBalance,
-            licenseRevenue4M,
-            commission,
-            interimPaid,
-            dueBeforeInterim,
-            dueToOrg,
             fullLicenses,
             tempLicenses,
             noLicenses,
@@ -2555,64 +2510,51 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             earlyBirdSignups,
             normalSignups,
         };
-    }, [activeRegistrations, payments, divFee, formatPaymentMethodForExport, formatLicenseForExport, refundByReg, refunds, interimPayments, earlyBirdMeta, registrations, financeReconciliation]);
+    }, [activeRegistrations, payments, divFee, formatLicenseForExport, refundByReg, refunds, interimPayments, earlyBirdMeta, registrations, divisions, event]);
 
-    const incomeStatementRows = useMemo(() => {
+    const buildIncomeStatementRows = useCallback((reportStats) => {
         const rows = [];
         const usedPaymentIds = new Set();
         const teamLabel = (r) => [r.full_name, r.partner_name].filter(Boolean).join(' / ') || r.email || '—';
-        financeReconciliation.allocations.forEach(({ registration: r, payment, amount }, index) => {
-            usedPaymentIds.add(payment.id);
-            const meta = normalizePaymentMetadata(payment.metadata);
-            rows.push({
-                id: `entry-${payment.id}-${r?.id || index}`, date: payment.created_at,
-                description: `${r?.division || meta.division || 'Unallocated entry'} — Entry Fee`,
-                category: 'Entry payment', bucket: isPaystackPaymentMethod(payment.payment_method) ? '4M Paystack' : 'Manual / club',
-                type: 'payment', player: r ? teamLabel(r) : meta.paid_by_name || meta.email || 'Unallocated entry',
-                email: r?.email || meta.email || '', division: r?.division || meta.division || '',
-                amount, status: 'success', method: labelPaymentMethod(payment.payment_method),
-                reference: payment.reference || '', note: meta.note || meta.payment_note || '',
-            });
+        reportStats.receiptRows.forEach(payment => {
+            payment.paymentIds.forEach(id => usedPaymentIds.add(id));
+            const matched = registrations.filter(r => payment.claims.some(p => p.metadata?.registration_id === r.id
+                || paymentMatchesRegistration(p, r)));
+            rows.push({ id: `entry-${payment.reference}`, date: payment.created_at,
+                description: `${matched.map(r => r.division).filter((v, i, a) => a.indexOf(v) === i).join(', ') || 'Unallocated entry'} — Entry Fee`,
+                category: 'Entry payment', bucket: collectionBucket(payment), type: 'payment',
+                player: matched.map(teamLabel).join('; ') || payment.metadata?.paid_by_name || payment.metadata?.email || 'Unallocated entry',
+                email: matched.map(r => r.email).join('; '), division: matched.map(r => r.division).join('; '),
+                amount: payment.amount, status: 'success', method: labelPaymentMethod(payment.payment_method),
+                paymentId: payment.id,
+                reference: payment.reference || '', note: payment.metadata?.note || payment.metadata?.payment_note || '' });
         });
-        activeRegistrations.forEach((r) => {
-            const comped = registrationIsCompedEntry(r, payments);
-            if (!comped && registrationCountsAsPaid(r, refundByReg, payments)) return;
-            if (r.payment_status === 'refunded') return;
+        reportStats.allocations.forEach(allocation => {
+            const r = allocation.registration;
+            if (!allocation.comped && allocation.outstanding <= 0) return;
             rows.push({ id: `uncollected-${r.id}`, date: r.created_at,
-                description: `${r.division} — ${comped ? 'Comped Entry' : 'Outstanding entry fee'}`,
-                category: comped ? 'Comped entry' : 'Pending / unpaid', bucket: comped ? 'Informational' : 'Outstanding',
-                type: comped ? 'comped' : 'pending', player: teamLabel(r), email: r.email,
-                division: r.division, amount: comped ? 0 : divFee(r), status: comped ? 'comped' : 'pending',
-                method: comped ? 'Comped' : '—', reference: '', note: '',
-            });
+                description: `${r.division} — ${allocation.comped ? 'Comped Entry' : 'Outstanding entry fee'}`,
+                category: allocation.comped ? 'Comped entry' : 'Pending / unpaid', bucket: allocation.comped ? 'Informational' : 'Outstanding',
+                type: allocation.comped ? 'comped' : 'pending', player: teamLabel(r), email: r.email,
+                division: r.division, amount: allocation.outstanding || 0, status: allocation.comped ? 'comped' : 'pending',
+                method: allocation.comped ? 'Comped' : '—', reference: '', note: '' });
         });
-
-        const paymentById = new Map((payments || []).map((p) => [p.id, p]));
-        refunds.forEach((rf) => {
-            const linkedPayment = paymentById.get(rf.payment_id);
-            const isLicense = isLicenseRefund(rf, linkedPayment);
-            if (!isLicense && !isEntryFeeRefund(rf, linkedPayment)) return;
-            const reg = registrations.find((r) => r.id === rf.event_registration_id);
-            rows.push({
-                id: `refund-${rf.id}`,
-                date: rf.processed_at || rf.created_at,
-                description: isLicense
-                    ? 'License Refund'
-                    : (reg?.division ? `${reg.division} — Entry Fee Refund` : 'Entry Fee Refund'),
-                category: isLicense ? 'License refund' : 'Entry refund',
-                bucket: isLicense ? '4M retained' : '4M Paystack',
-                type: 'refund',
-                player: reg
-                    ? ([reg.full_name, reg.partner_name].filter(Boolean).join(' / ') || reg.email || '—')
-                    : '—',
-                email: reg?.email || '',
-                division: reg?.division || '',
-                amount: -Math.abs(Number(rf.amount || 0)),
-                status: rf.status === 'processed' ? 'processed' : (rf.status || 'pending'),
-                method: isLicense ? 'License reversal' : 'Card reversal',
-                reference: rf.paystack_refund_id || rf.provider_refund_id || '',
-                note: rf.failure_reason || '',
-            });
+        [...reportStats.processedRefundRows, ...reportStats.reservedRefundRows].forEach(rf => {
+            const reg = registrations.find(r => r.id === rf.event_registration_id);
+            const processed = rf.status === 'processed';
+            rows.push({ id: `refund-${rf.id}`, date: rf.processed_at || rf.created_at,
+                description: processed ? 'Entry Fee Refund' : 'Entry refund reserved',
+                category: processed ? 'Entry refund' : 'Refund reserve',
+                bucket: processed ? collectionBucket(rf.receipt) : 'Refund reserve', type: 'refund',
+                player: reg ? teamLabel(reg) : '—', email: reg?.email || '', division: reg?.division || '',
+                amount: -Math.abs(rf.amount), status: rf.status, method: labelPaymentMethod(rf.receipt.payment_method),
+                reference: rf.paystack_refund_id || rf.provider_refund_id || '', note: '' });
+        });
+        refunds.filter(rf => isLicenseRefund(rf, payments.find(p => p.id === rf.payment_id))).forEach(rf => {
+            rows.push({ id: `refund-${rf.id}`, date: rf.processed_at || rf.created_at, description: 'License Refund',
+                category: 'License refund', bucket: '4M retained', type: 'refund', player: '—', email: '', division: '',
+                amount: -Math.abs(Number(rf.amount || 0)), status: rf.status, method: 'License reversal',
+                reference: rf.paystack_refund_id || '', note: rf.failure_reason || '' });
         });
 
         (payments || []).forEach((p) => {
@@ -2664,26 +2606,47 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             });
         });
 
-        if (overviewStats.commission > 0) {
+        const currentEntryAdjustment = Math.round((reportStats.grossEntryFees - reportStats.cashHistory.grossEntryFees
+            + reportStats.cashHistory.entryFeesRefunded + reportStats.cashHistory.refundReserve) * 100) / 100;
+        for (const [id, category, amount, note] of [
+            ['current-entry-adjustment', 'Current entry allocation adjustment', currentEntryAdjustment, 'Exclude cash not allocated to current registrations.'],
+            ['unconfirmed-recipient', 'Recipient unconfirmed held', -reportStats.unconfirmedCollected, 'Excluded from the transfer until the recipient is confirmed.'],
+            ['refund-funding', 'Refund funding adjustment', reportStats.refundFundingAdjustment, 'Refund paid by a different funds holder.'],
+        ]) {
+            if (!amount) continue;
+            rows.push({ id, date: null, description: category, category, bucket: 'Settlement adjustment',
+                type: 'adjustment', player: '—', email: '', division: '', amount, status: 'processed',
+                method: '—', reference: '', note });
+        }
+
+        if (reportStats.commission > 0) {
             rows.push({
                 id: 'platform-fee',
                 date: null,
-                description: `Platform Fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}% of gross entry income)`,
+                description: `Platform Fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}% of entry fees received by 4M)`,
                 category: 'Platform / commission fee',
                 bucket: '4M retained',
                 type: 'fee',
                 player: '—',
                 email: '',
                 division: '',
-                amount: -overviewStats.commission,
+                amount: -reportStats.commission,
                 status: 'processed',
                 method: '—',
                 reference: '',
-                note: '5% of all gross entry fees collected, before refunds',
+                note: '5% of current-entry funds allocated to 4M. Direct club / organiser payments earn no commission.',
             });
         }
 
-        (interimPayments || []).forEach((p) => {
+        if (reportStats.organiserRetained !== 0) rows.push({
+            id: 'organiser-receipts-retained', date: null,
+            description: 'Entry fees already retained by organiser', category: 'Direct organiser receipts retained',
+            bucket: 'Organiser retained', type: 'organiser_receipts', player: event?.organiser_name || 'Organiser',
+            email: '', division: '', amount: -reportStats.organiserRetained, status: 'processed',
+            method: 'Direct collection', reference: '',
+            note: 'Current-entry funds already held by the organiser; excluded from the transfer due from 4M.',
+        });
+        reportStats.payoutRows.forEach((p) => {
             const amount = Math.max(0, Number(p.amount || 0));
             if (amount <= 0) return;
             rows.push({
@@ -2714,7 +2677,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         });
 
         return rows;
-    }, [activeRegistrations, payments, refundByReg, refunds, registrations, overviewStats.commission, interimPayments, event?.organiser_name, event?.organiser_email, divFee, financeReconciliation]);
+    }, [payments, refunds, registrations, event?.organiser_name, event?.organiser_email]);
+
+    const incomeStatementRows = useMemo(() => buildIncomeStatementRows(overviewStats), [buildIncomeStatementRows, overviewStats]);
 
     const filteredIncomeStatementRows = useMemo(() => {
         const q = statementSearch.trim().toLowerCase();
@@ -2744,65 +2709,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     }, [incomeStatementRows, statementSearch]);
 
     const payoutRequestRules = useMemo(() => {
-        const remainingDue = Math.max(0, Number(overviewStats.dueToOrg || 0));
-        const totalDue = Math.max(0, Number(overviewStats.dueBeforeInterim || 0));
-        const interimPaid = Math.max(0, Number(overviewStats.interimPaid || 0));
-        const firstRequestCap = Math.floor(totalDue * PAYOUT_REQUEST_MAX_RATE);
-        const endRaw = event?.end_date || event?.start_date || null;
-        let eventEnded = false;
-        if (endRaw) {
-            const end = new Date(endRaw);
-            if (!Number.isNaN(end.getTime())) {
-                // Treat the event as finished after the end calendar day.
-                end.setHours(23, 59, 59, 999);
-                eventEnded = Date.now() > end.getTime();
-            }
-        }
-
-        const hasFirstPartial = interimPaid > 0;
-        let maxRequestable = 0;
-        let phase = 'first';
-        let helperText = '';
-        let blockedReason = '';
-
-        if (remainingDue <= 0) {
-            blockedReason = 'Nothing due to organiser yet';
-        } else if (!eventEnded) {
-            phase = 'first';
-            if (hasFirstPartial) {
-                blockedReason = 'First partial payment already recorded. The remaining balance can be requested after the event ends.';
-            } else {
-                maxRequestable = Math.min(remainingDue, firstRequestCap);
-                helperText = `First payout request is limited to 50% of the amount due (${fmtR(maxRequestable)}). The remaining balance can be requested after the event.`;
-            }
-        } else {
-            phase = 'final';
-            maxRequestable = remainingDue;
-            helperText = hasFirstPartial
-                ? `Event has ended. You can request the remaining balance of ${fmtR(remainingDue)}.`
-                : `Event has ended. You can request the full amount due of ${fmtR(remainingDue)}.`;
-        }
-
-        return {
-            remainingDue,
-            totalDue,
-            interimPaid,
-            firstRequestCap,
-            eventEnded,
-            hasFirstPartial,
-            maxRequestable,
-            phase,
-            helperText,
-            blockedReason,
-            canRequest: maxRequestable > 0 && !blockedReason,
-        };
-    }, [
-        overviewStats.dueToOrg,
-        overviewStats.dueBeforeInterim,
-        overviewStats.interimPaid,
-        event?.end_date,
-        event?.start_date,
-    ]);
+        const rules = eventPayoutRequestLimit(event || {}, overviewStats);
+        if (loading || financeLoadError) return { ...rules, canRequest: false, blockedReason: financeLoadError || 'Wait for finance records to finish loading' };
+        return rules;
+    }, [event, overviewStats, loading, financeLoadError]);
 
     const maxPayoutRequest = payoutRequestRules.maxRequestable;
 
@@ -2844,7 +2754,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             return;
         }
         const amount = Number(String(payoutRequestAmount).replace(/[^0-9.]/g, ''));
-        if (!Number.isFinite(amount) || amount <= 0) {
+        if (!Number.isFinite(amount) || amount <= 0 || Math.round(amount * 100) / 100 !== amount) {
             toast.error('Enter how much you want to request');
             return;
         }
@@ -2867,6 +2777,21 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         }
         setRequestingPayout(true);
         try {
+            const [latestRegistrations, latestPayments, latestDivisions, latestEvent] = await Promise.all([
+                fetchAllRows(() => supabase.from('event_registrations').select('*').eq('event_id', event.id).order('id', { ascending: true })),
+                fetchAllRows(() => supabase.from('payments').select('*').eq('event_id', event.id).order('id', { ascending: true })),
+                fetchAllRows(() => supabase.from('tournament_divisions').select('*').eq('event_id', event.id).order('id', { ascending: true })),
+                supabase.from('calendar').select('*').eq('id', event.id).single(),
+            ]);
+            if (latestEvent.error) throw latestEvent.error;
+            const latestRefunds = await loadEventRefunds(supabase, latestRegistrations, latestPayments);
+            const current = calculateEventSettlement({ event: latestEvent.data, registrations: latestRegistrations,
+                payments: latestPayments, divisions: latestDivisions, refunds: latestRefunds });
+            const currentRules = eventPayoutRequestLimit(latestEvent.data, current);
+            if (!currentRules.canRequest || amount > currentRules.maxRequestable) {
+                await load();
+                throw new Error(currentRules.blockedReason || 'The available payout changed. Review the refreshed event balance.');
+            }
             const saved = await organisationBanking('request', event.organisation_id, {
                 event_id: event.id, amount, request_id: payoutRequestId,
                 expected_version: payoutBanking.version,
@@ -2919,81 +2844,59 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
         setExportMenuOpen(false);
         setExportingFinance(true);
         try {
+            const verification = await loadEventCashVerification(supabase, event.id);
+            if (!verification.complete) throw new Error('Payment verification is incomplete. Refresh and try the export again.');
+            const reportStats = { ...overviewStats, ...calculateEventSettlement({ event, registrations, divisions, payments, refunds, interimPayments, verification }) };
+
             const eventDate = event?.start_date
                 ? new Date(event.start_date).toLocaleDateString('en-ZA', {
                     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
                 })
                 : '';
-            const billedCompositionRows = overviewStats.billedTierBreakdown.map((tier, index) => {
-                const label = index === 0 && overviewStats.billedTierBreakdown.length > 1
+            const billedCompositionRows = reportStats.billedTierBreakdown.map((tier, index) => {
+                const label = index === 0 && reportStats.billedTierBreakdown.length > 1
                     ? 'Early bird'
                     : 'Regular';
                 return {
-                    section: 'Collected entry composition',
+                    section: 'Current entry fees',
                     label: `${label} (${tier.count} × ${fmtR(tier.rate)})`,
                     value: tier.total,
                     money: true,
                 };
             });
 
+            const history = reportStats.cashHistory;
             const summary = [
-                { section: 'Entries', label: 'Total entries', value: dashboardStats.totalEntries },
+                { section: 'Reconciliation', label: 'Status', value: reportStats.issues.length ? 'Needs review' : 'Reconciled', note: reportStats.issues.join('; ') },
                 { section: 'Entries', label: 'Unique players', value: dashboardStats.uniquePlayers },
-                { section: 'Entries', label: 'Paid', value: dashboardStats.paidCount },
-                { section: 'Entries', label: 'Pending / unpaid', value: overviewStats.pendingCount, note: fmtR(overviewStats.pendingAmount) },
-                { section: 'Entries', label: 'Comped (free)', value: overviewStats.compedEntries },
-                { section: 'Entries', label: 'Withdrawn', value: overviewStats.withdrawnCount },
-                { section: 'Entries', label: 'Early bird sign-ups', value: overviewStats.earlyBirdSignups },
-                { section: 'Entries', label: 'Normal sign-ups', value: overviewStats.normalSignups },
-
-                { section: 'Billed vs collected (all channels)', label: 'Total amount billed', value: overviewStats.totalAmountBilled, money: true, note: 'Gross entry collections plus outstanding entry fees' },
-                { section: 'Billed vs collected (all channels)', label: 'Gross entry fees collected', value: overviewStats.grossEntryFees, money: true, note: 'All successful Paystack and manual/EFT entry payments, including later refunds' },
-                { section: 'Billed vs collected (all channels)', label: '  of which Paystack', value: overviewStats.collected4M, money: true },
-                { section: 'Billed vs collected (all channels)', label: '  of which Manual / EFT', value: overviewStats.collectedManual, money: true },
-                { section: 'Billed vs collected (all channels)', label: 'Final entry sales', value: overviewStats.entryFeeBalance, money: true, note: 'Gross entry collections less entry refunds' },
-                { section: 'Billed vs collected (all channels)', label: 'Outstanding', value: dashboardStats.outstanding, money: true },
-
+                { section: 'Entries', label: 'Paid', value: reportStats.paid4M + reportStats.paidClub },
+                { section: 'Entries', label: 'Pending / unpaid', value: reportStats.pendingCount },
+                { section: 'Entries', label: 'Comped (free)', value: reportStats.compedEntries },
+                { section: 'Entries', label: 'Withdrawn', value: reportStats.withdrawnCount },
                 ...billedCompositionRows,
-
-                { section: 'Refunds', label: 'Entry fee refunds', value: overviewStats.entryFeesRefunded, money: true },
-                { section: 'Refunds', label: 'License refunds (stay with 4M)', value: overviewStats.licenseRefunds, money: true },
-
-                { section: 'Organiser settlement (all entry channels)', label: 'Total amount billed', value: overviewStats.totalAmountBilled, money: true },
-                { section: 'Organiser settlement (all entry channels)', label: 'Minus entry refunds', value: -overviewStats.entryFeesRefunded, money: true },
-                { section: 'Organiser settlement (all entry channels)', label: 'Minus outstanding entry fees', value: -overviewStats.pendingAmount, money: true },
-                { section: 'Organiser settlement (all entry channels)', label: 'Final entry sales', value: overviewStats.entryFeeBalance, money: true, note: 'Billed less refunds and outstanding entry fees' },
-                { section: 'Organiser settlement (all entry channels)', label: `Minus platform fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}% of gross collected)`, value: -overviewStats.commission, money: true, note: 'Charged on gross entry collections before refunds' },
-                { section: 'Organiser settlement (all entry channels)', label: 'Minus interim paid', value: -overviewStats.interimPaid, money: true },
-                { section: 'Organiser settlement (all entry channels)', label: 'Net due to organiser', value: overviewStats.dueToOrg, money: true },
-
-                { section: 'Retained by 4M', label: 'License revenue', value: overviewStats.licenseRevenue4M, money: true },
-                { section: 'Retained by 4M', label: 'Platform / commission fees', value: overviewStats.commission, money: true },
+                { section: 'Cash history', label: 'Entry receipts (all registrations)', value: history.grossEntryFees, money: true },
+                { section: 'Cash history', label: 'Entry fees received by 4M', value: history.collected4M, money: true },
+                { section: 'Cash history', label: 'Entry fees received directly by organiser', value: history.collectedOrganiser, money: true },
+                { section: 'Cash history', label: 'Collection recipient unconfirmed', value: history.unconfirmedCollected, money: true },
+                { section: 'Cash history', label: 'Completed entry refunds', value: history.entryFeesRefunded, money: true },
+                { section: 'Cash history', label: 'Pending entry refunds', value: history.refundReserve, money: true, note: 'Already excluded from current-entry paid amounts.' },
+                { section: 'Cash history', label: '4M cash not allocated to current entries', value: reportStats.unallocatedCash4M, money: true, note: 'Excluded from the current-entry fee and payout.' },
+                { section: 'Cash history', label: 'Of which identified unused credits', value: reportStats.unallocatedCredit4M, money: true },
+                { section: 'Cash history', label: 'Historical receipts needing review', value: history.issues.length, note: history.issues.join('; ') },
+                ...(normalizedReportType === 'full' ? [
+                    { section: 'Retained by 4M', label: 'License revenue', value: reportStats.licenseRevenue4M, money: true },
+                    { section: 'Retained by 4M', label: 'License refunds', value: reportStats.licenseRefunds, money: true },
+                ] : []),
             ];
 
-            const organiserSummary = [
-                { section: 'Entries', label: 'Total entries', value: dashboardStats.totalEntries },
-                { section: 'Entries', label: 'Unique players', value: dashboardStats.uniquePlayers },
-                { section: 'Entries', label: 'Paid', value: dashboardStats.paidCount },
-                { section: 'Entries', label: 'Pending / unpaid', value: overviewStats.pendingCount, note: fmtR(overviewStats.pendingAmount) },
-                { section: 'Entries', label: 'Comped (free)', value: overviewStats.compedEntries },
-                { section: 'Entries', label: 'Withdrawn', value: overviewStats.withdrawnCount },
-
-                ...billedCompositionRows,
-
-                { section: 'Organiser settlement', label: 'Total amount billed', value: overviewStats.totalAmountBilled, money: true, note: 'Gross entry collections plus outstanding entry fees' },
-                { section: 'Organiser settlement', label: 'Minus entry refunds', value: -overviewStats.entryFeesRefunded, money: true },
-                { section: 'Organiser settlement', label: 'Minus outstanding entry fees', value: -overviewStats.pendingAmount, money: true },
-                { section: 'Organiser settlement', label: 'Final entry sales', value: overviewStats.entryFeeBalance, money: true },
-                { section: 'Organiser settlement', label: `Minus platform fee (${Math.round(PLATFORM_COMMISSION_RATE * 100)}% of gross collected)`, value: -overviewStats.commission, money: true },
-                { section: 'Organiser settlement', label: 'Minus interim paid', value: -overviewStats.interimPaid, money: true },
-                { section: 'Organiser settlement', label: 'Net due to organiser', value: overviewStats.dueToOrg, money: true },
-            ];
-
+            const allocationById = new Map(reportStats.allocations.map(a => [a.registration.id, a]));
             const registrationRows = registrations.map((r) => {
+                const allocation = allocationById.get(r.id);
                 const details = getPaymentDetails(r);
                 let channel = '';
                 if (details) {
-                    if (details.isPartnerPaid) channel = `Partner (${details.payerName || 'partner'})`;
+                    if (details.isExpectedPayment) channel = 'Payment due to 4M';
+                    else if (details.isPartnerPaid) channel = `Partner (${details.payerName || 'partner'})`;
                     else if (details.isCompedChannel) channel = 'Comped';
                     else if (details.isManualChannel) channel = `Manual (${labelPaymentMethod(details.method) || 'Admin'})`;
                     else channel = labelPaymentMethod(details.method) || 'Paystack';
@@ -3009,6 +2912,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                 else entryAmount = r.status === 'withdrawn' ? 0 : divFee(r);
 
                 return {
+                    registrationId: r.id,
                     name: r.full_name,
                     email: r.email,
                     phone: r.phone || '',
@@ -3021,7 +2925,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                     license: formatLicenseForExport(r),
                     paymentStatus: formatPaymentStatusForExport(r),
                     channel,
-                    entryAmount,
+                    ...(allocation ? registrationFinanceAmounts(allocation) : { entryAmount }),
+                    collectionRecipient: allocation?.holder === 'club' ? normalizePaymentMetadata(allocation.payment?.metadata).collection_recipient_name || 'Club / organiser'
+                        : allocation?.holder === '4m' ? '4M' : details?.isExpectedPayment ? '4M (payment due)' : allocation?.holder === 'unconfirmed' ? 'Recipient unconfirmed' : '',
                     comped: isComped,
                     registrationStatus: r.status || '',
                     registeredAt: r.created_at,
@@ -3032,9 +2938,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
             await downloadEventFinanceWorkbook({
                 eventName: event?.event_name || 'Event',
                 eventDate,
-                summary: normalizedReportType === 'organiser' ? organiserSummary : summary,
-                lineItems: incomeStatementRows,
+                summary,
+                interimPaid: reportStats.interimPaid,
+                refundFundingAdjustment: reportStats.refundFundingAdjustment,
+                lineItems: buildIncomeStatementRows(reportStats),
                 registrations: registrationRows,
+                activeRegistrationIds: reportStats.allocations.map(a => a.registration.id),
+                receiptReport: buildEventReceiptReport({ registrations, divisions, refunds, settlement: reportStats }),
                 payments: normalizedReportType === 'full'
                     ? (payments || []).map((p) => ({
                         ...p,
@@ -3076,9 +2986,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                     className={buttonClass}
                     aria-haspopup="menu"
                     aria-expanded={exportMenuOpen}
+                    aria-busy={loading || exportingFinance}
                 >
                     {exportingFinance ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
-                    Export Excel
+                    {exportingFinance ? 'Preparing report…' : 'Export Excel'}
                     <ChevronDown size={15} className={exportMenuOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
                 </button>
                 {exportMenuOpen && (
@@ -3087,6 +2998,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                             <button
                                 type="button"
                                 role="menuitem"
+                                disabled={exportingFinance || loading || Boolean(financeLoadError)}
                                 onClick={() => exportFinanceExcel('full')}
                                 className="w-full rounded-lg px-3 py-2.5 text-left hover:bg-white/10 transition-colors"
                             >
@@ -3097,11 +3009,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                         <button
                             type="button"
                             role="menuitem"
+                            disabled={exportingFinance || loading || Boolean(financeLoadError)}
                             onClick={() => exportFinanceExcel('organiser')}
                             className="w-full rounded-lg px-3 py-2.5 text-left hover:bg-white/10 transition-colors"
                         >
                             <span className="block text-sm font-bold text-white">Organisers Consolidated Event Report</span>
-                            <span className="block text-[10px] text-gray-400 mt-0.5">Summary and registrations only</span>
+                            <span className="block text-[10px] text-gray-400 mt-0.5">Summary, current entries, withdrawals and 4M receipts</span>
                         </button>
                     </div>
                 )}
@@ -3134,6 +3047,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                         />
                     )}
                     {/* Header */}
+                    {onStartRehearsal && <div className="px-6 py-3"><button type="button" onClick={onStartRehearsal}
+                        className="min-h-11 rounded-xl border border-amber-300/40 bg-amber-300/10 px-4 py-3 text-sm font-bold text-amber-200 hover:bg-amber-300/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-200">
+                        Start private rehearsal
+                    </button><p className="mt-2 text-xs text-gray-400">Practise draws, scheduling and results in a private copy of this event.</p></div>}
                     <div className={`${isInline ? 'bg-[#1a1a1a]/50 backdrop-blur-md rounded-3xl border border-white/10' : ''} px-6 pt-4 ${isInline ? 'pb-0' : 'border-b border-white/10'}`}>
                         {isInline && onBack && (
                             <button
@@ -3341,9 +3258,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                             <DollarSign size={120} />
                                         </div>
                                         <div className="flex justify-between items-start relative z-10">
-                                            <p className="text-[10px] font-black uppercase text-padel-green/80 tracking-widest whitespace-nowrap">Total amount Billed</p>
+                                            <p className="text-[10px] font-black uppercase text-padel-green/80 tracking-widest whitespace-nowrap">Net entry income</p>
                                             <p className="text-[10px] font-black text-white bg-black/40 px-2 py-0.5 rounded border border-white/5">
-                                                {fmtR(overviewStats.totalAmountBilled)}
+                                                Billed {fmtR(overviewStats.totalAmountBilled)}
                                             </p>
                                         </div>
                                         <div className="flex flex-col mt-auto relative z-10">
@@ -3357,11 +3274,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                                 <p className="text-[10px] text-red-400 font-bold uppercase mt-1">Outstanding {fmtR(overviewStats.pendingAmount)}</p>
                                             )}
                                             <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">
-                                                Billed {fmtR(overviewStats.totalAmountBilled)} · Gross collected {fmtR(overviewStats.grossEntryFees)}
+                                                Billed {fmtR(overviewStats.totalAmountBilled)} · Current entry payments {fmtR(overviewStats.grossEntryFees)}
                                             </p>
                                             {overviewStats.entryFeesRefunded > 0 && (
                                                 <p className="text-[10px] text-sky-400 font-bold uppercase mt-1">
-                                                    Less entry refunds {fmtR(overviewStats.entryFeesRefunded)}
+                                                    Historical entry refunds {fmtR(overviewStats.entryFeesRefunded)}
                                                 </p>
                                             )}
                                         </div>
@@ -3450,9 +3367,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                             <span className="text-xl font-black text-white">{overviewStats.paid4M}</span>
                                         </div>
                                         <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
-                                            <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Entry Payments (Manual)</p>
+                                            <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Paid directly to organiser</p>
                                             <span className="text-xl font-black text-white">{overviewStats.paidClub}</span>
-                                            <p className="text-[9px] text-gray-500 mt-1">{fmtR(overviewStats.collectedManual)} collected</p>
+                                            <p className="text-[9px] text-gray-500 mt-1">{fmtR(overviewStats.collectedOrganiser)} collected</p>
                                         </div>
                                         <div className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
                                             <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Pending / unpaid</p>
@@ -3489,7 +3406,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                         </div>
                                         {overviewStats.billedTierBreakdown.length > 0 && (
                                             <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 space-y-1.5">
-                                                <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Collected entry composition</p>
+                                                <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Current entry fees</p>
                                                 {overviewStats.billedTierBreakdown.map((tier, index) => (
                                                     <div key={tier.rate} className="flex items-center justify-between gap-4 text-xs">
                                                         <span className="text-gray-400">
@@ -3501,9 +3418,14 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                             </div>
                                         )}
                                         <div className="flex items-center justify-between gap-4 text-sm">
-                                            <span className="text-gray-400">Gross entry fees collected</span>
+                                            <span className="text-gray-400">Outstanding entry fees</span>
+                                            <span className="font-bold text-red-400">−{fmtR(overviewStats.pendingAmount)}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between gap-4 text-sm">
+                                            <span className="text-gray-400">Payments allocated to current entries</span>
                                             <span className="font-bold text-white">{fmtR(overviewStats.grossEntryFees)}</span>
                                         </div>
+                                        <p className="text-xs text-gray-500">Paystack to 4M: {fmtR(overviewStats.paystackCollected)} · EFT / manual to 4M: {fmtR(overviewStats.collectedManual)} · Direct to organiser: {fmtR(overviewStats.collectedOrganiser)}{overviewStats.unconfirmedCollected > 0 ? ` · Recipient unconfirmed: ${fmtR(overviewStats.unconfirmedCollected)}` : ''}</p>
                                         {overviewStats.compedEntries > 0 && (
                                             <div className="flex items-center justify-between gap-4 text-sm">
                                                 <span className="text-gray-400">
@@ -3514,15 +3436,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                             </div>
                                         )}
                                         <div className="flex items-center justify-between gap-4 text-sm">
-                                            <span className="text-gray-400">Funds refunded for entry fees</span>
-                                            <span className="font-bold text-red-400">−{fmtR(overviewStats.entryFeesRefunded)}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between gap-4 text-sm">
-                                            <span className="text-gray-400">Outstanding entry fees</span>
-                                            <span className="font-bold text-red-400">−{fmtR(overviewStats.pendingAmount)}</span>
+                                            <span className="text-gray-400">Completed entry refunds (cash history)</span>
+                                            <span className="font-bold text-red-400">{fmtR(overviewStats.entryFeesRefunded)}</span>
                                         </div>
                                         <div className="flex items-center justify-between gap-4 text-sm border-t border-white/10 pt-3">
-                                            <span className="text-gray-300 font-semibold">Final entry sales</span>
+                                            <span className="text-gray-300 font-semibold">Net entry income</span>
                                             <span className="font-black text-white">{fmtR(overviewStats.entryFeeBalance)}</span>
                                         </div>
                                         {overviewStats.collectedManual > 0 && (
@@ -3532,12 +3450,26 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                             </div>
                                         )}
                                         <div className="flex items-center justify-between gap-4 text-sm">
-                                            <span className="text-red-400">Platform fees @ {Math.round(PLATFORM_COMMISSION_RATE * 100)}% of gross income</span>
+                                            <span className="text-red-400">Platform fees @ {Math.round(PLATFORM_COMMISSION_RATE * 100)}% of entry fees received by 4M</span>
                                             <span className="font-bold text-red-400">−{fmtR(overviewStats.commission)}</span>
                                         </div>
-                                        {interimPayments.length > 0 && (
+                                        <div className="flex items-center justify-between gap-4 text-sm">
+                                            <span className="text-gray-300 font-semibold">Organiser entitlement</span>
+                                            <span className="font-bold text-white">{fmtR(overviewStats.organiserEntitlement)}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between gap-4 text-sm">
+                                            <span className="text-gray-400">Less: entry fees retained by organiser</span>
+                                            <span className="font-bold text-red-400">−{fmtR(overviewStats.organiserRetained)}</span>
+                                        </div>
+                                        {overviewStats.unconfirmedCollected > 0 && <p className="text-xs text-amber-300">Recipient unconfirmed: {fmtR(overviewStats.unconfirmedCollected)}. Excluded from the amount due.</p>}
+                                        {overviewStats.refundFundingAdjustment !== 0 && <p className="text-xs text-amber-300">Refund funding adjustment: {fmtR(overviewStats.refundFundingAdjustment)}.</p>}
+                                        {overviewStats.refundReserve > 0 && <p className="text-xs text-amber-300">Pending entry refunds: {fmtR(overviewStats.refundReserve)}. Already excluded from current-entry paid amounts.</p>}
+                                        {overviewStats.unallocatedCash4M > 0 && <p className="text-xs text-gray-400">4M cash not allocated to current entries: {fmtR(overviewStats.unallocatedCash4M)}. Excluded from the fee and payout.</p>}
+                                        {overviewStats.cashHistory.issues.length > 0 && <p className="text-xs text-amber-300">Cash history review: {overviewStats.cashHistory.issues.join('; ')}. These receipts are excluded from current-entry settlement.</p>}
+                                        {overviewStats.unallocatedCredit4M > 0 && <p className="text-xs text-amber-300">Unallocated credit held by 4M: {fmtR(overviewStats.unallocatedCredit4M)}. Available for payout after reserves: {fmtR(overviewStats.availableForPayout)}.</p>}
+                                        {overviewStats.payoutRows.length > 0 && (
                                             <div className="space-y-2 border-t border-white/10 pt-3">
-                                                {interimPayments.map((p) => {
+                                                {overviewStats.payoutRows.map((p) => {
                                                     const paidLabel = p.paid_at
                                                         ? new Date(`${p.paid_at}T12:00:00`).toLocaleDateString('en-GB', {
                                                             day: 'numeric', month: 'short', year: 'numeric',
@@ -3559,7 +3491,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => handleRemoveInterimPayment(p.id)}
-                                                                    disabled={savingInterim}
+                                                                    disabled={savingInterim || Boolean(p.request_id) || String(p.note || '').startsWith('Manual payout request ')}
                                                                     className="p-1 rounded-md text-gray-500 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-40"
                                                                     title="Remove interim payment"
                                                                 >
@@ -3579,7 +3511,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                                 <input
                                                     type="number"
                                                     min="0"
-                                                    step="1"
+                                                    step="0.01"
                                                     value={interimAmount}
                                                     onChange={(e) => setInterimAmount(e.target.value)}
                                                     placeholder="Amount (R)"
@@ -3619,9 +3551,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Balance due from 4M</p>
                                                 <span className="text-3xl font-black text-padel-green">{fmtR(overviewStats.dueToOrg)}</span>
                                                 <p className="text-[9px] text-gray-500 mt-1">
-                                                    (Paystack collected − entry refunds) − {Math.round(PLATFORM_COMMISSION_RATE * 100)}% of Paystack gross
+                                                    Current-entry funds paid to 4M − {Math.round(PLATFORM_COMMISSION_RATE * 100)}% fee
                                                     {overviewStats.interimPaid > 0 ? ` − interim paid (${fmtR(overviewStats.interimPaid)})` : ''}
-                                                    {' · '}manual collections and licenses stay with the club / 4M
+                                                    {overviewStats.refundFundingAdjustment !== 0 ? ` · refund funding adjustment ${fmtR(overviewStats.refundFundingAdjustment)}` : ''}
+                                                    {' · '}licence fees excluded
                                                 </p>
                                                 {!payoutRequestRules.canRequest && payoutRequestRules.blockedReason && overviewStats.dueToOrg > 0 && (
                                                     <p className="text-[10px] text-amber-400 mt-2">{payoutRequestRules.blockedReason}</p>
@@ -4001,7 +3934,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                                         <td className="py-3 px-4">
                                                             <div className="flex flex-col gap-1.5">
                                                                 {r.status === 'withdrawn' ? (
-                                                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-gray-500/10 text-gray-400">Withdrawn</span>
+                                                                    <><span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-gray-500/10 text-gray-400">Withdrawn</span>{renderPaymentCell(r)}</>
                                                                 ) : (
                                                                     renderPaymentCell(r)
                                                                 )}
@@ -4416,17 +4349,20 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                     </div>
                                     <div className="min-w-0">
                                         <h3 className="text-white font-bold truncate">
-                                            {markPaidMethod === 'comp' ? 'Comp ' : 'Mark '}{markPaidTarget.full_name}{markPaidMethod === 'comp' ? '?' : ' as paid'}
+                                            {editingReceipt ? 'Edit payment for ' : markPaidMethod === 'comp' ? 'Comp ' : 'Mark '}{markPaidTarget.full_name}{editingReceipt ? '' : markPaidMethod === 'comp' ? '?' : ' as paid'}
                                         </h3>
                                         <p className="text-xs text-gray-400 mt-0.5">
-                                            {markPaidTarget.division} · {markPaidMethod === 'comp' ? 'Free / complimentary entry (R 0)' : fmtR(divFee(markPaidTarget))}
+                                            {markPaidTarget.division} · {markPaidMethod === 'comp' ? 'Free / complimentary entry (R 0)' : fmtR(editingReceipt?.amount ?? divFee(markPaidTarget))}
                                         </p>
                                     </div>
                                 </div>
 
-                                <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">Payment received via</label>
+                                {editingReceipt && canCorrectManualPayment(editingReceipt, markPaidTarget) && <p className="mb-4 text-xs leading-5 text-gray-400">Correct the recorded method below. The paid status and amount stay the same; your correction is recorded in the event audit.</p>}
+                                <label htmlFor="entry-payment-method" className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">Payment received via</label>
                                 <select
+                                    id="entry-payment-method"
                                     value={markPaidMethod}
+                                    disabled={Boolean(editingReceipt) && !canCorrectManualPayment(editingReceipt, markPaidTarget)}
                                     onChange={(e) => setMarkPaidMethod(e.target.value)}
                                     className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 mb-3"
                                 >
@@ -4434,10 +4370,18 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                     <option value="external">External payment provider</option>
                                     <option value="manual">Other manual payment</option>
                                     <option value="cash">Cash</option>
-                                    <option value="paystack">Paystack (offline fix)</option>
-                                    <option value="comp">Comp (free entry)</option>
+                                    {(!editingReceipt || editingReceipt.payment_method === 'paystack') && <option value="paystack">Paystack (offline fix)</option>}
+                                    {!editingReceipt && <option value="comp">Comp (free entry)</option>}
                                 </select>
 
+                                {!['comp', 'paystack'].includes(markPaidMethod) && <>
+                                    <label htmlFor="entry-payment-recipient" className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">Payment received by</label>
+                                    <select id="entry-payment-recipient" value={markPaidRecipient} onChange={e => setMarkPaidRecipient(e.target.value)} required className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white mb-3">
+                                        <option value="">Select recipient</option>
+                                        <option value="4m">4M</option>
+                                        <option value="organiser">Club / organiser directly</option>
+                                    </select>
+                                </>}
                                 <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">
                                     {markPaidMethod === 'comp' ? 'Comp note' : 'Payment note'} <span className="text-red-400">*</span>
                                 </label>
@@ -4456,11 +4400,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                 <div className="flex flex-col gap-2">
                                     <button
                                         onClick={confirmMarkPaid}
-                                        disabled={markPaidBusy || !markPaidNote.trim()}
+                                        disabled={markPaidBusy || !markPaidNote.trim() || (!['comp', 'paystack'].includes(markPaidMethod) && !markPaidRecipient)}
                                         className="w-full py-2.5 rounded-lg text-sm font-bold bg-emerald-500 text-black hover:opacity-90 disabled:opacity-40 inline-flex items-center justify-center gap-2"
                                     >
                                         {markPaidBusy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                                        {markPaidMethod === 'comp' ? 'Confirm comp' : 'Confirm payment'}
+                                        {editingReceipt ? 'Save payment' : markPaidMethod === 'comp' ? 'Confirm comp' : 'Confirm payment'}
                                     </button>
                                     <button
                                         onClick={closeMarkPaidModal}
@@ -4819,6 +4763,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                         );
                     })()}
 
+                    {['overview', 'statement'].includes(activeTab) && overviewStats.issues.length > 0 && <div role="alert" className="mx-6 my-3 rounded-xl border border-amber-400/30 p-4 text-sm text-amber-200">
+                        <p className="font-bold">Reconciliation needs review before requesting a payout</p>
+                        <ul className="mt-2 list-disc pl-5">{overviewStats.issues.map(issue => <li key={issue}>{issue}</li>)}</ul>
+                        <p className="mt-2 text-xs">Use Edit payment in Registrations List to confirm who received a manual payment.</p>
+                    </div>}
+
                     {activeTab === 'statement' && (
                         <div className="p-6 space-y-6">
                             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
@@ -4846,18 +4796,21 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                 </div>
                             </div>
 
-                            {event?.organisation_id && <OrganisationPayoutRequests key={event.organisation_id} organisationId={event.organisation_id} eventId={event.id} refreshKey={payoutRefresh} onProcessed={data => { if (Array.isArray(data.interim_payments)) setInterimPayments(data.interim_payments); }} />}
+                            {event?.organisation_id && <OrganisationPayoutRequests key={event.organisation_id} organisationId={event.organisation_id} eventId={event.id} refreshKey={payoutRefresh} onProcessed={data => { if (Array.isArray(data.interim_payments)) { interimSnapshot.current = data.interim_payments; setInterimPayments(data.interim_payments); } }} />}
 
                             <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 gap-3">
                                 {[
                                     { label: 'Total billed', value: fmtR(overviewStats.totalAmountBilled), color: 'text-padel-green' },
+                                    { label: 'Total collected', value: fmtR(overviewStats.grossEntryFees), color: 'text-white' },
+                                    { label: 'Net entry income', value: fmtR(overviewStats.entryFeeBalance), color: 'text-white' },
+                                    { label: 'Balance due from 4M', value: fmtR(overviewStats.dueToOrg), color: 'text-padel-green' },
                                     { label: 'Entry Fees Refunded', value: `−${fmtR(overviewStats.entryFeesRefunded)}`, color: 'text-red-400' },
                                     { label: 'Outstanding', value: `−${fmtR(overviewStats.pendingAmount)}`, color: 'text-red-400' },
-                                    { label: 'Final entry sales', value: fmtR(overviewStats.entryFeeBalance), color: 'text-white' },
                                     { label: 'Manual / EFT collected by 4M', value: fmtR(overviewStats.collectedManual), color: 'text-white' },
+                                    { label: 'Paid directly to organiser', value: fmtR(overviewStats.organiserRetained), color: 'text-white' },
+                                    { label: 'Refunds pending', value: fmtR(overviewStats.refundReserve), color: 'text-amber-300' },
                                     { label: 'Platform Fees', value: `−${fmtR(overviewStats.commission)}`, color: 'text-red-400' },
                                     { label: 'Interim Paid', value: `−${fmtR(overviewStats.interimPaid)}`, color: 'text-red-400' },
-                                    { label: 'Balance due from 4M', value: fmtR(overviewStats.dueToOrg), color: 'text-padel-green' },
                                 ].map((card) => (
                                     <div key={card.label} className="bg-[#1a1a1a]/50 border border-white/10 rounded-xl p-4">
                                         <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">{card.label}</p>
@@ -4977,7 +4930,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
                                                                 {row.status}
                                                             </span>
                                                         </td>
-                                                        <td className="px-4 py-3 text-gray-400 text-xs">{row.method}</td>
+                                                        <td className="px-4 py-3 text-gray-400 text-xs">{row.method}
+                                                            {row.type === 'payment' && row.method !== 'Paystack' && <button type="button" className="block mt-1 text-[10px] text-sky-400" onClick={() => {
+                                                                const receipt = payments.find(p => p.id === row.paymentId);
+                                                                if (receipt) openMarkPaidModal(registrations.find(r => r.id === receipt.metadata?.registration_id)
+                                                                    || { full_name: row.player, division: row.division, payment_method: receipt.payment_method }, receipt);
+                                                            }}>Edit recipient</button>}
+                                                        </td>
                                                     </tr>
                                                 );
                                             })}

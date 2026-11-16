@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Mail, Lock, User, Phone, CheckCircle, AlertCircle, Eye, EyeOff, Info, Camera, Upload, ChevronRight, Building, GraduationCap, Landmark, ChevronLeft } from 'lucide-react';
 import { supabase } from '../supabaseClient';
@@ -8,6 +8,8 @@ import SearchableSelect from './SearchableSelect';
 import { Trophy } from 'lucide-react';
 import { collectWebSignupDevice } from '../utils/signupDevice';
 import { authErrorMessage } from '../utils/authErrors';
+import { birthDateError, playtomicDetailsError, playtomicDetailsPayload } from '../utils/profileDetails';
+import { BirthDateField, PlayerProfileDetailsFields } from './PlayerProfileDetailsFields';
 import RegisterOrganisationForm from './RegisterOrganisationForm';
 import RegisterCoachForm from './RegisterCoachForm';
 import ClubCreateWizard from './clubs/ClubCreateWizard';
@@ -71,6 +73,10 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
 
     // Form states
     const [step, setStep] = useState(1);
+    const [signupUserId, setSignupUserId] = useState('');
+    const [playtomic, setPlaytomic] = useState({ playtomic_level: '', playtomic_proof_path: '' });
+    const [proofUploading, setProofUploading] = useState(false);
+    const submitLock = useRef(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -81,6 +87,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
     const [gender, setGender] = useState('');
     const [nationality, setNationality] = useState('');
     const [idNumber, setIdNumber] = useState('');
+    const [dateOfBirth, setDateOfBirth] = useState('');
     const [bio, setBio] = useState('');
     const [clubId, setClubId] = useState('');
     const [customClub, setCustomClub] = useState('');
@@ -107,6 +114,9 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
 
     const resetForm = () => {
         setStep(1);
+        setSignupUserId('');
+        setPlaytomic({ playtomic_level: '', playtomic_proof_path: '' });
+        setDateOfBirth('');
         setEmail('');
         setPassword('');
         setConfirmPassword('');
@@ -179,11 +189,14 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
         setMessage(null);
 
         try {
-            const { error } = await supabase.auth.signInWithPassword({
+            const { data: signedIn, error } = await supabase.auth.signInWithPassword({
                 email: email.trim(),
                 password,
             });
             if (error) throw error;
+            const { data: existing, error: lookupError } = await supabase.from('players').select('id').ilike('email', signedIn.user.email.replace(/[\\%_]/g, '\\$&')).maybeSingle();
+            if (lookupError) throw new Error('Your player profile could not be loaded. Please try again.');
+            if (!existing) { onClose(); navigate('/profile'); return; }
             showMessage('Successfully logged in!', 'success');
         } catch (error) {
             showMessage(authErrorMessage(error), 'error');
@@ -214,12 +227,14 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
         setLoading(false);
     };
 
-    const handleRegistrationSubmit = async (e) => {
+    const submitRegistrationStep = async (e) => {
         e.preventDefault();
         setMessage(null);
 
         // Validation for Step 1
         if (step === 1) {
+            const birthIssue = birthDateError(dateOfBirth);
+            if (birthIssue) { setMessage({ type: 'error', text: birthIssue }); return; }
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(email)) {
                 setMessage({ type: 'error', text: 'Please enter a valid email address.' });
@@ -256,7 +271,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
                 .ilike('email', email)
                 .maybeSingle();
 
-            if (existingPlayer) {
+            if (existingPlayer && !signupUserId) {
                 setLoading(false);
                 setMessage({ type: 'error', text: 'This email is already registered. Please sign in or reset your password.' });
                 return;
@@ -267,7 +282,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
             return;
         }
 
-        if (step !== 2) return;
+        if (step !== 2 && step !== 3) return;
 
         if (!category || !clubId || (clubId === 'Other' && !customClub) || !bio) {
             setMessage({ type: 'error', text: 'Please fill in all required fields for Step 2.' });
@@ -278,6 +293,11 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
             return;
         }
 
+        if (proofUploading) { setMessage({ type: 'error', text: 'Wait for your screenshot to finish uploading.' }); return; }
+        if (step === 3) {
+            const issue = playtomicDetailsError(playtomic);
+            if (issue) { setMessage({ type: 'error', text: issue }); return; }
+        }
         setLoading(true);
 
         const hasSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
@@ -287,17 +307,24 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
             return;
         }
 
-        const { error: authError } = await supabase.auth.signUp({
-            email,
-            password,
-            options: { data: { signup_source: 'web', signup_device: collectWebSignupDevice() } },
-        });
-
-        if (authError) {
-            showMessage('Registration failed: ' + authError.message, 'error');
-            setLoading(false);
-            return;
+        const { data: currentSession } = await supabase.auth.getSession();
+        let session = currentSession.session;
+        if (session && session.user.email?.toLowerCase() !== email.trim().toLowerCase()) {
+            throw new Error('Sign out before creating a player profile for another email address.');
         }
+        if (!session) {
+            if (signupUserId) throw new Error('Your account is created. Confirm your email, then sign in to complete your player profile.');
+            const { data: account, error: authError } = await supabase.auth.signUp({
+                email: email.trim(), password,
+                options: { data: { signup_source: 'web', signup_device: collectWebSignupDevice() } },
+            });
+            if (authError) throw authError;
+            if (account.user) setSignupUserId(account.user.id);
+            session = account.session;
+            if (!session) throw new Error('Your account is created. Confirm your email, then sign in to complete your player profile.');
+        }
+        setSignupUserId(session.user.id);
+        if (step === 2) { setStep(3); return; }
 
         let uploadedImageUrl = null;
         if (profilePic) {
@@ -325,7 +352,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
             }
         }
 
-        const { error: insertError } = await supabase.rpc('create_player_profile', {
+        const { error: insertError } = await supabase.rpc('create_player_profile_with_details_v3', { p_details: playtomicDetailsPayload({ ...playtomic, date_of_birth: dateOfBirth }), p_profile: {
             p_email: email,
             p_name: `${firstName} ${lastName}`.replace(/\s+/g, ' ').trim(),
             p_contact: contactNumber,
@@ -342,7 +369,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
             p_image_url: uploadedImageUrl,
             p_racket_brand: racketBrand === 'Other' ? customRacketBrand : racketBrand,
             p_club_id: clubId === 'Other' ? null : (clubId || null)
-        });
+        } });
 
         if (insertError) {
             showMessage('Account created, but failed to setup profile: ' + insertError.message, 'error');
@@ -359,7 +386,14 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
         setLoading(false);
     };
 
-
+    const handleRegistrationSubmit = async event => {
+        event.preventDefault();
+        if (submitLock.current || proofUploading) return;
+        submitLock.current = true;
+        try { await submitRegistrationStep(event); }
+        catch (error) { setMessage({ type: 'error', text: error.message || 'Your profile could not be saved. Please try again.' }); }
+        finally { submitLock.current = false; setLoading(false); }
+    };
 
     if (!isOpen) return null;
 
@@ -502,7 +536,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
                                             </button>
                                             <div className="flex items-center justify-between mb-2">
                                                 <span className="text-padel-green text-[10px] font-black uppercase tracking-widest">Step 1: Personal</span>
-                                                <span className="text-gray-500 text-[10px] font-bold">1 / 2</span>
+                                                <span className="text-gray-500 text-[10px] font-bold">1 / 3</span>
                                             </div>
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div className="relative">
@@ -592,6 +626,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
                                                     required
                                                 />
                                             </div>
+                                            <BirthDateField value={dateOfBirth} onChange={setDateOfBirth} />
                                             <div className="grid grid-cols-2 gap-4">
                                                 <select
                                                     value={gender}
@@ -649,11 +684,11 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
                                                 {loading ? 'Checking...' : 'Next Step'}
                                             </button>
                                         </div>
-                                    ) : (
+                                    ) : step === 2 ? (
                                         <div className="space-y-4">
                                             <div className="flex items-center justify-between mb-4">
                                                 <span className="text-padel-green text-[10px] font-black uppercase tracking-widest">Step 2: Padel Profile</span>
-                                                <span className="text-gray-500 text-[10px] font-bold">2 / 2</span>
+                                                <span className="text-gray-500 text-[10px] font-bold">2 / 3</span>
                                             </div>
 
                                             {/* Profile Picture Upload */}
@@ -813,12 +848,24 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login', initialRegisterType 
                                                     disabled={loading || isUploading}
                                                     className="flex-1 bg-padel-green text-black font-black uppercase tracking-widest py-4 rounded-xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-padel-green/20 disabled:opacity-50"
                                                 >
-                                                    {loading ? 'Registering...' : 'Register'}
+                                                    {loading ? 'Creating account…' : 'Continue to Playtomic level'}
                                                 </button>
                                             </div>
                                             <p className="text-[10px] text-gray-500 text-center leading-relaxed">
                                                 A temporary license can be added when you enter an event, if sales are open.
                                             </p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-padel-green text-[10px] font-black uppercase tracking-widest">Step 3: Playtomic level</span>
+                                                <span className="text-gray-500 text-[10px] font-bold">3 / 3</span>
+                                            </div>
+                                            <PlayerProfileDetailsFields signupUserId={signupUserId} value={playtomic} onChange={setPlaytomic} disabled={loading} onBusyChange={setProofUploading} />
+                                            <div className="flex gap-3">
+                                                <button type="button" disabled={loading || proofUploading} onClick={() => setStep(2)} className="min-h-11 rounded-xl border border-white/10 px-4 text-white">Back</button>
+                                                <button type="submit" disabled={loading || proofUploading} className="min-h-11 flex-1 rounded-xl bg-padel-green px-4 py-3 font-bold text-black disabled:opacity-50">{loading ? 'Saving profile…' : 'Create player profile'}</button>
+                                            </div>
                                         </div>
                                     )}
                                 </>

@@ -74,3 +74,9 @@ CREATE POLICY "Allow public update own registration"
 ON event_registrations FOR UPDATE
 USING (true)
 WITH CHECK (true);
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+REVOKE ALL ON TABLE public.tournament_divisions FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.tournament_divisions TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.tournament_divisions TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.tournament_divisions TO service_role;

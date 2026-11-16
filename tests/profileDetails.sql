@@ -1,0 +1,227 @@
+-- Run only in an EMPTY, disposable local database. Every fixture rolls back.
+\set ON_ERROR_STOP on
+begin;
+do $$ begin
+  if current_database() <> 'fourm_profile_details_test' or exists(select 1 from pg_tables where schemaname = 'public') then
+    raise exception 'Use the empty disposable fourm_profile_details_test database';
+  end if;
+end $$;
+do $$ begin
+  if not exists(select 1 from pg_roles where rolname='anon') then create role anon; end if;
+  if not exists(select 1 from pg_roles where rolname='authenticated') then create role authenticated; end if;
+  if not exists(select 1 from pg_roles where rolname='service_role') then create role service_role bypassrls; end if;
+end $$;
+create schema auth;
+create table auth.users(id uuid primary key,email text);
+insert into auth.users values ('00000000-0000-0000-0000-000000000001','owner@test.test');
+create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('test.uid',true),'')::uuid$$;
+create function auth.email() returns text language sql stable as $$select nullif(current_setting('test.email',true),'')$$;
+grant usage on schema public, auth to anon, authenticated, service_role;
+create table public.players(id bigserial primary key, email text unique, name text, contact_number text, age integer);
+create table public.admin_sidebar_permissions(email text, role text, allowed_tabs text[]);
+create function public.is_super_admin(text) returns boolean language sql as $$ select $1 = 'admin@test.test' $$;
+create function public.create_player_profile(p_email text,p_name text,p_contact text,p_category text,p_gender text,p_nationality text,p_id_number text,p_bio text,p_home_club text,p_sponsors text,p_region text,p_instagram_link text,p_paid_registration boolean,p_license_type text,p_image_url text,p_racket_brand text,p_club_id uuid)
+returns void language sql as $$ insert into public.players(email,name,contact_number) values(p_email,p_name,p_contact) on conflict(email) do nothing $$;
+insert into public.players(email,name) values ('owner@test.test','Owner'), ('other@test.test','Other');
+insert into public.admin_sidebar_permissions values ('players-admin@test.test','admin',array['players']), ('events-admin@test.test','admin',array['events']);
+create schema storage;
+create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
+create table storage.objects(id uuid not null unique default gen_random_uuid(),bucket_id text,name text,owner uuid,owner_id text,primary key(bucket_id,name));
+alter table storage.objects enable row level security;
+grant usage on schema storage to authenticated, anon;
+grant select, insert, update, delete on storage.objects to authenticated;
+-- A broad pre-existing policy must not weaken the new bucket's boundaries.
+create policy existing_storage_access on storage.objects for all to authenticated using(true) with check(true);
+alter default privileges in schema public revoke all on tables from public,anon,authenticated,service_role;
+\ir ../supabase/migrations/20261102073216_player_profile_birth_date_and_playtomic.sql
+-- Existing unknown levels survive the forward migration.
+insert into public.player_profile_details(player_id,date_of_birth) values (2,'2000-01-01');
+\ir ../supabase/migrations/20261105080030_required_playtomic_level_and_extraction.sql
+\ir ../supabase/migrations/20261105102417_playtomic_profile_evidence.sql
+create function pg_temp.expect(condition boolean,label text) returns void language plpgsql as $$begin if condition is distinct from true then raise exception 'FAIL: %',label; end if; end$$;
+create function pg_temp.reject(query text, expected text) returns void language plpgsql as $$
+begin
+  begin execute query;
+  exception when others then
+    if sqlerrm !~ expected then raise exception 'Unexpected error: % (expected %)',sqlerrm,expected; end if;
+    return;
+  end;
+  raise exception 'Expected rejection: %',query;
+end $$;
+select pg_temp.expect((select not public and file_size_limit=5242880 from storage.buckets where id='playtomic-proofs'),'private bounded bucket');
+select pg_temp.expect(not has_table_privilege('authenticated','public.player_profile_details','select'),'RPC-only authenticated access');
+select pg_temp.expect(not has_table_privilege('anon','public.player_profile_details','select'),'no anonymous personal data');
+select pg_temp.expect(has_table_privilege('service_role','public.player_profile_details','select,insert,update,delete'),'explicit service grants');
+select set_config('test.uid','00000000-0000-0000-0000-000000000001',true);
+select set_config('test.email','owner@test.test',true);
+set local role authenticated;
+select pg_temp.expect(public.get_player_profile_details(1) is null,'existing player needs DOB without fabricated backfill');
+select pg_temp.reject($q$select * from public.player_profile_details$q$,'permission denied');
+select pg_temp.reject($q$select public.get_player_profile_details(2)$q$,'access denied');
+select pg_temp.reject($q$select public.save_player_profile_details(1,'{}')$q$,'valid date of birth');
+select pg_temp.reject($q$select public.save_player_profile_details(1,'{"date_of_birth":"2999-01-01"}')$q$,'valid date of birth');
+select pg_temp.reject($q$select public.save_player_profile_details(1,'{"date_of_birth":"2001-02-29"}')$q$,'out of range');
+select public.save_player_profile_details(1,'{"date_of_birth":"2000-02-29"}');
+select pg_temp.expect(public.get_player_profile_details(1)->>'date_of_birth'='2000-02-29','DOB saved');
+select public.save_player_profile_details_v2(1,'{"date_of_birth":"2000-02-29","playtomic_level":3.25}');
+select pg_temp.expect(public.get_player_profile_details(1)->>'playtomic_level'='3.25','level saves without screenshot');
+select pg_temp.reject($q$select public.save_player_profile_details_v2(1,'{"date_of_birth":"2000-02-29"}')$q$,'Enter your Playtomic level');
+select pg_temp.reject($q$select public.save_player_profile_details(1,'{"date_of_birth":"2000-02-29","playtomic_level":7.01,"playtomic_proof_path":"1/a.jpg"}')$q$,'level from 0 to 7');
+select pg_temp.reject($q$select public.save_player_profile_details(1,'{"date_of_birth":"2000-02-29","playtomic_level":3.251,"playtomic_proof_path":"1/a.jpg"}')$q$,'two decimal');
+select pg_temp.reject($q$select public.save_player_profile_details(1,'{"date_of_birth":"2000-02-29","playtomic_level":3.25,"playtomic_proof_path":"1/a.jpg"}')$q$,'Upload a screenshot');
+insert into storage.objects(bucket_id,name) values ('playtomic-proofs','1/a.jpg');
+select pg_temp.reject($q$insert into storage.objects(bucket_id,name) values ('playtomic-proofs','2/a.jpg')$q$,'row-level security');
+select public.save_player_profile_details(1,'{"date_of_birth":"2000-02-29","playtomic_level":0,"playtomic_proof_path":"1/a.jpg"}');
+select pg_temp.expect(public.get_player_profile_details(1)->>'playtomic_level'='0.00','zero is a real level');
+update storage.objects set name='1/b.jpg' where name='1/a.jpg';
+delete from storage.objects where name='1/a.jpg';
+select pg_temp.expect((select count(*)=1 from storage.objects),'saved proof cannot be changed or deleted');
+insert into storage.objects(bucket_id,name) values ('playtomic-proofs','1/b.jpg');
+select public.save_player_profile_details(1,'{"date_of_birth":"2000-02-29","playtomic_level":3.25,"playtomic_proof_path":"1/b.jpg"}');
+delete from storage.objects where name='1/a.jpg';
+select pg_temp.expect((select count(*)=1 from storage.objects),'replaced proof can be removed');
+select pg_temp.reject($q$select public.create_player_profile_with_details('{"p_email":"other@test.test","p_name":"Spoof"}','2000-01-01')$q$,'own profile');
+select set_config('test.email','other@test.test',true);
+select pg_temp.expect((select count(*)=0 from storage.objects),'another player cannot read proof');
+select pg_temp.reject($q$select public.save_player_profile_details(2,'{"date_of_birth":"2000-01-01","playtomic_level":3.25,"playtomic_proof_path":"1/b.jpg"}')$q$,'Upload a screenshot');
+select set_config('test.email','events-admin@test.test',true);
+select pg_temp.reject($q$select public.get_player_profile_details(1)$q$,'access denied');
+select set_config('test.email','players-admin@test.test',true);
+select pg_temp.expect(public.get_player_profile_details(1)->>'playtomic_level'='3.25','player admin can review');
+select pg_temp.expect((select count(*)=1 from storage.objects),'player admin can read proof');
+-- Stage screenshots before profile creation, scoped to the actual auth account.
+reset role;
+insert into auth.users values ('00000000-0000-0000-0000-000000000003','signup@test.test');
+set local role authenticated;
+select set_config('test.uid','00000000-0000-0000-0000-000000000003',true);
+select set_config('test.email','signup@test.test',true);
+insert into storage.objects(bucket_id,name) values ('playtomic-proofs','signup/00000000-0000-0000-0000-000000000003/a.jpg');
+select pg_temp.reject($q$insert into storage.objects(bucket_id,name) values ('playtomic-proofs','signup/00000000-0000-0000-0000-000000000001/c.jpg')$q$,'row-level security');
+select pg_temp.reject($q$select public.create_player_profile_with_details_v2('{"p_email":"signup@test.test","p_name":"Signup"}','{"date_of_birth":"2000-01-01","playtomic_level":8}')$q$,'level from 0 to 7');
+reset role;
+select pg_temp.expect(not exists(select 1 from public.players where email='signup@test.test'),'invalid level rolls back player creation');
+set local role authenticated;
+select public.create_player_profile_with_details_v2('{"p_email":"signup@test.test","p_name":"Signup"}','{"date_of_birth":"2000-01-01","playtomic_level":5.17,"playtomic_proof_path":"signup/00000000-0000-0000-0000-000000000003/a.jpg"}');
+select pg_temp.expect(not public.can_access_player_profile_proof('signup/00000000-0000-0000-0000-000000000003/a.jpg',true),'attached signup screenshot retained');
+select pg_temp.reject($q$select public.consume_playtomic_extraction('00000000-0000-0000-0000-000000000003')$q$,'permission denied');
+select set_config('test.uid','00000000-0000-0000-0000-000000000001',true);
+select set_config('test.email','owner@test.test',true);
+select pg_temp.expect(not public.can_access_player_profile_proof('signup/00000000-0000-0000-0000-000000000003/a.jpg'),'other account cannot read signup screenshot');
+select public.save_player_profile_details_v2(1,'{"date_of_birth":"2000-02-29","playtomic_level":0}');
+select pg_temp.expect(public.get_player_profile_details(1)->>'playtomic_level'='0.00' and public.get_player_profile_details(1)->>'playtomic_proof_path' is null,'removing screenshot preserves level');
+select public.save_player_profile_details_v2(1,'{"date_of_birth":"2000-02-29","playtomic_level":3.25,"playtomic_proof_path":"1/b.jpg"}');
+reset role;
+select pg_temp.expect((select playtomic_level is null from public.player_profile_details where player_id=2),'legacy missing level is not backfilled');
+set local role service_role;
+select pg_temp.expect(public.consume_playtomic_extraction('00000000-0000-0000-0000-000000000003'),'first extraction');
+select public.consume_playtomic_extraction('00000000-0000-0000-0000-000000000003') from generate_series(1,19);
+select pg_temp.expect(not public.consume_playtomic_extraction('00000000-0000-0000-0000-000000000003'),'twenty reads per day');
+select pg_temp.expect(public.account_deletion_storage('00000000-0000-0000-0000-000000000003') @> '[{"bucket":"playtomic-proofs","name":"signup/00000000-0000-0000-0000-000000000003/a.jpg"}]'::jsonb,'deletion includes signup screenshot');
+reset role;
+delete from public.players where email='signup@test.test';
+delete from storage.objects where name like 'signup/%';
+set local role authenticated;
+select set_config('test.email','new@test.test',true);
+select pg_temp.reject($q$select public.create_player_profile_with_details('{"p_email":"new@test.test","p_name":"New"}',null)$q$,'valid date of birth');
+select public.create_player_profile_with_details('{"p_email":"new@test.test","p_name":"New"}','1999-05-01');
+reset role;
+select pg_temp.expect((select count(*)=1 from public.players where email='new@test.test'),'atomic signup');
+select pg_temp.expect((select date_of_birth='1999-05-01' from public.player_profile_details where player_id=(select id from public.players where email='new@test.test')),'atomic signup birth date');
+set local role anon;
+select pg_temp.reject($q$select public.get_player_profile_details(1)$q$,'permission denied');
+reset role;
+insert into storage.objects(bucket_id,name,owner) values ('playtomic-proofs','2/c.jpg','00000000-0000-0000-0000-000000000001');
+set local role service_role;
+select pg_temp.expect(public.account_deletion_storage('00000000-0000-0000-0000-000000000001') = '[{"bucket":"playtomic-proofs","name":"1/b.jpg"}]'::jsonb,'deletion includes beneficiary proof and preserves proofs uploaded for other players');
+reset role;
+-- v3 remains additive: old RPCs above kept all their former contracts.
+select pg_temp.expect(not has_table_privilege('authenticated','public.playtomic_profile_extractions','select'),'extraction rows are private');
+select pg_temp.expect(not has_table_privilege('anon','public.playtomic_profile_extractions','select'),'no anonymous extraction access');
+select pg_temp.expect(not has_function_privilege('authenticated','public.get_playtomic_profile_proof_id(text)','execute'),'identity RPC service-only');
+select pg_temp.expect(not has_function_privilege('authenticated','public.record_playtomic_profile_extraction(text,numeric,integer,numeric,uuid)','execute'),'record RPC service-only');
+select pg_temp.expect(has_table_privilege('service_role','public.playtomic_profile_extractions','select,insert,update,delete'),'worker grants');
+select set_config('test.uid','00000000-0000-0000-0000-000000000001',true);
+select set_config('test.email','owner@test.test',true);
+set local role authenticated;
+select pg_temp.reject($q$select public.record_playtomic_profile_extraction('1/b.jpg',5.17,660,93,public.get_playtomic_profile_proof_id('1/b.jpg'))$q$,'permission denied');
+select pg_temp.reject($q$select public.save_player_profile_details_v3(1,'{"date_of_birth":"2000-02-29","playtomic_level":0}')$q$,'Upload a screenshot');
+select pg_temp.reject($q$select public.save_player_profile_details_v3(1,'{"date_of_birth":"2000-02-29","playtomic_no_profile":"true"}')$q$,'Enter your Playtomic level');
+select public.save_player_profile_details_v3(1,'{"date_of_birth":"2000-02-29","playtomic_no_profile":true}');
+select pg_temp.expect((public.get_player_profile_details(1)->>'playtomic_no_profile')::boolean and public.get_player_profile_details(1)->>'playtomic_level' is null and public.get_player_profile_details(1)->>'playtomic_no_profile_confirmed_at' is not null,'explicit no-profile remains unknown with recorded confirmation');
+select pg_temp.reject($q$select public.save_player_profile_details_v3(1,'{"date_of_birth":"2000-02-29","playtomic_no_profile":true,"playtomic_level":0}')$q$,'Remove Playtomic details');
+select public.save_player_profile_details_v3(1,'{"date_of_birth":"2000-02-29","playtomic_level":0,"playtomic_proof_path":"1/b.jpg","playtomic_matches":999}');
+select pg_temp.expect(public.get_player_profile_details(1)->>'playtomic_matches' is null,'client cannot forge algorithm inputs');
+reset role;
+set local role service_role;
+select public.record_playtomic_profile_extraction('1/b.jpg',5.17,660,93,public.get_playtomic_profile_proof_id('1/b.jpg'));
+select pg_temp.reject($q$select public.record_playtomic_profile_extraction('1/b.jpg',5.171,660,93,public.get_playtomic_profile_proof_id('1/b.jpg'))$q$,'Invalid screenshot details');
+select pg_temp.reject($q$select public.record_playtomic_profile_extraction('1/b.jpg',5.17,-1,93,public.get_playtomic_profile_proof_id('1/b.jpg'))$q$,'Invalid screenshot details');
+select pg_temp.reject($q$select public.record_playtomic_profile_extraction('1/b.jpg',5.17,660,101,public.get_playtomic_profile_proof_id('1/b.jpg'))$q$,'Invalid screenshot details');
+reset role;
+set local role authenticated;
+select pg_temp.expect(public.get_player_profile_details(1)->>'playtomic_matches'='660' and (public.get_player_profile_details(1)->>'playtomic_reliability_percent')::numeric=93,'owner can read linked evidence');
+select set_config('test.email','players-admin@test.test',true);
+select pg_temp.expect(public.get_player_profile_details(1)->>'playtomic_matches'='660','Players admin can review stats');
+select set_config('test.email','other@test.test',true);
+select pg_temp.reject($q$select public.get_player_profile_details(1)$q$,'access denied');
+select set_config('test.email','owner@test.test',true);
+select public.save_player_profile_details_v3(1,'{"date_of_birth":"2000-02-29","playtomic_no_profile":true}');
+select pg_temp.expect(public.get_player_profile_details(1)->>'playtomic_matches' is null,'removal detaches evidence');
+-- Legacy saves still work and clear a previous no-profile declaration on new evidence.
+select public.save_player_profile_details_v2(1,'{"date_of_birth":"2000-02-29","playtomic_level":7,"playtomic_proof_path":"1/b.jpg"}');
+select pg_temp.expect(not (public.get_player_profile_details(1)->>'playtomic_no_profile')::boolean,'legacy evidence clears exemption');
+reset role;
+reset role;
+insert into storage.objects(bucket_id,name) values ('playtomic-proofs','1/f.jpg');
+set local role service_role;
+select public.record_playtomic_profile_extraction('1/f.jpg',5.17,660,93,public.get_playtomic_profile_proof_id('1/f.jpg'));
+reset role;
+delete from storage.objects where bucket_id='playtomic-proofs' and name='1/f.jpg';
+insert into storage.objects(bucket_id,name) values ('playtomic-proofs','1/f.jpg');
+set local role authenticated;
+select public.save_player_profile_details_v3(1,'{"date_of_birth":"2000-02-29","playtomic_level":5.17,"playtomic_proof_path":"1/f.jpg"}');
+select pg_temp.expect(public.get_player_profile_details(1)->>'playtomic_matches' is null,'reused filenames cannot inherit old screenshot evidence');
+select public.save_player_profile_details_v3(1,'{"date_of_birth":"2000-02-29","playtomic_level":7,"playtomic_proof_path":"1/b.jpg"}');
+reset role;
+delete from storage.objects where name='1/f.jpg';
+-- Pre-player signup evidence attaches atomically, including retried signup.
+insert into auth.users values ('00000000-0000-0000-0000-000000000004','evidence@test.test');
+insert into storage.objects(bucket_id,name) values ('playtomic-proofs','signup/00000000-0000-0000-0000-000000000004/a.jpg');
+set local role service_role;
+select public.record_playtomic_profile_extraction('signup/00000000-0000-0000-0000-000000000004/a.jpg',5.17,660,93,public.get_playtomic_profile_proof_id('signup/00000000-0000-0000-0000-000000000004/a.jpg'));
+reset role;
+select pg_temp.expect((select signup_user_id is not null and player_id is null from public.playtomic_profile_extractions where proof_path like 'signup/%004/a.jpg'),'pending evidence belongs to auth account');
+set local role authenticated;
+select set_config('test.uid','00000000-0000-0000-0000-000000000004',true);
+select set_config('test.email','evidence@test.test',true);
+select pg_temp.reject($q$select public.create_player_profile_with_details_v3('{"p_email":"evidence@test.test","p_name":"Evidence"}','{"date_of_birth":"2000-01-01","playtomic_level":5.17}')$q$,'Upload a screenshot');
+reset role;
+select pg_temp.expect(not exists(select 1 from public.players where email='evidence@test.test'),'missing screenshot rolls back signup');
+set local role authenticated;
+select public.create_player_profile_with_details_v3('{"p_email":"evidence@test.test","p_name":"Evidence"}','{"date_of_birth":"2000-01-01","playtomic_level":5.17,"playtomic_proof_path":"signup/00000000-0000-0000-0000-000000000004/a.jpg"}');
+select public.create_player_profile_with_details_v3('{"p_email":"evidence@test.test","p_name":"Evidence"}','{"date_of_birth":"2000-01-01","playtomic_level":5.17,"playtomic_proof_path":"signup/00000000-0000-0000-0000-000000000004/a.jpg"}');
+reset role;
+select pg_temp.expect((select count(*)=1 from public.players where email='evidence@test.test'),'retry does not duplicate player');
+select pg_temp.expect((select player_id is not null and signup_user_id is null from public.playtomic_profile_extractions where proof_path like 'signup/%004/a.jpg'),'evidence ownership transfers to beneficiary');
+delete from public.players where email='evidence@test.test';
+select pg_temp.expect(not exists(select 1 from public.playtomic_profile_extractions where proof_path like 'signup/%004/a.jpg'),'player deletion cascades evidence');
+-- Pending signup deletion also cleans the extraction row.
+set local role service_role;
+select public.record_playtomic_profile_extraction('signup/00000000-0000-0000-0000-000000000004/a.jpg',null,0,0,public.get_playtomic_profile_proof_id('signup/00000000-0000-0000-0000-000000000004/a.jpg'));
+reset role;
+delete from auth.users where id='00000000-0000-0000-0000-000000000004';
+select pg_temp.expect(not exists(select 1 from public.playtomic_profile_extractions where proof_path like 'signup/%004/a.jpg'),'uncompleted account deletion cascades pending evidence');
+
+insert into auth.users values ('00000000-0000-0000-0000-000000000005','exempt@test.test');
+select set_config('test.uid','00000000-0000-0000-0000-000000000005',true);
+select set_config('test.email','exempt@test.test',true);
+set local role authenticated;
+select public.create_player_profile_with_details_v3('{"p_email":"exempt@test.test","p_name":"Exempt"}','{"date_of_birth":"2000-01-01","playtomic_no_profile":true}');
+select public.create_player_profile_with_details_v3('{"p_email":"exempt@test.test","p_name":"Exempt"}','{"date_of_birth":"2000-01-01","playtomic_no_profile":true}');
+reset role;
+select pg_temp.expect((select count(*)=1 from public.players where email='exempt@test.test'),'exempt signup retry remains atomic');
+select pg_temp.expect((select d.playtomic_no_profile and d.playtomic_level is null and d.playtomic_proof_path is null and d.playtomic_no_profile_confirmed_at is not null from public.player_profile_details d join public.players p on p.id=d.player_id where p.email='exempt@test.test'),'exempt signup stores confirmation without invented level');
+delete from public.players where id=1;
+select pg_temp.expect(not exists(select 1 from public.player_profile_details where player_id=1),'account deletion removes private details');
+rollback;
+\echo 'Profile details: validation, atomic signup, grants, owner/admin access, proof isolation and immutability passed.'

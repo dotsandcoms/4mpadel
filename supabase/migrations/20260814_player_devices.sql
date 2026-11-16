@@ -120,3 +120,8 @@ BEGIN
     WHERE email ILIKE v_email;
 END;
 $$;
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+REVOKE ALL ON TABLE public.player_devices FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.player_devices TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.player_devices TO service_role;

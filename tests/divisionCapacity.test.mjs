@@ -49,3 +49,14 @@ test('reservation errors block checkout rather than allowing payment to proceed'
     } }, rows), e => e === error);
     await reserveDivisionPlaces({ rpc() { assert.fail('No reservation needed'); } }, []);
 });
+
+test('a duplicate entry gives checkout recovery instructions without exposing SQL', async () => {
+    const client = { async rpc() {
+        return { error: { code: '23505', message: 'duplicate key value violates unique constraint "event_registrations_event_id_email_division_key"' } };
+    } };
+    await assert.rejects(reserveDivisionPlaces(client, [row('a')]), {
+        message: 'You or your partner already have an entry in this division. Refresh the page to review your entries and continue payment.',
+    });
+    const unrelated = { code: '23505', message: 'duplicate key value violates unique constraint "some_other_key"' };
+    await assert.rejects(reserveDivisionPlaces({ async rpc() { return { error: unrelated }; } }, [row('a')]), e => e === unrelated);
+});

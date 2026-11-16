@@ -177,4 +177,3 @@ grant execute on function public.license_federation_sales_export(date,date,integ
 comment on function public.license_federation_sales_export(date,date,integer,text) is
  'License-admin-only federation Excel data: one verified paid license per row, actual license allocation prices, original purchase timestamps and explicit refund/price review flags. No event checkout totals or current-price estimates.';
 notify pgrst,'reload schema';
-

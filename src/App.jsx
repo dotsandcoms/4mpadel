@@ -4,7 +4,7 @@ import { Toaster } from 'sonner';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import Reports from './pages/Reports';
-import Admin from './pages/Admin';
+const Admin = React.lazy(() => import('./pages/Admin'));
 import Players from './pages/Players';
 import Calendar from './pages/Calendar';
 import EventDetails from './pages/EventDetails';
@@ -134,7 +134,7 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/reports" element={<Reports />} />
-          <Route path="/admin" element={<Admin />} />
+          <Route path="/admin" element={<React.Suspense fallback={<div role="status" className="min-h-screen p-8 text-gray-400">Loading admin…</div>}><Admin /></React.Suspense>} />
           {import.meta.env.DEV && <Route path="/admin/draw-lab" element={<React.Suspense fallback={<div className="min-h-screen bg-black p-8 text-white">Loading Draw Lab…</div>}><DrawLab /></React.Suspense>} />}
           <Route path="/players" element={<Players />} /> {/* Added route for Players */}
           <Route path="/calendar" element={<Calendar />} />

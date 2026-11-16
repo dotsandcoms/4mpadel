@@ -30,3 +30,8 @@ CREATE POLICY "Authenticated manage club google matches"
     TO authenticated
     USING (true)
     WITH CHECK (true);
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+REVOKE ALL ON TABLE public.club_google_matches FROM PUBLIC, anon, authenticated;
+GRANT SELECT, UPDATE ON TABLE public.club_google_matches TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.club_google_matches TO service_role;

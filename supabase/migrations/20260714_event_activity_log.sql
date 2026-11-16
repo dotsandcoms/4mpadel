@@ -362,3 +362,8 @@ DROP TRIGGER IF EXISTS trg_event_payment_activity ON public.payments;
 CREATE TRIGGER trg_event_payment_activity
 AFTER INSERT OR UPDATE OF status ON public.payments
 FOR EACH ROW EXECUTE FUNCTION public.trg_log_event_payment_activity();
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+REVOKE ALL ON TABLE public.event_activity_log FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.event_activity_log TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.event_activity_log TO service_role;

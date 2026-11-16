@@ -33,7 +33,7 @@ await build({ entryPoints: [`${root}/src/components/admin/ManualEventRegistratio
         builder.onLoad({ filter: /ManualEventRegistrations\.jsx$/ }, args => {
             let source = fs.readFileSync(args.path, 'utf8');
             for (const [state, value] of Object.entries({ loading: 'globalThis.__exportReadyFixture.loading',
-                exportingFinance: 'globalThis.__exportReadyFixture.exporting', cashVerification: 'globalThis.__exportReadyFixture.verification',
+                exportingFinance: 'globalThis.__exportReadyFixture.exporting',
                 exportMenuOpen: 'true', activeTab: "'overview'" })) {
                 const pattern = new RegExp(`(const \\[${state},[^\\]]+\\] = useState\\()[^;]+(\\);)`);
                 assert.ok(pattern.test(source), `Missing fixture state ${state}`);

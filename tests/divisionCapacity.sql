@@ -18,6 +18,7 @@ CREATE TABLE public.event_registrations(
     division text, full_name text, email text, phone text, partner_name text, partner_email text,
     payment_status text DEFAULT 'pending', payment_method text, partner_payment_status text, status text DEFAULT 'registered',
     registered_by text, tshirt_size text, tshirt_sponsor_name text, tshirt_logo_url text, access_grant_id uuid,
+    pay_token uuid DEFAULT gen_random_uuid(), withdrawn_at timestamptz, refund_amount numeric,
     UNIQUE(event_id,email,division)
 );
 CREATE TABLE public.payments(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), status text, payment_type text, metadata jsonb);
@@ -30,6 +31,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authentic
 \ir ../supabase/migrations/20261019050836_registration_deadline_payment_access.sql
 \ir ../supabase/migrations/20261019050841_atomic_division_capacity_moves.sql
 \ir ../supabase/migrations/20261019054258_event_late_payment_setting.sql
+\ir ../supabase/migrations/20261027072037_registration_withdrawn_partner_reentry.sql
 CREATE FUNCTION pg_temp.expect(condition boolean, label text) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN IF condition IS DISTINCT FROM true THEN RAISE EXCEPTION 'FAIL: %', label; END IF; END $$;
 CREATE FUNCTION pg_temp.must_fail(query text, message text DEFAULT 'is full') RETURNS void LANGUAGE plpgsql AS $$
@@ -239,5 +241,51 @@ SET LOCAL ROLE service_role;
 SELECT pg_temp.must_fail($q$INSERT INTO public.event_registrations(event_id,division,email) VALUES(106,'Closed division','service-late')$q$,'Registration has closed');
 RESET ROLE;
 SELECT pg_temp.expect(NOT has_function_privilege('authenticated','private.assert_registration_deadline(bigint,uuid,text,text)','execute'),'deadline helper remains private');
+-- Reproduce the Joburg Open failure: the new registrant cannot see or update a
+-- partner's withdrawn solo entry. Only the replacement insert can archive it.
+DROP POLICY fixture_entries ON public.event_registrations;
+CREATE POLICY own_entries_read ON public.event_registrations FOR SELECT TO authenticated
+    USING (auth.email() IN (email, partner_email, registered_by));
+CREATE POLICY own_entries_update ON public.event_registrations FOR UPDATE TO authenticated
+    USING (auth.email() IN (email, partner_email, registered_by))
+    WITH CHECK (auth.email() IN (email, partner_email, registered_by));
+CREATE POLICY own_entries_insert ON public.event_registrations FOR INSERT TO authenticated
+    WITH CHECK (registered_by = auth.email() AND auth.email() IN (email, partner_email));
+INSERT INTO public.calendar(id) VALUES(107),(108);
+INSERT INTO public.tournament_divisions(id,event_id,name,entry_limit) VALUES
+('00000000-0000-0000-0000-000000000070',107,'Reentry',1),
+('00000000-0000-0000-0000-000000000071',107,'Full',1),
+('00000000-0000-0000-0000-000000000072',107,'Closed',1),
+('00000000-0000-0000-0000-000000000073',108,'Reentry',1);
+INSERT INTO public.event_registrations(id,event_id,division,division_id,email,registered_by,status,payment_status,pay_token,withdrawn_at,refund_amount) VALUES
+('00000000-0000-0000-0000-000000000080',107,'Reentry','00000000-0000-0000-0000-000000000070','partner@example.com','partner@example.com','withdrawn','paid','00000000-0000-0000-0000-000000000081',now(),600),
+('00000000-0000-0000-0000-000000000082',107,'Full','00000000-0000-0000-0000-000000000071','partner@example.com','partner@example.com','withdrawn','pending',DEFAULT,now(),NULL),
+('00000000-0000-0000-0000-000000000083',107,'Closed','00000000-0000-0000-0000-000000000072','partner@example.com','partner@example.com','withdrawn','pending',DEFAULT,now(),NULL),
+('00000000-0000-0000-0000-000000000084',108,'Reentry','00000000-0000-0000-0000-000000000073','partner@example.com','partner@example.com','withdrawn','pending',DEFAULT,now(),NULL);
+INSERT INTO public.event_registrations(event_id,division,email) VALUES(107,'Full','unrelated@example.com');
+UPDATE public.tournament_divisions SET entries_close_at=now()-interval '1 hour' WHERE name='Closed';
+SELECT pg_temp.as_registration_user('registrant@example.com');
+SET LOCAL ROLE authenticated;
+SELECT pg_temp.expect((SELECT count(*) FROM public.event_registrations WHERE email='partner@example.com')=0,'old partner rows stay private');
+SELECT public.reserve_event_registration_places('[{"event_id":107,"division":"Reentry","email":"registrant@example.com","partner_email":"partner@example.com","registered_by":"registrant@example.com"},{"event_id":107,"division":"Reentry","email":"partner@example.com","partner_email":"registrant@example.com","registered_by":"registrant@example.com"}]');
+SELECT pg_temp.expect((SELECT count(*) FROM public.event_registrations WHERE event_id=107 AND division='Reentry' AND payment_status='pending')=2,'withdrawn hidden partner can reenter with pending reciprocal entries');
+SELECT pg_temp.expect((SELECT count(*) FROM public.event_registrations WHERE status='withdrawn')=0,'archiving grants no access to historical entries');
+-- The payment INSERT reserves the same entries again; this must be idempotent.
+INSERT INTO public.payments(status,payment_type,metadata) VALUES('processing','event_entry_fee','{"source":"manual_event","registration_rows":[{"event_id":107,"division":"Reentry","email":"registrant@example.com","partner_email":"partner@example.com","registered_by":"registrant@example.com"},{"event_id":107,"division":"Reentry","email":"partner@example.com","partner_email":"registrant@example.com","registered_by":"registrant@example.com"}]}');
+SELECT pg_temp.expect((SELECT count(*) FROM public.event_registrations WHERE event_id=107)=2,'checkout retry reuses active pair');
+SELECT pg_temp.must_fail($q$SELECT public.reserve_event_registration_places('[{"event_id":107,"division":"Full","email":"partner@example.com","partner_email":"registrant@example.com","registered_by":"registrant@example.com"}]')$q$);
+SELECT pg_temp.must_fail($q$SELECT public.reserve_event_registration_places('[{"event_id":107,"division":"Closed","email":"partner@example.com","partner_email":"registrant@example.com","registered_by":"registrant@example.com"}]')$q$,'Registration has closed');
+SELECT pg_temp.must_fail($q$INSERT INTO public.event_registrations(event_id,division,email,partner_email,registered_by) VALUES(108,'Reentry','partner@example.com','registrant@example.com','another@example.com')$q$,'row-level security');
+-- An active entry owned by someone else must still reject a duplicate.
+SELECT pg_temp.must_fail($q$INSERT INTO public.event_registrations(event_id,division,email,partner_email,registered_by) VALUES(107,'Full','unrelated@example.com','registrant@example.com','registrant@example.com')$q$,'duplicate key');
+RESET ROLE;
+SELECT pg_temp.expect((SELECT division='__archived__/'||id::text AND division_id IS NULL AND status='withdrawn' AND payment_status='paid'
+    AND pay_token='00000000-0000-0000-0000-000000000081' AND refund_amount=600 AND withdrawn_at IS NOT NULL AND registered_by='partner@example.com'
+    FROM public.event_registrations WHERE id='00000000-0000-0000-0000-000000000080'),'historical payment, refund, token and owner are preserved');
+SELECT pg_temp.expect((SELECT count(*) FROM public.event_registrations WHERE id IN ('00000000-0000-0000-0000-000000000082','00000000-0000-0000-0000-000000000083','00000000-0000-0000-0000-000000000084') AND division NOT LIKE '__archived__/%')=3,'capacity, deadline and RLS failures roll archival back');
+SELECT pg_temp.expect((SELECT count(*) FROM public.event_registrations WHERE email='unrelated@example.com' AND division='Full' AND status='registered')=1,'active registrations stay untouched');
+SELECT pg_temp.expect(NOT has_function_privilege('authenticated','private.archive_withdrawn_registration_conflict()','execute')
+    AND NOT has_function_privilege('anon','private.archive_withdrawn_registration_conflict()','execute')
+    AND NOT has_function_privilege('service_role','private.archive_withdrawn_registration_conflict()','execute'),'archival helper is trigger-only');
 ROLLBACK;
 \echo 'Division capacity checks passed'

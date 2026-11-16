@@ -8,6 +8,9 @@ const projectDirectory = path.dirname(fileURLToPath(import.meta.url))
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // Shared API helpers also serve the native app. Web builds must not load
+  // Expo's tsconfig or require mobile dependencies to transpile those files.
+  esbuild: { tsconfigRaw: '{}' },
   // Expose only browser-safe settings; local maintenance scripts also use server credentials.
   envPrefix: [
     'VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'VITE_SUPABASE_KEY',

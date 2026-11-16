@@ -88,34 +88,36 @@ const getPartnerAvailability = (regs: any[], divisionId: string, player: any, di
         (r) => r.division_id === divisionId && r.status !== 'withdrawn',
     );
 
+    const viewerEmail = normEmail(currentUserEmail);
+    // One-way partner links reserve the pair even before both entries exist.
+    // Booking attribution (registered_by) alone does not reserve a partner.
+    const otherInviter = divRegs.find(
+        (r) => normEmail(r.partner_email) === email && normEmail(r.email) !== viewerEmail,
+    );
+    if (otherInviter) {
+        return {
+            ok: false,
+            message: `${name} is already partnered with ${otherInviter.full_name || 'another player'} for ${divLabel}`,
+        };
+    }
+
+    const viewerConflict = viewerEmail && divRegs.find((r) =>
+        (normEmail(r.email) === viewerEmail && normEmail(r.partner_email) && normEmail(r.partner_email) !== email)
+        || (normEmail(r.partner_email) === viewerEmail && normEmail(r.email) !== email),
+    );
+    if (viewerConflict) {
+        const partnerName = normEmail(viewerConflict.email) === viewerEmail
+            ? resolveRegPartnerName(divRegs, viewerConflict.partner_email, viewerConflict.partner_name)
+            : viewerConflict.full_name || 'another player';
+        return { ok: false, message: `You are already partnered with ${partnerName} for ${divLabel}` };
+    }
+
     const primary = divRegs.find((r) => normEmail(r.email) === email);
     if (primary) {
-        const registeredBy = normEmail(primary.registered_by);
-        if (registeredBy && registeredBy !== email) {
-            const inviter = divRegs.find((r) => normEmail(r.email) === registeredBy);
-            // `registered_by` only records who *created* this entry — it persists
-            // after a division switch or withdrawal that cleared the actual pairing.
-            // Only treat this as taken when the inviter STILL lists this player as
-            // their partner; otherwise it's a stale link and the player is free.
-            const inviterStillPartners = inviter && normEmail(inviter.partner_email) === email;
-            if (inviterStillPartners) {
-                return {
-                    ok: false,
-                    message: `${name} is already partnered with ${inviter?.full_name || 'another player'} for ${divLabel}`,
-                };
-            }
-        }
         if (primary.partner_name?.trim() || primary.partner_email?.trim()) {
             const partnerEm = normEmail(primary.partner_email);
-            // Only treat this as "still available" when the searching user IS the
-            // confirmed mutual partner re-selecting themselves — not any third
-            // party, who must never be allowed to join an already-complete pair.
-            const mutualLink = partnerEm
-                && partnerEm === normEmail(currentUserEmail)
-                && divRegs.some(
-                    (r) => normEmail(r.email) === partnerEm && normEmail(r.partner_email) === email,
-                );
-            if (mutualLink) {
+            // The named partner can join without already having a reciprocal row.
+            if (partnerEm && partnerEm === viewerEmail) {
                 return { ok: true };
             }
             return {
@@ -124,21 +126,6 @@ const getPartnerAvailability = (regs: any[], divisionId: string, player: any, di
             };
         }
         return { ok: true, linkSoloRegId: primary.id, isSoloLink: true };
-    }
-
-    const asPartnerOn = divRegs.find((r) => normEmail(r.partner_email) === email);
-    if (asPartnerOn) {
-        const inviterEm = normEmail(asPartnerOn.email);
-        const mutualLink = inviterEm && divRegs.some(
-            (r) => normEmail(r.email) === email && normEmail(r.partner_email) === inviterEm,
-        );
-        if (mutualLink) {
-            return { ok: true };
-        }
-        return {
-            ok: false,
-            message: `${name} is already partnered with ${asPartnerOn.full_name || 'another player'} for ${divLabel}`,
-        };
     }
 
     return { ok: true };

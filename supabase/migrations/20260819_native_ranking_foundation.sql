@@ -135,3 +135,16 @@ DROP TRIGGER IF EXISTS trg_protect_division_ranking_tags ON public.tournament_di
 CREATE TRIGGER trg_protect_division_ranking_tags
 BEFORE INSERT OR UPDATE ON public.tournament_divisions
 FOR EACH ROW EXECUTE FUNCTION public.protect_division_ranking_tags();
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+REVOKE ALL ON TABLE public.ranking_tiers FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.ranking_tiers TO anon;
+GRANT SELECT ON TABLE public.ranking_tiers TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.ranking_tiers TO service_role;
+REVOKE ALL ON TABLE public.ranking_points_table FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.ranking_points_table TO anon;
+GRANT SELECT ON TABLE public.ranking_points_table TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.ranking_points_table TO service_role;
+REVOKE ALL ON TABLE public.player_ranking_points FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT ON TABLE public.player_ranking_points TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.player_ranking_points TO service_role;

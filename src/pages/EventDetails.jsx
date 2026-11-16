@@ -1,4 +1,5 @@
 import LicensePaymentModal from '../components/LicensePaymentModal';
+import { legacyEventCheckout } from '../utils/legacyEventCheckout';
 import { eventLicense } from '../utils/licenses';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useParams, useLocation, Link } from 'react-router-dom';
@@ -2996,54 +2997,8 @@ const EventDetails = () => {
             }
         }
 
-        // 2. Sync / Insert to tournament_participants
-        const insertParticipant = async (pEmail, pName, targetDivs, overrideIsPaid = isPaidStatus) => {
-            let pId = null;
-            let finalEmail = pEmail;
+        // Persisted entries now maintain the participant roster on the server.
 
-            if (pEmail) {
-                const { data: pRows } = await supabase.rpc('find_registration_partner', { p_email: pEmail });
-                const pData = pRows?.[0];
-                if (pData) {
-                    pId = pData.id;
-                    finalEmail = pData.email;
-                }
-            } else if (pName) {
-                const { data: pRows } = await supabase.rpc('find_registration_partner', { p_name: pName });
-                const pData = pRows?.[0];
-                if (pData) {
-                    pId = pData.id;
-                    finalEmail = pData.email;
-                }
-            }
-
-            for (const div of targetDivs) {
-                await supabase.rpc('upsert_tournament_participant', {
-                    p_event_id: event.id,
-                    p_full_name: pName,
-                    p_email: finalEmail || null,
-                    p_class_name: div,
-                    p_profile_id: pId,
-                    p_is_paid: overrideIsPaid,
-                });
-            }
-        };
-
-        await insertParticipant(formData.email, formData.full_name, selectedDivisions);
-
-        for (const div of selectedDivisions) {
-            const part = divisionPartners[div];
-            if (part?.hasPartner) {
-                // Partner is only marked as paid if the main user successfully paid AND explicitly chose to pay for the partner
-                const partnerPaidStatus = isPaidStatus && part.payForPartner === true;
-
-                if (part.partnerProfile) {
-                    await insertParticipant(part.partnerProfile.email, part.partnerProfile.name, [div], partnerPaidStatus);
-                } else if (part.partnerName) {
-                    await insertParticipant(null, part.partnerName, [div], partnerPaidStatus);
-                }
-            }
-        }
     };
 
     const handleRegisterOnly = async () => {
@@ -3067,6 +3022,9 @@ const EventDetails = () => {
         toast.info("Recording your registration...");
 
         try {
+            const { data: { user: payer } } = await supabase.auth.getUser();
+            const payerEmail = payer?.email?.trim().toLowerCase();
+            if (!payerEmail || payerEmail !== formData.email.trim().toLowerCase()) throw new Error('Use your signed-in player profile to register.');
             const registrationsToUpsert = [];
             selectedDivisions.forEach(division => {
                 const partnerState = divisionPartners[division] || {};
@@ -3074,9 +3032,11 @@ const EventDetails = () => {
                 registrationsToUpsert.push({
                     event_id: event.id,
                     full_name: formData.full_name,
-                    email: formData.email,
+                    email: payerEmail,
+                    registered_by: payerEmail,
                     phone: formData.phone,
-                    partner_name: partnerState.partnerName || null,
+                    partner_name: partnerState.partnerProfile?.name || partnerState.partnerName || null,
+                    partner_email: partnerState.partnerProfile?.email || null,
                     division: division,
                     payment_status: 'pending',
                     is_test: isTestMode
@@ -3087,6 +3047,8 @@ const EventDetails = () => {
                         event_id: event.id,
                         full_name: partnerState.partnerProfile.name,
                         email: partnerState.partnerProfile.email,
+                        registered_by: payerEmail,
+                        partner_email: payerEmail,
                         partner_name: formData.full_name,
                         division: division,
                         payment_status: 'pending',
@@ -3163,30 +3125,33 @@ const EventDetails = () => {
             setLicensePurchase({ playerId: unlicensedPartner.partnerProfile.id, type: unlicensedPartner.partnerLicenseChoice || 'temporary' });
             return;
         }
+        const { data: { user: payer } } = await supabase.auth.getUser();
+        if (!payer?.email || payer.email.toLowerCase() !== formData.email.trim().toLowerCase()) {
+            toast.error('Use your signed-in player profile to register.');return;
+        }
+        const reference = paymentReference || `REGEV-${event.id}-${Date.now()}`;
+        let pending;
+        try {
+            pending = legacyEventCheckout({ event, profile: playerProfileData, email: payer.email,
+                name: formData.full_name, phone: formData.phone, divisions: selectedDivisions,
+                partners: divisionPartners, feeFor: division => entryCharge(getEntryFeeForCategory(division)),
+                reference, isTest: isTestMode, commerce });
+            const { error } = await supabase.from('payments').insert(pending);
+            if (error) throw error;
+        } catch {
+            toast.error('Your checkout could not be saved. Refresh this page and try again.');return;
+        }
         const paystackPop = new PaystackPop();
 
         await paystackPop.checkout({
             key: PAYSTACK_PUBLIC_KEY,
-            reference: paymentReference || `REGEV-${event?.id}-${Date.now()}`,
+            reference,
             email: formData.email,
             firstname: firstname || '',
             lastname: lastname || '',
-            amount: toPaystackAmount(calculateTotalAmount()),
+            amount: toPaystackAmount(pending.amount),
             currency: 'ZAR',
-            metadata: {
-                event_id: event?.id,
-                event_name: event?.event_name,
-                full_name: formData.full_name,
-                partner_name: formData.partner_name,
-                partner_id: partnerProfile?.id,
-                division: selectedDivisions.length > 0 ? selectedDivisions.join(', ') : formData.division,
-                is_test: isTestMode,
-                includes_license: playerProfileData && !playerProfileData.paid_registration && licenseSalesOpen,
-                license_type: playerProfileData && !playerProfileData.paid_registration && licenseSalesOpen ? licenseChoice : null,
-                paying_for_partner: hasPartner && payForPartner,
-                partner_needs_license: hasPartner && payForPartner && partnerProfile && !partnerProfile.paid_registration && licenseSalesOpen,
-                partner_license_type: hasPartner && payForPartner && partnerProfile && !partnerProfile.paid_registration && licenseSalesOpen ? partnerLicenseChoice : null
-            },
+            metadata: pending.metadata,
             onSuccess: (ref) => handlePaymentSuccess(ref),
             onCancel: () => {
                 console.log("Paystack payment cancelled.");
@@ -3306,164 +3271,19 @@ const EventDetails = () => {
         }
     };
     const handlePaymentSuccess = async (reference) => {
-        console.log("SUCCESS CALLBACK TRIGGERED. Reference:", reference);
-
-        setRegStep(2);
-        setIsPaid(true);
-        setIsRegistered(true);
-        toast.success("Payment Received! Recording your registration...");
-
+        const paidRef = typeof reference === 'string' ? reference : reference?.reference || reference?.trxref;
+        if (!paidRef) { toast.error('Payment verification needs your transaction reference.');return; }
+        setIsCheckingReg(true);
         try {
-            const paystackRef = typeof reference === 'string' ? reference : (reference?.reference || reference?.trxref || 'Unknown');
-
-            const registrationsToUpsert = [];
-            selectedDivisions.forEach(division => {
-                const partnerState = divisionPartners[division] || {};
-
-                registrationsToUpsert.push({
-                    event_id: event.id,
-                    full_name: formData.full_name,
-                    email: formData.email,
-                    phone: formData.phone,
-                    partner_name: partnerState.partnerName || null,
-                    division: division,
-                    payment_status: 'paid',
-                    is_test: isTestMode
-                });
-
-                if (partnerState.payForPartner && partnerState.partnerProfile) {
-                    registrationsToUpsert.push({
-                        event_id: event.id,
-                        full_name: partnerState.partnerProfile.name,
-                        email: partnerState.partnerProfile.email,
-                        partner_name: formData.full_name,
-                        division: division,
-                        payment_status: 'paid',
-                        is_test: isTestMode
-                    });
-                }
-            });
-
-            const uniqueRegistrations = Array.from(new Map(registrationsToUpsert.map(r => [`${r.email.toLowerCase()}_${r.division}`, r])).values());
-
-            // Clear previous entries to avoid constraint clashes
-            for (const reg of uniqueRegistrations) {
-                await supabase.from('event_registrations')
-                    .delete()
-                    .eq('event_id', reg.event_id)
-                    .ilike('email', reg.email)
-                    .eq('division', reg.division);
+            const { data, error } = await supabase.functions.invoke('confirm-manual-payment', { body: { reference: paidRef } });
+            if (error || data?.error || (!data?.processed && !data?.alreadyProcessed)) {
+                toast.info('Payment is still being verified. If you have paid, check your entry again shortly.');return;
             }
-
-            const { error: regError } = await supabase.from('event_registrations').insert(uniqueRegistrations);
-
-            if (regError) {
-                console.error("Reg Error:", regError);
-            }
-
-            const { data: pRows } = await supabase.rpc('find_registration_partner', { p_email: formData.email });
-            const playerId = pRows?.[0]?.id || null;
-
-            const paymentsToInsert = [];
-            selectedDivisions.forEach(division => {
-                const fee = entryCharge(getEntryFeeForCategory(division));
-                const partnerState = divisionPartners[division] || {};
-                const partnerEntryFee = (partnerState.payForPartner && partnerState.partnerProfile) ? fee : 0;
-
-                paymentsToInsert.push({
-                    player_id: playerId,
-                    event_id: event.id,
-                    amount: fee + partnerEntryFee,
-                    status: 'success',
-                    payment_type: 'event_entry_fee',
-                    payment_method: 'paystack',
-                    reference: `REG-${paystackRef}-${division.replaceAll(' ', '_')}`,
-                    is_test: isTestMode,
-                    metadata: {
-                        paystack_ref: paystackRef,
-                        division: division,
-                        line_items: [
-                            { type: 'entry_fee', amount: fee, player: formData.full_name },
-                            ...(partnerState.payForPartner ? [{ type: 'entry_fee', amount: fee, player: partnerState.partnerProfile.name }] : [])
-                        ]
-                    }
-                });
-
-                if (partnerState.payForPartner && partnerState.partnerProfile) {
-                    paymentsToInsert.push({
-                        player_id: partnerState.partnerProfile.id,
-                        event_id: event.id,
-                        amount: 0,
-                        status: 'success',
-                        payment_type: 'event_entry_fee',
-                        payment_method: 'paystack',
-                        reference: `REG-PARTNER-${paystackRef}-${division.replaceAll(' ', '_')}`,
-                        is_test: isTestMode,
-                        metadata: {
-                            paystack_ref: paystackRef,
-                            division: division,
-                            paid_by_name: formData.full_name,
-                            paid_by_id: playerId,
-                            line_items: [{ type: 'entry_fee', amount: 0, player: partnerState.partnerProfile.name, paid_by: formData.full_name }]
-                        }
-                    });
-                }
-            });
-
-            if (playerProfileData && !playerProfileData.paid_registration && licenseSalesOpen) {
-                const isFull = licenseChoice === 'full';
-                const licenseAmount = licenseCharge(licenseChoice);
-                paymentsToInsert.push({
-                    player_id: playerId,
-                    event_id: event.id,
-                    amount: licenseAmount,
-                    status: 'success',
-                    payment_type: isFull ? 'full_license' : 'temp_license',
-                    payment_method: 'paystack',
-                    reference: `License - ${formData.full_name}`,
-                    is_test: isTestMode,
-                    metadata: { license_year: commerce.license_year, paystack_ref: paystackRef, line_items: [{ type: isFull ? 'full_license' : 'temp_license', amount: licenseAmount, player: formData.full_name }] }
-                });
-            }
-
-            selectedDivisions.forEach(division => {
-                const partnerState = divisionPartners[division];
-                if (partnerState?.payForPartner && partnerState?.partnerProfile && !partnerState.partnerProfile.paid_registration && partnerState.payForPartnerLicense && licenseSalesOpen) {
-                    const isFull = partnerState.partnerLicenseChoice === 'full';
-                    const licenseAmount = licenseCharge(partnerState.partnerLicenseChoice);
-                    const existingLicensePayment = paymentsToInsert.find(p => p.player_id === partnerState.partnerProfile.id && (p.payment_type === 'full_license' || p.payment_type === 'temp_license'));
-
-                    if (!existingLicensePayment) {
-                        paymentsToInsert.push({
-                            player_id: partnerState.partnerProfile.id,
-                            event_id: event.id,
-                            amount: licenseAmount,
-                            status: 'success',
-                            payment_type: isFull ? 'full_license' : 'temp_license',
-                            payment_method: 'paystack',
-                            reference: `License - ${partnerState.partnerProfile.name} (Paid by ${formData.full_name})`,
-                            is_test: isTestMode,
-                            metadata: { license_year: commerce.license_year, paystack_ref: paystackRef, paid_by_name: formData.full_name, paid_by_id: playerId, line_items: [{ type: isFull ? 'full_license' : 'temp_license', amount: licenseAmount, player: partnerState.partnerProfile.name, paid_by: formData.full_name }] }
-                        });
-                    }
-                }
-            });
-
-            const { error: payError } = await supabase.from('payments').insert(paymentsToInsert);
-            if (payError) {
-                console.error("Payment Record Error:", payError);
-            }
-
-            // Apply licenses to players if paid
-            // Verified server payment confirmation finalizes each player/event license.
-
-            // Sync emails and participants
-            await finalizeRegistrationEmailsAndSync(true);
-
-        } catch (err) {
-            console.error("Critical Save Error:", err);
-            toast.error(`Error saving registration: ${err.message}`);
-        }
+            setRegStep(2);setIsPaid(true);setIsRegistered(true);refreshParticipants();
+            toast.success('Payment verified and registration saved.');
+        } catch {
+            toast.info('Payment is still being verified. Please check your entry shortly before trying another payment.');
+        } finally { setIsCheckingReg(false); }
     };
 
     // handlePayNow removed from here since it's now at the top

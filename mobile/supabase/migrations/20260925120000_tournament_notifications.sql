@@ -489,4 +489,15 @@ BEGIN
 END $$;
 CREATE TRIGGER notify_followed_event_cancelled AFTER UPDATE ON public.calendar FOR EACH ROW EXECUTE FUNCTION public.notify_followed_event_cancelled();
 REVOKE ALL ON FUNCTION public.notify_followed_event_cancelled() FROM PUBLIC;
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+REVOKE ALL ON TABLE public.event_notification_follows FROM PUBLIC, anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.event_notification_follows TO service_role;
+REVOKE ALL ON TABLE public.notification_match_snapshots FROM anon;
+REVOKE ALL ON TABLE public.notification_match_snapshots FROM authenticated;
+REVOKE ALL ON TABLE public.notification_event_snapshots FROM anon;
+REVOKE ALL ON TABLE public.notification_event_snapshots FROM authenticated;
+REVOKE ALL ON TABLE public.tournament_notification_jobs FROM anon;
+REVOKE ALL ON TABLE public.tournament_notification_jobs FROM authenticated;
+
 COMMIT;

@@ -65,3 +65,6 @@ GRANT USAGE ON SCHEMA private TO authenticated;
 GRANT EXECUTE ON FUNCTION private.set_event_management_completed(bigint, boolean, timestamptz),
     public.set_event_management_completed(bigint, boolean, timestamptz) TO authenticated;
 NOTIFY pgrst, 'reload schema';
+
+-- Data API access is explicit for fresh tables; row policies remain in force.
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.event_management_completion TO service_role;

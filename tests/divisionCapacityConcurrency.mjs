@@ -15,7 +15,8 @@ const schema = readFileSync(new URL('./divisionCapacity.sql', import.meta.url), 
     .replace('\\ir ../supabase/migrations/20261019050830_division_team_capacity.sql', () => readFileSync(new URL('../supabase/migrations/20261019050830_division_team_capacity.sql', import.meta.url), 'utf8'))
     .replace('\\ir ../supabase/migrations/20261019050836_registration_deadline_payment_access.sql', () => readFileSync(new URL('../supabase/migrations/20261019050836_registration_deadline_payment_access.sql', import.meta.url), 'utf8'))
     .replace('\\ir ../supabase/migrations/20261019050841_atomic_division_capacity_moves.sql', () => readFileSync(new URL('../supabase/migrations/20261019050841_atomic_division_capacity_moves.sql', import.meta.url), 'utf8'))
-    .replace('\\ir ../supabase/migrations/20261019054258_event_late_payment_setting.sql', () => readFileSync(new URL('../supabase/migrations/20261019054258_event_late_payment_setting.sql', import.meta.url), 'utf8'));
+    .replace('\\ir ../supabase/migrations/20261019054258_event_late_payment_setting.sql', () => readFileSync(new URL('../supabase/migrations/20261019054258_event_late_payment_setting.sql', import.meta.url), 'utf8'))
+    .replace('\\ir ../supabase/migrations/20261027072037_registration_withdrawn_partner_reentry.sql', () => readFileSync(new URL('../supabase/migrations/20261027072037_registration_withdrawn_partner_reentry.sql', import.meta.url), 'utf8'));
 const fixture = (email) => `INSERT INTO public.event_registrations(event_id,division_id,division,email,partner_email) VALUES
     (9001,'00000000-0000-0000-0000-000000009001','Race','${email}-a','${email}-b'),
     (9001,'00000000-0000-0000-0000-000000009001','Race','${email}-b','${email}-a');`;

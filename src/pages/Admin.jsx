@@ -2,21 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { authErrorMessage } from '../utils/authErrors';
 import AdminSidebar from '../components/admin/AdminSidebar';
-import DashboardHome from '../components/admin/DashboardHome';
-import PlayerManager from '../components/admin/PlayerManager';
-import LicenseManager from '../components/admin/LicenseManager';
-import BlogManager from '../components/admin/BlogManager';
-import CalendarManager from '../components/admin/CalendarManager';
-import GalleryManager from '../components/admin/GalleryManager';
-import FinanceManager from '../components/admin/FinanceManager';
-import CoachManager from '../components/admin/CoachManager';
-import SettingsManager from '../components/admin/SettingsManager';
-import AdminManager from '../components/admin/AdminManager';
-import EventManagement from '../components/admin/EventManagement';
-import EmailBroadcastManager from '../components/admin/EmailBroadcastManager';
-import OrganisationManager from '../components/admin/OrganisationManager';
-import FederationManager from '../components/admin/FederationManager';
-import ClubManager from '../components/admin/ClubManager';
+const DashboardHome = React.lazy(() => import('../components/admin/DashboardHome'));
+const PlayerManager = React.lazy(() => import('../components/admin/PlayerManager'));
+const LicenseManager = React.lazy(() => import('../components/admin/LicenseManager'));
+const BlogManager = React.lazy(() => import('../components/admin/BlogManager'));
+const CalendarManager = React.lazy(() => import('../components/admin/CalendarManager'));
+const GalleryManager = React.lazy(() => import('../components/admin/GalleryManager'));
+const FinanceManager = React.lazy(() => import('../components/admin/FinanceManager'));
+const CoachManager = React.lazy(() => import('../components/admin/CoachManager'));
+const SettingsManager = React.lazy(() => import('../components/admin/SettingsManager'));
+const AdminManager = React.lazy(() => import('../components/admin/AdminManager'));
+const EventManagement = React.lazy(() => import('../components/admin/EventManagement'));
+const EmailBroadcastManager = React.lazy(() => import('../components/admin/EmailBroadcastManager'));
+const OrganisationManager = React.lazy(() => import('../components/admin/OrganisationManager'));
+const FederationManager = React.lazy(() => import('../components/admin/FederationManager'));
+const ClubManager = React.lazy(() => import('../components/admin/ClubManager'));
 import { useAdminPermissions } from '../hooks/useAdminPermissions';
 import { useAdminFeedNotifications } from '../hooks/useAdminFeedNotifications';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -495,7 +495,7 @@ const Admin = () => {
                                     <p className="text-gray-400">You don't have permission to view this module.</p>
                                 </div>
                             ) : (
-                                <>
+                                <React.Suspense fallback={<p role="status" className="py-8 text-gray-400">Loading module…</p>}>
                                     {activeTab === 'dashboard' && <DashboardHome onTabChange={setActiveTab} />}
                                     {activeTab === 'federations' && (
                                         <FederationManager permissions={permissions} />
@@ -513,7 +513,7 @@ const Admin = () => {
                                     {activeTab === 'players' && <PlayerManager canManageLicenses={hasPermission('licenses')} />}
                                     {activeTab === 'blog' && <BlogManager />}
                                     {activeTab === 'calendar' && <CalendarManager />}
-                                    {activeTab === 'event-mgmt' && <EventManagement allowedEvents={permissions?.module_permissions?.['event-mgmt']?.allowedEvents || []} />}
+                                    {activeTab === 'event-mgmt' && <EventManagement allowedEvents={permissions?.module_permissions?.['event-mgmt']?.allowedEvents || []} permissions={permissions} userEmail={targetEmail} />}
                                     {activeTab === 'gallery' && (
                                         <GalleryManager permissions={permissions} />
                                     )}
@@ -531,7 +531,7 @@ const Admin = () => {
                                     )}
                                     {activeTab === 'licenses' && hasPermission('licenses') && <LicenseManager />}
                                     {activeTab === 'settings' && <SettingsManager />}
-                                </>
+                                </React.Suspense>
                             )}
                         </motion.div>
                     </AnimatePresence>

@@ -17,7 +17,8 @@ import { classifyPaystackTransaction, paystackMetadata } from '../../utils/payst
 
 const FinanceManager = () => {
     const { config: commerce } = useCommerceConfig();
-    const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'users', 'events', 'transactions', 'summary'
+    const [activeTab, setActiveTab] = useState('dashboard');
+    const [financeEventId, setFinanceEventId] = useState(null); // 'dashboard', 'users', 'events', 'transactions', 'summary'
     const [paystackEnabled, setPaystackEnabled] = useState(true);
     const [transactions, setTransactions] = useState([]);
     const [stats, setStats] = useState({ totalRevenue: 'R 0.00', successfulPayouts: 'R 0.00' });
@@ -861,11 +862,11 @@ const FinanceManager = () => {
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
                 >
-                    {activeTab === 'dashboard' && allowedTabs.includes('dashboard') && <FinancialDashboard allowedEvents={activeAllowedEvents} />}
+                    {activeTab === 'dashboard' && allowedTabs.includes('dashboard') && <FinancialDashboard allowedEvents={activeAllowedEvents} onSelectEvent={id => { setFinanceEventId(id); setActiveTab('events'); }} />}
                     
                     {activeTab === 'summary' && allowedTabs.includes('summary') && <FinancialSummaryReport allowedEvents={activeAllowedEvents} />}
 
-                    {activeTab === 'events' && (allowedTabs.includes('events') || activeAllowedEvents.length > 0) && <EventFinance allowedEvents={activeAllowedEvents} />}
+                    {activeTab === 'events' && (allowedTabs.includes('events') || activeAllowedEvents.length > 0) && <EventFinance allowedEvents={activeAllowedEvents} initialEventId={financeEventId} />}
 
                     {activeTab === 'users' && allowedTabs.includes('users') && <UserPayments allowedEvents={activeAllowedEvents} />}
                     

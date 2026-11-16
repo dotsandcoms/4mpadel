@@ -24,13 +24,6 @@ const API_BASE = 'https://api.rankedin.com/v1';
 /** RankedIn EventTypes.Tournament */
 const EVENT_TYPE_TOURNAMENT = 4;
 
-const SUPER_ADMINS = [
-  'bradein@dotsandcoms.co.za',
-  'brad@dotsandcoms.co.za',
-  'admin@4mpadel.co.za',
-  'markstillerman@gmail.com',
-];
-
 const extractRankedinId = (value: unknown): string | null => {
   if (value == null) return null;
   const raw = String(value).trim();
@@ -1031,33 +1024,29 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
     if (authError || !user) throw new Error('Unauthorized');
 
+    const body = await req.json().catch(() => ({}));
+    const eventId = Number(body.eventId);
+    if (!Number.isSafeInteger(eventId) || eventId <= 0) throw new Error('A valid eventId is required');
+
+    // Use the same event scope as registration/finance management, with the
+    // caller's JWT so organisers, co-admins and assigned managers are recognised.
+    const { data: canManageEvent, error: permissionError } = await supabaseUser
+      .rpc('can_manage_event', { p_event_id: eventId });
+    if (permissionError) {
+      log('error', 'Event permission check failed', {
+        eventId,
+        userId: user.id,
+        error: permissionError.message,
+      });
+      return json({ ok: false, error: 'Could not verify event management permissions' }, 500);
+    }
+    if (canManageEvent !== true) throw new Error('Forbidden: Insufficient privileges');
+
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     );
 
-    let isAuthorized = SUPER_ADMINS.some(
-      (email) => email.toLowerCase() === user.email?.toLowerCase(),
-    );
-    if (!isAuthorized) {
-      const { data: adminData } = await supabaseAdmin
-        .from('admin_sidebar_permissions')
-        .select('role, allowed_tabs')
-        .ilike('email', user.email ?? '')
-        .maybeSingle();
-      if (
-        adminData?.role === 'super_admin'
-        || adminData?.allowed_tabs?.includes('calendar')
-        || adminData?.allowed_tabs?.includes('event-management')
-      ) {
-        isAuthorized = true;
-      }
-    }
-    if (!isAuthorized) throw new Error('Forbidden: Insufficient privileges');
-
-    const body = await req.json().catch(() => ({}));
-    const eventId = Number(body.eventId);
-    if (!eventId) throw new Error('eventId is required');
     const pushEntries = body.pushEntries !== false;
     const pushDetails = body.pushDetails !== false;
     const pushSeeds = body.pushSeeds === true || (body.pushSeeds !== false && (pushEntries || pushDetails));
