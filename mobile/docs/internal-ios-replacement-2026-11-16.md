@@ -1,5 +1,9 @@
 # Complete mobile replacement — 16 November 2026
 
+**Version 1.0.2 / internal iPhone build 47 is finished and verified.**
+
+Install on Brad or Mark’s registered test iPhone: https://expo.dev/accounts/fourm-padel/projects/4m-padel/builds/c32b6be4-c58b-487c-a9b8-ce285a8030af
+
 This release replaces build 46, whose committed-source snapshot omitted mobile changes still present in the shared working copy. The omission was in release preparation, not lost source. All morning mobile changes must be committed together on `brad/mobile-messaging` before preparing the replacement. The website's `main` release remains separate.
 
 ## Included mobile changes
@@ -29,4 +33,15 @@ The three previously uncommitted mobile migrations for Following rankings, notif
 
 The full app TypeScript and test suite, plus isolated event-points, Following-ranking, messaging/notification-retention and Data API grant tests passed. Follow layout regressions cover initial profile absence and all follow states. In the running iPhone preview, SAPA Men/Women and FIP controls align consistently; a real public event generated a PDF and its Activity action opened the published points sheet (including 2,600 winner points per player).
 
-Build and installer details are added after the replacement finishes. Nothing is submitted to Apple.
+## Finished build and installer
+
+- Source: `1078422372a10846dd5a6fba504463829a4576b2`, pushed on `brad/mobile-messaging`.
+- All 85 mobile paths changed since the morning baseline (`92ef35f7`) are included. The 756-file / 10,918,734-byte upload archive matches the committed source; only the environment example is excluded by the existing EAS ignore rule. No later app code edits were pending at verification.
+- TypeScript and **801 / 801 app tests** passed. Isolated event-points, Following, messaging/retention and 71 table / 4 sequence API access contracts passed.
+- The actual compiled build 47 bundle contains the player-list PDF action, Activity points action, ranking-points screen and profile trophy shelf. Those features were absent from build 46’s bundle.
+- EAS finished the iPhone, widget, Watch and Watch-widget targets. All four are version 1.0.2 / build 47, correctly signed on team `52RX6X5X2T`, and provisioned for both registered test iPhones through 28 September 2027. Debugging is disabled and the host retains production push.
+- ZIP integrity and strict deep code-signature verification passed. The existing non-blocking Expo Doctor SDK patch warning remains (19 available package patches); native compilation and installer verification succeeded with the tested lockfile.
+- Installer: `/private/tmp/fourm-iphone-1.0.2-47.ipa`. SHA-256: `269ce6b8fe41dd37ceffc3a8524a9c39596b50080b38762270a7ba90ef83dc84`.
+- Source manifests, the complete morning coverage inventory, tests, build state, compiled-feature checks and installer receipts are stored in `outputs/iphone-internal-20261116-replacement`.
+
+Nothing is submitted to TestFlight, App Review or the App Store. Physical-device and paired-Watch testing remain with the user and partner. Build 47 supersedes build 46 for this test pass.
