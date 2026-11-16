@@ -1,10 +1,12 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Loader2, ShieldCheck } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import { authenticatorQrSource } from '../../utils/messagingAuthenticator';
 
 /** A fresh TOTP challenge; verification is also enforced by the database. */
-export default function BankingVerification({ onVerified, onCancel, purpose = 'continue' }) {
+export default function BankingVerification({ onVerified, onCancel, purpose = 'continue', allowEnrollment = true }) {
     const [factorId, setFactorId] = useState(null);
+    const [factors, setFactors] = useState([]);
     const [enrollment, setEnrollment] = useState(null);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
@@ -18,7 +20,7 @@ export default function BankingVerification({ onVerified, onCancel, purpose = 'c
         supabase.auth.mfa.listFactors().then(({ data, error: loadError }) => {
             if (!mounted.current) return;
             if (loadError) setError('Could not load authenticator settings. Sign in again and retry.');
-            else setFactorId(data?.totp?.find(f => f.status === 'verified')?.id || null);
+            else { const connected = (data?.totp || []).filter(f => f.status === 'verified'); setFactors(connected); setFactorId(connected[0]?.id || null); }
             setLoading(false);
         });
         return () => {
@@ -30,7 +32,7 @@ export default function BankingVerification({ onVerified, onCancel, purpose = 'c
         if (busy) return;
         setBusy(true); setError('');
         const { data, error: enrollError } = await supabase.auth.mfa.enroll({
-            factorType: 'totp', friendlyName: `4M Banking ${Date.now()}`,
+            factorType: 'totp', issuer: '4M Padel', friendlyName: `4M Banking ${Date.now()}`,
         });
         if (!mounted.current) {
             if (data?.id) await supabase.auth.mfa.unenroll({ factorId: data.id });
@@ -60,16 +62,18 @@ export default function BankingVerification({ onVerified, onCancel, purpose = 'c
         <div className="rounded-xl border border-padel-green/25 bg-black/30 p-4 space-y-3">
             <p className="text-sm font-semibold text-white flex items-center gap-2"><ShieldCheck size={17} className="text-padel-green" /> Verify to {purpose}</p>
             {loading ? <p role="status" className="text-sm text-gray-400">Loading authenticator…</p> : <>
-                {!factorId && <>
+                {!factorId && allowEnrollment && <>
                     <p className="text-sm text-gray-400">Protect banking with an authenticator app. Set it up once, then use a code for sensitive actions. Keep access to your authenticator; contact 4M support if you lose it.</p>
                     <button type="button" onClick={enroll} disabled={busy || !!error} className="px-4 py-2.5 rounded-lg bg-padel-green text-black font-bold text-sm disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-padel-green">{busy ? 'Setting up…' : 'Set up authenticator'}</button>
                 </>}
+                {!factorId && !allowEnrollment && <p className="text-sm text-gray-400">Set up an authenticator in Security first. If you lost access to all connected authenticators, another verified Super Admin can help recover this account.</p>}
                 {enrollment && <div className="space-y-3">
                     <p className="text-sm text-gray-300">Scan this code with your authenticator app, then enter its 6-digit code. Enabling this signs out your other sessions.</p>
-                    <img src={enrollment.qr_code.startsWith('data:') ? enrollment.qr_code : `data:image/svg+xml;charset=utf-8,${encodeURIComponent(enrollment.qr_code)}`} alt="Authenticator setup QR code" width="200" height="200" className="bg-white p-2 rounded-lg" />
-                    <details className="text-xs text-gray-400"><summary className="cursor-pointer">Enter a setup key instead</summary><code className="block mt-2 break-all text-white select-all">{enrollment.secret}</code></details>
+                    {authenticatorQrSource(enrollment.qr_code) && <img src={authenticatorQrSource(enrollment.qr_code)} alt="Authenticator setup QR code" width="200" height="200" className="bg-white p-2 rounded-lg" />}
+                    <details open={!authenticatorQrSource(enrollment.qr_code)} className="text-xs text-gray-400"><summary className="cursor-pointer">Enter a setup key instead</summary><code className="block mt-2 break-all text-white select-all">{enrollment.secret}</code></details>
                 </div>}
                 {factorId && <form onSubmit={verify} className="flex flex-wrap items-end gap-3">
+                    {factors.length > 1 && <label className="text-xs text-gray-300">Choose your authenticator<select value={factorId} disabled={busy} onChange={event => { setFactorId(event.target.value); if (codeRef.current) codeRef.current.value = ''; setError(''); }} className="mt-1 block min-h-11 max-w-full rounded-lg border border-white/20 bg-[#151515] p-3 text-base text-white">{factors.map(factor => <option key={factor.id} value={factor.id}>{factor.friendly_name || 'Authenticator app'}</option>)}</select></label>}
                     <label className="text-xs text-gray-300">Authenticator code
                         <input ref={codeRef} name="banking-totp" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required aria-invalid={!!error} aria-describedby={error ? errorId : undefined} className="block mt-1 w-40 rounded-lg bg-black/40 border border-white/20 px-3 py-2.5 text-base text-white tracking-widest focus:outline-2 focus:outline-padel-green" />
                     </label>
