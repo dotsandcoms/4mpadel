@@ -888,11 +888,11 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         setSaving(true);
         try {
             const publishedAt = new Date().toISOString();
-            const { error } = await supabase.from('draws').update({
+            const { data: published, error } = await supabase.from('draws').update({
                 status: 'published', published_at: publishedAt, updated_at: publishedAt,
-            }).eq('id', savedDraw.id).eq('status', 'draft').eq('updated_at', savedDraw.updated_at).select('id').single();
+            }).eq('id', savedDraw.id).eq('status', 'draft').eq('updated_at', savedDraw.updated_at).select('updated_at').single();
             if (error) throw error;
-            setSavedDraw({ ...savedDraw, status: 'published', updated_at: publishedAt });
+            setSavedDraw({ ...savedDraw, status: 'published', updated_at: published.updated_at });
             setShowDrawSetup(true);
             setWorkspace(typeof destination === 'string' ? destination : 'schedule');
             toast.success(privateRehearsal ? `${division.name} rehearsal draw published privately.` : `${division.name} event draw is published at /native-draws/${event.slug}`);

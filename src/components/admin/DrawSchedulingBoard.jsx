@@ -195,10 +195,10 @@ export default function DrawSchedulingBoard({ eventId, drawId, playDays, onSaved
             for (const [id, values] of Object.entries(changes)) {
                 const original = fresh.matches.find((match) => match.id === id);
                 const updates = { ...values, updated_at: new Date().toISOString() };
-                const { error } = await supabase.from('draw_matches').update(updates)
-                    .eq('id', id).eq('draw_id', original.draw_id).eq('updated_at', original.updated_at).in('status', ['pending', 'scheduled']).select('id').single();
+                const { data: saved, error } = await supabase.from('draw_matches').update(updates)
+                    .eq('id', id).eq('draw_id', original.draw_id).eq('updated_at', original.updated_at).in('status', ['pending', 'scheduled']).select('updated_at').single();
                 if (error) throw error;
-                savedUpdates.push({ id, ...updates });
+                savedUpdates.push({ id, ...updates, updated_at: saved.updated_at });
             }
             setNotice(`${savedUpdates.length} match assignments saved. Published draws also update the public calendar.`);
         } catch (error) {

@@ -87,3 +87,75 @@ test('Americano publication, scores and court reservations remain inside the reh
     assert.equal((await client.from('draw_matches').select()).data.filter(match => match.status === 'completed').length, 1);
     assert.equal((await client.from('player_ranking_points').select()).data.length, 0);
 });
+
+test('group editing, undo and elimination persist in the private copy', async () => {
+    const snapshot = rehearsalFixture();
+    const client = createRehearsalClient(snapshot);
+    const groups = [{ id: 'a', name: 'Group A' }, { id: 'b', name: 'Group B' }];
+    const entries = snapshot.registrations.map((registration, index) => ({
+        id: `entry-${index}`, source_registration_id: registration.id, team_name: registration.full_name, group_id: index < 2 ? 'a' : 'b',
+    }));
+    const fixture = (group, one, two) => ({
+        group_id: group, entry_one_id: one, entry_two_id: two,
+        round_number: 1, bracket_position: 1, round_label: 'Group stage · Round 1', round_code: 'group_r1',
+    });
+    const initialFixtures = [fixture('a', 'entry-0', 'entry-1'), fixture('b', 'entry-2', 'entry-3')];
+    const { data: id, error } = await client.rpc('native_save_group_draw', {
+        p_event: snapshot.event.id, p_division: 'division', p_expected: null,
+        p_format: 'group_knockout', p_places: null, p_rules: { qualification: { mode: 'all' } },
+        p_groups: groups, p_entries: entries, p_matches: initialFixtures, p_history: [],
+    });
+    assert.equal(error, null);
+    const matches = () => client.from('draw_matches').select().eq('draw_id', id);
+    const draw = () => client.from('draws').select().eq('id', id).single();
+    const first = (await matches()).data[0];
+    await client.from('draw_matches').update({ status: 'scheduled', court_name: 'Court 1', scheduled_start: '2026-11-07T08:00:00+02:00' }).eq('id', first.id);
+
+    const edited = async (fixtures, groupIds, undoId = null) => {
+        const current = (await matches()).data;
+        return client.rpc('native_apply_group_edit', {
+            p_draw: id, p_expected: (await draw()).data.updated_at,
+            p_versions: Object.fromEntries(current.map(match => [match.id, match.updated_at])),
+            p_two_groups: groupIds, p_source: 'entry-0', p_target: 'entry-2',
+            p_fixtures: fixtures.map(item => ({ ...item, id: current.find(match => match.group_id === item.group_id).id })),
+            p_undo: undoId,
+        });
+    };
+    assert.deepEqual(await edited([fixture('a', 'entry-2', 'entry-1'), fixture('b', 'entry-0', 'entry-3')], ['a', 'b']), { data: 0, error: null });
+    const swapped = (await matches()).data.find(match => match.id === first.id);
+    assert.equal(swapped.entry_one_id, 'entry-2');
+    assert.equal(swapped.court_name, 'Court 1');
+    const { data: audits } = await client.from('native_draw_edit_audit').select();
+    assert.equal(audits[0].details.source.group, 'Group A');
+    assert.equal(audits[0].details.target.group, 'Group B');
+    assert.equal((await edited(initialFixtures, ['b', 'a'], audits[0].id)).error, null);
+
+    await client.from('draws').update({ status: 'published' }).eq('id', id);
+    for (const match of (await matches()).data) {
+        assert.equal((await client.rpc('native_record_draw_result', {
+            p_match: match.id, p_expected: match.updated_at, p_result: { kind: 'walkover', winner: match.entry_one_id },
+        })).error, null);
+    }
+    assert.match((await edited(initialFixtures, ['b', 'a'], audits[0].id)).error.message, /play has started/);
+    const current = (await matches()).data;
+    const versions = Object.fromEntries(current.map(match => [match.id, match.updated_at]));
+    const knockout = [
+        { id: 'semi-1', stage: 'knockout', round_number: 1, entry_one_id: 'entry-0', entry_two_id: 'entry-3', winner_to_match_id: 'final', winner_to_slot: 1 },
+        { id: 'semi-2', stage: 'knockout', round_number: 1, entry_one_id: 'entry-2', entry_two_id: 'entry-1', winner_to_match_id: 'final', winner_to_slot: 2 },
+        { id: 'final', stage: 'knockout', round_number: 2 },
+    ];
+    assert.equal((await client.rpc('native_create_group_elimination', {
+        p_draw: id, p_expected: (await draw()).data.updated_at, p_versions: versions, p_matches: knockout,
+        p_qualification: { advancing: entries.map(entry => entry.id), bracket: 4, comparison: [] },
+    })).error, null);
+
+    const restored = createRehearsalClient(client.exportSnapshot());
+    const { data: savedMatches } = await restored.from('draw_matches').select().eq('stage', 'knockout');
+    assert.equal(savedMatches.length, 3);
+    const history = await restored.from('native_draw_edit_audit').select().order('created_at');
+    assert.deepEqual(history.data.map(item => item.action), ['group_edit', 'group_undo', 'qualification']);
+    const beforeAuditFeature = client.exportSnapshot();
+    delete beforeAuditFeature.tables.native_draw_edit_audit;
+    assert.deepEqual((await createRehearsalClient(beforeAuditFeature).from('native_draw_edit_audit').select()).data, []);
+    assert.equal(snapshot.tables, undefined);
+});
