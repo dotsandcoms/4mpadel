@@ -1,5 +1,7 @@
+import { PlayerFollowAction } from '@/components/players/player-follow-action';
 import { FollowedLocalMatches } from '@/components/followed-local-matches';
 import { ProMatchStar } from '@/components/pro-match-star';
+import { MatchSetScore } from '@/components/match-set-score';
 import { addToCalendar } from '@/lib/device-calendar';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { ActivityIndicator, Alert, AppState, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
@@ -15,7 +17,7 @@ import type { ProPadelState } from '@/hooks/use-pro-padel';
 import { proDate, proRound, proStale, proStatus, selectProMatches, type ProTournament, type ProCategory, type ProFollow, type ProMatch, type ProPerson, type ProPlayer, type ProRankings } from '@/lib/pro-padel';
 import { fetchLiveTournaments, fetchMatchDetails, fetchTournamentMatches, withLiveScores, type MatchDetails } from '@/lib/pro-padel-live';
 import { getMatchBookmarks, refreshMatchBookmarks, removeMatchBookmark, subscribeMatchBookmarks } from '@/lib/pro-match-bookmarks';
-import { lightBrand as brand } from '@/theme/tokens';
+import { loadingBlue, lightBrand as brand } from '@/theme/tokens';
 
 type Filter = ProCategory | 'all';
 const followRow = (p: ProPlayer): ProFollow => ({ player_id: p.id, player_name: p.name, category: p.category });
@@ -224,7 +226,7 @@ function LiveTournaments({ fallback }: { fallback?: ProTournament | null }) {
         </Pressable>
       </View>}
     </View>
-    {loading && !liveTours.length && <ActivityIndicator color={brand.accent} />}
+    {loading && !liveTours.length && <ActivityIndicator color={loadingBlue} />}
     {!!liveTours.length && <View onLayout={event => setMeasuredWidth(event.nativeEvent.layout.width)}>
       <ScrollView ref={rail} key={tourIds} horizontal showsHorizontalScrollIndicator={false} decelerationRate="fast"
         snapToInterval={cardWidth + 12} disableIntervalMomentum
@@ -325,7 +327,7 @@ function IntegratedUpNext({ tournament, showLocal, showInternational, message }:
     {showInternational && <LiveTournaments fallback={liveTour} />}
     {showInternational && <StarredMatches />}
     {(cards.length > 0 || loading || error) && <Text style={s.sectionTitle}>Up next</Text>}
-    {loading && <ActivityIndicator color={brand.accent} />}
+    {loading && <ActivityIndicator color={loadingBlue} />}
     {!!error && <Message body={error} retry={() => setRetry(n => n + 1)} />}
     {!cards.length && !loading && !error && !liveTour && <Text style={s.caption}>No upcoming tournaments are published yet.</Text>}
     {cards.length > 0 && <ScrollView horizontal showsHorizontalScrollIndicator={false} decelerationRate="fast" snapToInterval={298} contentContainerStyle={{ gap: 12, alignItems: 'flex-start' }}>
@@ -411,11 +413,7 @@ export function MatchCard({ match, lookup, onPlayer, onOpenMatch }: { match: Pro
           }) : <Text style={s.body}>Opponents TBC</Text>}
         </View>
         {!upcoming && <View style={s.scores} accessible accessibilityLabel={`${team.map(p => p.name).join(' and ')}${winner ? ', winning pair' : ''}, set scores ${match.score.map(set => set[index] ?? 'unavailable').join(', ')}`}>
-          {match.score.map((set, i) => {
-            const value = String(set[index] ?? '—');
-            const parts = /^(\d+)(\(\d+\))$/.exec(value);
-            return <View key={i} style={s.scoreColumn}><Text style={[s.score, winner && { color: brand.accent }]}>{parts ? parts[1] : value}{parts && <Text style={s.tieBreak}>{parts[2]}</Text>}</Text></View>;
-          })}
+          {match.score.map((set, i) => <MatchSetScore key={i} value={set[index]} width={32} color={winner ? brand.accent : brand.muted} />)}
         </View>}
       </View>;
     })}
@@ -484,7 +482,7 @@ export function ProPadelFeed({ state, localState, showInternationalResults = tru
   function followControl(player: ProPlayer | ProFollow) {
     const row = 'player_id' in player ? player : followRow(player);
     const followed = ids.includes(row.player_id);
-    return <Button label={state.pendingId === row.player_id ? 'Saving…' : followed ? 'Following' : 'Follow'} icon={followed ? 'heart' : 'heart-outline'}
+    return <PlayerFollowAction name={row.player_name} following={followed} pending={state.pendingId === row.player_id}
       disabled={state.followsLoading || !!state.followsError || state.pendingId !== null}
       onPress={() => { if (!state.userId) { setDirectory(false); setSelectedId(null); router.push('/(auth)/sign-in'); } else void state.toggleFollow(row); }} />;
   }
@@ -507,12 +505,12 @@ export function ProPadelFeed({ state, localState, showInternationalResults = tru
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.filterScroll} contentContainerStyle={s.filters}>{(localState ? ['all', '4m', 'pro', 'men', 'women'] as const : ['all', 'men', 'women'] as const).map(v => <Pressable key={v} accessibilityRole="button" accessibilityState={{ selected: filter === v }}
       onPress={() => { setFilter(v); setCount(6); }} style={[s.filter, filter === v && s.activeFilter, v === '4m' && filter === v && { backgroundColor: '#EAF0FF', borderColor: '#2449D8' }]}><Text style={[s.caption, filter === v && { color: v === '4m' ? '#2449D8' : brand.premium }]}>{v === 'all' ? 'All' : v === '4m' ? '4M' : v === 'pro' ? 'FIP' : v === 'men' ? 'Men' : 'Women'}</Text></Pressable>)}</ScrollView>
 
-    {state.loading && !state.rankings.data && !state.tour.data && <View style={s.loading}><ActivityIndicator color={brand.accent} /><Text style={s.body}>Loading the tour…</Text></View>}
+    {state.loading && !state.rankings.data && !state.tour.data && <View style={s.loading}><ActivityIndicator color={loadingBlue} /><Text style={s.body}>Loading the tour…</Text></View>}
     {state.writeError && <Text accessibilityRole="alert" style={s.warning}>{state.writeError}</Text>}
     {state.rankings.error && <Message body={state.rankings.error} retry={retry} />}
     {localState?.error && filter !== 'pro' && <Message body={localState.error} retry={() => { void localState.refresh(); }} />}
     {localState?.followError && <Message body={localState.followError} retry={() => { void localState.refresh(); }} />}
-    {personal && (state.followsLoading || localState?.followLoading || localState?.loading) ? <View style={s.loading}><ActivityIndicator color={brand.accent} /><Text style={s.body}>Loading your players…</Text></View>
+    {personal && (state.followsLoading || localState?.followLoading || localState?.loading) ? <View style={s.loading}><ActivityIndicator color={loadingBlue} /><Text style={s.body}>Loading your players…</Text></View>
       : personal && state.followsError ? <Message body={state.followsError} retry={() => { void state.refreshFollows(); }} />
       : personal && !state.userId ? <View style={s.message}><Text style={s.cardTitle}>Make padel your own</Text><Text style={s.body}>Sign in to follow players and see their results here.</Text><Button label="Sign in" onPress={() => router.push('/(auth)/sign-in')} /></View>
       : personal && !hasFollows ? <View style={s.message}><Text style={s.cardTitle}>Who’s your first pick?</Text><Text style={s.body}>Follow your favourite players for their results, ranking updates and published fixtures.</Text><Button label="Find players" icon="add" onPress={openDirectory} /></View> : null}
@@ -533,7 +531,7 @@ export function ProPadelFeed({ state, localState, showInternationalResults = tru
             <Text style={[s.caption, player.source === '4m' && { color: '#2449D8' }]}>{playerRankLabel(player)} · {player.gender === 'men' ? 'Men' : player.gender === 'women' ? 'Women' : 'Player'}</Text>
             {player.fipUnverified && <Text style={[s.caption, { color: '#2449D8', fontWeight: '700' }]}>Unverified link</Text>}
           </Pressable>
-          {player.source === '4m' && localState ? <Button local label={localState.pending === player.key ? 'Saving…' : localState.isFollowing(player) ? 'Following' : 'Follow'} icon={localState.isFollowing(player) ? 'heart' : 'heart-outline'} disabled={localState.followLoading || !!localState.followError || !!localState.pending} onPress={() => { if (!state.userId) router.push('/(auth)/sign-in'); else void localState.toggle(player); }} /> : followControl({ player_id: Number(player.id), player_name: player.name, category: player.gender === 'women' ? 'women' : 'men' })}
+          {player.source === '4m' && localState ? <PlayerFollowAction name={player.name} following={localState.isFollowing(player)} pending={localState.pending === player.key} accentColor="#2449D8" disabled={localState.followLoading || !!localState.followError || !!localState.pending} onPress={() => { if (!state.userId) router.push('/(auth)/sign-in'); else void localState.toggle(player); }} /> : followControl({ player_id: Number(player.id), player_name: player.name, category: player.gender === 'women' ? 'women' : 'men' })}
         </View>)}
       </ScrollView>
     </>}
@@ -557,7 +555,7 @@ export function ProPadelFeed({ state, localState, showInternationalResults = tru
           <Portrait key={p.id} player={p} size={40} /><View style={{ flex: 1, gap: 4 }}><Text style={s.personName}>{playerCountryFlag(p.nationality)}{p.nationality ? ' ' : ''}{p.name}</Text><Text style={s.caption}>World #{p.rank} · {proDate(p.rankingDate)}</Text></View>
           <View style={{ alignItems: 'flex-end', gap: 4 }}>{p.rankChange != null && Number.isFinite(p.rankChange) && p.rankChange !== 0 && <Text style={[s.movementValue, { color: p.rankChange > 0 ? '#226047' : brand.muted }]}>{p.rankChange > 0 ? '↑' : '↓'} {Math.abs(p.rankChange)}</Text>}
             {p.pointsChange != null && Number.isFinite(p.pointsChange) && p.pointsChange !== 0 && <Text style={s.caption}>{p.pointsChange > 0 ? '+' : ''}{number(p.pointsChange)} pts</Text>}</View>
-        </Pressable>)}</View> : state.loading && !state.rankings.data ? <ActivityIndicator color={brand.accent} /> : <Message title="No FIP ranking changes yet" body={personal ? 'Ranking changes from your followed FIP players will appear here.' : 'Changes will appear after the next official ranking update.'} />}
+        </Pressable>)}</View> : state.loading && !state.rankings.data ? <ActivityIndicator color={loadingBlue} /> : <Message title="No FIP ranking changes yet" body={personal ? 'Ranking changes from your followed FIP players will appear here.' : 'Changes will appear after the next official ranking update.'} />}
       </>}
     </View>}
     {ready && showInternationalResults && <>
@@ -687,7 +685,7 @@ const s = StyleSheet.create({
   liveMatchTime: { color: '#D5E4D8', fontSize: 11 },
   matchToggle: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderTopWidth: 1, borderBottomWidth: 1, borderColor: brand.edge, marginTop: 8 },
   matchToggleTitle: { color: brand.premium, fontSize: 18, fontWeight: '600' },
-  matchCount: { backgroundColor: '#ccff0014', borderRadius: 12, minWidth: 28, paddingHorizontal: 8, paddingVertical: 4, alignItems: 'center' },
+  matchCount: { backgroundColor: '#8DB9E024', borderRadius: 12, minWidth: 28, paddingHorizontal: 8, paddingVertical: 4, alignItems: 'center' },
   match: { padding: 16, backgroundColor: brand.elevated, borderRadius: 18, borderWidth: 1, borderColor: brand.edge },
   matchHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
   matchKicker: { fontSize: 10, lineHeight: 15, fontWeight: '700', letterSpacing: 1, color: brand.muted },
@@ -704,7 +702,6 @@ const s = StyleSheet.create({
   scores: { flexDirection: 'row', gap: 2, flexShrink: 0, alignItems: 'center' },
   scoreColumn: { width: 32, alignItems: 'center', justifyContent: 'center', textAlign: 'center' },
   score: { color: brand.muted, fontSize: 19, lineHeight: 26, fontWeight: '700', textAlign: 'center', fontVariant: ['tabular-nums'] },
-  tieBreak: { fontSize: 10, fontWeight: '500' },
   resultStatus: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1 },
   matchFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: brand.edge },
   movementList: { paddingHorizontal: 14, borderRadius: 14, backgroundColor: brand.elevated },

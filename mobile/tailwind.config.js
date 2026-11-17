@@ -8,9 +8,9 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        court: { page: '#F5F6F3', elevated: '#FFFFFF', surface: '#EDF0EB', panel: '#E5EAE2', ink: '#16251F', muted: '#52625A', faint: '#65726B', edge: '#DCE2DA', accent: '#386018', danger: '#B7352D', glass: '#EAF0E5' },
-        // Electric lime — the single brand accent. Use sparingly.
-        padel: '#CCFF00',
+        court: { page: '#F5F6F3', elevated: '#FFFFFF', surface: '#EDF0EB', panel: '#E5EAE2', ink: '#16251F', muted: '#52625A', faint: '#65726B', edge: '#DCE2DA', accent: '#386018', action: '#27517B', danger: '#B7352D', glass: '#EAF0E5' },
+        // Blue brand fill; keep aligned with brand.padel in theme/tokens.ts.
+        padel: '#8DB9E0',
         // Near-black surface ramp, darkest to lightest.
         page: '#0a0a0a',
         elevated: '#141414',

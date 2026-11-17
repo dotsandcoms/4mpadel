@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchEventEntryCounts } from '../src/utils/calendarEvents.js';
+import { fetchEventEntryCounts, matchesCalendarStatus } from '../src/utils/calendarEvents.js';
 
 function registrationClient(rows, failAt = null) {
     const requests = [];
@@ -75,4 +75,12 @@ test('skips queries when there are no manual events and returns no entries for a
 test('rejects a failed later page instead of showing partial registration totals', async () => {
     const rows = Array.from({ length: 1001 }, (_, index) => ({ id: index + 1, event_id: 471 }));
     await assert.rejects(fetchEventEntryCounts(registrationClient(rows, 1000), [471]), /Count query failed/);
+});
+
+test('calendar hides cancelled events by default and retains an explicit status opt-in', () => {
+    const events = [{ id: 1 }, { id: 2, event_status: null }, { id: 3, event_status: 'cancelled' }, { id: 4, event_status: ' Cancelled ' }];
+    assert.deepEqual(events.filter(event => matchesCalendarStatus(event)).map(event => event.id), [1, 2]);
+    assert.deepEqual(events.filter(event => matchesCalendarStatus(event, 'cancelled')).map(event => event.id), [3, 4]);
+    assert.deepEqual(events.filter(event => matchesCalendarStatus(event, 'all')).map(event => event.id), [1, 2, 3, 4]);
+    assert.equal(events.length, 4);
 });

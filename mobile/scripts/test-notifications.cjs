@@ -35,6 +35,8 @@ test('push routes reject external, auth and prototype payloads', () => {
   assert.equal(native.pathFromNotificationData({ type: '__proto__' }), null);
   assert.equal(native.pathFromNotificationData({ type: 'event_cancelled' }), '/calendar');
   assert.equal(native.pathFromNotificationData({ path: '/(tabs)/calendar' }), '/calendar');
+  assert.equal(native.pathFromNotificationData({ path: '/(tabs)' }), '/(tabs)');
+  for (const path of ['/(tabs)?redirect=evil', '/(tabs)/../reset-password', '/(tabs)//']) assert.equal(native.pathFromNotificationData({ path }), null);
 });
 test('starred match alerts open only valid native match paths', () => {
   assert.equal(native.pathFromNotificationData({ path: '/pro/match/13744' }), '/pro/match/13744');
@@ -73,4 +75,13 @@ test('tournament deep links accept scoped match routes and reject extra or dupli
   for (const path of ['/events/12?redirect=https://evil.test', '/events/12?tab=Draws&tab=Results', '/events/12?match=bad', '/events/12/../reset-password', '/events/0']) {
     assert.equal(native.pathFromNotificationData({ path }), null, path);
   }
+});
+
+test('messaging categories and discussion mode use the own-account messaging API', async () => {
+  const calls = [], prefs = moduleAt('src/lib/notification-preferences.ts', { './supabase': { supabase: { rpc: async (name, data) => { calls.push({ name, data }); return { error: null }; } } } });
+  await prefs.saveNotificationPreference('chat_announcements', false);
+  assert.equal(calls[0].name, 'messaging_api'); assert.equal(calls[0].data.p_action, 'notification_preferences'); assert.equal(calls[0].data.p_data.chat_announcements, false);
+  await prefs.saveDiscussionNotifications('replies'); assert.equal(calls[1].data.p_data.chat_discussion, 'replies');
+  await assert.rejects(prefs.saveDiscussionNotifications('unknown')); assert.equal(calls.length, 2);
+  await prefs.saveNotificationPreference('event_cancelled', false); assert.equal(calls[2].name, 'set_notification_pref');
 });

@@ -50,3 +50,6 @@ supabase/.temp/
 
 # Local store assets and build artifacts are not app source.
 release/
+
+# Watchman synchronisation cookies are generated locally.
+.watchman-cookie-*

@@ -39,13 +39,13 @@ test('failed, underpaid, test-mode, wrong-currency and wrong-owner payments neve
 test('verified payment uses the webhook ledger key and activates the matching player', async () => { const app=server(); assert.equal((await app.call({action:'verify',reference})).body.paid,true); assert.equal(app.writes[0].table,'payments'); assert.equal(app.writes[0].value.reference,'123'); assert.equal(app.writes[0].value.amount,525); assert.equal(app.writes[0].value.metadata.license_year,2027); assert.equal(app.writes.some(w=>w.table==='players'),false); });
 
 test('yearless annual requests require an app update',async()=>{const app=server();const r=await app.call({action:'quote'});assert.equal(r.status,400);assert.match(r.body.error,/Update the app/);});
-test('temporary licences can be bought without a Full licence',async()=>{const app=server({saved:null});const r=await app.call({action:'quote',licenseType:'temporary',eventId:10});assert.equal(r.status,200);assert.equal(r.body.quote.base,120);assert.equal(r.body.quote.licenseYear,null);assert.equal(r.body.quote.eventId,10);});
+test('standalone temporary quotes and purchases require event registration before any write or gateway call',async()=>{for(const action of ['quote','checkout']){const app=server({saved:null});const r=await app.call({action,licenseType:'temporary',eventId:10,attemptId,agreed:true,acceptedTotal:126});assert.equal(r.status,400);assert.equal(r.body.code,'EVENT_CHECKOUT_REQUIRED');assert.equal(app.calls.length,0);assert.equal(app.writes.length,0);}});
 test('a new year can be purchased by a prior-year Full holder',async()=>{const app=server({saved:null});const r=await app.call({action:'checkout',licenseYear:2027,attemptId,agreed:true,acceptedTotal:525});assert.equal(r.status,200);assert.equal(app.writes[0].value.license_year,2027);});
 test('a checkout cannot be reused for another year',async()=>{const app=server({saved:{license_year:2026}});const r=await app.call({action:'checkout',licenseYear:2027,attemptId,agreed:true,acceptedTotal:525});assert.equal(r.status,400);assert.equal(app.calls.length,0);});
 test('a checkout cannot be reused for another beneficiary at the same price',async()=>{const app=server({saved:{player_id:2}});const r=await app.call({action:'checkout',licenseYear:2027,attemptId,agreed:true,acceptedTotal:525});assert.equal(r.status,400);assert.equal(app.calls.length,0);assert.match(r.body.error,/different quote/);});
 test('a verified payment cannot restore revoked coverage',async()=>{const app=server({revoked:true});const r=await app.call({action:'verify',reference});assert.equal(r.status,400);assert.match(r.body.error,/administrator review/);});
 
-test('a Full licence covering the event prevents an unnecessary temporary charge',async()=>{const app=server({fullForEvent:true});const r=await app.call({action:'quote',licenseType:'temporary',eventId:10});assert.equal(r.body.quote.active,true);assert.equal(r.body.quote.coveredByFull,true);assert.equal(app.calls.length,0);});
+test('standalone temporary purchases are refused even for a Full holder',async()=>{const app=server({fullForEvent:true});const r=await app.call({action:'quote',licenseType:'temporary',eventId:10});assert.equal(r.body.code,'EVENT_CHECKOUT_REQUIRED');assert.equal(app.calls.length,0);});
 
 test('Full renewals use R500 and new or temporary-only buyers use R650',async()=>{for(const priorFull of [true,false]){const app=server({policy:true,priorFull});const r=await app.call({action:'quote',licenseYear:2027});assert.equal(r.body.quote.base,priorFull?500:650);assert.equal(r.body.quote.isRenewal,priorFull);assert.equal(r.body.quote.startsOn,'2026-10-15');assert.equal(r.body.quote.endsOn,'2027-12-31');}});
 
@@ -73,4 +73,24 @@ test('a saved checkout can be verified even if the payer has no player profile',
 test('playing preferences are optional when quoting a completed profile',async()=>{
   const app=server();const r=await app.call({action:'quote',licenseYear:2027});
   assert.equal(r.status,200);assert.equal(r.body.code,undefined);
+});
+
+function appLicenseClient() {
+  const calls = [], mod = { exports: {} };
+  const clientCode = ts.transpileModule(fs.readFileSync('src/lib/licenses.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  vm.runInNewContext(clientCode, { module: mod, exports: mod.exports, require: () => ({ supabase: { functions: { invoke: async (name, options) => { calls.push({name,body:options.body}); return { data: { paid: true, quote: {} } }; } } } }) });
+  return { ...mod.exports, calls };
+}
+test('standalone app licence screen refuses temporary quote and checkout before network access', async () => {
+  const api = appLicenseClient();
+  for (const action of ['quote','checkout']) await assert.rejects(api.invokeLicense({ action, licenseType: 'temporary', eventId: 10 }), { code: 'EVENT_CHECKOUT_REQUIRED' });
+  assert.equal(api.calls.length, 0);
+});
+test('annual app purchases and verification of an older temporary payment still reach checkout', async () => {
+  const api = appLicenseClient();
+  await api.invokeLicense({ action: 'quote', licenseType: 'full', licenseYear: 2027 });
+  await api.invokeLicense({ action: 'checkout', licenseType: 'full', licenseYear: 2027 });
+  await api.invokeLicense({ action: 'verify', licenseType: 'temporary', reference: 'existing-reference' });
+  assert.equal(api.calls.length, 3); assert.equal(api.calls[2].body.action, 'verify');
+  assert.ok(api.calls.every(call => call.name === 'native-license-checkout'));
 });

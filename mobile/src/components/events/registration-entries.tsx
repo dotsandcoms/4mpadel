@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Accordion, EventIcon, EventText as Text, useEventAccent } from './website-ui';
+import { Accordion, EventIcon, EventText as Text } from './website-ui';
 import { PlayerAvatar } from './event-teams';
 import type { Division, EventDetail, EventRegistration } from '@/lib/events';
 import type { RankedPlayer } from '@/lib/event-teams';
@@ -16,7 +16,7 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
   const router = useRouter();
   const [managing, setManaging] = useState(false);
   useEffect(() => { if (manageRequested) { setManaging(true); onManageOpened?.(); } }, [manageRequested, onManageOpened]);
-  const accent = useEventAccent();
+  const accent = brand.accent;
   const insets = useSafeAreaInsets();
   const [action, setAction] = useState<{ kind: 'withdraw' | 'switch_division' | 'remove_partner'; entry: EventRegistration } | null>(null);
   const [target, setTarget] = useState('');
@@ -25,6 +25,7 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
   const freeEntry = (r: EventRegistration) => { const fee = divisions.find(d => d.id === r.division_id)?.entry_fee ?? event.entry_fee; return fee != null && Number(fee) === 0; };
   const paid = (r: EventRegistration) => paymentPresentation(r.payment_status, r.balance, freeEntry(r)).confirmed;
   const statusLabel = (r: EventRegistration) => { const state = paymentPresentation(r.payment_status, r.balance, freeEntry(r)); return state.due != null ? `${formatMoney(state.due)} outstanding` : state.label; };
+  const entryHelp = (r: EventRegistration) => { setManaging(false); router.push({ pathname: '/help', params: { topic: 'entry', eventId: String(event.id), entryId: r.id, compose: '1' } }); };
   const payBalance = (r: EventRegistration) => { setManaging(false); router.push({ pathname: '/events/pay-balance', params: { registrationId: r.id } }); };
   const addPartner = (r: EventRegistration) => { setManaging(false); router.push({ pathname: '/events/register', params: { id: String(event.id), mode: 'add-partner', entry: r.id } }); };
   const payDivision = (r: EventRegistration) => { setManaging(false); router.push({ pathname: '/events/register', params: { id: String(event.id), mode: 'pay', entry: r.id } }); };
@@ -50,7 +51,7 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
     finally { setBusy(false); }
   };
   return <>
-    <Accordion highlighted highlightColor={pending ? '#D97706' : '#16A34A'} pending={pending} singleLineTitle icon="trophy" title={`You are Registered for this Event${registrations.length > 1 ? ` (${registrations.length} divisions)` : ''}`}>
+    <Accordion highlighted highlightColor={pending ? '#D97706' : '#16A34A'} pending={pending} singleLineTitle icon="trophy" title={`${pending ? 'Awaiting payment' : 'Your registration is confirmed'}${registrations.length > 1 ? ` (${registrations.length} divisions)` : ''}`}>
       {pending && <View style={{ borderRadius: 12, padding: 12, backgroundColor: '#fffbebcc', borderWidth: 1, borderColor: '#fef3c7', flexDirection: 'row', alignItems: 'center', gap: 10 }}><EventIcon name="exclamationmark.circle" color="#d97706" size={16} /><Text style={{ color: '#78350f', fontSize: 12, lineHeight: 18, flex: 1 }}>{registrations.some(paid) ? 'You have an outstanding payment to complete your registration.' : 'Complete your payment to secure your spot.'}</Text></View>}
       <Text style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Your entries</Text>
       {registrations.map(r => <View key={r.id} style={{ borderRadius: 12, borderColor: '#e2e8f0', borderWidth: 1, backgroundColor: pending ? '#ffedd5' : '#f8fafc80', padding: 14 }}>
@@ -89,7 +90,7 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
             const ownsBooking = r.registered_by?.toLowerCase() === r.email.toLowerCase();
             const balanceDue = Number(r.balance?.due || 0);
             return <View key={r.id} style={{ backgroundColor: brand.elevated, borderWidth: 1, borderColor: brand.edge, borderRadius: 22, overflow: 'hidden' }}>
-              <View style={{ height: 4, backgroundColor: paid(r) ? brand.accent : accent }} />
+              <View style={{ height: 4, backgroundColor: paid(r) ? brand.accent : '#9A4B0A' }} />
               <View style={{ padding: 18, gap: 18 }}>
                 <View style={{ gap: 6 }}>
                   <Text style={{ color: brand.faint, fontSize: 10, fontWeight: '800', letterSpacing: 1.4 }}>DIVISION {String(index + 1).padStart(2, '0')}</Text>
@@ -118,6 +119,7 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
                   <ManageActionRow label="Switch division" icon="swap-horizontal" onPress={() => begin('switch_division', r)} />
                   <ManageActionRow label="Withdraw entry" icon="trash-outline" tone="danger" onPress={() => begin('withdraw', r)} />
                 </View>}
+                <ManageActionRow label="Get help with this entry" icon="help-circle-outline" tone="support" onPress={() => entryHelp(r)} />
               </View>
             </View>;
           })}
@@ -129,7 +131,7 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
             {topUp && <Text style={{ color: brand.muted, fontSize: 13, lineHeight: 20 }}>Review and pay the entry-fee difference in the app. Your entry moves only after payment is verified. Your partner stays in the original division.</Text>}
           </View>
           {!!error && <Text accessibilityRole="alert" style={{ color: brand.danger, fontSize: 13, lineHeight: 20 }}>{error}</Text>}
-          <Pressable accessibilityRole="button" accessibilityState={{ disabled: busy || (action.kind === 'switch_division' && !target) }} disabled={busy || (action.kind === 'switch_division' && !target)} onPress={() => void confirm()} style={{ minHeight: 54, borderRadius: 15, backgroundColor: action.kind === 'withdraw' || action.kind === 'remove_partner' ? brand.danger : accent, alignItems: 'center', justifyContent: 'center', opacity: busy || (action.kind === 'switch_division' && !target) ? 0.5 : 1 }}>{busy ? <ActivityIndicator color={brand.elevated} /> : <Text style={{ color: action.kind === 'withdraw' || action.kind === 'remove_partner' ? brand.elevated : brand.premium, fontSize: 15, fontWeight: '800' }}>{topUp ? 'Review additional payment' : action.kind === 'remove_partner' ? 'Confirm partner removal' : action.kind === 'withdraw' ? 'Confirm withdrawal' : 'Confirm switch'}</Text>}</Pressable>
+          <Pressable accessibilityRole="button" accessibilityState={{ disabled: busy || (action.kind === 'switch_division' && !target) }} disabled={busy || (action.kind === 'switch_division' && !target)} onPress={() => void confirm()} style={{ minHeight: 54, borderRadius: 15, backgroundColor: action.kind === 'withdraw' || action.kind === 'remove_partner' ? brand.danger : brand.accent, alignItems: 'center', justifyContent: 'center', opacity: busy || (action.kind === 'switch_division' && !target) ? 0.5 : 1 }}>{busy ? <ActivityIndicator color={brand.elevated} /> : <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>{topUp ? 'Review additional payment' : action.kind === 'remove_partner' ? 'Confirm partner removal' : action.kind === 'withdraw' ? 'Confirm withdrawal' : 'Confirm switch'}</Text>}</Pressable>
           <Pressable accessibilityRole="button" disabled={busy} onPress={() => setAction(null)} style={{ minHeight: 50, borderRadius: 15, borderWidth: 1, borderColor: brand.edge, backgroundColor: brand.elevated, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: brand.premium, fontSize: 14, fontWeight: '700' }}>Cancel</Text></Pressable>
         </ScrollView>}
       </View>
@@ -137,11 +139,11 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
   </>;
 }
 function Outline({ label, color, onPress }: { label: string; color: string; onPress: () => void }) { return <Pressable accessibilityRole="button" onPress={onPress} style={{ minHeight: 48, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: `${color}40`, backgroundColor: '#fff', justifyContent: 'center' }}><Text style={{ color, fontSize: 12 }}>{label}</Text></Pressable>; }
-function ManageActionRow({ label, icon, tone = 'neutral', onPress }: { label: string; icon: 'card-outline' | 'person-add-outline' | 'person-remove-outline' | 'swap-horizontal' | 'trash-outline'; tone?: 'primary' | 'secondary' | 'neutral' | 'danger'; onPress: () => void }) {
-  const color = tone === 'danger' ? brand.danger : brand.premium;
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={{ minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 13, paddingHorizontal: 10, backgroundColor: tone === 'primary' ? brand.padel : tone === 'secondary' ? brand.surface : 'transparent', borderWidth: tone === 'secondary' ? 1 : 0, borderColor: brand.edge }}>
-    <View style={{ width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: tone === 'primary' ? '#16251F15' : tone === 'secondary' ? brand.elevated : tone === 'danger' ? '#B7352D12' : brand.surface }}><Ionicons name={icon} size={18} color={tone === 'danger' ? brand.danger : brand.accent} /></View>
+function ManageActionRow({ label, icon, tone = 'neutral', onPress }: { label: string; icon: 'card-outline' | 'person-add-outline' | 'person-remove-outline' | 'swap-horizontal' | 'trash-outline' | 'help-circle-outline'; tone?: 'primary' | 'secondary' | 'neutral' | 'danger' | 'support'; onPress: () => void }) {
+  const color = tone === 'primary' ? '#FFFFFF' : tone === 'danger' ? brand.danger : tone === 'support' ? brand.supportInk : brand.premium;
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={{ minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 13, paddingHorizontal: 10, backgroundColor: tone === 'primary' ? brand.accent : tone === 'secondary' ? brand.surface : tone === 'support' ? brand.supportTint : 'transparent', borderWidth: tone === 'secondary' ? 1 : 0, borderColor: brand.edge }}>
+    <View style={{ width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: tone === 'primary' ? '#FFFFFF1F' : tone === 'secondary' ? brand.elevated : tone === 'danger' ? '#B7352D12' : brand.surface }}><Ionicons name={icon} size={18} color={tone === 'primary' ? '#FFFFFF' : tone === 'danger' ? brand.danger : tone === 'support' ? brand.supportInk : brand.accent} /></View>
     <Text style={{ color, fontSize: 14, fontWeight: '700', flex: 1 }}>{label}</Text>
-    <EventIcon name="chevron.right" size={15} color={tone === 'danger' ? brand.danger : brand.faint} />
+    <EventIcon name="chevron.right" size={15} color={tone === 'primary' ? '#FFFFFF' : tone === 'danger' ? brand.danger : tone === 'support' ? brand.supportInk : brand.faint} />
   </Pressable>;
 }

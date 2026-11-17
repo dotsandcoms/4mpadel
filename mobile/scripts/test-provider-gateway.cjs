@@ -19,3 +19,8 @@ test('web proxy uses existing private credential without a database admin key',a
 test('web proxy preserves POST bodies and passes unrelated traffic through',async()=>{
  const seen=[];const fetcher=shared.createSharedProviderFetch(async(url,init)=>{seen.push({url,init});return Response.json({});},{VITE_SUPABASE_URL:'https://supabase.test',PADEL_API_TOKEN:credential});await fetcher('https://padelapi.org/api/matches/headtohead',{method:'POST',body:JSON.stringify({team_1:[1],team_2:[2]})});assert.equal(JSON.parse(seen[0].init.body).method,'POST');assert.equal(JSON.parse(JSON.parse(seen[0].init.body).body).team_1[0],1);await fetcher('https://www.padelfip.com/calendar/');assert.equal(seen[1].url,'https://www.padelfip.com/calendar/');
 });
+
+test('gateway allows exact new insight resources without widening arbitrary access',()=>{
+ for(const path of ['players/65/rivals','players/65/form','pairs/1-2/rivals','pairs/1-2/synergy']) assert.equal(handler.validateProviderRequest({url:`https://padelapi.org/api/${path}`}).method,'GET');
+ for(const path of ['players/65/synergy','pairs/1-2/form','players/65/secrets']) assert.throws(()=>handler.validateProviderRequest({url:`https://padelapi.org/api/${path}`}));
+});

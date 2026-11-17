@@ -1,3 +1,4 @@
+import { withSapaMainRanking } from './sapa-main-ranking';
 import { queueWelcomeEmail } from '@/lib/welcome-email';
 import { parseSponsors } from '@/lib/sponsors';
 import { courtSideLabel, playingHandLabel } from '@/lib/player-preferences';
@@ -7,10 +8,16 @@ import type { Session, User } from '@supabase/supabase-js';
 import { fetchPlayerMatches, isMatchWinner, type PlayerMatch } from './matches';
 import { collectSignupDevice, resolveSignupSource } from './signup-source';
 import { supabase } from './supabase';
+import { birthDateError, playtomicDetailsError, type PlaytomicExtraction } from './profile-details';
 import { brand, lightBrand } from '@/theme/tokens';
 
 
 export type PlayerDraft = {
+  dateOfBirth: string;
+  playtomicLevel: string;
+  playtomicProofPath?: string;
+  playtomicNoProfile?: boolean;
+  playtomicExtraction?: PlaytomicExtraction | null;
   firstName: string;
   lastName: string;
   email: string;
@@ -80,6 +87,10 @@ export function nameFromUser(user: User | null): { firstName: string; lastName: 
 }
 
 export async function createPlayerProfile(draft: PlayerDraft, clubs: ClubRow[]) {
+  const birthIssue = birthDateError(draft.dateOfBirth);
+  if (birthIssue) throw new Error(birthIssue);
+  const levelIssue = playtomicDetailsError(draft.playtomicLevel ?? '', draft.playtomicProofPath || '', draft.playtomicNoProfile);
+  if (levelIssue) throw new Error(levelIssue);
   if (draft.courtSide && !courtSideLabel(draft.courtSide)) throw new Error('Select a valid court side.');
   if (draft.playingHand && !playingHandLabel(draft.playingHand)) throw new Error('Select a valid playing hand.');
   const homeClub =
@@ -109,12 +120,13 @@ export async function createPlayerProfile(draft: PlayerDraft, clubs: ClubRow[]) 
     p_club_id: draft.clubId && draft.clubId !== 'Other' ? draft.clubId : null,
   };
 
-  const first = await supabase.rpc('create_player_profile', payload);
-  if (first.error) {
-    const { p_club_id: _clubId, ...withoutClubId } = payload;
-    const retry = await supabase.rpc('create_player_profile', withoutClubId);
-    if (retry.error) throw first.error;
-  }
+  const { error: createError } = await supabase.rpc('create_player_profile_with_details_v3', { p_profile: payload, p_details: {
+    date_of_birth: draft.dateOfBirth,
+    playtomic_no_profile: draft.playtomicNoProfile === true,
+    playtomic_level: draft.playtomicNoProfile ? null : Number(draft.playtomicLevel),
+    playtomic_proof_path: draft.playtomicNoProfile ? null : draft.playtomicProofPath || null,
+  } });
+  if (createError) throw createError;
 
   // The existing profile-creation RPC does not accept playing preferences.
   // Save selected values through the same player permissions used by Edit profile.
@@ -171,6 +183,7 @@ export async function clearProfileDraft(email?: string) {
 export function draftHasProgress(draft: Partial<PlayerDraft> | null | undefined): boolean {
   if (!draft) return false;
   return [
+    draft.dateOfBirth,
     draft.firstName,
     draft.lastName,
     draft.contactNumber,
@@ -256,6 +269,8 @@ export type ProfileStats = {
 };
 
 export type ProfileTransaction = {
+  sourceId?: string | number;
+  eventId?: number | null;
   kind: 'payment' | 'refund';
   id: string | number;
   date: string;
@@ -281,6 +296,7 @@ export type ProfileBundle = {
 };
 
 export type PlayerDetailsUpdate = {
+  name?: string; gender?: string | null; nationality?: string | null; sponsors?: string | null;
   contact_number: string | null;
   region: string | null;
   category: string;
@@ -397,7 +413,7 @@ async function fetchPlayerRow(email: string): Promise<PlayerRow | null> {
       .ilike('email', email)
       .maybeSingle();
     if (error || !data) return null;
-    return data as PlayerRow;
+    return withSapaMainRanking(data) as PlayerRow;
   } catch {
     return null;
   }
@@ -608,6 +624,7 @@ export async function fetchProfileTransactions(email: string): Promise<ProfileTr
   }
 
   type PaymentRow = {
+    event_id?: number | null;
     id: number;
     reference?: string | null;
     amount?: number | null;
@@ -629,6 +646,7 @@ export async function fetchProfileTransactions(email: string): Promise<ProfileTr
     const rawStatus = String(t.status || 'unknown');
     return {
       kind: 'payment' as const,
+      sourceId: t.id, eventId: t.event_id,
       id: t.reference || t.id,
       date: t.metadata?.original_trx?.date || new Date(t.created_at).toLocaleDateString(),
       sortDate: new Date(t.created_at).getTime(),
@@ -651,6 +669,7 @@ export async function fetchProfileTransactions(email: string): Promise<ProfileTr
         : String(rf.status || '');
     return {
       kind: 'refund' as const,
+      sourceId: rf.id as string, eventId: linkedPayment?.event_id,
       id: (rf.paystack_reference as string) || (rf.paystack_refund_id as string) || (rf.id as number),
       date: rf.processed_at
         ? new Date(rf.processed_at as string).toLocaleDateString()

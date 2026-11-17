@@ -6,6 +6,7 @@ import { AppState, Platform } from 'react-native';
 
 import { NOTIFICATION_PATHS, type NotificationType } from './notification-events';
 import { supabase } from './supabase';
+import { markNotificationFromPush } from './notification-read-state';
 
 export type { NotificationType } from './notification-events';
 export { NOTIFICATION_PATHS, NOTIFICATION_TYPES, pushCopy } from './notification-events';
@@ -26,11 +27,15 @@ let registrationInFlight: Promise<boolean> | null = null;
 
 if (Platform.OS !== 'web') {
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
+    handleNotification: async notification => ({
+      // Realtime + the receive listener render the immediate in-app chat banner.
+      // Avoid a second, delayed OS banner while the app is already foregrounded.
+      shouldShowBanner: !(notification.request.content.data?.type === 'chat_message' && AppState.currentState === 'active'),
+      shouldShowList: !(notification.request.content.data?.type === 'chat_message' && AppState.currentState === 'active'),
+      shouldPlaySound: !(notification.request.content.data?.type === 'chat_message' && AppState.currentState === 'active'),
+      // The foreground badge writer reconciles reads against the server. A late
+      // push payload must not restore a count from before the notification was read.
+      shouldSetBadge: AppState.currentState !== 'active',
     }),
   });
 }
@@ -203,7 +208,7 @@ export function addNotificationResponseListener(
   const sub = Notifications.addNotificationResponseReceivedListener((response) => {
     const data = response.notification.request.content.data as Record<string, unknown> | undefined;
     const path = pathFromNotificationData(data);
-    if (path) { void trackEvent('notification_open'); onPath(path); }
+    if (path) { void markNotificationFromPush(data).catch(() => {}); void trackEvent('notification_open'); onPath(path); }
   });
   return sub;
 }
@@ -212,7 +217,9 @@ export function addNotificationResponseListener(
 export function consumeInitialNotificationPath(): string | null {
   const response = Notifications.getLastNotificationResponse();
   if (!response) return null;
-  const path = pathFromNotificationData(response.notification.request.content.data);
+  const data = response.notification.request.content.data;
+  const path = pathFromNotificationData(data);
+  if (path) void markNotificationFromPush(data).catch(() => {});
   if (path) void trackEvent('notification_open');
   Notifications.clearLastNotificationResponse();
   return path;

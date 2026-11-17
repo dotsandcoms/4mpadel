@@ -177,6 +177,7 @@ test('native finals and third-place playoffs sharing a round number stay separat
 function drawBoard(sections, matchId, results) {
   const hooks = { useState: initial => [initial, () => {}], useMemo: fn => fn(), useEffect() {} };
   const modules = {
+    './tournament-bracket': { TournamentBracket: 'TournamentBracket' },
     react: hooks,
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }), Fragment: 'Fragment' },
     'react-native': { ...Object.fromEntries(['ActivityIndicator', 'Pressable', 'ScrollView', 'Text', 'View'].map(name => [name, name])), StyleSheet: { create: value => value } },

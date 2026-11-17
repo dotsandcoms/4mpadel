@@ -50,11 +50,11 @@ final class WatchSchedule: NSObject, ObservableObject, WCSessionDelegate {
 @main
 struct FourMWatchApp: App {
   @StateObject private var schedule = WatchSchedule()
+  @StateObject private var reminders = WatchReminders()
   @AppStorage("schedule-category") private var preferredCategory = ""
   @State private var linkedCategory: String?
   @State private var navigationPath: [WatchDestination] = []
   @Environment(\.scenePhase) private var scenePhase
-  private let lime = Color(red: 0.8, green: 1, blue: 0)
   var body: some Scene {
     WindowGroup {
       NavigationStack(path: $navigationPath) {
@@ -76,19 +76,24 @@ struct FourMWatchApp: App {
                     Text("COMING UP").font(.system(size: 10, weight: .bold)).tracking(1.2)
                     Spacer()
                     Text("\(items.count - 1)").monospacedDigit()
-                  }.font(.caption2).foregroundStyle(.secondary).padding(.top, 4)
+                  }.font(.caption2).foregroundStyle(WatchTheme.muted).padding(.top, 4)
                   ForEach(Array(items.dropFirst().prefix(4))) { item in
                     scheduleLink(item, featured: false)
                   }
                 }
               } else {
-                Image(systemName: category == "match" ? "tennisball" : "calendar").font(.largeTitle).foregroundStyle(lime)
+                Image(systemName: category == "match" ? "tennisball" : "calendar").font(.largeTitle).foregroundStyle(WatchTheme.accent)
                 Text(schedule.snapshot.signedIn ? (category == "match" ? "No upcoming matches" : "No upcoming events") : "Your schedule").font(.headline)
                 Text(schedule.snapshot.signedIn
                      ? (category == "match" ? "Your scheduled matches will appear here after syncing with iPhone." : "Save or enter an event in the iPhone app to see it here.")
-                     : schedule.snapshot.emptyMessage).font(.caption).foregroundStyle(.secondary)
+                     : schedule.snapshot.emptyMessage).font(.caption).foregroundStyle(WatchTheme.muted)
               }
-              Divider()
+              NavigationLink(value: WatchDestination.reminders) {
+                Label("Court reminders", systemImage: "bell").font(.caption.bold())
+                  .frame(maxWidth: .infinity, minHeight: 44).foregroundStyle(WatchTheme.accent)
+                  .background(WatchTheme.surface, in: Capsule())
+              }.buttonStyle(.plain)
+              Divider().overlay(WatchTheme.border)
               VStack(spacing: 10) {
               if schedule.snapshot.updatedAt > 0 {
                 VStack(spacing: 2) {
@@ -96,36 +101,43 @@ struct FourMWatchApp: App {
                   if !Calendar.current.isDate(schedule.snapshot.updated, inSameDayAs: context.date) {
                     Text(schedule.snapshot.updated, format: .dateTime.day().month(.abbreviated))
                   }
-                }.font(.caption2).foregroundStyle(.secondary)
-                if schedule.snapshot.isStale(at: context.date) { Text("Schedule may have changed. Open 4M on iPhone.").font(.caption2).foregroundStyle(.orange) }
+                }.font(.caption2).foregroundStyle(WatchTheme.muted)
+                if schedule.snapshot.isStale(at: context.date) { Text("Schedule may have changed. Open 4M on iPhone.").font(.caption2).foregroundStyle(WatchTheme.danger) }
               }
-              if !schedule.message.isEmpty { Text(schedule.message).font(.caption2).foregroundStyle(.secondary) }
+              if !schedule.message.isEmpty { Text(schedule.message).font(.caption2).foregroundStyle(WatchTheme.muted) }
               Button(action: schedule.refresh) {
                 Label(schedule.isRefreshing ? "Refreshing…" : "Refresh", systemImage: "arrow.clockwise")
                   .font(.caption.bold()).lineLimit(1)
                   .frame(maxWidth: .infinity, minHeight: 44)
-                  .background(lime.opacity(0.18), in: Capsule())
-              }.buttonStyle(.plain).foregroundStyle(lime).disabled(schedule.isRefreshing)
+                  .background(WatchTheme.surface, in: Capsule())
+              }.buttonStyle(.plain).foregroundStyle(WatchTheme.accent).disabled(schedule.isRefreshing)
                 .accessibilityLabel("Refresh schedule from iPhone")
-              Text("Entries & payments\non iPhone").font(.caption2).foregroundStyle(.secondary)
+              Text("Entries & payments\non iPhone").font(.caption2).foregroundStyle(WatchTheme.muted)
               }.multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
                 .padding(.bottom, 24)
             }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8)
-          }.id(category).navigationTitle("Next up").navigationBarTitleDisplayMode(.inline)
+          }.watchPage().id(category).navigationTitle("Next up").navigationBarTitleDisplayMode(.inline)
         }
         .navigationDestination(for: WatchDestination.self) { destination in
           switch destination {
           case .event(let id): WatchEventCard(schedule: schedule, eventID: id)
+          case .match(let id): WatchMatchCard(schedule: schedule, matchID: id)
+          case .reminders: WatchReminderSettings(reminders: reminders, snapshot: schedule.snapshot)
           }
         }
-      }.tint(lime).onChange(of: scenePhase) { _, phase in if phase == .active { schedule.refresh() } }
+      }.preferredColorScheme(.light).tint(WatchTheme.accent).onChange(of: scenePhase) { _, phase in if phase == .active { schedule.refresh() } }
+        .task { reminders.reconcile(schedule.snapshot) }
+        .onChange(of: schedule.snapshot.updatedAt) { _, _ in reminders.reconcile(schedule.snapshot) }
+        .onChange(of: reminders.destination) { _, url in if let url { open(url); reminders.destination = nil } }
         .onOpenURL { url in
-          guard let route = WatchScheduleRoute(url: url) else { return }
-          linkedCategory = route.category
-          navigationPath = route.destination.map { [$0] } ?? []
+          open(url)
         }
     }
+  }
+  private func open(_ url: URL) {
+    guard let route = WatchScheduleRoute(url: url) else { return }
+    linkedCategory = route.category; navigationPath = route.destination.map { [$0] } ?? []
   }
 
   @ViewBuilder private func scheduleLink(_ item: ScheduleItem, featured: Bool) -> some View {
@@ -136,7 +148,8 @@ struct FourMWatchApp: App {
         .accessibilityLabel((["View event: " + item.title, item.when, item.venue, item.court, item.status]
           .filter { !$0.isEmpty }).joined(separator: ", "))
     } else {
-      WatchScheduleCard(item: item, featured: featured)
+      NavigationLink(value: WatchDestination.match(item.id)) { WatchScheduleCard(item: item, featured: featured) }
+        .buttonStyle(.plain).accessibilityLabel("View match: " + item.title)
     }
   }
 
@@ -144,18 +157,43 @@ struct FourMWatchApp: App {
     Button { preferredCategory = kind; linkedCategory = nil } label: {
       Text(title).font(.caption.bold())
         .frame(maxWidth: .infinity, minHeight: 44)
-        .foregroundStyle(selected == kind ? Color.black : Color.white)
-        .background(selected == kind ? lime : Color.white.opacity(0.12), in: Capsule())
+        .foregroundStyle(selected == kind ? Color.white : WatchTheme.ink)
+        .background(selected == kind ? WatchTheme.accent : WatchTheme.surface, in: Capsule())
     }
     .buttonStyle(.plain)
     .accessibilityAddTraits(selected == kind ? .isSelected : [])
   }
 }
 
+private struct WatchMatchCard: View {
+  @ObservedObject var schedule: WatchSchedule
+  let matchID: String
+  var body: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 12) {
+        if schedule.snapshot.signedIn, let item = schedule.snapshot.items.first(where: { $0.id == matchID && $0.kind == "match" }) {
+          Text(item.title).font(.headline).fixedSize(horizontal: false, vertical: true)
+          Text(item.when).font(.caption).foregroundStyle(WatchTheme.accent)
+          if !item.subtitle.isEmpty {
+            Text("PLAYERS").font(.system(size: 9, weight: .bold)).foregroundStyle(WatchTheme.muted)
+            Text(item.subtitle).font(.caption).fixedSize(horizontal: false, vertical: true)
+          }
+          if !item.court.isEmpty { Label(item.court, systemImage: "sportscourt").font(.headline) }
+          if !item.venue.isEmpty { WatchVenueButton(item: item) }
+          WatchStatus(item: item)
+          Text("Schedule synced " + schedule.snapshot.updated.formatted(date: .abbreviated, time: .shortened)).font(.caption2).foregroundStyle(WatchTheme.muted)
+        } else {
+          Text("Match unavailable").font(.headline)
+          Text("Open 4M on iPhone to refresh your schedule.").font(.caption).foregroundStyle(WatchTheme.muted)
+        }
+      }.padding(.horizontal, 4).padding(.bottom, 20)
+    }.watchPage().navigationTitle("Match")
+  }
+}
+
 private struct WatchEventCard: View {
   @ObservedObject var schedule: WatchSchedule
   let eventID: String
-  private let lime = Color(red: 0.8, green: 1, blue: 0)
 
   var body: some View {
     ScrollView {
@@ -171,27 +209,27 @@ private struct WatchEventCard: View {
               WatchEventTiming(item: event)
             }
           }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
-            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+            .background(WatchTheme.surface, in: RoundedRectangle(cornerRadius: 14))
           WatchStatus(item: event)
           WatchLiveBadge(item: event)
           VStack(alignment: .leading, spacing: 4) {
-            Text("VENUE").font(.system(size: 9, weight: .bold)).tracking(1.3).foregroundStyle(.secondary)
+            Text("VENUE").font(.system(size: 9, weight: .bold)).tracking(1.3).foregroundStyle(WatchTheme.muted)
             if !event.venue.isEmpty { WatchVenueButton(item: event) }
             else { Text("To be confirmed").font(.caption) }
-            if !event.subtitle.isEmpty { Text(event.subtitle).font(.caption2).foregroundStyle(.secondary) }
+            if !event.subtitle.isEmpty { Text(event.subtitle).font(.caption2).foregroundStyle(WatchTheme.muted) }
           }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
-            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+            .background(WatchTheme.surface, in: RoundedRectangle(cornerRadius: 14))
           WatchHero(item: event)
           Text("Manage your entry and payments in 4M on iPhone.")
-            .font(.caption2).foregroundStyle(.secondary)
+            .font(.caption2).foregroundStyle(WatchTheme.muted)
           Text("Synced \(schedule.snapshot.updated.formatted(date: .abbreviated, time: .shortened))")
-            .font(.caption2).foregroundStyle(.secondary)
+            .font(.caption2).foregroundStyle(WatchTheme.muted)
         } else {
           Text("Event unavailable").font(.headline)
-          Text("Open 4M on iPhone to refresh your schedule.").font(.caption).foregroundStyle(.secondary)
+          Text("Open 4M on iPhone to refresh your schedule.").font(.caption).foregroundStyle(WatchTheme.muted)
         }
       }.padding(.horizontal, 4).padding(.bottom, 24)
-    }.navigationTitle("Event").navigationBarTitleDisplayMode(.inline)
+    }.watchPage().navigationTitle("Event").navigationBarTitleDisplayMode(.inline)
   }
 }
 
@@ -200,7 +238,6 @@ private struct WatchVenueButton: View {
   var concise = false
   @State private var searching = false
   @State private var failure: String?
-  private let lime = Color(red: 0.8, green: 1, blue: 0)
 
   var body: some View {
     VStack(alignment: .leading, spacing: 5) {
@@ -214,12 +251,12 @@ private struct WatchVenueButton: View {
             .fixedSize(horizontal: false, vertical: true)
           Spacer(minLength: 0)
           Image(systemName: "arrow.up.right").font(.caption2)
-        }.font(.caption).foregroundStyle(lime)
+        }.font(.caption).foregroundStyle(WatchTheme.accent)
           .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
           .contentShape(Rectangle())
       }.buttonStyle(.plain).disabled(searching)
         .accessibilityLabel("Open \(item.venue) in Maps")
-      if let failure { Text(failure).font(.caption2).foregroundStyle(.orange) }
+      if let failure { Text(failure).font(.caption2).foregroundStyle(WatchTheme.danger) }
     }
   }
 
@@ -247,12 +284,10 @@ private struct WatchVenueButton: View {
   }
 }
 
-private let watchLime = Color(red: 0.8, green: 1, blue: 0)
-
 private extension ScheduleItem {
   var statusColor: Color {
-    status == "Payment pending" ? Color(red: 1, green: 0.48, blue: 0.42)
-      : status == "Saved event" ? Color(red: 0.7, green: 0.76, blue: 0.83) : watchLime
+    status == "Payment pending" ? WatchTheme.danger
+      : status == "Saved event" ? WatchTheme.muted : WatchTheme.accent
   }
   var statusIcon: String {
     status == "Payment pending" ? "exclamationmark.circle.fill"
@@ -274,8 +309,8 @@ private struct WatchDateTile: View {
     VStack(spacing: 0) {
       Text(item.datePart("dd")).font(.system(size: 26, weight: .bold, design: .rounded)).monospacedDigit()
       Text(item.datePart("MMM").uppercased()).font(.system(size: 9, weight: .heavy)).tracking(1)
-    }.foregroundStyle(watchLime).frame(width: 44, height: 52)
-      .background(watchLime.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+    }.foregroundStyle(WatchTheme.accent).frame(width: 44, height: 52)
+      .background(WatchTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
       .accessibilityLabel(item.when)
   }
 }
@@ -302,7 +337,7 @@ private struct WatchHero: View {
             // Event posters contain text and sponsor marks: preserve the full graphic.
             Image(decorative: artwork, scale: 1).resizable().scaledToFit()
               .frame(maxWidth: .infinity).frame(height: compact ? 100 : 145)
-              .background(Color.black)
+              .background(WatchTheme.surface)
       } else { fallback }
     }.clipShape(RoundedRectangle(cornerRadius: 16))
       .accessibilityLabel("Event graphic for \(item.title)")
@@ -337,7 +372,7 @@ private struct WatchScheduleCard: View {
         if featured {
           Text(item.title).font(.system(size: 15, weight: .bold, design: .rounded))
             .lineLimit(3).frame(maxWidth: .infinity, alignment: .leading)
-          Text(item.allDay ? item.datePart("EEE d MMM") : item.when).font(.caption2.bold()).foregroundStyle(watchLime)
+          Text(item.allDay ? item.datePart("EEE d MMM") : item.when).font(.caption2.bold()).foregroundStyle(WatchTheme.accent)
             .fixedSize(horizontal: false, vertical: true)
         } else {
           HStack(alignment: .top, spacing: 9) {
@@ -349,19 +384,19 @@ private struct WatchScheduleCard: View {
         if !item.court.isEmpty { Label(item.court, systemImage: "sportscourt").font(.caption2) }
         if !item.venue.isEmpty {
           Label(item.venue, systemImage: "mappin.and.ellipse")
-            .font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+            .font(.caption2).foregroundStyle(WatchTheme.muted).lineLimit(2)
         }
         WatchEventTiming(item: item)
         if item.kind == "match" && !item.subtitle.isEmpty {
-          Text(item.subtitle).font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+          Text(item.subtitle).font(.caption2).foregroundStyle(WatchTheme.muted).fixedSize(horizontal: false, vertical: true)
         }
         WatchStatus(item: item)
         WatchLiveBadge(item: item)
       }.padding(10)
       if featured || item.kind == "event" { WatchHero(item: item, compact: !featured) }
     }.frame(maxWidth: .infinity, alignment: .leading)
-      .background(Color(white: 0.075), in: RoundedRectangle(cornerRadius: 16))
-      .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.08), lineWidth: 0.5))
+      .background(WatchTheme.card, in: RoundedRectangle(cornerRadius: 16))
+      .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(WatchTheme.border, lineWidth: 0.5))
   }
 }
 
@@ -372,10 +407,10 @@ private struct WatchLiveBadge: View {
     TimelineView(.animation(minimumInterval: 60, paused: scenePhase != .active)) { context in
       if item.isLive(at: context.date) {
         HStack(spacing: 5) {
-          Circle().fill(.orange).frame(width: 5, height: 5)
+          Circle().fill(WatchTheme.accent).frame(width: 5, height: 5)
           Text("LIVE").font(.system(size: 10, weight: .heavy)).tracking(1)
-        }.foregroundStyle(.orange).padding(.horizontal, 8).padding(.vertical, 5)
-          .background(Color.orange.opacity(0.15), in: Capsule())
+        }.foregroundStyle(WatchTheme.accent).padding(.horizontal, 8).padding(.vertical, 5)
+          .background(WatchTheme.accent.opacity(0.1), in: Capsule())
           .accessibilityLabel("Tournament underway, based on event dates")
       }
     }
@@ -388,7 +423,7 @@ private struct WatchEventTiming: View {
   var body: some View {
     TimelineView(.animation(minimumInterval: 60, paused: scenePhase != .active)) { context in
       if item.isLive(at: context.date) {
-        Text("Tournament underway").font(.caption2).foregroundStyle(.orange)
+        Text("Tournament underway").font(.caption2).foregroundStyle(WatchTheme.accent)
       } else if let countdown = item.countdown(at: context.date) {
         let seconds = max(0, Int(countdown.end.timeIntervalSince(context.date)))
         let days = seconds / 86400
@@ -396,9 +431,9 @@ private struct WatchEventTiming: View {
         let minutes = (seconds % 3600) / 60
         VStack(alignment: .leading, spacing: 7) {
           Text(countdown.label == "Entries close" ? "Registration closes in" : countdown.label == "Entries open" ? "Registration opens in" : "Starts in")
-            .font(.caption2).foregroundStyle(.secondary)
+            .font(.caption2).foregroundStyle(WatchTheme.muted)
           if seconds < 60 {
-            Text("Less than a minute").font(.caption.bold()).foregroundStyle(watchLime)
+            Text("Less than a minute").font(.caption.bold()).foregroundStyle(WatchTheme.accent)
           } else {
             HStack(spacing: 6) {
               if days > 0 { unit(days, label: days == 1 ? "day" : "days") }
@@ -410,16 +445,16 @@ private struct WatchEventTiming: View {
         }
       } else {
         Label(item.allDay ? "Time TBC" : item.datePart("HH:mm") + " SAST", systemImage: "clock")
-          .font(.caption2).foregroundStyle(.secondary)
+          .font(.caption2).foregroundStyle(WatchTheme.muted)
       }
     }
   }
 
   private func unit(_ value: Int, label: String) -> some View {
     VStack(spacing: 2) {
-      Text(String(value)).font(.system(size: 20, weight: .bold, design: .rounded)).monospacedDigit().foregroundStyle(watchLime)
-      Text(label).font(.system(size: 9, weight: .medium)).foregroundStyle(.secondary)
+      Text(String(value)).font(.system(size: 20, weight: .bold, design: .rounded)).monospacedDigit().foregroundStyle(WatchTheme.accent)
+      Text(label).font(.system(size: 9, weight: .medium)).foregroundStyle(WatchTheme.muted)
     }.frame(maxWidth: .infinity).padding(.vertical, 7)
-      .background(watchLime.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
+      .background(WatchTheme.accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
   }
 }

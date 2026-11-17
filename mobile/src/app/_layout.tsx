@@ -1,3 +1,6 @@
+import { MessagingProvider } from '@/components/messaging/messaging-provider';
+import { AppIconBadge } from '@/components/app-icon-badge';
+import { IncomingMessageBanner } from '@/components/messaging/incoming-banner';
 import { watchWelcomeEmailRetries } from '@/lib/welcome-email';
 import 'react-native-gesture-handler';
 import type { Session } from '@supabase/supabase-js';
@@ -33,7 +36,7 @@ SplashScreen.preventAutoHideAsync();
 Observe.configure({
   integrations: {
     'expo-router': {
-      filteredParams: ['id', 'code', 'entry', 'pay_ref', 'payment_return', 'reference', 'registrationId', 'match', 'query', 'email', 'token'],
+      filteredParams: ['id', 'code', 'entry', 'pay_ref', 'payment_return', 'reference', 'registrationId', 'match', 'query', 'email', 'token', 'conversationId', 'playerId', 'body', 'code'],
     },
   },
 });
@@ -44,10 +47,9 @@ Observe.configure({
  * App chrome uses the dark 4M identity. Event overview content follows the
  * website’s white tabs and light accordion surfaces.
  *
- * Launch runs as: static native splash (near-black) → in-app AnimatedSplash
- * (full-bleed court, lime line, wordmark) → app. Native cannot animate, so
- * the overlay is the wow moment. The lime rule then reappears under the mark
- * on onboarding and sign-in so the first screen feels like a continuation.
+ * Launch runs as a static native splash, then a matching light overlay with the
+ * 4M wordmark and one short court/ball animation. The overlay never delays data
+ * loading; it hands off once the startup and routing gates below are ready.
  *
  * The overlay stays up until three things are true:
  *   - the animation has run its course (so it never truncates mid-motion),
@@ -62,7 +64,7 @@ function RootLayout() {
   const pathname = usePathname();
   const isAuth = segments[0] === '(auth)';
   const recoveryRoute = useRef(false);
-  recoveryRoute.current = segments[0] === 'reset-password';
+  recoveryRoute.current = segments[0] === 'reset-password' || segments[0] === 'email-change';
   const brand = lightBrand;
   const navigationTheme = DefaultTheme;
   const [dataReady, setDataReady] = useState(false);
@@ -90,8 +92,9 @@ function RootLayout() {
   const onSplashFinish = useCallback(() => setAnimDone(true), []);
 
   const resolvePath = useCallback(async (seen: boolean, session: Session | null) => {
-    // Replay the introduction in development; production keeps first-launch onboarding.
-    if (__DEV__ || !seen) return '/(auth)/onboarding' as const;
+    // UI work should retain the normal saved-session flow across dev reloads.
+    // Set the public dev-only flag when deliberately reviewing the introduction.
+    if ((__DEV__ && process.env.EXPO_PUBLIC_REPLAY_ONBOARDING === '1') || !seen) return '/(auth)/onboarding' as const;
     if (!session) return '/(auth)/sign-in' as const;
     return withStartupDeadline(destinationAfterAuth(session));
   }, []);
@@ -223,8 +226,19 @@ function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="events/register" />
+        <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
         <Stack.Screen
           name="search"
+          options={{
+            presentation: 'formSheet',
+            sheetAllowedDetents: [0.62, 1],
+            sheetGrabberVisible: true,
+            sheetCornerRadius: 24,
+            contentStyle: { backgroundColor: brand.page },
+          }}
+        />
+        <Stack.Screen
+          name="event-winners"
           options={{
             presentation: 'formSheet',
             sheetAllowedDetents: [0.62, 1],
@@ -246,6 +260,7 @@ function RootLayout() {
         <Stack.Screen
           name="notifications"
           options={{
+            headerShown: false,
             presentation: 'formSheet',
             sheetAllowedDetents: [0.42, 0.78],
             sheetGrabberVisible: true,
@@ -298,6 +313,6 @@ function ObserveFailure({ onRetry }: { onRetry: () => void }) {
 
 export default function ObservedRootLayout() {
   return <ObserveRoot errorBoundaryFallback={({ resetError }) => <ObserveFailure onRetry={resetError} />}>
-    <RootLayout />
+    <MessagingProvider><AppIconBadge /><RootLayout /><IncomingMessageBanner /></MessagingProvider>
   </ObserveRoot>;
 }

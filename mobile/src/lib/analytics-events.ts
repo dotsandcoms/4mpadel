@@ -39,7 +39,8 @@ const SCREENS: Record<string, string> = {
   'pro/fip/[id]/index': 'fip_tournament', 'pro/fip/[id]/document': 'fip_document',
   'media/index': 'media', 'media/[id]': 'media_album', 'calendar/[id]': 'calendar_event',
   search: 'event_search', help: 'help', legal: 'legal', 'reset-password': 'reset_password',
-  'match-result': 'match_result',
+  'match-result': 'match_result', messages: 'messages', 'messages/[id]': 'conversation',
+  'messages/new': 'message_request', 'messages/events': 'event_messages', 'settings/messaging': 'messaging_settings',
 };
 
 /** Receives Expo Router segments, whose dynamic parts are templates such as [id]. */
@@ -52,7 +53,7 @@ const ENUMS: Record<string, readonly string[]> = {
   method: ['password', 'google', 'apple', 'native'],
   item_category: PURCHASE_KINDS,
   currency: ['ZAR'], payment_state: ['paid', 'pending'],
-  content_type: ['events', 'local_player', 'pro_player', 'pro_match', 'tournament', 'support', 'players', 'rankings', 'media', 'media_album', 'fip_document'],
+  content_type: ['all', 'events', 'local_player', 'pro_player', 'pro_match', 'tournament', 'support', 'players', 'rankings', 'media', 'media_album', 'fip_document'],
   permission: ['granted', 'denied', 'undetermined', 'unavailable'],
   destination: [...new Set(Object.values(SCREENS)), 'other'],
   feature: ['event_details', 'event_calendar', 'rankings', 'player_hub', 'pro_live', 'following_feed', 'media', 'licence', 'registration', 'entry_balance', 'authentication', 'profile', 'match_detail', 'notifications'],

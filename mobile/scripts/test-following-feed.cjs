@@ -9,6 +9,76 @@ const model = load('supabase/functions/deliver-push/following-model.ts');
 const routing = load('src/lib/notification-routing.ts', () => ({ NOTIFICATION_PATHS: {} }));
 const feed = load('src/lib/following-feed.ts', () => routing);
 const now = Date.parse('2026-10-07T12:00:00Z');
+const mainScope = { ranking_source: 'sapa_main_v1', org: 'SAPA', ranking_id: 15809, age_group_id: 82, ranking_type: 3, age_group: 'Men-Main', match_type: 'Men-Doubles', ranking_scope: 'sapa:15809:3:82' };
+
+test('local ranking posts require a verified SAPA Main source, not the displayed rank', () => {
+  const row = { id: '00000000-0000-4000-8000-000000000001', kind: 'ranking', title: 'Charl moved', path: '/players/191', occurred_at: '2026-11-09T06:00:00Z' };
+  for (const payload of [
+    { before_rank: 17, rank: 9, points: 180 },
+    { ...mainScope, ranking_id: 16482, org: 'SA Grand Tour', before_rank: 17, rank: 9 },
+    { ...mainScope, age_group_id: 2, before_rank: 17, rank: 9 },
+    { ...mainScope, ranking_type: 4, before_rank: 17, rank: 9 },
+    { ...mainScope, match_type: 'Men-Singles', before_rank: 17, rank: 9 },
+    { ...mainScope, before_rank: 17, rank: 17, points: 4000 },
+  ]) {
+    const page = feed.parseFeedPage({ items: [{ ...row, payload }], has_more: true });
+    assert.equal(page.items.length, 0); assert.equal(page.cursor.id, row.id); assert.equal(page.hasMore, true);
+  }
+  const page = feed.parseFeedPage({ items: [{ ...row, payload: { ...mainScope, before_rank: 24, rank: 17, points: 3381 } }], has_more: false });
+  assert.equal(page.items.length, 1);
+  const change = feed.feedRankingChange(page.items[0]);
+  assert.equal(change.label, 'SAPA Men-Main'); assert.equal(change.rank, 17); assert.equal(change.points, 3381);
+});
+test('Women-Main identity cannot be labelled as Men-Main or borrowed from another circuit', () => {
+  const payload = { ...mainScope, age_group_id: 83, ranking_type: 4, age_group: 'Women-Main', match_type: 'Women-Doubles', ranking_scope: 'sapa:15809:4:83', before_rank: 11, rank: 6, points: 2000 };
+  assert.equal(feed.feedRankingChange({ kind: 'ranking', path: '/players/192', payload }).label, 'SAPA Women-Main');
+  assert.equal(feed.feedRankingChange({ kind: 'ranking', path: '/players/192', payload: { ...payload, age_group: 'Men-Main' } }), null);
+});
+test('ranking movement directions describe places gained or lost within the same SAPA Main scope', () => {
+  for (const [before, rank, change] of [[40, 46, -6], [46, 39, 7]]) {
+    const movement = feed.feedRankingChange({ kind: 'ranking', path: '/players/1', payload: { ...mainScope, before_rank: before, rank } });
+    assert.equal(movement.change, change);
+    assert.equal(movement.scope, 'sapa:15809:3:82');
+    assert.equal(movement.label, 'SAPA Men-Main');
+  }
+});
+test('local and FIP ranking posts require more than five places or entry into a top milestone', () => {
+  const cases = [
+    [394, 397, false], [122, 127, false], [127, 122, false],
+    [122, 128, true], [128, 122, true],
+    [11, 10, true], [21, 20, true], [101, 100, true],
+    [12, 9, true], [22, 19, true], [102, 99, true],
+    [10, 9, false], [20, 19, false], [100, 99, false],
+    [10, 11, false], [20, 21, false], [100, 101, false],
+    [9, 9, false], [null, 10, false], [0, 10, false], [10, null, false],
+  ];
+  for (const path of ['/players/191', '/pro/player/95']) {
+    for (const [before_rank, rank, expected] of cases) {
+      const item = { id: '00000000-0000-4000-8000-000000000001', kind: 'ranking', title: 'Ranking update', path,
+        payload: { ...mainScope, before_rank, rank, points: 2000 }, occurred_at: '2026-11-16T08:00:00Z' };
+      assert.equal(!!feed.feedRankingChange(item), expected, `${path}: ${before_rank} -> ${rank}`);
+      const page = feed.parseFeedPage({ items: [item], has_more: true });
+      assert.equal(page.items.length, expected ? 1 : 0);
+      assert.equal(page.cursor.id, item.id);
+      assert.equal(page.hasMore, true);
+    }
+  }
+});
+test('Home player data is a separate followed-player list with independent local and FIP identities', () => {
+  const page = feed.parseFeedPage({ items: [], has_more: false, followed_players: [
+    { id: 191, name: 'Charl Vos', source: 'local', photo_url: 'https://test/charl.jpg', nationality: 'ZA', rank_label: 9, points: 180, email: 'private', main_rankings: [{ ...mainScope, rank: 17, points: 3381 }] },
+    { id: 191, name: 'FIP player', source: 'pro', photo_url: 'https://test/fip.jpg', nationality: 'ES', pro_ranking: { category: 'men', rank: 7, points: 1555 } },
+  ] });
+  assert.equal(page.items.length, 0); assert.equal(page.followedPlayers.length, 2);
+  assert.equal(page.followedPlayers[0].mainRankings[0].rank, 17); assert.equal(page.followedPlayers[0].mainRankings[0].points, 3381);
+  assert.equal(page.followedPlayers[1].proRanking.rank, 7); assert.equal(page.followedPlayers[1].mainRankings, undefined);
+  assert.equal(page.followedPlayers[0].proRanking, undefined); assert.ok(!JSON.stringify(page.followedPlayers).includes('private'));
+});
+test('ranking notification deep links keep the main division and reject extra or duplicate parameters', () => {
+  const path = '/(tabs)/rankings?view=Rankings&source=4m&gender=women';
+  assert.equal(routing.pathFromNotificationData({ path }), path);
+  for (const bad of [path + '&gender=men', path + '&org=16482', path.replace('source=4m','source=pro')]) assert.equal(routing.pathFromNotificationData({ path: bad }), null);
+});
 const match = { id: 77, status: 'scheduled', scheduled_at: '2026-10-07T14:00:00Z', court: 'Court 2', players: { team_1: [{ id: 1, name: 'Mark' }, { id: 2, name: 'Paul' }], team_2: [{ id: 3, name: 'Brad' }, { id: 4, name: 'Jason' }] }, tournament: { name: 'SA Nationals' }, played_at: '2026-10-07', score: [{ team_1: 6, team_2: 0 }, { team_1: 6, team_2: 0 }], winner: 'team_1' };
 test('two and three-set pro results preserve tie-break sets through the worker and feed', () => {
   for (const scores of [
@@ -192,7 +262,7 @@ test('an invalidated account request does not continue collecting personal feed 
 });
 test('feed windows and load more skip unchanged ranking pages to reach real updates', async () => {
   const calls = [];
-  const entries = Array.from({ length: 5 }, (_, i) => ({ id: `00000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`, kind: 'ranking', title: 'Ranking update', path: '/pro/player/95', occurred_at: new Date(now - i * 1000).toISOString(), payload: { before_rank: 10, rank: i < 3 ? 10 : 9 } }));
+  const entries = Array.from({ length: 5 }, (_, i) => ({ id: `00000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`, kind: 'ranking', title: 'Ranking update', path: '/pro/player/95', occurred_at: new Date(now - i * 1000).toISOString(), payload: { before_rank: 10, rank: i < 3 ? 9 : 3 } }));
   const api = load('src/lib/following-feed.ts', name => name.includes('supabase') ? { supabase: { rpc: async (_name, args) => {
     calls.push(args);
     const offset = args.p_before_id ? entries.findIndex(row => row.id === args.p_before_id) + 1 : 0;

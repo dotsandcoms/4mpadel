@@ -1,3 +1,5 @@
+import { deliverMessagingPush } from './messaging.ts';
+import { cachedAppBadge, appBadgeForToken } from '../_shared/app-badge.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { deliveryDecision, retryDelay } from './policy.ts';
 import { refreshProMatchAlerts } from './pro-match-alerts.ts';
@@ -28,6 +30,7 @@ Deno.serve(async request => {
   if (!secret || request.headers.get('Authorization') !== `Bearer ${secret}`) return new Response('Unauthorized', { status: 401 });
   if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
   try {
+    await deliverMessagingPush(client, expo, token => appBadgeForToken(client, token)).catch(() => console.warn('Messaging delivery batch unavailable'));
     const providerFetch = createPadelFetch(client);
     // A provider outage must not block the existing tournament notification queue.
     await refreshProMatchAlerts(client, Deno.env.get('PADEL_API_TOKEN'), providerFetch).catch(() => console.warn('Pro match alert refresh failed'));
@@ -64,8 +67,10 @@ Deno.serve(async request => {
         const prefs = context?.preferences ?? {};
         const decision = deliveryDecision(outbox, token, prefs ?? {});
         if (decision) { await finish({ status: 'skipped', error: decision }); processed++; return; }
+        const badge = await cachedAppBadge(client, outbox.email).catch(() => undefined);
         const ticket = await expo('send', {
           to: token!.token, title: outbox.title, body: outbox.body, sound: 'default', channelId: 'default',
+          ...(badge !== undefined ? { badge } : {}),
           data: { type: outbox.type, path: outbox.path || '/calendar', notificationId: outbox.id },
         });
         if (ticket.status === 'ok' && ticket.id) {

@@ -5,6 +5,7 @@ import {
     getPaystackSecretForPayment,
     resolvePaystackVerifySecrets,
     verifyPaystackReference,
+    assertPaystackPayment,
 } from './paystack.ts';
 import {
     applyRegistrationWithdrawal,
@@ -695,6 +696,7 @@ async function handleSwitchDivision(
             if (secrets.length === 0) return json(500, { error: configError || 'Payment verification not configured' });
             const verification = await verifyPaystackReference(topUpReference, secrets);
             if (!verification.ok) return json(200, { switched: false, retry: true, error: 'Top-up not verified', status: verification.status });
+            assertPaystackPayment(topPay, verification.data);
             await supabaseAdmin.from('payments').update({ status: 'success' }).eq('id', topPay.id);
         }
         if (Number(topPay.amount) + 0.01 < delta) return json(400, { error: 'Top-up amount is less than the fee difference' });

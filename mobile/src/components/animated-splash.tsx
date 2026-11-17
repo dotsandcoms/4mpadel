@@ -6,30 +6,27 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withDelay,
-  withRepeat,
   withTiming,
 } from 'react-native-reanimated';
 
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { lightBrand as brand } from '@/theme/tokens';
 
-const RULE_W = 72;
 const REVEAL_MS = 1200;
 
 /**
  * In-app launch screen.
  *
  * Native splash is a static light frame (storyboards cannot animate).
- * This overlay takes over on the first JS frame: light background, lime line
- * draws, wordmark lands, then we hand off. If session lookup is still in
- * flight the line pulses — it is the loading cue, not a spinner.
+ * This overlay takes over on the first JS frame. One short serve crosses a
+ * small court beneath the wordmark. It settles rather than looping or implying
+ * a percentage of network progress. Startup routing owns the actual handoff.
  *
  * Reveal is 1.2s. Reduce Motion skips movement and keeps a still.
  */
 export function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
   const reduced = useReducedMotion();
-  const ruleDraw = useSharedValue(reduced ? 1 : 0);
-  const rulePulse = useSharedValue(1);
+  const serve = useSharedValue(reduced ? 1 : 0);
   const four = useSharedValue(reduced ? 1 : 0);
   const padel = useSharedValue(reduced ? 1 : 0);
   const promise = useSharedValue(reduced ? 1 : 0);
@@ -39,20 +36,15 @@ export function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
 
     if (reduced) return () => clearTimeout(done);
 
-    ruleDraw.value = withTiming(1, { duration: 320, easing: Easing.out(Easing.cubic) });
+    serve.value = withDelay(360, withTiming(1, { duration: 560, easing: Easing.inOut(Easing.cubic) }));
     four.value = withDelay(180, withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) }));
     padel.value = withDelay(360, withTiming(1, { duration: 280, easing: Easing.out(Easing.cubic) }));
     promise.value = withDelay(
       540,
       withTiming(1, { duration: 240, easing: Easing.out(Easing.cubic) })
     );
-    rulePulse.value = withDelay(
-      REVEAL_MS,
-      withRepeat(withTiming(0.45, { duration: 700 }), -1, true)
-    );
-
     return () => clearTimeout(done);
-  }, [four, onFinish, padel, promise, reduced, ruleDraw, rulePulse]);
+  }, [four, onFinish, padel, promise, reduced, serve]);
 
   const fourStyle = useAnimatedStyle(() => ({
     opacity: four.value,
@@ -64,9 +56,12 @@ export function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
     transform: reduced ? [] : [{ translateY: (1 - padel.value) * 8 }],
   }));
 
-  const ruleStyle = useAnimatedStyle(() => ({
-    width: ruleDraw.value * RULE_W,
-    opacity: rulePulse.value,
+  const serveStyle = useAnimatedStyle(() => ({
+    opacity: reduced ? 1 : padel.value,
+    transform: reduced ? [] : [
+      { translateX: -20 + serve.value * 40 },
+      { translateY: -Math.sin(serve.value * Math.PI) * 12 },
+    ],
   }));
 
   const promiseStyle = useAnimatedStyle(() => ({
@@ -83,7 +78,13 @@ export function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
         <View style={styles.cluster}>
           <Animated.Text style={[styles.four, fourStyle]}>4M</Animated.Text>
           <Animated.Text style={[styles.padel, padelStyle]}>PADEL</Animated.Text>
-          <Animated.View style={[styles.rule, ruleStyle]} />
+          <View style={styles.court}>
+            <View style={styles.net} />
+            <View style={[styles.serviceLine, { left: 14 }]} />
+            <View style={[styles.serviceLine, { right: 14 }]} />
+            <View style={styles.centreLine} />
+            <Animated.View style={[styles.ball, serveStyle]} />
+          </View>
           <Animated.Text style={[styles.promise, promiseStyle]}>Play local. Follow the world.</Animated.Text>
         </View>
       </View>
@@ -116,12 +117,41 @@ const styles = StyleSheet.create({
     letterSpacing: 8,
     marginTop: 2,
   },
-  rule: {
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: brand.padel,
-    marginTop: 20,
-    alignSelf: 'center',
+  court: {
+    width: 64,
+    height: 32,
+    marginTop: 24,
+    borderWidth: 1,
+    borderRadius: 4,
+    borderColor: '#C7D1C5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  net: {
+    position: 'absolute',
+    width: 1,
+    height: 30,
+    backgroundColor: '#A7B8A3',
+  },
+  serviceLine: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: brand.edge,
+  },
+  centreLine: {
+    position: 'absolute',
+    left: 14,
+    right: 14,
+    height: 1,
+    backgroundColor: brand.edge,
+  },
+  ball: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: brand.messagingAction,
   },
   promise: {
     color: brand.muted,
@@ -129,6 +159,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.5,
     textAlign: 'center',
-    marginTop: 18,
+    marginTop: 16,
   },
 });

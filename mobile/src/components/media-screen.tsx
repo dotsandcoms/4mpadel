@@ -5,9 +5,11 @@ import { Image } from 'expo-image';
 import { Stack, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fetchMediaAlbum, fetchMediaAlbums, fetchMediaPhotos, PHOTO_PAGE_SIZE, type MediaAlbum, type MediaPhoto } from '@/lib/media';
+import { fetchMediaContent, fetchMediaPhotos, photographerInstagramUrl, PHOTO_PAGE_SIZE, type MediaAlbum, type MediaPhoto } from '@/lib/media';
+import { AlbumPhotoProfileAction } from './album-photo-profile-action';
+import { ErrorBanner } from './error-banner';
 import { hapticLight } from '@/lib/haptics';
 import { lightBrand as brand } from '@/theme/tokens';
 
@@ -54,7 +56,13 @@ function AlbumCard({ album, width }: { album: MediaAlbum; width: number }) {
     <Text numberOfLines={1} style={styles.albumDate}>{albumDate(album)}</Text>
   </TouchableOpacity>;
 }
-function AlbumHeader({ album }: { album: MediaAlbum }) {
+function AlbumHeader({ album, onInstagram }: { album: MediaAlbum; onInstagram: (url: string) => void }) {
+  const instagram = photographerInstagramUrl(album.photographer_instagram);
+  const credit = <>
+    <View style={styles.creditIcon}><Ionicons name={instagram ? 'logo-instagram' : 'camera-outline'} size={16} color={instagram ? BLUE : brand.muted} /></View>
+    <View style={{ flex: 1, gap: 2 }}><Text style={styles.creditLabel}>PHOTOGRAPHY</Text><Text style={[styles.creditName, instagram && { color: BLUE }]}>{album.photographer_name || album.photographer_instagram}</Text></View>
+    {instagram && <Ionicons name="arrow-up-right-box-outline" size={18} color={BLUE} />}
+  </>;
   return <View style={styles.albumHeader}>
     <View style={styles.detailCover}><AlbumArtwork album={album} /></View>
     <View style={styles.detailMeta}>
@@ -64,10 +72,7 @@ function AlbumHeader({ album }: { album: MediaAlbum }) {
     </View>
     <Text accessibilityRole="header" style={styles.detailTitle}>{album.title}</Text>
     {!!album.description && <Text style={styles.body}>{album.description}</Text>}
-    {!!(album.photographer_name || album.photographer_instagram) && <View style={styles.creditRow}>
-      <View style={styles.creditIcon}><Ionicons name="camera-outline" size={16} color={brand.muted} /></View>
-      <View style={{ flex: 1, gap: 2 }}><Text style={styles.creditLabel}>PHOTOGRAPHY</Text><Text style={styles.creditName}>{album.photographer_name || album.photographer_instagram}</Text></View>
-    </View>}
+    {!!(album.photographer_name || album.photographer_instagram) && (instagram ? <TouchableOpacity accessibilityRole="link" accessibilityLabel={`${album.photographer_name || album.photographer_instagram} on Instagram`} accessibilityHint="Opens Instagram" activeOpacity={0.65} style={styles.creditRow} onPress={() => onInstagram(instagram)}>{credit}</TouchableOpacity> : <View style={styles.creditRow}>{credit}</View>)}
     {!!album.youtube_playlist_url && <TouchableOpacity activeOpacity={0.65} accessibilityRole="button" accessibilityLabel="Watch event videos on YouTube" onPress={() => void openPlaylist(album.youtube_playlist_url!)} style={styles.videoRow}>
       <View style={styles.playIcon}><Ionicons name="play" size={16} color="white" /></View>
       <View style={{ flex: 1, gap: 3 }}><Text style={styles.videoTitle}>Watch the highlights</Text><Text style={styles.albumDate}>Event videos on YouTube</Text></View>
@@ -75,12 +80,14 @@ function AlbumHeader({ album }: { album: MediaAlbum }) {
     </TouchableOpacity>}
   </View>;
 }
-function PhotoViewer({ photos, index, title, onClose }: { photos: MediaPhoto[]; index: number; title: string; onClose: () => void }) {
+function PhotoViewer({ photos, index, title, albumId, onClose }: { photos: MediaPhoto[]; index: number; title: string; albumId: string; onClose: () => void }) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [current, setCurrent] = useState(index);
+  const [error, setError] = useState('');
+  useEffect(() => setError(''), [current]);
   const pager = useRef<FlatList<MediaPhoto>>(null);
-  const imageHeight = Math.max(120, height - insets.top - insets.bottom - 180);
+  const imageHeight = Math.max(120, height - insets.top - insets.bottom - 264);
   const move = (direction: number) => {
     const next = Math.max(0, Math.min(photos.length - 1, current + direction));
     pager.current?.scrollToIndex({ index: next, animated: true });
@@ -107,7 +114,9 @@ function PhotoViewer({ photos, index, title, onClose }: { photos: MediaPhoto[]; 
             return <Pressable key={direction} accessibilityRole="button" accessibilityLabel={direction < 0 ? 'Previous photo' : 'Next photo'} accessibilityState={{ disabled }} disabled={disabled} onPress={() => move(direction)} style={[styles.viewerArrow, disabled && { opacity: 0.25 }]}><Ionicons name={direction < 0 ? 'chevron-back' : 'chevron-forward'} size={20} color="white" /></Pressable>;
           })}
         </View>
+        {!!photos[current] && <AlbumPhotoProfileAction albumId={albumId} photo={photos[current]} onError={setError} />}
       </View>
+      <ErrorBanner message={error || null} top={insets.top + 8} />
     </View>
   </Modal>;
 }
@@ -122,6 +131,7 @@ export function MediaScreen({ albumId }: { albumId?: string }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
+  const [actionError, setActionError] = useState('');
   const [search, setSearch] = useState('');
   const [featuredOnly, setFeaturedOnly] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
@@ -134,10 +144,7 @@ export function MediaScreen({ albumId }: { albumId?: string }) {
     if (refresh) setRefreshing(true); else setLoading(true);
     setError(false);
     try {
-      const [nextAlbums, nextAlbum, nextPhotos] = await Promise.all([
-        fetchMediaAlbums(albumId), albumId ? fetchMediaAlbum(albumId) : null,
-        albumId ? fetchMediaPhotos(albumId) : [],
-      ]);
+      const { albums: nextAlbums, album: nextAlbum, photos: nextPhotos } = await fetchMediaContent(albumId);
       if (request !== generation.current) return;
       setAlbums(nextAlbums); setAlbum(nextAlbum); setPhotos(nextPhotos); setHasMore(nextPhotos.length === PHOTO_PAGE_SIZE);
       setSelected(null);
@@ -150,7 +157,7 @@ export function MediaScreen({ albumId }: { albumId?: string }) {
     moreBusy.current = true; setLoadingMore(true);
     const request = generation.current;
     try {
-      const next = await fetchMediaPhotos(albumId, photos.length);
+      const next = await fetchMediaPhotos(album?.id || albumId, photos.length);
       if (request !== generation.current) return;
       setPhotos(previous => [...previous, ...next]); setHasMore(next.length === PHOTO_PAGE_SIZE);
     } catch { Alert.alert('Could not load more photos', 'Please try again.'); }
@@ -181,7 +188,10 @@ export function MediaScreen({ albumId }: { albumId?: string }) {
           <Text style={styles.cardTitle}>Media could not be loaded</Text><Text style={styles.body}>Check your connection and try again.</Text>
           <Pressable accessibilityRole="button" onPress={() => void load()} style={styles.button}><Text style={styles.buttonText}>Try again</Text></Pressable>
         </View> : <>
-          {album && <AlbumHeader album={album} />}
+          {album && <AlbumHeader album={album} onInstagram={url => {
+            setActionError(''); hapticLight();
+            void Linking.openURL(url).catch(() => setActionError('Instagram could not open. Please try again.'));
+          }} />}
           {!albumId && <>
             <View style={styles.search}><Ionicons name="search-outline" size={19} color={brand.muted} /><TextInput accessibilityLabel="Search albums" placeholder="Find an event or album" placeholderTextColor={brand.muted} value={search} onChangeText={setSearch} style={styles.searchInput} clearButtonMode="while-editing" returnKeyType="search" /></View>
             <View style={styles.filters}>{['All albums', 'Featured'].map((label, i) => {
@@ -201,7 +211,8 @@ export function MediaScreen({ albumId }: { albumId?: string }) {
       renderItem={({ item }) => item.kind === 'album' ? <AlbumCard album={item.album} width={albumWidth} /> : <TouchableOpacity activeOpacity={0.65} accessibilityRole="button" accessibilityLabel={item.photo.caption || `Open photo ${item.index + 1}`} onPress={() => { void trackEvent('feature_interaction', { feature: 'media', action: 'photo_open' }); setSelected(item.index); }} style={[styles.photoTile, { width: tileWidth, height: tileWidth }]}><Image source={item.photo.thumbnail_url || item.photo.image_url} recyclingKey={item.photo.id} contentFit="cover" style={StyleSheet.absoluteFill} /></TouchableOpacity>}
       ListEmptyComponent={!loading && !error ? <View style={styles.message}><View style={styles.emptyIcon}><Ionicons name={albumId ? 'camera-outline' : 'albums-outline'} size={26} color={brand.muted} /></View><Text style={styles.cardTitle}>{albumId ? 'Photos coming soon' : albums.length ? 'No matching albums' : 'No albums yet'}</Text><Text style={styles.body}>{albumId ? 'Photos will appear here when they are published.' : albums.length ? 'Try another event name or browse all albums.' : 'Explore event photos and highlights here after they are published.'}</Text>{!albumId && albums.length > 0 && <Pressable accessibilityRole="button" onPress={() => { setSearch(''); setFeaturedOnly(false); }} style={styles.resetButton}><Text style={styles.resetLabel}>View all albums</Text></Pressable>}</View> : null}
       ListFooterComponent={!loading && !error && hasMore ? <Pressable accessibilityRole="button" disabled={loadingMore} onPress={() => void loadMore()} style={[styles.loadMore, { marginTop: 24 }]}>{loadingMore ? <ActivityIndicator color={brand.premium} /> : <><Text style={styles.loadMoreLabel}>Load more photos</Text><Ionicons name="chevron-down" size={16} color={brand.premium} /></>}</Pressable> : null} />
-    {selected !== null && <PhotoViewer photos={photos} index={selected} title={album?.title || 'Event photos'} onClose={() => setSelected(null)} />}
+    {selected !== null && album && <PhotoViewer photos={photos} index={selected} albumId={album.id} title={album.title || 'Event photos'} onClose={() => setSelected(null)} />}
+    <ErrorBanner message={actionError || null} top={insets.top + 8} />
   </>;
 }
 const styles = StyleSheet.create({
@@ -228,7 +239,7 @@ const styles = StyleSheet.create({
   detailMeta: { flexDirection: 'row', alignItems: 'center', gap: 7, flexWrap: 'wrap' },
   metaDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: '#A0AAA4', marginHorizontal: 2 },
   detailTitle: { color: brand.premium, fontSize: 27, lineHeight: 33, letterSpacing: -0.6, fontWeight: '700' },
-  creditRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 3 },
+  creditRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 3 },
   creditIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#E8EDE7', alignItems: 'center', justifyContent: 'center' },
   creditLabel: { color: brand.muted, fontSize: 8, letterSpacing: 1.2, fontWeight: '700' },
   creditName: { color: brand.premium, fontSize: 12, fontWeight: '600' },

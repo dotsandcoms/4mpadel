@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchFipTournament, type FipDocument } from '@/lib/fip-tournament';
 import { FipPdf } from '@/components/events/fip-pdf';
-import { lightBrand as b } from '@/theme/tokens';
+import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 
 export default function FipDocumentScreen() {
   const { id, document: documentId } = useLocalSearchParams<{ id: string; document: string }>();
@@ -31,6 +31,6 @@ export default function FipDocumentScreen() {
       <Pressable accessibilityRole="button" accessibilityLabel="Back to tournament" onPress={() => router.back()} style={{ width: 44, height: 44, justifyContent: 'center', alignItems: 'center' }}><Ionicons name="arrow-back" color={b.premium} size={24} /></Pressable>
       <View style={{ flex: 1, gap: 4 }}><Text style={{ color: b.accent, fontSize: 10, fontWeight: '800', letterSpacing: 1 }}>OFFICIAL FIP DOCUMENT</Text><Text numberOfLines={2} style={{ color: b.premium, fontWeight: '700', fontSize: 15 }}>{document?.title || 'Published document'}</Text></View>
     </View>
-    {loading ? <ActivityIndicator color={b.accent} style={{ margin: 30 }} /> : error ? <View style={{ padding: 24, gap: 20 }}><Text style={{ color: b.premium }}>{error}</Text><Pressable onPress={() => setAttempt(n => n + 1)} accessibilityRole="button"><Text style={{ color: b.accent, fontWeight: '700' }}>Retry</Text></Pressable></View> : document && <FipPdf document={document} />}
+    {loading ? <ActivityIndicator color={loadingBlue} style={{ margin: 30 }} /> : error ? <View style={{ padding: 24, gap: 20 }}><Text style={{ color: b.premium }}>{error}</Text><Pressable onPress={() => setAttempt(n => n + 1)} accessibilityRole="button"><Text style={{ color: b.accent, fontWeight: '700' }}>Retry</Text></Pressable></View> : document && <FipPdf document={document} />}
   </SafeAreaView>;
 }

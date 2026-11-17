@@ -1,3 +1,4 @@
+import { loadingBlue, onAccent } from '@/theme/tokens';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SymbolView } from 'expo-symbols';
 import { type ComponentProps, type ReactNode, useState, createContext, useContext } from 'react';
@@ -5,8 +6,7 @@ import { Platform, Pressable, Text as NativeText, View, type TextProps, type Vie
 import { useRouter } from 'expo-router';
 import { HomeHeader } from '@/components/home-header';
 
-export const lime = '#CCFF00';
-export const EventAccent = createContext(lime);
+export const EventAccent = createContext(loadingBlue);
 export const useEventAccent = () => useContext(EventAccent);
 export type EventIconName = ComponentProps<typeof SymbolView>['name'];
 /** The website uses SF Pro Rounded on Apple devices. */
@@ -20,7 +20,7 @@ export function EventIcon({ name, size = 16, color: suppliedColor }: { name: Eve
     rosette: 'award', cloud: 'cloud', envelope: 'mail', person: 'user', camera: 'camera', 'exclamationmark.circle': 'alert-circle', 'point.3.connected.trianglepath.dotted': 'git-branch', calendar: 'calendar', magnifyingglass: 'search', 'mappin.and.ellipse': 'map-pin', map: 'map',
     'person.2': 'users', lock: 'lock', clock: 'clock', 'chevron.right': 'chevron-right',
     'chevron.down': 'chevron-down', plus: 'plus', checkmark: 'check', 'arrow.left': 'arrow-left',
-    'square.and.arrow.up': 'share-2', 'line.3.horizontal.decrease': 'filter', 'doc.text': 'file-text',
+    'square.and.arrow.up': 'share-2', 'line.3.horizontal.decrease': 'filter', 'doc.text': 'file-text', 'arrow.down.document': 'download',
     phone: 'phone', 'info.circle': 'info', bolt: 'zap', star: 'star', 'rectangle.split.2x2': 'layout',
     'person.crop.circle.badge.xmark': 'user-x', 'circle.inset.filled': 'radio',
     'list.bullet.rectangle': 'list', 'chart.bar': 'bar-chart-2', 'square.grid.2x2': 'grid',
@@ -39,7 +39,7 @@ export function CircleAction({ name, label, onPress, selected, disabled }: { nam
   const accent = useEventAccent();
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected, disabled }} disabled={disabled} onPress={onPress} hitSlop={4}
     style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? accent : '#FFFFFF', borderWidth: 1, borderColor: selected ? accent : '#16251f4d', opacity: disabled ? 0.5 : 1 }}>
-    <EventIcon name={name} color="#16251F" size={18} />
+    <EventIcon name={name} color={selected ? onAccent(accent) : '#16251F'} size={18} />
   </Pressable>;
 }
 export function Fade({ to = '#F5F6F3' }: { to?: string }) {

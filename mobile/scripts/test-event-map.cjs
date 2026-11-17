@@ -75,6 +75,7 @@ function renderLocation(platform, key) {
     if (name === 'react-native') return { Platform: { OS: platform }, View: 'View', Pressable: 'Pressable', ActivityIndicator: 'ActivityIndicator' };
     if (name === 'expo') return { requireOptionalNativeModule: name => { requests.push(name); return {}; } };
     if (name === '@/lib/event-map') return mockMap;
+    if (name === '@/theme/tokens') return { loadingBlue: '#27517B' };
     if (name === './website-ui') return { EventText: 'Text', useEventAccent: () => '#ff0022' };
     if (name === 'expo-maps') { requests.push('expo-maps'); return { GoogleMaps: { View: GoogleMap, MapColorScheme: { LIGHT: 'light' } }, AppleMaps: { View: AppleMap, MapColorScheme: { LIGHT: 'light' } } }; }
     throw new Error('Unexpected dependency '+name);

@@ -92,7 +92,7 @@ test('profile career totals use published records and exclude upcoming fixtures'
  const code=ts.transpileModule(fs.readFileSync('src/lib/profile.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  const module={exports:{}};
  const query={select(){return this},ilike(){return this},eq(){return this},order(){return this},limit:async()=>({data:[]}),maybeSingle:async()=>({data:{id:1,rankedin_id:'R1'}})};
- vm.runInNewContext(code,{module,exports:module.exports,Date,require:name=>name.includes('matches')?{fetchPlayerMatches:async()=>({upcoming:[old],past:[old],career:{played:56,wins:35,losses:21}}),isMatchWinner:()=>false}:name.includes('supabase')?{supabase:{from:()=>query}}:{}});
+ vm.runInNewContext(code,{module,exports:module.exports,Date,require:name=>name.includes('sapa-main-ranking')?(()=>{const m={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/sapa-main-ranking.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{module:m,exports:m.exports});return m.exports;})():name.includes('matches')?{fetchPlayerMatches:async()=>({upcoming:[old],past:[old],career:{played:56,wins:35,losses:21}}),isMatchWinner:()=>false}:name.includes('supabase')?{supabase:{from:()=>query}}:{}});
  const {stats}=await module.exports.fetchProfileBundle('player@example.com');
  assert.equal(stats.matchCount,56);assert.equal(stats.played,56);assert.equal(stats.wins,35);assert.equal(stats.losses,21);assert.equal(stats.winRatio,62.5);
 });

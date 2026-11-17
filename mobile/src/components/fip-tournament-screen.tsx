@@ -8,7 +8,7 @@ import { TournamentDrawBoard } from '@/components/events/tournament-draw';
 import { fetchFipTournament, type FipDocument, type FipTournament } from '@/lib/fip-tournament';
 import { fetchProSnapshot, proDate, type ProTournament } from '@/lib/pro-padel';
 import { playerCountryFlag } from '@/lib/player-hub';
-import { lightBrand as b } from '@/theme/tokens';
+import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 
 type Tab = 'overview' | 'draws' | 'results' | 'schedule';
 const tabs: { id: Tab; label: string }[] = [{ id: 'overview', label: 'Overview' }, { id: 'draws', label: 'Draws' }, { id: 'results', label: 'Results' }, { id: 'schedule', label: 'Schedule' }];
@@ -53,14 +53,14 @@ export function FipTournamentScreen({ id }: { id: number }) {
   const empty = (message: string) => <View style={s.notice}><Ionicons name="information-circle-outline" size={24} color={b.muted} /><Text style={[s.body, { flex: 1 }]}>{message}</Text></View>;
   return <SafeAreaView style={{ flex: 1, backgroundColor: b.page }}>
     <View style={s.topBar}><Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.canGoBack() ? router.back() : router.replace('/')} style={s.back}><Ionicons name="arrow-back" size={24} color={b.premium} /></Pressable><Text style={s.topLabel}>OFFICIAL FIP EVENT CENTRE</Text><Pressable accessibilityRole="button" accessibilityLabel="Refresh tournament" onPress={() => { void load(true); }} style={s.back} disabled={loading}><Ionicons name="refresh-outline" size={21} color={b.accent} /></Pressable></View>
-    <ScrollView refreshControl={<RefreshControl refreshing={loading && !!event} onRefresh={() => { void load(true); }} tintColor={b.accent} />} contentContainerStyle={s.content}>
+    <ScrollView refreshControl={<RefreshControl colors={[loadingBlue]} refreshing={loading && !!event} onRefresh={() => { void load(true); }} tintColor={loadingBlue} />} contentContainerStyle={s.content}>
       {event?.photoUrl && tab === 'overview' && <Image source={{ uri: event.photoUrl }} contentFit="cover" contentPosition="top" style={s.poster} />}
       <View style={{ gap: 9 }}><View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}><Text style={s.kicker}>{event?.level === 'fip_promises' ? 'FIP PROMISES' : 'FIP BRONZE'}</Text><Text style={s.status}>{status}</Text></View>
         <Text accessibilityRole="header" style={s.title}>{event?.name || 'Tournament'}</Text>
         {event && <><Text style={s.body}>{proDate(event.startDate)} – {proDate(event.endDate)}</Text><Text style={s.body}>{playerCountryFlag(event.country || event.location?.split(' - ').pop())} {event.location}</Text></>}
       </View>
       <View style={s.tabs}>{tabs.map(item => <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected: item.id === tab }} onPress={() => setTab(item.id)} style={[s.tab, item.id === tab && s.activeTab]}><Text style={[s.tabText, item.id === tab && { color: b.accent }]}>{item.label}</Text></Pressable>)}</View>
-      {loading && !snapshot && <ActivityIndicator color={b.accent} style={{ padding: 20 }} />}
+      {loading && !snapshot && <ActivityIndicator color={loadingBlue} style={{ padding: 20 }} />}
       {!!error && <View style={s.notice}><Text style={[s.body, { flex: 1 }]}>{error}</Text><Pressable accessibilityRole="button" onPress={() => { void load(true); }}><Text style={s.retry}>Retry</Text></Pressable></View>}
       {snapshot?.pending && empty('Official tournament information is refreshing. Please try again shortly.')}
       {snapshot?.stale && !snapshot.pending && empty('Showing the last saved official information. Pull to try refreshing.')}

@@ -33,6 +33,30 @@ test('one summary request per event, distinct divisions retain their own action'
   assert.equal((await api.fetchPendingPayments('me@example.com')).length, 2);
   assert.equal(api.calls.length, 1);
 });
+test('a doubles pair creates one payment action for the user, not one per reciprocal record', async () => {
+  const rows = [own({ division_id: 'open', partner_email: 'partner@example.com', payment_status: 'pending' }),
+    own({ id: 'partner-row', division_id: 'open', email: 'partner@example.com', partner_email: 'me@example.com', partner_payment_status: 'pending' })];
+  const actions = await setup(rows).fetchPendingPayments('me@example.com');
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].key, 'pay_reg-1');
+  assert.equal(actions[0].detail, 'Open · Payment outstanding');
+});
+test('a stale partner mirror cannot ask a fully paid user to pay again', async () => {
+  const rows = [own({ division_id: 'open' }), own({ id: 'partner-row', division_id: 'open', email: 'partner@example.com', partner_email: 'me@example.com', partner_payment_status: 'pending' })];
+  assert.equal((await setup(rows, 0).fetchPendingPayments('me@example.com')).length, 0);
+});
+test('division identity stays separate and legacy partner-only records retain a reminder', async () => {
+  const rows = [own({ division_id: 'open-a', payment_status: 'pending' }),
+    own({ id: 'another-division', division_id: 'open-b', email: 'partner@example.com', partner_email: 'me@example.com', partner_payment_status: 'pending' })];
+  assert.equal((await setup(rows).fetchPendingPayments('me@example.com')).length, 2);
+  assert.equal((await setup(rows.slice(1)).fetchPendingPayments('me@example.com')).length, 1);
+});
+test('legacy division names and email casing match mirrored entries without merging other events', async () => {
+  const rows = [own({ email: ' ME@EXAMPLE.COM ', payment_status: 'pending' }),
+    own({ id: 'mirror', email: 'partner@example.com', partner_email: 'me@example.com', partner_payment_status: 'pending', division: ' open ' }),
+    own({ id: 'different-event', event_id: 554, email: 'partner@example.com', partner_email: 'me@example.com', partner_payment_status: 'pending' })];
+  assert.equal((await setup(rows).fetchPendingPayments(' Me@Example.com ')).length, 2);
+});
 test('partner does not inherit registrant balance and original unpaid entries retain checkout', async () => {
   const api = setup([own({ email: 'partner@example.com', partner_payment_status: 'paid' }), own({ id: 'reg-2', payment_status: 'unpaid' }), own({ id: 'reg-3' })]);
   const actions = await api.fetchPendingPayments('me@example.com');

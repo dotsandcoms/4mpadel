@@ -6,6 +6,10 @@ verify_jwt = false
 [functions.deliver-push]
 verify_jwt = false
 
+[functions.app-badge]
+# Validates Auth.getUser and the live own-only session RPC in the handler.
+verify_jwt = false
+
 [functions.native-license-checkout]
 verify_jwt = false
 
@@ -42,3 +46,11 @@ verify_jwt = false
 [functions.delete-account]
 # Also verifies the token with Auth.getUser before using its authoritative ID.
 verify_jwt = true
+
+[functions.native-club-places]
+# Auth.getUser validates the caller; public club lookup also uses the caller's RLS.
+verify_jwt = false
+
+[functions.deliver-help-alerts]
+# Dedicated scheduler-secret authentication in the handler; no client recipients.
+verify_jwt = false

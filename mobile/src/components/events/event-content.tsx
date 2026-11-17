@@ -1,3 +1,4 @@
+import { loadingBlue } from '@/theme/tokens';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import { EventRichText } from './event-rich-text';
@@ -38,5 +39,5 @@ export function EventWeatherSection({ event }: { event: EventDetail }) {
     return () => controller.abort();
   }, [event.city, event.venue, event.start_date, attempt]);
   if (!event.city && !event.venue) return null;
-  return <Accordion title="Weather Forecast" icon="cloud">{loading ? <ActivityIndicator color={accent} /> : weather ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}><View style={{ width: 56, height: 56, borderRadius: 12, backgroundColor: `${accent}15`, alignItems: 'center', justifyContent: 'center' }}><EventIcon name="cloud" size={28} color="#0a0a0a" /></View><View><Text style={{ color: '#0f172a', fontSize: 24 }}>{Math.round(weather.temp)}°C</Text><Text style={{ color: '#6b7280', fontSize: 12 }}>{weather.condition}</Text></View></View> : <View style={{ gap: 12 }}><Text style={{ color: '#64748b', fontSize: 12 }}>{error || 'No forecast is available for this location.'}</Text><Pressable accessibilityRole="button" onPress={() => setAttempt(attempt + 1)}><Text style={{ color: '#2563eb', fontSize: 13 }}>Retry forecast</Text></Pressable></View>}</Accordion>;
+  return <Accordion title="Weather Forecast" icon="cloud">{loading ? <ActivityIndicator color={loadingBlue} /> : weather ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}><View style={{ width: 56, height: 56, borderRadius: 12, backgroundColor: `${accent}15`, alignItems: 'center', justifyContent: 'center' }}><EventIcon name="cloud" size={28} color="#0a0a0a" /></View><View><Text style={{ color: '#0f172a', fontSize: 24 }}>{Math.round(weather.temp)}°C</Text><Text style={{ color: '#6b7280', fontSize: 12 }}>{weather.condition}</Text></View></View> : <View style={{ gap: 12 }}><Text style={{ color: '#64748b', fontSize: 12 }}>{error || 'No forecast is available for this location.'}</Text><Pressable accessibilityRole="button" onPress={() => setAttempt(attempt + 1)}><Text style={{ color: '#2563eb', fontSize: 13 }}>Retry forecast</Text></Pressable></View>}</Accordion>;
 }

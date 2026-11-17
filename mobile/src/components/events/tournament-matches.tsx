@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { ActivityIndicator, AppState, Pressable, Text, View } from 'react-native';
 import { supabase } from '@/lib/supabase';
-import { lightBrand as brand } from '@/theme/tokens';
+import { loadingBlue, lightBrand as brand } from '@/theme/tokens';
 
 type Match = { id: string; division_name: string; round: string; status: string; start: string | null; court: string | null; one_name: string | null; two_name: string | null; scores: number[][] | number[]; winner: string | null; one: string | null; two: string | null };
 export function TournamentMatches({ eventId, divisionId, matchId, showPoints = false }: { eventId: number; divisionId?: string; matchId?: string; showPoints?: boolean }) {
@@ -31,7 +31,7 @@ export function TournamentMatches({ eventId, divisionId, matchId, showPoints = f
     const state = AppState.addEventListener('change', value => { if (value === 'active') void load(); });
     return () => { active = false; clearInterval(timer); state.remove(); };
   }, [eventId, divisionId, matchId, showPoints, attempt]));
-  if (loading) return <ActivityIndicator accessibilityLabel="Loading published matches" style={{ margin: 20 }} />;
+  if (loading) return <ActivityIndicator color={loadingBlue} accessibilityLabel="Loading published matches" style={{ margin: 20 }} />;
   if (error) return <View style={{ padding: 16 }}><Text accessibilityRole="alert" style={{ color: brand.premium }}>{error}</Text><Pressable accessibilityRole="button" onPress={() => setAttempt(n => n + 1)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: brand.accent }}>Retry</Text></Pressable></View>;
   return <View style={{ gap: 12, marginVertical: 12 }}>
     {showPoints && points.map(award => <View key={award.division} style={{ padding: 16, borderRadius: 16, backgroundColor: brand.elevated }}><Text style={{ color: brand.premium, fontWeight: '600' }}>Your points · {award.division}</Text><Text style={{ color: brand.accent, marginTop: 6 }}>{award.points} points · {award.round.replaceAll('_', ' ')}</Text></View>)}

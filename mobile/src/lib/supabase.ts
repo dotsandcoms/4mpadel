@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 import './polyfill-webcrypto';
+import { protectDataApi } from './protected-data-api';
 
 /**
  * Supabase client for the native app.
@@ -48,7 +49,7 @@ const SecureStorageAdapter = {
   removeItem: (key: string) => SecureStore.deleteItemAsync(key),
 };
 
-export const supabase = createClient(supabaseUrl, supabaseKey, {
+export const supabase = protectDataApi(createClient(supabaseUrl, supabaseKey, {
   auth: {
     // SecureStore is unavailable on the web target; fall back to the default.
     storage: Platform.OS === 'web' ? undefined : SecureStorageAdapter,
@@ -58,6 +59,6 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     persistSession: true,
     detectSessionInUrl: false,
   },
-});
+}), { enabled: false });
 
 export const isSupabaseConfigured = () => Boolean(supabaseUrl && supabaseKey);

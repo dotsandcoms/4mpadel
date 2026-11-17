@@ -1,3 +1,6 @@
+import { useHelpInbox } from '@/components/help-inbox-provider';
+import { useMessagingInbox } from '@/components/messaging/messaging-provider';
+import { useNotificationUnread } from '@/hooks/use-notification-unread';
 import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
 import { useEffect } from 'react';
@@ -13,7 +16,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { MenuButton } from '@/components/app-drawer';
+import { useDrawerOptional } from '@/components/app-drawer';
+import { HomeAction } from '@/components/home-action';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { useScreenActive } from '@/hooks/use-screen-active';
 import { hapticLight } from '@/lib/haptics';
@@ -22,14 +26,17 @@ import { lightBrand as brand } from '@/theme/tokens';
 type Props = {
   onSearch: () => void;
   onNotifications: () => void;
-  noticeCount?: number;
 };
 
 /**
  * Home chrome on a solid page fill so icons stay readable. Safe-area padding
  * lives on the parent — this row is 52pt of tappable header only.
  */
-export function HomeHeader({ onSearch, onNotifications, noticeCount = 0 }: Props) {
+export function HomeHeader({ onSearch, onNotifications }: Props) {
+  const drawer = useDrawerOptional();
+  const help = useHelpInbox();
+  const { owner } = useMessagingInbox();
+  const noticeCount = useNotificationUnread(owner) + help.unread;
   const noticeLabel =
     noticeCount > 0
       ? `Notifications, ${noticeCount} waiting`
@@ -47,21 +54,15 @@ export function HomeHeader({ onSearch, onNotifications, noticeCount = 0 }: Props
           contentFit="contain"
           accessibilityLabel="4M Padel"
         />
-        <Text
-          accessibilityLabel="South Africa"
-          className="ml-2 text-[15px] leading-[18px]">
-          🇿🇦
-        </Text>
       </View>
 
       <View className="flex-row items-center">
-          <NotificationBell
-            label={noticeLabel}
-            onPress={onNotifications}
-            ringing={noticeCount > 0}
-          />
-        <HeaderIcon name="magnifyingglass" label="Search" onPress={onSearch} />
-        <MenuButton />
+        <View>
+          <HomeAction label={noticeLabel} icon="bell" kind="icon" onPress={onNotifications} />
+          {noticeCount > 0 && <View pointerEvents="none" style={{ position: 'absolute', top: 8, right: 8, minWidth: 18, height: 18, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: '#B7352D' }}><Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '600' }}>{noticeCount > 99 ? '99+' : noticeCount}</Text></View>}
+        </View>
+        <HomeAction label="Search" icon="search" kind="icon" onPress={onSearch} />
+        {drawer && <HomeAction label="Menu" icon="menu" kind="icon" onPress={drawer.openDrawer} />}
       </View>
     </View>
   );

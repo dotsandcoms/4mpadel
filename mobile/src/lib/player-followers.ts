@@ -4,11 +4,11 @@ export type PlayerFollower = { id: string; name: string; imageUrl: string | null
 export type PlayerFollowerPage = { followers: PlayerFollower[]; total: number; hasMore: boolean };
 export const FOLLOWER_PAGE_SIZE = 50;
 
-/** The server verifies the signed-in account owns playerId before returning names. */
+/** The checked RPC returns only visible public profiles for an eligible viewer. */
 export async function fetchPlayerFollowers(playerId: string, offset = 0): Promise<PlayerFollowerPage> {
   if (!/^[1-9]\d*$/.test(playerId)) throw new Error('Invalid player ID.');
   if (!Number.isSafeInteger(offset) || offset < 0) throw new Error('Invalid follower page.');
-  const { data, error } = await supabase.rpc('get_my_player_followers', {
+  const { data, error } = await supabase.rpc('get_player_followers', {
     p_player_id: playerId, p_limit: FOLLOWER_PAGE_SIZE, p_offset: offset,
   });
   if (error) throw error;

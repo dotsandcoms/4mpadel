@@ -367,3 +367,37 @@ test('late-payment switch leaves pre-deadline payments and a later division over
     assert.equal((await app.call({ mode: 'pay' })).status, 200);
   }
 });
+test('checkout reference cannot resume another player or event payment',async()=>{
+ for(const patch of [{player_id:99},{event_id:99},{metadata:{registrant_email:'foreign@example.com'}}]){
+  const payment={player_id:3,event_id:1,status:'processing',amount:367.5,is_test:false,metadata:{registrant_email:'player@example.com',native_authorization_url:'https://checkout.paystack.com/foreign'},...patch};
+  const app=server({gateway:true,tables:{payments:payment}});
+  const r=await app.call({action:'checkout',agreed:true,acceptedTotal:367.5,attemptId:'00000000-0000-0000-0000-000000000001'});
+  assert.equal(r.status,400);assert.match(r.body.error,/another account/);assert.equal(app.gatewayCalls.length,0);
+ }
+});
+test('completed own checkout remains resumable after licence ledger split',async()=>{
+ const app=server({gateway:true,tables:{payments:{player_id:3,event_id:1,status:'success',amount:350,is_test:false,metadata:{registrant_email:'player@example.com',split_recorded:true,covers:[]}}}});
+ const r=await app.call({action:'checkout',agreed:true,acceptedTotal:367.5,attemptId:'00000000-0000-0000-0000-000000000001'});
+ assert.equal(r.status,200);assert.equal(r.body.registered,true);assert.equal(app.gatewayCalls.length,0);assert.equal(app.writes.length,0);
+});
+
+test('register now pay later requires the event setting and saves without a gateway or email', async () => {
+  const denied = server();
+  assert.equal((await denied.call({ paymentIntent: 'reserve' })).status, 400);
+  assert.equal(denied.writes.length, 0);
+  const app = server({ tables: { calendar: { id: 1, is_manual: true, start_date: '2099-01-01', payment_method: 'platform', weekly_payment_policy: 'allow_reserve' }, tournament_divisions: [{ id: 'division-1', name: 'Open', entry_fee: 350, license_required: true }] } });
+  const result = await app.call({ action: 'checkout', paymentIntent: 'reserve', agreed: true, acceptedTotal: 367.5, attemptId: '00000000-0000-4000-8000-000000000207' });
+  assert.equal(result.status, 200); assert.equal(result.body.registered, true); assert.equal(result.body.paymentPending, true);
+  assert.equal(app.gatewayCalls.length, 0); assert.equal(app.emails.length, 0);
+  const save = app.rpcCalls.find(call => call.name === 'register_event_pay_later'); assert.ok(save);
+  assert.equal(save.args.p_rows[0].payment_status, 'pending');
+});
+test('free deferred entries are paid only when there is no outstanding licence obligation', async () => {
+  for (const licenseRequired of [false, true]) {
+    const app = server({ tables: { calendar: { id: 1, is_manual: true, payment_method: 'platform', weekly_payment_policy: 'allow_reserve' }, tournament_divisions: [{ id: 'division-1', name: 'Open', entry_fee: 0, license_required: licenseRequired }] } });
+    const result = await app.call({ action: 'checkout', paymentIntent: 'reserve', agreed: true, acceptedTotal: 0, attemptId: '00000000-0000-4000-8000-000000000208' });
+    assert.equal(result.status, 200); assert.equal(result.body.paymentPending, licenseRequired);
+    assert.equal(app.rpcCalls.find(call => call.name === 'register_event_pay_later').args.p_rows[0].payment_status, licenseRequired ? 'pending' : 'paid');
+    assert.equal(app.gatewayCalls.length, 0); assert.equal(app.emails.length, 0);
+  }
+});

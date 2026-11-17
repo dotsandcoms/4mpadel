@@ -1,3 +1,7 @@
+import { ProfileEmailChange } from '@/components/profile-email-change';
+import { homeFeedCache } from '@/lib/home-feed-cache';
+import { SponsorField } from '@/components/sponsor-field';
+import { parseSponsors, serializeSponsors } from '@/lib/sponsors';
 import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
@@ -29,17 +33,27 @@ import {
 } from '@/lib/profile';
 import {
   CATEGORIES,
+  GENDERS,
+  NATIONALITIES,
   RACKET_BRANDS,
   REGION_BADGE,
   SA_REGIONS,
 } from '@/lib/registration';
 import { supabase } from '@/lib/supabase';
 import { changeProfilePhoto } from '@/lib/profile-photos';
+import { ageFromBirthDate, birthDateError, playtomicDetailsError, profileExtraction, type PlaytomicExtraction, fetchProfileDetails, saveEditedProfileDetails, PROOF_BUCKET } from '@/lib/profile-details';
+import { PlaytomicProofField } from '@/components/playtomic-proof-field';
 import { trackEvent } from '@/lib/analytics';
 import { COURT_SIDE_OPTIONS, PLAYING_HAND_OPTIONS, courtSideLabel, playingHandLabel } from '@/lib/player-preferences';
-import { lightBrand as brand } from '@/theme/tokens';
+import { loadingBlue, lightBrand as brand } from '@/theme/tokens';
 
 type Form = {
+  name: string; gender: string; nationality: string; idNumber: string; sponsors: string;
+  dateOfBirth: string;
+  playtomicLevel: string;
+  playtomicProofPath: string;
+  playtomicNoProfile: boolean;
+  playtomicExtraction: PlaytomicExtraction | null;
   contactNumber: string;
   region: string;
   category: string;
@@ -54,9 +68,13 @@ type Form = {
 };
 
 type Errors = Partial<Record<keyof Form, string>>;
-type Section = 'essentials' | 'about' | 'fip';
+type Section = 'essentials' | 'about' | 'fip' | 'playtomic';
 
 const EMPTY_FORM: Form = {
+  name: '', gender: '', nationality: '', idNumber: '', sponsors: '',
+  dateOfBirth: '',
+  playtomicLevel: '',
+  playtomicProofPath: '', playtomicNoProfile: false, playtomicExtraction: null,
   contactNumber: '',
   region: '',
   category: '',
@@ -79,6 +97,10 @@ function formFromPlayer(player: PlayerRow, clubs: ClubRow[]): Form {
   const knownRacket = RACKET_BRANDS.includes(racket as (typeof RACKET_BRANDS)[number]);
   const clubId = clubIdOf(player, clubs);
   return {
+    name: player.name || '', gender: player.gender || '', nationality: player.nationality || '', idNumber: '', sponsors: player.sponsors || '',
+    dateOfBirth: '',
+    playtomicLevel: '',
+    playtomicProofPath: '', playtomicNoProfile: false, playtomicExtraction: null,
     contactNumber: player.contact_number ?? '',
     region: player.region ?? '',
     category: player.category ?? '',
@@ -102,13 +124,17 @@ export default function EditProfileScreen() {
   const router = useRouter();
   const [player, setPlayer] = useState<PlayerRow | null>(null);
   const [clubs, setClubs] = useState<ClubRow[]>([]);
+  const [sponsorInput, setSponsorInput] = useState('');
+  const [login, setLogin] = useState({ id: '', email: '', pendingEmail: '' }), [emailBusy, setEmailBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [photoSaving, setPhotoSaving] = useState(false);
+  const [proofSaving, setProofSaving] = useState(false);
+  const [detailsReady, setDetailsReady] = useState(false);
   const photoBusy = useRef(false);
   const [form, setForm] = useState<Form>(EMPTY_FORM);
   const [initialForm, setInitialForm] = useState<Form>(EMPTY_FORM);
-  const [expanded, setExpanded] = useState<Section | null>(null);
+  const [expanded, setExpanded] = useState<Section | null>('essentials');
   const [errors, setErrors] = useState<Errors>({});
   const [toast, setToast] = useState<{ id: number; message: string; kind: ToastKind } | null>(
     null
@@ -129,16 +155,21 @@ export default function EditProfileScreen() {
         fetchClubs().catch(() => [] as ClubRow[]),
       ]);
       const email = data.user?.email ?? null;
-      setClubs(clubRows);
+      setLogin({ id: data.user?.id || '', email: email || '', pendingEmail: data.user?.new_email || '' });
+      setClubs(clubRows); setSponsorInput('');
       const next = await fetchProfileBundle(email);
       setPlayer(next.player);
       if (next.player) {
-        const loadedForm = formFromPlayer(next.player, clubRows);
+        const [details, identity] = await Promise.all([fetchProfileDetails(next.player.id), supabase.rpc('own_player_identity')]);
+        if (identity.error) throw new Error('Your private identity details could not be loaded. Please try again.');
+        const loadedForm = { ...formFromPlayer(next.player, clubRows), idNumber: identity.data?.idNumber || '', dateOfBirth: details?.date_of_birth || '', playtomicLevel: details?.playtomic_level == null ? '' : String(details.playtomic_level), playtomicProofPath: details?.playtomic_proof_path || '', playtomicNoProfile: details?.playtomic_no_profile === true, playtomicExtraction: profileExtraction(details) };
+        setDetailsReady(true);
         setForm(loadedForm);
         setInitialForm(loadedForm);
       }
     } catch (err) {
       console.warn('[edit-profile]', err);
+      flash('Your profile could not be loaded. Go back and try again.');
     } finally {
       setLoading(false);
     }
@@ -164,7 +195,8 @@ export default function EditProfileScreen() {
   const clubReady = !!form.clubId && (form.clubId !== 'Other' || filled(form.customClub));
   const racketReady =
     !!form.racketBrand && (form.racketBrand !== 'Other' || filled(form.customRacketBrand));
-  const dirty = (Object.keys(form) as (keyof Form)[]).some(key => form[key] !== initialForm[key]);
+  const dirty = !!sponsorInput.trim() || (Object.keys(form) as (keyof Form)[]).some(key => form[key] !== initialForm[key]);
+  const age = ageFromBirthDate(form.dateOfBirth);
   const clubName = form.clubId === 'Other'
     ? form.customClub
     : clubs.find(club => club.id === form.clubId)?.name || player?.home_club || '';
@@ -181,11 +213,13 @@ export default function EditProfileScreen() {
 
   function validate(): Errors {
     const next: Errors = {};
-    if (!form.category) next.category = 'Select a category.';
-    if (!form.clubId) next.clubId = 'Select a home club.';
+    if (!form.name.trim()) next.name = 'Enter your name.';
+    const birthIssue = form.dateOfBirth || initialForm.dateOfBirth ? birthDateError(form.dateOfBirth) : null;
+    if (birthIssue) next.dateOfBirth = birthIssue;
+    if (!form.dateOfBirth && (form.playtomicLevel || form.playtomicProofPath || form.playtomicNoProfile)) next.dateOfBirth = 'Add your date of birth to save Playtomic details.';
+    const levelIssue = !form.playtomicNoProfile && (form.playtomicLevel || form.playtomicProofPath) ? playtomicDetailsError(form.playtomicLevel, form.playtomicProofPath, false) : null;
+    if (levelIssue) next.playtomicLevel = levelIssue;
     if (form.clubId === 'Other' && !filled(form.customClub)) next.customClub = 'Enter your club name.';
-    if (!filled(form.bio)) next.bio = 'Tell us about your game.';
-    if (!form.racketBrand) next.racketBrand = 'Select a racket brand.';
     if (form.racketBrand === 'Other' && !filled(form.customRacketBrand)) {
       next.customRacketBrand = 'Enter your racket brand.';
     }
@@ -198,12 +232,12 @@ export default function EditProfileScreen() {
   }
 
   async function save() {
-    if (!player || saving || photoBusy.current) return;
+    if (!player || saving || emailBusy || photoBusy.current || proofSaving || !detailsReady) return;
     const next = validate();
     if (Object.keys(next).length) {
       setErrors(next);
       const first = Object.keys(next)[0] as keyof Form;
-      setExpanded(['contactNumber', 'region', 'category', 'clubId', 'customClub'].includes(first) ? 'essentials' : 'about');
+      setExpanded(first.startsWith('playtomic') ? 'playtomic' : ['name', 'gender', 'nationality', 'idNumber', 'dateOfBirth', 'contactNumber', 'region', 'category', 'clubId', 'customClub'].includes(first) ? 'essentials' : 'about');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       flash(Object.values(next)[0] ?? 'Check the highlighted fields.');
       return;
@@ -216,7 +250,11 @@ export default function EditProfileScreen() {
           : clubs.find((club) => club.id === form.clubId)?.name ?? player.home_club ?? '';
       const racket =
         form.racketBrand === 'Other' ? form.customRacketBrand.trim() : form.racketBrand;
+      if (form.dateOfBirth) await saveEditedProfileDetails(player.id, form.dateOfBirth, form.playtomicLevel, form.playtomicProofPath, form.playtomicNoProfile);
+      if (form.idNumber !== initialForm.idNumber) { const result = await supabase.rpc('update_own_player_id_number', { p_value: form.idNumber.trim() }); if (result.error) throw new Error(result.error.message); }
+      if (initialForm.playtomicProofPath && initialForm.playtomicProofPath !== form.playtomicProofPath) void supabase.storage.from(PROOF_BUCKET).remove([initialForm.playtomicProofPath]);
       await updatePlayerDetails(player.id, {
+        name: form.name.trim(), gender: form.gender || null, nationality: form.nationality || null, sponsors: serializeSponsors([...parseSponsors(form.sponsors), ...parseSponsors(sponsorInput)]) || null,
         contact_number: form.contactNumber.trim() || null,
         region: form.region.trim() || null,
         category: form.category,
@@ -228,6 +266,7 @@ export default function EditProfileScreen() {
         court_side: form.courtSide || null,
         playing_hand: form.playingHand || null,
       });
+      homeFeedCache.invalidate(['profile:', 'profile-completion:']);
       void trackEvent('profile_updated', { photo_changed: false });
       goBack();
     } catch (err) {
@@ -244,6 +283,7 @@ export default function EditProfileScreen() {
     try {
       const url = await changeProfilePhoto(player.id);
       if (!url) return;
+      homeFeedCache.invalidate(['profile:', 'profile-completion:']);
       void trackEvent('profile_updated', { photo_changed: true });
       setPlayer(current => current?.id === player.id ? { ...current, image_url: url } : current);
       flash('Profile photo updated.', 'success');
@@ -290,7 +330,7 @@ export default function EditProfileScreen() {
         <View
           accessibilityLabel="Loading profile"
           className="flex-1 items-center justify-center">
-          <ActivityIndicator color={brand.padel} />
+          <ActivityIndicator color={loadingBlue} />
         </View>
       ) : !player ? (
         <View className="flex-1 px-6 pt-10">
@@ -310,7 +350,7 @@ export default function EditProfileScreen() {
             <Pressable onPress={changePhoto} disabled={photoSaving || saving} accessibilityRole="button" accessibilityLabel={player.image_url ? 'Change profile photo' : 'Add profile photo'} accessibilityHint="Choose a photo from your library. It saves immediately." accessibilityState={{ busy: photoSaving, disabled: photoSaving || saving }} style={{ padding: 18, borderRadius: 22, backgroundColor: brand.elevated, borderWidth: 1, borderColor: brand.edge, flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 24 }}>
               <View style={{ width: 64, height: 64, borderRadius: 20, overflow: 'hidden', backgroundColor: brand.surface, borderWidth: 1, borderColor: brand.edge, alignItems: 'center', justifyContent: 'center' }}>
                 {player.image_url ? <Image source={{ uri: player.image_url }} style={{ width: 64, height: 64 }} contentFit="cover" accessibilityLabel={`${name} profile photo`} accessibilityIgnoresInvertColors /> : <Text style={{ color: brand.accent, fontSize: 28, fontWeight: '800' }}>{name.charAt(0)}</Text>}
-                {photoSaving && <View style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(255,255,255,0.7)', alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={brand.accent} /></View>}
+                {photoSaving && <View style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(255,255,255,0.7)', alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={loadingBlue} /></View>}
               </View>
               <View style={{ flex: 1, gap: 4 }}>
                 <Text numberOfLines={2} style={{ color: brand.premium, fontSize: 18, lineHeight: 22, fontWeight: '800' }}>{name}</Text>
@@ -331,8 +371,16 @@ export default function EditProfileScreen() {
               detail={[form.contactNumber, clubName, courtSideLabel(form.courtSide) && `${courtSideLabel(form.courtSide)} court`, playingHandLabel(form.playingHand)].filter(Boolean).join(' · ')}
               expanded={expanded === 'essentials'}
               onPress={() => setExpanded(expanded === 'essentials' ? null : 'essentials')}>
-              <LiquidField label="Mobile number (optional)" icon="phone.fill" value={form.contactNumber} error={errors.contactNumber} invalid={!!errors.contactNumber} valid={filled(form.contactNumber) && !errors.contactNumber} onChangeText={(value) => patch('contactNumber', value)} keyboardType="phone-pad" autoComplete="tel" textContentType="telephoneNumber" />
-              <SelectField label="Region (optional)" value={form.region} error={errors.region} valid={!!form.region && !errors.region} badge={regionBadge} options={[{ label: 'Prefer not to say', value: '' }, ...SA_REGIONS.map((region) => ({ label: region, value: region }))]} onChange={(value) => patch('region', value)} />
+              <ProfileEmailChange key={login.id} email={login.email} userId={login.id} pendingEmail={login.pendingEmail} disabled={saving || photoSaving || proofSaving} onBusyChange={setEmailBusy} onVerified={load} />
+              <LiquidField label="Name" value={form.name} error={errors.name} onChangeText={value => patch('name', value)} autoComplete="name" autoCapitalize="words" maxLength={100} />
+              <SelectField label="Gender" value={form.gender} options={[{ label: 'Prefer not to say', value: '' }, ...GENDERS.map(value => ({ label: value, value }))]} onChange={value => patch('gender', value)} />
+              <SelectField label="Nationality" value={form.nationality} options={[{ label: 'Prefer not to say', value: '' }, ...NATIONALITIES.map(value => ({ label: value.label, value: value.value, badge: value.badge }))]} onChange={value => patch('nationality', value)} searchable />
+              <LiquidField label="ID / passport number" value={form.idNumber} hint="Only you and authorised staff can access this private detail." onChangeText={value => patch('idNumber', value)} maxLength={50} autoCapitalize="characters" />
+              <LiquidField label="Date of birth (YYYY-MM-DD)" value={form.dateOfBirth} placeholder="YYYY-MM-DD" error={errors.dateOfBirth} invalid={!!errors.dateOfBirth} onChangeText={value => patch('dateOfBirth', value)} autoComplete="birthdate-full" autoCapitalize="none" maxLength={10} />
+              <LiquidField label="Age (calculated)" value={age == null ? '' : String(age)} editable={false} placeholder="Enter your date of birth" hint="Calculated from your date of birth." />
+              <Text style={{ color: brand.muted, fontSize: 12 }}>Your date of birth stays private. Your profile shows your age.</Text>
+              <LiquidField label="Mobile number" icon="phone.fill" value={form.contactNumber} error={errors.contactNumber} invalid={!!errors.contactNumber} valid={filled(form.contactNumber) && !errors.contactNumber} onChangeText={(value) => patch('contactNumber', value)} keyboardType="phone-pad" autoComplete="tel" textContentType="telephoneNumber" />
+              <SelectField label="Region" value={form.region} error={errors.region} valid={!!form.region && !errors.region} badge={regionBadge} options={[{ label: 'Prefer not to say', value: '' }, ...SA_REGIONS.map((region) => ({ label: region, value: region }))]} onChange={(value) => patch('region', value)} />
               <SelectField label="Category" value={form.category} error={errors.category} valid={!!form.category && !errors.category} options={categoryOptions} onChange={(value) => patch('category', value)} />
               <SelectField label="Court side" value={form.courtSide} valid={!!form.courtSide} options={COURT_SIDE_OPTIONS} onChange={(value) => patch('courtSide', value)} />
               <SelectField label="Playing hand" value={form.playingHand} valid={!!form.playingHand} options={PLAYING_HAND_OPTIONS} onChange={(value) => patch('playingHand', value)} />
@@ -348,9 +396,15 @@ export default function EditProfileScreen() {
               expanded={expanded === 'about'}
               onPress={() => setExpanded(expanded === 'about' ? null : 'about')}>
               <LiquidField label="About your game" value={form.bio} error={errors.bio} invalid={!!errors.bio} valid={filled(form.bio) && !errors.bio} onChangeText={(value) => patch('bio', value)} multiline autoCapitalize="sentences" autoCorrect />
-              <LiquidField label="Instagram (optional)" value={form.instagramLink} valid={filled(form.instagramLink)} onChangeText={(value) => patch('instagramLink', value)} autoCapitalize="none" keyboardType="url" />
+              <SponsorField label="Sponsors" value={form.sponsors} input={sponsorInput} onInputChange={setSponsorInput} onChange={value => patch('sponsors', value)} />
+              <LiquidField label="Instagram" value={form.instagramLink} valid={filled(form.instagramLink)} onChangeText={(value) => patch('instagramLink', value)} autoCapitalize="none" keyboardType="url" />
               <SelectField label="Racket brand" value={form.racketBrand} error={errors.racketBrand} valid={racketReady && !errors.racketBrand} options={RACKET_BRANDS.map((name) => ({ label: name, value: name }))} onChange={(value) => patch('racketBrand', value)} />
               {form.racketBrand === 'Other' && <LiquidField label="Racket brand" value={form.customRacketBrand} error={errors.customRacketBrand} invalid={!!errors.customRacketBrand} valid={filled(form.customRacketBrand) && !errors.customRacketBrand} onChangeText={(value) => patch('customRacketBrand', value)} autoCapitalize="words" />}
+            </ProfileSection>
+
+            <ProfileSection title="Playtomic Level" icon="tennisball-outline" summary={form.playtomicLevel ? `Playtomic Level ${form.playtomicLevel} · player submitted` : form.playtomicNoProfile ? 'No Playtomic profile or level' : 'Level and screenshot required.'} expanded={expanded === 'playtomic'} onPress={() => setExpanded(expanded === 'playtomic' ? null : 'playtomic')}>
+              {!form.playtomicNoProfile && <LiquidField label="Playtomic Level (required)" value={form.playtomicLevel} placeholder="e.g. 3.25" keyboardType="decimal-pad" error={errors.playtomicLevel} invalid={!!errors.playtomicLevel} onChangeText={value => patch('playtomicLevel', value)} />}
+              <PlaytomicProofField noProfile={form.playtomicNoProfile} onNoProfileChange={value => { patch('playtomicNoProfile', value); if (value) { patch('playtomicLevel', ''); patch('playtomicProofPath', ''); patch('playtomicExtraction', null); } }} extraction={form.playtomicExtraction} onExtractionDetected={value => patch('playtomicExtraction', value)} playerId={player.id} path={form.playtomicProofPath} level={form.playtomicLevel} disabled={saving || !detailsReady} onChange={value => patch('playtomicProofPath', value)} onLevelDetected={value => patch('playtomicLevel', value)} onBusyChange={setProofSaving} />
             </ProfileSection>
 
             <ProfileSection title="FIP profile" icon="link-outline" summary="FIP ranking and profile connection" expanded={expanded === 'fip'} onPress={() => setExpanded(expanded === 'fip' ? null : 'fip')}>
@@ -364,13 +418,13 @@ export default function EditProfileScreen() {
             <Text style={{ color: brand.muted, fontSize: 12, textAlign: 'center', marginBottom: 8 }}>Unsaved changes</Text>
             <PressableScale
               onPress={save}
-              disabled={saving || photoSaving}
+              disabled={saving || emailBusy || photoSaving || proofSaving || !detailsReady}
               accessibilityRole="button"
-              accessibilityState={{ busy: saving, disabled: saving || photoSaving }}
+              accessibilityState={{ busy: saving, disabled: saving || emailBusy || photoSaving || proofSaving || !detailsReady }}
               accessibilityLabel="Save changes"
-              className="h-[52px] flex-row items-center justify-center rounded-[14px] bg-padel">
-              {saving ? <ActivityIndicator color={brand.premium} style={{ marginRight: 8 }} /> : null}
-              <Text className="text-[13px] font-black uppercase tracking-widest text-court-ink">
+              className="h-[52px] flex-row items-center justify-center rounded-[14px] bg-court-action">
+              {saving ? <ActivityIndicator color="#FFFFFF" style={{ marginRight: 8 }} /> : null}
+              <Text className="text-[13px] font-black uppercase tracking-widest text-white">
                 {saving ? 'Saving…' : 'Save changes'}
               </Text>
             </PressableScale>

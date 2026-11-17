@@ -46,6 +46,7 @@ const dependencies = {
   'expo-router': { Stack: { Screen: () => null }, useRouter: () => ({ push() {} }) },
   'expo-web-browser': {}, 'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
   '@/lib/media': {}, '@/lib/haptics': { hapticLight() {} }, '@/theme/tokens': { lightBrand: {} },
+  './album-photo-profile-action': { AlbumPhotoProfileAction: () => null }, './error-banner': { ErrorBanner: () => null },
 };
 vm.runInNewContext(`${source}\nexports.AlbumCard = AlbumCard;`, { module: mod, exports: mod.exports, require: id => {
   if (!(id in dependencies)) throw new Error(`Unexpected dependency: ${id}`);

@@ -1,3 +1,4 @@
+import { useHelpInbox } from '@/components/help-inbox-provider';
 import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
 import { usePathname, useRouter } from 'expo-router';
@@ -47,7 +48,7 @@ const NAV: NavItem[] = [
   },
   {
     name: 'Following',
-    icon: { ios: 'heart.text.square', android: 'feed', web: 'feed' },
+    icon: { ios: 'heart', android: 'favorite_border', web: 'favorite_border' },
     dest: { kind: 'tab', href: '/following' },
   },
   {
@@ -118,6 +119,7 @@ export function DrawerMenu({
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const help = useHelpInbox();
   const router = useRouter();
   const pathname = usePathname();
   const [player, setPlayer] = useState<PlayerCard | null>(null);
@@ -309,7 +311,7 @@ export function DrawerMenu({
                 }}
                 accessibilityRole="menuitem"
                 accessibilityState={{ selected: active, expanded: item.children ? expanded : undefined }}
-                accessibilityLabel={item.name}
+                accessibilityLabel={item.name === 'Help & enquiries' && help.unread ? `${item.name}, ${help.unread} unread` : item.name}
                 className="min-h-11 flex-row items-center justify-between rounded-xl border px-4"
                 style={{
                   backgroundColor: active ? 'rgba(204,255,0,0.10)' : 'transparent',
@@ -326,7 +328,7 @@ export function DrawerMenu({
                   <Text
                     className="ml-3 text-xs font-bold uppercase tracking-widest"
                     style={{ color: active ? brand.accent : '#52625A' }}>
-                    {item.name}
+                    {item.name}{item.name === 'Help & enquiries' && help.unread ? ` (${help.unread})` : ''}
                   </Text>
                 </View>
                 {item.children ? (

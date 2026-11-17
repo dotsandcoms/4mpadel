@@ -2,7 +2,8 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 import { useFieldColors } from '@/components/field-colors';
 import { parseSponsors, serializeSponsors } from '@/lib/sponsors';
 
-export function SponsorField({ value, input, onChange, onInputChange }: {
+export function SponsorField({ value, input, onChange, onInputChange, label = 'Sponsors (optional)' }: {
+  label?: string;
   value: string;
   input: string;
   onChange: (value: string) => void;
@@ -16,7 +17,7 @@ export function SponsorField({ value, input, onChange, onInputChange }: {
   }
   return (
     <View className="mb-3">
-      <Text className="mb-1.5 text-[14px] font-semibold" style={{ color: colors.label }}>Sponsors (optional)</Text>
+      <Text className="mb-1.5 text-[14px] font-semibold" style={{ color: colors.label }}>{label}</Text>
       <View className="rounded-[14px] p-3" style={{ backgroundColor: colors.elevated, borderColor: colors.accent, borderWidth: 2 }}>
         {names.length > 0 && <View className="mb-2 flex-row flex-wrap" style={{ gap: 8 }}>
           {names.map((name) => <Pressable key={name.toLowerCase()} accessibilityRole="button" accessibilityLabel={`Remove sponsor ${name}`}

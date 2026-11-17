@@ -1,4 +1,4 @@
-import { brand } from '@/theme/tokens';
+import { loadingBlue } from '@/theme/tokens';
 
 export type SapaTone = {
   fill: string;
@@ -21,7 +21,7 @@ export function sapaTone(status?: string | null): SapaTone {
   if (s.includes('silver')) return tone('#9CA3AF');
   if (s.includes('bronze')) return tone('#C2410C');
   if (s.includes('fip')) return tone('#2563EB');
-  return tone(brand.padel);
+  return tone(loadingBlue);
 }
 
 export function sapaLabel(status?: string | null) {
@@ -51,7 +51,7 @@ function hexAlpha(hex: string, alpha: number) {
 export function lightSapaTone(status?: string | null): SapaTone {
   const original = sapaTone(status);
   const textByFill: Record<string, string> = {
-    '#CCFF00': '#386018', '#EAB308': '#875E0B', '#F59E0B': '#87520B',
+    '#EAB308': '#875E0B', '#F59E0B': '#87520B',
     '#9CA3AF': '#52625A', '#F40020': '#B42335',
   };
   return { ...original, text: textByFill[original.fill] || original.fill };

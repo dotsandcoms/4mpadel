@@ -2,6 +2,121 @@ const test = require('node:test'), assert = require('node:assert/strict'), fs = 
 function load(file, env = {}) { const mod={exports:{}}; vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{module:mod,exports:mod.exports,require:()=>({}),...env});return mod.exports; }
 const hub=load('src/lib/player-hub.ts');
 const local=(id,category,rank)=>hub.localHubPlayer({id:String(id),name:`Player ${id}`,category,rank_label:String(rank),image_url:null,points:100,home_club:'Club'});
+
+function followLayoutComponents() {
+ const modules = {
+  'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
+  'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable' },
+  '@/theme/tokens': { lightBrand: {} },
+  '@/components/home-action': { HomeAction: 'HomeAction' },
+  '@/components/home-feed': { FeedPortrait: 'FeedPortrait' },
+  './home-action.types': { homeIcons: { followed: { ios: 'heart.fill' }, following: { ios: 'heart' } } },
+  '@expo/ui/swift-ui': Object.fromEntries(['Host', 'Button', 'HStack', 'VStack', 'Image', 'Text'].map(name => [name, name])),
+  '@expo/ui/swift-ui/modifiers': new Proxy({}, { get: (_, name) => name === 'shapes' ? new Proxy({}, { get: (_, shape) => () => ({ shape }) }) : value => ({ name, value }) }),
+ };
+ const read = file => {
+  const mod = { exports: {} };
+  const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { fileName: file, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+  vm.runInNewContext(code, { module: mod, exports: mod.exports, require: name => modules[name] });
+  return mod.exports;
+ };
+ const action = read('src/components/players/player-follow-action.tsx');
+ modules['@/components/players/player-follow-action'] = action;
+ return { ...action, ...read('src/components/rankings/local-ranking-row.tsx'), ...read('src/components/home-action.ios.tsx') };
+}
+test('follow controls keep the same frame while loading, following, saving and returning to Follow', () => {
+ const { PlayerFollowAction, HomeAction } = followLayoutComponents();
+ let pressed = 0;
+ const frames = [];
+ for (const state of [{ pending: true, pendingLabel: 'Loading…' }, {}, { following: true }, { following: true, pending: true }, {}]) {
+  const action = PlayerFollowAction({ name: 'Test Player', following: false, onPress: () => pressed++, ...state });
+  frames.push(JSON.stringify(action.props.style));
+  const control = action.props.children;
+  assert.equal(control.props.disabled, !!state.pending);
+  assert.match(control.props.accessibilityLabel, /Test Player/);
+  const native = HomeAction(control.props);
+  assert.equal(native.props.matchContents, false, 'follow labels must not trigger a delayed intrinsic width measurement');
+  assert.equal(native.props.style.width, '100%');
+  if (!state.pending) control.props.onPress();
+ }
+ assert.equal(new Set(frames).size, 1);
+ assert.equal(pressed, 3);
+});
+test('ranking rows reserve the follow space before a player profile becomes available', () => {
+ const { LocalRankingRow, PlayerFollowAction } = followLayoutComponents();
+ const player = { id: 'r1', name: 'Test Player', rank: 1, points: 1200, change: 0 };
+ for (const iconOnlyFollow of [false, true]) {
+  let opened = 0;
+  const initial = LocalRankingRow({ player, rankingLabel: 'SAPA', onPress: () => opened++, iconOnlyFollow });
+  const action = PlayerFollowAction({ name: player.name, following: true, iconOnly: iconOnlyFollow, onPress() {} });
+  const loaded = LocalRankingRow({ player: { ...player, profile: { id: '407' } }, rankingLabel: 'SAPA', onPress() {}, follow: action, iconOnlyFollow });
+  const slot = tree => tree.props.children.at(-1);
+  assert.equal(JSON.stringify(slot(initial).props.style), JSON.stringify(slot(loaded).props.style));
+  assert.equal(slot(initial).props.style.width, action.props.style.width);
+  initial.props.children[0].props.onPress(); assert.equal(opened, 1);
+ }
+});
+
+test('reopening the FIP Players shortcut restores Discover and clears the previous directory filters', () => {
+ const values = [], dependencies = []; let effects = [], effectIndex = 0, cursor = 0, mounted = false, focus = [];
+ let params = { view: 'Discover', source: 'pro', query: '', gender: 'all' };
+ const router = { replace() {} };
+ const state = { locals: [], fipLinks: [], ids: [], isFollowing: () => false, pro: { rankings: { data: null }, follows: [], userId: null } };
+ const modules = {
+  react: {
+   useState(initial) { const i = cursor++; if (!(i in values)) values[i] = typeof initial === 'function' ? initial() : initial; return [values[i], value => { values[i] = typeof value === 'function' ? value(values[i]) : value; }]; },
+   useRef(initial) { const i = cursor++; if (!(i in values)) values[i] = { current: initial }; return values[i]; },
+   useMemo: fn => fn(), useCallback: fn => fn,
+   useEffect(fn, deps) { const i = effectIndex++; if (!dependencies[i] || deps.some((value, j) => value !== dependencies[i][j])) effects.push(fn); dependencies[i] = deps; },
+  },
+  'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
+  'react-native': { ...Object.fromEntries(['View', 'Text', 'TextInput', 'Pressable', 'FlatList', 'Modal', 'ActivityIndicator'].map(name => [name, name])), Platform: { OS: 'ios' } },
+  'expo-router': { useRouter: () => router, useLocalSearchParams: () => params, useFocusEffect: fn => focus.push(fn) },
+  'expo-router/react-navigation': { useRoute: () => ({ params }) },
+  'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0 }) },
+  '@/hooks/use-player-hub': { usePlayerHub: () => state },
+  '@/hooks/use-tab-scene-padding': { useTabScenePadding: () => 0 },
+  '@/hooks/use-analytics-search': { useAnalyticsSearch() {} },
+  '@/lib/analytics': { trackEvent() {} }, '@/lib/player-hub': hub,
+  '@/theme/tokens': { lightBrand: {} },
+ };
+ const exports = {};
+ vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/components/players/player-hub.tsx', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText,
+  { exports, require: name => modules[name] || new Proxy({}, { get: (_, key) => key }), setTimeout, clearTimeout });
+ function render() {
+  cursor = 0; effectIndex = 0; focus = []; effects = []; const tree = exports.default();
+  effects.forEach(fn => fn());
+  if (!mounted) { mounted = true; focus.forEach(fn => fn()); }
+  return tree;
+ }
+ function find(tree, label) {
+  if (!tree || typeof tree !== 'object') return;
+  if (Array.isArray(tree)) return tree.map(child => find(child, label)).find(Boolean);
+  if (tree.props?.label === label || tree.props?.accessibilityLabel === label) return tree;
+  return find(tree.props?.children, label);
+ }
+ render();
+ let tree = render();
+ assert.equal(find(tree, 'Player directory').props.value, 'pro');
+ find(tree, 'Players view').props.onChange('Rankings'); tree = render();
+ find(tree, 'Player directory').props.onChange('4m'); tree = render();
+ find(tree, 'Player category').props.onChange('women');
+ find(tree, 'Search players').props.onChangeText('Sam');
+ find(tree, 'Players view').props.onChange('Following'); tree = render();
+ assert.equal(find(tree, 'Players view').props.value, 'Following');
+ assert.equal(find(tree, 'Player directory').props.value, '4m');
+ // Returning from a profile preserves the current filters.
+ focus.forEach(fn => fn()); tree = render();
+ assert.equal(find(tree, 'Players view').props.value, 'Following');
+ assert.equal(find(tree, 'Player directory').props.value, '4m');
+ // An explicit shortcut navigation delivers fresh route params with the same values.
+ params = { ...params }; render(); tree = render();
+ assert.equal(find(tree, 'Players view').props.value, 'Discover');
+ assert.equal(find(tree, 'Player directory').props.value, 'pro');
+ assert.equal(find(tree, 'Player category').props.value, 'all');
+ assert.equal(find(tree, 'Search players').props.value, '');
+});
+
 test('ranking updates require a known nonzero rank change, regardless of points changes',()=>{
  for(const player of [{},{rankChange:null},{rankChange:0,pointsChange:0},{rankChange:NaN},{pointsChange:Infinity},{rankChange:0,pointsChange:40},{pointsChange:-20}])assert.equal(hub.hasRankingUpdate(player),false);
  for(const player of [{rankChange:3},{rankChange:-2},{rankChange:2,pointsChange:0}])assert.equal(hub.hasRankingUpdate(player),true);
@@ -97,6 +212,41 @@ test('featured local ranks use national category and stable identity, not profil
  assert.ok(hub.rankedLocalPlayers(duplicate,[{name:'Same name',rank:1,points:1}],[]).every(p=>p.rank===null));
 });
 
+test('a player listed in both national tables keeps the rank from their profile category',()=>{
+ const directory=[
+  {id:'403',name:'Debbie van Aswegen',rankedin_id:'R000337233',category:'Ladies Open (Pro/Elite)'},
+  {id:'404',name:'Mikayla Plitt',rankedin_id:'R000050565',category:'Ladies Open (Pro/Elite)'},
+  {id:'405',name:'Linge Steenkamp',rankedin_id:'R000335193',category:'Ladies Open (Pro/Elite)'},
+  {id:'406',name:'Men Player',rankedin_id:'men-id',category:'Men Over 35'},
+ ];
+ const men=[{rankedinId:'R000050565',name:'Mikayla Plitt',rank:818,points:23.667,change:-9},{rankedinId:'men-id',name:'Men Player',rank:2,points:9000,change:3}];
+ const women=[
+  {rankedinId:'R000337233',name:'Debbie Van Aswegen',rank:1,points:12860,change:0},
+  {rankedinId:'R000050565',name:'Mikayla Plitt',rank:2,points:10444,change:1},
+  {rankedinId:'R000335193',name:'Linge Steenkamp',rank:3,points:10228,change:-1},
+  {rankedinId:'men-id',name:'Men Player',rank:500,points:10,change:-5},
+ ];
+ const rows=hub.rankedLocalPlayers(directory,men,women);
+ assert.deepEqual(Array.from(hub.topLocalPlayers(rows,'women'),p=>p.rank),[1,2,3]);
+ const mikayla=rows.find(p=>p.id==='404');
+ assert.equal(mikayla.rank,2);assert.equal(mikayla.points,10444);assert.equal(mikayla.rankChange,1);
+ assert.equal(mikayla.gender,'women');assert.equal(mikayla.key,'4m:404');
+ assert.equal(rows[3].rank,2);assert.equal(rows[3].points,9000);assert.equal(rows[3].rankChange,3);
+});
+
+test('category matching preserves conservative identity and ambiguity checks',()=>{
+ const women=[{rankedinId:'women-id',name:'Shared Name',rank:2,points:100,change:1}];
+ const men=[{rankedinId:'men-id',name:'Shared Name',rank:500,points:5,change:-2}];
+ const profile={id:'1',name:'Shared Name',category:'Ladies Open (Pro/Elite)'};
+ assert.equal(hub.rankedLocalPlayers([profile],men,women)[0].rank,2);
+ assert.equal(hub.rankedLocalPlayers([{...profile,rankedin_id:'different-id'}],men,women)[0].rank,null);
+ assert.equal(hub.rankedLocalPlayers([{...profile,category:null}],men,women)[0].rank,null);
+ assert.equal(hub.rankedLocalPlayers([profile],men,[])[0].rank,null);
+ assert.equal(hub.rankedLocalPlayers([{...profile,rankedin_id:'women-id'}],men,[...women,...women])[0].rank,null);
+ assert.equal(hub.rankedLocalPlayers([{...profile,category:null,rankedin_id:'women-id'}],men,women)[0].rank,2);
+ assert.ok(hub.rankedLocalPlayers([profile,{...profile,id:'2'}],men,women).every(p=>p.rank===null));
+});
+
 test('Home offers local suggestions when only Pro players are followed',()=>{
  const suggestions=[local(1,'Men',1),local(2,'Women',2)];
  const result=hub.homePlayerSelection(true,[],suggestions);
@@ -175,11 +325,13 @@ function followerComponent() {
  let cursor = 0, dependencyKey, cleanup, effect;
  const modules = {
   react: {
-   useState(initial) { const i = cursor++; if (!(i in values)) values[i] = initial; return [values[i], value => { values[i] = value; }]; },
+   useState(initial) { const i = cursor++; if (!(i in values)) values[i] = typeof initial === 'function' ? initial() : initial; return [values[i], value => { values[i] = value; }]; },
    useCallback(fn, deps) { const key = JSON.stringify(deps); return { fn, key }; },
   },
   'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }), Fragment: 'Fragment' },
   'react-native': { Text: 'Text', Pressable: 'Pressable' }, '@/theme/tokens': { lightBrand: {} },
+  '@expo/vector-icons': { Ionicons: 'Ionicons' },
+  './player-follow-action': { PlayerFollowAction: 'PlayerFollowAction' },
   'expo-router': { useFocusEffect(callback) { if (callback.key !== dependencyKey) { dependencyKey = callback.key; effect = callback.fn; cleanup?.(); cleanup = effect(); } } },
   '@/lib/player-hub': { fetchLocalFollowerCount: id => new Promise((resolve, reject) => requests.push({ id, resolve, reject })) },
  };
@@ -226,13 +378,14 @@ test('the follow control refreshes the count after successful follows and unfoll
  const values = []; let cursor = 0, mounted = false, changed = 0, fail = false;
  const modules = {
   react: {
-   useState(initial) { const i = cursor++; if (!(i in values)) values[i] = initial; return [values[i], value => { values[i] = value; }]; },
+   useState(initial) { const i = cursor++; if (!(i in values)) values[i] = typeof initial === 'function' ? initial() : initial; return [values[i], value => { values[i] = value; }]; },
    useRef(initial) { const i = cursor++; if (!(i in values)) values[i] = { current: initial }; return values[i]; },
    useCallback: fn => fn,
   },
   'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
   'react-native': { View: 'View', Text: 'Text', Pressable: 'Pressable', Alert: { alert() {} } },
   '@expo/vector-icons': { Ionicons: 'Ionicons' },
+  './player-follow-action': { PlayerFollowAction: 'PlayerFollowAction' },
   'expo-router': { useRouter: () => ({}), useFocusEffect(fn) { if (!mounted) { mounted = true; fn(); } } },
   '@/lib/supabase': { supabase: { auth: {
    getSession: async () => ({ data: { session: { user: { id: 'u1' } } } }),
@@ -245,11 +398,23 @@ test('the follow control refreshes the count after successful follows and unfoll
  const render = () => { cursor = 0; return exports.LocalFollowButton({ playerId: '407', name: 'Player', onFollowChange: () => changed++ }).props.children[0]; };
  const flush = () => new Promise(resolve => setImmediate(resolve));
  render(); await flush();
- assert.equal(render().props.accessibilityState.selected, false);
+ assert.equal(render().props.following, false);
  render().props.onPress(); await flush();
- assert.equal(render().props.accessibilityState.selected, true); assert.equal(changed, 1);
+ assert.equal(render().props.following, true); assert.equal(changed, 1);
  render().props.onPress(); await flush();
- assert.equal(render().props.accessibilityState.selected, false); assert.equal(changed, 2);
+ assert.equal(render().props.following, false); assert.equal(changed, 2);
  fail = true; render().props.onPress(); await flush();
- assert.equal(render().props.accessibilityState.selected, false); assert.equal(changed, 2);
+ assert.equal(render().props.following, false); assert.equal(changed, 2);
+});
+
+test('Discovery shuffles the full Men, Women and FIP pools before limiting cards',()=>{
+ const men=Array.from({length:50},(_,i)=>local(i+1,'Men',i+1)),women=Array.from({length:50},(_,i)=>local(i+101,'Women',i+1));
+ const pros=Array.from({length:50},(_,i)=>hub.proHubPlayer({id:i+1,name:'FIP '+i,category:i%2?'women':'men',rank:i+1,points:500-i}));
+ const all=[...men,...women,...pros],before=JSON.stringify(all);
+ for(const [source,gender]of [['4m','men'],['4m','women'],['pro','all'],['pro','women']]){
+  const first=hub.discoveryPlayers(all,source,gender,123),again=hub.discoveryPlayers([...all].reverse(),source,gender,123),other=hub.discoveryPlayers(all,source,gender,987);
+  assert.equal(first.length,20);assert.equal(new Set(first.map(p=>p.key)).size,20);assert(first.every(p=>p.source===source&&(gender==='all'||p.gender===gender)));
+  assert.deepEqual(Array.from(first,p=>p.key),Array.from(again,p=>p.key));assert.notDeepEqual(Array.from(first,p=>p.key),Array.from(other,p=>p.key));assert(first.some(p=>p.rank>20));
+ }
+ assert.equal(JSON.stringify(all),before);assert.deepEqual(Array.from(hub.topLocalPlayers(all,'men'),p=>p.rank),Array.from({length:20},(_,i)=>i+1));
 });

@@ -1,3 +1,4 @@
+import { withSapaMainRanking } from './sapa-main-ranking';
 import { fetchHomeRankingChange } from '@/lib/rankings';
 import { joinedOne } from './query-result';
 import { fetchPlayerMatches, type PlayerMatch } from '@/lib/matches';
@@ -6,6 +7,7 @@ import { siteUrl } from '@/lib/site';
 import { fetchEntryBalances } from '@/lib/entry-balances';
 import type { EntryBalance } from '@/lib/events';
 import { formatMoney } from '@/lib/event-rules';
+import { resultHighlights, resultPortraits, type ResultHighlight } from './home-results';
 
 const CALENDAR_FIELDS =
   'id, event_name, start_date, end_date, city, venue, sapa_status, slug, registered_players, featured_event, is_spotlight, is_manual, featured_live, live_youtube_url, registration_opens_at, registration_closes_at, rankedin_url, organiser_name, organiser_badge_text, points, entry_fee, category_fees, allow_payments, custom_image_url, poster_image_url, image_url';
@@ -44,6 +46,8 @@ export type CalendarEvent = {
   registrationKnown?: boolean;
   hasEntryBalance?: boolean;
   winnerName?: string | null;
+  resultHighlight?: ResultHighlight | null;
+  resultDivisions?: ResultHighlight[];
   custom_image_url?: string | null;
   poster_image_url?: string | null;
   image_url?: string | null;
@@ -59,6 +63,7 @@ export type HomePlayer = {
   name: string | null;
   rank_label: string | null;
   points: number | null;
+  sapa_main_label?: string | null;
   region: string | null;
   racket_brand: string | null;
   rankedin_id: string | null;
@@ -68,6 +73,8 @@ export type HomePlayer = {
   paid_registration: boolean | null;
   winLoss: string | null;
   rankingChange?: number | null;
+  contact_number?: string | null; gender?: string | null; nationality?: string | null;
+  home_club?: string | null; bio?: string | null; court_side?: string | null; playing_hand?: string | null;
 };
 
 export type PendingKind = 'payment' | 'profile';
@@ -183,31 +190,34 @@ export async function fetchHomePlayerExtras(player: HomePlayer) {
   };
 }
 
-export async function fetchPendingActions(email?: string | null): Promise<PendingAction[]> {
+export async function fetchPendingActions(email?: string | null, strict = false): Promise<PendingAction[]> {
   const normalised = email?.trim().toLowerCase() ?? '';
   if (!normalised) return [];
   const [player, payments] = await Promise.all([
-    fetchPlayer(normalised),
-    fetchPendingPayments(normalised),
+    fetchPlayer(normalised, strict),
+    fetchPendingPayments(normalised, strict),
   ]);
   return [...payments, ...profileGaps(player)];
 }
 
-export async function fetchSearchEvents(): Promise<CalendarEvent[]> {
+export async function fetchSearchEvents(strict = false, upcomingOnly = false): Promise<CalendarEvent[]> {
   try {
     const from = new Date();
     from.setDate(from.getDate() - 45);
-    const { data, error } = await supabase
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg' }).format(new Date());
+    const visibility = 'or(sanction_status.eq.approved,sanction_status.is.null)';
+    let query = supabase
       .from('calendar')
       .select(CALENDAR_FIELDS)
-      .or('sanction_status.eq.approved,sanction_status.is.null')
-      .neq('is_visible', false)
-      .gte('start_date', isoDate(from))
-      .order('start_date', { ascending: true })
-      .limit(120);
+      .or(upcomingOnly ? `and(${visibility},or(end_date.gte.${today},and(end_date.is.null,start_date.gte.${today})))` : 'sanction_status.eq.approved,sanction_status.is.null')
+      .neq('is_visible', false);
+    if (!upcomingOnly) query = query.gte('start_date', isoDate(from));
+    const { data, error } = await query.order('start_date', { ascending: true }).limit(120);
+    if (error && strict) throw error;
     if (error || !data) return [];
     return await enrichManualCounts(data as CalendarEvent[]);
-  } catch {
+  } catch (error) {
+    if (strict) throw error;
     return [];
   }
 }
@@ -391,18 +401,20 @@ export function isEventLive(event: Pick<CalendarEvent, 'start_date' | 'end_date'
   return now.getTime() >= start.getTime() && now.getTime() <= end.getTime();
 }
 
-async function fetchPlayer(email: string): Promise<Omit<HomePlayer, 'winLoss'> | null> {
+export async function fetchPlayer(email: string, strict = false): Promise<Omit<HomePlayer, 'winLoss'> | null> {
   try {
     const { data, error } = await supabase
       .from('players')
       .select(
-        'id, name, rank_label, points, region, racket_brand, rankedin_id, category, image_url, license_type, paid_registration'
+        'id, name, rank_label, points, region, racket_brand, rankedin_id, category, gender, rankings, image_url, license_type, paid_registration, contact_number, nationality, home_club, bio, court_side, playing_hand'
       )
-      .ilike('email', email)
+      .ilike('email', email.trim().replace(/[\\%_]/g, '\\$&'))
       .maybeSingle();
+    if (error && strict) throw error;
     if (error || !data) return null;
-    return data as Omit<HomePlayer, 'winLoss'>;
-  } catch {
+    return withSapaMainRanking(data) as Omit<HomePlayer, 'winLoss'>;
+  } catch (error) {
+    if (strict) throw error;
     return null;
   }
 }
@@ -426,27 +438,27 @@ async function fetchWinLoss(rankedinId: string): Promise<string | null> {
   }
 }
 
-async function fetchHappeningNow(): Promise<CalendarEvent[]> {
+export async function fetchHappeningNow(strict = false): Promise<CalendarEvent[]> {
   try {
     const today = startOfToday();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    endOfMonth.setHours(23, 59, 59, 999);
+    const date = isoDate(today);
 
     const { data, error } = await supabase
       .from('calendar')
       .select(CALENDAR_FIELDS)
       .neq('is_visible', false)
       .or('sanction_status.eq.approved,sanction_status.is.null')
-      .gte('start_date', yesterday.toISOString())
-      .lte('start_date', endOfMonth.toISOString())
-      .order('start_date', { ascending: true });
+      .lte('start_date', date)
+      .or(`end_date.gte.${date},and(end_date.is.null,start_date.gte.${date})`)
+      .order('start_date', { ascending: false })
+      .limit(20);
 
+    if (error && strict) throw error;
     if (error || !data) return [];
     const rows = await enrichManualCounts(data as CalendarEvent[]);
     return rows.filter((event) => isEventLive(event, today)).sort(byFeaturedThenDate);
-  } catch {
+  } catch (error) {
+    if (strict) throw error;
     return [];
   }
 }
@@ -463,7 +475,7 @@ export function selectSpotlightEvents(featured: CalendarEvent[]): CalendarEvent[
   return [...unique.values()].slice(0, 5);
 }
 
-async function fetchFeatured(): Promise<CalendarEvent[]> {
+export async function fetchFeatured(strict = false): Promise<CalendarEvent[]> {
   try {
     const today = isoDate(new Date());
     const { data, error } = await supabase
@@ -471,22 +483,24 @@ async function fetchFeatured(): Promise<CalendarEvent[]> {
       .select(CALENDAR_FIELDS)
       .or('featured_event.eq.true,is_spotlight.eq.true')
       .or('sanction_status.eq.approved,sanction_status.is.null')
-      .gte('start_date', today)
+      .or(`start_date.gte.${today},end_date.gte.${today}`)
       .neq('is_visible', false)
       .order('is_spotlight', { ascending: false, nullsFirst: false })
       .order('start_date', { ascending: true })
       .limit(5);
+    if (error && strict) throw error;
     if (error || !data) return [];
     const rows = selectSpotlightEvents(data as CalendarEvent[]);
     return await enrichManualCounts(rows);
-  } catch {
+  } catch (error) {
+    if (strict) throw error;
     return [];
   }
 }
 
-async function fetchRecentResults(): Promise<CalendarEvent[]> {
+export async function fetchRecentResults(strict = false): Promise<CalendarEvent[]> {
   try {
-    const [{ data: flagged }, { data: autoTiers }] = await Promise.all([
+    const responses = await Promise.all([
       supabase
         .from('calendar')
         .select(CALENDAR_FIELDS)
@@ -505,6 +519,11 @@ async function fetchRecentResults(): Promise<CalendarEvent[]> {
         .limit(30),
     ]);
 
+    if (strict) {
+      const failed = responses.find(response => response.error);
+      if (failed?.error) throw failed.error;
+    }
+    const [{ data: flagged }, { data: autoTiers }] = responses;
     const byId = new Map<number, CalendarEvent>();
     (flagged as CalendarEvent[] | null)?.forEach((event) => byId.set(event.id, event));
     (autoTiers as CalendarEvent[] | null)
@@ -522,32 +541,65 @@ async function fetchRecentResults(): Promise<CalendarEvent[]> {
 
     if (!merged.length) return [];
 
-    let winnersByEvent = new Map<number, unknown>();
-    try {
-      const { data: cache } = await supabase
-        .from('rankedin_results_cache')
-        .select('event_id, winners')
-        .in(
-          'event_id',
-          merged.map((event) => event.id)
-        );
-      for (const row of cache ?? []) {
-        const id = (row as { event_id?: number }).event_id;
-        if (typeof id === 'number') {
-          winnersByEvent.set(id, (row as { winners?: unknown }).winners);
-        }
-      }
-    } catch {
-      winnersByEvent = new Map();
-    }
-
-    return merged.map((event) => ({
-      ...event,
-      winnerName: mensOpenWinner(winnersByEvent.get(event.id)),
-    }));
-  } catch {
+    return await withPublishedResults(merged);
+  } catch (error) {
+    if (strict) throw error;
     return [];
   }
+}
+
+/** One read path for Home previews and the native all-winners sheet. */
+async function withPublishedResults(events: CalendarEvent[], strict = false): Promise<CalendarEvent[]> {
+  let winnersByEvent = new Map<number, unknown>();
+  try {
+    const { data: cache, error } = await supabase
+      .from('rankedin_results_cache')
+      .select('event_id, winners')
+      .eq('has_results', true)
+      .in(
+        'event_id',
+        events.map((event) => event.id)
+      );
+    if (error && strict) throw error;
+    for (const row of cache ?? []) {
+      const id = (row as { event_id?: number }).event_id;
+      if (typeof id === 'number') {
+        winnersByEvent.set(id, (row as { winners?: unknown }).winners);
+      }
+    }
+  } catch (error) {
+    if (strict) throw error;
+    winnersByEvent = new Map();
+  }
+
+  const highlights = new Map(events.map(event => [event.id, resultHighlights(winnersByEvent.get(event.id))]));
+  const names = [...new Set([...highlights.values()].flatMap(results => results.flatMap(result => result.winners.map(player => player.name))))];
+  let portraits: { id: number; name: string | null; image_url: string | null }[] = [];
+  if (names.length) {
+    // Batch only the public portraits needed by these published results.
+    for (let offset = 0; offset < names.length; offset += 60) {
+      try {
+        const { data, error } = await supabase.from('players_public').select('id, name, image_url').in('name', names.slice(offset, offset + 60));
+        if (!error) portraits.push(...(data ?? []));
+      } catch { /* Published winner names remain usable when portraits are offline. */ }
+    }
+  }
+  return events.map((event) => {
+    const divisions = (highlights.get(event.id) ?? []).map(result => resultPortraits(result, portraits));
+    return { ...event, winnerName: divisions[0]?.winners.map(player => player.name).join(' & ') ?? null,
+      resultHighlight: divisions[0] ?? null, resultDivisions: divisions };
+  });
+}
+
+/** Fallback for a reopened sheet; ordinary Home taps reuse its account-scoped cache. */
+export async function fetchEventWinners(eventId: number): Promise<CalendarEvent | null> {
+  if (!Number.isSafeInteger(eventId) || eventId <= 0) return null;
+  const { data, error } = await supabase.from('calendar').select(CALENDAR_FIELDS)
+    .eq('id', eventId).or('sanction_status.eq.approved,sanction_status.is.null')
+    .neq('is_visible', false).maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return (await withPublishedResults([data as CalendarEvent], true))[0] ?? null;
 }
 
 export type RegistrationState = { isRegistered: boolean; isPaid: boolean; hasOutstandingPayment: boolean };
@@ -583,7 +635,7 @@ export function resolveFeaturedCta(event: CalendarEvent): { label: string; actio
   return { label: 'Register', action: 'register' };
 }
 
-async function fetchSchedule(email: string, strict = false) {
+export async function fetchSchedule(email: string, strict = false) {
   try {
     const responses = await Promise.all([
       supabase
@@ -663,7 +715,7 @@ function filled(value?: string | null) {
   return Boolean(value?.trim());
 }
 
-function profileGaps(player: Omit<HomePlayer, 'winLoss'> | null): PendingAction[] {
+export function profileGaps(player: Omit<HomePlayer, 'winLoss'> | null): PendingAction[] {
   if (!player) return [];
   const actions: PendingAction[] = [];
   if (!filled(player.region)) {
@@ -672,8 +724,8 @@ function profileGaps(player: Omit<HomePlayer, 'winLoss'> | null): PendingAction[
       kind: 'profile',
       title: 'Region missing',
       subtitle: 'Select your home region.',
-      detail: 'Required to continue',
-      path: '/(tabs)/profile',
+      detail: 'Complete your profile',
+      path: '/edit-profile',
     });
   }
   if (!filled(player.racket_brand)) {
@@ -683,27 +735,45 @@ function profileGaps(player: Omit<HomePlayer, 'winLoss'> | null): PendingAction[
       title: 'Racket brand missing',
       subtitle: 'Select your racket brand.',
       detail: 'Complete your profile',
-      path: '/(tabs)/profile',
+      path: '/edit-profile',
     });
   }
   return actions;
 }
 
-export async function fetchPendingPayments(email: string): Promise<PendingAction[]> {
+export async function fetchPendingPayments(email: string, strict = false): Promise<PendingAction[]> {
   try {
+    const address = email.trim().toLowerCase();
+    if (!address) return [];
+    const literalEmail = address.replace(/[\\%_]/g, '\\$&');
     const { data, error } = await supabase
       .from('event_registrations')
       .select(
-        `id, event_id, email, partner_email, payment_status, partner_payment_status, division, calendar(id, event_name, slug, start_date)`
+        `id, event_id, email, partner_email, payment_status, partner_payment_status, division, division_id, calendar(id, event_name, slug, start_date)`
       )
-      .or(`email.ilike.${email},partner_email.ilike.${email}`)
+      .or(`email.ilike.${literalEmail},partner_email.ilike.${literalEmail}`)
       .neq('status', 'withdrawn');
 
+    if (error && strict) throw error;
     if (error || !data) return [];
+
+    // Doubles entries have reciprocal records. The user's primary entry is
+    // authoritative; a partner's cached status must not add a second reminder.
+    const normalise = (value: string | null | undefined) => value?.trim().toLowerCase() ?? '';
+    const ownRows = data.filter(row => normalise(row.email) === address);
+    const registrations = data.filter(row => {
+      if (normalise(row.email) === address) return true;
+      if (normalise(row.partner_email) !== address) return false;
+      return !ownRows.some(own => {
+        if (String(own.event_id) !== String(row.event_id)) return false;
+        if (own.division_id && row.division_id) return own.division_id === row.division_id;
+        return !!normalise(row.division) && normalise(own.division) === normalise(row.division);
+      });
+    });
 
     const balances = new Map<string, EntryBalance>();
     const failedEvents = new Set<number>();
-    const eventIds = [...new Set(data.filter(row => row.email?.toLowerCase() === email && row.payment_status === 'paid').map(row => Number(row.event_id)))];
+    const eventIds = [...new Set(registrations.filter(row => normalise(row.email) === address && row.payment_status === 'paid').map(row => Number(row.event_id)))];
     // One authenticated summary per event, bounded to avoid a request burst.
     for (let offset = 0; offset < eventIds.length; offset += 3) {
       await Promise.all(eventIds.slice(offset, offset + 3).map(async id => {
@@ -714,10 +784,10 @@ export async function fetchPendingPayments(email: string): Promise<PendingAction
     const today = startOfToday();
     const actions: PendingAction[] = [];
 
-    for (const row of data) {
+    for (const row of registrations) {
       const cal = joinedOne<Pick<CalendarEvent, 'id' | 'event_name' | 'slug' | 'start_date'>>(row.calendar);
       const start = parseDay(cal?.start_date);
-      const isRegistrant = row.email?.toLowerCase() === email;
+      const isRegistrant = normalise(row.email) === address;
       const status = isRegistrant ? row.payment_status : row.partner_payment_status;
       const balance = isRegistrant && status === 'paid' ? balances.get(String(row.id)) : undefined;
       if (balance?.known && balance.due != null && balance.due > 0) {
@@ -743,13 +813,14 @@ export async function fetchPendingPayments(email: string): Promise<PendingAction
         kind: 'payment',
         title: 'Complete payment',
         subtitle: cal?.event_name || 'Tournament',
-        detail: 'Payment outstanding',
+        detail: [row.division, 'Payment outstanding'].filter(Boolean).join(' · '),
         path: `/events/register?id=${row.event_id}&mode=pay`,
       });
     }
 
     return actions;
-  } catch {
+  } catch (error) {
+    if (strict) throw error;
     return [];
   }
 }

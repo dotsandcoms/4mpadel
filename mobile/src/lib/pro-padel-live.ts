@@ -3,14 +3,14 @@ import type { ProMatch, ProPerson, ProTournament } from '@/lib/pro-padel';
 
 export type PointGame = { game_number: number; game_score: string | null; serving: string | null; points: string[] };
 export type PointSet = { set_number: number; set_score: string | null; games: PointGame[] };
-export type PointFeed = { coverage: 'full' | 'partial' | 'tracking' | null; status: string; sets: PointSet[] };
+export type PointFeed = { channel?: string | null; freshness?: ProviderFreshness; coverage: 'full' | 'partial' | 'tracking' | null; status: string; sets: PointSet[] };
 export type MatchStats = Record<string, unknown>;
 export type LiveMatch = { id: number; status: string; coverage: string | null };
 export type LiveScoreSummary = { sets: [string | null, string | null][]; points: string | null; serving: string | null; coverage: string | null };
 export type ProviderFreshness = { stale: boolean; updatedAt: string; reason?: string };
-export type MatchDetails = { freshness?: ProviderFreshness; match: ProMatch; scoreText: string | null; duration: string | null; startedAt: string | null; updatedAt: string | null; draw: string | null; watchability: number | null; seeds: [string | null, string | null]; liveScore?: LiveScoreSummary | null; tournament?: ProTournament | null };
+export type MatchDetails = { freshness?: ProviderFreshness; match: ProMatch; scoreText: string | null; duration: string | null; startedAt: string | null; updatedAt: string | null; draw: string | null; bracketIndex?: number | null; courtOrder?: number | null; watchability: number | null; seeds: [string | null, string | null]; liveScore?: LiveScoreSummary | null; tournament?: ProTournament | null };
 export type HeadToHead = { matches: MatchDetails[]; total: number; complete: boolean };
-export type MatchPrediction = { team1: number; team2: number; eloDiff: number | null };
+export type MatchPrediction = { team1: number; team2: number; eloDiff: number | null; referenceDate: string; source: 'padel-api'; model: 'elo' };
 export type PlayerStats = { matchesPlayed: number | null; matchesWon: number | null; winPercentage: number | null; titles: number | null; finals: number | null; semifinals: number | null; setsWon: number | null; setsLost: number | null; gamesWon: number | null; gamesLost: number | null; bestRound: number | null; coverage: string | null; since: string | null };
 export type PlayerProfile = { id: number; name: string; category: 'men' | 'women'; rank: number | null; points: number | null; nationality: string | null; photoUrl: string | null; birthdate: string | null; birthplace: string | null; age: number | null; height: number | null; side: string | null; hand: string | null; elo: number | null };
 export type PlayerPair = { id: string; name: string; partner: ProPerson; partnerRank: number | null; partnerPoints: number | null; partnerNationality: string | null; partnerPhotoUrl: string | null; partnerSide: string | null; partnerHand: string | null; combinedPoints: number | null; status: string | null; firstMatchAt: string | null; lastMatchAt: string | null };
@@ -21,7 +21,7 @@ const object = (v: unknown): v is Record<string, any> => !!v && typeof v === 'ob
 const text = (v: unknown): string | null => typeof v === 'string' && v.trim() && v !== 'hidden_free_plan' ? v.trim() : null;
 const finiteNumber = (v: unknown): number | null => v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null;
 const positiveId = (v: unknown) => Number.isSafeInteger(v) && Number(v) > 0;
-const person = (v: unknown): ProPerson | null => object(v) && positiveId(v.id) && text(v.name) ? { id: v.id, name: text(v.name)!, nationality: /^[A-Z]{2}$/.test(v.nationality || '') ? v.nationality : null } : null;
+const person = (v: unknown): ProPerson | null => object(v) && positiveId(v.id) && text(v.name) ? { id: v.id, name: text(v.name)!, shortName: text(v.short_name), nationality: /^[A-Z]{2}$/.test(v.nationality || '') ? v.nationality : null } : null;
 
 export function parseProviderTournament(value: unknown): ProTournament | null {
   if (!object(value) || !positiveId(value.id) || !text(value.name)) return null;
@@ -39,7 +39,7 @@ export function recentMatchForm(matches: MatchDetails[], playerId: number): bool
     .slice(0, 10).reverse().map(({ match }) => match.winner === `team_${match.teams.findIndex(team => team.some(player => player.id === playerId)) + 1}`);
 }
 
-async function invoke(kind: string, id?: number | string, page?: number, extra?: Record<string, unknown>): Promise<any> {
+export async function invokeProResource(kind: string, id?: number | string, page?: number, extra?: Record<string, unknown>): Promise<any> {
   const { data, error } = await supabase.functions.invoke('pro-padel-explore', { body: { kind, id, page, ...extra } });
   if (error) {
     const response = (error as any).context;
@@ -68,19 +68,21 @@ export function parseProviderMatch(raw: unknown): MatchDetails | null {
   const seed = object(raw.seeds) ? raw.seeds : {};
   const scoreText = text(raw.score) || (score.length ? score.map(([first, second]) => first != null && second != null ? `${first}-${second}` : '').filter(Boolean).join(', ') : null);
   return { match, scoreText, duration: text(raw.duration), startedAt: text(raw.started_time), updatedAt: text(raw.updated_at), draw: text(raw.draw),
+    bracketIndex: Number.isSafeInteger(raw.index) && raw.index >= 0 ? raw.index : null,
+    courtOrder: Number.isSafeInteger(raw.court_order) && raw.court_order > 0 ? raw.court_order : null,
     watchability: Number.isFinite(raw.watchability) && raw.watchability >= 0 && raw.watchability <= 100 ? raw.watchability : null,
     freshness: object(raw._freshness) ? raw._freshness as ProviderFreshness : undefined,
     seeds: [text(seed.team_1), text(seed.team_2)], tournament: parseProviderTournament(tournament) };
 }
 
 export async function fetchLiveMatches(): Promise<LiveMatch[]> {
-  const value = await invoke('live');
+  const value = await invokeProResource('live');
   if (!Array.isArray(value?.data)) throw new Error('Live matches are unavailable.');
   return value.data.filter((row: any) => object(row) && positiveId(row.id)).map((row: any) => ({ id: row.id, status: text(row.status) || 'live', coverage: text(row.coverage) }));
 }
 
 export async function fetchMatchDetails(id: number): Promise<MatchDetails | null> {
-  const value = await invoke('match', id);
+  const value = await invokeProResource('match', id);
   if (value?.unavailable) return null;
   const result = parseProviderMatch(value);
   if (!result) throw new Error('This match could not be displayed.');
@@ -88,10 +90,14 @@ export async function fetchMatchDetails(id: number): Promise<MatchDetails | null
 }
 
 export async function fetchPointFeed(id: number): Promise<PointFeed | null> {
-  const value = await invoke('points', id);
+  const value = await invokeProResource('points', id);
   if (value?.unavailable) return null;
-  if (!object(value) || !Array.isArray(value.sets)) return null;
-  return { status: text(value.status) || '', coverage: ['full', 'partial', 'tracking'].includes(value.coverage) ? value.coverage : null,
+  return parsePointFeed(value, id);
+}
+
+export function parsePointFeed(value: unknown, expectedId?: number): PointFeed | null {
+  if (!object(value) || !Array.isArray(value.sets) || value.sets.length > 5 || (expectedId !== undefined && value.id !== expectedId)) return null;
+  return { channel: typeof value.channel === 'string' && /^matches\.[a-zA-Z0-9_-]{8,128}$/.test(value.channel) ? value.channel : null, freshness: object(value._freshness) ? value._freshness as ProviderFreshness : undefined, status: text(value.status) || '', coverage: ['full', 'partial', 'tracking'].includes(value.coverage) ? value.coverage : null,
     sets: value.sets.filter(object).map((set: any) => ({ set_number: Number(set.set_number) || 0, set_score: text(set.set_score),
       games: Array.isArray(set.games) ? set.games.filter(object).map((game: any) => ({ game_number: Number(game.game_number) || 0,
         game_score: text(game.game_score), serving: text(game.serving), points: Array.isArray(game.points) ? game.points.filter((p: unknown) => typeof p === 'string') : [] })) : [] })) };
@@ -103,7 +109,7 @@ export function liveScoreFromPointFeed(feed: PointFeed | null): LiveScoreSummary
   const lastGame = lastSet.games[lastSet.games.length - 1];
   const sets = feed.sets.map(set => {
     const value = set.set_score || set.games[set.games.length - 1]?.game_score || '';
-    const score = /^(\d+)-(\d+)$/.exec(value);
+    const score = /^(\d+)\s*-\s*(\d+)$/.exec(value);
     return score ? [score[1], score[2]] as [string, string] : [null, null] as [null, null];
   });
   return { sets, points: lastSet.set_score ? null : lastGame?.points[lastGame.points.length - 1] || null,
@@ -118,12 +124,12 @@ export async function withLiveScores(rows: MatchDetails[]): Promise<MatchDetails
 }
 
 export async function fetchMatchStats(id: number): Promise<MatchStats | null> {
-  const value = await invoke('stats', id);
+  const value = await invokeProResource('stats', id);
   return value?.unavailable || !object(value) ? null : value;
 }
 
 export async function fetchHeadToHead(id: number): Promise<HeadToHead | null> {
-  const value = await invoke('head-to-head', id);
+  const value = await invokeProResource('head-to-head', id);
   if (value?.unavailable) return null;
   if (!Array.isArray(value?.data)) throw new Error('Head-to-head history could not be loaded.');
   const matches = value.data.map((row: any) => parseProviderMatch({ ...row, _freshness: value._freshness })).filter(Boolean) as MatchDetails[];
@@ -131,16 +137,25 @@ export async function fetchHeadToHead(id: number): Promise<HeadToHead | null> {
 }
 
 export async function fetchMatchPrediction(details: MatchDetails): Promise<MatchPrediction | null> {
-  const teams = details.match.teams.map(team => team.map(player => player.id));
+  const teams = details.match.teams.map(team => team.map(player => player.id).sort((a, b) => a - b));
   const playedAt = details.match.playedAt?.slice(0, 10) || details.match.scheduledAt?.slice(0, 10);
-  if (teams.some(team => team.length !== 2) || !playedAt) return null;
-  const value = await invoke('prediction', details.match.id, undefined, { team_1: teams[0], team_2: teams[1], played_at: playedAt });
-  if (value?.unavailable || !Number.isFinite(value?.probability?.team_1) || !Number.isFinite(value?.probability?.team_2)) return null;
-  return { team1: value.probability.team_1, team2: value.probability.team_2, eloDiff: Number.isFinite(value.eloDiff) ? value.eloDiff : null };
+  if (teams.length !== 2 || teams.some(team => team.length !== 2 || !team.every(positiveId)) || new Set(teams.flat()).size !== 4 || !playedAt) return null;
+  const value = await invokeProResource('prediction', details.match.id, undefined, { team_1: teams[0], team_2: teams[1], played_at: playedAt });
+  return parseMatchPrediction(value, teams, playedAt, details.match.category);
+}
+
+export function parseMatchPrediction(value: any, teams: number[][], date: string, category: 'men' | 'women'): MatchPrediction | null {
+  if (value?.unavailable) return null;
+  const sameTeam = (actual: unknown, expected: number[]) => Array.isArray(actual) && actual.length === 2 && actual.every(positiveId) && [...actual].sort((a, b) => a - b).join(':') === [...expected].sort((a, b) => a - b).join(':');
+  if (!sameTeam(value?.teams?.team_1, teams[0]) || !sameTeam(value?.teams?.team_2, teams[1]) || value?.referenceDate !== date || value?.category !== category || value?.source !== 'padel-api' || value?.model !== 'elo' ||
+    ![value?.probability?.team_1, value?.probability?.team_2].every(number => Number.isFinite(number) && number >= 0 && number <= 100) || Math.abs(value.probability.team_1 + value.probability.team_2 - 100) > .1) {
+    throw new Error('The win estimate could not be verified for this matchup.');
+  }
+  return { team1: value.probability.team_1, team2: value.probability.team_2, eloDiff: Number.isFinite(value.eloDiff) ? value.eloDiff : null, referenceDate: date, source: 'padel-api', model: 'elo' };
 }
 
 export async function fetchPlayerStats(id: number): Promise<PlayerStats | null> {
-  const value = await invoke('player-stats', id);
+  const value = await invokeProResource('player-stats', id);
   if (value?.unavailable || !object(value)) return null;
   const count = (item: unknown) => Number.isFinite(item) && Number(item) >= 0 ? Number(item) : null;
   return { matchesPlayed: count(value.matches_played), matchesWon: count(value.matches_won), winPercentage: count(value.win_percentage),
@@ -150,7 +165,7 @@ export async function fetchPlayerStats(id: number): Promise<PlayerStats | null> 
 }
 
 export async function fetchPlayerProfile(id: number): Promise<PlayerProfile | null> {
-  const value = await invoke('player', id);
+  const value = await invokeProResource('player', id);
   if (value?.unavailable) return null;
   const row = object(value?.data) ? value.data : value;
   if (!object(row) || row.id !== id || !text(row.name) || !['men', 'women'].includes(row.category)) throw new Error('This player profile could not be displayed.');
@@ -162,13 +177,13 @@ export async function fetchPlayerProfile(id: number): Promise<PlayerProfile | nu
 }
 
 export async function fetchPlayerCoach(id: number): Promise<PlayerCoach> {
-  const value = await invoke('player-coach', id);
+  const value = await invokeProResource('player-coach', id);
   return { coaches: Array.isArray(value?.coaches) ? value.coaches.filter((coach: unknown): coach is string => !!text(coach)) : [],
     sourceUrl: typeof value?.sourceUrl === 'string' && /^https:\/\/www\.padelfip\.com\/player\/[a-z0-9-]+\/$/.test(value.sourceUrl) ? value.sourceUrl : null };
 }
 
 export async function fetchPlayerMatches(id: number, page = 1, year?: number): Promise<{ matches: MatchDetails[]; hasMore: boolean; total: number }> {
-  const value = await invoke('player-matches', id, page, year ? { year } : undefined);
+  const value = await invokeProResource('player-matches', id, page, year ? { year } : undefined);
   if (value?.unavailable) return { matches: [], hasMore: false, total: 0 };
   if (!Array.isArray(value?.data)) throw new Error('Player match history could not be loaded.');
   const matches = value.data.map((row: any) => parseProviderMatch({ ...row, _freshness: value._freshness })).filter(Boolean) as MatchDetails[];
@@ -176,7 +191,7 @@ export async function fetchPlayerMatches(id: number, page = 1, year?: number): P
 }
 
 export async function fetchPlayerPairs(id: number): Promise<PlayerPair[]> {
-  const value = await invoke('player-pairs', id);
+  const value = await invokeProResource('player-pairs', id);
   if (value?.unavailable) return [];
   const rows = Array.isArray(value) ? value : value?.data;
   if (!Array.isArray(rows)) throw new Error('Player partners could not be loaded.');
@@ -192,7 +207,7 @@ export async function fetchPlayerPairs(id: number): Promise<PlayerPair[]> {
 }
 
 export async function fetchPairStats(pairId: string): Promise<PlayerStats | null> {
-  const value = await invoke('pair-stats', pairId);
+  const value = await invokeProResource('pair-stats', pairId);
   if (value?.unavailable || !object(value)) return null;
   const count = (item: unknown) => { const number = finiteNumber(item); return number != null && number >= 0 ? number : null; };
   return { matchesPlayed: count(value.matches_played), matchesWon: count(value.matches_won), winPercentage: count(value.win_percentage),
@@ -202,7 +217,7 @@ export async function fetchPairStats(pairId: string): Promise<PlayerStats | null
 }
 
 export async function fetchPairMatches(pairId: string, page = 1, year?: number): Promise<{ matches: MatchDetails[]; hasMore: boolean; total: number }> {
-  const value = await invoke('pair-matches', pairId, page, year ? { year } : undefined);
+  const value = await invokeProResource('pair-matches', pairId, page, year ? { year } : undefined);
   if (value?.unavailable) return { matches: [], hasMore: false, total: 0 };
   if (!Array.isArray(value?.data)) throw new Error('Pair match history could not be loaded.');
   const matches = value.data.map((row: any) => parseProviderMatch({ ...row, _freshness: value._freshness })).filter(Boolean) as MatchDetails[];
@@ -210,7 +225,7 @@ export async function fetchPairMatches(pairId: string, page = 1, year?: number):
 }
 
 export async function fetchPlayerRankings(id: number): Promise<PlayerRanking[]> {
-  const value = await invoke('player-rankings', id);
+  const value = await invokeProResource('player-rankings', id);
   if (value?.unavailable) return [];
   const rows = Array.isArray(value) ? value : value?.data;
   if (!Array.isArray(rows)) throw new Error('FIP rankings could not be loaded.');
@@ -221,7 +236,7 @@ export async function fetchPlayerRankings(id: number): Promise<PlayerRanking[]> 
 }
 
 export async function fetchTournamentDetails(id: number): Promise<ProTournament | null> {
-  const value = await invoke('tournament', id);
+  const value = await invokeProResource('tournament', id);
   if (value?.unavailable) return null;
   if (!object(value) || value.id !== id || !text(value.name)) throw new Error('Tournament details could not be loaded.');
   return parseProviderTournament(value);
@@ -230,7 +245,7 @@ export async function fetchTournamentDetails(id: number): Promise<ProTournament 
 export async function fetchLiveTournaments(): Promise<ProTournament[]> {
   const tournaments = new Map<number, ProTournament>();
   for (let page = 1; page <= 20; page++) {
-    const value = await invoke('live-tournaments', undefined, page);
+    const value = await invokeProResource('live-tournaments', undefined, page);
     if (!Array.isArray(value?.data)) throw new Error('Live tournaments could not be loaded.');
     for (const row of value.data) {
       if (!object(row) || !positiveId(row.id) || !text(row.name) || !['live', 'ongoing'].includes(row.status)) continue;
@@ -247,10 +262,12 @@ export async function fetchLiveTournaments(): Promise<ProTournament[]> {
 }
 
 export async function fetchTournamentMatches(id: number, page = 1): Promise<{ matches: MatchDetails[]; hasMore: boolean; total: number; lastPage: number }> {
-  const value = await invoke('tournament-matches', id, page);
+  const value = await invokeProResource('tournament-matches', id, page);
   if (value?.unavailable) return { matches: [], hasMore: false, total: 0, lastPage: 1 };
   if (!Array.isArray(value?.data)) throw new Error('Tournament matches could not be loaded.');
-  const matches = value.data.map((row: any) => parseProviderMatch({ ...row, _freshness: value._freshness })).filter(Boolean) as MatchDetails[];
+  // Tournament-list resources omit their parent object. Bind that known request context,
+  // while rejecting a provider row that explicitly belongs to a different tournament.
+  const matches = value.data.map((row: any) => parseProviderMatch({ ...row, tournament: { ...(object(row?.tournament) ? row.tournament : {}), id: row?.tournament?.id ?? id }, _freshness: value._freshness })).filter((row: MatchDetails | null): row is MatchDetails => row != null && row.match.tournamentId === id);
   return { matches, hasMore: Number(value.meta?.last_page) > page, total: Number(value.meta?.total) || matches.length, lastPage: Number(value.meta?.last_page) || 1 };
 }
 
@@ -273,14 +290,14 @@ export async function fetchTournamentDraw(id: number): Promise<{ matches: MatchD
 export type ProSeason = { id: number; name: string; startDate: string; endDate: string; status: string };
 
 export async function fetchProSeasons(): Promise<ProSeason[]> {
-  const value = await invoke('seasons');
+  const value = await invokeProResource('seasons');
   if (!Array.isArray(value?.data)) throw new Error('International tour seasons could not be loaded.');
   return value.data.filter((row: any) => object(row) && positiveId(row.id) && text(row.name))
     .map((row: any) => ({ id: row.id, name: text(row.name)!, startDate: text(row.start_date) || '', endDate: text(row.end_date) || '', status: text(row.status) || '' }));
 }
 
 export async function fetchSeasonTournaments(id: number, page = 1): Promise<{ tournaments: ProTournament[]; hasMore: boolean }> {
-  const value = await invoke('season-tournaments', id, page);
+  const value = await invokeProResource('season-tournaments', id, page);
   if (!Array.isArray(value?.data)) throw new Error('Season tournaments could not be loaded.');
   return {
     tournaments: value.data.filter((row: any) => object(row) && positiveId(row.id) && text(row.name) && text(row.start_date) && text(row.end_date))

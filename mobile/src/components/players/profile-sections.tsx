@@ -42,7 +42,7 @@ export function PlayerForm({ player }: { player: PublicPlayer }) {
     </View>
     <View style={{ ...profileCard, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
       <Text style={{ ...labelStyle, fontSize: 10, letterSpacing: 0.5 }}>RECENT FORM</Text>
-      {form.length ? <View style={{ flexDirection: 'row', gap: 6 }}>{form.map((result, i) => <View key={i} accessible accessibilityLabel={result === 'W' ? 'Win' : 'Loss'} style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: result === 'W' ? b.padel : b.danger, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: result === 'W' ? b.premium : '#FFF', fontSize: 13, fontWeight: '800' }}>{result}</Text></View>)}</View> : <Text style={{ color: b.muted, fontSize: 12 }}>No recent form published yet.</Text>}
+      {form.length ? <View style={{ flexDirection: 'row', gap: 6 }}>{form.map((result, i) => <View key={i} accessible accessibilityLabel={result === 'W' ? 'Win' : 'Loss'} style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: result === 'W' ? b.accent : b.danger, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>{result}</Text></View>)}</View> : <Text style={{ color: b.muted, fontSize: 12 }}>No recent form published yet.</Text>}
     </View>
   </>;
 }

@@ -75,6 +75,36 @@ function boot(sessionTask, seen = true) {
 }
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
+function initialPath(dev, replay) {
+  const file = ts.createSourceFile('layout.tsx', fs.readFileSync('src/app/_layout.tsx', 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let resolver;
+  function visit(node) {
+    if (ts.isVariableDeclaration(node) && node.name.getText(file) === 'resolvePath') resolver = node.initializer.arguments[0];
+    ts.forEachChild(node, visit);
+  }
+  visit(file); assert.ok(resolver);
+  const mod = { exports: {} }, calls = [];
+  vm.runInNewContext(ts.transpile('module.exports = (' + resolver.getText(file) + ');'), {
+    module: mod, exports: mod.exports, __DEV__: dev, process: { env: { EXPO_PUBLIC_REPLAY_ONBOARDING: replay } },
+    withStartupDeadline: value => value,
+    destinationAfterAuth: session => { calls.push(session); return '/(tabs)'; },
+  });
+  return { resolve: mod.exports, calls };
+}
+test('normal dev reload restores a saved session through the account eligibility gate', async () => {
+  const app = initialPath(true), session = { user: { id: 'a' } };
+  assert.equal(await app.resolve(true, session), '/(tabs)'); assert.equal(app.calls[0], session);
+});
+test('onboarding replay requires the dev-only opt-in; release ignores that flag', async () => {
+  assert.equal(await initialPath(true, '1').resolve(true, {}), '/(auth)/onboarding');
+  assert.equal(await initialPath(false, '1').resolve(true, {}), '/(tabs)');
+});
+test('session restoration preserves first-install onboarding and unsigned users still sign in', async () => {
+  const app = initialPath(true);
+  assert.equal(await app.resolve(false, null), '/(auth)/onboarding');
+  assert.equal(await app.resolve(true, null), '/(auth)/sign-in'); assert.equal(app.calls.length, 0);
+});
+
 test('the root shows retry when session restoration never completes', async () => {
   const h = boot(new Promise(() => {}));
   h.start(); await flush(); [...h.timers.values()][0](); await flush();

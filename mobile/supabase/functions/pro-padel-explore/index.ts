@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { createPadelFetch } from '../_shared/padel-api.ts';
+import { projectPadelPrediction } from '../_shared/padel-prediction.mjs';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info' };
 const cache = new Map<string, { until: number; value: unknown }>();
@@ -33,9 +34,11 @@ Deno.serve(async req => {
     const input = await req.json();
     const kind = input?.kind;
     const page = Number(input?.page ?? 1);
-    const isPair = ['pair-stats', 'pair-matches'].includes(kind);
-    if (!['live', 'live-tournaments', 'match', 'stats', 'points', 'head-to-head', 'prediction', 'player', 'player-coach', 'player-stats', 'player-matches', 'player-pairs', 'player-rankings', 'pair-stats', 'pair-matches', 'tournament', 'tournament-matches', 'seasons', 'season-tournaments'].includes(kind) ||
-      (!['live', 'live-tournaments', 'seasons'].includes(kind) && !(isPair ? pairId(input?.id) : id(input?.id))) || !Number.isSafeInteger(page) || page < 1 || page > 20) return json({ error: 'Invalid request.' }, 400);
+    const isPair = ['pair-stats', 'pair-matches', 'pair-rivals', 'pair-synergy'].includes(kind);
+    if (!['player-portraits', 'live', 'live-tournaments', 'match', 'stats', 'points', 'head-to-head', 'prediction', 'player', 'player-coach', 'player-stats', 'player-matches', 'player-pairs', 'player-rankings', 'player-rivals', 'player-form', 'pair-stats', 'pair-matches', 'pair-rivals', 'pair-synergy', 'tournament', 'tournament-matches', 'seasons', 'season-tournaments'].includes(kind) ||
+      (!['player-portraits', 'live', 'live-tournaments', 'seasons'].includes(kind) && !(isPair ? pairId(input?.id) : id(input?.id))) || !Number.isSafeInteger(page) || page < 1 || page > 20) return json({ error: 'Invalid request.' }, 400);
+    const portraitIds = kind === 'player-portraits' && Array.isArray(input.player_ids) ? [...new Set<number>(input.player_ids)] : [];
+    if (kind === 'player-portraits' && (!portraitIds.length || input.player_ids.length > 32 || !portraitIds.every(value => Number.isSafeInteger(value) && id(value)))) return json({ error: 'Invalid professional player IDs.' }, 400);
     const year = input?.year == null ? null : Number(input.year);
     if (['player-matches', 'pair-matches'].includes(kind) && year !== null && (!Number.isSafeInteger(year) || year < 2006 || year > new Date().getUTCFullYear() + 1)) return json({ error: 'Invalid year.' }, 400);
     if (kind === 'prediction' && (!Array.isArray(input.team_1) || !Array.isArray(input.team_2) ||
@@ -45,7 +48,8 @@ Deno.serve(async req => {
     const numericResourceId = Number(input?.id);
     const resourceId = isPair ? String(input.id) : numericResourceId;
     const key = `${kind}:${['live', 'live-tournaments', 'seasons'].includes(kind) ? '' : resourceId}:${['live-tournaments', 'tournament-matches', 'season-tournaments', 'player-matches', 'pair-matches', 'player-pairs'].includes(kind) ? `${page}:${['player-matches', 'pair-matches'].includes(kind) ? year ?? 'all' : ''}` : kind === 'prediction' ? [...input.team_1, ...input.team_2, input.played_at].join(':') : ''}`;
-    const cached = cache.get(key);
+    const cacheKey = kind === 'player-portraits' ? `portraits:${portraitIds.sort((a, b) => a - b).join(',')}` : key;
+    const cached = cache.get(cacheKey);
     if (cached && cached.until > Date.now()) return json(cached.value);
     // Allow a live-list burst and match detail tabs, but stop rapid manual reload loops.
     const recent = (attempts.get(user.id) || []).filter(time => Date.now() - time < 10000);
@@ -55,6 +59,19 @@ Deno.serve(async req => {
     const token = Deno.env.get('PADEL_API_TOKEN');
     if (!token) return json({ error: 'International tour details are temporarily unavailable.' }, 503);
     const providerClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    if (kind === 'player-portraits') {
+      const { data, error } = await providerClient.rpc('cached_padel_players', { p_ids: portraitIds });
+      if (error) throw new Error('Player pictures could not be loaded.');
+      // Project only public professional sports fields. Never expose raw cached profiles.
+      const players = (Array.isArray(data) ? data : []).filter(row => portraitIds.includes(Number(row.id)) && row.self === `/api/players/${Number(row.id)}`).map(row => ({
+        id: Number(row.id), photo_url: typeof row.photo_url === 'string' && row.photo_url.length <= 2048 && /^https:\/\//.test(row.photo_url) ? row.photo_url : null,
+        nationality: /^[A-Z]{2}$/.test(row.nationality || '') ? row.nationality : null,
+      }));
+      const result = { players };
+      if (cache.size >= 200) cache.delete(cache.keys().next().value!);
+      cache.set(cacheKey, { value: result, until: Date.now() + 300000 });
+      return json(result);
+    }
     const sharedFetch = createPadelFetch(providerClient);
     const freshness = { stale: false, updatedAt: '', reason: '' };
     const providerFetch: typeof fetch = async (input, init) => {
@@ -102,6 +119,10 @@ Deno.serve(async req => {
     if (kind === 'player-matches') path = `players/${resourceId}/matches`;
     if (kind === 'player-pairs') path = `players/${resourceId}/pairs`;
     if (kind === 'player-rankings') path = `players/${resourceId}/rankings`;
+    if (kind === 'player-rivals') path = `players/${resourceId}/rivals`;
+    if (kind === 'player-form') path = `players/${resourceId}/form`;
+    if (kind === 'pair-rivals') path = `pairs/${resourceId}/rivals`;
+    if (kind === 'pair-synergy') path = `pairs/${resourceId}/synergy`;
     if (kind === 'pair-stats') path = `pairs/${resourceId}/stats`;
     if (kind === 'pair-matches') path = `pairs/${resourceId}/matches`;
     if (kind === 'prediction') path = 'matches/simulate';
@@ -139,10 +160,7 @@ Deno.serve(async req => {
       let value = await response.json();
       if (!value || typeof value !== 'object') throw new Error('Invalid international match response.');
       if (kind === 'prediction') {
-        const probability = value.probability;
-        if (!Number.isFinite(probability?.team_1) || !Number.isFinite(probability?.team_2)) throw new Error('Match prediction is unavailable.');
-        value = { probability: { team_1: probability.team_1, team_2: probability.team_2 },
-          eloDiff: Number.isFinite(value.elo_diff) ? value.elo_diff : null };
+        value = projectPadelPrediction(value, input);
       }
       if (kind === 'match' || kind === 'tournament-matches') {
         const match = kind === 'match' ? value : value.data?.[0];
@@ -191,7 +209,7 @@ Deno.serve(async req => {
       if (kind === 'match') value = (await withPlayerCountries([value], token, providerClient))[0];
       if (kind === 'tournament-matches' && Array.isArray(value.data)) value = { ...value, data: await withPlayerCountries(value.data, token, providerClient) };
       value = Array.isArray(value) ? { data: value, _freshness: freshness } : { ...value, _freshness: freshness };
-      const ttl = kind === 'live-tournaments' ? 300000 : ['live', 'tournament-matches'].includes(kind) ? 45000 : ['tournament', 'seasons', 'season-tournaments', 'head-to-head', 'prediction', 'player', 'player-stats', 'player-pairs', 'player-rankings', 'pair-stats'].includes(kind) ? 600000 : ['player-matches', 'pair-matches'].includes(kind) ? 180000 : kind === 'match' ? 30000 : 45000;
+      const ttl = kind === 'live-tournaments' ? 300000 : ['live', 'tournament-matches'].includes(kind) ? 45000 : ['tournament', 'seasons', 'season-tournaments', 'head-to-head', 'prediction', 'player', 'player-stats', 'player-pairs', 'player-rankings', 'pair-stats'].includes(kind) ? 600000 : ['player-matches', 'pair-matches'].includes(kind) ? 180000 : ['player-rivals', 'player-form', 'pair-rivals', 'pair-synergy'].includes(kind) ? 600000 : kind === 'match' ? 30000 : 30000;
       if (cache.size >= 200) cache.delete(cache.keys().next().value!);
       cache.set(key, { value, until: Date.now() + ttl });
       return value;

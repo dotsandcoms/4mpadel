@@ -40,7 +40,7 @@ export function playerRankLabel(p: HubPlayer): string {
   return p.source === '4m' && (p.fipPlayerId || p.fipProfileUrl) ? `${first} · ${p.fipRank ? `FIP #${p.fipRank}` : 'FIP rank not listed'}` : first;
 }
 export function localHubPlayer(p: DirectoryPlayer): HubPlayer {
-  const category = (p.category || '').toLowerCase();
+  const category = (p.gender || p.category || '').toLowerCase();
   const gender = /women|ladies|female/.test(category) ? 'women' : /men|male/.test(category) ? 'men' : 'unknown';
   const rank = Number(String(p.rank_label || '').replace(/^#/, ''));
   return { key: `4m:${p.id}`, source: '4m', id: p.id, rankedinId: p.rankedin_id ? String(p.rankedin_id) : undefined, name: p.name, photo: p.image_url, nationality: p.nationality, gender, rank: rank > 0 && Number.isFinite(rank) ? rank : null, points: p.points, subtitle: p.home_club || p.category || '4M player' };
@@ -71,8 +71,29 @@ export function filterHubPlayers(rows: HubPlayer[], query: string, source: strin
 export function topLocalPlayers(rows: HubPlayer[], gender: 'men' | 'women') {
   return rows.filter(p => p.source === '4m' && p.gender === gender && p.rank !== null).sort((a, b) => a.rank! - b.rank! || a.name.localeCompare(b.name)).slice(0, 20);
 }
-async function invokePlayerSearch(body: Record<string, unknown>) {
-  const { data, error } = await supabase.functions.invoke('player-search', { body });
+
+/** Shuffle Discovery's entire eligible pool before limiting its rail. A stable
+ * seed prevents follow actions and identical refresh responses moving the cards. */
+export function discoveryPlayers(rows: HubPlayer[], source: '4m' | 'pro', gender: string, seed: number, limit = 20): HubPlayer[] {
+  const eligible = [...new Map(rows.filter(player => player.source === source && (gender === 'all' || player.gender === gender)
+    && (source !== '4m' || player.rank != null && Number.isFinite(player.rank) && player.rank > 0)).map(player => [player.key, player])).values()]
+    .sort((a, b) => a.key.localeCompare(b.key));
+  let random = seed >>> 0;
+  for (const letter of `${source}:${gender}`) random = Math.imul(random ^ letter.charCodeAt(0), 16777619) >>> 0;
+  const next = () => {
+    random = (random + 0x6D2B79F5) >>> 0;
+    let value = Math.imul(random ^ random >>> 15, 1 | random);
+    value ^= value + Math.imul(value ^ value >>> 7, 61 | value);
+    return ((value ^ value >>> 14) >>> 0) / 4294967296;
+  };
+  for (let index = eligible.length - 1; index > 0; index--) {
+    const other = Math.floor(next() * (index + 1));
+    [eligible[index], eligible[other]] = [eligible[other], eligible[index]];
+  }
+  return eligible.slice(0, Math.max(0, limit));
+}
+async function invokePlayerSearch(body: Record<string, unknown>, signal?: AbortSignal) {
+  const { data, error } = await supabase.functions.invoke('player-search', { body, signal });
   if (error || data?.error) {
     let message = data?.error;
     if (!message && error?.context instanceof Response) { try { message = (await error.context.json()).error; } catch {} }
@@ -80,8 +101,8 @@ async function invokePlayerSearch(body: Record<string, unknown>) {
   }
   return data;
 }
-export async function searchProPlayers(query: string, category = 'all', page = 1, id?: number): Promise<{ players: ProPlayer[]; officialProfiles: OfficialFipProfile[]; hasMore: boolean; total: number | null }> {
-  const data = await invokePlayerSearch({ query, category, page, id });
+export async function searchProPlayers(query: string, category = 'all', page = 1, id?: number, signal?: AbortSignal): Promise<{ players: ProPlayer[]; officialProfiles: OfficialFipProfile[]; hasMore: boolean; total: number | null }> {
+  const data = await invokePlayerSearch({ query, category, page, id }, signal);
   if (!Array.isArray(data?.players)) throw new Error('Invalid player search response.');
   return { ...data, officialProfiles: Array.isArray(data.officialProfiles) ? data.officialProfiles : [] };
 }
@@ -117,10 +138,14 @@ export function rankedLocalPlayers(players: DirectoryPlayer[], men: RankingPlaye
   const names = new Map<string, number>();
   for (const p of players) names.set(normalizeName(p.name), (names.get(normalizeName(p.name)) || 0) + 1);
   return players.map(p => {
-    const exact = p.rankedin_id ? rankings.filter(r => r.rankedinId === String(p.rankedin_id)) : [];
-    const matchingNames = rankings.filter(r => normalizeName(r.name) === normalizeName(p.name));
+    const local = localHubPlayer(p);
+    // RankedIn can list one identity in both tables. Resolve within the
+    // player's category so the second entry does not erase their national rank.
+    const categoryRankings = local.gender === 'unknown' ? rankings : rankings.filter(r => r.gender === local.gender);
+    const exact = p.rankedin_id ? categoryRankings.filter(r => r.rankedinId === String(p.rankedin_id)) : [];
+    const matchingNames = categoryRankings.filter(r => normalizeName(r.name) === normalizeName(p.name));
     const match = exact.length === 1 ? exact[0] : !p.rankedin_id && matchingNames.length === 1 && names.get(normalizeName(p.name)) === 1 ? matchingNames[0] : undefined;
-    return { ...localHubPlayer(p), rank: match?.rank || null, rankChange: match && match.changeKnown !== false && Number.isFinite(match.change) ? match.change : null, points: match?.points ?? p.points, ...(match ? { gender: match.gender } : {}) };
+    return { ...local, rank: match?.rank || null, rankChange: match && match.changeKnown !== false && Number.isFinite(match.change) ? match.change : null, points: match?.points ?? null, ...(match ? { gender: match.gender } : {}) };
   });
 }
 

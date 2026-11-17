@@ -85,3 +85,15 @@ export function profileExtraction(details: ProfileDetails | null): PlaytomicExtr
   if (!details?.playtomic_extracted_at) return null;
   return { level: details.playtomic_extracted_level ?? null, matches: details.playtomic_matches ?? null, reliability_percent: details.playtomic_reliability_percent ?? null };
 }
+
+/** Partial profile edits can add a birth date before supplying Playtomic details. */
+export async function saveEditedProfileDetails(playerId: number, dateOfBirth: string, level: string, proofPath: string, noProfile = false) {
+  const issue = birthDateError(dateOfBirth) || (!noProfile && (level.trim() || proofPath) ? playtomicDetailsError(level, proofPath, false) : null);
+  if (issue) throw new Error(issue);
+  const { data, error } = await supabase.rpc('save_player_profile_details_v4', { p_player_id: playerId, p_details: {
+    date_of_birth: dateOfBirth, playtomic_no_profile: noProfile,
+    playtomic_level: noProfile || !level.trim() ? null : Number(level), playtomic_proof_path: noProfile ? null : proofPath || null,
+  } });
+  if (error) throw new Error(error.message);
+  return data as ProfileDetails;
+}

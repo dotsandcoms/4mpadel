@@ -8,6 +8,8 @@ The Players bottom tab replaces the Rankings label while retaining the existing 
 
 Discover supports All players / 4M / Pro and All / Men / Women filters. Featured local cards show the top 20 available approved 4M profiles for the selected gender, ordered by the official SAPA national standings. Profile age-group rank labels are not used. All shows separate men's and women's local rails. Blue identifies local cards; green identifies professionals. A missing/unmatched public profile is not fabricated, so national rank numbers can have gaps.
 
+Ranking identity matches are scoped to the profile's men's or women's category. RankedIn can include the same identity in both national tables; that must not remove an otherwise valid rank (for example, Mikayla Plitt's women's #2). Profiles with an unknown category still require a unique match across both tables, and duplicate matches within a category remain unresolved.
+
 Search covers all approved local profiles and the provider's paginated pro directory, beyond the former top-50 snapshot. Pro search requires sign-in. Search is debounced and supports loading further pages. Results, profiles and follow controls remain native. Provider coverage determines which professionals and profile details are available.
 
 Following combines local and professional favourites with namespaced identities. Existing professional follows remain intact. Local profiles have their own Follow control, and local ranking details link to the native player profile. The existing local ranking table and filters remain under Rankings → 4M; Pro has a separate gender-filtered list. Tour retains published professional results and fixtures.

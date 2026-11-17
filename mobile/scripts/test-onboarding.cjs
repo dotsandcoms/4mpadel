@@ -4,6 +4,17 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
 
+test('NativeWind and Expo accents stay aligned with the app palette', () => {
+  const palette = {};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/theme/tokens.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { exports: palette });
+  const colors = require('../tailwind.config.js').theme.extend.colors;
+  const app = require('../app.json').expo;
+  assert.equal(colors.padel, palette.brand.padel);
+  assert.equal(colors.court.action, palette.lightBrand.messagingAction);
+  assert.equal(app.primaryColor, palette.lightBrand.messagingAction);
+  assert.equal(app.plugins.find(plugin => Array.isArray(plugin) && plugin[0] === 'expo-notifications')[1].color, palette.lightBrand.messagingAction);
+});
+
 // Run the screen's actual controls with isolated navigation, storage and hooks.
 function screen(markSeen = async () => {}) {
   const hooks = [], paths = [];

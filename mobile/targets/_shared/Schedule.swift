@@ -78,6 +78,34 @@ struct ScheduleSnapshot: Codable {
   var emptyMessage: String { signedIn ? "Save or enter an event in the iPhone app." : "Open 4M on iPhone and sign in to sync your schedule." }
 }
 
+/// Widgets lead with a player's own commitments; saved events remain browsable.
+enum WidgetSchedule {
+  static func items(_ snapshot: ScheduleSnapshot, kind: String?, at date: Date) -> [ScheduleItem] {
+    func priority(_ item: ScheduleItem) -> Int {
+      item.kind == "match" || ["Registered", "Entry paid", "Payment pending"].contains(item.status) ? 0 : 1
+    }
+    return snapshot.upcoming(at: date).filter { kind == nil || $0.kind == kind }.sorted {
+      if priority($0) != priority($1) { return priority($0) < priority($1) }
+      if $0.startAt != $1.startAt { return ($0.startAt ?? .greatestFiniteMagnitude) < ($1.startAt ?? .greatestFiniteMagnitude) }
+      return $0.id < $1.id
+    }
+  }
+  static func selected(_ items: [ScheduleItem], id: String?) -> ScheduleItem? {
+    items.first { $0.id == id } ?? items.first
+  }
+  static func timing(_ item: ScheduleItem, at date: Date) -> String {
+    if item.isLive(at: date) { return "Tournament underway" }
+    guard let start = item.start else { return "Date and time TBC" }
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "Africa/Johannesburg")!
+    let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: start)).day ?? 0
+    let prefix = days == 0 ? "Today" : days == 1 ? "Tomorrow" : days > 1 ? "In \(days) days" : "Check schedule"
+    guard !item.allDay else { return prefix + " · Time TBC" }
+    let formatter = DateFormatter(); formatter.timeZone = calendar.timeZone; formatter.dateFormat = "HH:mm"
+    return prefix + " · " + formatter.string(from: start) + " SAST"
+  }
+}
+
 enum ScheduleStore {
   static let group = "group.com.fourmpadel.app.schedule"
   static let key = "schedule-v1"

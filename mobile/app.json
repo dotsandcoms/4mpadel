@@ -8,7 +8,7 @@
     "scheme": "fourmpadel",
     "userInterfaceStyle": "light",
     "backgroundColor": "#F5F6F3",
-    "primaryColor": "#CCFF00",
+    "primaryColor": "#27517B",
     "ios": {
       "bundleIdentifier": "com.fourmpadel.app",
       "googleServicesFile": "./GoogleService-Info.plist",
@@ -103,7 +103,7 @@
         "expo-notifications",
         {
           "icon": "./assets/images/icon.png",
-          "color": "#CCFF00",
+          "color": "#27517B",
           "defaultChannel": "default"
         }
       ],
@@ -136,7 +136,16 @@
       "@config-plugins/react-native-blob-util",
       "@config-plugins/react-native-pdf",
       "expo-maps",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-sharing",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow 4M Padel to use your location to find nearby padel clubs.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

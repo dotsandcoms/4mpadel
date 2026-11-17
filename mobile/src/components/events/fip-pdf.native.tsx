@@ -1,7 +1,7 @@
 import { Component, useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, Text, TurboModuleRegistry, View } from 'react-native';
 import { loadNativePdf } from '@/lib/native-pdf';
-import { lightBrand as b } from '@/theme/tokens';
+import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 import { isFipDocumentUrl, type FipDocument } from '@/lib/fip-tournament';
 
 /** Native PDFKit/Pdfium rendering. No website, browser session or HTML is opened. */
@@ -26,7 +26,7 @@ export function FipPdf({ document }: { document: FipDocument }) {
     <Text style={{ color: b.muted, fontSize: 12, padding: 14, textAlign: 'center' }}>{pages ? `Page ${page} of ${pages} · Pinch to zoom` : 'Opening published document…'}</Text>
     {error ? <View style={{ padding: 24, gap: 16 }}><Text style={{ color: b.premium }}>This document could not load. Please try again.</Text><Pressable accessibilityRole="button" onPress={() => { setError(false); setAttempt(n => n + 1); }} style={{ padding: 16, borderRadius: 12, backgroundColor: b.accent }}><Text style={{ color: '#FFF', fontWeight: '700', textAlign: 'center' }}>Retry document</Text></Pressable></View>
       : <PdfRenderBoundary key={`${document.id}:${attempt}`} onError={() => setError(true)}><Pdf source={source} trustAllCerts={false} enableAnnotationRendering={false} onLoadComplete={count => setPages(count)} onPageChanged={current => setPage(current)} onError={() => setError(true)}
-        renderActivityIndicator={() => <ActivityIndicator size="large" color={b.accent} />} style={{ flex: 1, width: '100%', backgroundColor: b.page }} /></PdfRenderBoundary>}
+        renderActivityIndicator={() => <ActivityIndicator size="large" color={loadingBlue} />} style={{ flex: 1, width: '100%', backgroundColor: b.page }} /></PdfRenderBoundary>}
   </View>;
 }
 
