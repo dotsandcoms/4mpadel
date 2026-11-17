@@ -31,6 +31,7 @@ import { setCompanionAccount } from '@/lib/companion';
 import { watchAuthRefresh } from '@/lib/foreground-task';
 import { migrateLegacyDrafts } from '@/lib/profile-draft-storage';
 import { withStartupDeadline } from '@/lib/startup';
+import { consumeSharedLink } from '@/lib/shared-links';
 import { initializeAnalytics, setAnalyticsUser, trackScreen } from '@/lib/analytics';
 
 SplashScreen.preventAutoHideAsync();
@@ -171,7 +172,7 @@ function RootLayout() {
       try {
       const path = await resolvePath(seenRef.current, sessionRef.current);
       if (cancelled) return;
-      if (!recoveryRoute.current) router.replace(path);
+      if (!recoveryRoute.current) router.replace(path === '/(tabs)' ? consumeSharedLink() ?? path : path);
       // Wait until the destination is on the stack so the splash fade
       // lands on onboarding/sign-in, not a one-frame flash of Home.
       requestAnimationFrame(() => {
@@ -198,13 +199,17 @@ function RootLayout() {
 
   useEffect(() => {
     if (!revealed || !sessionRef.current || isAuth || recoveryRoute.current) return;
+    if (pathname === '/') {
+      const shared = consumeSharedLink();
+      if (shared) { router.replace(shared); return; }
+    }
     const path = pendingPushPath ?? consumeInitialNotificationPath();
     if (path) {
       consumeInitialNotificationPath();
       setPendingPushPath(null);
       router.push(path as never);
     }
-  }, [revealed, isAuth, pendingPushPath, router]);
+  }, [revealed, isAuth, pathname, pendingPushPath, router]);
 
   const showSplash = !revealed;
 

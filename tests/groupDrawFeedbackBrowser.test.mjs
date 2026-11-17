@@ -39,13 +39,24 @@ for (const division of divisions) {
         result_summary: complete ? [2, 0] : null, court_name: 'Court 1',
     })));
 }
+const duplicateTeams = ['groups-team-1', 'groups-team-5'];
+registrations.push(...duplicateTeams.map(id => {
+    const team = registrations.find(row => row.id === id);
+    return {
+        ...team, id: `${id}-reciprocal`, full_name: team.partner_name, partner_name: team.full_name,
+        email: team.partner_email.toUpperCase(), partner_email: team.email,
+        payment_status: id === 'groups-team-5' ? 'pending' : 'paid',
+    };
+}));
+const licensedPlayers = [...new Set(registrations.flatMap(row => [row.email, row.partner_email]).map(email => email.toLowerCase()))]
+    .map((email, index) => [email, { id: index + 1, email, license_type: 'full' }]);
 const opening = generateKnockoutDraft(teams('ko')).matches;
 
 const mockDb = `
 const tables = ${JSON.stringify(tables)};
 window.calls = [];
 export const supabase = {
-    auth: { getUser: async () => ({ data: { user: { email: 'director@example.test' } } }) },
+    auth: { getUser: async () => ({ data: { user: { id: 'director', email: 'director@example.test' } } }) },
     from(name) {
         const filters = [];
         const read = () => (tables[name] || []).filter(row => filters.every(fn => fn(row)));
@@ -53,6 +64,12 @@ export const supabase = {
             select: () => query, order: () => query,
             eq(key, value) { if (!key.startsWith('draws.')) filters.push(row => row[key] === value); return query; },
             in(key, values) { filters.push(row => values.includes(row[key])); return query; },
+            upsert: async row => {
+                if (name !== 'draw_player_reviews') throw new Error('Unexpected write to ' + name);
+                tables[name] = [row];
+                window.confirmedReview = row.state;
+                return { error: null };
+            },
             maybeSingle: async () => ({ data: read()[0] || null }),
             then(resolve) { return Promise.resolve({ data: read() }).then(resolve); },
         };
@@ -96,14 +113,14 @@ const clickButton = async (page, label, selector = 'button') => {
         .find(button => !button.disabled && button.getClientRects().length > 0 && button.textContent.includes(label)).click(), selector, label);
 };
 
-test('admin Draw workspace supports accessible swaps, saved undo and qualification overrides', { timeout: 45000 }, async () => {
+test('admin Draw workspace handles reciprocal teams, accessible swaps, saved undo and qualification overrides', { timeout: 45000 }, async () => {
     const bundle = await build({
         stdin: { contents: `import React from 'react'; import {createRoot} from 'react-dom/client';
             import Manager from './src/components/admin/NativeDrawManager.jsx';
             import Bracket from './src/components/admin/DrawBracketPreview.jsx';
             const root = createRoot(document.getElementById('root'));
             if (location.pathname === '/bracket') root.render(<Bracket matches={${JSON.stringify(opening)}} onSwapPositions={(a,b)=>window.selected=[a.position,b.position]}/>);
-            else root.render(<Manager event={${JSON.stringify(event)}} divisions={${JSON.stringify(divisions)}} registrations={${JSON.stringify(registrations)}} playersByEmail={new Map()} />);`,
+            else root.render(<Manager event={${JSON.stringify(event)}} divisions={${JSON.stringify(divisions)}} registrations={${JSON.stringify(registrations)}} playersByEmail={new Map(${JSON.stringify(licensedPlayers)})} />);`,
         resolveDir: process.cwd(), loader: 'jsx' },
         write: false, outfile: 'browser.js', bundle: true, platform: 'browser', format: 'iife',
         define: { 'process.env.NODE_ENV': '"test"' },
@@ -218,6 +235,32 @@ test('admin Draw workspace supports accessible swaps, saved undo and qualificati
         await page.keyboard.press('Enter');
         await page.keyboard.press('Enter');
         await page.waitForFunction(() => window.selected?.length === 2);
+
+        await page.setViewport({ width: 1400, height: 900 });
+        await page.goto(url);
+        await clickButton(page, 'Group rehearsal', '.draw-overview-row');
+        await clickButton(page, 'Teams & seeds', 'nav[aria-label="Draw workflow"] button');
+        await clickButton(page, 'Show all 13 teams');
+        const reviewRows = '#draw-player-list > div';
+        const names = await page.$$eval(`${reviewRows} > label`, labels => labels.map(label => [...label.childNodes]
+            .filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join('').trim()));
+        assert.equal(names.length, 13, 'two pairs entered twice have one review row each');
+        assert.equal(names.filter(name => ['Player 1 / Partner 1', 'Partner 1 / Player 1'].some(pair => name.includes(pair))).length, 1);
+        assert.equal(names.filter(name => ['Player 5 / Gogoski Junior', 'Gogoski Junior / Player 5'].some(pair => name.includes(pair))).length, 1);
+        assert.match(await page.$eval('#draw-player-list', list => list.textContent), /Exception reason for Gogoski Junior/);
+        await page.type('#draw-player-list input[placeholder="Why this player may participate"]', 'Director approved');
+        await page.evaluate(selector => [...document.querySelectorAll(selector)].find(row => row.textContent.includes('Player 1 / Partner 1'))
+            .querySelector('input[type="checkbox"]').click(), reviewRows);
+        await page.waitForFunction(() => document.body.textContent.includes('12 teams included'));
+        await clickButton(page, 'Confirm teams & continue');
+        await page.waitForFunction(() => window.confirmedReview);
+        const review = await page.evaluate(() => window.confirmedReview);
+        assert.deepEqual([...review.excluded].sort(), ['groups-team-1', 'groups-team-1-reciprocal']);
+        assert.equal(review.seeds.length, 12);
+        assert.equal(review.exceptions['groups-team-5-reciprocal'], 'Director approved');
+        await clickButton(page, 'Regenerate preview');
+        await page.waitForFunction(() => document.body.textContent.includes('12 teams · 3 groups'));
+        assert.equal(await page.$('[aria-label^="Swap Player 1 / Partner 1"]'), null);
         assert.deepEqual(errors, []);
     } finally {
         await browser?.close();

@@ -13,6 +13,7 @@
       "bundleIdentifier": "com.fourmpadel.app",
       "googleServicesFile": "./GoogleService-Info.plist",
       "appleTeamId": "52RX6X5X2T",
+      "associatedDomains": ["applinks:4mpadel.co.za"],
       "supportsTablet": false,
       "entitlements": {
         "com.apple.security.application-groups": [
@@ -45,6 +46,20 @@
     "android": {
       "package": "com.fourmpadel.app",
       "googleServicesFile": "./google-services.json",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "category": ["BROWSABLE", "DEFAULT"],
+          "data": [
+            { "scheme": "https", "host": "4mpadel.co.za", "path": "/players" },
+            { "scheme": "https", "host": "4mpadel.co.za", "path": "/rankings" },
+            { "scheme": "https", "host": "4mpadel.co.za", "pathPrefix": "/calendar/" },
+            { "scheme": "https", "host": "4mpadel.co.za", "pathPrefix": "/clubs/" },
+            { "scheme": "https", "host": "4mpadel.co.za", "path": "/pro/results" }
+          ]
+        }
+      ],
       "permissions": [
         "POST_NOTIFICATIONS",
         "RECEIVE_BOOT_COMPLETED",
