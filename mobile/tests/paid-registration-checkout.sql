@@ -219,4 +219,91 @@ select public.finalize_paid_event_checkout((select id from public.payments where
 select pg_temp.expect((select payment_status='paid' from public.event_registrations where event_id=207),'already started payment confirms the original saved entry');
 reset role;
 select set_config('request.jwt.claims','{}',false);
+-- Regression: manual events hidden from calendar listings stay payable by link.
+insert into public.calendar(id,event_name,organisation_id,is_manual,is_visible,sanction_status,payment_method,allow_payments,start_date,registration_opens_at,registration_closes_at,entry_fee)
+ select 208,'Direct-link checkout',organisation_id,true,false,'approved','platform',true,current_date+3,now()-interval '1 day',now()+interval '2 days',100 from public.calendar where id=101;
+insert into public.tournament_divisions(id,event_id,name,entry_fee,entry_limit,license_required)
+ values('60000000-0000-0000-0000-000000000208',208,'Open',100,5,false);
+insert into public.event_registrations(event_id,division_id,division,email,full_name,registered_by,payment_status)
+ values(208,'60000000-0000-0000-0000-000000000208','Open','actor1@example.test','Staff-added player','actor9@example.test','pending');
+create function pg_temp.link_cart() returns jsonb language sql as $$select jsonb_build_array(jsonb_build_object(
+ 'event_id',208,'division_id','60000000-0000-0000-0000-000000000208','division','Open','email','actor1@example.test',
+ 'full_name','Staff-added player','registered_by','actor9@example.test','payment_status','pending'))$$;
+create function pg_temp.link_payment(p_reference text) returns void language sql as $$
+ insert into public.payments(player_id,event_id,amount,status,payment_type,payment_method,reference,metadata)
+ values(1,208,100,'processing','event_entry_fee','paystack',p_reference,jsonb_build_object('source','manual_event','registrant_email','actor1@example.test',
+ 'covers','[{"type":"entry","email":"actor1@example.test","division":"Open"}]'::jsonb,'registration_rows',pg_temp.link_cart()))
+$$;
+create function pg_temp.reject_message(query text,expected text) returns void language plpgsql as $$
+begin
+ begin execute query;
+ exception when others then
+  if sqlerrm=expected then perform pg_temp.expect(true,'reproduced: '||expected);return;end if;
+  raise exception 'Expected %, received %',expected,sqlerrm;
+ end;
+ raise exception 'Expected rejection: %',expected;
+end $$;
+set role authenticated;
+select pg_temp.identity(1);
+select pg_temp.reject_message('select public.reserve_event_registration_places(pg_temp.link_cart())','This event is unavailable.');
+select pg_temp.identity(9);
+select public.reserve_event_registration_places(pg_temp.link_cart());
+select pg_temp.reject_message($q$select pg_temp.link_payment('staff-payer-before-fix')$q$,'Sign in before starting registration.');
+reset role;
+select set_config('request.jwt.claims','{}',false);
+delete from private.event_checkout_holds where event_id=208;
+\ir ../../supabase/migrations/20261117133715_direct_link_manual_event_checkout.sql
+\ir ../../supabase/migrations/20261117133726_staff_assisted_event_checkout.sql
+set role authenticated;
+select pg_temp.identity(1);
+select public.reserve_event_registration_places(pg_temp.link_cart());
+select pg_temp.link_payment('direct-link-player');
+select pg_temp.expect(public.event_checkout_state('direct-link-player')->>'state'='awaiting_payment','hidden manual event permits the existing player to pay');
+select public.cancel_event_checkout('direct-link-player');
+select pg_temp.expect((select payment_status='pending' and status='registered' from public.event_registrations where event_id=208),'direct-link cancellation preserves the staff-added unpaid entry');
+select pg_temp.identity(9);
+select public.reserve_event_registration_places(pg_temp.link_cart());
+select pg_temp.link_payment('direct-link-staff');
+select pg_temp.expect(public.event_checkout_state('direct-link-staff')->>'state'='awaiting_payment','super admin can start and inspect checkout on behalf of a player');
+select pg_temp.identity(2);
+select pg_temp.expect(public.event_checkout_state('direct-link-staff')->>'state'='awaiting_payment','authorised event organiser can inspect event checkout');
+select pg_temp.identity(3);
+select pg_temp.reject($q$select public.event_checkout_state('direct-link-staff')$q$,'foreign event organiser cannot inspect another event checkout');
+select pg_temp.reject($q$select public.cancel_event_checkout('direct-link-staff')$q$,'foreign event organiser cannot cancel another event checkout');
+select pg_temp.reject($q$select pg_temp.link_payment('forged-payer')$q$,'ordinary player cannot claim another payer through the staff path');
+select pg_temp.identity(9,1);
+select pg_temp.reject($q$select public.reserve_event_registration_places(pg_temp.link_cart())$q$,'revoked super-admin session cannot reserve places');
+select pg_temp.reject($q$select public.event_checkout_state('direct-link-staff')$q$,'revoked super-admin session cannot inspect checkout');
+select pg_temp.identity(9);
+select public.cancel_event_checkout('direct-link-staff');
+select pg_temp.identity(1);
+select pg_temp.expect(public.event_checkout_state('direct-link-staff')->>'state'='awaiting_payment','receipt stays attached to the player after staff assistance');
+reset role;
+select set_config('request.jwt.claims','{}',false);
+select pg_temp.expect((select owner_email='actor9@example.test' from private.event_checkout_holds where event_id=208),'staff hold keeps the real authenticated actor');
+select pg_temp.expect((select metadata->>'registrant_email'='actor1@example.test' and player_id=1 and status='processing' from public.payments where reference='direct-link-staff'),'staff checkout keeps the player as payer and does not mark payment successful');
+update public.calendar set is_manual=false where id=208;
+set role authenticated;
+select pg_temp.identity(1);
+select pg_temp.reject_message('select public.reserve_event_registration_places(pg_temp.link_cart())','This event is unavailable.');
+reset role;
+select set_config('request.jwt.claims','{}',false);
+update public.calendar set is_manual=true,sanction_status='rejected' where id=208;
+set role authenticated;
+select pg_temp.identity(1);
+select pg_temp.reject_message('select public.reserve_event_registration_places(pg_temp.link_cart())','This event is unavailable.');
+reset role;
+select set_config('request.jwt.claims','{}',false);
+update public.calendar set sanction_status='approved',registration_access='protected' where id=208;
+set role authenticated;
+select pg_temp.identity(1);
+select pg_temp.reject_message('select public.reserve_event_registration_places(pg_temp.link_cart())','Unlock this event before registering.');
+reset role;
+select set_config('request.jwt.claims','{}',false);
+update public.calendar set registration_access='public',event_status='cancelled' where id=208;
+set role authenticated;
+select pg_temp.identity(1);
+select pg_temp.reject_message('select public.reserve_event_registration_places(pg_temp.link_cart())','Choose an available event and division.');
+reset role;
+select set_config('request.jwt.claims','{}',false);
 select 'Paid registration DB: '||count(*)||' assertions passed' from checks;

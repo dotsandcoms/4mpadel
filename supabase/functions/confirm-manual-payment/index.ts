@@ -7,6 +7,7 @@ import {
     assertPaystackPayment,
 } from './paystack.ts';
 import { persistManualEventRegistrations, recordLicensePaymentSplit, markManualEventEntryCoversPaid } from './manual-event-payment.ts';
+import { canConfirmEventCheckout } from './checkout-access.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -256,8 +257,7 @@ serve(async (req: Request) => {
         }
 
         const paymentMeta = parseMetadata(payment.metadata);
-        const registrantEmail = String(paymentMeta.registrant_email || '').toLowerCase();
-        if (registrantEmail !== user.email.toLowerCase()) {
+        if (!await canConfirmEventCheckout(supabaseUser, reference)) {
             return new Response(JSON.stringify({ error: 'Forbidden' }), {
                 status: 403,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
