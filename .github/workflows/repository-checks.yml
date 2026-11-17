@@ -55,7 +55,7 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - run: npx puppeteer browsers install chrome --install-deps
+      - run: npx puppeteer browsers install chrome
       - run: npm run check:web
 
   mobile:
