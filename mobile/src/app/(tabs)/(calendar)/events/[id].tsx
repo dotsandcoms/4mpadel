@@ -179,9 +179,9 @@ function EventContent() {
               </Pressable>}
               <View style={{ flex: 1, minWidth: 0, gap: 8 }}>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: 6 }}>
-                  {hasSapa && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, maxWidth: '100%' }}>
-                    <Text style={badgeStyle}>{event.sapa_status?.toUpperCase()}</Text>
-                    <Text style={badgeStyle}>SAPA</Text>
+                  {hasSapa && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '100%' }}>
+                    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[badgeStyle, { flexShrink: 1 }]}>{event.sapa_status?.toUpperCase()}</Text>
+                    <Text numberOfLines={1} style={badgeStyle}>SAPA</Text>
                   </View>}
                   <ContextualTip chapter="event" mode="replay" replayLabel="Event guide" style={{ marginStart: 'auto', maxWidth: '100%', alignSelf: 'center' }} />
                 </View>
