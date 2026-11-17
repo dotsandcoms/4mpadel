@@ -34,12 +34,12 @@ export const seededSlotOrder = (drawSize) => {
     return order;
 };
 
-const entrySort = (entries, seedingMethod, random, seededPercentage = 100, seededCount = null) => {
+const entrySort = (entries, seedingMethod, random, seededPercentage = 100, seededCount = null, shuffleSeedBands = true) => {
     const active = entries.filter((entry) => entry.status !== 'withdrawn');
     if (seedingMethod === 'random') return shuffled(active, random);
     const ranked = [...active].sort((a, b) => {
-        const aSeed = Number.isFinite(Number(a.seed_number)) ? Number(a.seed_number) : Infinity;
-        const bSeed = Number.isFinite(Number(b.seed_number)) ? Number(b.seed_number) : Infinity;
+        const aSeed = Number(a.seed_number) || Infinity;
+        const bSeed = Number(b.seed_number) || Infinity;
         if (aSeed !== bSeed) return aSeed - bSeed;
         const aValue = Number(a.seeding_value || 0);
         const bValue = Number(b.seeding_value || 0);
@@ -49,8 +49,12 @@ const entrySort = (entries, seedingMethod, random, seededPercentage = 100, seede
     if (seededCount !== null) {
         if (!Number.isInteger(seededCount) || seededCount < 0 || seededCount > ranked.length) throw new Error('Choose a seeded-team count between zero and the number of teams.');
         const seeded = ranked.slice(0, seededCount).map((entry,index)=>({...entry,seed_number:index+1}));
-        const grouped = seeded.slice(0,2);
-        for(let start=2;start<seededCount;start*=2) grouped.push(...shuffled(seeded.slice(start,Math.min(start*2,seededCount)),random));
+        const grouped = shuffleSeedBands ? seeded.slice(0, 2) : seeded;
+        if (shuffleSeedBands) {
+            for (let start = 2; start < seededCount; start *= 2) {
+                grouped.push(...shuffled(seeded.slice(start, Math.min(start * 2, seededCount)), random));
+            }
+        }
         return [...grouped,...shuffled(ranked.slice(seededCount).map(entry=>({...entry,seed_number:null})),random)];
     }
     if (seedingMethod === 'manual') return ranked;
@@ -84,6 +88,7 @@ export const generateKnockoutDraft = (entries, {
     seededCount = null,
     placementPlayoff = 'none',
     plateMode = 'none',
+    separateGroups = false,
     random = Math.random,
 } = {}) => {
     const orderedEntries = entrySort(entries, seedingMethod, random, seededPercentage, seededCount).map((entry, index) => ({
@@ -96,6 +101,7 @@ export const generateKnockoutDraft = (entries, {
     if (placementPlayoff === 'top8' && drawSize < 8) throw new Error('Top 8 placement requires an 8-slot elimination draw or larger. Choose Top 4 for a smaller draw.');
     const seedOrder = seededSlotOrder(drawSize);
     const slots = seedOrder.map((seed) => orderedEntries[seed - 1] || null);
+    if (separateGroups) separateOpeningOpponents(slots);
     const matches = [];
     let currentRoundSlots = slots.map((entry, index) => ({ type: 'entry', entry, slot: index + 1 }));
     let roundNumber = 1;
@@ -180,11 +186,46 @@ export const generateKnockoutDraft = (entries, {
     }, plateMode);
 };
 
-/** Assigns teams to groups in a seeded snake: A/B/C then C/B/A, repeatedly. */
-export const allocateSnakeGroups = (entries, groupCount, { seedingMethod = 'manual', seededPercentage = 100, seededCount = null, random = Math.random } = {}) => {
+// Keep bye recipients and the higher seed in each live pairing in place.
+// Maximum matching across the remaining slots minimizes group rematches.
+function separateOpeningOpponents(slots) {
+    const pairs = [];
+    for (let i = 0; i < slots.length; i += 2) {
+        if (!slots[i] || !slots[i + 1]) continue;
+        const high = slots[i].seed_number < slots[i + 1].seed_number ? i : i + 1;
+        pairs.push({ group: slots[high].group_id, low: high === i ? i + 1 : i });
+    }
+    if (pairs.every(({ group, low }) => slots[low].group_id !== group)) return;
+
+    const opponents = pairs.map(({ low }) => slots[low]);
+    const owner = new Map();
+    const assign = (pair, visited) => {
+        const options = [pair, ...opponents.keys()].filter(index => (
+            !visited.has(index) && opponents[index].group_id !== pairs[pair].group
+        ));
+        for (const index of options) {
+            if (visited.has(index)) continue;
+            visited.add(index);
+            if (!owner.has(index) || assign(owner.get(index), visited)) {
+                owner.set(index, pair);
+                return true;
+            }
+        }
+        return false;
+    };
+    pairs.forEach((_, index) => assign(index, new Set()));
+    const unmatched = opponents.filter((_, index) => !owner.has(index));
+    const byPair = new Map([...owner].map(([index, pair]) => [pair, opponents[index]]));
+    pairs.forEach(({ low }, index) => { slots[low] = byPair.get(index) || unmatched.shift(); });
+}
+
+export const groupSeedOrder = (a, b) => (a.seed_number ?? Infinity) - (b.seed_number ?? Infinity);
+
+/** Full pots alternate direction. A partial final pot starts at Group A. */
+export const allocateSnakeGroups = (entries, groupCount, { seedingMethod = 'manual', seededPercentage = 100, seededCount = null, groupSeeding = 'snake', random = Math.random } = {}) => {
     const count = Number(groupCount);
     if (!Number.isInteger(count) || count < 1) throw new Error('At least one group is required');
-    const ordered = entrySort(entries, seedingMethod, random, seededPercentage, seededCount).map((entry, index) => ({
+    const ordered = entrySort(entries, seedingMethod, random, seededPercentage, seededCount, false).map((entry, index) => ({
         ...entry,
         seed_number: seededCount === null ? index + 1 : entry.seed_number,
     }));
@@ -196,12 +237,19 @@ export const allocateSnakeGroups = (entries, groupCount, { seedingMethod = 'manu
         entries: [],
     }));
 
-    ordered.forEach((entry, index) => {
-        const wave = Math.floor(index / count);
-        const offset = index % count;
-        const groupIndex = wave % 2 === 0 ? offset : count - 1 - offset;
-        groups[groupIndex].entries.push(entry);
-    });
+    for (let start = 0; start < ordered.length; start += count) {
+        const pot = ordered.slice(start, start + count);
+        const full = pot.length === count;
+        const fixed = start === 0 ? pot.filter(entry => entry.seed_number && entry.seed_number <= 2).length : 0;
+        const randomize = groupSeeding === 'random_pots' && full;
+        const teams = randomize ? [...pot.slice(0, fixed), ...shuffled(pot.slice(fixed), random)] : pot;
+        const reverse = full && !randomize && (start / count) % 2 === 1;
+        const destinations = groupSeeding === 'random_pots' && !full
+            ? [...groups].sort((a, b) => groupSeedOrder(a.entries[0], b.entries[0]))
+            : reverse ? [...groups].reverse() : groups;
+        teams.forEach((entry, offset) => destinations[offset].entries.push(entry));
+    }
+    groups.forEach(group => group.entries.sort(groupSeedOrder));
     return groups;
 };
 
@@ -246,11 +294,15 @@ export const generateRoundRobinFixtures = (entries) => {
 
 export const generateGroupStageDraft = (entries, options) => {
     const groups = allocateSnakeGroups(entries, options.groupCount, options);
-    const populatedGroups = groups.map((group) => ({
-        ...group,
-        entries: group.entries.map((entry) => ({ ...entry, group_key: group.key })),
-        fixtures: generateRoundRobinFixtures(group.entries).map((fixture) => ({ ...fixture, group_key: group.key })),
-    }));
+    const populatedGroups = groups.map((group) => {
+        const groupEntries = group.entries.map(entry => ({ ...entry, group_key: group.key }));
+        return {
+            ...group, entries: groupEntries,
+            fixtures: generateRoundRobinFixtures(groupEntries).map(fixture => ({
+                ...fixture, key: `${group.key}:${fixture.key}`, group_key: group.key,
+            })),
+        };
+    });
     return {
         format: options.format || 'group_only',
         seeded_percentage: Math.min(100, Math.max(0, Number(options.seededPercentage) || 0)),

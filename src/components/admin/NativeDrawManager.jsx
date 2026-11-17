@@ -11,9 +11,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Award, Brackets, CalendarClock, CheckCircle2, ChevronDown, ChevronUp, Eye, Loader2, Megaphone, Radio, RefreshCcw, Save, Send, Star, Trash2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../supabaseClient';
-import { generateGroupStageDraft, generateKnockoutDraft, nextPowerOfTwo } from '../../utils/nativeDrawGenerator';
+import { generateGroupStageDraft, generateKnockoutDraft, groupSeedOrder, nextPowerOfTwo } from '../../utils/nativeDrawGenerator';
 import { moveDrawPreviewMatch, swapDrawPreviewPositions } from '../../utils/drawPreviewEditing';
 import { areGroupMatchesComplete, calculateGroupStandings } from '../../utils/nativeDrawStandings';
+import { describeGroupEdit, drawTeamKey, editGroupTeams, hasGroupPlayStarted } from '../../utils/drawGroupEditing';
+import { defaultQualificationRules, qualificationRules, qualificationSize, rankGroupQualifiers } from '../../utils/drawQualification';
+import DrawGroupPreview from './DrawGroupPreview';
+import { GroupQualificationReview, GroupQualificationSettings } from './DrawGroupQualification';
 import { deriveKnockoutPlacementProposals } from '../../utils/nativeDrawPlacements';
 import { addEventPlayDay, mergeEventPlayDays, buildEventPlayDays } from '../../utils/nativeDrawScheduler';
 import { listRankingCategories, listRankingOrganisations, resolvePlayerRanking } from '../../utils/playerRankingSelection';
@@ -54,6 +58,8 @@ const rankedInPairKey = (...players) => players
     .filter(Boolean)
     .sort()
     .join(':');
+
+const playerClub = player => player?.club_id || player?.home_club?.trim().toLowerCase();
 
 const registrationToEntry = (registration, index, playersByEmail, rankingSource, rankedInClassSeedings) => {
     const playerOne = registration.full_name || registration.email || `Entry ${index + 1}`;
@@ -96,9 +102,19 @@ const registrationToEntry = (registration, index, playersByEmail, rankingSource,
             player_one_image_url: playerOneProfile?.image_url || null,
             player_two_image_url: playerTwoProfile?.image_url || null,
             pair_seeding_points: seedingValue,
+            clubs: [...new Set([playerOneProfile, playerTwoProfile].map(playerClub).filter(Boolean))],
         },
     };
 };
+
+const groupIdFor = group => group.id || group.key;
+const matchGroupId = match => match.group_id || match.group_key;
+const fixtureVersions = matches => Object.fromEntries(matches.map(match => [match.id, match.updated_at]));
+const fixtureFields = match => ({
+    round_number: match.round_number, round_code: match.round_code, round_label: match.round_label,
+    bracket_position: match.bracket_position,
+});
+const defaultQualification = { mode: 'fixed', extras: 1, rules: defaultQualificationRules };
 
 const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, onSaved, onDivisionRankingSourceChange, sandboxTesting = false, privateRehearsal = false, onRestartSandbox, onExpandTestCount }) => {
     const { getTournamentParticipants } = useRankedin();
@@ -154,6 +170,10 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
     const [drawFormat, setDrawFormat] = useState('knockout');
     const [groupCount, setGroupCount] = useState('4');
     const [advancersPerGroup, setAdvancersPerGroup] = useState('2');
+    const [qualificationConfig, setQualificationConfig] = useState(defaultQualification);
+    const [groupSeeding, setGroupSeeding] = useState('snake');
+    const [editAudit, setEditAudit] = useState([]);
+    const [previewAudit, setPreviewAudit] = useState([]);
     const [plateMode, setPlateMode] = useState('none');
     const [playoffMode, setPlayoffMode] = useState('none');
     const [seedingTemplate, setSeedingTemplate] = useState('100');
@@ -200,6 +220,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
     const [newPlayDate, setNewPlayDate] = useState('');
 
     const division = divisions.find((item) => item.id === divisionId);
+    const clubsByPlayer = useMemo(() => new Map([...playersByEmail.values()].map(player => [String(player.id), playerClub(player)])), [playersByEmail]);
 
     const selectRankingSource = async (source) => {
         const previousSource = rankingSource;
@@ -252,13 +273,28 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         const seed=playerReview?.seeds?.indexOf(r.id) ?? -1;
         return {...entry,seed_number:seed>=0?seed+1:null,snapshot:{...entry.snapshot,draw_exception:playerReview?.exceptions?.[r.id]||null}};
     }), [teams,playersByEmail,rankingSource,rankedInClassSeedings,playerReview]);
-    const eliminationSize = nextPowerOfTwo(drawFormat === 'group_knockout' ? Number(groupCount) * Number(advancersPerGroup) : entries.length);
+    const currentGroups = draft?.groups?.length ? draft.groups : null;
+    const fieldSize = currentGroups ? draft.entries.length : entries.length;
+    const selectedGroupCount = currentGroups?.length || Math.max(1, Math.min(Number(groupCount) || 1, fieldSize || 1));
+    const groupSizes = currentGroups?.map(group => group.entries.length)
+        || Array.from({ length: selectedGroupCount }, (_, index) => Math.floor(fieldSize / selectedGroupCount) + Number(index < fieldSize % selectedGroupCount));
+    const smallestGroupSize = Math.min(...groupSizes);
+    const groupCountOptions = Array.from({ length: Math.max(1, Math.min(8, fieldSize), currentGroups?.length || 0) }, (_, index) => index + 1);
+    const advancerOptions = Array.from({ length: smallestGroupSize }, (_, index) => index + 1)
+        .filter(count => selectedGroupCount > 1 || groupSizes[0] < 2 || count >= 2);
+    const places = Math.max(advancerOptions[0] || 1, Math.min(Number(advancersPerGroup), smallestGroupSize));
+    const { mode: qualificationMode, rules: crossGroupRules } = qualificationConfig;
+    const availableExtras = groupSizes.filter(size => size > places).length;
+    const extraTeams = Math.min(qualificationConfig.extras, availableExtras);
+    const bracketSize = qualificationSize(groupSizes, qualificationMode, places, extraTeams);
+    const eliminationSize = drawFormat === 'group_knockout' ? bracketSize.bracket : nextPowerOfTwo(entries.length);
     const backDrawHelp = backDrawExplanation(plateMode, eliminationSize);
-    const selectedGroupCount = Math.max(1, Number(groupCount) || 1);
-    const smallestGroupSize = selectedGroupCount > 0 ? Math.floor(entries.length / selectedGroupCount) : 0;
-    const groupCountOptions = Array.from({ length: Math.max(1, Math.min(8, entries.length)) }, (_, index) => index + 1);
-    const advancerOptions = Array.from({ length: Math.max(0, smallestGroupSize) }, (_, index) => index + 1)
-        .filter((count) => selectedGroupCount > 1 || count >= 2);
+    const minimumGroupSize = drawFormat === 'group_knockout' && qualificationMode !== 'all' ? places : 1;
+    const changeQualification = ({ places: nextPlaces, ...settings }) => {
+        if (nextPlaces != null) setAdvancersPerGroup(String(nextPlaces));
+        setQualificationConfig(current => ({ ...current, ...settings }));
+        setDraft(null);
+    };
     const linkedRankedinTournamentId = extractRankedinId(event?.rankedin_id) || extractRankedinId(event?.rankedin_url);
     const hasLinkedRankedinClass = Boolean(linkedRankedinTournamentId && division?.rankedin_class_id);
     const linkedSeedFallbackCount = useMemo(() => entries.filter((entry) => entry.snapshot?.seeding_fallback).length, [entries]);
@@ -447,18 +483,22 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                     if (active) { setSavedDraw(null); setSilverPlate(null); setBronzePlate(null); setDraft(null); }
                     return;
                 }
+                const isGroupDraw = ['group_knockout', 'group_only'].includes(draw.format);
                 if (draw.format === 'americano') {
                     if (active) { setShowFormatChoices(false); setSavedDraw(draw); setDrawFormat(draw.scoring_rules?.americano?.variant==='team'?'team_americano':'americano'); setDraft(null); }
                     return;
                 }
-                const [{ data: savedEntries, error: entriesError }, { data: savedMatches, error: matchesError }, { data: groups }, { data: savedStandings }] = await Promise.all([
+                const [{ data: savedEntries, error: entriesError }, { data: savedMatches, error: matchesError }, { data: groups, error: groupsError }, { data: savedStandings, error: standingsError }, audit] = await Promise.all([
                     supabase.from('draw_entries').select('*').eq('draw_id', draw.id).order('seed_number'),
                     supabase.from('draw_matches').select('*').eq('draw_id', draw.id).order('round_number').order('bracket_position'),
                     supabase.from('draw_groups').select('*').eq('draw_id', draw.id).order('display_order'),
                     supabase.from('draw_standings').select('*').eq('draw_id', draw.id).order('group_id').order('position'),
+                    isGroupDraw ? supabase.from('native_draw_edit_audit').select('*').eq('draw_id', draw.id).order('created_at', { ascending: false }).order('id', { ascending: false }) : { data: [] },
                 ]);
                 if (entriesError) throw entriesError;
                 if (matchesError) throw matchesError;
+                if (groupsError || standingsError) throw groupsError || standingsError;
+                if (audit.error && audit.error.code !== 'PGRST205') throw audit.error;
                 if (!active) return;
                 const entryById = new Map((savedEntries || []).map((entry) => [entry.id, entry]));
                 const matches = (savedMatches || []).map((match) => ({
@@ -470,10 +510,15 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                     winner: entryById.get(match.winner_entry_id) || null,
                 }));
                 const matchIds = (savedMatches || []).map((match) => match.id);
-                const { data: savedSets } = matchIds.length
-                    ? await supabase.from('draw_match_sets').select('*').in('match_id', matchIds).order('set_number')
-                    : { data: [] };
+                const setResults = await Promise.all(Array.from({ length: Math.ceil(matchIds.length / 100) }, (_, index) =>
+                    supabase.from('draw_match_sets').select('*').in('match_id', matchIds.slice(index * 100, (index + 1) * 100)).order('set_number')));
+                if (!active) return;
+                const setsError = setResults.find(result => result.error)?.error;
+                if (setsError) throw setsError;
+                const savedSets = setResults.flatMap(result => result.data || []);
                 setSavedDraw(draw);
+                setEditAudit(audit.data || []);
+                setPreviewAudit([]);
                 setConfirmReopen(false);
                 setDraftDirty(false);
                 setSavedGroups(groups || []);
@@ -483,6 +528,9 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                 setDrawFormat(draw.format || 'knockout');
                 setGroupCount(String(draw.group_count || 1));
                 setAdvancersPerGroup(String(draw.advancers_per_group || 2));
+                setGroupSeeding(draw.scoring_rules?.group_seeding || 'snake');
+                const config = draw.scoring_rules?.qualification;
+                setQualificationConfig(config ? { ...defaultQualification, ...config, rules: qualificationRules(config.rules) } : defaultQualification);
                 setPlateMode(draw.scoring_rules?.plate_mode || 'none');
                 setPlayoffMode(draw.scoring_rules?.playoff_mode || 'none');
                 setSeedingTemplate(String(draw.scoring_rules?.seeding_template_percent ?? 100));
@@ -496,7 +544,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                     total_rounds: Math.max(...matches.filter(match=>match.stage==='knockout').map((match) => match.round_number), 0),
                     entries: (savedEntries || []).map((entry) => ({ ...entry, group_key: entry.group_id })),
                     matches,
-                    groups: (groups || []).map((group) => ({ ...group, key: group.id, entries: (savedEntries || []).filter((entry) => entry.group_id === group.id) })),
+                    groups: (groups || []).map((group) => ({ ...group, key: group.id, entries: (savedEntries || []).filter(entry => entry.group_id === group.id).sort(groupSeedOrder) })),
                 });
             } catch (error) {
                 console.error('Failed to load native draw draft', error);
@@ -525,7 +573,9 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                 setWorkspace('players');
                 throw new Error(`Missing partners for: ${missingPartners.map(entry => entry.player_one_name).join(', ')}. Complete their pairs in Registrations, or exclude their standalone entries in Teams & seeds, then confirm again.`);
             }
-            setDraftDirty(true);
+            if (drawFormat === 'group_knockout' && playoffMode === 'top8' && eliminationSize < 8) {
+                throw new Error('Top 8 placement needs an 8-slot knockout bracket. Choose a smaller playoff or advance more teams.');
+            }
             if (drawFormat === 'knockout') {
                 setDraft({ ...generateKnockoutDraft(entries, {
                     seedingMethod: 'native_ranking',
@@ -533,15 +583,16 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                     placementPlayoff: playoffMode, plateMode,
                 }), format: 'knockout' });
             } else {
-                if (Number(groupCount) > entries.length) throw new Error('There must be at least one team per group');
-                if (drawFormat === 'group_knockout' && Number(advancersPerGroup) > smallestGroupSize) {
-                    throw new Error(`Only ${smallestGroupSize} ${smallestGroupSize === 1 ? 'team' : 'teams'} fit in the smallest group; reduce the number advancing`);
+                if (drawFormat === 'group_knockout' && (bracketSize.total < 2 || (qualificationMode === 'best_placed' && !extraTeams))) {
+                    throw new Error('Choose a qualification that advances at least two teams and has an eligible next-place team if adding extras.');
                 }
-                if (drawFormat === 'group_knockout' && Number(groupCount) * Number(advancersPerGroup) < 2) {
-                    throw new Error('At least two teams must advance to the elimination phase');
-                }
-                setDraft(generateGroupStageDraft(entries, { format: drawFormat, groupCount: Number(groupCount), seedingMethod: 'native_ranking', seededCount: effectiveSeedCount }));
+                setDraft(generateGroupStageDraft(entries, {
+                    format: drawFormat, groupCount: selectedGroupCount, seedingMethod: 'native_ranking',
+                    seededCount: effectiveSeedCount, groupSeeding,
+                }));
             }
+            setPreviewAudit([]);
+            setDraftDirty(true);
             setWorkspace('review');
         } catch (error) {
             toast.error(error.message);
@@ -564,6 +615,56 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         setDraftDirty(true);
     };
 
+    const applyGroupEdit = async (source, target, details, undoOf = null) => {
+        const next = editGroupTeams(draft, source, target, minimumGroupSize);
+        if (!savedDraw || draftDirty) {
+            setDraft(next);
+            setPreviewAudit(current => [...current, {
+                id: crypto.randomUUID(), undo_of: undoOf, details, action: undoOf ? 'group_undo' : 'group_edit',
+            }]);
+            return;
+        }
+        if (scheduleDirty) throw new Error('Save or discard pending schedule changes first.');
+        const groups = [source.groupKey, target.groupKey];
+        const belongs = match => groups.includes(matchGroupId(match));
+        setSaving(true);
+        try {
+            const { data: cleared, error } = await supabase.rpc('native_apply_group_edit', {
+                p_draw: savedDraw.id, p_expected: savedDraw.updated_at,
+                p_versions: fixtureVersions(draft.matches.filter(belongs)),
+                p_two_groups: groups, p_source: source.entry.id, p_target: target.entry?.id || null,
+                p_fixtures: next.matches.filter(belongs).map(match => ({
+                    ...fixtureFields(match), id: match.id || null, group_id: matchGroupId(match),
+                    entry_one_id: drawTeamKey(match.entry_one), entry_two_id: drawTeamKey(match.entry_two),
+                })),
+                p_undo: undoOf,
+            });
+            if (error) throw error;
+            const newFixtures = next.matches.filter(match => belongs(match) && !match.id).length;
+            const toSchedule = newFixtures + (cleared || 0);
+            toast.success(toSchedule ? `Groups updated. ${toSchedule} ${toSchedule === 1 ? 'fixture needs' : 'fixtures need'} a court time.` : 'Groups and fixtures updated');
+            setDrawReloadKey(key => key + 1);
+            onSaved?.();
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const undoGroupEdit = async edit => {
+        if (!edit || hasGroupPlayStarted(draft.matches)) return;
+        const findSlot = (side, name) => {
+            const group = draft.groups.find(item => item.name === name);
+            const entry = group?.entries.find(item => side.registration
+                ? item.source_registration_id === side.registration : drawTeamKey(item) === side.id);
+            return group ? { entry, groupKey: groupIdFor(group), position: name } : null;
+        };
+        const { source: oldSource, target: oldTarget } = edit.details;
+        const source = findSlot(oldSource, oldTarget.group);
+        const target = findSlot(oldTarget, oldSource.group);
+        if (!source?.entry || !target || (oldTarget.name && !target.entry)) throw new Error('This edit no longer matches the draw.');
+        await applyGroupEdit(source, target, describeGroupEdit(source, target), edit.id);
+    };
+
     const resolveSavedRoutes = async (drawId) => {
         const {error} = await supabase.rpc('resolve_draw_routes', {p_draw_id:drawId});
         if (error) throw error;
@@ -577,7 +678,33 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         setSaving(true);
         try {
             const hasElimination = ['knockout', 'group_knockout'].includes(draft.format);
+            const isGroupDraw = ['group_only', 'group_knockout'].includes(draft.format);
             const scoringRules = { sets_to_win: 2, golden_point: true, match_tiebreak: false, plate_mode: hasElimination ? plateMode : 'none', playoff_mode: hasElimination ? playoffMode : 'none', seeding_template_percent: Number(seedingTemplate), seeded_team_count: effectiveSeedCount, seeding_placement: 'grouped', ranking_source: rankingSource, player_review: playerReview };
+            if (isGroupDraw) {
+                const groups = draft.groups.map(group => ({ id: crypto.randomUUID(), name: group.name, display_order: group.display_order }));
+                const groupIds = new Map(draft.groups.map((group, index) => [groupIdFor(group), groups[index].id]));
+                const savedEntries = draft.entries.map(entry => ({ ...entry, id: crypto.randomUUID(), group_id: groupIds.get(entry.group_key || entry.group_id) }));
+                const entryIds = new Map(draft.entries.map((entry, index) => [drawTeamKey(entry), savedEntries[index].id]));
+                const { data: id, error } = await supabase.rpc('native_save_group_draw', {
+                    p_event: event.id, p_division: division.id, p_expected: savedDraw?.updated_at || null,
+                    p_format: draft.format, p_places: draft.format === 'group_knockout' && qualificationMode !== 'all' ? places : null,
+                    p_rules: { ...scoringRules, group_seeding: groupSeeding, qualification: { mode: qualificationMode, extras: extraTeams, rules: crossGroupRules } },
+                    p_groups: groups, p_entries: savedEntries, p_history: previewAudit,
+                    p_matches: draft.matches.map(match => ({
+                        ...fixtureFields(match), group_id: groupIds.get(matchGroupId(match)),
+                        entry_one_id: entryIds.get(drawTeamKey(match.entry_one)), entry_two_id: entryIds.get(drawTeamKey(match.entry_two)),
+                    })),
+                });
+                if (error) throw error;
+                const record = { id, status: 'draft', format: draft.format };
+                setLoadingSaved(true);
+                setSavedDraw(record);
+                setDraftDirty(false);
+                setDrawReloadKey(key => key + 1);
+                toast.success(`${division.name} draw saved as a draft`);
+                onSaved?.();
+                return record;
+            }
             const { data: existing, error: existingError } = await supabase
                 .from('draws')
                 .select('id, status')
@@ -599,7 +726,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                 const { error: deleteGroupsError } = await supabase.from('draw_groups').delete().eq('draw_id', draw.id);
                 if (deleteGroupsError) throw deleteGroupsError;
                 const { error: updateError } = await supabase.from('draws').update({
-                    format: draft.format || 'knockout', group_count: draft.groups?.length || null, advancers_per_group: draft.format === 'group_knockout' ? Number(advancersPerGroup) : null, seeding_method: 'native_ranking', scoring_rules: scoringRules, generated_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+                    format: draft.format || 'knockout', group_count: draft.groups?.length || null, advancers_per_group: null, seeding_method: 'native_ranking', scoring_rules: scoringRules, generated_at: new Date().toISOString(), updated_at: new Date().toISOString(),
                 }).eq('id', draw.id);
                 if (updateError) throw updateError;
             } else {
@@ -614,7 +741,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                     seeding_method: 'native_ranking',
                     scoring_rules: scoringRules,
                     group_count: draft.groups?.length || null,
-                    advancers_per_group: draft.format === 'group_knockout' ? Number(advancersPerGroup) : null,
+                    advancers_per_group: null,
                         generated_at: new Date().toISOString(),
                     })
                     .select('id, status, format, group_count, advancers_per_group, generated_at')
@@ -624,36 +751,15 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                 draw = newDraw;
             }
 
-            const { data: savedGroups, error: groupsError } = draft.groups?.length ? await supabase
-                .from('draw_groups')
-                .insert(draft.groups.map((group) => ({ draw_id: draw.id, name: group.name, display_order: group.display_order })))
-                .select('id, name') : { data: [], error: null };
-            if (groupsError) throw groupsError;
-            const groupIdByKey = new Map((draft.groups || []).map((group) => [
-                group.key,
-                (savedGroups || []).find((savedGroup) => savedGroup.name === group.name)?.id,
-            ]));
-
             const { data: savedEntries, error: entriesError } = await supabase
                 .from('draw_entries')
-                .insert(draft.entries.map(({ group_key, ...entry }) => ({
-                    ...entry,
-                    draw_id: draw.id,
-                    seed_number: entry.seed_number ?? null,
-                    group_id: group_key ? groupIdByKey.get(group_key) : null,
-                })))
+                .insert(draft.entries.map(entry => {
+                    const row = { ...entry, draw_id: draw.id, seed_number: entry.seed_number ?? null, group_id: null };
+                    delete row.group_key;
+                    return row;
+                }))
                 .select('id, source_registration_id');
             if (entriesError) throw entriesError;
-
-            if (draft.groups?.length) {
-                const standingsRows = savedEntries.map((entry) => {
-                    const source = draft.entries.find((item) => item.source_registration_id === entry.source_registration_id);
-                    return source?.group_key ? { draw_id: draw.id, group_id: groupIdByKey.get(source.group_key), entry_id: entry.id } : null;
-                }).filter(Boolean);
-                const { error: standingsError } = await supabase.from('draw_standings').upsert(standingsRows, { onConflict: 'group_id,entry_id' });
-                if (standingsError) throw standingsError;
-                setStandings(standingsRows);
-            }
 
             const entryIdByRegistration = new Map(savedEntries.map((entry) => [entry.source_registration_id, entry.id]));
             const { data: savedMatches, error: matchesError } = await supabase
@@ -668,7 +774,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                     const validWinnerId = winnerId === entryOneId || winnerId === entryTwoId ? winnerId : null;
                     return {
                         draw_id: draw.id,
-                        group_id: match.group_key ? groupIdByKey.get(match.group_key) : null,
+                        group_id: null,
                         stage: match.stage,
                         round_code: match.round_code,
                         round_label: match.round_label,
@@ -695,7 +801,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             const linkError = linkResults.find((result) => result.error)?.error;
             if (linkError) throw linkError;
 
-            if (draft.format === 'knockout') setDraft((current) => ({
+            setDraft((current) => ({
                 ...current,
                 entries: current.entries.map((entry) => ({
                     ...entry,
@@ -711,25 +817,6 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                     ...routes.get(match.key),
                 })),
             }));
-            else {
-                const matchIdByDraftKey = new Map(draft.matches.map((match, index) => [match.key, savedMatches[index]?.id]));
-                setDraft((current) => ({
-                    ...current,
-                    entries: current.entries.map((entry) => ({ ...entry, id: entryIdByRegistration.get(entry.source_registration_id) })),
-                    matches: current.matches.map((match) => ({
-                        ...match,
-                        id: matchIdByDraftKey.get(match.key),
-                        key: matchIdByDraftKey.get(match.key),
-                        group_id: match.group_key ? groupIdByKey.get(match.group_key) : null,
-                        entry_one_id: match.entry_one ? entryIdByRegistration.get(match.entry_one.source_registration_id) : null,
-                        entry_two_id: match.entry_two ? entryIdByRegistration.get(match.entry_two.source_registration_id) : null,
-                        entry_one: match.entry_one ? { ...match.entry_one, id: entryIdByRegistration.get(match.entry_one.source_registration_id) } : null,
-                        entry_two: match.entry_two ? { ...match.entry_two, id: entryIdByRegistration.get(match.entry_two.source_registration_id) } : null,
-                    })),
-                }));
-                setSavedGroups((savedGroups || []).map((group) => ({ ...group, key: group.id })));
-            }
-
             await supabase.from('draw_match_audit').insert({
                 match_id: savedMatches[0].id,
                 action: 'created',
@@ -758,6 +845,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             const { error } = await supabase.rpc('reopen_native_draw_for_corrections', { p_draw_id: savedDraw.id });
             if (error) throw error;
             setSavedDraw((current) => ({ ...current, status: 'draft' }));
+            setDrawReloadKey(key => key + 1);
             setConfirmReopen(false);
             setShowDrawSetup(true);
             setShowDrawConfiguration(true);
@@ -780,6 +868,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             await onRestartSandbox(divisionId);
             setSavedDraw(null); setDraft(null); setAvailableDraws([]); setMatchSets([]); setSavedGroups([]); setStandings([]);
             setActiveDrawKind('main'); setDrawFormat('knockout'); setPlateMode('none'); setPlayoffMode('none'); setDraftDirty(false);
+            setEditAudit([]); setPreviewAudit([]); setGroupSeeding('snake'); setQualificationConfig(defaultQualification);
             setRecordingMatchId(null); setShowFormatChoices(true); setShowDrawSetup(true); setShowDrawConfiguration(true);
             setRestartConfirmed(false); setWorkspace('setup');
             toast.success('Sandbox draw restarted. Choose a new format.');
@@ -792,17 +881,18 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             toast.error('Update the draft to save your seed changes before publishing.');
             return;
         }
-        if (!savedDraw?.id || savedDraw.status !== 'draft') {
+        if (!savedDraw?.id || loadingSaved || savedDraw.status !== 'draft') {
             toast.error('Save the draft before publishing it');
             return;
         }
         setSaving(true);
         try {
+            const publishedAt = new Date().toISOString();
             const { error } = await supabase.from('draws').update({
-                status: 'published', published_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-            }).eq('id', savedDraw.id).eq('status', 'draft');
+                status: 'published', published_at: publishedAt, updated_at: publishedAt,
+            }).eq('id', savedDraw.id).eq('status', 'draft').eq('updated_at', savedDraw.updated_at).select('id').single();
             if (error) throw error;
-            setSavedDraw({ ...savedDraw, status: 'published' });
+            setSavedDraw({ ...savedDraw, status: 'published', updated_at: publishedAt });
             setShowDrawSetup(true);
             setWorkspace(typeof destination === 'string' ? destination : 'schedule');
             toast.success(privateRehearsal ? `${division.name} rehearsal draw published privately.` : `${division.name} event draw is published at /native-draws/${event.slug}`);
@@ -1117,47 +1207,36 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         }
     };
 
-    const createKnockoutFromGroups = async () => {
-        if (!savedDraw?.id || !draft || !groupStageComplete) return;
-        if (draft.matches.some((match) => match.stage === 'knockout')) {
-            toast.error('The elimination phase has already been created');
-            return;
-        }
-        const advancers = Array.from({ length: Number(advancersPerGroup) }, (_, position) => position)
-            .flatMap((position) => savedGroups.map((group) => {
-                const row = standingsForGroup(group.id)[position];
-                return row ? draft.entries.find((entry) => entry.id === row.entry_id) : null;
-            }).filter(Boolean));
-        if (advancers.length < 2) {
-            toast.error('At least two teams must advance to create an elimination phase');
-            return;
-        }
-        const knockout = generateKnockoutDraft(
-            advancers.map((entry, index) => ({ ...entry, seed_number: index + 1 })),
-            { seedingMethod: 'manual', placementPlayoff: playoffMode, plateMode },
-        );
+    const createKnockoutFromGroups = async (overrideIds, reason) => {
+        if (!savedDraw?.id || !draft || !groupStageComplete || savedQualification || saving) return;
         setSaving(true);
         try {
-            const { data: inserted, error } = await supabase.from('draw_matches').insert(knockout.matches.map((match) => ({
-                draw_id: savedDraw.id, stage: match.stage, round_code: match.round_code, round_label: match.round_label,
-                round_number: match.round_number, bracket_position: match.bracket_position,
-                entry_one_id: match.entry_one?.id || null, entry_two_id: match.entry_two?.id || null,
-                winner_entry_id: match.winner?.id || null, status: match.status, result_type: match.result_type,
-            }))).select('id, stage, round_number, bracket_position');
+            const { advancing, comparison } = overrideIds
+                ? rankGroupQualifiers({ ...qualificationInput, overrideIds })
+                : qualification;
+            const knockout = generateKnockoutDraft(advancing, {
+                seedingMethod: 'manual', placementPlayoff: playoffMode, plateMode, separateGroups: true,
+            });
+            const ids = new Map(knockout.matches.map(match => [match.key, crypto.randomUUID()]));
+            const routes = routeIds(knockout.matches, match => ids.get(match.key));
+            const { error } = await supabase.rpc('native_create_group_elimination', {
+                p_draw: savedDraw.id, p_expected: savedDraw.updated_at,
+                p_versions: fixtureVersions(draft.matches.filter(match => match.stage === 'group')),
+                p_matches: knockout.matches.map(match => ({
+                    ...fixtureFields(match), ...routes.get(match.key), id: ids.get(match.key), stage: match.stage,
+                    entry_one_id: match.entry_one?.id || null, entry_two_id: match.entry_two?.id || null,
+                    winner_entry_id: match.winner?.id || null, result_type: match.result_type,
+                })),
+                p_qualification: {
+                    advancing: advancing.map(entry => entry.id), bracket: knockout.draw_size,
+                    comparison, rules: crossGroupRules, reason: overrideIds ? reason : null,
+                },
+            });
             if (error) throw error;
-            const ids = new Map(inserted.map((match) => [`${match.stage}:${match.round_number}:${match.bracket_position}`, match.id]));
-            const routes = routeIds(knockout.matches, match => ids.get(`${match.stage}:${match.round_number}:${match.bracket_position}`));
-            const links = await Promise.all(knockout.matches.map(match => supabase.from('draw_matches').update(routes.get(match.key)).eq('id', ids.get(`${match.stage}:${match.round_number}:${match.bracket_position}`))));
-            const linkError = links.find((result) => result.error)?.error;
-            if (linkError) throw linkError;
-            setDraft((current) => ({ ...current, matches: [...current.matches, ...knockout.matches.map((match) => ({
-                ...match, id: ids.get(`${match.stage}:${match.round_number}:${match.bracket_position}`), key: ids.get(`${match.stage}:${match.round_number}:${match.bracket_position}`),
-                ...routes.get(match.key),
-            }))] }));
-            await resolveSavedRoutes(savedDraw.id);
+            setDrawReloadKey(key => key + 1);
             toast.success('Elimination phase created from the final group standings');
+            onSaved?.();
         } catch (error) {
-            console.error('Failed to create elimination phase', error);
             toast.error(error.message || 'Could not create the elimination phase');
         } finally {
             setSaving(false);
@@ -1398,12 +1477,13 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         setSaving(true);
         try {
             const scoringRules = { ...(savedDraw.scoring_rules || {}), plate_mode: 'double' };
+            const updatedAt = new Date().toISOString();
             const { error } = await supabase.from('draws').update({
                 scoring_rules: scoringRules,
-                updated_at: new Date().toISOString(),
+                updated_at: updatedAt,
             }).eq('id', savedDraw.id);
             if (error) throw error;
-            setSavedDraw((current) => ({ ...current, scoring_rules: scoringRules }));
+            setSavedDraw((current) => ({ ...current, scoring_rules: scoringRules, updated_at: updatedAt }));
             setPlateMode('double');
             toast.success('Silver plate enabled. Complete the opening round to create it.');
         } catch (error) {
@@ -1416,6 +1496,10 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
 
     const completeDraw = async () => {
         if (!savedDraw?.id || !draft) return;
+        if (draft.format === 'group_knockout' && !draft.matches.some(match => match.stage === 'knockout')) {
+            toast.error('Create the elimination phase before completing this draw.');
+            return;
+        }
         const playableMatches = draft.matches.filter((match) => match.entry_one_id && match.entry_two_id);
         const resolvedStatuses = ['completed', 'walkover', 'retired'];
         if (!playableMatches.length || draft.matches.some((match) => ![...resolvedStatuses, 'cancelled'].includes(match.status))) {
@@ -1497,20 +1581,35 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
         }
     };
 
-    const standingsForGroup = (groupId) => standings
-        .filter((row) => row.group_id === groupId)
-        .sort((a, b) => (a.position || 999) - (b.position || 999));
-    const groupStageComplete = savedGroups.length > 0
-        && savedGroups.every((group) => areGroupMatchesComplete(draft?.matches || [], group.id));
+    const groupMatches = (draft?.matches || []).filter(match => match.stage === 'group');
+    const groupStageComplete = savedGroups.length > 0 && savedGroups.every(group =>
+        draft?.groups?.find(item => item.id === group.id)?.entries.length === 1 || areGroupMatchesComplete(groupMatches, group.id));
+    const qualificationAudit = editAudit.find(edit => edit.action.startsWith('qualification'));
+    const savedQualification = qualificationAudit ? { ...qualificationAudit.details, actor: qualificationAudit.actor_email } : null;
+    const qualificationInput = {
+        groups: savedGroups, entries: draft?.entries || [], matches: groupMatches,
+        matchSets, mode: qualificationMode, places, extras: extraTeams, rules: crossGroupRules, drawId: savedDraw?.id,
+    };
+    const qualification = draft?.format === 'group_knockout' && workspace === 'run' && groupStageComplete && !savedQualification
+        ? { ...rankGroupQualifiers(qualificationInput), rules: crossGroupRules } : null;
+    const groupAudit = [...previewAudit].reverse().concat(editAudit.filter(edit => edit.action.startsWith('group_')));
+    const undoneEdits = new Set(groupAudit.map(edit => edit.undo_of).filter(Boolean));
+    const lastGroupEdit = groupAudit.find(edit => edit.action === 'group_edit' && !undoneEdits.has(edit.id)
+        && (draftDirty ? !edit.created_at : edit.generation === savedDraw?.generated_at));
     const settingsLocked = Boolean(savedDraw && savedDraw.status !== 'draft');
     const mainKnockoutMatches = (draft?.matches || []).filter((match) => match.stage === 'knockout');
+    const eliminationSeeds = new Map(savedQualification?.advancing?.map((id, index) => [id, index + 1]));
+    const elimPreviewMatches = draft?.format === 'group_knockout' ? draft.matches.filter(match => match.stage !== 'group').map(match => {
+        const seedEntry = entry => entry && eliminationSeeds.has(entry.id) ? { ...entry, seed_number: eliminationSeeds.get(entry.id) } : entry;
+        return { ...match, entry_one: seedEntry(match.entry_one), entry_two: seedEntry(match.entry_two) };
+    }) : [];
     const mainOpeningRound = mainKnockoutMatches.length ? Math.min(...mainKnockoutMatches.map((match) => match.round_number)) : null;
     const mainOpeningMatches = mainKnockoutMatches.filter((match) => match.round_number === mainOpeningRound);
     const silverPlateReady = mainOpeningMatches.length > 0 && mainOpeningMatches.every((match) => (
         match.winner_entry_id && ['completed', 'walkover', 'retired'].includes(match.status)
     ));
     const playableMatches = (draft?.matches || []).filter((match) => match.entry_one_id && match.entry_two_id);
-    const drawReadyToComplete = playableMatches.length > 0 && (draft?.matches || []).every((match) => (
+    const drawReadyToComplete = playableMatches.length > 0 && (draft?.format !== 'group_knockout' || mainKnockoutMatches.length > 0) && (draft?.matches || []).every((match) => (
         ['completed', 'walkover', 'retired', 'cancelled'].includes(match.status)
     ));
 
@@ -1519,7 +1618,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
     const seedBands = [];
     for(let start=3;start<=effectiveSeedCount;start=(start-1)*2+1){const end=Math.min((start-1)*2,effectiveSeedCount);seedBands.push(`${start}–${end}`);}
     const rankingControls = <div className="grid gap-3 sm:grid-cols-2">                        <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Ranking source<select disabled={settingsLocked || rankedInClassSeedingsLoading} value={rankingSource} onChange={(event) => selectRankingSource(event.target.value)} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50"><option value="active" className="text-black">Each player’s active ranking</option>{rankingSource === 'rankedin_class' && <option value="rankedin_class" className="text-black">Legacy imported RankedIn snapshot</option>}{rankingOrganisations.map((organisation) => <option key={`main:${organisation}`} value={`organisation:${organisation}`} className="text-black">{organisation} · gendered Main divisions</option>)}{rankingCategories.map((category) => <option key={category.source} value={category.source} className="text-black">{category.organisation} · {category.age_group}</option>)}</select><span className="mt-2 block text-xs font-normal leading-4 text-gray-500">{rankedInClassSeedingsLoading ? 'Loading the legacy imported snapshot…' : 'New draws use ranking records stored in our database. Choose an exact category such as Mixed-Main when the division uses it; values are shared by player lists and event cards, then frozen when the draw is saved.'}</span>{rankingSource === 'rankedin_class' && linkedSeedFallbackCount > 0 && <span className="mt-2 block text-xs font-semibold leading-4 text-amber-200">{linkedSeedFallbackCount} {linkedSeedFallbackCount === 1 ? 'team was' : 'teams were'} not matched to the linked class and will use active profile points.</span>}</label>
-                        <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-gray-300">{['americano','team_americano'].includes(drawFormat)?<p>Americano uses a points leaderboard. Knockout seed protection does not apply.</p>:<><label className="font-bold">Number of seeded teams<select aria-label="Number of seeded teams" disabled={settingsLocked} value={effectiveSeedCount} onChange={e=>{setSeededTeamCount(Number(e.target.value));setDraft(null);}} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white">{seedCountOptions.map(n=><option key={n} value={n}>{n===0?'None · random draw':`${n} seeded teams`}</option>)}</select></label><p className="mt-3 text-xs text-sky-200">{effectiveSeedCount} seeded · {entries.length-effectiveSeedCount} unseeded</p>{savedDraw && savedDraw.scoring_rules?.seeded_team_count == null && <p className="mt-2 text-xs text-amber-200">This saved draw uses the earlier exact-order seeding. Grouped placement applies when you generate a new preview.</p>}{drawFormat==='knockout'?<div className="mt-3 space-y-2 text-xs font-normal leading-5"><p>{effectiveSeedCount>=2?'Seeds 1 and 2: opposite halves; can only meet in the final.':effectiveSeedCount===1?'Seed 1: fixed at the top of the draw.':'All teams are randomly placed.'}</p>{seedBands.map(band=><p key={band}>Seeds {band}: randomly drawn within this protected group.</p>)}{effectiveSeedCount>=4&&<p>Top 4 stay apart until the semifinals.{effectiveSeedCount>=8?' Top 8 stay apart until the quarterfinals.':''}</p>}<p>Unseeded teams are randomly placed in the remaining positions. Ranking order selects the seeded teams; it does not fix their position within a seed group.</p></div>:<p className="mt-3 text-xs font-normal leading-5">Seeded teams are distributed across groups using the group allocation order. Teams within seed groups are shuffled. Knockout round protection applies only to a knockout draw.</p>}</>}</div>
+                        <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-gray-300">{['americano','team_americano'].includes(drawFormat)?<p>Americano uses a points leaderboard. Knockout seed protection does not apply.</p>:<><label className="font-bold">Number of seeded teams<select aria-label="Number of seeded teams" disabled={settingsLocked} value={effectiveSeedCount} onChange={e=>{setSeededTeamCount(Number(e.target.value));setDraft(null);}} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white">{seedCountOptions.map(n=><option key={n} value={n}>{n===0?'None · random draw':`${n} seeded teams`}</option>)}</select></label><p className="mt-3 text-xs text-sky-200">{effectiveSeedCount} seeded · {entries.length-effectiveSeedCount} unseeded</p>{savedDraw && savedDraw.scoring_rules?.seeded_team_count == null && <p className="mt-2 text-xs text-amber-200">This saved draw uses the earlier exact-order seeding. Grouped placement applies when you generate a new preview.</p>}{drawFormat==='knockout'?<div className="mt-3 space-y-2 text-xs font-normal leading-5"><p>{effectiveSeedCount>=2?'Seeds 1 and 2: opposite halves; can only meet in the final.':effectiveSeedCount===1?'Seed 1: fixed at the top of the draw.':'All teams are randomly placed.'}</p>{seedBands.map(band=><p key={band}>Seeds {band}: randomly drawn within this protected group.</p>)}{effectiveSeedCount>=4&&<p>Top 4 stay apart until the semifinals.{effectiveSeedCount>=8?' Top 8 stay apart until the quarterfinals.':''}</p>}<p>Unseeded teams are randomly placed in the remaining positions. Ranking order selects the seeded teams; it does not fix their position within a seed group.</p></div>:<p className="mt-3 text-xs font-normal leading-5">Group seeding takes one team from each full pot. Choose snake or random pots in Draw configuration.</p>}</>}</div>
 </div>;
 
     useEffect(()=>{setWorkflowRevision(n=>n+1);},[savedDraw?.id,savedDraw?.status,savedDraw?.updated_at,draft?.matches,rankingAwards]);
@@ -1531,6 +1630,8 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
             setMatchSearch(''); setMatchRound('all'); setEditingMatchId(null); setRecordingMatchId(null);
             setConfirmReopen(false); setShowPublicControls(false); setShowBulkMatchSetup(false);
             setSeededTeamCount(null); setRestartConfirmed(false); setPlateMode('none'); setPlayoffMode('none');
+            setGroupCount('4'); setAdvancersPerGroup('2'); setQualificationConfig(defaultQualification);
+            setGroupSeeding('snake'); setEditAudit([]); setPreviewAudit([]); setSavedGroups([]); setStandings([]);
             setRankingSource(divisions.find(d => d.id === id)?.seeding_ranking_source || 'active');
         }
         const existing=workflowData.draws.find(d=>d.division_id===id && d.draw_kind==='main');
@@ -1647,8 +1748,16 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                         ].map(([value, title, description]) => <label key={value} className={`cursor-pointer rounded-xl border p-5 ${drawFormat === value ? 'border-padel-green bg-padel-green/5' : 'border-white/15 hover:border-white/40'}`}><span className="flex items-center gap-3"><input type="radio" name="draw-format" value={value} checked={drawFormat === value} disabled={!divisionId || settingsLocked || loadingSaved} onChange={() => { setDrawFormat(value); setShowFormatChoices(false); setDraft(null); }} onClick={() => { if (drawFormat === value) setShowFormatChoices(false); }} className="accent-padel-green" /><strong className="text-white">{title}</strong></span><span className="mt-2 block pl-6 text-sm leading-6 text-gray-400">{description}</span></label>)}</div></fieldset>}
 
 
-                        {drawFormat !== 'knockout' && <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Round robin groups<select disabled={settingsLocked} value={groupCount} onChange={(event) => { const nextCount = event.target.value; const nextSmallestGroup = Math.floor(entries.length / Number(nextCount)); const minimumAdvancers = drawFormat === 'group_knockout' && Number(nextCount) === 1 ? 2 : 1; setGroupCount(nextCount); if (Number(advancersPerGroup) > nextSmallestGroup) setAdvancersPerGroup(String(nextSmallestGroup)); else if (Number(advancersPerGroup) < minimumAdvancers) setAdvancersPerGroup(String(minimumAdvancers)); setDraft(null); }} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50">{groupCountOptions.map((count) => <option key={count} value={count} className="text-black">{count === 1 ? '1 group' : `${count} groups`}</option>)}</select><span className="mt-2 block text-xs font-normal leading-4 text-gray-500">{selectedGroupCount === 1 ? `${entries.length} teams play in one round robin.` : `${entries.length} teams are distributed across ${selectedGroupCount} groups.`}</span></label>}
-                        {drawFormat === 'group_knockout' && <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Advance to elimination<select disabled={settingsLocked || advancerOptions.length === 0} value={advancersPerGroup} onChange={(event) => { setAdvancersPerGroup(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50">{advancerOptions.map((count) => <option key={count} value={count} className="text-black">Top {count} {count === 1 ? 'team' : 'teams'}{selectedGroupCount > 1 ? ' per group' : ''}</option>)}</select><span className="mt-2 block text-xs font-normal leading-4 text-gray-500">{selectedGroupCount === 1 && Number(advancersPerGroup) === 4 && plateMode === 'none' && playoffMode === 'none' ? 'Top 4 advance to semifinals. No back plate or third-place playoff.' : 'The elimination phase unlocks when every round-robin result is complete.'}</span></label>}
+                        {drawFormat !== 'knockout' && <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Round robin groups<select disabled={settingsLocked} value={selectedGroupCount} onChange={event => { setGroupCount(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50">{groupCountOptions.map((count) => <option key={count} value={count} className="text-black">{count === 1 ? '1 group' : `${count} groups`}</option>)}</select><span className="mt-2 block text-xs font-normal leading-4 text-gray-500">{selectedGroupCount === 1 ? `${entries.length} teams play in one round robin.` : `${entries.length} teams are distributed across ${selectedGroupCount} groups.`}</span></label>}
+                        {['group_only', 'group_knockout'].includes(drawFormat) && <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Group seeding
+                            <select disabled={settingsLocked} value={groupSeeding} onChange={event => { setGroupSeeding(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white">
+                                <option value="snake">Snake seeding (default)</option><option value="random_pots">Random draw within pots · fix seeds 1 and 2</option>
+                            </select>
+                            <span className="mt-2 block text-xs font-normal leading-5 text-gray-400">{groupSeeding === 'snake' ? 'One team per pot per group. Full pots alternate direction.' : 'Seeds 1 and 2 stay in the first two groups. Other seeds are drawn within their pots.'} An incomplete final pot goes to the groups with the strongest top seeds.</span>
+                        </label>}
+                        {drawFormat === 'group_knockout' && <GroupQualificationSettings disabled={settingsLocked} mode={qualificationMode}
+                            places={places} extras={extraTeams} options={advancerOptions} size={bracketSize}
+                            rules={crossGroupRules} onChange={changeQualification} />}
 
 
                     </div>
@@ -1656,7 +1765,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
 {drawFormat !== 'group_only' && <fieldset className="rounded-xl border border-white/15 p-4"><legend className="px-2 text-sm font-semibold text-white">Back draws & placements</legend><div className="grid gap-4 md:grid-cols-2">                        {drawFormat !== 'group_only' && <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Back draw<select aria-describedby="back-draw-explanation" disabled={settingsLocked} value={Array.isArray(plateMode) ? 'custom' : plateMode} onChange={(event) => { setPlateMode(event.target.value === 'custom' ? [] : event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50"><option value="none" className="text-black">No plate</option><option value="double" className="text-black">Double plate · Main + Silver</option><option value="triple" className="text-black">Triple plate · Main + Silver + Bronze</option><option value="custom" className="text-black">Choose placement ranges</option><option value="all" className="text-black">Full placement · play for every position</option></select></label>}
                         {drawFormat !== 'group_only' && <label className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm font-bold text-gray-300">Placement playoff<select disabled={settingsLocked} value={playoffMode} onChange={(event) => { setPlayoffMode(event.target.value); setDraft(null); }} className="mt-2 block w-full rounded-lg border border-white/10 bg-[#151515] px-3 py-2.5 text-white outline-none focus-visible:border-padel-green disabled:cursor-not-allowed disabled:opacity-50"><option value="none" className="text-black">No placement playoff</option><option value="top4" className="text-black">Top 4 · 3rd place playoff</option><option value="top8" disabled={eliminationSize < 8} className="text-black">Top 8 · places 3–8 playoffs</option></select></label>}</div><details className="mt-3 text-xs text-gray-400"><summary className="cursor-pointer py-2">How plates and placement playoffs work</summary><span id="back-draw-explanation" aria-live="polite" className="mt-3 block rounded-lg border border-sky-300/25 bg-sky-300/5 p-3 text-sm font-normal leading-6 text-gray-300"><strong className="block font-bold text-sky-200">{backDrawHelp.title}</strong><span className="mt-1 block">{backDrawHelp.description}</span><span className="mt-2 block text-xs leading-5 text-gray-400">{backDrawHelp.example}</span></span><p className="mt-3">{placementPlayoffExplanation(playoffMode)}</p></details>
 </fieldset>}
-                    {Array.isArray(plateMode) && drawFormat !== 'group_only' && <fieldset disabled={settingsLocked} className="rounded-xl border border-sky-300/30 bg-sky-300/5 p-4"><legend className="px-2 font-bold text-sky-200">Back draw · places to play for</legend><p className="mb-3 text-sm text-gray-400">Select the finishing ranges you need. Required feeder matches are included automatically; a round-of-32 opening loss feeds places 17–32.</p><div className="grid gap-3 sm:grid-cols-3">{placementRangeOptions(nextPowerOfTwo(drawFormat==='group_knockout'?Number(groupCount)*Number(advancersPerGroup):entries.length)).map(range=><label key={range} className="text-sm text-white"><input type="checkbox" checked={plateMode.includes(range)} onChange={e=>{setPlateMode(current=>e.target.checked?[...current,range]:current.filter(r=>r!==range));setDraft(null);}} /> Places {range.split('_').slice(1).join('–')}</label>)}</div></fieldset>}
+                    {Array.isArray(plateMode) && drawFormat !== 'group_only' && <fieldset disabled={settingsLocked} className="rounded-xl border border-sky-300/30 bg-sky-300/5 p-4"><legend className="px-2 font-bold text-sky-200">Back draw · places to play for</legend><p className="mb-3 text-sm text-gray-400">Select the finishing ranges you need. Required feeder matches are included automatically; a round-of-32 opening loss feeds places 17–32.</p><div className="grid gap-3 sm:grid-cols-3">{placementRangeOptions(eliminationSize).map(range=><label key={range} className="text-sm text-white"><input type="checkbox" checked={plateMode.includes(range)} onChange={e=>{setPlateMode(current=>e.target.checked?[...current,range]:current.filter(r=>r!==range));setDraft(null);}} /> Places {range.split('_').slice(1).join('–')}</label>)}</div></fieldset>}
                     {divisionId && <div className="flex items-start gap-3 rounded-xl border border-padel-green/20 bg-padel-green/5 p-4 text-sm text-gray-300"><span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-padel-green/10 text-padel-green"><Users size={18} /></span><span><strong className="text-white">{teams.length} teams ready</strong><br /><span className="text-gray-400">Built from {eligibleRegistrations.length} paid, active registration {eligibleRegistrations.length === 1 ? 'row' : 'rows'} in {division?.name}.</span></span></div>}
                     <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-5"><p className="text-sm text-gray-400">Review the draw before saving or publishing.</p>{settingsLocked ? <p className="pb-3 text-sm text-gray-400">To change the format, create a new draft before publishing.</p> : <button type="button" onClick={previewDraft} disabled={!divisionId || loadingSaved || (rankingSource === 'rankedin_class' && rankedInClassSeedingsLoading)} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-padel-green px-4 py-3 font-bold text-black transition-transform hover:brightness-110 active:scale-95 disabled:opacity-40">{loadingSaved || (rankingSource === 'rankedin_class' && rankedInClassSeedingsLoading) ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} />}{savedDraw ? 'Regenerate preview' : 'Generate preview'}</button>}</div>
                 </div>}
@@ -1675,7 +1784,7 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                 </div>}
             </details>}
 
-            {workspace === 'review' && draft && <p className="text-sm text-gray-400">{draft.entries.length} teams · {draft.format === 'knockout' ? `${draft.draw_size} slots · ${draft.total_rounds} rounds` : `${draft.groups?.length || 0} groups`}{playoffMode === 'top8' ? ' · Top 8 playoff' : playoffMode === 'top4' ? ' · Top 4 playoff' : ''}{plateMode === 'triple' ? ' · Triple plate' : plateMode === 'double' ? ' · Double plate' : ''}</p>}
+            {workspace === 'review' && draft && <p className="text-sm text-gray-400">{draft.entries.length} teams · {draft.format === 'knockout' ? `${draft.draw_size} slots · ${draft.total_rounds} rounds` : `${draft.groups?.length || 0} groups`}{draft.format === 'group_knockout' && ` · ${bracketSize.total} advance`}{playoffMode === 'top8' ? ' · Top 8 playoff' : playoffMode === 'top4' ? ' · Top 4 playoff' : ''}{plateMode === 'triple' ? ' · Triple plate' : plateMode === 'double' ? ' · Double plate' : ''}</p>}
             {workspace === 'review' && draft && <div className="sticky top-4 z-30 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/15 bg-[#101010] p-5"><div><p className="text-sm font-semibold text-white">{settingsLocked ? 'Draw confirmed' : draftDirty || !savedDraw ? 'Happy with the matchups?' : 'Draft saved'}</p><p className="mt-1 text-xs text-gray-400">{settingsLocked ? 'Continue to courts and times, or use Results & points to enter scores.' : 'Save your draw to continue. It stays private until you publish in the next stage.'}</p></div><button type="button" onClick={continueToSchedule} disabled={saving} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-padel-green px-5 py-3 text-sm font-bold text-black disabled:opacity-40">{saving ? 'Saving…' : !savedDraw || draftDirty ? 'Save draw & continue →' : savedDraw.status === 'completed' ? 'View results & points →' : 'Continue to schedule →'}</button></div>}
             {workspace === 'review' && draft && <div className="rounded-2xl border border-white/10 bg-[#101010] overflow-hidden">
                 <button type="button" onClick={() => setShowDrawSetup((open) => !open)} className="flex w-full items-center justify-between gap-3 border-b border-white/10 px-5 py-4 text-left hover:bg-white/[0.03]">
@@ -1683,23 +1792,17 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                     {showDrawSetup ? <ChevronUp className="text-padel-green" size={20} /> : <ChevronDown className="text-padel-green" size={20} />}
                 </button>
                 {showDrawSetup && <>
-                {(draft.format || 'knockout') === 'knockout' ? <div id="draw-bracket-preview" className="scroll-mt-64 md:scroll-mt-36"><DrawBracketPreview matchSets={matchSets} matches={draft.matches} onSwapPositions={!settingsLocked && activeDrawKind === 'main' ? swapPreviewPositions : undefined} onMoveMatch={!settingsLocked && activeDrawKind === 'main' ? movePreviewMatch : undefined} swapDisabled={saving || loadingSaved} title={`${activeDrawKind === 'main' ? 'Main draw' : activeDrawKind === 'silver' ? 'Silver plate' : 'Bronze plate'} bracket preview`} /></div> : <div className="grid gap-4 p-5 md:grid-cols-2">
-                    {(draft.groups || []).map((group) => {
-                        const groupRows = standingsForGroup(group.id || group.key);
-                        const hasResults = groupRows.some((row) => row.played > 0);
-                        const advancingCount = draft.format === 'group_knockout' ? Number(advancersPerGroup) : 1;
-                        const fixtureCount = group.fixtures?.length || draft.matches.filter((match) => match.group_id === (group.id || group.key)).length;
-                        return <div key={group.key || group.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
-                            <div className="mb-4 flex items-start justify-between gap-3"><div><p className="font-bold text-padel-green">{group.name}</p><p className="mt-1 text-xs text-gray-500">{hasResults ? (draft.format === 'group_knockout' ? `Top ${advancingCount} currently qualify` : 'Current group leader shown') : 'Results will update the live table'}</p></div>{hasResults && groupRows[0] && <span className="shrink-0 rounded-full border border-padel-green/40 bg-padel-green/10 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-padel-green">Leader: #{groupRows[0].position}</span>}</div>
-                            {groupRows.length > 0 ? <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="border-b border-white/10 text-gray-500"><tr><th className="pb-2">#</th><th className="pb-2">Team</th><th className="pb-2 text-center">P</th><th className="pb-2 text-center">W</th><th className="pb-2 text-center">+/-</th><th className="pb-2 text-right">Pts</th></tr></thead><tbody>{groupRows.map((row) => { const entry = draft.entries.find((item) => item.id === row.entry_id); const isLeader = hasResults && row.position === 1 && !row.requires_manual_resolution; const isQualifying = hasResults && row.position <= advancingCount && !row.requires_manual_resolution; return <tr key={row.entry_id} className={row.requires_manual_resolution ? 'bg-amber-300/5 text-amber-200' : isLeader ? 'bg-padel-green/10 text-white' : isQualifying ? 'bg-padel-green/[0.04] text-gray-100' : 'text-gray-300'}><td className="py-2.5 pl-2 font-black"><span className={`inline-flex min-w-6 justify-center rounded-full px-1.5 py-1 ${isLeader ? 'bg-padel-green text-black' : isQualifying ? 'bg-padel-green/15 text-padel-green' : 'text-gray-400'}`}>{row.position}</span></td><td className="py-2.5 pr-2"><div className="font-medium">{entry?.team_name || 'Team'}</div>{isLeader && <span className="mt-1 inline-block text-[10px] font-black uppercase tracking-wide text-padel-green">Leading group</span>}{isQualifying && !isLeader && <span className="mt-1 inline-block text-[10px] font-bold uppercase tracking-wide text-padel-green/80">Qualifying position</span>}{row.requires_manual_resolution && <span className="mt-1 inline-block text-[10px] font-bold uppercase tracking-wide text-amber-300">Tie to resolve</span>}</td><td className="py-2.5 text-center tabular-nums">{row.played}</td><td className="py-2.5 text-center tabular-nums">{row.won}</td><td className="py-2.5 text-center tabular-nums">{row.games_for - row.games_against}</td><td className="py-2.5 pr-2 text-right font-bold tabular-nums">{row.standings_points}</td></tr>; })}</tbody></table></div> : <div className="space-y-2 text-sm text-gray-200">{group.entries.map((entry) => <p key={entry.source_registration_id || entry.id}>#{entry.seed_number} · {entry.team_name}</p>)}</div>}
-                            <p className="mt-4 text-xs text-gray-500">{fixtureCount} round-robin fixtures generated</p>
-                        </div>;
-                    })}
-                </div>}
+                {(draft.format || 'knockout') === 'knockout' ? <div id="draw-bracket-preview" className="scroll-mt-64 md:scroll-mt-36"><DrawBracketPreview matchSets={matchSets} matches={draft.matches} onSwapPositions={!settingsLocked && activeDrawKind === 'main' ? swapPreviewPositions : undefined} onMoveMatch={!settingsLocked && activeDrawKind === 'main' ? movePreviewMatch : undefined} swapDisabled={saving || loadingSaved} title={`${activeDrawKind === 'main' ? 'Main draw' : activeDrawKind === 'silver' ? 'Silver plate' : 'Bronze plate'} bracket preview`} /></div> : <DrawGroupPreview key={`${divisionId}:${savedDraw?.generated_at || 'preview'}`} draft={draft} standings={standings}
+                    mode={qualificationMode} places={places} minimumSize={minimumGroupSize} clubsByPlayer={clubsByPlayer}
+                    editable={activeDrawKind === 'main' && (!savedDraw || ['draft', 'published', 'in_progress'].includes(savedDraw.status)) && !mainKnockoutMatches.length}
+                    busy={saving || loadingSaved} audit={groupAudit} lastEdit={lastGroupEdit} onEdit={applyGroupEdit} onUndo={undoGroupEdit} />}
+                {draft.format === 'group_knockout' && mainKnockoutMatches.length > 0 && <DrawBracketPreview
+                    title="Elimination bracket" matchSets={matchSets} matches={elimPreviewMatches} />}
                 </>}
             </div>}
 
             {workspace === 'run' && (!savedDraw || savedDraw.status === 'draft') && savedDraw?.format !== 'americano' && <section className="rounded-xl border border-white/15 p-5"><p className="text-sm text-gray-300">Publish your draw in Schedule & publish before entering results.</p><button type="button" onClick={()=>setWorkspace(savedDraw && !draftDirty ? 'schedule' : 'review')} className="mt-4 rounded-lg bg-padel-green px-5 py-3 text-sm font-bold text-black">{savedDraw && !draftDirty ? 'Continue to schedule & publish →' : 'Review and save draw →'}</button></section>}
+            {workspace === 'run' && savedDraw?.status === 'completed' && savedQualification && <GroupQualificationReview saved={savedQualification} />}
             {workspace === 'schedule' && savedDraw?.status === 'completed' && <section className="rounded-xl border border-white/15 p-5"><h3 className="font-semibold text-white">This division has finished</h3><p className="mt-2 text-sm text-gray-400">{currentProgress?.scheduled} of {currentProgress?.playable} played matches have court times recorded. Results and final points are in the next stage.</p><button type="button" onClick={()=>setWorkspace('run')} className="mt-4 rounded-lg bg-padel-green px-5 py-3 text-sm font-bold text-black">View results & points →</button></section>}
             {((workspace === 'schedule' && ['draft', 'published', 'in_progress'].includes(savedDraw?.status) && !draftDirty) || (workspace === 'run' && ['published', 'in_progress'].includes(savedDraw?.status))) && draft && <div className="rounded-2xl border border-white/10 bg-[#101010] p-5">
                 {workspace === 'schedule' && <>
@@ -1750,7 +1853,10 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
                 <div className="mb-4"><p className="font-bold text-white">Record results</p><p className="text-xs text-gray-400">Enter game scores or set totals. The winner is selected automatically; live scores do not advance the bracket.</p></div>
                 {activeDrawKind === 'main' && hasKnockoutStage && !draft.matches.some(m => m.round_code?.startsWith('places_')) && <div className="mb-5 rounded-xl border border-amber-300/30 bg-amber-300/5 p-4"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><p className="font-bold text-white">Silver plate</p><p className="mt-1 text-xs text-gray-400">{!['double', 'triple'].includes(plateMode) ? 'This existing draw was published without a back draw. Enable a Silver plate to create one from its opening-round losers.' : silverPlate ? `The Silver plate is published${plateMode === 'triple' ? '; its opening-round losers can progress into Bronze.' : ''}` : silverPlateReady ? 'All opening-round main-draw matches are complete. Create the Silver plate from their losing teams.' : 'Complete every opening-round main-draw match to unlock the Silver plate.'}</p></div>{!['double', 'triple'].includes(plateMode) ? <button type="button" onClick={enableSilverPlate} disabled={saving} className="shrink-0 rounded-lg border border-amber-300/40 px-3 py-2 text-sm font-bold text-amber-200 hover:bg-amber-300/10 disabled:opacity-50">Enable Silver plate</button> : silverPlate ? <a href={`/native-draws/${event.slug}`} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center justify-center rounded-lg border border-amber-300/40 px-3 py-2 text-sm font-bold text-amber-200 hover:bg-amber-300/10">View Silver plate</a> : silverPlateReady && <button type="button" onClick={createSilverPlate} disabled={saving} className="shrink-0 rounded-lg bg-amber-300 px-3 py-2 text-sm font-bold text-black disabled:opacity-50">Create Silver plate</button>}</div></div>}
                 {activeDrawKind === 'silver' && draft.format === 'knockout' && plateMode === 'triple' && <div className="mb-5 rounded-xl border border-orange-400/30 bg-orange-400/5 p-4"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><p className="font-bold text-white">Bronze plate</p><p className="mt-1 text-xs text-gray-400">{bronzePlate ? 'The Bronze plate is published and can now be managed separately.' : silverPlateReady ? 'All opening-round Silver plate matches are complete. Create the Bronze plate from their losing teams.' : 'Complete every opening-round Silver plate match to unlock the Bronze plate.'}</p></div>{bronzePlate ? <a href={`/native-draws/${event.slug}`} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center justify-center rounded-lg border border-orange-400/40 px-3 py-2 text-sm font-bold text-orange-200 hover:bg-orange-400/10">View Bronze plate</a> : silverPlateReady && <button type="button" onClick={createBronzePlate} disabled={saving} className="shrink-0 rounded-lg bg-orange-400 px-3 py-2 text-sm font-bold text-black disabled:opacity-50">Create Bronze plate</button>}</div></div>}
-                {draft.format === 'group_knockout' && !draft.matches.some((match) => match.stage === 'knockout') && <div className="mb-5 rounded-xl border border-padel-green/30 bg-padel-green/5 p-4"><p className="font-bold text-white">Elimination phase</p><p className="mt-1 text-xs text-gray-400">{groupStageComplete ? `All group matches are complete. The top ${advancersPerGroup} from each group will advance.` : 'Complete every group match before creating the elimination phase.'}</p>{groupStageComplete && <button type="button" onClick={createKnockoutFromGroups} disabled={saving} className="mt-3 rounded-lg bg-padel-green px-3 py-2 text-sm font-bold text-black disabled:opacity-50">Create elimination phase</button>}</div>}
+                {draft.format === 'group_knockout' && (savedQualification || !mainKnockoutMatches.length) && <GroupQualificationReview
+                    key={`${savedDraw.id}:${groupMatches.map(match => match.updated_at).join(',')}`}
+                    ready={groupStageComplete} mode={qualificationMode} places={places} extras={extraTeams}
+                    qualification={qualification} saved={savedQualification} saving={saving || loadingSaved} onCreate={createKnockoutFromGroups} />}
                 <div className="mb-5 grid gap-4 sm:grid-cols-2"><label className="text-sm text-gray-300">Find a pair<input value={matchSearch} onChange={e => setMatchSearch(e.target.value)} placeholder="Search player or pair…" className="mt-2 w-full rounded-lg border border-white/15 bg-black/20 p-3 text-white" /></label><label className="text-sm text-gray-300">Round<select value={matchRound} onChange={e => setMatchRound(e.target.value)} className="mt-2 w-full rounded-lg border border-white/15 bg-[#151515] p-3 text-white"><option value="all">All rounds</option>{[...new Set(draft.matches.map(m => m.round_label))].map(label => <option key={label}>{label}</option>)}</select></label></div>
                 <div className="space-y-3">
                     {draft.matches.filter((match) => (matchRound === 'all' || match.round_label === matchRound) && `${match.entry_one?.team_name} ${match.entry_two?.team_name}`.toLowerCase().includes(matchSearch.toLowerCase()) && ['pending', 'scheduled', 'in_progress'].includes(match.status) && match.entry_one && match.entry_two).map((match) => (

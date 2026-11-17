@@ -16,7 +16,7 @@ group('club_google_matches', [], ['select', 'update']);
 group('player_schedule_events pro_player_follows local_player_follows club_favourites', [], ['delete', 'insert', 'select']);
 group('commerce_config', ['select'], ['insert', 'select', 'update']);
 group('ranking_tiers ranking_points_table', ['select'], ['select']);
-group('player_ranking_points draw_match_audit', [], ['insert', 'select']);
+group('player_ranking_points draw_match_audit native_draw_edit_audit', [], ['insert', 'select']);
 group('event_play_days', [], CRUD);
 group('license_seasons', ['select'], ['select']);
 group('player_fip_links', ['select'], ['delete', 'insert', 'select']);

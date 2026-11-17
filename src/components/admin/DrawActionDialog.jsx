@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 // Native modal dialogs also appear above the Players & seeds side drawer.
-export default function DrawActionDialog({ open, title, onClose, children, footer, alert = false, wide = false }) {
+export default function DrawActionDialog({ open, title, onClose, children, footer, alert = false, wide = false, initialFocusRef }) {
     const ref = useRef(null);
     const titleId = useId();
     useEffect(() => {
@@ -13,12 +13,13 @@ export default function DrawActionDialog({ open, title, onClose, children, foote
         const overflow = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
         dialog.showModal();
+        initialFocusRef?.current?.focus();
         return () => {
             dialog.close();
             document.body.style.overflow = overflow;
             if (previous?.isConnected) previous.focus();
         };
-    }, [open]);
+    }, [open, initialFocusRef]);
 
     return createPortal(
         <dialog ref={ref} role={alert ? 'alertdialog' : undefined} aria-labelledby={titleId} aria-describedby={alert ? `${titleId}-content` : undefined}
