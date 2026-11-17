@@ -86,7 +86,7 @@ export default function LicensePaymentModal({
       setSeasons(s.data || []);
       setYear(previous => s.data?.some(season => season.year === previous) ? previous : s.data?.[0]?.year || defaultLicenseYear());
       setEvents(e.filter(row => row.allow_temporary_license !== false));
-      setType(initialType);
+      setType('full');
       setEventId(initialEventId || '');
       const stored = localStorage.getItem(k);
       if (stored) {
@@ -104,7 +104,7 @@ export default function LicensePaymentModal({
     };
   }, [isOpen, initialEventId, initialType]);
   useEffect(() => {
-    if (!isOpen || type === 'temporary' && !eventId) {
+    if (!isOpen || attempt?.type === 'temporary') {
       setQuote(null);
       return;
     }
@@ -152,6 +152,7 @@ export default function LicensePaymentModal({
     setBusy(true);
     setError('');
     try {
+      if (attempt?.type === 'temporary') throw new Error('Temporary licenses are purchased during event registration. You can check an earlier payment below.');
       const current = attempt || {
         id: crypto.randomUUID(),
         type,
@@ -194,14 +195,11 @@ export default function LicensePaymentModal({
   const renew = quote?.isRenewal === true;
   return <div className="fixed inset-0 z-[1100] bg-black/80 flex items-center justify-center p-4" onClick={onClose}><section ref={dialog} role="dialog" aria-modal="true" aria-labelledby="license-checkout-title" className="relative max-w-md w-full max-h-[90vh] overflow-auto rounded-2xl bg-neutral-950 border border-white/15 p-6 text-white" onClick={e => e.stopPropagation()}>
         <button type="button" aria-label="Close license checkout" className="absolute top-4 right-4 p-2" onClick={onClose}><X size={20} /></button><h2 id="license-checkout-title" className="text-xl font-bold pr-8">{quote?.forAnotherPlayer ? `License for ${quote.beneficiaryName}` : 'Your license'}</h2>
-        <p className="text-sm text-gray-400 mt-2">Choose annual coverage or a temporary license for one event.</p>
+        <p className="text-sm text-gray-400 mt-2">Purchase annual coverage here. Temporary licenses are only available during registration for an event that requires one.</p>
         {error && <p role="alert" className="text-red-300 mt-4">{error}</p>}
         {profileIssue && <div className="mt-3 text-sm"><p className="text-gray-300">Missing: {profileIssue.fields.join(', ') || 'player profile details'}.</p><a href={profileIssue.url} onClick={e => { if (onEditProfile && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) { e.preventDefault(); onEditProfile(); } }} className="mt-3 inline-flex min-h-11 items-center text-padel-green underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-padel-green">Edit profile</a></div>}
         {quote?.licenseNumber && <p className="mt-4 text-xs text-gray-400">4M license number <span className="ml-2 font-mono text-white">{quote.licenseNumber}</span></p>}
-        <label className="block mt-5 text-sm">License type<select disabled={!!attempt || busy} value={type} onChange={e => {
-          setError('');
-          setType(e.target.value);
-        }} className="block w-full mt-2 p-3 rounded-lg bg-neutral-900 border border-white/20"><option value="full">Full annual license</option><option value="temporary">Temporary event license</option></select></label>
+        {attempt?.type === 'temporary' && <p className="mt-4 text-sm text-amber-300">An earlier temporary-license payment can still be checked. Start a new temporary-license purchase from event registration.</p>}
         {type === 'full' ? <label className="block mt-4 text-sm">License year<select disabled={!!attempt || busy} value={year} onChange={e => setYear(Number(e.target.value))} className="block w-full mt-2 p-3 rounded-lg bg-neutral-900 border border-white/20">{seasons.map(s => <option key={s.year} value={s.year}>{s.year}{s.sales_open ? '' : ' · Sales closed'}</option>)}</select></label> : <label className="block mt-4 text-sm">Event<select disabled={!!attempt || busy} value={eventId} onChange={e => setEventId(e.target.value)} className="block w-full mt-2 p-3 rounded-lg bg-neutral-900 border border-white/20"><option value="">Select an event</option>{events.map(e => <option key={e.id} value={e.id}>{e.event_name}</option>)}</select></label>}
         {quote && <div className="mt-5 border-y border-white/10 py-4 space-y-2"><p className="flex justify-between"><span>{type === 'full' ? renew ? 'Full license renewal' : 'New Full license' : 'Temporary license'}</span><span>{formatCurrency(quote.base)}</span></p>{quote.fee > 0 && <p className="flex justify-between"><span>{quote.feeLabel}</span><span>{formatCurrency(quote.fee)}</span></p>}<p className="flex justify-between font-bold"><span>Total</span><span>{formatCurrency(quote.total)}</span></p>{type === 'full' && quote.startsOn && <p className="text-sm text-gray-400">Valid {licenseDate(quote.startsOn)} – {licenseDate(quote.endsOn)}</p>}{quote.active && <p className="text-padel-green text-sm">{quote.coveredByFull ? 'The Full license already covers this event.' : quote.forAnotherPlayer ? 'This player already holds this license. Contact support if it has been revoked.' : 'You already hold this license. Contact support if it has been revoked.'}</p>}{!quote.enabled && !quote.active && <p className="text-amber-300 text-sm">Sales are closed for this license.</p>}</div>}
         {attempt?.reference && <button type="button" disabled={busy} onClick={verify} className="w-full mt-4 p-3 rounded-xl border border-white/20">Check payment status</button>}
@@ -209,6 +207,7 @@ export default function LicensePaymentModal({
         {attempt && <button type="button" disabled={busy} onClick={() => {
         localStorage.removeItem(key);
         setAttempt(null);
+        setType('full');
         setError('');
       }} className="w-full mt-3 text-xs text-gray-400 underline">Start a different checkout (check any payment already made first)</button>}
         <p className="text-xs text-gray-400 mt-4">Pay securely with Paystack. Your license is issued after payment is verified.</p>

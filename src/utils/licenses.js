@@ -8,6 +8,9 @@ export async function licenseRpc(name, args = {}) {
   return data;
 }
 export async function licenseCheckout(body) {
+  if (body.action !== 'verify' && body.licenseType === 'temporary') {
+    throw Object.assign(new Error('Temporary licenses are only available during registration for an event that requires one.'), { code: 'EVENT_CHECKOUT_REQUIRED' });
+  }
   const {
     data,
     error

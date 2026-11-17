@@ -56,6 +56,10 @@ Deno.serve(async req => {
     }, 401);
     const input = await req.json();
     if (!['quote', 'checkout', 'verify'].includes(input.action)) throw new Error('Choose a valid licence action.');
+    if (input.action !== 'verify' && input.licenseType === 'temporary') return json({
+      error: 'Temporary licences are only available during registration for an event that requires one.',
+      code: 'EVENT_CHECKOUT_REQUIRED',
+    }, 400);
     const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     let profile = await checked(admin.from('players').select('id,name,email,contact_number').ilike('email', user.email.replace(/[\\%_]/g, '\\$&')).maybeSingle());
     const purchaserId = profile?.id;
@@ -116,6 +120,7 @@ Deno.serve(async req => {
           license_type: saved.license_type,
           license_year: saved.license_year,
           client_reference: saved.reference,
+          verified_paid_at: payment.paid_at || null,
           paystack_ref: String(payment.id),
           event_id: saved.event_id
         }

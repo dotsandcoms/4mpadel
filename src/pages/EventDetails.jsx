@@ -3674,7 +3674,7 @@ const EventDetails = () => {
                     <div className="min-w-0">
                         <p className={`text-[10px] font-bold uppercase tracking-widest ${manualHasPending ? 'text-amber-700' : 'text-emerald-700'
                             }`}>
-                            You are registered for{manualEntries.length > 1 ? ` (${manualEntries.length} divisions)` : ''}
+                            {manualHasPending ? 'Awaiting payment' : 'Your registration is confirmed'}{manualEntries.length > 1 ? ` (${manualEntries.length} divisions)` : ''}
                         </p>
                         {partnerAddedEntries.length > 0 && (
                             <p className={`text-xs leading-relaxed mt-1 ${manualHasPending ? 'text-amber-900/90' : 'text-emerald-900/90'

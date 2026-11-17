@@ -2277,6 +2277,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 }
             }
 
+            if (payload?.needsReview) throw Object.assign(new Error(payload.message || 'Payment received after checkout closed. Contact support before paying again.'), { code: 'PAYMENT_REVIEW' });
             if (payload?.processed || payload?.alreadyProcessed) return payload;
 
             if (payload?.retry || payload?.error === 'Payment not verified') {
@@ -2284,7 +2285,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     await new Promise((r) => setTimeout(r, 2500));
                     continue;
                 }
-                throw new Error(payload?.message || 'Payment confirmation timed out. Refresh the page — your payment may still be processing.');
+                throw Object.assign(new Error('Awaiting payment. Your registration is not confirmed.'), { code: 'PAYMENT_NOT_CONFIRMED' });
             }
 
             if (payload?.error) throw new Error(payload.message || payload.error);
@@ -2571,6 +2572,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     };
 
     const sendRegistrationEmails = async (savedRows, paid) => {
+        if (!paid) return; // Starting checkout is not a confirmed registration.
         const selfName = profile?.name || 'Player';
         const divisionNames = selectedDivisions.map((d) => d.name).join(', ');
         sendEmail(userEmail, 'event_registration', {
@@ -2649,11 +2651,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         try {
             const data = await confirmManualPayment(paidRef);
             if (!data?.processed && !data?.alreadyProcessed) {
-                toast.success('Payment received — confirming your registration...');
+                throw new Error('Awaiting payment. Your registration is not confirmed.');
             }
         } catch (confirmErr) {
             console.error('Payment confirmation error:', confirmErr);
             toast.error(confirmErr.message || 'Payment received but confirmation failed. Try refreshing or contact support.');
+            setProcessing(false);
+            return;
         }
         // Show the amount actually charged, not the client-side `total` captured
         // when the checkout was preloaded — that value can drift if the cart/fees
@@ -2689,6 +2693,16 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         snapshotSelectedWeeksForSchedule,
     ]);
 
+    const cancelUnpaidCheckout = useCallback(async (reference) => {
+        const { data, error } = await supabase.rpc('cancel_event_checkout', { p_reference: reference });
+        if (error) { setProcessing(false); toast.error('Could not cancel checkout. Please check payment status before trying again.'); return; }
+        if (data?.paymentReceived) { await handlePaymentSuccess(reference); return; }
+        checkoutPrepRef.current = null;
+        setProcessing(false); setSelected({}); setWizardStep(1);
+        toast.info('You are not registered. No payment was completed. Start registration again.');
+        await loadMyRegs(); await loadDivisionRegs();
+    }, [handlePaymentSuccess, loadMyRegs, loadDivisionRegs]);
+
     const launchPaystackCheckout = useCallback(async (reference, amount, paymentMetadata) => {
         if (!isPaystackConfigured()) {
             toast.error('Payments not configured');
@@ -2713,14 +2727,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 const paidRef = resolvePaystackReference(response, reference);
                 await handlePaymentSuccess(paidRef, amount);
             },
-            onCancel: () => {
-                setProcessing(false);
-                toast.info('Payment cancelled. Any reserved entry remains unpaid. You can retry payment or withdraw it.');
-                loadMyRegs();
-                loadDivisionRegs();
-            },
+            onCancel: () => { void cancelUnpaidCheckout(reference); },
         });
-    }, [userEmail, event.id, event.event_name, profile?.name, displayProfile?.name, handlePaymentSuccess, loadMyRegs, loadDivisionRegs]);
+    }, [userEmail, event.id, event.event_name, profile?.name, displayProfile?.name, handlePaymentSuccess, cancelUnpaidCheckout]);
 
     const expireAbandonedCheckouts = useCallback(async () => {
         const cutoff = new Date(Date.now() - ABANDONED_CHECKOUT_AFTER_MS).toISOString();
@@ -2800,12 +2809,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         const paidRef = resolvePaystackReference(response, payload.reference);
                         await handlePaymentSuccess(paidRef, payload.amount);
                     },
-                    onCancel: () => {
-                        setProcessing(false);
-                        toast.info('Payment cancelled. Any reserved entry remains unpaid. You can retry payment or withdraw it.');
-                        loadMyRegs();
-                        loadDivisionRegs();
-                    },
+                    onCancel: () => { void cancelUnpaidCheckout(payload.reference); },
                 });
                 if (!cancelled) {
                     checkoutPrepRef.current = { ...payload, launcher };
@@ -2839,6 +2843,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         loadDivisionRegs,
         allowWeeklyReserve,
         weeklyCheckoutIntent,
+        cancelUnpaidCheckout,
     ]);
 
     const resumePaymentByReference = useCallback(async (reference) => {
@@ -2873,15 +2878,17 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
         setProcessing(true);
         try {
-            await reserveDivisionPlaces(supabase, meta.registration_rows || [], meta.solo_link_updates || []);
-            toast.info('Complete your payment to confirm registration');
-            await launchPaystackCheckout(reference, Number(payment.amount));
+            // A return link can confirm an existing payment, but must never
+            // resurrect an expired or cancelled cart and charge it again.
+            await confirmManualPayment(reference, 1);
+            await handlePaymentSuccess(reference, Number(payment.amount));
         } catch (err) {
-            toast.error(err.message || 'Unable to reserve your place.');
+            if (err.code === 'PAYMENT_NOT_CONFIRMED') await cancelUnpaidCheckout(reference);
+            else toast.error(err.message || 'Could not check your payment.');
         } finally {
             setProcessing(false);
         }
-    }, [userEmail, event.id, launchPaystackCheckout]);
+    }, [userEmail, event.id, handlePaymentSuccess, cancelUnpaidCheckout]);
 
     const pendingPayRefRef = useRef(null);
 
@@ -5253,8 +5260,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         <h2 className="text-sm font-semibold text-slate-900 tracking-normal">
                             {hasAnyRegistration
                                 ? registrationEntries.length > 1
-                                    ? `You are Registered for this Event (${registrationEntries.length} ${isWeeklyEvent ? 'entries' : 'divisions'})`
-                                    : 'You are Registered for this Event'
+                                    ? `${allRegistrationsPaid ? 'Your registration is confirmed' : 'Awaiting payment'} (${registrationEntries.length} ${isWeeklyEvent ? 'entries' : 'divisions'})`
+                                    : (allRegistrationsPaid ? 'Your registration is confirmed' : 'Awaiting payment')
                                 : hasPendingPayment
                                     ? 'Complete Your Registration'
                                     : isWeeklyEvent

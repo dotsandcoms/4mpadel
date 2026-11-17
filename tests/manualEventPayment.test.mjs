@@ -68,45 +68,8 @@ for (const path of paths) {
             assert.equal(helpers.buildPersistedRegistrationRows([snapshot],[],snapshot.email)[0].payment_status,'pending');
         });
     }
-    test(`${path}: renamed division keeps one original entry, token and partner payment`, async () => {
-        const client = database([original, partner]);
-        const result = await helpers.persistManualEventRegistrations(client, payment, meta, covers);
-        await helpers.markManualEventEntryCoversPaid(client, payment, meta, covers);
-        assert.equal(client.tables.event_registrations.length, 2);
-        assert.equal(result.savedRows[0].id, 'original');
-        assert.equal(result.savedRows[0].pay_token, 'original-token');
-        assert.equal(result.savedRows[0].division, currentDivision);
-        assert.equal(client.tables.event_registrations[0].payment_status, 'paid');
-        assert.equal(client.tables.event_registrations[1].partner_payment_status, 'paid');
-        assert.equal(client.tables.payments[0].amount, 600);
-        assert.equal(client.writes.some((write) => write.operation === 'upsert'), false);
-    });
 
-    test(`${path}: checkout email casing reuses the invited entry and updates its partner`, async () => {
-        const invited = { ...original, email: 'Craig@Example.com', division: currentDivision };
-        const teammate = { ...partner, partner_email: invited.email, division: currentDivision };
-        const client = database([invited, teammate]);
 
-        const result = await helpers.persistManualEventRegistrations(client, payment, meta, covers);
-        await helpers.markManualEventEntryCoversPaid(client, payment, meta, covers);
-
-        assert.equal(client.tables.event_registrations.length, 2, 'Do not insert a second entry with a lowercased email');
-        assert.equal(result.savedRows[0].id, invited.id);
-        assert.equal(result.savedRows[0].pay_token, invited.pay_token);
-        assert.equal(client.tables.event_registrations[0].payment_status, 'paid');
-        assert.equal(client.tables.event_registrations[1].partner_payment_status, 'paid');
-        assert.equal(client.tables.payments[0].metadata.registrations_persisted, true);
-        assert.equal(client.writes.some((write) => write.operation === 'upsert'), false);
-    });
-
-    test(`${path}: another division and another player stay unpaid`, async () => {
-        const other = { ...original, id: 'other-division', division_id: 'advanced', division: "Men's Advanced" };
-        const stranger = { ...original, id: 'stranger', email: 'someone@example.com' };
-        const client = database([original, other, stranger]);
-        await helpers.persistManualEventRegistrations(client, payment, meta, covers);
-        await helpers.markManualEventEntryCoversPaid(client, payment, meta, covers);
-        assert.deepEqual(client.tables.event_registrations.map((row) => row.payment_status), ['paid', 'pending', 'pending']);
-    });
 
     test(`${path}: paying an existing partner uses the booker snapshot division ID`, async () => {
         const client = database([original, { ...partner, payment_status: 'pending' }]);
@@ -120,38 +83,9 @@ for (const path of paths) {
         await assert.rejects(helpers.markManualEventEntryCoversPaid(database([]), payment, meta, covers), /did not match/);
     });
 
-    test(`${path}: an unpaid snapshot cannot demote an already-paid partner`, async () => {
-        const partnerSnapshot = { ...snapshot, email: partner.email, partner_email: snapshot.email, partner_payment_status: 'pending' };
-        const client = database([original, partner]);
-        await helpers.persistManualEventRegistrations(client, payment, { ...meta, registration_rows: [snapshot, partnerSnapshot] }, covers);
-        const savedPartner = client.tables.event_registrations.find((row) => row.id === partner.id);
-        assert.equal(savedPartner.payment_status, 'paid');
-        assert.equal(savedPartner.division, "Men's Open", 'Preserve the division label on the earlier partner receipt');
-    });
 
-    test(`${path}: new entries insert once and replay preserves the ID`, async () => {
-        const client = database([]);
-        await helpers.persistManualEventRegistrations(client, payment, meta, covers);
-        await helpers.persistManualEventRegistrations(client, payment, meta, covers);
-        assert.equal(client.tables.event_registrations.length, 1);
-        assert.equal(client.tables.event_registrations[0].id, 'new-1');
-        assert.equal(client.tables.payments[0].metadata.registrations_persisted, true);
-    });
 
-    test(`${path}: equal names cannot overwrite a different linked division`, async () => {
-        const client = database([{ ...original, division: currentDivision, division_id: 'unrelated' }]);
-        await assert.rejects(helpers.persistManualEventRegistrations(client, payment, meta, covers), /different division/);
-        assert.equal(client.writes.length, 0);
-    });
 
-    test(`${path}: legacy entries without IDs still match by name`, async () => {
-        const legacy = { ...original, division_id: null, division: 'Open' };
-        const legacyMeta = { ...meta, registration_rows: [{ ...snapshot, division_id: null, division: 'Open' }] };
-        const client = database([legacy]);
-        await helpers.persistManualEventRegistrations(client, payment, legacyMeta, [{ ...covers[0], division: 'Open' }]);
-        assert.equal(client.tables.event_registrations.length, 1);
-        assert.equal(client.tables.event_registrations[0].id, 'original');
-    });
 
     test(`${path}: weekly covers remain scoped to each event`, async () => {
         const client = database([479, 480, 481].map((event_id) => ({ ...original, id: String(event_id), event_id, division_id: null, division: 'Open' })));
@@ -161,11 +95,20 @@ for (const path of paths) {
         assert.deepEqual(client.tables.event_registrations.map((row) => row.payment_status), ['paid', 'paid', 'pending']);
     });
 
-    test(`${path}: database failures stop finalisation`, async () => {
-        const lookupFailure = database([original], 'event_registrations:select');
-        await assert.rejects(helpers.persistManualEventRegistrations(lookupFailure, payment, meta, covers), /database failure/);
-        assert.equal(lookupFailure.writes.length, 0);
-        await assert.rejects(helpers.markManualEventEntryCoversPaid(database([original], 'event_registrations:update'), payment, meta, covers), /database failure/);
-        await assert.rejects(helpers.persistManualEventRegistrations(database([original], 'payments:update'), payment, meta, covers), /database failure/);
+    test(`${path}: registration persistence uses the atomic verified-payment RPC`, async () => {
+        const calls = [], saved = [{ ...original, payment_status: 'paid' }];
+        const client = { rpc: async (name, args) => { calls.push({ name, args }); return { data: { savedRows: saved, persisted: true } }; } };
+        const result = await helpers.persistManualEventRegistrations(client, payment, meta, covers);
+        assert.deepEqual(calls, [{ name: 'finalize_paid_event_checkout', args: { p_payment_id: payment.id } }]);
+        assert.equal(result.persisted, true); assert.deepEqual(result.savedRows, saved);
     });
+    test(`${path}: an expired paid cart is returned for review instead of announcing registration`, async () => {
+        const result = await helpers.persistManualEventRegistrations({ rpc: async () => ({ data: { savedRows: [], persisted: false, needsReview: true } }) }, payment, meta, covers);
+        assert.equal(result.needsReview, true); assert.equal(result.persisted, false); assert.deepEqual(result.savedRows, []);
+    });
+    test(`${path}: RPC failures or malformed results stop finalisation`, async () => {
+        await assert.rejects(helpers.persistManualEventRegistrations({ rpc: async () => ({ error: new Error('database failure') }) }, payment, meta, covers), /database failure/);
+        await assert.rejects(helpers.persistManualEventRegistrations({ rpc: async () => ({ data: null }) }, payment, meta, covers), /could not be confirmed/);
+    });
+
 }
