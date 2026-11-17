@@ -173,7 +173,7 @@ function EventContent() {
         <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 40 }}>
           <ContextualTip chapter="event" mode="tip" label="Show me around this event" style={{ marginBottom: 12 }} />
           <TourTarget id="event.summary">
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: posterUrl ? 'flex-start' : 'center', gap: 12 }}>
               {!!posterUrl && <Pressable accessibilityRole="button" accessibilityLabel="View event poster" onPress={() => setPosterOpen(true)} style={{ width: '36%', maxWidth: 132, aspectRatio: 0.89, borderRadius: 10, overflow: 'hidden' }}>
                 <Image source={{ uri: posterUrl }} contentFit="contain" style={{ width: '100%', height: '100%' }} />
               </Pressable>}
