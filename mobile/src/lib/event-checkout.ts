@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 
 export type CheckoutInput = {
-  mode?: 'pay';
+  mode?: 'pay'; paymentIntent?: 'pay' | 'reserve';
   selections?: ({ divisionId: string; partnerEmail?: string; payForSelf?: boolean; payForPartner?: boolean; licenseChoice?: 'temporary' | 'full'; tshirtSize?: string; tshirtLogoUrl?: string; tshirtSponsorName?: string })[];
   tshirtLogoUrl?: string; tshirtSponsorName?: string; partnerTshirtLogoUrl?: string; partnerTshirtSponsorName?: string;
   licenseChoice?: 'temporary' | 'full';
@@ -9,6 +9,7 @@ export type CheckoutInput = {
   tshirtSize: string; partnerTshirtSize: string; accessGrantId: string | null; isTest: boolean;
 };
 export type Quote = {
+  allowPayLater?: boolean; paymentIntent?: 'pay' | 'reserve';
   mode?: 'pay' | 'register'; entries?: { id: string; divisionId?: string; canCustomizePartner?: boolean; partnerEmail?: string; tshirtLogoUrl?: string; tshirtSponsorName?: string; partnerTshirtLogoUrl?: string; partnerTshirtSponsorName?: string; division: string; playerName: string; partnerName: string | null; paymentStatus: string; partnerPaymentStatus: string | null; payForSelf?: boolean; payForPartner?: boolean; amount?: number; playerCount?: number; unitFee?: number }[];
   licenseTotal?: number; licenseItems?: { label: string; amount: number }[];
   total: number; base: number; fee: number; feeLabel: string; lineItems: { label: string; amount: number }[];

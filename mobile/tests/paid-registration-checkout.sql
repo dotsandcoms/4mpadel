@@ -15,6 +15,7 @@ create function private.event_license_quote_matches(p_id uuid,p_amount numeric,p
  select exists(select 1 from private.event_license_quotes where payment_id=p_id and amount=p_amount and license_covers=(select coalesce(jsonb_agg(value),'[]') from jsonb_array_elements(coalesce(p_meta->'covers','[]')) where value->>'type'='license'))
 $$;
 \ir ../../supabase/migrations/20261019050830_division_team_capacity.sql
+\ir ../../supabase/migrations/20261019050836_registration_deadline_payment_access.sql
 alter table public.calendar drop column allow_payments_after_close;
 \ir ../../supabase/migrations/20261019054258_event_late_payment_setting.sql
 -- Existing abandoned online entry is withdrawn without changing paid/EFT rows.
@@ -160,4 +161,62 @@ select pg_temp.expect((select count(*)=1 and bool_and(email='actor1@example.test
 reset role;
 select set_config('request.jwt.claims','{}',false);
 select pg_temp.expect((select state='released' from private.event_checkout_holds where event_id=205 and email='actor3@example.test'),'unpaid partner does not retain a checkout hold');
+-- Simulate a retried checkout that archived an old unpaid row.
+update public.event_registrations set division='__archived__/'||id::text,division_id=null where event_id=203 and email='actor1@example.test';
+-- Prospective-only policy recovery: retain historical unpaid entries and staff access.
+\ir ../../supabase/migrations/20261117105019_restore_existing_unpaid_entries_and_admin_access.sql
+select pg_temp.expect((select status='registered' and payment_status='pending' and withdrawn_at is null from public.event_registrations where event_id=203 and email='actor1@example.test'),'previous unpaid registration is restored without manufacturing payment');
+select pg_temp.expect(exists(select 1 from public.event_registrations_public where event_id=203 and payment_status='pending'),'public roster retains legitimate unpaid registrations');
+update public.calendar set organisation_id=(select organisation_id from public.calendar where id=101) where id=203;
+set role authenticated;
+select pg_temp.identity(2);
+insert into public.event_registrations(event_id,division_id,division,email,full_name,registered_by,payment_status,payment_method,partner_email)
+ values(203,'60000000-0000-0000-0000-000000000203','Legacy','staff-one@example.test','Staff entry one','actor2@example.test','pending','platform','staff-two@example.test'),
+ (203,'60000000-0000-0000-0000-000000000203','Legacy','staff-two@example.test','Staff entry two','actor2@example.test','pending','platform','staff-one@example.test');
+select pg_temp.expect((select count(*)=2 from public.event_registrations where event_id=203 and email like 'staff-%' and payment_status='pending'),'authorised event admin can add an unpaid team');
+select pg_temp.identity(3);
+select pg_temp.reject($q$insert into public.event_registrations(event_id,division_id,division,email,full_name,registered_by,payment_status,payment_method)
+ values(205,'60000000-0000-0000-0000-000000000205','Open','actor3@example.test','Three','actor3@example.test','pending','platform')$q$,'new ordinary pay-now entries still require verified payment');
+reset role;
+select set_config('request.jwt.claims','{}',false);
+-- Explicit event opt-in and later payment are separate from the registration deadline.
+\ir ../../supabase/migrations/20261117110333_register_now_pay_later_event_policy.sql
+insert into public.calendar(id,event_name,is_manual,is_visible,sanction_status,payment_method,allow_payments,start_date,registration_opens_at,registration_closes_at,entry_fee,weekly_payment_policy)
+ values(207,'Pay later opt-in',true,true,'approved','platform',true,current_date+3,now()-interval '1 day',now()+interval '2 days',100,'allow_reserve');
+insert into public.tournament_divisions(id,event_id,name,entry_fee,entry_limit,license_required)
+ values('60000000-0000-0000-0000-000000000207',207,'Open',100,1,false);
+create function pg_temp.deferred_cart(p_email text) returns jsonb language sql as $$select jsonb_build_array(jsonb_build_object(
+ 'event_id',207,'division_id','60000000-0000-0000-0000-000000000207','division','Open','full_name',p_email,'email',p_email,'registered_by',p_email,'payment_method','platform','payment_status','pending'))$$;
+set role authenticated;
+select pg_temp.identity(1);
+select public.register_event_pay_later(pg_temp.deferred_cart('actor1@example.test'));
+select pg_temp.expect((select status='registered' and payment_status='pending' from public.event_registrations where event_id=207),'opt-in creates a saved unpaid registration');
+select pg_temp.expect(exists(select 1 from public.event_registrations_public where event_id=207),'saved unpaid entry remains visible on the roster');
+select pg_temp.identity(3);
+select pg_temp.reject($q$select public.register_event_pay_later(pg_temp.deferred_cart('actor3@example.test'))$q$,'pay-later entries consume event capacity');
+select pg_temp.reject($q$select public.register_event_pay_later(pg_temp.cart('actor3@example.test'))$q$,'player cannot choose pay later for a pay-now event');
+reset role;
+select set_config('request.jwt.claims','{}',false);
+update public.calendar set registration_closes_at=now()-interval '1 hour' where id=207;
+set role authenticated;
+select pg_temp.identity(1);
+insert into public.payments(player_id,event_id,amount,status,payment_type,reference,metadata)
+ values(1,207,100,'processing','event_entry_fee','deferred-pay-after-close','{"source":"manual_event","registrant_email":"actor1@example.test","covers":[{"type":"entry","email":"actor1@example.test","division":"Open"}],"registration_rows":[]}');
+select pg_temp.expect(public.event_checkout_state('deferred-pay-after-close')->>'state'='awaiting_payment','saved entry payment does not require a new expiring place hold');
+select public.cancel_event_checkout('deferred-pay-after-close');
+select pg_temp.expect(exists(select 1 from public.event_registrations where event_id=207 and status='registered' and payment_status='pending'),'cancelling a payment attempt retains the saved entry');
+reset role;
+select set_config('request.jwt.claims','{}',false);
+update public.calendar set allow_payments_after_close=false where id=207;
+set role authenticated;
+select pg_temp.identity(1);
+select pg_temp.reject($q$insert into public.payments(player_id,event_id,amount,status,payment_type,reference,metadata)
+ values(1,207,100,'processing','event_entry_fee','deferred-late-disabled','{"source":"manual_event","registrant_email":"actor1@example.test","covers":[{"type":"entry","email":"actor1@example.test","division":"Open"}],"registration_rows":[]}')$q$,'late payment toggle also protects payment-only carts');
+set role service_role;
+select set_config('request.jwt.claims','{"role":"service_role"}',false);
+update public.payments set status='success' where reference='deferred-pay-after-close';
+select public.finalize_paid_event_checkout((select id from public.payments where reference='deferred-pay-after-close'));
+select pg_temp.expect((select payment_status='paid' from public.event_registrations where event_id=207),'already started payment confirms the original saved entry');
+reset role;
+select set_config('request.jwt.claims','{}',false);
 select 'Paid registration DB: '||count(*)||' assertions passed' from checks;

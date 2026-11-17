@@ -2142,9 +2142,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             ...form,
             is_manual: true,
             is_weekly: isWeekly,
-            weekly_payment_policy: isWeekly
-                ? (form.weekly_payment_policy === 'allow_reserve' ? 'allow_reserve' : 'pay_now')
-                : 'pay_now',
+            weekly_payment_policy: form.weekly_payment_policy === 'allow_reserve' ? 'allow_reserve' : 'pay_now',
             entry_fee: isWeekly
                 ? (weeklyFee ?? 0)
                 : (form.entry_fee === '' || form.entry_fee == null ? null : Number(form.entry_fee)),
@@ -2231,7 +2229,6 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         // Never invent a series for normal events
         if (!isWeekly) {
             delete payload.series_id;
-            delete payload.weekly_payment_policy;
         } else {
             payload.series_id = form.series_id || activeEvent?.series_id || null;
         }
@@ -3833,7 +3830,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                     </button>
                                                 )}
                                             </div>
-                                            {form.is_weekly && (
+                                            {(
                                                 <div className="space-y-2">
                                                     <label className={labelClass}>Payment policy</label>
                                                     <div className="grid grid-cols-1 gap-2">
@@ -3846,8 +3843,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                                 className="accent-padel-green mt-1"
                                                             />
                                                             <span>
-                                                                <span className="text-sm font-medium text-gray-200 block">Pay selected weeks upfront</span>
-                                                                <span className="text-[11px] text-gray-500">Players must pay for every week they book at checkout.</span>
+                                                                <span className="text-sm font-medium text-gray-200 block">Require payment to confirm entry</span>
+                                                                <span className="text-[11px] text-gray-500">New player entries are confirmed after successful payment. Staff can still add unpaid players and teams.</span>
                                                             </span>
                                                         </label>
                                                         <label className={`flex items-start gap-3 rounded-xl border px-4 py-3 cursor-pointer ${form.weekly_payment_policy === 'allow_reserve' ? 'border-padel-green/50 bg-padel-green/5' : 'border-white/10 bg-[#1a1a1a]'}`}>
@@ -3859,8 +3856,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                                 className="accent-padel-green mt-1"
                                                             />
                                                             <span>
-                                                                <span className="text-sm font-medium text-gray-200 block">Allow reserve + remind later</span>
-                                                                <span className="text-[11px] text-gray-500">Players can book seats unpaid and get payment reminders before each week.</span>
+                                                                <span className="text-sm font-medium text-gray-200 block">Allow registration now, payment later</span>
+                                                                <span className="text-[11px] text-gray-500">Save unpaid entries so players can return and pay later. This is separate from allowing payments after registration closes.</span>
                                                             </span>
                                                         </label>
                                                     </div>
@@ -5051,8 +5048,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                         <p className="text-sm text-gray-300">
                                             <span className="text-gray-500">Payment policy:</span>{' '}
                                             {form.weekly_payment_policy === 'allow_reserve'
-                                                ? 'Allow reserve + remind later'
-                                                : 'Pay selected weeks upfront'}
+                                                ? 'Register now, pay later'
+                                                : 'Payment required to confirm entry'}
                                         </p>
                                         <p className="text-sm text-gray-300">
                                             <span className="text-gray-500">Entry mode:</span> Single or with partner (player chooses)

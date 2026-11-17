@@ -59,6 +59,9 @@ function RegistrationFlow() {
   const insets = useSafeAreaInsets();
   const [event, setEvent] = useState<(EventDetail & { collect_tshirt_size?: boolean }) | null>(null);
   const availability = event ? registrationState(event, null, now) : 'open';
+  const [paymentIntent, setPaymentIntent] = useState<'pay' | 'reserve'>('pay');
+  const allowPayLater = !payOnly && event?.weekly_payment_policy === 'allow_reserve' && (event.payment_method || 'platform') === 'platform';
+  const reserving = allowPayLater && paymentIntent === 'reserve';
   const [step, setStep] = useState(mode === 'pay' ? 2 : 1);
   const [partners, setPartners] = useState<Record<string, PartnerChoice>>({});
   const [playtomic, setPlaytomic] = useState('');
@@ -133,7 +136,7 @@ function RegistrationFlow() {
     return () => { active = false; };
   }, [id]));
   const missingProfileFields = [!profile?.name?.trim() && 'name', !profile?.contact_number?.trim() && 'mobile number'].filter(Boolean);
-  const input: CheckoutInput = { ...(payOnly ? { mode: 'pay' as const } : {}), eventId: event?.id || Number(id), divisionIds: selected, partnerEmail: partnerEmail.trim().toLowerCase(),
+  const input: CheckoutInput = { paymentIntent: reserving ? 'reserve' : 'pay', ...(payOnly ? { mode: 'pay' as const } : {}), eventId: event?.id || Number(id), divisionIds: selected, partnerEmail: partnerEmail.trim().toLowerCase(),
     selections: event?.is_weekly ? undefined : selected.map(divisionId => ({ divisionId, ...partners[divisionId], ...(payOnly ? { payForSelf: paymentChoices[divisionId]?.self ?? false, payForPartner: paymentChoices[divisionId]?.partner ?? false } : {}) })), licenseChoice,
     ...(!payOnly || sponsorChanged ? { tshirtLogoUrl, tshirtSponsorName } : {}), partnerTshirtLogoUrl, partnerTshirtSponsorName,
     payForSelf: payOnly && event?.is_weekly ? paymentChoices.weekly?.self : undefined,
@@ -191,7 +194,7 @@ function RegistrationFlow() {
         const stored = await AsyncStorage.getItem(storageKey.current);
         if (stored) {
           try { const pending = JSON.parse(stored); const savedState = await eventCheckoutState(pending.reference);
-            if (savedState.state === 'expired') { await AsyncStorage.removeItem(storageKey.current); showError('Your unpaid checkout expired. You are not registered. Start registration again.'); }
+            if (savedState.state === 'expired') { await AsyncStorage.removeItem(storageKey.current); showError(payOnly ? 'Your previous payment attempt expired. Your saved entry is still awaiting payment.' : 'Your unpaid checkout expired. You are not registered. Start registration again.'); }
             else { setReference(pending.reference); setCheckoutUrl(pending.url); setReturnedFromCheckout(!!pending.returnedFromCheckout); if (pending.quote) setQuote(pending.quote); if (pending.selected) setSelected(pending.selected); if (pending.paymentChoices) setPaymentChoices(pending.paymentChoices); restoredPartnerPayment = pending.payForPartner; setPayForPartner(restoredPartnerPayment); }
           }
           catch (failure) { if (stored.trim().startsWith('{')) throw failure; setReference(stored); }
@@ -287,8 +290,8 @@ function RegistrationFlow() {
     setReference(null); setCheckoutUrl(null); setQuote(null); setReturnedFromCheckout(false); setCheckoutStarted(false);
     setSelected([]); setPartners({}); setAgreed(false); setObligations(false); setSapaAgreed(false);
     attempt.current = Crypto.randomUUID(); goStep(1);
-    showError('No payment was completed, so you are not registered. Start registration again.');
-    if (payOnly) router.replace({ pathname: '/events/register', params: { id } });
+    if (payOnly) { goStep(2); await load(); showError('Your saved entry is still awaiting payment. You can pay it later.'); }
+    else showError('No payment was completed, so you are not registered. Start registration again.');
   });
   const back = () => {
     if (busy) return;
@@ -340,7 +343,7 @@ function RegistrationFlow() {
       {!event && !loading && <ActionButton label="Try again" secondary onPress={load} />}
       {done ? <>
         <Notice title={paymentPending ? 'Registration received — payment pending' : 'Your entry is confirmed'}>
-          {paymentPending ? 'Follow the organiser’s payment instructions. Your payment remains pending until the organiser confirms it.' : 'Your entry is saved. You can review it on the event page and in your schedule.'}
+          {paymentPending ? (event?.payment_method === 'platform' ? 'Your entry is saved and awaiting payment. You can return to this entry and pay later. Payment confirmation is sent after successful payment.' : 'Follow the organiser’s payment instructions. Your payment remains pending until the organiser confirms it.') : 'Your entry is saved. You can review it on the event page and in your schedule.'}
         </Notice>
         {!!event?.payment_instructions && <Text style={{ color: brand.muted, lineHeight: 23 }}>{event.payment_instructions}</Text>}
         {paymentPending && event?.payment_method === 'eft' && <Notice title="EFT details">
@@ -354,21 +357,21 @@ function RegistrationFlow() {
         <ActionButton label="View my entry" onPress={() => router.replace({ pathname: '/events/[id]', params: { id } })} />
       </> : showPaymentStatus ? <>
         <Notice title="Awaiting payment">
-          {returnedFromCheckout
+          {payOnly ? 'Your saved entry is awaiting payment. Cancelling this payment attempt keeps the entry so you can pay later.' : returnedFromCheckout
             ? 'Your registration is only confirmed once payment is successful. If you did not pay, you are not registered. Cancel this checkout and start registration again.'
             : checkoutUrl
               ? 'Your registration is only confirmed once payment is successful. This checkout hold expires after 30 minutes. Already paid? Check your payment status below.'
               : 'A previous payment attempt was found. Check its status before continuing.'}
         </Notice>
         {checkoutUrl && !returnedFromCheckout && <ActionButton label="Continue to checkout" secondary={returnedFromCheckout} busy={busy} onPress={() => run(async () => {
-          if ((await eventCheckoutState(reference!)).state === 'expired') throw new Error('Your checkout expired. You are not registered. Start registration again.');
+          if ((await eventCheckoutState(reference!)).state === 'expired') throw new Error(payOnly ? 'This payment attempt expired. Your saved entry is still awaiting payment.' : 'Your checkout expired. You are not registered. Start registration again.');
           const url = new URL(checkoutUrl);
           if (url.protocol !== 'https:' || url.hostname !== 'checkout.paystack.com') throw new Error('This saved checkout address is invalid.');
           await WebBrowser.openBrowserAsync(url.href, { controlsColor: brand.accent });
           setReturnedFromCheckout(true);
         })} />}
         <ActionButton label="Check payment status" secondary={!!checkoutUrl && !returnedFromCheckout} busy={busy} onPress={verify} />
-        <ActionButton label="I did not pay — start registration again" secondary busy={busy} onPress={restartRegistration} />
+        <ActionButton label={payOnly ? 'Cancel this payment attempt' : 'I did not pay — start registration again'} secondary busy={busy} onPress={restartRegistration} />
         <ActionButton label="Return to event" secondary disabled={busy} onPress={() => router.back()} />
         <Text style={{ color: brand.faint, fontSize: 12 }}>Reference: {reference}</Text>
       </> : event && !loading && payOnly && selected.length > 0 && selected.every(id => registrationPaymentClosed(event, divisions.find(d => d.id === id))) ? <>
@@ -397,7 +400,7 @@ function RegistrationFlow() {
         </View>
       </> : event && !loading && quote && step === 4 ? <>
         <Text style={{ color: brand.premium, fontSize: 24, fontWeight: '600' }}>Review & Pay</Text>
-        <Text style={{ color: brand.muted, lineHeight: 22 }}>Review your entries and fees. Registration is confirmed once payment is completed successfully.</Text>
+        <Text style={{ color: brand.muted, lineHeight: 22 }}>{reserving ? 'Save your entry now and pay later. Required licences will be reviewed when you pay.' : 'Review your entries and fees. Registration is confirmed once payment is completed successfully.'}</Text>
         {payOnly && reference && <ActionButton label="Already paid? Check payment status" secondary busy={busy} onPress={verify} />}
         {quote.isTest && <Text style={{ color: brand.muted, fontSize: 12 }}>Test checkout · Changes still use the shared 4M database.</Text>}
         {!event.is_weekly && <View style={{ padding: 16, borderRadius: 16, backgroundColor: brand.elevated, flexDirection: 'row', justifyContent: 'space-between' }}><Text style={{ color: brand.muted }}>Your current SAPA Points</Text><Text style={{ color: brand.premium, fontWeight: '600' }}>{profile?.points == null ? '—' : Number(profile.points).toLocaleString('en-ZA')}</Text></View>}
@@ -436,10 +439,10 @@ function RegistrationFlow() {
         <View style={{ flexDirection: 'row', alignItems: 'stretch', gap: 10 }}>
           <ActionButton label="‹ Back" secondary disabled={busy} onPress={back} />
           <View style={{ flex: 1 }}>
-            <ActionButton label={quote.method === 'platform' && quote.total > 0 ? 'Pay & Complete Registration' : 'Confirm registration'} busy={busy} disabled={!agreementsComplete} onPress={checkout} />
+            <ActionButton label={reserving ? 'Register now, pay later' : quote.method === 'platform' && quote.total > 0 ? 'Pay & Complete Registration' : 'Confirm registration'} busy={busy} disabled={!agreementsComplete} onPress={checkout} />
           </View>
         </View>
-        <Text style={{ color: brand.muted, lineHeight: 22 }}>Your registration is only confirmed once payment is successful. No confirmation email is sent before payment.</Text>
+        <Text style={{ color: brand.muted, lineHeight: 22 }}>{reserving ? 'Your unpaid entry is saved when you register. Return to the event to pay later. No payment confirmation email is sent before payment.' : 'Your registration is only confirmed once payment is successful. No confirmation email is sent before payment.'}</Text>
         {['eft', 'external'].includes(quote.method) && <Text style={{ color: brand.muted, lineHeight: 22 }}>The organiser must verify your payment before confirming your entry.</Text>}
       </> : event && !loading && payOnly && step === 4 ? <>
         <Notice title="Existing entry payment">Your divisions and partner details stay unchanged. Payment review will include only outstanding fees.</Notice>
@@ -504,10 +507,11 @@ function RegistrationFlow() {
             <ActionButton label="Back to my entry" secondary onPress={back} />
           </>}
           {!payOnly && step === 2 && <>
-            {event.is_weekly ? <Notice title="This week’s entry">{formatMoney(entryFee(event))} per player for this event date.</Notice> : <DivisionOptions event={event} divisions={mode === 'add-partner' ? divisions.filter(d => selected.includes(d.id)) : divisions} selected={selected} registered={mode === 'pay' || mode === 'add-partner' ? [] : existingDivisionIds} values={partners} profileId={profile?.id} currentUserEmail={profile?.email} licences={licences} busy={busy}
+            {allowPayLater && <View style={{ gap: 10 }}><Text style={{ color: brand.premium, fontWeight: '600' }}>Payment option</Text><Choices value={paymentIntent} onChange={value => { setPaymentIntent(value === 'reserve' ? 'reserve' : 'pay'); setQuote(null); }} options={[{ value: 'pay', label: 'Pay now' }, { value: 'reserve', label: 'Register now, pay later' }]} /><Text style={{ color: brand.muted, lineHeight: 21 }}>The organiser allows you to save an unpaid entry and pay it later.</Text></View>}
+            {event.is_weekly ? <Notice title="This week’s entry">{formatMoney(entryFee(event))} per player for this event date.</Notice> : <DivisionOptions event={event} divisions={mode === 'add-partner' ? divisions.filter(d => selected.includes(d.id)) : divisions} selected={selected} registered={mode === 'pay' || mode === 'add-partner' ? [] : existingDivisionIds} values={partners} profileId={profile?.id} currentUserEmail={profile?.email} licences={licences} busy={busy} deferLicence={reserving}
               onToggle={divisionId => { if (mode === 'add-partner') return; setRegistrationEdited(true); setSelected(values => values.includes(divisionId) ? values.filter(v => v !== divisionId) : [...values, divisionId]); }}
               onChange={(divisionId, value) => { if ((partners[divisionId]?.partnerEmail || '') !== (value.partnerEmail || '')) setRegistrationEdited(true); setPartnerPayAccepted(false); setPartners(values => Object.fromEntries(Object.entries({ ...values, [divisionId]: value }).map(([key, p]) => [key, value.partnerEmail && p.partnerEmail === value.partnerEmail && value.licenseChoice ? { ...p, licenseChoice: value.licenseChoice } : p]))); }} />}
-            {!event.is_weekly && !hasLicence && divisions.some(d => selected.includes(d.id) && d.license_required) && <LicencePicker name="You" value={licenseChoice} onChange={setLicenseChoice} options={licences} />}
+            {!reserving && !event.is_weekly && !hasLicence && divisions.some(d => selected.includes(d.id) && d.license_required) && <LicencePicker name="You" value={licenseChoice} onChange={setLicenseChoice} options={licences} />}
             {event.collect_tshirt_size && <>
               <SizePicker label="Your T-shirt size" value={tshirtSize} onChange={setTshirtSize} />
               {selected.filter(key => !!partners[key]?.partnerEmail).filter((key, index, all) => all.findIndex(k => partners[k]?.partnerEmail === partners[key]?.partnerEmail) === index).map(key => <SizePicker key={key} label={`${partners[key].partnerName} — T-shirt size`} value={partners[key].tshirtSize || ''} onChange={tshirtSize => setPartners(values => Object.fromEntries(Object.entries(values).map(([id, p]) => [id, p.partnerEmail === values[key].partnerEmail ? { ...p, tshirtSize } : p])))} />)}

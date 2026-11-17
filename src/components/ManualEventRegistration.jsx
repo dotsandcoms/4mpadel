@@ -474,7 +474,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     // Weekly series multi-date registration
     const isWeeklyEvent = !!event?.is_weekly;
-    const allowWeeklyReserve = isWeeklyEvent && event?.weekly_payment_policy === 'allow_reserve';
+    const allowPayLater = eventPaymentMethod === 'platform' && event?.weekly_payment_policy === 'allow_reserve' && wizardMode === 'register';
     const [seriesWeeks, setSeriesWeeks] = useState([]);
     const [selectedWeekIds, setSelectedWeekIds] = useState(() => new Set(event?.id ? [event.id] : []));
     const [registeredWeekIds, setRegisteredWeekIds] = useState(() => new Set());
@@ -482,6 +482,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const [weekEntryCounts, setWeekEntryCounts] = useState({});
     const [weeklyEntryMode, setWeeklyEntryMode] = useState('single'); // single | partner
     const [weeklyCheckoutIntent, setWeeklyCheckoutIntent] = useState('pay'); // pay | reserve
+    const isPayLater = allowPayLater && weeklyCheckoutIntent === 'reserve';
     const wizardSteps = isWeeklyEvent ? WEEKLY_STEPS : STEPS;
     const weeklyCapacity = getWeeklyCapacity(event);
 
@@ -1900,8 +1901,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             const payPartner = weeklyEntryMode === 'partner' && !!(sel?.partnerName) && !!sel?.payForPartner;
             const entryBase = computeWeeklySubtotal(selectedWeeks, { paySelf, payPartner });
             let t = eventEntryQuote(entryBase, commerce).total;
-            if (buyLicenseSelf) t += licenseFee(licenseSelfChoice);
-            for (const purchase of partnerLicensePurchases) {
+            if (!isPayLater && buyLicenseSelf) t += licenseFee(licenseSelfChoice);
+            for (const purchase of (isPayLater ? [] : partnerLicensePurchases)) {
                 t += licenseFee(purchase.choice, purchase.partnerId);
             }
             return t;
@@ -1914,12 +1915,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             if (sel?.partnerName && sel?.payForPartner && !isPartnerDivisionPaid(d.id)) entryBase += fee;
         }
         let t = eventEntryQuote(entryBase, commerce).total;
-        if (buyLicenseSelf) t += licenseFee(licenseSelfChoice);
-        for (const purchase of partnerLicensePurchases) {
+        if (!isPayLater && buyLicenseSelf) t += licenseFee(licenseSelfChoice);
+        for (const purchase of (isPayLater ? [] : partnerLicensePurchases)) {
             t += licenseFee(purchase.choice, purchase.partnerId);
         }
         return t;
-    }, [isWeeklyEvent, selectedWeeks, weeklyEntryMode, selectedDivisions, selected, myRegs, divisionRegs, buyLicenseSelf, licenseSelfChoice, partnerLicensePurchases, userEmail, event, commerce, licenseInfo, partnerLicenseCache]);
+    }, [isWeeklyEvent, selectedWeeks, weeklyEntryMode, selectedDivisions, selected, myRegs, divisionRegs, buyLicenseSelf, licenseSelfChoice, isPayLater, isPayLater, partnerLicensePurchases, userEmail, event, commerce, licenseInfo, partnerLicenseCache]);
 
     const total = subtotal;
 
@@ -1960,13 +1961,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             }
             return { players, extras: (() => {
                 const extras = [];
-                if (buyLicenseSelf) {
+                if (!isPayLater && buyLicenseSelf) {
                     extras.push({
                         label: licenseSelfChoice === 'full' ? 'Annual SAPA license' : 'Temporary SAPA license',
                         amount: licenseFee(licenseSelfChoice),
                     });
                 }
-                for (const purchase of partnerLicensePurchases) {
+                for (const purchase of (isPayLater ? [] : partnerLicensePurchases)) {
                     extras.push({
                         label: purchase.choice === 'full'
                             ? `Partner annual license — ${purchase.partnerName}`
@@ -2025,13 +2026,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
 
         const extras = [];
-        if (buyLicenseSelf) {
+        if (!isPayLater && buyLicenseSelf) {
             extras.push({
                 label: licenseSelfChoice === 'full' ? 'Annual SAPA license' : 'Temporary SAPA license',
                 amount: licenseFee(licenseSelfChoice),
             });
         }
-        for (const purchase of partnerLicensePurchases) {
+        for (const purchase of (isPayLater ? [] : partnerLicensePurchases)) {
             extras.push({
                 label: purchase.choice === 'full'
                     ? `Partner annual license — ${purchase.partnerName}`
@@ -2052,7 +2053,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         return { players, extras };
     }, [
         isWeeklyEvent, selectedWeeks, weeklyEntryMode, selectedDivisions, selected, myRegs, divisionRegs,
-        buyLicenseSelf, licenseSelfChoice, partnerLicenseCache, partnerLicensePurchases,
+        buyLicenseSelf, licenseSelfChoice, isPayLater, isPayLater, partnerLicenseCache, partnerLicensePurchases,
         profile?.name, displayProfile?.name, event, commerce, licenseInfo,
     ]);
 
@@ -2061,6 +2062,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
         const licenseLines = [];
         const pushLicenseLine = (choice, label, partnerId) => {
+            if (isPayLater) return;
+            if (isPayLater) return;
             const quote = personLicenseQuote(choice, partnerId);
             licenseLines.push({
                 label,
@@ -2075,7 +2078,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 licenseSelfChoice === 'full' ? 'Your SAPA annual license' : 'Your SAPA temporary license',
             );
         }
-        for (const purchase of partnerLicensePurchases) {
+        for (const purchase of (isPayLater ? [] : partnerLicensePurchases)) {
             pushLicenseLine(
                 purchase.choice,
                 purchase.choice === 'full'
@@ -2175,7 +2178,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         };
     }, [
         isWeeklyEvent, selectedWeeks, weeklyEntryMode, selectedDivisions, selected, myRegs, divisionRegs,
-        buyLicenseSelf, licenseSelfChoice, hasLicense, anySelectedRequiresLicense, partnerLicenseCache,
+        buyLicenseSelf, licenseSelfChoice, isPayLater, isPayLater, hasLicense, anySelectedRequiresLicense, partnerLicenseCache,
         partnerLicensePurchases, profile?.name, displayProfile?.name, profileImageUrl, event, commerce, licenseInfo,
     ]);
 
@@ -2313,7 +2316,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (isWeeklyEvent) {
             const openDiv = selectedDivisions[0] || divisions.find((d) => d._synthetic || d.name === WEEKLY_OPEN_DIVISION);
             const sel = openDiv ? selected[openDiv.id] : null;
-            const isReserve = allowWeeklyReserve && weeklyCheckoutIntent === 'reserve';
+            const isReserve = allowPayLater && weeklyCheckoutIntent === 'reserve';
             const markPaid = !isReserve && total <= 0;
             const built = buildWeeklyRegistrationRows({
                 weeks: selectedWeeks,
@@ -2335,8 +2338,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             }));
             if (isReserve) return { ...built, covers: [] };
             const covers = [...(built.covers || [])];
-            if (buyLicenseSelf) covers.push({ email: userEmail, type: 'license', license_year: commerce.license_year, license: licenseSelfChoice });
-            for (const purchase of partnerLicensePurchases) {
+            if (!isPayLater && buyLicenseSelf) covers.push({ email: userEmail, type: 'license', license_year: commerce.license_year, license: licenseSelfChoice });
+            for (const purchase of (isPayLater ? [] : partnerLicensePurchases)) {
                 covers.push({
                     email: purchase.partnerEmail,
                     type: 'license',
@@ -2444,8 +2447,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 }
             }
         }
-        if (buyLicenseSelf) covers.push({ email: userEmail, type: 'license', license_year: commerce.license_year, license: licenseSelfChoice });
-        for (const purchase of partnerLicensePurchases) {
+        if (!isPayLater && buyLicenseSelf) covers.push({ email: userEmail, type: 'license', license_year: commerce.license_year, license: licenseSelfChoice });
+        for (const purchase of (isPayLater ? [] : partnerLicensePurchases)) {
             covers.push({
                 email: purchase.partnerEmail,
                 type: 'license',
@@ -2458,7 +2461,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 ...row,
                 ...(accessGrantId ? { access_grant_id: accessGrantId } : {}),
             })),
-            covers,
+            covers: isPayLater ? [] : covers,
             soloLinks,
         };
     };
@@ -2538,7 +2541,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         selectedWeeks,
         weeklyEntryMode,
         weeklyCheckoutIntent,
-        allowWeeklyReserve,
+        allowPayLater,
         divisions,
         commerce,
         wizardMode,
@@ -2580,6 +2583,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             .from('event_registrations')
             .upsert(securedRows, { onConflict: 'event_id,email,division' })
             .select('*');
+        if (error) throw error;
+        return data || [];
+    };
+
+    const savePayLaterRegistrations = async (rows, soloLinks) => {
+        const { data, error } = await supabase.rpc('register_event_pay_later', { p_rows: rows, p_solo_links: soloLinks });
         if (error) throw error;
         return data || [];
     };
@@ -2711,10 +2720,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (error) { setProcessing(false); toast.error('Could not cancel checkout. Please check payment status before trying again.'); return; }
         if (data?.paymentReceived) { await handlePaymentSuccess(reference); return; }
         checkoutPrepRef.current = null;
-        setProcessing(false); setSelected({}); setWizardStep(1);
-        toast.info('You are not registered. No payment was completed. Start registration again.');
+        setProcessing(false);
+        if (wizardMode === 'payOnly') setWizardStep(2);
+        else { setSelected({}); setWizardStep(1); }
+        toast.info(hasRegistrations ? 'Payment cancelled. Your saved entries remain available to pay later.' : 'You are not registered. No payment was completed. Start registration again.');
         await loadMyRegs(); await loadDivisionRegs();
-    }, [handlePaymentSuccess, loadMyRegs, loadDivisionRegs]);
+    }, [handlePaymentSuccess, loadMyRegs, loadDivisionRegs, hasRegistrations, wizardMode]);
 
     const launchPaystackCheckout = useCallback(async (reference, amount, paymentMetadata) => {
         if (!isPaystackConfigured()) {
@@ -2791,7 +2802,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             || usesManualEntryPayment
             || !userEmail
             || !isPaystackConfigured()
-            || (allowWeeklyReserve && weeklyCheckoutIntent === 'reserve')
+            || (allowPayLater && weeklyCheckoutIntent === 'reserve')
         ) {
             checkoutPrepRef.current = null;
             setCheckoutPreparing(false);
@@ -2854,7 +2865,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         handlePaymentSuccess,
         loadMyRegs,
         loadDivisionRegs,
-        allowWeeklyReserve,
+        allowPayLater,
         weeklyCheckoutIntent,
         cancelUnpaidCheckout,
     ]);
@@ -2961,11 +2972,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             toast.error('Select at least one division');
             return;
         }
-        if (!isWeeklyEvent && anySelectedRequiresLicense && !hasLicense && !licenseSalesOpen) {
+        if (!isPayLater && !isWeeklyEvent && anySelectedRequiresLicense && !hasLicense && !licenseSalesOpen) {
             toast.error('License sales are closed. You cannot enter this division until a license type is available.');
             return;
         }
-        if (!isWeeklyEvent && anySelectedRequiresLicense && !hasLicense && !buyLicenseSelf) {
+        if (!isPayLater && !isWeeklyEvent && anySelectedRequiresLicense && !hasLicense && !buyLicenseSelf) {
             toast.error('A selected division requires a license'); return;
         }
         if (!agreeRules || !agreeComplete || (requiresSapaAgreement && !agreeSapa)) {
@@ -3004,7 +3015,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             }
 
             const { rows, covers, soloLinks } = buildRegistrationRows();
-            const isReserve = isWeeklyEvent && allowWeeklyReserve && weeklyCheckoutIntent === 'reserve';
+            const isReserve = isPayLater;
 
             if (event.is_quick_event && Number(event.max_players) > 0) {
                 const activeEmails = new Set(
@@ -3071,7 +3082,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             }
 
             const weeksToSchedule = snapshotSelectedWeeksForSchedule();
-            const savedRows = await persistRegistrations(rows, soloLinks, covers);
+            const savedRows = isReserve
+                ? await savePayLaterRegistrations(rows, soloLinks)
+                : await persistRegistrations(rows, soloLinks, covers);
             await sendRegistrationEmails(savedRows, isReserve ? false : (wizardMode === 'addPartner' ? total > 0 : true));
             setConfirmedPaidTotal(isReserve ? null : 0);
             setWizardStep(5);
@@ -3081,7 +3094,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             await loadRegisteredWeekIds();
             onParticipantsChange?.();
             if (isReserve) {
-                toast.success('Weeks reserved — we will remind you to pay before each night.');
+                toast.success('Entry saved — return to your entry to pay later.');
             }
         } catch (err) {
             console.error('Manual registration error:', err);
@@ -3333,7 +3346,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     toast.error(check.message);
                     return;
                 }
-                if (sel.payForPartner && d.license_required) {
+                if (!isPayLater && sel.payForPartner && d.license_required) {
                     const lic = getPartnerLicenseInfo(sel.partnerId);
                     if (!lic.active && !getEventPartnerLicenseChoice(sel.partnerId)) {
                         toast.error(`Select a SAPA license for ${sel.partnerName}`);
@@ -3393,7 +3406,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     }
                 }
                 if (!sel?.partnerId || !sel?.partnerEmail) continue;
-                if (sel.payForPartner && d.license_required) {
+                if (!isPayLater && sel.payForPartner && d.license_required) {
                     const lic = getPartnerLicenseInfo(sel.partnerId);
                     if (!lic.active && !getEventPartnerLicenseChoice(sel.partnerId)) {
                         toast.error(`Select a SAPA license for ${sel.partnerName}`);
@@ -3642,6 +3655,34 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         </button>
     );
 
+    const PaymentPolicyOptions = () => allowPayLater ? (
+                            <Card>
+                                <CardHeader title="Payment option" soft />
+                                <CardBody className="space-y-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setWeeklyCheckoutIntent('pay')}
+                                        className={`w-full text-left rounded-xl border px-4 py-3 ${
+                                            weeklyCheckoutIntent === 'pay' ? 'border-slate-900 bg-slate-50' : 'border-gray-200'
+                                        }`}
+                                    >
+                                        <p className="text-sm font-semibold text-slate-900">Pay now</p>
+                                        <p className="text-[11px] text-slate-500 mt-0.5">Pay for your selected entries now</p>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setWeeklyCheckoutIntent('reserve')}
+                                        className={`w-full text-left rounded-xl border px-4 py-3 ${
+                                            weeklyCheckoutIntent === 'reserve' ? 'border-slate-900 bg-slate-50' : 'border-gray-200'
+                                        }`}
+                                    >
+                                        <p className="text-sm font-semibold text-slate-900">Register now, pay later</p>
+                                        <p className="text-[11px] text-slate-500 mt-0.5">Save an unpaid entry and return to pay later. Required licences are reviewed when you pay.</p>
+                                    </button>
+                                </CardBody>
+                            </Card>
+                        ) : null;
+
     const renderStep = () => {
         switch (wizardStep) {
             case 1:
@@ -3861,6 +3902,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 : 'Select one or more divisions. Adding a partner is optional — leave it blank to enter on your own.'}
                         />
 
+                        <PaymentPolicyOptions />
                         {isEarlyBirdActive(event) && (
                             <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[12px] text-emerald-900">
                                 <span className="font-bold">Early bird:</span>{' '}
@@ -4301,7 +4343,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             </Card>
                         )}
 
-                        {anySelectedRequiresLicense && !hasLicense && (
+                        {!isPayLater && anySelectedRequiresLicense && !hasLicense && (
                             <Card>
                                 <CardHeader title="License Check" soft />
                                 <CardBody className="space-y-2.5">
@@ -4616,35 +4658,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             </div>
                         )}
 
-                        {allowWeeklyReserve && total > 0 && (
-                            <Card>
-                                <CardHeader title="Payment option" soft />
-                                <CardBody className="space-y-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setWeeklyCheckoutIntent('pay')}
-                                        className={`w-full text-left rounded-xl border px-4 py-3 ${
-                                            weeklyCheckoutIntent === 'pay' ? 'border-slate-900 bg-slate-50' : 'border-gray-200'
-                                        }`}
-                                    >
-                                        <p className="text-sm font-semibold text-slate-900">Pay now</p>
-                                        <p className="text-[11px] text-slate-500 mt-0.5">Pay for all selected weeks upfront</p>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setWeeklyCheckoutIntent('reserve')}
-                                        className={`w-full text-left rounded-xl border px-4 py-3 ${
-                                            weeklyCheckoutIntent === 'reserve' ? 'border-slate-900 bg-slate-50' : 'border-gray-200'
-                                        }`}
-                                    >
-                                        <p className="text-sm font-semibold text-slate-900">Reserve &amp; pay later</p>
-                                        <p className="text-[11px] text-slate-500 mt-0.5">Hold your spots — we will email payment reminders before each week</p>
-                                    </button>
-                                </CardBody>
-                            </Card>
-                        )}
+                        <PaymentPolicyOptions />
 
-                        {!usesManualEntryPayment && reviewPaySummary.licenseLines.length > 0 && (
+                        {!isPayLater && !usesManualEntryPayment && reviewPaySummary.licenseLines.length > 0 && (
                             <Card>
                                 <CardHeader title="Licenses" soft />
                                 <CardBody className="space-y-0">
@@ -4699,7 +4715,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         <Card className={`border-2 ${sapaHighlightClass}`} style={{ borderColor: accent }}>
                             <CardBody className="flex justify-between items-center py-4">
                                 <span className="text-sm font-semibold text-slate-900">
-                                    {allowWeeklyReserve && weeklyCheckoutIntent === 'reserve'
+                                    {allowPayLater && weeklyCheckoutIntent === 'reserve'
                                         ? 'Amount due later'
                                         : 'Total payable'}
                                 </span>
@@ -5048,14 +5064,16 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 return (
                     <WizardStepWrap>
                         <div className="flex flex-col items-center text-center pt-2 pb-1">
-                            <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${usesManualEntryPayment ? 'bg-amber-500' : 'bg-emerald-500'}`}>
-                                {usesManualEntryPayment ? <AlertCircle size={32} className="text-white" strokeWidth={2.5} /> : <Check size={32} className="text-white" strokeWidth={2.5} />}
+                            <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 ${usesManualEntryPayment || isPayLater ? 'bg-amber-500' : 'bg-emerald-500'}`}>
+                                {usesManualEntryPayment || isPayLater ? <AlertCircle size={32} className="text-white" strokeWidth={2.5} /> : <Check size={32} className="text-white" strokeWidth={2.5} />}
                             </div>
                             <h2 className="text-lg font-bold text-slate-900 tracking-normal">
-                                {usesManualEntryPayment ? 'Registration received — payment pending' : wizardMode === 'addPartner' ? 'Partner Added!' : 'Registration Confirmed!'}
+                                {isPayLater ? 'Entry saved — awaiting payment' : usesManualEntryPayment ? 'Registration received — payment pending' : wizardMode === 'addPartner' ? 'Partner Added!' : 'Registration Confirmed!'}
                             </h2>
                             <p className="text-xs text-slate-600 mt-1.5 font-normal leading-snug max-w-sm">
-                                {usesManualEntryPayment
+                                {isPayLater
+                                    ? 'Your unpaid entry is saved. Return to this entry to pay later.'
+                                    : usesManualEntryPayment
                                     ? `Complete ${manualPaymentLabel}. The organiser will confirm your entry after verifying payment.`
                                     : wizardMode === 'addPartner'
                                     ? (hasPaid
@@ -5224,8 +5242,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             if (wizardMode === 'addPartner') {
                 return total > 0 ? 'Pay & Add Partner' : 'Add Partner';
             }
-            if (isWeeklyEvent && allowWeeklyReserve && weeklyCheckoutIntent === 'reserve') {
-                return 'Reserve weeks';
+            if (isPayLater) {
+                return isWeeklyEvent ? 'Reserve weeks' : 'Register now, pay later';
             }
             return total > 0 ? 'Pay & Complete Registration' : 'Complete Registration';
         }

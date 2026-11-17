@@ -24,20 +24,20 @@ export function LicencePicker({ value, onChange, options, name }: { value?: stri
     {options.length ? <Choices value={value || ''} onChange={v => onChange(v as 'temporary' | 'full')} options={options.map(o => ({ value: o.type, label: `${o.type === 'full' ? 'Annual' : 'Temporary'} · ${formatMoney(o.amount)}` }))} /> : <Text style={{ color: brand.muted }}>Licence sales are closed.</Text>}
   </View>;
 }
-export function DivisionOptions({ event, divisions, selected, registered, values, onToggle, onChange, profileId, currentUserEmail, licences, busy, lockEntry = false, paidPartnerDivisionIds = [] }: {
+export function DivisionOptions({ event, divisions, selected, registered, values, onToggle, onChange, profileId, currentUserEmail, licences, busy, lockEntry = false, paidPartnerDivisionIds = [], deferLicence = false }: {
   event: EventDetail; divisions: Division[]; selected: string[]; registered: string[];
   values: Record<string, PartnerChoice>; onToggle: (id: string) => void; onChange: (id: string, value: PartnerChoice) => void;
-  profileId?: string; currentUserEmail?: string; licences: LicenceOption[]; busy: boolean; lockEntry?: boolean; paidPartnerDivisionIds?: string[];
+  profileId?: string; currentUserEmail?: string; licences: LicenceOption[]; busy: boolean; lockEntry?: boolean; paidPartnerDivisionIds?: string[]; deferLicence?: boolean;
 }) {
   return <View style={{ gap: 12 }}>
     <Text style={{ color: brand.premium, fontSize: 23, fontWeight: '600' }}>{lockEntry ? 'Your division(s)' : 'Choose your division(s)'}</Text>
     <Text style={{ color: brand.muted, lineHeight: 22 }}>{lockEntry ? 'Your division and partner stay unchanged. Choose whether to pay your partner’s outstanding fee as well as your own.' : 'Select one or more divisions. Adding a partner is optional — leave it blank to enter on your own.'}</Text>
-    {divisions.map(d => <DivisionOption key={d.id} event={event} division={d} selected={selected.includes(d.id)} registered={registered.includes(d.id)} value={values[d.id] || {}} onToggle={() => onToggle(d.id)} onChange={value => onChange(d.id, value)} profileId={profileId} currentUserEmail={currentUserEmail} licences={licences} busy={busy} lockEntry={lockEntry} partnerAlreadyPaid={paidPartnerDivisionIds.includes(d.id)} />)}
+    {divisions.map(d => <DivisionOption key={d.id} event={event} division={d} selected={selected.includes(d.id)} registered={registered.includes(d.id)} value={values[d.id] || {}} onToggle={() => onToggle(d.id)} onChange={value => onChange(d.id, value)} profileId={profileId} currentUserEmail={currentUserEmail} licences={licences} busy={busy} lockEntry={lockEntry} partnerAlreadyPaid={paidPartnerDivisionIds.includes(d.id)} deferLicence={deferLicence} />)}
   </View>;
 }
-function DivisionOption({ event, division: d, selected, registered, value, onToggle, onChange, profileId, currentUserEmail, licences, busy, lockEntry, partnerAlreadyPaid }: {
+function DivisionOption({ event, division: d, selected, registered, value, onToggle, onChange, profileId, currentUserEmail, licences, busy, lockEntry, partnerAlreadyPaid, deferLicence }: {
   event: EventDetail; division: Division; selected: boolean; registered: boolean; value: PartnerChoice;
-  onToggle: () => void; onChange: (value: PartnerChoice) => void; profileId?: string; currentUserEmail?: string; licences: LicenceOption[]; busy: boolean; lockEntry: boolean; partnerAlreadyPaid: boolean;
+  onToggle: () => void; onChange: (value: PartnerChoice) => void; profileId?: string; currentUserEmail?: string; licences: LicenceOption[]; busy: boolean; lockEntry: boolean; partnerAlreadyPaid: boolean; deferLicence?: boolean;
 }) {
   const [expanded, setExpanded] = useState(true);
   const closed = registrationState(event, d) !== 'open';
@@ -61,7 +61,7 @@ function DivisionOption({ event, division: d, selected, registered, value, onTog
         <TextInput accessibilityLabel={`${d.name} partner Playtomic level`} keyboardType="decimal-pad" value={value.level || ''} onChangeText={level => onChange({ ...value, level })} placeholder="—" placeholderTextColor={brand.faint} style={{ color: brand.premium, borderWidth: 1, borderColor: brand.edge, padding: 12, borderRadius: 10 }} /></>}
         {partnerAlreadyPaid ? <Text style={{ color: brand.accent, fontSize: 12 }}>Your partner has already paid.</Text> : <Choices value={value.payForPartner === false ? 'partner' : 'self'} onChange={v => onChange({ ...value, payForPartner: v === 'self' })} options={lockEntry ? [{ value: 'self', label: 'I pay for both' }, { value: 'partner', label: 'Partner pays for themselves' }] : [{ value: 'self', label: 'I pay' }, { value: 'partner', label: 'Partner pays' }]} />}
         {!partnerAlreadyPaid && value.payForPartner === false && <Text style={{ color: brand.muted, fontSize: 12, lineHeight: 18 }}>Your partner will need to complete their own payment.</Text>}
-        {d.license_required && value.payForPartner !== false && !value.activeLicence && <LicencePicker name={value.partnerName} value={value.licenseChoice} onChange={licenseChoice => onChange({ ...value, licenseChoice })} options={partnerLicenceOptions(licences, value)} />}
+        {!deferLicence && d.license_required && value.payForPartner !== false && !value.activeLicence && <LicencePicker name={value.partnerName} value={value.licenseChoice} onChange={licenseChoice => onChange({ ...value, licenseChoice })} options={partnerLicenceOptions(licences, value)} />}
         {d.license_required && value.activeLicence && <Text style={{ color: brand.accent, fontSize: 12 }}>✓ Partner has an active SAPA licence</Text>}
       </>}
     </>}

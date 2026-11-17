@@ -44,14 +44,14 @@ async function screen(mode, eventOptions = {}, savedCheckout = null, quoteError 
     '@/lib/foreground-task': { startForegroundTask: () => () => {} },
     'expo-image': { Image: 'Image' }, '@expo/vector-icons': { Ionicons: 'Ionicons' },
     'expo-crypto': { randomUUID: () => 'test-attempt' },
-    'expo-web-browser': {}, 'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 20, bottom: 20 }) },
-    '@react-native-async-storage/async-storage': { default: { getItem: async () => savedCheckout, removeItem: async key => removed.push(key) } },
+    'expo-web-browser': { openBrowserAsync: async () => ({ type: 'cancel' }) }, 'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 20, bottom: 20 }) },
+    '@react-native-async-storage/async-storage': { default: { getItem: async () => savedCheckout, setItem: async () => {}, removeItem: async key => removed.push(key) } },
     '@/components/events/event-ui': { ActionButton: 'ActionButton', Chip: 'Chip', Notice: 'Notice' },
     '@/components/events/registration-options': { Choices: 'Choices', DivisionOptions: 'DivisionOptions', LicencePicker: 'LicencePicker' },
     '@/lib/home': { formatEventRange: () => '2–4 Oct' },
-    '@/lib/events': { fetchEvent: async () => event, fetchDivisions: async () => divisions, currentEmail: async () => 'mark@example.com', fetchMyEventRegistrations: async () => mode === 'add-partner' ? [{ id: 'reg1', division_id: 'men40', tshirt_size: 'L', payment_status: 'paid' }] : mode === 'pay' ? [{ id: 'reg1', division_id: 'men40', partner_email: partner.email, partner_name: partner.name }] : [], eventImage: () => 1 },
+    '@/lib/events': { fetchEvent: async () => event, fetchDivisions: async () => divisions, currentEmail: async () => 'mark@example.com', fetchMyEventRegistrations: async () => mode === 'add-partner' ? [{ id: 'reg1', division_id: 'men40', tshirt_size: 'L', payment_status: 'paid' }] : mode === 'pay' ? [{ id: 'reg1', division_id: 'men40', partner_email: partner.email, partner_name: partner.name }] : [], setEventScheduled: async () => {}, eventImage: () => 1 },
     '@/lib/event-rules': { ...eventRules, formatMoney: n => `R ${n}`, entryFee: () => 600, registrationState: event => event.registration_closes_at && new Date(event.registration_closes_at) <= new Date() ? 'closed' : 'open' },
-    '@/lib/event-checkout': { invokeCheckout: async input => { requests.push(input); if (quoteError && !input.tshirtSize) throw new Error(quoteError); return { quote }; },
+    '@/lib/event-checkout': { invokeCheckout: async (request, checkout) => { const input = { ...request, ...checkout }; requests.push(input); if (quoteError && !input.tshirtSize) throw new Error(quoteError); return eventOptions.deferredSuccess && input.attemptId ? { quote, registered: true, paymentPending: true } : eventOptions.paymentAttempt && input.attemptId ? { quote, reference: 'saved-entry-payment', authorizationUrl: 'https://checkout.paystack.com/test' } : { quote }; },
       eventCheckoutState: async () => ({ state: eventOptions.checkoutState || 'awaiting_payment' }),
       confirmCheckout: async () => { throw Object.assign(new Error('Not paid'), { code: 'PAYMENT_NOT_CONFIRMED' }); },
       cancelEventCheckout: async ref => cancelled.push(ref),
@@ -66,7 +66,7 @@ async function screen(mode, eventOptions = {}, savedCheckout = null, quoteError 
   };
   const source = ts.transpileModule(fs.readFileSync('src/app/events/register.tsx', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: false } }).outputText;
   const exports = {};
-  vm.runInNewContext(source, { exports, require: name => { assert.ok(name in modules, name); return modules[name]; }, __DEV__: true, console, Error, setInterval: () => 0, clearInterval: () => {} });
+  vm.runInNewContext(source, { exports, require: name => { assert.ok(name in modules, name); return modules[name]; }, __DEV__: true, console, Error, URL, setInterval: () => 0, clearInterval: () => {} });
   const render = () => { cursor = 0; const component = exports.default().type; const tree = component(); mounted = true; return tree; };
   render(); effects.forEach(fn => fn());
   await new Promise(resolve => setImmediate(resolve));
@@ -104,6 +104,31 @@ test('missing phone is explained and saving the profile enables Continue on retu
   assert.equal(app.find('Field', p => p.label === 'Playtomic level').props.value, '3.5');
   app.find('ActionButton', p => p.label === 'Continue to Division').props.onPress();
   assert.ok(app.find('DivisionOptions'));
+});
+test('an enabled pay-later event saves an unpaid entry through the normal registration flow', async () => {
+  const app = await screen(undefined, { weekly_payment_policy: 'allow_reserve', deferredSuccess: true });
+  app.find('ActionButton', p => p.label === 'Continue to Division').props.onPress();
+  app.find('Choices', p => p.options?.some(option => option.value === 'reserve')).props.onChange('reserve');
+  app.find('DivisionOptions').props.onToggle('men40');
+  assert.equal(app.find('DivisionOptions').props.deferLicence, true);
+  app.find('ActionButton', p => p.label === 'Continue to Review & Pay').props.onPress(); await app.flush();
+  assert.equal(app.requests.at(-1).paymentIntent, 'reserve');
+  app.find('Agreement', p => p.label.startsWith('I agree')).props.onPress();
+  app.find('Agreement', p => p.label.startsWith('I confirm')).props.onPress();
+  await app.find('ActionButton', p => p.label === 'Register now, pay later').props.onPress(); await app.flush();
+  assert.ok(app.find('Notice', p => p.title === 'Registration received — payment pending'));
+});
+test('cancelling payment for a saved entry keeps that entry available for later payment', async () => {
+  const app = await screen('pay', { paymentAttempt: true });
+  app.find('ActionButton', p => p.label === 'Continue to Review & Pay').props.onPress(); await app.flush();
+  app.find('Agreement', p => p.label.startsWith('I agree')).props.onPress();
+  app.find('Agreement', p => p.label.startsWith('I confirm')).props.onPress();
+  await app.find('ActionButton', p => p.label === 'Pay & Complete Registration').props.onPress(); await app.flush();
+  assert.ok(app.find('ActionButton', p => p.label === 'Cancel this payment attempt'));
+  await app.find('ActionButton', p => p.label === 'Cancel this payment attempt').props.onPress(); await app.flush();
+  assert.deepEqual(app.cancelled, ['saved-entry-payment']);
+  assert.equal(app.navigation.some(item => item[0] === 'replace'), false);
+  assert.ok(app.find('ActionButton', p => p.label === 'Continue to Review & Pay'));
 });
 test('closing an unpaid checkout requires a fresh registration and releases its hold', async () => {
   const app = await screen(undefined, {}, JSON.stringify({ reference: 'unpaid-attempt', url: 'https://checkout.paystack.com/saved', returnedFromCheckout: true }));

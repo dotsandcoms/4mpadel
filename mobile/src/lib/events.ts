@@ -48,6 +48,7 @@ export type EventDetail = CalendarEvent & {
   contact_details?: string | null;
   payment_method?: string | null;
   allow_payments_after_close?: boolean;
+  weekly_payment_policy?: 'pay_now' | 'allow_reserve';
   payment_instructions?: string | null;
   payment_bank_name?: string | null;
   payment_account_name?: string | null;
