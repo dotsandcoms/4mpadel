@@ -324,7 +324,7 @@ function registrationDivisionKey(registration, divisions = []) {
 var fullyRefundedForAnotherRegistration = (payment, reg, refunds) => {
   const entryRefunds = refunds.filter((refund) => refund.payment_id === payment.id && isEntryFeeRefund(refund, payment));
   if (entryRefunds.some((refund) => refund.event_registration_id === reg.id)) return false;
-  const refunded = entryRefunds.reduce((total, refund) => total + Number(refund.amount || 0), 0);
+  const refunded = entryRefunds.reduce((total2, refund) => total2 + Number(refund.amount || 0), 0);
   return Number(payment.amount) > 0 && refunded >= Number(payment.amount) - 0.01;
 };
 function findFinancePayment(payments, reg, refunds = []) {
@@ -346,11 +346,59 @@ function findFinancePayment(payments, reg, refunds = []) {
   return findPaymentForRegistration(candidates, reg);
 }
 
+// src/utils/registrationFinance.js
+var ENTRY_COMMISSION_RATE = 0.05;
+var REGISTRATION_FINANCE_BASIS = "current_registrations_v1";
+var money = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+var total = (rows, key) => money(rows.reduce((sum2, row) => sum2 + Number(row[key] || 0), 0));
+function registrationFinanceAmounts(allocation) {
+  const shares = allocation.shares || [];
+  const received = (predicate) => money(shares.filter(predicate).reduce((sum2, share) => sum2 + share.amount, 0));
+  return {
+    entryAmount: allocation.amount,
+    paidTo4M: received((s) => s.receipt.recipient === "4m"),
+    paidDirectToOrganiser: received((s) => s.receipt.recipient === "organiser"),
+    recipientUnconfirmed: received((s) => !s.receipt.recipient),
+    outstanding: allocation.outstanding || 0,
+    refunded: allocation.refunded || 0,
+    refundPending: allocation.refundPending || 0,
+    comped: allocation.comped
+  };
+}
+function summarizeRegistrationFinance(rows, { interimPaid = 0, refundFundingAdjustment = 0 } = {}) {
+  const collected4M = total(rows, "paidTo4M");
+  const collectedOrganiser = total(rows, "paidDirectToOrganiser");
+  const unconfirmedCollected = total(rows, "recipientUnconfirmed");
+  const grossEntryFees = money(collected4M + collectedOrganiser + unconfirmedCollected);
+  const commission = Math.round(Math.round(collected4M * 100) * ENTRY_COMMISSION_RATE) / 100;
+  const dueBeforeInterim = money(collected4M - commission + refundFundingAdjustment);
+  const dueToOrg = money(dueBeforeInterim - interimPaid);
+  return {
+    basis: REGISTRATION_FINANCE_BASIS,
+    totalAmountBilled: total(rows, "entryAmount"),
+    collected4M,
+    collectedOrganiser,
+    unconfirmedCollected,
+    grossEntryFees,
+    entryFeeBalance: grossEntryFees,
+    organiserRetained: collectedOrganiser,
+    commissionBase: collected4M,
+    commission,
+    organiserEntitlement: money(collected4M + collectedOrganiser - commission),
+    interimPaid,
+    refundFundingAdjustment,
+    dueBeforeInterim,
+    dueToOrg,
+    // Refund reserves and credits were excluded before allocating the shares.
+    availableForPayout: Math.max(0, dueToOrg)
+  };
+}
+
 // src/utils/eventSettlement.js
 var norm2 = (value) => String(value || "").trim().toLowerCase();
-var money = (value) => Math.round(((Number(value) || 0) + Number.EPSILON) * 100) / 100;
-var positive = (value) => Math.max(0, money(value));
-var sum = (rows) => money(rows.reduce((total, row) => total + Number(row.amount || 0), 0));
+var money2 = (value) => Math.round(((Number(value) || 0) + Number.EPSILON) * 100) / 100;
+var positive = (value) => Math.max(0, money2(value));
+var sum = (rows) => money2(rows.reduce((total2, row) => total2 + Number(row.amount || 0), 0));
 var refsFor = (payment) => {
   const meta = normalizePaymentMetadata(payment.metadata);
   return new Set([payment.reference, meta.paystack_ref, ...`${meta.note || ""} ${meta.payment_note || ""}`.match(/\bT\d{10,}\b/g) || []].filter(Boolean));
@@ -414,12 +462,13 @@ function calculateEventSettlement({ event = {}, registrations = [], divisions = 
     const primary = claims.find((p) => p.reference === reference && !isExplicitAdminMarkedPayment(p)) || claims[0];
     const gateway = verified.get(reference);
     const external = reference !== primary.reference;
-    let amount = gateway && external ? Math.min(positive(gateway.amount), sum(claims)) : positive(primary.amount);
+    const confirmedExternalEntries = external && /^T\d{10,}$/.test(reference) && claims.every((p) => isExplicitAdminMarkedPayment(p) && collectionRecipient(p) === "4m" && p.metadata.registration_id) && new Set(claims.map((p) => p.metadata.registration_id)).size === claims.length;
+    let amount = gateway && external ? Math.min(positive(gateway.amount), sum(claims)) : confirmedExternalEntries ? sum(claims) : positive(primary.amount);
     if (gateway && amount > positive(gateway.amount)) {
       issues.push(`Receipt allocation exceeds Paystack amount: ${reference}`);
       amount = positive(gateway.amount);
     }
-    if (external && claims.length > 1 && (!gateway || sum(claims) > positive(gateway.amount))) {
+    if (external && claims.length > 1 && (gateway ? sum(claims) > positive(gateway.amount) : !confirmedExternalEntries)) {
       issues.push(`Multiple entry confirmations share ${reference}; review the receipt allocation`);
     }
     const recipient = gateway || external && /^T\d{10,}$/.test(reference) ? "4m" : collectionRecipient(primary);
@@ -478,13 +527,13 @@ function calculateEventSettlement({ event = {}, registrations = [], divisions = 
       const item = { ...row, amount, receipt, fundedBy };
       if (status === "processed") {
         processedRefundRows.push(item);
-        receipt.refunded = money(receipt.refunded + amount);
+        receipt.refunded = money2(receipt.refunded + amount);
       } else {
         reservedRefundRows.push(item);
-        receipt.reserved = money(receipt.reserved + amount);
+        receipt.reserved = money2(receipt.reserved + amount);
       }
     }
-    receipt.net = money(receipt.amount - receipt.refunded - receipt.reserved);
+    receipt.net = money2(receipt.amount - receipt.refunded - receipt.reserved);
     receipt.unallocatedCredit = Math.min(receipt.unallocatedCredit, positive(receipt.net));
   }
   for (const refund of refunds) {
@@ -519,8 +568,8 @@ function calculateEventSettlement({ event = {}, registrations = [], divisions = 
     for (const receipt of matches) {
       const amount = Math.min(remaining, available.get(receipt.reference));
       if (amount <= 0) continue;
-      available.set(receipt.reference, money(available.get(receipt.reference) - amount));
-      remaining = money(remaining - amount);
+      available.set(receipt.reference, money2(available.get(receipt.reference) - amount));
+      remaining = money2(remaining - amount);
       shares.push({ receipt, amount });
     }
     const refundsForEntry = (rows) => rows.filter((r) => r.event_registration_id === reg.id || !r.event_registration_id && matches.includes(r.receipt) && invoices.filter((i) => r.receipt.claims.some((p) => paymentMatchesRegistration(p, i.registration))).length === 1);
@@ -530,13 +579,22 @@ function calculateEventSettlement({ event = {}, registrations = [], divisions = 
     const holder = remaining > 0 ? "pending" : shares.some((s) => s.receipt.recipient === "organiser") ? "club" : shares.some((s) => !s.receipt.recipient) ? "unconfirmed" : "4m";
     if (remaining > 0 && norm2(reg.payment_status) !== "refunded") {
       pendingCount++;
-      pendingAmount = money(pendingAmount + remaining);
+      pendingAmount = money2(pendingAmount + remaining);
     } else if (shares.length) {
       if (holder === "club") paidClub++;
       else if (holder === "4m") paid4M++;
     }
     if (remaining > 0 && norm2(reg.payment_status) === "paid" && !findExpectedEntryPayment(payments, reg)) issues.push(`Paid entry has no fully allocated receipt: ${reg.full_name || reg.email || reg.id}`);
-    return { ...invoice, holder, receipt: shares[0]?.receipt, payment: shares[0]?.receipt.claims[0], shares, outstanding: norm2(reg.payment_status) === "refunded" ? 0 : remaining };
+    return {
+      ...invoice,
+      holder,
+      receipt: shares[0]?.receipt,
+      payment: shares[0]?.receipt.claims[0],
+      shares,
+      refunded: returned,
+      refundPending: reserved,
+      outstanding: norm2(reg.payment_status) === "refunded" ? 0 : remaining
+    };
   });
   const grossEntryFees = sum(receiptRows);
   const entryFeesRefunded = sum(processedRefundRows);
@@ -545,58 +603,58 @@ function calculateEventSettlement({ event = {}, registrations = [], divisions = 
   const collectedManual = sum(receiptRows.filter((r) => r.recipient === "4m" && norm2(r.payment_method) !== "paystack"));
   const paystackCollected = sum(receiptRows.filter((r) => r.recipient === "4m" && norm2(r.payment_method) === "paystack"));
   const collectedOrganiser = sum(receiptRows.filter((r) => r.recipient === "organiser"));
-  const organiserRefunds = sum(processedRefundRows.filter((r) => ["organiser", "club"].includes(r.fundedBy)));
-  const organiserRetained = money(collectedOrganiser - organiserRefunds);
   const unconfirmedCollected = sum(receiptRows.filter((r) => !r.recipient));
-  const unallocatedCredit4M = money(receiptRows.filter((r) => r.recipient === "4m").reduce((total, r) => total + r.unallocatedCredit, 0));
-  const entryFeeBalance = money(grossEntryFees - entryFeesRefunded);
-  const commissionBase = collected4M;
-  const commission = Math.round(Math.round(commissionBase * 100) * 5 / 100) / 100;
-  const organiserEntitlement = money(entryFeeBalance - commission);
+  const unallocatedCredit4M = money2(receiptRows.filter((r) => r.recipient === "4m").reduce((total2, r) => total2 + r.unallocatedCredit, 0));
   const payoutRows = completedOrganiserPayouts(interimPayments);
   const interimPaid = sum(payoutRows);
-  const dueBeforeInterim = money(organiserEntitlement - organiserRetained);
-  const dueToOrg = money(dueBeforeInterim - interimPaid);
-  const totalAmountBilled = money(grossEntryFees + pendingAmount);
+  const refundFundingAdjustment = money2([...processedRefundRows, ...reservedRefundRows].reduce((n, r) => n + (r.receipt.recipient === "4m" && ["club", "organiser"].includes(r.fundedBy) ? r.amount : 0) - (r.receipt.recipient !== "4m" && r.fundedBy === "4m" ? r.amount : 0), 0));
+  const current = summarizeRegistrationFinance(allocations.map(registrationFinanceAmounts), { interimPaid, refundFundingAdjustment });
+  const activeShares = allocations.flatMap((a) => a.shares || []);
+  const currentManual = money2(activeShares.filter((s) => s.receipt.recipient === "4m" && norm2(s.receipt.payment_method) !== "paystack").reduce((n, s) => n + s.amount, 0));
+  const currentPaystack = money2(activeShares.filter((s) => s.receipt.recipient === "4m" && norm2(s.receipt.payment_method) === "paystack").reduce((n, s) => n + s.amount, 0));
+  const unallocatedCash4M = positive(sum(receiptRows.filter((r) => r.recipient === "4m").map((r) => ({ amount: r.net }))) - current.collected4M);
+  const historyIssues = [];
+  const currentIssues = issues.filter((issue) => {
+    const receipt = receiptRows.find((r) => issue === `Confirm who received ${r.reference || r.id}`);
+    if (receipt && !activeShares.some((s) => s.receipt === receipt)) {
+      historyIssues.push(issue);
+      return false;
+    }
+    return true;
+  });
   const tiers = /* @__PURE__ */ new Map();
-  for (const receipt of receiptRows) {
-    const covers = [...new Map(receipt.claims.flatMap((p) => {
-      const meta = normalizePaymentMetadata(p.metadata);
-      return (meta.covers || []).filter((c) => c.type === "entry").map((c) => [`${norm2(c.email)}:${c.division || ""}`, c]);
-    })).values()];
-    const count = Math.max(1, covers.length);
-    const rate = money(receipt.amount / count);
+  for (const invoice of invoices.filter((i) => !i.comped)) {
+    const rate = invoice.amount;
     const tier = tiers.get(rate) || { rate, count: 0, total: 0 };
-    tier.count += count;
-    tier.total = money(tier.total + receipt.amount);
+    tier.count++;
+    tier.total = money2(tier.total + invoice.amount);
     tiers.set(rate, tier);
   }
   const result = {
-    collected4M,
-    paystackCollected,
-    collectedManual,
-    collectedOrganiser,
-    organiserRetained,
-    unconfirmedCollected,
+    ...current,
+    paystackCollected: currentPaystack,
+    collectedManual: currentManual,
     unallocatedCredit4M,
-    netHeld4M: money(collected4M - sum(processedRefundRows.filter((r) => r.fundedBy === "4m"))),
-    grossEntryFees,
+    unallocatedCash4M,
+    cashHistory: {
+      collected4M,
+      paystackCollected,
+      collectedManual,
+      collectedOrganiser,
+      unconfirmedCollected,
+      grossEntryFees,
+      entryFeesRefunded,
+      refundReserve,
+      issues: historyIssues
+    },
+    netHeld4M: money2(collected4M - sum(processedRefundRows.filter((r) => r.fundedBy === "4m"))),
     entryFeesRefunded,
     refundReserve,
-    entryFeeBalance,
-    commissionBase,
-    commission,
-    organiserEntitlement,
-    totalAmountBilled,
     pendingCount,
     pendingAmount,
     paid4M,
     paidClub,
-    interimPaid,
     payoutRows,
-    dueBeforeInterim,
-    dueToOrg,
-    availableForPayout: positive(dueToOrg - refundReserve - unconfirmedCollected - unallocatedCredit4M),
     billedTierBreakdown: [...tiers.values()].sort((a, b) => a.rate - b.rate),
     compedEntries: invoices.filter((i) => i.comped).length,
     withdrawnCount: registrations.filter((r) => ["withdrawn", "cancelled"].includes(norm2(r.status))).length,
@@ -606,7 +664,7 @@ function calculateEventSettlement({ event = {}, registrations = [], divisions = 
     processedRefundRows,
     reservedRefundRows,
     allocations,
-    issues: [.../* @__PURE__ */ new Set([...issues, ...(verification?.unresolved || []).map((r) => r.reason)])],
+    issues: [.../* @__PURE__ */ new Set([...currentIssues, ...(verification?.unresolved || []).map((r) => r.reason)])],
     verificationComplete: verification?.complete === true,
     activeEntries: invoices.length,
     // Legacy aggregate confirmations must never override actual cash movements.
@@ -664,6 +722,7 @@ function resolveRegistrationLicenseCategory(email, eventId, player, eventPayment
 // src/utils/eventFinanceSummary.js
 var norm3 = (value) => String(value || "").trim().toLowerCase();
 var SUMMARY_FIELDS = [
+  "basis",
   "activeEntries",
   "grossEntryFees",
   "totalAmountBilled",

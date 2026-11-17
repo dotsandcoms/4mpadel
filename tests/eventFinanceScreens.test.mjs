@@ -5,6 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { build } from 'esbuild';
 import puppeteer from 'puppeteer';
+import { buildEventFinanceWorkbook } from '../src/utils/eventFinanceExport.js';
+const exportedMetric = (payload, label) => {
+    const sheet = buildEventFinanceWorkbook(payload).getWorksheet('Summary');
+    let value; sheet.eachRow(row => { if (row.getCell(1).value === label) value = row.getCell(3).result ?? row.getCell(3).value; });
+    return value;
+};
 
 const root = process.cwd();
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), '4m-reconciliation-screens-'));
@@ -69,7 +75,7 @@ async function open() {
     if (css) await page.addStyleTag({ content: fs.readFileSync(path.join(root, 'dist/assets', css), 'utf8') });
     page.on('pageerror', error => { throw error; });
     await page.addScriptTag({ path: output });
-    await page.waitForFunction(() => document.body.textContent.includes('R 912,50'));
+    await page.waitForFunction(() => document.body.textContent.includes('R 940,00'));
     return page;
 }
 const clickText = (page, label) => page.evaluate(label => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === label)?.click(), label);
@@ -78,42 +84,41 @@ const metric = (page, label) => page.evaluate(label => [...document.querySelecto
 test('existing Overview, Income Statement, export and finance overview reconcile the same event', async () => {
     const page = await open();
     try {
-        assert.equal(await metric(page, 'Balance due from 4M'), 'R912,50');
+        assert.equal(await metric(page, 'Balance due from 4M'), 'R940,00');
         await page.screenshot({path:'/tmp/4m-reconciliation-overview.png',fullPage:true});
         await clickText(page, 'Income Statement');
         await page.waitForFunction(() => document.querySelector('input[placeholder="Search player, division, type, status..."]'));
-        assert.equal(await metric(page, 'Total billed'), 'R2950,00');
-        assert.equal(await metric(page, 'Total collected'), 'R2350,00');
+        assert.equal(await metric(page, 'Total billed'), 'R2400,00');
+        assert.equal(await metric(page, 'Total collected'), 'R1800,00');
         assert.equal(await metric(page, 'Net entry income'), 'R1800,00');
-        assert.equal(await metric(page, 'Platform Fees'), '−R87,50');
+        assert.equal(await metric(page, 'Platform Fees'), '−R60,00');
         await page.screenshot({path:'/tmp/4m-reconciliation-statement.png',fullPage:true});
-        assert.equal(await metric(page, 'Balance due from 4M'), 'R912,50');
+        assert.equal(await metric(page, 'Balance due from 4M'), 'R940,00');
         await clickText(page, 'Export Excel');
         await page.evaluate(() => [...document.querySelectorAll('[role="menuitem"]')].find(b => b.textContent.includes('Full Event Report')).click());
         await page.waitForFunction(() => window.__export);
-        const result = await page.evaluate(() => ({ summary: window.__export.summary, lines: window.__export.lineItems,
-            registrations: window.__export.registrations, activeRegistrationIds: window.__export.activeRegistrationIds, receiptReport: window.__export.receiptReport }));
-        assert.equal(result.summary.find(r => r.label === 'Net due to organiser').value, 912.5);
-        assert.equal(result.summary.find(r => r.label === 'Commission base: entry fees received by 4M').value, 1750);
+        const result = await page.evaluate(() => window.__export);
+        assert.equal(exportedMetric(result, 'Amount due to organiser'), 940);
+        assert.equal(exportedMetric(result, 'Paid to 4M'), 1200);
         assert.equal(result.registrations.find(r => r.registrationId === 'c').paidDirectToOrganiser, 600);
         assert.equal(result.registrations.find(r => r.registrationId === 'c').paidTo4M, 0);
         assert.equal(result.registrations.find(r => r.registrationId === 'b').paidTo4M, 600);
         assert.deepEqual(result.activeRegistrationIds.sort(), ['a', 'b', 'c', 'd']);
         assert.equal(result.receiptReport.withdrawals.find(r => r.registrationId === 'old').refunded, 550);
-        assert.equal(result.summary.find(r => r.label === 'Minus direct organiser receipts retained').value, -600);
-        const settlementCategories = ['Entry payment', 'Entry refund', 'Platform / commission fee', 'Direct organiser receipts retained', 'Interim payout'];
-        assert.equal(result.lines.filter(r => settlementCategories.includes(r.category)).reduce((n, r) => n + r.amount, 0), 912.5);
+        assert.equal(exportedMetric(result, 'Paid direct to organiser'), 600);
+        const settlementCategories = ['Entry payment', 'Entry refund', 'Platform / commission fee', 'Direct organiser receipts retained', 'Interim payout', 'Refund reserve', 'Current entry allocation adjustment', 'Recipient unconfirmed held', 'Refund funding adjustment'];
+        assert.equal(result.lineItems.filter(r => settlementCategories.includes(r.category)).reduce((n, r) => n + r.amount, 0), 940);
         await page.evaluate(() => window.__showDashboard());
         await page.waitForFunction(() => document.body.textContent.includes('Event finance summary'));
-        assert.equal(await metric(page, 'Total cash collected'), 'R2350,00');
-        assert.equal(await metric(page, 'Total balance owed'), 'R912,50');
+        assert.equal(await metric(page, 'Current entry payments'), 'R1800,00');
+        assert.equal(await metric(page, 'Total balance owed'), 'R940,00');
         await page.screenshot({path:'/tmp/4m-reconciliation-finance-overview.png',fullPage:true});
         const cells = await page.$$eval('tbody tr', rows => [...rows[0].cells].map(c => c.textContent.replace(/\s/g, '')));
-        assert.deepEqual(cells.slice(1), ['4', 'R2350,00', 'R550,00', 'R87,50', 'R600,00', 'R200,00', 'R912,50']);
+        assert.deepEqual(cells.slice(1), ['4', 'R1800,00', 'R550,00', 'R60,00', 'R600,00', 'R200,00', 'R940,00']);
         await clickText(page, 'Reconciliation test');
         assert.equal(await page.evaluate(() => window.__selected), 1);
         await page.select('select[aria-label="Filter event reconciliations"]', 'settled');
-        assert.equal(await metric(page, 'Total cash collected'), 'R0,00');
+        assert.equal(await metric(page, 'Current entry payments'), 'R0,00');
     } finally { await page.close(); }
 });
 
@@ -127,7 +132,7 @@ test('manual partner-paid VAPC entries display the payer and export their separa
         });
         await page.waitForFunction(() => document.body.textContent.includes('Event finance summary'));
         await page.evaluate(() => window.__showManager());
-        await page.waitForFunction(() => document.body.textContent.includes('R 912,50'));
+        await page.waitForFunction(() => document.body.textContent.includes('R 940,00'));
         await clickText(page, 'Registrations List');
         await page.waitForFunction(() => document.body.textContent.includes('Paid direct to VAPC'));
         const text = await page.evaluate(() => [...document.querySelectorAll('tr')].find(r => r.textContent.includes('c@example.com')).textContent);
@@ -142,7 +147,7 @@ test('manual partner-paid VAPC entries display the payer and export their separa
         assert.equal(row.collectionRecipient, 'VAPC');
         assert.equal(row.paidTo4M, 0);
         assert.equal(row.paidDirectToOrganiser, 600);
-        assert.equal(result.summary.find(r => r.label === 'Commission base: entry fees received by 4M').value, 1750);
+        assert.equal(exportedMetric(result, 'Paid to 4M'), 1200);
     } finally { await page.close(); }
 });
 
@@ -157,7 +162,7 @@ test('an entry accepted on credit shows payment due without exporting promised m
         });
         await page.waitForFunction(() => document.body.textContent.includes('Event finance summary'));
         await page.evaluate(() => window.__showManager());
-        await page.waitForFunction(() => document.body.textContent.includes('R 342,50'));
+        await page.waitForFunction(() => document.body.textContent.includes('R 370,00'));
         await clickText(page, 'Registrations List');
         await page.waitForFunction(() => document.body.textContent.includes('Payment due to 4M'));
         await clickText(page, 'Export Excel');
@@ -170,7 +175,7 @@ test('an entry accepted on credit shows payment due without exporting promised m
         assert.equal(row.outstanding, 600);
         assert.equal(row.channel, 'Payment due to 4M');
         assert.equal(row.collectionRecipient, '4M (payment due)');
-        assert.equal(result.summary.find(r => r.label === 'Commission base: entry fees received by 4M').value, 1150);
+        assert.equal(exportedMetric(result, 'Paid to 4M'), 600);
     } finally { await page.close(); }
 });
 
@@ -185,14 +190,14 @@ test('an unallocated receipt remains cash and is reserved from payout in the scr
         });
         await page.waitForFunction(() => document.body.textContent.includes('Event finance summary'));
         await page.evaluate(() => window.__showManager());
-        await page.waitForFunction(() => document.body.textContent.replace(/\s/g,'').includes('R1672,50'));
+        await page.waitForFunction(() => document.body.textContent.replace(/\s/g,'').includes('R940,00'));
         assert.match(await page.$eval('body',e=>e.textContent), /Unallocated credit held by 4M/);
         await clickText(page, 'Export Excel');
         await page.evaluate(() => [...document.querySelectorAll('[role="menuitem"]')].find(b => b.textContent.includes('Full Event Report')).click());
         await page.waitForFunction(() => window.__export);
         const result = await page.evaluate(() => window.__export);
-        assert.equal(result.summary.find(r => r.label === 'Unallocated credit held by 4M').value, 800);
-        assert.equal(result.summary.find(r => r.label === 'Available for payout after reserves').value, 872.5);
+        assert.equal(result.summary.find(r => r.label === 'Of which identified unused credits').value, 800);
+        assert.equal(exportedMetric(result, 'Amount due to organiser'), 940);
         assert.equal(result.receiptReport.receipts.find(r => r.reference === 'REGEV-1-credit').unallocatedCredit, 800);
         assert.equal(result.activeRegistrationIds.length, 4);
     } finally { await page.close(); }
@@ -209,8 +214,8 @@ test('editing the existing payment recipient updates the payout without insertin
         await page.waitForFunction(() => window.__writes.some(w => w.table === 'payments' && w.values.metadata));
         await page.waitForFunction(() => !document.querySelector('#entry-payment-recipient'));
         await clickText(page, 'Overview');
-        await page.waitForFunction(() => document.body.textContent.includes('R 342,50'));
-        assert.equal(await metric(page, 'Balance due from 4M'), 'R342,50');
+        await page.waitForFunction(() => document.body.textContent.includes('R 370,00'));
+        assert.equal(await metric(page, 'Balance due from 4M'), 'R370,00');
         const writes = await page.evaluate(() => window.__writes.filter(w => w.table === 'payments' && w.values.metadata));
         assert.equal(writes.length, 1);
         assert.equal(writes[0].operation, 'update');

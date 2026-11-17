@@ -218,7 +218,9 @@ async function run() {
 
             const patch = {
                 rankings,
-                points: selected ? Number(selected.points) || 0 : Number(unique[0]?.points) || 0,
+                // Preserved club rankings can contain decimals. players.points
+                // is an integer; keep the original precision in rankings JSON.
+                points: Math.round(selected ? Number(selected.points) || 0 : Number(unique[0]?.points) || 0),
                 rank_label: selected?.rank || unique[0]?.rank || null,
             };
             if (selected) {

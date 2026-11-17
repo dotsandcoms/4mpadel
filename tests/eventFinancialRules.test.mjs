@@ -21,29 +21,30 @@ function documentExample(direct = 0, payouts = []) {
 test('the document example reconciles billed, collections, refunds, fee and balance exactly', () => {
     const s = documentExample();
     assert.deepEqual([s.totalAmountBilled, s.pendingAmount, s.grossEntryFees, s.entryFeesRefunded, s.entryFeeBalance, s.commission, s.organiserEntitlement, s.dueToOrg],
-        [200600, 3200, 197400, 28000, 169400, 9870, 159530, 159530]);
+        [200600, 3200, 169400, 28000, 169400, 8470, 160930, 160930]);
     assert.equal(s.paystackCollected + s.collectedManual + s.collectedOrganiser, s.grossEntryFees);
     assert.equal(s.issues.length, 0);
 });
 
 test('direct organiser receipts and completed payouts reduce the transfer, while EFT to 4M stays in it', () => {
     const s = documentExample(5000, [{ id: 'paid-request', amount: 40000 }, { id: 'paid-request', amount: 40000 }, { id: 'pending-request', amount: 10000, status: 'pending' }]);
-    assert.equal(s.grossEntryFees, 197400);
+    assert.equal(s.cashHistory.grossEntryFees, 197400);
+    assert.equal(s.grossEntryFees, 169400);
     assert.equal(s.collectedManual, 8800);
     assert.equal(s.collectedOrganiser, 5000);
-    assert.equal(s.commissionBase, 192400);
-    assert.equal(s.commission, 9620);
+    assert.equal(s.commissionBase, 164400);
+    assert.equal(s.commission, 8220);
     assert.equal(s.interimPaid, 40000);
-    assert.equal(s.dueToOrg, 114780);
+    assert.equal(s.dueToOrg, 116180);
     assert.equal(s.payoutRows.length, 1);
 });
 
-test('the screenshot example retains its existing correct figures to the cent', () => {
+test('refunded withdrawals remain in history and are excluded from current-entry billing and fee', () => {
     const registrations = Array.from({ length: 87 }, (_, i) => registration(String(i), { payment_status: i < 60 ? 'paid' : 'pending' }));
     const payments = [...Array.from({ length: 60 }, (_, i) => payment(String(i), 600)), payment('withdrawn', 550)];
     const s = calculate({ registrations: [...registrations, registration('withdrawn', { status: 'withdrawn', payment_status: 'refunded' })], payments,
         refunds: [refund('withdrawn', 550, { event_registration_id: 'withdrawn' })] });
-    assert.deepEqual([s.activeEntries, s.pendingCount, s.totalAmountBilled, s.grossEntryFees, s.entryFeeBalance, s.commission, s.dueToOrg], [87, 27, 52750, 36550, 36000, 1827.5, 34172.5]);
+    assert.deepEqual([s.activeEntries, s.pendingCount, s.totalAmountBilled, s.grossEntryFees, s.entryFeeBalance, s.commission, s.dueToOrg], [87, 27, 52200, 36000, 36000, 1800, 34200]);
 });
 
 test('method cannot identify recipient; unconfirmed historical manual collections block payouts', () => {
@@ -63,8 +64,10 @@ test('direct club receipts earn zero commission, including withdrawn collections
     const s = calculate({ registrations: [registration('club'), registration('old', { status: 'withdrawn' })],
         payments: [manual('club', 600, 'organiser'), manual('old', 800, 'club')],
         refunds: [refund('old', 800, { metadata: { cover_type: 'entry', refund_funded_by: 'organiser' } })] });
-    assert.equal(s.grossEntryFees, 1400);
-    assert.equal(s.collectedOrganiser, 1400);
+    assert.equal(s.cashHistory.grossEntryFees, 1400);
+    assert.equal(s.grossEntryFees, 600);
+    assert.equal(s.cashHistory.collectedOrganiser, 1400);
+    assert.equal(s.collectedOrganiser, 600);
     assert.equal(s.organiserRetained, 600);
     assert.equal(s.commissionBase, 0);
     assert.equal(s.commission, 0);
@@ -82,7 +85,7 @@ test('a refunded team division repaid to the club stays separate from the partne
     const clubPayments = ['payer', 'partner'].map(id => manual(`${id}-club`, 800, 'organiser'));
     const s = calculate({ registrations, payments: [checkout, ...clubPayments],
         refunds: ['payer', 'partner'].map(id => refund('team', 800, { id: `refund-${id}`, event_registration_id: `${id}-old` })) });
-    assert.deepEqual([s.grossEntryFees, s.collected4M, s.collectedOrganiser, s.entryFeesRefunded, s.commission, s.dueToOrg], [4800, 3200, 1600, 1600, 160, 1440]);
+    assert.deepEqual([s.grossEntryFees, s.collected4M, s.collectedOrganiser, s.entryFeesRefunded, s.commission, s.dueToOrg], [3200, 1600, 1600, 1600, 80, 1520]);
     assert.equal(s.paid4M, 2);
     assert.equal(s.paidClub, 2);
     assert.equal(s.pendingCount, 0);
@@ -109,7 +112,7 @@ test('correcting a receipt to organiser-held removes its commission without addi
 
 test('pending refunds reserve payout cash without becoming completed refunds or unpaid entries', () => {
     const s = calculate({ registrations: [registration('a')], payments: [payment('a', 600)], refunds: [refund('a', 200, { status: 'processing' })] });
-    assert.deepEqual([s.totalAmountBilled, s.pendingAmount, s.entryFeesRefunded, s.refundReserve, s.entryFeeBalance, s.dueToOrg, s.availableForPayout], [600, 0, 0, 200, 600, 570, 370]);
+    assert.deepEqual([s.totalAmountBilled, s.pendingAmount, s.entryFeesRefunded, s.refundReserve, s.entryFeeBalance, s.dueToOrg, s.availableForPayout], [600, 0, 0, 200, 400, 380, 380]);
 });
 
 test('processed and pending copies of the same provider refund are deducted once as completed', () => {
@@ -120,7 +123,7 @@ test('processed and pending copies of the same provider refund are deducted once
     ] });
     assert.equal(s.entryFeesRefunded, 100);
     assert.equal(s.refundReserve, 0);
-    assert.equal(s.dueToOrg, 470);
+    assert.equal(s.dueToOrg, 475);
 });
 
 test('an organiser-funded refund reduces their retained receipts instead of being charged to 4M again', () => {
@@ -137,7 +140,7 @@ test('a refunded old entry cannot supply the price or receipt for an unpaid repl
     const current = registration('current', { payment_status: 'pending', email: old.email });
     const s = calculate({ registrations: [old, current], payments: [payment('old', 550)], refunds: [refund('old', 550, { event_registration_id: 'old' })] });
     assert.equal(s.pendingAmount, 600);
-    assert.equal(s.totalAmountBilled, 1150);
+    assert.equal(s.totalAmountBilled, 600);
     assert.equal(s.entryFeesRefunded, 550);
 });
 
@@ -162,16 +165,17 @@ test('an explicitly unallocated credit remains collected cash but is not applied
     const s = calculate({ registrations: [registration('a')], payments: [payment('a', 600, { created_at: '2026-10-01', metadata: { email: 'a@example.com', covers } }), payment('credit', 800, {
         created_at: '2026-10-02', metadata: { email: 'a@example.com', covers, unallocated_credit_amount: 800 },
     })] });
-    assert.equal(s.collected4M, 1400);
+    assert.equal(s.cashHistory.collected4M, 1400);
+    assert.equal(s.collected4M, 600);
     assert.equal(s.unallocatedCredit4M, 800);
-    assert.equal(s.commission, 70);
-    assert.equal(s.dueToOrg, 1330);
-    assert.equal(s.availableForPayout, 530);
+    assert.equal(s.commission, 30);
+    assert.equal(s.dueToOrg, 570);
+    assert.equal(s.availableForPayout, 570);
     assert.equal(s.allocations[0].amount, 600);
     assert.equal(s.pendingAmount, 0);
     assert.deepEqual(s.issues, []);
     assert.equal(s.allocations[0].shares.some(share => share.receipt.reference.endsWith('credit')), false);
-    assert.equal(eventPayoutRequestLimit({ end_date: '2026-10-01' }, s).maxRequestable, 530);
+    assert.equal(eventPayoutRequestLimit({ end_date: '2026-10-01' }, s).maxRequestable, 570);
     const returned = calculate({ registrations: [], payments: [payment('credit', 800, {
         metadata: { unallocated_credit_amount: 800 },
     })], refunds: [refund('credit', 800)] });
@@ -181,7 +185,7 @@ test('an explicitly unallocated credit remains collected cash but is not applied
 test('event end-day payout rules use South African time and remaining payouts use the current balance', () => {
     const s = documentExample(5000, [{ id: 'first', amount: 40000 }]);
     assert.equal(eventPayoutRequestLimit({ end_date: '2026-11-02' }, s, Date.parse('2026-11-02T21:59:59Z')).canRequest, false);
-    assert.equal(eventPayoutRequestLimit({ end_date: '2026-11-02' }, s, Date.parse('2026-11-02T22:00:00Z')).maxRequestable, 114780);
+    assert.equal(eventPayoutRequestLimit({ end_date: '2026-11-02' }, s, Date.parse('2026-11-02T22:00:00Z')).maxRequestable, 116180);
 });
 
 test('finance overview uses the same event statements and keeps overpayments separate', () => {
@@ -199,6 +203,6 @@ test('a refund retaining only its gateway reference is included in the event ove
     const rows = buildEventSettlements({ events: [{ id: 1, is_manual: true, entry_fee: 600 }], registrations: [registration('a')], payments: [payment('a', 600)],
         refunds: [refund('a', 100, { payment_id: null, paystack_reference: 'REGEV-1-a' })] });
     assert.equal(rows[0].settlement.entryFeesRefunded, 100);
-    assert.equal(rows[0].settlement.dueToOrg, 470);
+    assert.equal(rows[0].settlement.dueToOrg, 475);
     assert.equal(rows[0].settlement.pendingAmount, 0);
 });

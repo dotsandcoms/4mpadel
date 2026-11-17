@@ -111,6 +111,9 @@ test('client batches summaries in groups of 5 and rejects missing or duplicate r
     for (const rows of [[], [{ id: 1, stats: {}, settlement: {} }, { id: 1, stats: {}, settlement: {} }]]) {
         await assert.rejects(loadFinanceOverviewSummaries({ functions: { invoke: async () => ({ data: { summaries: rows } }) } }, [1, 2], () => assert.fail('partial results')), /Incomplete/);
     }
+    const stale = buildFinanceOverviewSummaries(source)[0];
+    delete stale.settlement.basis;
+    await assert.rejects(loadFinanceOverviewSummaries({ functions: { invoke: async () => ({ data: { summaries: [stale] } }) } }, [101], () => assert.fail('stale calculation basis')), /Incomplete/);
 });
 
 test('memory cache expires, separates account/permission/filter scopes and invalidates edited events everywhere', () => {

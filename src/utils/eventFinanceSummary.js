@@ -2,7 +2,7 @@ import { buildEventSettlements } from './eventSettlement.js';
 import { resolveRegistrationLicenseCategory } from './registrationLicense.js';
 
 const norm = value => String(value || '').trim().toLowerCase();
-const SUMMARY_FIELDS = ['activeEntries', 'grossEntryFees', 'totalAmountBilled', 'pendingAmount',
+const SUMMARY_FIELDS = ['basis', 'activeEntries', 'grossEntryFees', 'totalAmountBilled', 'pendingAmount',
     'paid4M', 'paidClub', 'compedEntries', 'commission', 'interimPaid', 'organiserRetained',
     'entryFeesRefunded', 'dueToOrg', 'issues'];
 

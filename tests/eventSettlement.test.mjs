@@ -28,9 +28,24 @@ test('one shared external reference can fund only one R600 entry', () => {
     assert.equal(r.allocations.find(a => a.registration.id === 'a').holder, '4m');
     assert.ok(r.issues.some(i => i.includes('Multiple entry confirmations')));
 });
-test('genuine extra entry collections earn commission and remain in the gross statement', () => {
+test('distinct admin-confirmed external entry allocations share one receipt without dropping an entry', () => {
+    const r = calc({ registrations: [reg('a'), reg('b')], payments: [admin('a', 'manual', 'T396848386071945'), admin('b', 'manual', 'T396848386071945')] });
+    assert.equal(r.receiptRows.length, 1);
+    assert.equal(r.receiptRows[0].amount, 1200);
+    assert.equal(r.paid4M, 2);
+    assert.equal(r.pendingAmount, 0);
+    assert.equal(r.commission, 60);
+    assert.equal(r.dueToOrg, 1140);
+    assert.deepEqual(r.issues, []);
+    const duplicate = calc({ registrations: [reg('a')], payments: [admin('a', 'manual', 'T396848386071945'), { ...admin('a', 'manual', 'T396848386071945'), id: 'retry' }] });
+    assert.equal(duplicate.receiptRows[0].amount, 600);
+    assert.equal(duplicate.commission, 30);
+    assert.equal(duplicate.dueToOrg, 570);
+    assert.ok(duplicate.issues.length > 0);
+});
+test('extra receipts remain in cash history without inflating current-entry fees or payout', () => {
     const r = calc({ registrations: [reg('a')], payments: [pay('a'), pay('second', { metadata: { email: 'a@example.com' } })] });
-    assert.equal(r.collected4M, 1200); assert.equal(r.totalAmountBilled, 1200); assert.equal(r.commission, 60); assert.equal(r.dueToOrg, 1140);
+    assert.equal(r.cashHistory.collected4M, 1200); assert.equal(r.collected4M, 600); assert.equal(r.totalAmountBilled, 600); assert.equal(r.commission, 30); assert.equal(r.dueToOrg, 570); assert.equal(r.unallocatedCash4M, 600);
 });
 test('gateway and recorded refunds with the same provider ID are counted once; licence refunds stay separate', () => {
     const p = pay('a', { amount: 1200 });
@@ -38,7 +53,7 @@ test('gateway and recorded refunds with the same provider ID are counted once; l
         refunds: [{ id: 'f', payment_id: 'a', amount: 600, status: 'processed', paystack_refund_id: '8', metadata: { cover_type: 'entry' } },
             { id: 'l', payment_id: 'lic', amount: 120, status: 'processed', paystack_refund_id: '9', metadata: { cover_type: 'license' } }],
         verification: { receipts: [proof(p.reference, 1320)], gateway_refunds: [{ reference: p.reference, refund_id: '8', amount: 600, status: 'processed' }, { reference: p.reference, refund_id: '9', amount: 120, status: 'processed' }], complete: true } });
-    assert.equal(r.collected4M, 1200); assert.equal(r.entryFeesRefunded, 600); assert.equal(r.netHeld4M, 600);
+    assert.equal(r.cashHistory.collected4M, 1200); assert.equal(r.collected4M, 600); assert.equal(r.entryFeesRefunded, 600); assert.equal(r.netHeld4M, 600);
 });
 test('a Paystack refund missing from the local ledger still reduces held funds', () => {
     const p = pay('a');
@@ -47,7 +62,7 @@ test('a Paystack refund missing from the local ledger still reduces held funds',
 });
 test('pending refunds are reserved rather than reported as processed', () => {
     const r = calc({ registrations: [reg('a')], payments: [pay('a')], refunds: [{ id: 'f', payment_id: 'a', amount: 200, status: 'processing', metadata: { cover_type: 'entry' } }] });
-    assert.equal(r.entryFeesRefunded, 0); assert.equal(r.refundReserve, 200); assert.equal(r.netHeld4M, 600); assert.equal(r.availableForPayout, 370);
+    assert.equal(r.entryFeesRefunded, 0); assert.equal(r.refundReserve, 200); assert.equal(r.netHeld4M, 600); assert.equal(r.availableForPayout, 380);
 });
 test('old refunded Paystack cash does not make a new club-paid entry into 4M cash', () => {
     const r = calc({ registrations: [reg('a')], payments: [pay('a'), admin('a', 'manual', 'Card payment at club', 'organiser')], refunds: [{ id: 'f', payment_id: 'a', amount: 600, status: 'processed', metadata: { cover_type: 'entry' } }] });

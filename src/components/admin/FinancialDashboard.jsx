@@ -81,7 +81,7 @@ const FinancialDashboard = ({ allowedEvents = EMPTY_EVENTS, onSelectEvent }) => 
                 ]);
                 const statements = buildEventSettlements({ events, registrations, participants, payments, refunds, divisions });
                 const receipts = statements.flatMap(e => e.settlement.receiptRows);
-                const entryRefunds = statements.flatMap(e => e.settlement.processedRefundRows);
+                const currentShares = statements.flatMap(e => e.settlement.allocations.flatMap(a => a.shares || []));
                 const licenses = payments.filter(p => p.status === 'success' && !p.is_test && !normalizePaymentMetadata(p.metadata).is_test && isLicensePaymentRow(p));
                 const licenseById = new Map(licenses.map(p => [p.id, p]));
                 const licenseRefunds = [...new Map(refunds.filter(r => r.status === 'processed' && licenseById.has(r.payment_id))
@@ -93,7 +93,7 @@ const FinancialDashboard = ({ allowedEvents = EMPTY_EVENTS, onSelectEvent }) => 
                 const fullLicRev = sum(licenses.filter(full)) - sum(licenseRefunds.filter(r => full(licenseById.get(r.payment_id))));
                 const tempLicRev = sum(licenses.filter(p => !full(p))) - sum(licenseRefunds.filter(r => !full(licenseById.get(r.payment_id))));
                 const totals = summarizeEventSettlements(statements);
-                const eventEntryRev = totals.collected - totals.refunds;
+                const eventEntryRev = totals.collected;
                 const totalRevenue = eventEntryRev + fullLicRev + tempLicRev;
                 const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                 const monthlyData = months.map((name, i) => {
@@ -101,7 +101,7 @@ const FinancialDashboard = ({ allowedEvents = EMPTY_EVENTS, onSelectEvent }) => 
                         const date = new Date(value);
                         return date.getFullYear() === new Date().getFullYear() && date.getMonth() === i;
                     };
-                    const entries = sum(receipts.filter(p => inMonth(p.created_at))) - sum(entryRefunds.filter(r => inMonth(r.processed_at || r.created_at)));
+                    const entries = sum(currentShares.filter(s => inMonth(s.receipt.created_at)));
                     const licenseTotal = sum(licenses.filter(p => inMonth(p.created_at))) - sum(licenseRefunds.filter(r => inMonth(r.processed_at || r.created_at)));
                     return { name, revenue: entries + licenseTotal, entries, licenses: licenseTotal };
                 });
@@ -166,7 +166,7 @@ const FinancialDashboard = ({ allowedEvents = EMPTY_EVENTS, onSelectEvent }) => 
                     color="blue-500"
                 />
                 <KPICard
-                    title="Total cash collected"
+                    title="Current entry payments"
                     value={money(eventTotals.collected)}
                     icon={Trophy}
                     color="padel-green"
@@ -287,7 +287,7 @@ const FinancialDashboard = ({ allowedEvents = EMPTY_EVENTS, onSelectEvent }) => 
                 <div className="flex justify-between items-center mb-8">
                     <div>
                         <h3 className="text-xl font-bold text-white uppercase tracking-tighter">Event finance summary</h3>
-                        <p className="text-gray-400 text-sm">Collections, refunds, commission and organiser settlements</p>
+                        <p className="text-gray-400 text-sm">Current registration payments, commission and organiser settlements</p>
                     </div>
                     <div className="bg-padel-green/10 text-padel-green px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-padel-green/20">
                         Balance owed: {money(eventTotals.balanceOwed)}
@@ -302,7 +302,7 @@ const FinancialDashboard = ({ allowedEvents = EMPTY_EVENTS, onSelectEvent }) => 
                         </select></label>
                         <div className="overflow-x-auto">
                             <table className="w-full min-w-[960px] text-left text-xs">
-                                <thead className="text-gray-400"><tr>{['Event', 'Entries', 'Cash collected', 'Refunds', 'Commission on 4M receipts', 'Direct to organiser', 'Paid out by 4M', 'Balance owed'].map(label => <th key={label} className="p-3">{label}</th>)}</tr></thead>
+                                <thead className="text-gray-400"><tr>{['Event', 'Entries', 'Current entry payments', 'Refunds (history)', 'Fee on current 4M entries', 'Direct to organiser', 'Paid out by 4M', 'Balance owed'].map(label => <th key={label} className="p-3">{label}</th>)}</tr></thead>
                                 <tbody className="divide-y divide-white/10">{displayedEvents.map(event => <tr key={event.id}>
                                     <td className="p-3"><button type="button" onClick={() => onSelectEvent?.(event.id)} className="text-left font-bold text-white hover:text-padel-green">{event.event_name}</button>{event.settlement.issues.length > 0 && <p className="mt-1 text-amber-300">Needs review</p>}{event.settlement.unallocatedCredit4M > 0 && <p className="mt-1 text-amber-300">{money(event.settlement.unallocatedCredit4M)} unallocated credit reserved from payout</p>}</td>
                                     <td className="p-3 text-white">{event.settlement.activeEntries}</td>

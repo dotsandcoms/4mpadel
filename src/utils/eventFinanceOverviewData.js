@@ -1,4 +1,5 @@
 import { fetchAllRows } from './fetchAllRows.js';
+import { REGISTRATION_FINANCE_BASIS } from './registrationFinance.js';
 
 const DEFAULT_SAPA_STATUSES = ['Silver', 'Gold', 'Super Gold', 'S Gold', 'Major'];
 const EVENT_COLUMNS = 'id, event_name, sapa_status, start_date, end_date, registration_closes_at, rankedin_id, rankedin_url, entry_fee, category_fees, early_bird_fee, early_bird_ends_at, finance_managed, is_manual, allow_payments, slug, venue, venues, event_status, organisation_id, club_id, organiser_interim_payments, organiser_settlement_confirmation, organiser_name, organiser_email, organisations:organisation_id(id, name, slug), clubs:club_id(id, name, short_name, slug)';
@@ -39,7 +40,7 @@ export async function loadFinanceOverviewSummaries(client, eventIds, onBatch) {
 
 function validSummary({ stats, settlement }) {
     const numeric = value => typeof value === 'number' && Number.isFinite(value);
-    return stats && settlement
+    return stats && settlement && settlement.basis === REGISTRATION_FINANCE_BASIS
         && ['entries', 'billed', 'collected', 'outstanding', 'paidCount', 'compedCount', 'uniquePlayersCount'].every(key => numeric(stats[key]))
         && ['full', 'temp', 'none'].every(key => numeric(stats.licenses?.[key]))
         && ['activeEntries', 'grossEntryFees', 'totalAmountBilled', 'pendingAmount', 'paid4M', 'paidClub', 'compedEntries',

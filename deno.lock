@@ -65,6 +65,7 @@
         "npm:autoprefixer@^10.4.24",
         "npm:dompurify@^3.2.4",
         "npm:dotenv@^17.3.1",
+        "npm:esbuild@0.28.1",
         "npm:eslint-plugin-react-hooks@^7.0.1",
         "npm:eslint-plugin-react-refresh@~0.4.24",
         "npm:eslint@^9.39.1",
