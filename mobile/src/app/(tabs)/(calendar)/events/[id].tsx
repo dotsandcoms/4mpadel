@@ -17,6 +17,7 @@ import { Notice } from '@/components/events/event-ui';
 import { Accordion, CircleAction, EventIcon, EventText as Text, Fade, InfoRows, WebsiteHeader, EventAccent, useEventAccent, type EventIconName } from '@/components/events/website-ui';
 import { EventTimeline, RegistrationCountdown } from '@/components/events/event-timeline';
 import { EventTitle } from '@/components/events/event-title';
+import { TourTarget, TourScrollScope, ContextualTip } from '@/components/guided-tour';
 import { fetchEntryBalances, currentEmail, fetchEventPlayerRankings, fetchDivisions, fetchDrawStatus, fetchEvent, fetchEventOrganisation, fetchMyEventRegistrations, fetchPublicEntries, fetchScheduledIds, setEventScheduled,
   type Division, type EventDetail, type EventOrganisation, type EventRegistration, type PublicEntry } from '@/lib/events';
 import { entryFee, formatMoney, plainText, registrationState } from '@/lib/event-rules';
@@ -49,6 +50,7 @@ function EventContent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const tabPadding = useTabScenePadding();
+  const tourScroll = useRef<ScrollView>(null), tourContent = useRef<View>(null!);
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [registrations, setRegistrations] = useState<EventRegistration[]>([]);
@@ -154,20 +156,21 @@ function EventContent() {
   const sponsors = event?.sponsor_logos?.filter(url => url && url !== organisation?.logo_url && url !== event.poster_image_url && url !== event.custom_image_url) || [];
   return <EventAccent value={accent}><View style={{ flex: 1, backgroundColor: '#F5F6F3', paddingTop: insets.top }}>
     <WebsiteHeader />
-    {event && <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}><EventMessagesButton eventId={event.id} /></View>}
-    <ScrollView stickyHeaderIndices={event ? [1] : []} refreshControl={<RefreshControl colors={[loadingBlue]} refreshing={loading && !!event} onRefresh={load} tintColor={loadingBlue} />} contentContainerStyle={{ paddingBottom: tabPadding, backgroundColor: '#f9fafb' }}>
+    {event && <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}><TourTarget id="event.messages"><EventMessagesButton eventId={event.id} /></TourTarget></View>}
+    <TourScrollScope scroll={tourScroll} content={tourContent}><ScrollView ref={tourScroll} innerViewRef={tourContent} stickyHeaderIndices={event ? [1] : []} refreshControl={<RefreshControl colors={[loadingBlue]} refreshing={loading && !!event} onRefresh={load} tintColor={loadingBlue} />} contentContainerStyle={{ paddingBottom: tabPadding, backgroundColor: '#f9fafb' }}>
       {event ? <View style={{ backgroundColor: '#F5F6F3' }}>
         <View style={{ paddingHorizontal: 20, paddingTop: 16, flexDirection: 'row', justifyContent: 'space-between' }}>
           <CircleAction name="arrow.left" label="Back to calendar" onPress={back} />
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <EventNotificationBell eventId={event.id} eventName={event.event_name || 'Tournament'} circle />
-            <CircleAction name="calendar" label="Add to calendar" onPress={() => void runAction(() => addToCalendar({ title: event.event_name || "Padel event", startDate: event.start_date || "", endDate: event.end_date, location: eventLocation(event), url: eventWebUrl(event) }))} />
-            <CircleAction name="square.and.arrow.up" label="Share event" onPress={() => void runAction(() => Share.share({ message: `${event.event_name}\n${eventWebUrl(event)}`, url: eventWebUrl(event) }).then(result => { if (result.action === Share.sharedAction) void trackEvent('share', { content_type: 'events', method: 'native' }); }))} />
-            <CircleAction name={saved ? 'checkmark' : 'plus'} label={saved ? 'Remove from My Schedule' : 'Add to My Schedule'} onPress={toggleSaved} selected={saved} disabled={saving || !!accountError} />
+            <TourTarget id="event.bell"><EventNotificationBell eventId={event.id} eventName={event.event_name || 'Tournament'} circle /></TourTarget>
+            <TourTarget id="event.calendar"><CircleAction name="calendar" label="Add to calendar" onPress={() => void runAction(() => addToCalendar({ title: event.event_name || "Padel event", startDate: event.start_date || "", endDate: event.end_date, location: eventLocation(event), url: eventWebUrl(event) }))} /></TourTarget>
+            <TourTarget id="event.share"><CircleAction name="square.and.arrow.up" label="Share event" onPress={() => void runAction(() => Share.share({ message: `${event.event_name}\n${eventWebUrl(event)}`, url: eventWebUrl(event) }).then(result => { if (result.action === Share.sharedAction) void trackEvent('share', { content_type: 'events', method: 'native' }); }))} /></TourTarget>
+            <TourTarget id="event.save"><CircleAction name={saved ? 'checkmark' : 'plus'} label={saved ? 'Remove from My Schedule' : 'Add to My Schedule'} onPress={toggleSaved} selected={saved} disabled={saving || !!accountError} /></TourTarget>
           </View>
         </View>
         <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 40 }}>
-          {!!event.sapa_status && event.sapa_status !== 'None' && <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}><Text style={{ color: sapaTone(event.sapa_status).text, fontSize: 9, fontWeight: '700', letterSpacing: 1, borderWidth: 1, borderColor: sapaTone(event.sapa_status).border, borderRadius: 16, paddingHorizontal: 9, paddingVertical: 4 }}>{event.sapa_status.toUpperCase()}</Text><Text style={{ color: sapaTone(event.sapa_status).text, fontSize: 9, fontWeight: '700', letterSpacing: 1, borderWidth: 1, borderColor: sapaTone(event.sapa_status).border, borderRadius: 16, paddingHorizontal: 9, paddingVertical: 4 }}>SAPA</Text></View>}
+          <ContextualTip chapter="event" label="Show me around this event" replayLabel="Event guide" style={{ marginBottom: 12 }} />
+          <TourTarget id="event.summary">{!!event.sapa_status && event.sapa_status !== 'None' && <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}><Text style={{ color: sapaTone(event.sapa_status).text, fontSize: 9, fontWeight: '700', letterSpacing: 1, borderWidth: 1, borderColor: sapaTone(event.sapa_status).border, borderRadius: 16, paddingHorizontal: 9, paddingVertical: 4 }}>{event.sapa_status.toUpperCase()}</Text><Text style={{ color: sapaTone(event.sapa_status).text, fontSize: 9, fontWeight: '700', letterSpacing: 1, borderWidth: 1, borderColor: sapaTone(event.sapa_status).border, borderRadius: 16, paddingHorizontal: 9, paddingVertical: 4 }}>SAPA</Text></View>}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
             {!!posterUrl && <Pressable accessibilityRole="button" accessibilityLabel="View event poster" onPress={() => setPosterOpen(true)} style={{ width: 64, height: 80, borderRadius: 8, overflow: 'hidden' }}><Image source={{ uri: posterUrl }} contentFit="contain" style={{ width: '100%', height: '100%' }} /></Pressable>}
             <EventTitle key={event.id} title={event.event_name || 'Tournament'} />
@@ -176,23 +179,24 @@ function EventContent() {
             <EventIcon name="calendar" size={14} /><Text style={{ fontSize: 12, color: '#16251fe6' }}>{event.event_dates || formatEventRange(event.start_date, event.end_date)}</Text>
             <Text style={{ fontSize: 12, color: '#16251f55' }}>|</Text><EventIcon name="mappin.and.ellipse" size={14} /><Text numberOfLines={1} style={{ fontSize: 12, flex: 1, color: '#16251fe6' }}>{eventLocation(event)}</Text>
           </View>
-          <View style={{ marginTop: 8, flexDirection: 'row', borderRadius: 16, borderColor: '#16251f1a', borderWidth: 1, overflow: 'hidden', backgroundColor: '#fff' }}>
+          </TourTarget>
+          <TourTarget id="event.stats" style={{ marginTop: 8, flexDirection: 'row', borderRadius: 16, borderColor: '#16251f1a', borderWidth: 1, overflow: 'hidden', backgroundColor: '#fff' }}>
             {stats.map((stat, i) => <View key={stat.label} style={{ flex: 1, paddingVertical: 16, paddingHorizontal: 1, alignItems: 'center', borderLeftWidth: i ? 1 : 0, borderColor: '#16251f1a', gap: 4 }}><EventIcon name={stat.icon} /><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ fontSize: 14, fontWeight: '700', textAlign: 'center', alignSelf: 'stretch' }}>{stat.value}</Text><Text style={{ fontSize: 9, color: '#16251f80', letterSpacing: 0.3 }}>{stat.label.toUpperCase()}</Text></View>)}
-          </View>
+          </TourTarget>
           {(hasSapa || organisation?.logo_url || sponsors.length > 0) && <View style={{ flexDirection: 'row', marginTop: 12, borderRadius: 16, borderColor: '#16251f1a', borderWidth: 1, backgroundColor: '#fff', overflow: 'hidden' }}>
             {hasSapa && <View style={{ width: 92, paddingHorizontal: 8, paddingVertical: 12, alignItems: 'center', borderRightWidth: organisation?.logo_url || sponsors.length ? 1 : 0, borderColor: '#16251f1a', gap: 8 }}><Text style={{ fontSize: 9, color: '#386018' }}>SAPA</Text><Image source={require('@/assets/sapa-logo.svg')} accessibilityLabel="South African Padel Association" contentFit="contain" style={{ width: 48, height: 48 }} /></View>}
             {organisation?.logo_url && <Pressable accessibilityRole="button" accessibilityLabel={organisation.name} onPress={() => organisation.slug && void runAction(() => openSitePath(`/organisations/${organisation.slug}`))} style={{ width: 92, paddingHorizontal: 8, paddingVertical: 12, alignItems: 'center', borderRightWidth: sponsors.length ? 1 : 0, borderColor: '#16251f1a', gap: 8 }}><Text numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 9, color: "#386018" }}>ORGANISATION</Text><Image source={{ uri: organisation.logo_url }} style={{ width: 55, height: 32 }} contentFit="contain" /></Pressable>}
             {sponsors.length > 0 && <View style={{ flex: 1, padding: 12, gap: 8, alignItems: 'center' }}><Text style={{ fontSize: 9, color: "#386018" }}>SPONSORS</Text><ScrollView horizontal nestedScrollEnabled showsHorizontalScrollIndicator={false} style={{ alignSelf: 'stretch' }} contentContainerStyle={{ alignItems: 'center', justifyContent: sponsors.length <= 3 ? 'space-evenly' : 'flex-start', flexGrow: 1, gap: 8 }}>{sponsors.map(url => <Image key={url} source={{ uri: url }} style={{ width: 40, height: 32 }} contentFit="contain" />)}</ScrollView></View>}
           </View>}
-          <RegistrationCountdown event={event} onRegister={() => { if (registrations.length) { setTab('Overview'); setManageRequested(true); } else register(); }} label={registrations.length ? 'Manage Entry' : state === 'open' ? 'Register' : null} onDownloadPlayers={() => void downloadPlayers()} downloadingPlayers={downloadingPlayers} />
-          <EventTimeline event={event} hasDraw={drawStatus.hasDraw} />
+          <TourTarget id="event.registration"><RegistrationCountdown event={event} onRegister={() => { if (registrations.length) { setTab('Overview'); setManageRequested(true); } else register(); }} label={registrations.length ? 'Manage Entry' : state === 'open' ? 'Register' : null} onDownloadPlayers={() => void downloadPlayers()} downloadingPlayers={downloadingPlayers} /></TourTarget>
+          <TourTarget id="event.progress"><EventTimeline event={event} hasDraw={drawStatus.hasDraw} /></TourTarget>
           {!!(actionError || accountError || publicError) && <View style={{ marginTop: 12 }}><Notice title="Please try again" onRetry={load}>{actionError || accountError || publicError}</Notice></View>}
           {state === 'cancelled' && <View style={{ marginTop: 12 }}><Notice title="Event cancelled">This event is no longer taking place.</Notice></View>}
         </View>
       </View> : <View style={{ backgroundColor: '#F5F6F3', padding: 30 }}>{loading ? <ActivityIndicator color={loadingBlue} /> : <Notice title="Event unavailable" onRetry={load}>{error}</Notice>}</View>}
-      {event && <View><View style={{ flexDirection: 'row', backgroundColor: '#fff', paddingHorizontal: 16, borderBottomColor: '#e5e7eb', borderBottomWidth: 1 }}>
+      {event && <TourTarget id="event.tabs"><View style={{ flexDirection: 'row', backgroundColor: '#fff', paddingHorizontal: 16, borderBottomColor: '#e5e7eb', borderBottomWidth: 1 }}>
         {['Overview', 'Activity', 'Players', 'Draws', 'Results', 'Media'].map(label => <Pressable key={label} accessibilityRole="tab" accessibilityState={{ selected: label === tab }} onPress={() => { void trackEvent('feature_interaction', { feature: 'event_details', action: 'tab', selection: label.toLowerCase() }); setTab(label); }} style={{ flex: 1, paddingVertical: 16, borderBottomWidth: 2, borderBottomColor: label === tab ? '#0a0a0a' : 'transparent', alignItems: 'center' }}><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ color: label === tab ? '#0a0a0a' : '#65726B', fontSize: 12, fontWeight: label === tab ? '500' : '400' }}>{label}</Text></Pressable>)}
-      </View></View>}
+      </View></TourTarget>}
       {event && <View style={{ paddingHorizontal: 16, paddingTop: 24, gap: 24, backgroundColor: '#f9fafb', minHeight: 300 }}>
         {tab === 'Overview' && <>
           {event.registration_access === 'code' && state === 'open' && !registrations.length && <View style={{ padding: 16, borderRadius: 16, backgroundColor: '#fff7ed', borderColor: '#fed7aa', borderWidth: 1, gap: 18 }}>
@@ -227,7 +231,7 @@ function EventContent() {
         {tab === 'Activity' && <EventActivity event={event} directory={profiles} refreshKey={request.current} />}
 
       </View>}
-    </ScrollView>
+    </ScrollView></TourScrollScope>
     <Modal visible={posterOpen} transparent animationType="fade" onRequestClose={() => setPosterOpen(false)}><Pressable accessibilityRole="button" accessibilityLabel="Close event poster" onPress={() => setPosterOpen(false)} style={{ flex: 1, backgroundColor: '#000d', paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12, paddingHorizontal: 16 }}><View style={{ alignItems: 'flex-end' }}><Ionicons name="close" size={28} color="#fff" /></View>{!!posterUrl && <Image source={{ uri: posterUrl }} style={{ flex: 1, width: '100%' }} contentFit="contain" />}</Pressable></Modal>
 
   </View></EventAccent>;

@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ErrorBanner } from '@/components/error-banner';
 import { HomeAction } from '@/components/home-action';
 import { HomeHeader } from '@/components/home-header';
+import { TourTarget, ContextualTip, useGuidedTour } from '@/components/guided-tour';
 import { HomeSourcePicker, type HomeFeedTab } from '@/components/home-source-picker';
 import { FollowingFeedList } from '@/components/following-feed-list';
 import { FeedSection, FollowingRail, HomeIdentity, LocalNowRail, LocalResults, MediaRail, OfficialFipRail, SectionState, SpotlightRail, TourLiveRail, TourResults, TourSpotlight, UpcomingEntries } from '@/components/home-feed';
@@ -36,6 +37,7 @@ export default function HomeScreen() {
   }>>();
   const [tab, setTab] = useState<HomeFeedTab>('following'), [refreshing, setRefreshing] = useState(false);
   const banner = useHomeBannerDismissal();
+  const tour = useGuidedTour(), revealFollowing = useRef<() => void>(() => {});
   const source: HomeSource = tab === 'international' ? 'international' : '4m';
   const following = tab === 'following';
   const feed = useHomeFeed(source, !following);
@@ -62,12 +64,12 @@ export default function HomeScreen() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      if (!(await shouldPromptForPush()) || cancelled) return;
+      if (!feed.signedIn || tour?.allowSystemPrompts === false || !(await shouldPromptForPush()) || cancelled) return;
       await requestPushPermission();
       if (!cancelled) await markPushPromptSeen();
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [feed.signedIn, tour?.allowSystemPrompts]);
   // Keep the Watch/widget schedule without loading career results or the player directory.
   useEffect(() => {
     if (!feed.active || !feed.owner?.id || !feed.schedule.data || !feed.payments.data || feed.schedule.error || feed.payments.error || feed.matches.loading || feed.matches.error) return;
@@ -153,7 +155,8 @@ export default function HomeScreen() {
 
   const listHeader = <View style={{ flexShrink: 0 }}>
         <HomeIdentity player={feed.profile.data} loading={feed.profile.loading} onProfile={() => open('/(tabs)/profile')} onRankings={() => open('/rankings?view=Rankings&source=4m')} />
-        <View style={{ marginBottom: 16, flexShrink: 0 }}><HomeSourcePicker following value={tab} onChange={setTab} /></View>
+        <TourTarget id="home.feed" onReveal={() => { if (following) revealFollowing.current(); else list.current?.scrollToOffset({ offset: 0, animated: false }); }} style={{ marginBottom: 16, flexShrink: 0 }}><HomeSourcePicker following value={tab} onChange={setTab} /></TourTarget>
+        <ContextualTip chapter="home" style={{ marginBottom: 12 }} />
         {feed.signedIn && <ProfileCompletionBanner missing={profileMissing} onEdit={() => router.push('/edit-profile')} />}
         {!following && banner.ready && !banner.hidden && <HomeActionBanner actions={actionReminders} onReview={() => actionReminders.length > 1 ? open('/notifications') : openPending(actionReminders[0])} onDismiss={banner.dismiss} />}
       </View>;
@@ -161,7 +164,7 @@ export default function HomeScreen() {
   return <View style={s.page}>
     <ObserveReady ready={following ? !feed.profile.loading : local ? !feed.spotlight.loading : !feed.tour.loading} />
     <View style={{ paddingTop: insets.top, backgroundColor: b.page }}><HomeHeader onSearch={() => open(local ? '/search' : '/search?source=international')} onNotifications={() => open('/notifications')} /></View>
-    {following ? <FollowingFeedList header={listHeader} horizontalPadding={20} bottomPadding={tabPadding} /> : <FlatList ref={list} data={sections} extraData={feed} keyExtractor={section => `${source}:${section}`} renderItem={({ item }) => renderSection(item)}
+    {following ? <FollowingFeedList onTourScrollReady={reveal => { revealFollowing.current = reveal; }} header={listHeader} horizontalPadding={20} bottomPadding={tabPadding} /> : <FlatList ref={list} data={sections} extraData={feed} keyExtractor={section => `${source}:${section}`} renderItem={({ item }) => renderSection(item)}
       initialNumToRender={3} maxToRenderPerBatch={2} windowSize={5} showsVerticalScrollIndicator={false}
       contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 32 : tabPadding }}
       refreshControl={<RefreshControl colors={[loadingBlue]} refreshing={refreshing} onRefresh={() => void refresh()} tintColor={loadingBlue} />}

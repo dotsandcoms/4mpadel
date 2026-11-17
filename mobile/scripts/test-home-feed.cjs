@@ -58,6 +58,7 @@ test('FIP Home shortcuts select the native calendar and Players tabs with their 
     '@/hooks/use-tab-scene-padding': { useTabScenePadding: () => 0 },
     '@/hooks/use-home-feed': { useHomeFeed: () => ({ ...feed, completion: empty }) },
     '@/hooks/use-home-banner-dismissal': { useHomeBannerDismissal: () => ({ ready: true, hidden: false, dismiss() {} }) },
+    '@/components/guided-tour': { useGuidedTour: () => null, TourTarget: 'TourTarget', ContextualTip: 'ContextualTip' },
     '@/lib/profile-completion': { missingProfileFields: () => [] },
     '@/lib/home': { profileGaps: () => [] },
     '@/lib/home-feed': { homeTourEvents: () => [], homeOfficialFipEvents: () => [] },

@@ -8,6 +8,7 @@ import { ClubIdentity } from '@/components/club-identity';
 import { ClubTags, ClubVerifiedBadge } from '@/components/club-tags';
 import { clubHasOwner } from '@/lib/club-claims';
 import { HomeAction } from '@/components/home-action';
+import { TourTarget, TourScrollView, ContextualTip } from '@/components/guided-tour';
 import { ClubActions } from '@/components/club-actions';
 import { useClubFavourites } from '@/hooks/use-club-favourites';
 import { ErrorBanner } from '@/components/error-banner';
@@ -76,7 +77,7 @@ export default function ClubScreen() {
   });
   return <View style={{ flex: 1, backgroundColor: b.page }}>
     <Stack.Screen options={{ headerShown: true, title: 'Club details', headerBackTitle: 'Clubs', headerTintColor: b.premium, headerStyle: { backgroundColor: b.page }, headerShadowVisible: false }} />
-    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: 20, paddingBottom: 40, gap: 16 }}>
+    <TourScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: 20, paddingBottom: 40, gap: 16 }}>
       {loading && <ActivityIndicator color={loadingBlue} accessibilityLabel="Loading club details" />}
       {!!error && <HomeAction label="Retry club" onPress={() => setRevision(value => value + 1)} />}
       {club ? <>
@@ -90,7 +91,8 @@ export default function ClubScreen() {
           {claimAvailable === true && <HomeAction size="small" label="Claim Club" accessibilityLabel={`Claim ${club.name}`} onPress={() => router.push({ pathname: '/claim-club', params: { slug: club.slug } })} />}
         </View>
         <ClubTags club={club} onGroup={() => router.push({ pathname: '/club-groups/[slug]', params: { slug: club.group!.slug } })} />
-        <ClubActions club={club} favourites={favourites} onError={setError} />
+        <ContextualTip chapter="club" />
+        <TourTarget id="club.actions"><ClubActions club={club} favourites={favourites} onError={setError} /></TourTarget>
         {!!favourites.error && <HomeAction label="Retry favourites" onPress={favourites.retry} />}
         {claimError && <HomeAction size="small" label="Retry club ownership check" onPress={() => setRevision(value => value + 1)} />}
         {place?.rating && <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}><Text style={{ color: b.premium, fontSize: 16, fontWeight: '600' }}>{place.rating.toFixed(1)}</Text><RatingStars rating={place.rating} /><Text style={{ color: '#5E5E5E', fontSize: 12 }}>Google Maps · {place.reviewCount ?? '—'} reviews</Text>{place.openNow !== null && <Text style={{ ...s.meta, color: place.openNow ? b.accent : b.muted }}>{place.openNow ? 'Open now' : 'Closed now'}</Text>}</View>}
@@ -156,7 +158,7 @@ export default function ClubScreen() {
         </Section>}
         {!!relatedError && <HomeAction label="Retry linked information" onPress={() => setRevision(value => value + 1)} />}
       </> : !loading && !error && <Text style={s.body}>This club is not available in the public directory.</Text>}
-    </ScrollView>
+    </TourScrollView>
     <Modal visible={!!photo} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setPhoto(null)}>
       <View style={{ flex: 1, backgroundColor: b.page, paddingTop: safe.top, paddingBottom: safe.bottom }}>
         <View style={{ minHeight: 56, paddingHorizontal: 20, flexDirection: 'row', gap: 12, alignItems: 'center' }}><Text numberOfLines={2} style={{ ...s.rowTitle, flex: 1 }}>{photo?.caption || 'Club photo'}</Text><HomeAction kind="icon" icon="close" label="Close photo" onPress={() => setPhoto(null)} /></View>

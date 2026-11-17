@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { EventArtwork } from '@/components/event-artwork';
 import { HomeAction } from '@/components/home-action';
+import { TourTarget, ContextualTip } from '@/components/guided-tour';
 import { type EventDetail } from '@/lib/events';
 import { localDay } from '@/lib/event-rules';
 import { formatEventRange } from '@/lib/home';
@@ -10,8 +11,8 @@ import { lightBrand as b } from '@/theme/tokens';
 import { EventNotificationBell } from './follow-tournament';
 
 /** The poster opens the event; alerts and the personal schedule remain separate actions. */
-export function CalendarEventCard({ event, saved, saving = false, onPress, onSave }: {
-  event: EventDetail; saved: boolean; saving?: boolean; onPress: () => void; onSave: () => void;
+export function CalendarEventCard({ event, saved, saving = false, onPress, onSave, tour = false, onTourReveal }: {
+  event: EventDetail; saved: boolean; saving?: boolean; onPress: () => void; onSave: () => void; tour?: boolean; onTourReveal?: () => void;
 }) {
   const tone = lightSapaTone(event.sapa_status);
   const tier = sapaLabel(event.sapa_status);
@@ -19,7 +20,7 @@ export function CalendarEventCard({ event, saved, saving = false, onPress, onSav
   const today = localDay(new Date());
   const onNow = event.event_status !== 'cancelled' && !!event.start_date && event.start_date.slice(0, 10) <= today && (event.end_date || event.start_date).slice(0, 10) >= today;
   return <View style={s.card}>
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${event.event_name}, ${date}. View event and entry options.`}
+    <TourTarget id="eventCard.details" enabled={tour} onActivate={onPress} onReveal={onTourReveal}><Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${event.event_name}, ${date}. View event and entry options.`}
       android_ripple={{ color: b.surface }} style={s.main}>
       <EventArtwork uri={event.image || event.custom_image_url || event.poster_image_url || event.image_url} event={event} style={s.poster} />
       <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
@@ -34,16 +35,17 @@ export function CalendarEventCard({ event, saved, saving = false, onPress, onSav
         <Text style={s.location}>{[event.venue, event.city].filter(Boolean).join(' · ')}</Text>
       </View>
       <Ionicons name="chevron-forward" size={16} color={b.faint} style={{ alignSelf: 'center' }} accessible={false} />
-    </Pressable>
+    </Pressable></TourTarget>
+    {tour && <ContextualTip chapter="eventCard" label="Show me this event card" replayLabel="Event card tips" style={{ marginHorizontal: 12, marginBottom: 8 }} />}
     <View style={s.footer}>
       <View style={s.entries}><Ionicons name="people-outline" size={16} color={b.muted} accessible={false} />
         <Text style={s.meta}>{event.registered_players == null ? 'View event details' : `${event.registered_players.toLocaleString('en-ZA')} players entered`}</Text>
       </View>
-      <EventNotificationBell eventId={event.id} eventName={event.event_name || 'Tournament'} />
-      <HomeAction label={saving ? 'Saving…' : saved ? 'Scheduled' : 'Save event'} compact size="small" disabled={saving}
+      <TourTarget id="eventCard.bell" enabled={tour} onReveal={onTourReveal}><EventNotificationBell eventId={event.id} eventName={event.event_name || 'Tournament'} /></TourTarget>
+      <TourTarget id="eventCard.save" enabled={tour} onReveal={onTourReveal}><HomeAction label={saving ? 'Saving…' : saved ? 'Scheduled' : 'Save event'} compact size="small" disabled={saving}
         kind={saved ? 'primary' : 'link'} icon={saved ? 'scheduleCheck' : 'scheduleAdd'}
         accessibilityLabel={`${saved ? 'Remove from' : 'Add to'} My schedule: ${event.event_name}${saving ? ', saving' : ''}`}
-        onPress={onSave} />
+        onPress={onSave} /></TourTarget>
     </View>
   </View>;
 }

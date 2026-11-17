@@ -5,6 +5,7 @@ import { getForegroundPermissionsAsync } from 'expo-location';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, FlatList, Linking, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { HomeAction } from '@/components/home-action';
+import { TourTarget, ContextualTip } from '@/components/guided-tour';
 import { ClubActions } from '@/components/club-actions';
 import { useClubFavourites } from '@/hooks/use-club-favourites';
 import { NativeSegmentedControl } from '@/components/native-segmented-control';
@@ -24,6 +25,7 @@ export default function ClubsScreen() {
   const [query, setQuery] = useState(''), [origin, setOrigin] = useState<Coordinate | null>(null), [radius, setRadius] = useState('25');
   const [locating, setLocating] = useState(false), [locationNotice, setLocationNotice] = useState(''), [settingsNeeded, setSettingsNeeded] = useState(false);
   const locationRequest = useRef(0);
+  const list = useRef<FlatList<{ club: Club; distance: number | null }>>(null);
   useEffect(() => {
     const controller = new AbortController(); setLoading(true); setError(''); setGroupError('');
     void fetchClubGroups(controller.signal, revision > 0).then(value => { if (!controller.signal.aborted) setGroups(value); }).catch(() => { if (!controller.signal.aborted) setGroupError('Club groups couldn’t load. Pull down to retry.'); });
@@ -66,11 +68,12 @@ export default function ClubsScreen() {
   return <>
     <Stack.Screen options={{ headerShown: true, title: 'Find clubs', headerBackTitle: 'Back', headerTintColor: b.premium, headerStyle: { backgroundColor: b.page }, headerShadowVisible: false }} />
     {Platform.OS !== 'web' && <Stack.SearchBar placeholder={placeholder} hideWhenScrolling={false} hideNavigationBar={false} obscureBackground={false} placement="stacked" tintColor={b.accent} onChangeText={event => setQuery(event.nativeEvent.text)} />}
-    <FlatList style={{ flex: 1, backgroundColor: b.page }} data={directory !== 'groups' ? rows : []} keyExtractor={row => row.club.id} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentInsetAdjustmentBehavior="automatic" removeClippedSubviews={false}
+    <FlatList ref={list} style={{ flex: 1, backgroundColor: b.page }} data={directory !== 'groups' ? rows : []} keyExtractor={row => row.club.id} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentInsetAdjustmentBehavior="automatic" removeClippedSubviews={false}
       contentContainerStyle={{ padding: 20, paddingBottom: 36, gap: 12 }} refreshing={loading && clubs.length > 0} onRefresh={() => setRevision(value => value + 1)}
       ListHeaderComponent={<View style={{ gap: 16, paddingBottom: 4 }}>
         {Platform.OS === 'web' && <TextInput value={query} onChangeText={setQuery} placeholder={placeholder} accessibilityLabel="Search clubs" style={{ minHeight: 44, backgroundColor: b.elevated, borderRadius: 12, padding: 12, color: b.premium }} />}
-        <NativeSegmentedControl label="Club directory" value={directory} options={[{ value: 'venues', label: 'Venues' }, { value: 'favourites', label: 'Favourites' }, { value: 'groups', label: 'Club groups' }]} onChange={value => { setDirectory(value); if (value !== 'venues') showAll(); }} />
+        <ContextualTip chapter="clubs" />
+        <TourTarget id="clubs.directory" onReveal={() => list.current?.scrollToOffset({ offset: 0, animated: false })}><NativeSegmentedControl label="Club directory" value={directory} options={[{ value: 'venues', label: 'Venues' }, { value: 'favourites', label: 'Favourites' }, { value: 'groups', label: 'Club groups' }]} onChange={value => { setDirectory(value); if (value !== 'venues') showAll(); }} /></TourTarget>
         {directory === 'favourites' && <Text accessibilityRole="header" style={{ color: b.premium, fontSize: 19, fontWeight: '600' }}>Favourite clubs</Text>}
         {directory === 'venues' && <View style={{ gap: 12 }}>
           <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
