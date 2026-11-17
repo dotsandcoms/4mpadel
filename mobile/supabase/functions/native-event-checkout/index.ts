@@ -50,6 +50,8 @@ Deno.serve(async req => {
     if (!event || event.is_visible === false || ![null, undefined, 'approved'].includes(event.sanction_status)) fail('This event is not available.');
     if (!event.is_manual) fail('This event uses RankedIn registration. Please register with the event organiser.');
     if (event.event_status === 'cancelled') fail('This event has been cancelled.');
+    const reserving = input.paymentIntent === 'reserve';
+    if (reserving && (payOnly || event.weekly_payment_policy !== 'allow_reserve')) fail('This event does not allow register now, pay later.');
     if (!payOnly && event.registration_opens_at && new Date(event.registration_opens_at).getTime() > Date.now()) fail('Registration has not opened yet.');
     if (!payOnly && event.registration_closes_at && new Date(event.registration_closes_at).getTime() <= Date.now()) fail('Registration has closed.');
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg' }).format(new Date());
@@ -91,7 +93,7 @@ Deno.serve(async req => {
 
     const licenceCovers: any[] = [], licenceItems: any[] = [];
     const requireLicence = async (personEmail: string, name: string, active: boolean, choice: string | undefined, personId?: number) => {
-      if (active || licenceCovers.some(c => c.email === personEmail)) return;
+      if (reserving || active || licenceCovers.some(c => c.email === personEmail)) return;
       if (!['full', 'temporary'].includes(choice || '')) fail(`Select a SAPA licence for ${name} before entering this division.`);
       const full = choice === 'full';
       if (full ? commerce.full_license_enabled !== true : commerce.temp_license_enabled !== true || event.allow_temporary_license === false) fail('That SAPA licence is not available for this event.');
@@ -109,6 +111,7 @@ Deno.serve(async req => {
     const sizes = ['Youth XS', 'Youth S', 'Youth M', 'Youth L', 'Youth XL', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
     if (!payOnly && event.collect_tshirt_size && !sizes.includes(input.tshirtSize)) fail('Select your T-shirt size.');
     const method = event.payment_method || (event.allow_payments === false ? 'free' : 'platform');
+    if (reserving && method !== 'platform') fail('Use the organiser’s payment instructions for this event.');
     if (!['platform', 'free', 'eft', 'external'].includes(method)) fail('Contact the organiser to confirm the payment method.');
     const rows: any[] = [], covers: any[] = [], soloLinks: any[] = [], lineItems: any[] = [];
     const sponsorDetails = (value: any, existing: any = {}) => {
@@ -196,7 +199,7 @@ Deno.serve(async req => {
       const entryRow = (person: any, other: any, existing: any, paid: boolean) => ({
         event_id: eventId, division_id: d.id, division: d.name, full_name: person.name,
         email: norm(person.email), phone: person.contact_number || null, partner_name: other?.name || null,
-        partner_email: other ? norm(other.email) : null, payment_status: paid || fee === 0 ? 'paid' : 'pending',
+        partner_email: other ? norm(other.email) : null, payment_status: paid || (fee === 0 && (!reserving || !d.license_required || (norm(person.email) === email ? hasLicence : ((person.license_type === 'full' && person.paid_registration) || person.has_temp_license_for_event)))) ? 'paid' : 'pending',
         partner_payment_status: other ? 'pending' : null, payment_method: fee === 0 ? 'free' : method,
         status: 'registered', registered_by: existing?.registered_by || email,
         tshirt_size: norm(person.email) === email ? input.tshirtSize || existing?.tshirt_size || null : selection?.tshirtSize || input.partnerTshirtSize || existing?.tshirt_size || null,
@@ -228,7 +231,10 @@ Deno.serve(async req => {
       rows.forEach(r => emails.add(r.email));
       if (emails.size > Number(event.max_players)) fail('This event is full.');
     }
-    if (payOnly && !covers.length) fail('No outstanding entry fees found. Return to the event to refresh your entries.');
+    if (payOnly && !covers.length && !licenceCovers.length) fail('No outstanding entry fees found. Return to the event to refresh your entries.');
+    if (payOnly && licenceCovers.length) for (const r of payable) {
+      if (divisionIds.includes(r.division_id) && divisionFees[r.division] === 0 && !rows.some(row => row.id === r.id)) rows.push(r);
+    }
     covers.push(...licenceCovers);
     const percent = Math.min(100, Math.max(0, Number(commerce.event_fee_percent) || 0));
     const fee = money(base * percent / 100);
@@ -236,7 +242,7 @@ Deno.serve(async req => {
     const total = money(base + fee + licenseTotal);
     lineItems.push(...licenceItems);
     if (fee) lineItems.push({ label: commerce.fee_label || 'Management fee', amount: fee });
-    const quote = { licenseTotal, licenseItems: licenceItems, total, base: money(base), fee, feeLabel: commerce.fee_label || 'Management fee', lineItems,
+    const quote = { allowPayLater: !payOnly && event.weekly_payment_policy === 'allow_reserve' && method === 'platform', paymentIntent: reserving ? 'reserve' : 'pay', licenseTotal, licenseItems: licenceItems, total, base: money(base), fee, feeLabel: commerce.fee_label || 'Management fee', lineItems,
       eventName: event.event_name, profileName: profile.name, partnerName: [...new Set(partnerNames)].join(', ') || null, method,
       mode: payOnly ? 'pay' : 'register', entries: payOnly ? payable.filter((r: any) => divisionIds.includes(r.division_id)).map((r: any) => ({ id: r.id, divisionId: r.division_id, partnerEmail: r.partner_email || linkedPartner(r)?.email || null, canCustomizePartner: !!linkedPartner(r), tshirtLogoUrl: r.tshirt_logo_url, tshirtSponsorName: r.tshirt_sponsor_name, partnerTshirtLogoUrl: linkedPartner(r)?.tshirt_logo_url, partnerTshirtSponsorName: linkedPartner(r)?.tshirt_sponsor_name, division: r.division, playerName: r.full_name, partnerName: r.partner_email ? r.partner_name || linkedPartner(r)?.full_name || null : null, paymentStatus: r.payment_status, partnerPaymentStatus: r.partner_email ? linkedPartner(r)?.payment_status || r.partner_payment_status || null : null, payForSelf: covers.some((c: any) => c.type === 'entry' && c.division === r.division && c.email === email), payForPartner: covers.some((c: any) => c.type === 'entry' && c.division === r.division && c.email === norm(r.partner_email || linkedPartner(r)?.email)), amount: money(covers.filter((c: any) => c.type === 'entry' && c.division === r.division).length * divisionFees[r.division]), playerCount: covers.filter((c: any) => c.type === 'entry' && c.division === r.division).length, unitFee: divisionFees[r.division] })) : reviewEntries,
       divisionNames: divisions.map((d: any) => d.name), isTest: input.isTest === true };
@@ -247,6 +253,10 @@ Deno.serve(async req => {
     if (!/^[a-f0-9-]{36}$/i.test(input.attemptId || '')) fail('Start a new checkout attempt.');
     if (method === 'free' && total > 0) fail('The organiser must correct this event’s free-entry pricing before registration.');
     if (licenceCovers.length && method !== 'platform') fail('SAPA licences require online payment. Purchase your licence before using the organiser’s payment method.');
+    if (reserving) {
+      await checked(client.rpc('register_event_pay_later', { p_rows: rows, p_solo_links: soloLinks }));
+      return json({ registered: true, paymentPending: rows.some((row: any) => row.payment_status !== 'paid'), quote });
+    }
     // Allocate capped division places before any gateway charge. The RPC leaves
     // unpaid entries available for payment retries or withdrawal after cancellation.
     if (method === 'platform' && total > 0 && rows.length) {
