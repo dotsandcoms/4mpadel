@@ -4,6 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "prepare": "node scripts/workflow-install.mjs",
+    "workflow:install": "node scripts/workflow-install.mjs",
+    "workflow:check": "node scripts/workflow-guard.mjs check",
+    "app:preview": "node scripts/workflow-app-preview.mjs",
+    "test:workflow": "node --test tests/workflowPolicy.test.mjs",
+    "test:web": "node --test --test-concurrency=2 tests/*.test.mjs tests/tournament/*.test.mjs",
+    "check:web": "npm run build && npm run test:web",
     "dev": "vite",
     "predev": "node scripts/build-private-draw-rehearsal.mjs",
     "prebuild": "node --test tests/privacyPolicy.test.mjs && node scripts/build-private-draw-rehearsal.mjs && node scripts/build-event-finance-summary.mjs",

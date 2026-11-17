@@ -1,0 +1,31 @@
+{
+  "defaultBranch": "main",
+  "requiredCheck": "Repository checks",
+  "expoCliVersion": "24.13.0",
+  "activeBranches": [
+    {
+      "branch": "brad/admin-ui-preview",
+      "scope": "admin",
+      "preserve": true,
+      "reason": "Older pushed admin preview snapshot. Keep until the unfinished admin work is reviewed and explicitly retired."
+    },
+    {
+      "branch": "brad/admin-preview-v2",
+      "scope": "admin",
+      "preserve": true,
+      "reason": "Active admin preview with unfinished local work. Do not reset, overwrite, delete or merge its working folder wholesale."
+    },
+    {
+      "branch": "brad/mobile-messaging",
+      "scope": "app",
+      "preserve": true,
+      "reason": "Transitional app integration branch while current iPhone changes are being tested. New unrelated tasks start from main."
+    },
+    {
+      "branch": "brad/fix-delayed-refund-entry-status",
+      "scope": "web",
+      "preserve": true,
+      "reason": "Existing draft pull request #2 still needs review."
+    }
+  ]
+}

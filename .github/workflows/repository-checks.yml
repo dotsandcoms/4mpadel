@@ -1,0 +1,135 @@
+name: Repository validation
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Workflow policy
+    runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.scope.outputs.web }}
+      mobile: ${{ steps.scope.outputs.mobile }}
+      backend: ${{ steps.scope.outputs.backend }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify workflow guards
+        run: npm run test:workflow
+      - name: Determine required product checks
+        id: scope
+        run: node scripts/workflow-changes.mjs
+        env:
+          WORKFLOW_PULL_REQUEST: ${{ github.event_name == 'pull_request' }}
+          WORKFLOW_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          WORKFLOW_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          WORKFLOW_HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
+
+  web:
+    name: Web and admin
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            mobile/package-lock.json
+      - run: npm ci
+      # Cross-client regression tests load TypeScript/React from the mobile lockfile.
+      - run: npm ci --prefix mobile
+      - run: npx puppeteer browsers install chrome
+      - run: npm run check:web
+
+  mobile:
+    name: Native app
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: public-ci-placeholder
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci --prefix mobile
+      - run: npm --prefix mobile run check
+      - name: Bundle iOS
+        working-directory: mobile
+        run: npx expo export --platform ios --output-dir /tmp/fourm-ci-ios
+      - name: Bundle Android
+        working-directory: mobile
+        run: npx expo export --platform android --output-dir /tmp/fourm-ci-android
+
+  backend:
+    name: Database access contracts
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fourm_data_api_grant_test
+        ports:
+          - 55443:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '55443'
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm run test:data-api
+      - run: npm run test:data-api:db
+      - run: psql -X -q -v ON_ERROR_STOP=1 -d fourm_data_api_grant_test -f tests/refundReadAuthorization.sql
+
+  gate:
+    name: Repository checks
+    needs: [changes, web, mobile, backend]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all applicable checks to pass
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node -e 'const jobs=JSON.parse(process.env.RESULTS); if(jobs.changes.result!=="success" || Object.values(jobs).some(job=>!["success","skipped"].includes(job.result))) process.exit(1); console.log("All applicable repository checks passed.");'

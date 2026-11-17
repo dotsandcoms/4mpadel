@@ -45,7 +45,7 @@ test('server search and filters survive opening and replying to a conversation',
  await page.type('.pm-filter-search input',' ');await page.waitForFunction(()=>document.querySelectorAll('.pm-conversation-link').length===1);
  await page.click('.pm-conversation-link');await page.waitForSelector('#player-message-body');await page.type('#player-message-body','Fictional reply only');
  await click(page,'Review message');await click(page,'Send reply');await page.waitForFunction(()=>window.__calls.some(c=>c.action==='send'));
- await click(page,'Back to conversations');assert.equal(await page.$eval('.pm-filter-search input',n=>n.value),'Brad ');
+ await click(page,'Back to conversations');await page.waitForSelector('.pm-filter-search input');assert.equal(await page.$eval('.pm-filter-search input',n=>n.value),'Brad ');
  await page.waitForFunction(()=>document.querySelectorAll('.pm-conversation-link').length===1);
  assert(await page.evaluate(()=>window.__calls.some(c=>c.action==='admin_inbox_page'&&c.data.query==='Brad')));
 }finally{await page.close();}});

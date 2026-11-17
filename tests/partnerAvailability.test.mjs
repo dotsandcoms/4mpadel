@@ -88,7 +88,7 @@ test('joining a paid partner creates only the missing pending entry and charges 
     const source = webSource.slice(webSource.indexOf('    const buildRegistrationRows ='),
         webSource.indexOf('    const buildManualPaymentPayload ='));
     const build = runInNewContext(`${source}\nbuildRegistrationRows;`, {
-        profile: { name: 'Calvin' }, userEmail: selfEmail, isWeeklyEvent: false,
+        profile: { name: 'Calvin' }, userEmail: selfEmail, isWeeklyEvent: false, isPayLater: false,
         selectedDivisions: [division], selected: { [division.id]: { partnerName: player.name,
             partnerEmail: player.email, payForSelf: true, payForPartner: true } },
         myRegs: [], divisionRegs: [invitedPair], event: { id: 522 }, wizardMode: 'register',

@@ -51,7 +51,9 @@ for (const mode of ['impersonated', 'direct', 'outsider']) test(`private rehears
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     let browser;
     try {
-        browser = await puppeteer.launch({ headless: true });
+        // Hosted Linux runners restrict Chrome's user namespaces; this browser
+        // only opens the local mocked fixture above.
+        browser = await puppeteer.launch({ headless: true, args: process.env.CI ? ['--no-sandbox'] : [] });
         const page = await browser.newPage();
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
