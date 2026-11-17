@@ -1,5 +1,5 @@
 import { onAccent } from '@/theme/tokens';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View, useWindowDimensions, type ViewStyle } from 'react-native';
 import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { EventText as Text, EventIcon, useEventAccent, type EventIconName } from './website-ui';
@@ -63,7 +63,9 @@ export function EventTimeline({ event, hasDraw }: { event: EventDetail; hasDraw:
   const accent = useEventAccent();
   const now = useForegroundClock(60000);
   const [showDateNote, setShowDateNote] = useState(false);
-  const [contentWidth, setContentWidth] = useState(0);
+  const scroll = useRef<ScrollView>(null);
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const [trackWidth, setTrackWidth] = useState(0);
   const { width, fontScale } = useWindowDimensions();
   const parse = (raw?: string | null) => raw ? new Date(raw.includes('T') ? raw : `${raw.slice(0, 10)}T00:00:00`).getTime() : 0;
   const opens = parse(event.registration_opens_at), closes = parse(event.registration_closes_at), early = parse(event.early_bird_ends_at);
@@ -81,13 +83,31 @@ export function EventTimeline({ event, hasDraw }: { event: EventDetail; hasDraw:
   const windowIndex = steps.findIndex(s => s.until && now >= s.at && now <= s.until);
   if (windowIndex >= 0) active = windowIndex;
   if (isEarlyBirdActive(event, new Date(now))) { const index = steps.findIndex(s => s.label === 'Early Bird Entries'); if (index >= 0 && now >= steps[index].at) active = index; }
-  if (!steps.length) return null;
-  // Keep stages in one row. Swipe for later stages when the card is too narrow.
-  const stageWidth = Math.max((contentWidth || width - 66) / steps.length, 116 * Math.max(1, fontScale));
+
+  const stageCount = steps.length;
+  const availableWidth = viewportWidth || width - 66;
+  const minimumStageWidth = 108 * Math.max(1, fontScale);
+  const visibleCount = Math.max(1, Math.min(stageCount, Math.floor(availableWidth / minimumStageWidth)));
+  const stageWidth = Math.max(minimumStageWidth, availableWidth / visibleCount);
+  const focusIndex = Math.max(0, active);
+  const focusLabel = steps[focusIndex]?.label;
+  useEffect(() => {
+    // Wait until the native track is laid out. Preserve manual scrolling until
+    // the event, current stage or layout changes.
+    if (!focusLabel || !viewportWidth || trackWidth < stageWidth * stageCount - 1) return;
+    const firstVisibleIndex = Math.max(0, focusIndex - Math.floor(visibleCount / 2));
+    const x = Math.max(0, Math.min(firstVisibleIndex * stageWidth, trackWidth - viewportWidth));
+    scroll.current?.scrollTo({ x, animated: false });
+  }, [event.id, focusIndex, focusLabel, stageCount, stageWidth, trackWidth, viewportWidth, visibleCount]);
+
+  if (!stageCount) return null;
   return <View style={{ ...panel, marginTop: 12, paddingHorizontal: 12, paddingVertical: 16 }}>
     <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 16 }}><EventIcon name="bolt" size={14} /><Text style={{ flex: 1, fontSize: 10, letterSpacing: 0.4 }}>TOURNAMENT PROGRESS</Text><Pressable accessibilityRole="button" accessibilityLabel="Dates and times are subject to change" accessibilityState={{ expanded: showDateNote }} onPress={() => setShowDateNote(!showDateNote)} hitSlop={10}><EventIcon name="info.circle" size={16} color="#65726B" /></Pressable></View>
     {showDateNote && <Text style={{ fontSize: 11, color: '#65726B', marginBottom: 8 }}>Dates and times are subject to change</Text>}
-    <ScrollView horizontal nestedScrollEnabled onLayout={({ nativeEvent }) => setContentWidth(nativeEvent.layout.width)} contentContainerStyle={{ flexGrow: 1, alignItems: 'flex-start', paddingVertical: 6 }}>
+    <ScrollView ref={scroll} horizontal nestedScrollEnabled scrollEnabled={stageWidth * stageCount > viewportWidth + 1}
+      onLayout={({ nativeEvent }) => setViewportWidth(nativeEvent.layout.width)}
+      onContentSizeChange={width => setTrackWidth(width)}
+      contentContainerStyle={{ flexGrow: 1, alignItems: 'flex-start', paddingVertical: 6 }}>
       {steps.length > 1 && <View pointerEvents="none" style={{ position: 'absolute', top: 26, left: stageWidth / 2, right: stageWidth / 2, height: 1, backgroundColor: '#DCE2DA' }} />}
       {steps.map((step, i) => {
         const live = i === active && (!step.until || now <= step.until);
