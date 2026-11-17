@@ -6,6 +6,10 @@ import { transform } from 'esbuild';
 
 const source = (await fs.readFile('supabase/functions/send-email/index.ts', 'utf8')).replace(/^import .*;\n/gm, '');
 const { code } = await transform(source, { loader: 'ts', format: 'cjs' });
+const paymentSource = await fs.readFile('supabase/functions/send-email/registration-payment.ts', 'utf8');
+const paymentModule = { exports: {} };
+vm.runInNewContext((await transform(paymentSource, { loader: 'ts', format: 'cjs' })).code,
+    { module: paymentModule, exports: paymentModule.exports });
 const id = '20000000-0000-0000-0000-000000000001';
 function fixture({ allowed = true, signedIn = true } = {}) {
     let handler;
@@ -23,6 +27,7 @@ function fixture({ allowed = true, signedIn = true } = {}) {
     });
     vm.runInNewContext(code, {
         exports: {}, createClient, serve: fn => { handler = fn; }, Response, Request,
+        registrationEmailAllowed: paymentModule.exports.registrationEmailAllowed,
         console: { info() {}, warn() {}, error() {} },
         Deno: { env: { get: name => ({ SUPABASE_URL: 'https://project.test', SUPABASE_ANON_KEY: 'public-key', SUPABASE_SERVICE_ROLE_KEY: 'server-key', RESEND_API_KEY: 'email-key' })[name] } },
         fetch: async (_url, options) => { deliveries.push(JSON.parse(options.body)); return new Response('{"id":"email-1"}'); },

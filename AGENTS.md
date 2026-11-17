@@ -1,3 +1,38 @@
+# Development workflow
+
+Read `docs/development-workflow.md` before starting a task, changing branches,
+publishing a build or merging a PR. These are standing instructions; Brad does
+not need to repeat them in each chat.
+
+- Inspect status, branches, open PRs and worktrees first. Preserve other chats'
+  changes. Never reset, stash, clean, switch or commit someone else's unfinished
+  working folder to make this task easier.
+- Start independent work from current `origin/main` in a suitable clean task
+  worktree: `brad/app-*`, `brad/web-*`, `brad/admin-*`, `brad/backend-*`,
+  `brad/shared-*` or `brad/workflow-*`. Use managed worktree tools in Codex when
+  creating a new folder. One independent task/chat uses one worktree.
+- Read `.github/workstreams.json` before cleanup. Preserve BOTH unfinished admin
+  previews and their working folders. Review and move completed pieces onto
+  current main through a focused PR; never merge a stale working folder wholesale.
+- Keep native screens in `mobile/` and web/admin screens in `src/`. Backend
+  changes must support installed app versions. The web imports protected API
+  helpers from mobile; validate both consumers when those helpers change.
+- Run `npm run workflow:install` if the shared Git guards are not installed.
+  Commit only reviewed task files. Push a task branch and use a checked PR into
+  main. Never bypass hooks/checks, force-push main, or retire unfinished branches.
+- Implementing code authorizes local changes and verification. A request to push
+  code authorizes the task branch/PR; a production release/merge still needs release
+  authorization. Require the green `Repository checks` gate before merging.
+- Record source commit, validation and deployment/build URL for a release. Phone
+  testing uses internal `preview`. Use root `npm run app:preview -- --platform
+  ios --build` from clean, pushed source when an internal build is requested.
+  Follow it to completion and verify the installer before reporting it ready.
+- Store submission, production app builds/OTA updates, hosted migrations and web
+  production releases need authorization for that release. Brad must approve his
+  current phone test before Apple submission. Ordinary CI must never submit apps.
+- Finish with behavior changed, validation, branch/PR and what was released.
+  Keep credentials out of source and logs.
+
 # Database migrations
 
 New or recreated public tables must declare API access in the migration that

@@ -119,7 +119,7 @@ test('event manager loads without reports and offers substitution without paid-p
         await page.evaluate(() => window.__finishVerification());
         await page.waitForFunction(() => window.__workbooks.length === 1);
         const workbook = await page.evaluate(() => window.__workbooks[0]);
-        assert.equal(workbook.summary.find(row => row.label === '  of which Paystack to 4M').value, 0, 'export uses fresh gateway evidence');
+        assert.equal(workbook.summary.find(row => row.section === 'Cash history' && row.label === 'Entry fees received by 4M').value, 0, 'export uses fresh gateway evidence');
         assert.equal(workbook.lineItems.filter(row => row.type === 'payment').length, 0, 'line items use the same fresh verification');
         assert.deepEqual(errors, []);
     } finally {

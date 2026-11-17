@@ -1,16 +1,25 @@
 # 4M Padel
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+One repository for website/admin (`src/`), the Expo native app (`mobile/`) and
+shared backend (`supabase/` and `mobile/supabase/`). Read the
+[development workflow](docs/development-workflow.md) and [agent rules](AGENTS.md).
 
-Currently, two official plugins are available:
+Use Node 24 (at least 24.12) and committed lockfiles. Install `npm ci` in the root
+and `npm ci --prefix mobile` for native work. Root installation installs shared
+Git guards. Keep real environment values local.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+| Task | Command from repository root |
+| --- | --- |
+| Web/admin development | `npm run dev` |
+| Native development | `npm --prefix mobile start` |
+| Web/admin build and tests | `npm run check:web` |
+| Native types and tests | `npm --prefix mobile run check` |
+| Workflow tests | `npm run test:workflow` |
+| Data API access contracts | `npm run test:data-api` |
+| Restore shared Git guards | `npm run workflow:install` |
+| Prepare committed iPhone source | `npm run app:preview -- --platform ios` |
+| Start an approved internal iPhone build | `npm run app:preview -- --platform ios --build` |
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+`main` is the checked integration branch and Vercel web production source. Use
+task branches and separate working folders. Both migration folders share one
+hosted database: follow [the access contract](docs/data-api-grants.md).
