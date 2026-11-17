@@ -46,15 +46,16 @@ export function TourScrollView({ children, contentContainerStyle, ...props }: Sc
   return <TourScrollScope scroll={scroll} content={content}><ScrollView {...props} ref={scroll}><View ref={content} collapsable={false} style={contentContainerStyle}>{children}</View></ScrollView></TourScrollScope>;
 }
 
-export function ContextualTip({ chapter, ready = true, style, matchPath = true, replayLabel, label = 'Show me around this page' }: { chapter: GuideId; ready?: boolean; style?: StyleProp<ViewStyle>; matchPath?: boolean; replayLabel?: string; label?: string }) {
+export function ContextualTip({ chapter, ready = true, style, matchPath = true, replayLabel, label = 'Show me around this page', mode = 'both' }: { chapter: GuideId; ready?: boolean; style?: StyleProp<ViewStyle>; matchPath?: boolean; replayLabel?: string; label?: string; mode?: 'both' | 'tip' | 'replay' }) {
   const guide = useGuidedTour(), path = usePathname();
   const [focused, setFocused] = useState(false);
   useFocusEffect(useCallback(() => { setFocused(true); return () => setFocused(false); }, []));
   if (!guide?.ready || !ready || !focused || guide.active || guide.welcomeVisible || guide.progress.welcome === 'unseen'
     || matchPath && !tourPathMatches(GUIDES[chapter].steps[0].path, path)) return null;
-  if (guide.progress.seen.includes(chapter)) return replayLabel ? <Pressable accessibilityRole="button" onPress={() => guide.start(chapter)} style={[{ minHeight: 44, flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6 }, style]}>
-    <Ionicons name="information-circle-outline" size={16} color="#526A80" accessible={false} /><Text style={{ color: '#526A80', fontSize: 12, fontWeight: '500' }}>{replayLabel}</Text>
+  if (guide.progress.seen.includes(chapter)) return mode !== 'tip' && replayLabel ? <Pressable accessibilityRole="button" onPress={() => guide.start(chapter)} style={[{ minHeight: 44, flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6 }, style]}>
+    <Ionicons name="information-circle-outline" size={16} color="#526A80" accessible={false} /><Text style={{ color: '#526A80', fontSize: 12, fontWeight: '500', flexShrink: 1 }}>{replayLabel}</Text>
   </Pressable> : null;
+  if (mode === 'replay') return null;
   return <View style={[{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#EAF1F8', borderWidth: 1, borderColor: '#D4E1ED', borderRadius: 14, minHeight: 44 }, style]}>
     <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${GUIDES[chapter].title}`} onPress={() => guide.start(chapter)}
       style={{ flex: 1, minHeight: 44, flexDirection: 'row', gap: 8, alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8 }}>

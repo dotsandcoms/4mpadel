@@ -1,6 +1,6 @@
 import { onAccent } from '@/theme/tokens';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, View, useWindowDimensions, type ViewStyle } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, View, useWindowDimensions, type ViewStyle } from 'react-native';
 import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { EventText as Text, EventIcon, useEventAccent, type EventIconName } from './website-ui';
 import type { EventDetail } from '@/lib/events';
@@ -63,7 +63,9 @@ export function EventTimeline({ event, hasDraw }: { event: EventDetail; hasDraw:
   const accent = useEventAccent();
   const now = useForegroundClock(60000);
   const [showDateNote, setShowDateNote] = useState(false);
-  const [contentWidth, setContentWidth] = useState(0);
+  const scroll = useRef<ScrollView>(null);
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const [trackWidth, setTrackWidth] = useState(0);
   const { width, fontScale } = useWindowDimensions();
   const parse = (raw?: string | null) => raw ? new Date(raw.includes('T') ? raw : `${raw.slice(0, 10)}T00:00:00`).getTime() : 0;
   const opens = parse(event.registration_opens_at), closes = parse(event.registration_closes_at), early = parse(event.early_bird_ends_at);
@@ -81,33 +83,44 @@ export function EventTimeline({ event, hasDraw }: { event: EventDetail; hasDraw:
   const windowIndex = steps.findIndex(s => s.until && now >= s.at && now <= s.until);
   if (windowIndex >= 0) active = windowIndex;
   if (isEarlyBirdActive(event, new Date(now))) { const index = steps.findIndex(s => s.label === 'Early Bird Entries'); if (index >= 0 && now >= steps[index].at) active = index; }
-  if (!steps.length) return null;
-  // Fit the card itself, including split-screen and larger accessibility text.
-  // Balance short final rows instead of leaving one isolated stage.
-  const availableWidth = contentWidth || Math.max(0, width - 64);
-  const maxColumns = Math.max(1, Math.floor(availableWidth / (76 * Math.max(1, fontScale))));
-  const rowCount = Math.ceil(steps.length / maxColumns);
-  const columns = Math.ceil(steps.length / rowCount);
-  const rows = Array.from({ length: rowCount }, (_, row) => steps.slice(row * columns, (row + 1) * columns));
+
+  const stageCount = steps.length;
+  const availableWidth = viewportWidth || width - 66;
+  const minimumStageWidth = 108 * Math.max(1, fontScale);
+  const visibleCount = Math.max(1, Math.min(stageCount, Math.floor(availableWidth / minimumStageWidth)));
+  const stageWidth = Math.max(minimumStageWidth, availableWidth / visibleCount);
+  const focusIndex = Math.max(0, active);
+  const focusLabel = steps[focusIndex]?.label;
+  useEffect(() => {
+    // Wait until the native track is laid out. Preserve manual scrolling until
+    // the event, current stage or layout changes.
+    if (!focusLabel || !viewportWidth || trackWidth < stageWidth * stageCount - 1) return;
+    const firstVisibleIndex = Math.max(0, focusIndex - Math.floor(visibleCount / 2));
+    const x = Math.max(0, Math.min(firstVisibleIndex * stageWidth, trackWidth - viewportWidth));
+    scroll.current?.scrollTo({ x, animated: false });
+  }, [event.id, focusIndex, focusLabel, stageCount, stageWidth, trackWidth, viewportWidth, visibleCount]);
+
+  if (!stageCount) return null;
   return <View style={{ ...panel, marginTop: 12, paddingHorizontal: 12, paddingVertical: 16 }}>
     <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 16 }}><EventIcon name="bolt" size={14} /><Text style={{ flex: 1, fontSize: 10, letterSpacing: 0.4 }}>TOURNAMENT PROGRESS</Text><Pressable accessibilityRole="button" accessibilityLabel="Dates and times are subject to change" accessibilityState={{ expanded: showDateNote }} onPress={() => setShowDateNote(!showDateNote)} hitSlop={10}><EventIcon name="info.circle" size={16} color="#65726B" /></Pressable></View>
     {showDateNote && <Text style={{ fontSize: 11, color: '#65726B', marginBottom: 8 }}>Dates and times are subject to change</Text>}
-    <View onLayout={({ nativeEvent }) => { if (nativeEvent.layout.width > 0) setContentWidth(nativeEvent.layout.width); }} style={{ gap: 20, paddingVertical: 4 }}>
-      {rows.map((row, rowIndex) => <View key={row[0].label} style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-        {row.length > 1 && <View pointerEvents="none" style={{ position: 'absolute', top: 20, left: `${50 / columns}%`, right: `${100 - (row.length - 0.5) * 100 / columns}%`, height: 1, backgroundColor: '#DCE2DA' }} />}
-        {row.map((step, columnIndex) => {
-        const i = rowIndex * columns + columnIndex;
+    <ScrollView ref={scroll} horizontal nestedScrollEnabled scrollEnabled={stageWidth * stageCount > viewportWidth + 1}
+      onLayout={({ nativeEvent }) => setViewportWidth(nativeEvent.layout.width)}
+      onContentSizeChange={width => setTrackWidth(width)}
+      contentContainerStyle={{ flexGrow: 1, alignItems: 'flex-start', paddingVertical: 6 }}>
+      {steps.length > 1 && <View pointerEvents="none" style={{ position: 'absolute', top: 26, left: stageWidth / 2, right: stageWidth / 2, height: 1, backgroundColor: '#DCE2DA' }} />}
+      {steps.map((step, i) => {
         const live = i === active && (!step.until || now <= step.until);
         const showLive = live && ['Registration Open', 'Early Bird Entries', 'Tournament Live'].includes(step.label);
         const done = i < active || !!step.published || (!!step.until && now > step.until);
         const color = live || done ? '#386018' : '#65726B';
         const dateLabel = step.label === 'Early Bird Entries' && now > (step.until || 0) ? 'ENDED' : step.label === 'Tournament Live' ? `${new Date(start).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${new Date(end).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`.toUpperCase().replace(/\bSEP\b/g, 'SEPT') : step.label === 'Registration Open' ? '' : new Date(step.until && step.label === 'Early Bird Entries' ? step.until : step.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(step.time ? { hour: '2-digit', minute: '2-digit' } : {}) }).toUpperCase().replace(/\bSEP\b/g, 'SEPT').replace(' AT ', ' · ');
-        return <View key={step.label} accessible accessibilityLabel={`${step.label}. ${live ? 'Current stage.' : done ? 'Completed.' : 'Upcoming.'} ${showLive ? 'Live.' : dateLabel}`} style={{ width: `${100 / columns}%`, minWidth: 0, alignItems: 'center', paddingHorizontal: 3 }}>
+        return <View key={step.label} accessible accessibilityLabel={`${step.label}. ${live ? 'Current stage.' : done ? 'Completed.' : 'Upcoming.'} ${showLive ? 'Live.' : dateLabel}`} style={{ width: stageWidth, flexShrink: 0, alignItems: 'center', paddingHorizontal: 3 }}>
           {live ? <ActiveStageIcon icon={step.icon} accent={accent} /> : <View style={{ width: 40, height: 40, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}><View style={{ width: 32, height: 32, borderRadius: 16, borderColor: color, borderWidth: 1, backgroundColor: '#EDF0EB', alignItems: 'center', justifyContent: 'center' }}><EventIcon name={step.icon} size={14} color={color} /></View></View>}
-          <Text style={{ alignSelf: 'stretch', minHeight: 28 * Math.max(1, fontScale), color: live ? '#173909' : color, fontSize: 10, lineHeight: 14, textAlign: 'center', fontWeight: live ? '800' : '600', marginTop: 8 }}>{step.label}</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.9} style={{ alignSelf: 'stretch', color: live ? '#173909' : color, fontSize: 10, lineHeight: 14, textAlign: 'center', fontWeight: live ? '800' : '600', marginTop: 8 }}>{step.label}</Text>
           {showLive ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 9, backgroundColor: '#386018' }}><View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: '#D7E7C5' }} /><Text style={{ color: '#FFFFFF', fontSize: 8, fontWeight: '800', letterSpacing: 0.5 }}>LIVE</Text></View> : <Text style={{ color, fontSize: 8, lineHeight: 12, textAlign: 'center', marginTop: 4 }}>{dateLabel}</Text>}
         </View>;
-      })}</View>)}
-    </View>
+      })}
+    </ScrollView>
   </View>;
 }

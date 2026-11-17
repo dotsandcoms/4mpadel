@@ -10,7 +10,7 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, Share, View } from 'react-native';
+import { ActivityIndicator, AppState, Linking, Modal, Platform, Pressable, RefreshControl, ScrollView, Share, View, type TextStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
 import { Notice } from '@/components/events/event-ui';
@@ -148,11 +148,13 @@ function EventContent() {
     { label: 'Entry Fee', value: fee, icon: 'dollarsign.circle' },
     ...(Number(event.prize_money_total) > 0 ? [{ label: 'Prize Money', value: `R${Number(event.prize_money_total).toLocaleString('en-GB')}`, icon: 'trophy' as const }] : []),
   ] : [];
-  const accent = sapaTone(event?.sapa_status).fill;
+  const tone = sapaTone(event?.sapa_status);
+  const accent = tone.fill;
   const teams = useMemo(() => buildEventTeams(divisions, entries, profiles), [divisions, entries, profiles]);
   const pendingPayment = registrations.some(r => r.payment_status !== 'paid' && Number(divisions.find(d => d.id === r.division_id)?.entry_fee || 0) > 0);
   const posterUrl = event?.poster_image_url || event?.custom_image_url;
   const hasSapa = !!event?.sapa_status && event.sapa_status !== 'None';
+  const badgeStyle: TextStyle = { color: tone.text, fontSize: 9, fontWeight: '700', letterSpacing: 1, borderWidth: 1, borderColor: tone.border, borderRadius: 16, paddingHorizontal: 9, paddingVertical: 4 };
   const sponsors = event?.sponsor_logos?.filter(url => url && url !== organisation?.logo_url && url !== event.poster_image_url && url !== event.custom_image_url) || [];
   return <EventAccent value={accent}><View style={{ flex: 1, backgroundColor: '#F5F6F3', paddingTop: insets.top }}>
     <WebsiteHeader />
@@ -169,18 +171,31 @@ function EventContent() {
           </View>
         </View>
         <View style={{ paddingHorizontal: 20, paddingTop: 14, paddingBottom: 40 }}>
-          <ContextualTip chapter="event" label="Show me around this event" replayLabel="Event guide" style={{ marginBottom: 12 }} />
-          <TourTarget id="event.summary">{!!event.sapa_status && event.sapa_status !== 'None' && <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}><Text style={{ color: sapaTone(event.sapa_status).text, fontSize: 9, fontWeight: '700', letterSpacing: 1, borderWidth: 1, borderColor: sapaTone(event.sapa_status).border, borderRadius: 16, paddingHorizontal: 9, paddingVertical: 4 }}>{event.sapa_status.toUpperCase()}</Text><Text style={{ color: sapaTone(event.sapa_status).text, fontSize: 9, fontWeight: '700', letterSpacing: 1, borderWidth: 1, borderColor: sapaTone(event.sapa_status).border, borderRadius: 16, paddingHorizontal: 9, paddingVertical: 4 }}>SAPA</Text></View>}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-            {!!posterUrl && <Pressable accessibilityRole="button" accessibilityLabel="View event poster" onPress={() => setPosterOpen(true)} style={{ width: 64, height: 80, borderRadius: 8, overflow: 'hidden' }}><Image source={{ uri: posterUrl }} contentFit="contain" style={{ width: '100%', height: '100%' }} /></Pressable>}
-            <EventTitle key={event.id} title={event.event_name || 'Tournament'} />
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10 }}>
-            <EventIcon name="calendar" size={14} /><Text style={{ fontSize: 12, color: '#16251fe6' }}>{event.event_dates || formatEventRange(event.start_date, event.end_date)}</Text>
-            <Text style={{ fontSize: 12, color: '#16251f55' }}>|</Text><EventIcon name="mappin.and.ellipse" size={14} /><Text numberOfLines={1} style={{ fontSize: 12, flex: 1, color: '#16251fe6' }}>{eventLocation(event)}</Text>
-          </View>
+          <ContextualTip chapter="event" mode="tip" label="Show me around this event" style={{ marginBottom: 12 }} />
+          <TourTarget id="event.summary">
+            <View style={{ flexDirection: 'row', alignItems: posterUrl ? 'flex-start' : 'center', gap: 12 }}>
+              {!!posterUrl && <Pressable accessibilityRole="button" accessibilityLabel="View event poster" onPress={() => setPosterOpen(true)} style={{ width: '36%', maxWidth: 132, aspectRatio: 0.89, borderRadius: 10, overflow: 'hidden' }}>
+                <Image source={{ uri: posterUrl }} contentFit="contain" style={{ width: '100%', height: '100%' }} />
+              </Pressable>}
+              <View style={{ flex: 1, minWidth: 0, gap: 8 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: 6 }}>
+                  {hasSapa && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '100%' }}>
+                    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[badgeStyle, { flexShrink: 1 }]}>{event.sapa_status?.toUpperCase()}</Text>
+                    <Text numberOfLines={1} style={badgeStyle}>SAPA</Text>
+                  </View>}
+                  <ContextualTip chapter="event" mode="replay" replayLabel="Event guide" style={{ marginStart: 'auto', maxWidth: '100%', alignSelf: 'center' }} />
+                </View>
+                <View style={{ flexDirection: 'row' }}>
+                  <EventTitle key={event.id} title={event.event_name || 'Tournament'} />
+                </View>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginVertical: 14 }}>
+              <EventIcon name="calendar" size={14} /><Text style={{ fontSize: 12, flexShrink: 1, color: '#16251fe6' }}>{event.event_dates || formatEventRange(event.start_date, event.end_date)}</Text>
+              <Text style={{ fontSize: 12, marginHorizontal: 4, color: '#16251f55' }}>|</Text><EventIcon name="mappin.and.ellipse" size={14} /><Text numberOfLines={1} style={{ fontSize: 12, flex: 1, color: '#16251fe6' }}>{eventLocation(event)}</Text>
+            </View>
           </TourTarget>
-          <TourTarget id="event.stats" style={{ marginTop: 8, flexDirection: 'row', borderRadius: 16, borderColor: '#16251f1a', borderWidth: 1, overflow: 'hidden', backgroundColor: '#fff' }}>
+          <TourTarget id="event.stats" style={{ flexDirection: 'row', borderRadius: 16, borderColor: '#16251f1a', borderWidth: 1, overflow: 'hidden', backgroundColor: '#fff' }}>
             {stats.map((stat, i) => <View key={stat.label} style={{ flex: 1, paddingVertical: 16, paddingHorizontal: 1, alignItems: 'center', borderLeftWidth: i ? 1 : 0, borderColor: '#16251f1a', gap: 4 }}><EventIcon name={stat.icon} /><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ fontSize: 14, fontWeight: '700', textAlign: 'center', alignSelf: 'stretch' }}>{stat.value}</Text><Text style={{ fontSize: 9, color: '#16251f80', letterSpacing: 0.3 }}>{stat.label.toUpperCase()}</Text></View>)}
           </TourTarget>
           {(hasSapa || organisation?.logo_url || sponsors.length > 0) && <View style={{ flexDirection: 'row', marginTop: 12, borderRadius: 16, borderColor: '#16251f1a', borderWidth: 1, backgroundColor: '#fff', overflow: 'hidden' }}>
