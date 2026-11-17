@@ -57,7 +57,7 @@ function fixture() {
   const run = (command, args, options = {}) => spawnSync(command, args, { cwd: folder, env, encoding: 'utf8', ...options });
   const git = (...args) => { const result = run('git', args); assert.equal(result.status, 0, result.stderr); return result.stdout.trim(); };
   git('init', '--initial-branch=main'); git('config', 'user.name', 'Workflow Fixture'); git('config', 'user.email', 'workflow@example.test');
-  for (const file of ['scripts/workflow-install.mjs', 'scripts/workflow-guard.mjs', 'scripts/lib/workflow-policy.mjs', '.github/workstreams.json']) {
+  for (const file of ['scripts/workflow-install.mjs', 'scripts/workflow-guard.mjs', 'scripts/workflow-vercel-ignore.mjs', 'scripts/lib/workflow-policy.mjs', '.github/workstreams.json']) {
     mkdirSync(path.dirname(path.join(folder, file)), { recursive: true }); copyFileSync(path.join(root, file), path.join(folder, file));
   }
   writeFileSync(path.join(folder, 'AGENTS.md'), 'Fixture workflow guidance\n');
@@ -112,6 +112,26 @@ test('installation also preserves active hooks in the default Git hooks director
     writeFileSync(hook, '#!/bin/sh\nexit 0\n');
     assert.notEqual(f.run(process.execPath, ['scripts/workflow-install.mjs']).status, 0);
     assert.equal(readFileSync(hook, 'utf8'), '#!/bin/sh\nexit 0\n');
+  } finally { f.close(); }
+});
+
+test('Vercel compares all commits since the successful deployment and builds without a known baseline', () => {
+  const f = fixture();
+  try {
+    f.git('switch', '-c', 'brad/shared-fixture');
+    const initial = f.git('rev-parse', 'HEAD');
+    mkdirSync(path.join(f.folder, 'src')); writeFileSync(path.join(f.folder, 'src/web.js'), 'web change');
+    f.git('add', 'src'); f.git('commit', '-m', 'web change');
+    const web = f.git('rev-parse', 'HEAD');
+    mkdirSync(path.join(f.folder, 'mobile/src'), { recursive: true }); writeFileSync(path.join(f.folder, 'mobile/src/app.ts'), 'app change');
+    f.git('add', 'mobile'); f.git('commit', '-m', 'app change');
+    const invoke = previous => f.run(process.execPath, ['scripts/workflow-vercel-ignore.mjs'], {
+      env: { ...f.env, VERCEL_GIT_COMMIT_REF: 'brad/shared-fixture', VERCEL_GIT_PREVIOUS_SHA: previous },
+    }).status;
+    assert.equal(invoke(''), 1, 'first multi-commit push must include earlier web changes');
+    assert.equal(invoke(initial), 1, 'web has changed since the successful deployment');
+    assert.equal(invoke(web), 0, 'only app inputs changed since the successful deployment');
+    assert.equal(invoke('a'.repeat(40)), 1, 'missing Git history must continue building');
   } finally { f.close(); }
 });
 
