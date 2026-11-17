@@ -267,7 +267,9 @@ const NativeDrawManager = ({ event, divisions, registrations, playersByEmail, on
     const participatingPlayers = useMemo(() => teams.flatMap(r => [playersByEmail.get(normaliseEmail(r.email)),playersByEmail.get(normaliseEmail(r.partner_email))]).filter(Boolean), [teams,playersByEmail]);
     const rankingOrganisations = useMemo(() => listRankingOrganisations(participatingPlayers), [participatingPlayers]);
     const rankingCategories = useMemo(() => listRankingCategories(participatingPlayers), [participatingPlayers]);
-    const allReviewEntries = useMemo(() => dedupePairRegistrations(divisionRegistrations, { keepStandalonePlayers: drawFormat === 'americano' }).map((r,i)=>registrationToEntry(r,i,playersByEmail,rankingSource,rankedInClassSeedings)),[divisionRegistrations,drawFormat,playersByEmail,rankingSource,rankedInClassSeedings]);
+    const allReviewEntries = useMemo(() => divisionRegistrations.map((registration, index) =>
+        registrationToEntry(registration, index, playersByEmail, rankingSource, rankedInClassSeedings)),
+    [divisionRegistrations, playersByEmail, rankingSource, rankedInClassSeedings]);
     const entries = useMemo(() => teams.map((r,i) => {
         const entry=registrationToEntry(r,i,playersByEmail,rankingSource,rankedInClassSeedings);
         const seed=playerReview?.seeds?.indexOf(r.id) ?? -1;

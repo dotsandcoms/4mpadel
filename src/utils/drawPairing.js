@@ -1,8 +1,8 @@
 const normaliseEmail = (value) => String(value || '').trim().toLowerCase();
 
-// A pair can have two reciprocal registration rows. Keep the most complete
-// row, using the oldest registration to make equal candidates stable.
-export function dedupePairRegistrations(registrations, { keepStandalonePlayers = false } = {}) {
+// Reciprocal registrations share a team. Retain both rows for eligibility
+// checks and choose a stable representative for the lineup.
+export function groupPairRegistrations(registrations) {
     const teams = new Map();
     registrations.forEach((registration) => {
         const playerEmail = normaliseEmail(registration.email);
@@ -11,17 +11,27 @@ export function dedupePairRegistrations(registrations, { keepStandalonePlayers =
         const key = pairEmails.length === 2
             ? `pair:${pairEmails.join(':')}`
             : `single:${registration.id}`;
-        const existing = teams.get(key);
-        const existingScore = Number(Boolean(existing?.partner_name)) + Number(Boolean(existing?.partner_email));
+        const group = teams.get(key);
+        if (!group) {
+            teams.set(key, { registration, members: [registration] });
+            return;
+        }
+        group.members.push(registration);
+        const existing = group.registration;
+        const existingScore = Number(Boolean(existing.partner_name)) + Number(Boolean(existing.partner_email));
         const candidateScore = Number(Boolean(registration.partner_name)) + Number(Boolean(registration.partner_email));
-        if (!existing || candidateScore > existingScore || (
+        if (candidateScore > existingScore || (
             candidateScore === existingScore
             && String(registration.created_at || '') < String(existing.created_at || '')
         )) {
-            teams.set(key, registration);
+            group.registration = registration;
         }
     });
-    const uniqueTeams = [...teams.values()];
+    return [...teams.values()];
+}
+
+export function dedupePairRegistrations(registrations, { keepStandalonePlayers = false } = {}) {
+    const uniqueTeams = groupPairRegistrations(registrations).map(group => group.registration);
     if (keepStandalonePlayers) return uniqueTeams;
 
     // A player may have registered alone before a teammate named them as a
