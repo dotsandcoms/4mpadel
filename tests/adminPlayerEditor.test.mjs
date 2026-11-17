@@ -77,8 +77,9 @@ async function open(mode = '', width = 1200) {
     if (fs.existsSync(assets)) { const css = fs.readdirSync(assets).find(f => /^index-.*\.css$/.test(f)); if (css) { await page.addStyleTag({ content: fs.readFileSync(path.join(assets, css), 'utf8') }); await page.evaluate(() => window.__hasAppStyles=true); } }
     await page.addScriptTag({ path: output });
     await page.waitForSelector('button[aria-label="Edit Sample One"]');
-    // The player rows animate into place; wait for stable bounds before clicking.
-    await page.locator('button[aria-label="Edit Sample One"]').click();
+    // Keyboard activation can open the editor while the row entrance animates.
+    await page.focus('button[aria-label="Edit Sample One"]');
+    await page.keyboard.press('Enter');
     await page.waitForSelector('[role="dialog"]');
     if (mode !== 'read-error') await page.waitForFunction(() => !document.querySelector('[role="dialog"] button[type="submit"]').disabled);
     return page;

@@ -39,18 +39,26 @@ export const calculateGroupStandings = ({ entries = [], matches = [], matchSets 
         winner.won += 1; winner.standings_points += 2; loser.lost += 1;
         headToHead.set(`${match.entry_one_id}:${match.entry_two_id}`, match.winner_entry_id);
         headToHead.set(`${match.entry_two_id}:${match.entry_one_id}`, match.winner_entry_id);
-        matchSets.filter((set) => set.match_id === match.id).forEach((set) => {
-            const oneWon = set.entry_one_games > set.entry_two_games;
-            const twoWon = set.entry_two_games > set.entry_one_games;
+        const scores = matchSets.filter(set => set.match_id === match.id);
+        const [oneSets, twoSets] = Array.isArray(match.result_summary)
+            ? match.result_summary
+            : [
+                scores.filter(set => set.entry_one_games > set.entry_two_games).length,
+                scores.filter(set => set.entry_two_games > set.entry_one_games).length,
+            ];
+        one.sets_for += oneSets; two.sets_against += oneSets;
+        two.sets_for += twoSets; one.sets_against += twoSets;
+        scores.forEach(set => {
             one.games_for += set.entry_one_games; one.games_against += set.entry_two_games;
             two.games_for += set.entry_two_games; two.games_against += set.entry_one_games;
-            if (oneWon) { one.sets_for += 1; two.sets_against += 1; }
-            if (twoWon) { two.sets_for += 1; one.sets_against += 1; }
         });
     });
+    const tiedCounts = new Map();
+    for (const row of rows.values()) tiedCounts.set(row.standings_points, (tiedCounts.get(row.standings_points) || 0) + 1);
+    const directMatch = (a, b) => tiedCounts.get(a.standings_points) === 2 && headToHead.get(`${a.entry_id}:${b.entry_id}`);
     const sorted = [...rows.values()].sort((a, b) => {
         if (b.standings_points !== a.standings_points) return b.standings_points - a.standings_points;
-        const aVsB = headToHead.get(`${a.entry_id}:${b.entry_id}`);
+        const aVsB = directMatch(a, b);
         if (aVsB) return aVsB === a.entry_id ? -1 : 1;
         const aSetDiff = a.sets_for - a.sets_against;
         const bSetDiff = b.sets_for - b.sets_against;
@@ -68,7 +76,7 @@ export const calculateGroupStandings = ({ entries = [], matches = [], matchSets 
             && row.sets_for - row.sets_against === prior.sets_for - prior.sets_against
             && row.games_for - row.games_against === prior.games_for - prior.games_against
             && row.games_for === prior.games_for
-            && !headToHead.get(`${row.entry_id}:${prior.entry_id}`);
+            && !directMatch(row, prior);
         return { ...row, position: index + 1, requires_manual_resolution: Boolean(tiedWithoutHeadToHead) };
     });
 };

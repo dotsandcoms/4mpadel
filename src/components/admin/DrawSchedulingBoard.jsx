@@ -185,7 +185,7 @@ export default function DrawSchedulingBoard({ eventId, drawId, playDays, onSaved
         if (!count || errors.length || saving || planSaving) return;
         if (planDirty) { setNotice('Save the division plan before saving match bookings.'); return; }
         setSaving(true);
-        const savedIds = [];
+        const savedUpdates = [];
         try {
             const fresh = await fetchData();
             const stale = fresh.matches.find((match) => changes[match.id] && match.updated_at !== data.matches.find((old) => old.id === match.id)?.updated_at);
@@ -194,17 +194,19 @@ export default function DrawSchedulingBoard({ eventId, drawId, playDays, onSaved
             if (issues.length) throw new Error(issues.join(' '));
             for (const [id, values] of Object.entries(changes)) {
                 const original = fresh.matches.find((match) => match.id === id);
-                const { error } = await supabase.from('draw_matches').update({ ...values, updated_at: new Date().toISOString() })
-                    .eq('id', id).eq('draw_id', original.draw_id).eq('updated_at', original.updated_at).in('status', ['pending', 'scheduled']).select('id').single();
+                const updates = { ...values, updated_at: new Date().toISOString() };
+                const { data: saved, error } = await supabase.from('draw_matches').update(updates)
+                    .eq('id', id).eq('draw_id', original.draw_id).eq('updated_at', original.updated_at).in('status', ['pending', 'scheduled']).select('updated_at').single();
                 if (error) throw error;
-                savedIds.push(id);
+                savedUpdates.push({ id, ...updates, updated_at: saved.updated_at });
             }
-            setNotice(`${savedIds.length} match assignments saved. Published draws also update the public calendar.`);
+            setNotice(`${savedUpdates.length} match assignments saved. Published draws also update the public calendar.`);
         } catch (error) {
-            setNotice(`${savedIds.length ? `${savedIds.length} assignments saved before the error. ` : 'Nothing saved. '}${error.message}`);
+            setNotice(`${savedUpdates.length ? `${savedUpdates.length} assignments saved before the error. ` : 'Nothing saved. '}${error.message}`);
         } finally {
-            setChanges((current) => Object.fromEntries(Object.entries(current).filter(([id]) => !savedIds.includes(id))));
-            if (savedIds.length) onSaved(savedIds.map((id) => ({ id, ...changes[id] })));
+            const savedIds = new Set(savedUpdates.map(update => update.id));
+            setChanges(current => Object.fromEntries(Object.entries(current).filter(([id]) => !savedIds.has(id))));
+            if (savedUpdates.length) onSaved(savedUpdates);
             setRefresh((value) => value + 1);
             setSaving(false);
         }

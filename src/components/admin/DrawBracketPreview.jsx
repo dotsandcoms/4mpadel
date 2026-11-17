@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowLeftRight, ArrowRight, ArrowUpDown, CalendarClock, Trophy } from 'lucide-react';
 import DrawActionDialog from './DrawActionDialog';
+import DrawTeamSwapDialog from './DrawTeamSwapDialog';
 import { matchScoreText } from '../../utils/matchResult';
 import { firstRoundDrawSlots } from '../../utils/drawPreviewEditing';
 
@@ -28,8 +29,6 @@ const scheduleLabel = (match) => {
 
 const DrawBracketPreview = ({ matches = [], title = 'Bracket preview', contextMatches = matches, matchSets = [], onSwapPositions, onMoveMatch, swapDisabled = false }) => {
     const [swapPosition, setSwapPosition] = useState(null);
-    const [targetPosition, setTargetPosition] = useState('');
-    const [swapError, setSwapError] = useState('');
     const [moveKey, setMoveKey] = useState(null);
     const [moveTargetKey, setMoveTargetKey] = useState('');
     const [moveError, setMoveError] = useState('');
@@ -44,18 +43,6 @@ const DrawBracketPreview = ({ matches = [], title = 'Bracket preview', contextMa
         catch (error) { setMoveError(error.message || 'Could not move this match. Please try again.'); }
     };
     const swapSource = drawSlots.find(slot => slot.position === swapPosition);
-    const swapTarget = drawSlots.find(slot => slot.position === Number(targetPosition));
-    const slotLabel = slot => `Position ${slot.position} · ${slot.entry?.seed_number ? `#${slot.entry.seed_number} · ` : ''}${teamName(slot.entry, 'BYE')}`;
-    const closeSwap = () => { setSwapPosition(null); setTargetPosition(''); setSwapError(''); };
-    const applySwap = () => {
-        if (!swapSource || !swapTarget || swapDisabled) return;
-        try {
-            onSwapPositions(swapSource, swapTarget);
-            closeSwap();
-        } catch (error) {
-            setSwapError(error.message || 'Could not swap these positions. Please try again.');
-        }
-    };
     const knockoutMatches = useMemo(() => matches.filter((match) => match.stage === 'knockout'), [matches]);
     const placementMatches = useMemo(() => matches.filter((match) => match.stage === 'placement' && !match.round_code?.startsWith('places_')), [matches]);
     const rounds = useMemo(() => {
@@ -156,7 +143,7 @@ const DrawBracketPreview = ({ matches = [], title = 'Bracket preview', contextMa
                                                     return <div key={slotIndex} className={`flex h-[31px] items-center gap-2 border-b border-white/10 px-2 ${winner ? 'bg-padel-green/10' : ''}`}>
                                                         {onSwapPositions && round.number === 1 && <button type="button" disabled={swapDisabled}
                                                             aria-label={`Swap position ${position}: ${teamName(entry, 'BYE')}`} title={`Swap position ${position}: ${teamName(entry, 'BYE')}`}
-                                                            onClick={() => { setSwapPosition(position); setTargetPosition(''); setSwapError(''); }}
+                                                            onClick={() => setSwapPosition(position)}
                                                             className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-orange-300/60 bg-orange-400 text-black hover:bg-orange-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white disabled:opacity-40"><ArrowLeftRight size={15} /></button>}
                                                         <span className={`w-5 shrink-0 text-[10px] font-black ${entry?.seed_number ? 'text-padel-green' : 'text-gray-600'}`}>{entry?.seed_number ? `#${entry.seed_number}` : '—'}</span>
                                                         <span className={`min-w-0 flex-1 truncate text-xs ${entry ? 'font-semibold text-white' : 'font-medium text-gray-500'}`} title={teamName(entry, fallbackForSlot(match, slotIndex))}>{teamName(entry, fallbackForSlot(match, slotIndex))}</span>{match.result_summary && <span className="shrink-0 text-xs font-bold text-sky-200">{match.result_summary[slotIndex]}</span>}
@@ -185,21 +172,10 @@ const DrawBracketPreview = ({ matches = [], title = 'Bracket preview', contextMa
                 <p className="mb-3 text-xs font-black uppercase tracking-[0.16em] text-amber-200">3rd place playoff</p>
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{placementMatches.map((match) => <article key={match.key || match.id} className="overflow-hidden rounded-xl border border-amber-300/25 bg-black/20"><div className="flex items-center justify-between border-b border-white/10 px-3 py-2"><span className="text-xs font-bold text-white">{match.round_label}</span>{(match.scheduled_start || match.court_name) && <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-200"><CalendarClock size={11} /> {scheduleLabel(match)}</span>}</div>{[match.entry_one, match.entry_two].map((entry, index) => <div key={index} className="border-b border-white/10 px-3 py-2 text-xs font-semibold text-gray-200 last:border-0">{teamName(entry, fallbackForSlot(match, index))}{match.result_summary && <span className="float-right text-sky-200">{match.result_summary[index]}</span>}</div>)}{matchScoreText(match, matchSets) && <p className="border-t border-white/10 px-3 py-2 text-xs text-sky-200">{matchScoreText(match, matchSets)}</p>}</article>)}</div>
             </div>}
-            <DrawActionDialog open={Boolean(swapSource)} title="Swap draw positions" onClose={closeSwap}>
-                {swapSource && <>
-                    <div className="rounded-lg border border-orange-300/30 bg-orange-300/10 p-3"><p className="text-xs font-bold text-amber-200">Selected position {swapSource.position}</p><p className="mt-1 text-sm font-semibold leading-6">{swapSource.entry?.seed_number ? `#${swapSource.entry.seed_number} · ` : ''}{teamName(swapSource.entry, 'BYE')}</p></div>
-                    <label className="block text-sm font-bold">Swap with
-                        <select value={targetPosition} onChange={event => { setTargetPosition(event.target.value); setSwapError(''); }} className="mt-2 w-full min-w-0 rounded-lg border border-white/20 bg-[#151515] p-3 text-sm font-normal text-white focus-visible:outline-sky-300">
-                            <option value="">Choose a team or BYE position</option>
-                            {drawSlots.filter(slot => slot.position !== swapSource.position && (swapSource.entry || slot.entry)).map(slot => <option key={slot.position} value={slot.position}>{slotLabel(slot)}</option>)}
-                        </select>
-                    </label>
-                    {swapTarget && <p className="rounded-lg border border-white/15 p-3 text-sm leading-6 text-gray-200">{teamName(swapSource.entry, 'BYE')} moves to position {swapTarget.position}. {teamName(swapTarget.entry, 'BYE')} moves to position {swapSource.position}.</p>}
-                    <p className="text-xs leading-5 text-gray-400">Seed numbers stay with their teams. Manual swaps can change seed protection. Byes and later-round placeholders update automatically.</p>
-                    {swapError && <p role="alert" className="rounded-lg bg-red-300/10 p-3 text-sm text-red-200">{swapError}</p>}
-                    <div className="flex justify-end gap-3"><button type="button" onClick={closeSwap} className="rounded-lg border border-white/20 px-4 py-3 text-sm font-bold hover:bg-white/5">Cancel</button><button type="button" onClick={applySwap} disabled={!swapTarget || swapDisabled} className="rounded-lg bg-orange-400 px-4 py-3 text-sm font-bold text-black hover:bg-orange-300 disabled:opacity-40">Swap positions</button></div>
-                </>}
-            </DrawActionDialog>
+            {swapSource && <DrawTeamSwapDialog source={swapSource} disabled={swapDisabled}
+                targets={drawSlots.filter(slot => slot.position !== swapSource.position && (swapSource.entry || slot.entry))}
+                onClose={() => setSwapPosition(null)} onApply={onSwapPositions}
+                getWarnings={() => ['Manual swaps can change seed protection. Byes update automatically.']} />}
             <DrawActionDialog open={Boolean(moveSource)} title="Move opening match" onClose={closeMove}>
                 {moveSource && <>
                     <div className="rounded-lg border border-sky-300/30 bg-sky-300/10 p-3"><p className="text-xs font-bold text-sky-200">M{moveSource.bracket_position} · positions {(moveSource.bracket_position - 1) * 2 + 1}–{moveSource.bracket_position * 2}</p><p className="mt-2 text-sm font-semibold leading-6">{teamName(moveSource.entry_one, 'BYE')}<br />{teamName(moveSource.entry_two, 'BYE')}</p></div>
