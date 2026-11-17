@@ -744,6 +744,7 @@ const Calendar = () => {
                 return {
                     ...pe,
                     slug: localEvent.slug,
+                    event_status: localEvent.event_status,
                     id: localEvent.id,
                     image_url: localEvent.image_url,
                     custom_image_url: localEvent.custom_image_url,
