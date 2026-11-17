@@ -17,7 +17,7 @@ export function DiscoverySearch({ value, onChange, placeholder, filterCount = 0,
         style={s.input} selectionColor={b.accent} />
     </View>
     {onFilters && <HomeAction label={filterCount ? `Filters · ${filterCount}` : 'Filters'} icon="filters" compact
-      accessibilityLabel={`City and event type filters${filterCount ? `, ${filterCount} active` : ''}`} onPress={onFilters} />}
+      accessibilityLabel={`Event filters${filterCount ? `, ${filterCount} active` : ''}`} onPress={onFilters} />}
   </View>;
 }
 

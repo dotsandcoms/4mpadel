@@ -33,7 +33,9 @@ if (Platform.OS !== 'web') {
       shouldShowBanner: !(notification.request.content.data?.type === 'chat_message' && AppState.currentState === 'active'),
       shouldShowList: !(notification.request.content.data?.type === 'chat_message' && AppState.currentState === 'active'),
       shouldPlaySound: !(notification.request.content.data?.type === 'chat_message' && AppState.currentState === 'active'),
-      shouldSetBadge: true,
+      // The foreground badge writer reconciles reads against the server. A late
+      // push payload must not restore a count from before the notification was read.
+      shouldSetBadge: AppState.currentState !== 'active',
     }),
   });
 }

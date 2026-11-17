@@ -13,7 +13,7 @@ group('tournament_divisions clubs club_organisations draws draw_entries draw_gro
 group('payment_refunds org_audit_log event_activity_log player_devices player_push_tokens event_management_completion pro_match_bookmarks', [], ['select']);
 group('club_claim_invites draw_player_reviews', [], ['insert', 'select', 'update']);
 group('club_google_matches', [], ['select', 'update']);
-group('player_schedule_events pro_player_follows local_player_follows', [], ['delete', 'insert', 'select']);
+group('player_schedule_events pro_player_follows local_player_follows club_favourites', [], ['delete', 'insert', 'select']);
 group('commerce_config', ['select'], ['insert', 'select', 'update']);
 group('ranking_tiers ranking_points_table', ['select'], ['select']);
 group('player_ranking_points draw_match_audit', [], ['insert', 'select']);

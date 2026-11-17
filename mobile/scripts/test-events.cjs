@@ -131,3 +131,15 @@ test('payment availability follows the organiser switch and effective division d
   assert.equal(registrationPaymentClosed(event, { entries_close_at: '2026-09-08' }, now), false);
   assert.equal(registrationPaymentClosed(event, { entries_close_at: now.toISOString() }, now), true);
 });
+
+test('calendar hides cancelled events in default upcoming and past lists but supports an explicit status filter', () => {
+  for (const timing of ['upcoming', 'past']) {
+    const day = timing === 'past' ? '2026-09-01' : '2026-09-10';
+    const events = [{ ...base, id: 1, start_date: day, end_date: day }, { ...base, id: 2, start_date: day, end_date: day, event_status: 'cancelled' }];
+    const filters = { search: '', timing, city: '', tier: '' };
+    assert.deepEqual(Array.from(filterEvents(events, filters, [], now), event => event.id), [1]);
+    assert.deepEqual(Array.from(filterEvents(events, { ...filters, status: 'cancelled' }, [], now), event => event.id), [2]);
+    assert.equal(filterEvents(events, { ...filters, status: 'all' }, [], now).length, 2);
+    assert.equal(events.length, 2);
+  }
+});

@@ -45,3 +45,9 @@ export async function fetchUpcomingCalendarEvents(supabase) {
     if (error) throw error;
     return filterUpcomingEvents(data);
 }
+
+/** Cancelled events are hidden unless the calendar status filter includes them. */
+export function matchesCalendarStatus(event, status = 'active') {
+    const cancelled = String(event?.event_status || '').trim().toLowerCase() === 'cancelled';
+    return status === 'cancelled' ? cancelled : status === 'all' || !cancelled;
+}

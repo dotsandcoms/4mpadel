@@ -98,6 +98,9 @@ function ChatInboxProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; connected.current = false; for (const channel of channels) void supabase.removeChannel(channel); };
   }, [owner, status?.enabled, topics, signal]);
   useEffect(() => { if (owner) void refresh(); }, [owner, pathname, refresh]);
+  useEffect(() => {
+    if (notice && (pathname === `/messages/${notice.id}` || rows.some(row => row.id === notice.id && row.unread === 0))) setNotice(null);
+  }, [pathname, notice, rows]);
   // Chat lifecycles depend on this callback. Inbox/badge updates must not replace
   // it and restart the open conversation's draft and read-status effects.
   const refreshInbox = useCallback(async () => { await Promise.all([refresh(), help.refresh()]); }, [refresh, help.refresh]);

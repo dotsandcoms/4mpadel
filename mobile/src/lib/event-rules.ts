@@ -32,7 +32,7 @@ export function formatMoney(value: number) {
   return `R ${value.toLocaleString('en-ZA', { minimumFractionDigits: Number.isInteger(value) ? 0 : 2, maximumFractionDigits: 2 })}`;
 }
 
-export type EventFilters = { search: string; timing: 'upcoming' | 'past' | 'saved'; city: string; tier: string };
+export type EventFilters = { search: string; timing: 'upcoming' | 'past' | 'saved'; city: string; tier: string; status?: 'active' | 'cancelled' | 'all' };
 /** Upcoming events run nearest first; completed events run newest first. Undated events stay last. */
 export function compareEventDates(a: Pick<EventDetail, 'id' | 'start_date'>, b: Pick<EventDetail, 'id' | 'start_date'>, past = false) {
   if (!a.start_date || !b.start_date) return a.start_date ? -1 : b.start_date ? 1 : a.id - b.id;
@@ -43,6 +43,8 @@ export function filterEvents(events: EventDetail[], filters: EventFilters, saved
   const today = localDay(now);
   const needle = filters.search.trim().toLowerCase();
   return events.filter(event => {
+    const cancelled = (event.event_status || '').trim().toLowerCase() === 'cancelled';
+    if (filters.status === 'cancelled' ? !cancelled : filters.status !== 'all' && cancelled) return false;
     const end = (event.end_date || event.start_date || '').slice(0, 10);
     if (filters.timing === 'saved' && (!savedIds.includes(event.id) || event.event_status === 'cancelled')) return false;
     if (filters.timing === 'past' && (!end || end >= today)) return false;

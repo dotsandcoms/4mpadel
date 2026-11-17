@@ -37,6 +37,7 @@ test('manual sheets deduplicate mirrored partners by division and never include 
     entries: [{ id: 'e1', division_id: 'd1', full_name: 'A & B', partner_name: 'Second Player', email_hash: 'one', partner_email_hash: 'two' }, { id: 'e2', division_id: 'd1', full_name: 'Second Player', partner_name: 'A & B', email_hash: 'two', partner_email_hash: 'one' }, { id: 'e3', division_id: 'd1', full_name: 'Withdrawn', status: 'withdrawn' }],
   });
   const sheet = await api.fetchEventEntrySheet(1, now);
+  assert.equal(sheet.registrationClosesAt, event.registration_closes_at);
   assert.equal(sheet.divisions[0].teams.length, 1); assert.equal(sheet.divisions[0].teams[0].total, 1700);
   assert.equal(sheet.divisions[0].teams[0].players[0].rank, 1);
   assert.ok(!JSON.stringify(sheet).includes('private@test.invalid')); assert.ok(!JSON.stringify(sheet).includes('email_hash'));
@@ -74,7 +75,9 @@ test('native points use the public final-awards projection and reject failed loa
 });
 test('Player-list PDF escapes names and uses repeated table headers', () => {
   const pdf = load('src/lib/event-pdf-html.ts');
-  const html = pdf.entrySheetHtml({ eventName: '<script>unsafe</script>', generatedAt: now.toISOString(), dates: 'Nov 2026', divisions: [{ name: 'Men & Women', teams: [{ position: 1, players: [{ name: 'Player <One>', rank: 3, points: 0, country: 'ZA' }], total: null }] }] });
+  const html = pdf.entrySheetHtml({ eventName: '<script>unsafe</script>', generatedAt: now.toISOString(), registrationClosesAt: event.registration_closes_at, dates: 'Nov 2026', divisions: [{ name: 'Men & Women', teams: [{ position: 1, players: [{ name: 'Player <One>', rank: 3, points: 0, country: 'ZA' }], total: null }] }] });
   assert.ok(!html.includes('<script>')); assert.ok(html.includes('&lt;script&gt;')); assert.ok(html.includes('Men &amp; Women')); assert.ok(html.includes('Player &lt;One&gt;'));
   assert.ok(html.includes('<thead>')); assert.ok(html.includes('page-break-inside:avoid')); assert.ok(html.includes('0 points'));
+  assert.match(html, /Registration closes: 16 Nov 2026, 09:00 SAST/);
+  assert.match(html, /Generated 16 Nov 2026, 10:00 SAST/);
 });

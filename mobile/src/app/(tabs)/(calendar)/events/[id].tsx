@@ -16,6 +16,7 @@ import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
 import { Notice } from '@/components/events/event-ui';
 import { Accordion, CircleAction, EventIcon, EventText as Text, Fade, InfoRows, WebsiteHeader, EventAccent, useEventAccent, type EventIconName } from '@/components/events/website-ui';
 import { EventTimeline, RegistrationCountdown } from '@/components/events/event-timeline';
+import { EventTitle } from '@/components/events/event-title';
 import { fetchEntryBalances, currentEmail, fetchEventPlayerRankings, fetchDivisions, fetchDrawStatus, fetchEvent, fetchEventOrganisation, fetchMyEventRegistrations, fetchPublicEntries, fetchScheduledIds, setEventScheduled,
   type Division, type EventDetail, type EventOrganisation, type EventRegistration, type PublicEntry } from '@/lib/events';
 import { entryFee, formatMoney, plainText, registrationState } from '@/lib/event-rules';
@@ -150,8 +151,6 @@ function EventContent() {
   const pendingPayment = registrations.some(r => r.payment_status !== 'paid' && Number(divisions.find(d => d.id === r.division_id)?.entry_fee || 0) > 0);
   const posterUrl = event?.poster_image_url || event?.custom_image_url;
   const hasSapa = !!event?.sapa_status && event.sapa_status !== 'None';
-  const titleWords = event?.event_name?.trim().split(/\s+/) || [];
-  const shortTitle = titleWords.slice(0, 3).join(' ') + (titleWords.length > 3 ? '…' : '');
   const sponsors = event?.sponsor_logos?.filter(url => url && url !== organisation?.logo_url && url !== event.poster_image_url && url !== event.custom_image_url) || [];
   return <EventAccent value={accent}><View style={{ flex: 1, backgroundColor: '#F5F6F3', paddingTop: insets.top }}>
     <WebsiteHeader />
@@ -171,7 +170,7 @@ function EventContent() {
           {!!event.sapa_status && event.sapa_status !== 'None' && <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}><Text style={{ color: sapaTone(event.sapa_status).text, fontSize: 9, fontWeight: '700', letterSpacing: 1, borderWidth: 1, borderColor: sapaTone(event.sapa_status).border, borderRadius: 16, paddingHorizontal: 9, paddingVertical: 4 }}>{event.sapa_status.toUpperCase()}</Text><Text style={{ color: sapaTone(event.sapa_status).text, fontSize: 9, fontWeight: '700', letterSpacing: 1, borderWidth: 1, borderColor: sapaTone(event.sapa_status).border, borderRadius: 16, paddingHorizontal: 9, paddingVertical: 4 }}>SAPA</Text></View>}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
             {!!posterUrl && <Pressable accessibilityRole="button" accessibilityLabel="View event poster" onPress={() => setPosterOpen(true)} style={{ width: 64, height: 80, borderRadius: 8, overflow: 'hidden' }}><Image source={{ uri: posterUrl }} contentFit="contain" style={{ width: '100%', height: '100%' }} /></Pressable>}
-            <View style={{ flex: 1, minWidth: 0 }}><Text accessibilityRole="header" accessibilityLabel={event.event_name || undefined} numberOfLines={1} ellipsizeMode="tail" style={{ fontSize: 26, fontWeight: '700', lineHeight: 32 }}>{shortTitle}</Text></View>
+            <EventTitle key={event.id} title={event.event_name || 'Tournament'} />
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10 }}>
             <EventIcon name="calendar" size={14} /><Text style={{ fontSize: 12, color: '#16251fe6' }}>{event.event_dates || formatEventRange(event.start_date, event.end_date)}</Text>

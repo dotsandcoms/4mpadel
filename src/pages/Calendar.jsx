@@ -8,7 +8,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import { useMembersOnly } from '../context/MembersOnlyContext';
 import { toast } from 'sonner';
-import { fetchEventEntryCounts } from '../utils/calendarEvents';
+import { fetchEventEntryCounts, matchesCalendarStatus } from '../utils/calendarEvents';
 import {
     fetchScheduledEventIds,
     toggleEventOnSchedule,
@@ -532,6 +532,7 @@ const Calendar = () => {
     // Filter & Search State
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilters, setStatusFilters] = useState([]);
+    const [eventStateFilter, setEventStateFilter] = useState('active');
     const [cityFilter, setCityFilter] = useState('All');
     const [timingFilter, setTimingFilter] = useState('Upcoming');
     const [activeTab, setActiveTab] = useState(initialTab); // 'upcoming', 'past', 'all', 'my-calendar'
@@ -767,6 +768,7 @@ const Calendar = () => {
         }) : events;
 
         return sourceEvents.filter(event => {
+            if (!matchesCalendarStatus(event, eventStateFilter)) return false;
             // Map Rankedin fields to local fields if needed
             const eventName = event.event_name || event.eventName || '';
             const venueName = event.venue || event.clubName || '';
@@ -808,7 +810,7 @@ const Calendar = () => {
             const dateB = new Date(b.start_date || b.startDate).getTime();
             return timingFilter === 'Past' ? dateB - dateA : dateA - dateB;
         });
-    }, [events, personalEvents, activeTab, searchTerm, statusFilters, cityFilter, leagueFilter, timingFilter, scheduleOnly, scheduledEventIds]);
+    }, [events, personalEvents, activeTab, searchTerm, statusFilters, cityFilter, leagueFilter, timingFilter, scheduleOnly, scheduledEventIds, eventStateFilter]);
 
     const spotlightEvents = useMemo(() => {
         return events.filter(event => event.is_spotlight === true);
@@ -838,12 +840,12 @@ const Calendar = () => {
     // Reset page on filter change
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, statusFilters, cityFilter, activeTab, leagueFilter, timingFilter, viewMode, scheduleOnly]);
+    }, [searchTerm, statusFilters, cityFilter, activeTab, leagueFilter, timingFilter, viewMode, scheduleOnly, eventStateFilter]);
 
     // Scroll to top on filter change, but NOT on search typing
     useEffect(() => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, [statusFilters, cityFilter, activeTab, leagueFilter, timingFilter, viewMode]);
+    }, [statusFilters, cityFilter, activeTab, leagueFilter, timingFilter, viewMode, eventStateFilter]);
 
 
     // Scroll to top on page change
@@ -1021,9 +1023,9 @@ const Calendar = () => {
                         >
                             <Filter className="w-4 h-4 md:w-5 md:h-5 text-gray-400 group-hover:text-white transition-colors" />
                             <span className="hidden sm:block">Filters</span>
-                            {((statusFilters.length > 0) || (cityFilter !== 'All') || (leagueFilter !== 'All') || (timingFilter !== 'Upcoming')) && (
+                            {((statusFilters.length > 0) || (cityFilter !== 'All') || (leagueFilter !== 'All') || (timingFilter !== 'Upcoming') || eventStateFilter !== 'active') && (
                                 <span className="w-5 h-5 bg-[#CCFF00] text-black font-black text-[10px] md:text-xs rounded-full flex items-center justify-center shadow-lg ml-1">
-                                    {(statusFilters.length > 0 ? 1 : 0) + (cityFilter !== 'All' ? 1 : 0) + (leagueFilter !== 'All' ? 1 : 0) + (timingFilter !== 'Upcoming' ? 1 : 0)}
+                                    {(statusFilters.length > 0 ? 1 : 0) + (cityFilter !== 'All' ? 1 : 0) + (leagueFilter !== 'All' ? 1 : 0) + (timingFilter !== 'Upcoming' ? 1 : 0) + (eventStateFilter !== 'active' ? 1 : 0)}
                                 </span>
                             )}
                         </button>
@@ -1078,6 +1080,15 @@ const Calendar = () => {
                                         </div>
                                     </div>
 
+                                    <div className="space-y-2">
+                                        <label htmlFor="calendar-event-status" className="text-sm font-semibold text-gray-300">Event status</label>
+                                        <select id="calendar-event-status" value={eventStateFilter} onChange={e => setEventStateFilter(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 px-4 text-white focus:outline-none focus:border-padel-green text-sm">
+                                            <option value="active" className="bg-[#141414]">Active events</option>
+                                            <option value="cancelled" className="bg-[#141414]">Cancelled events</option>
+                                            <option value="all" className="bg-[#141414]">All events</option>
+                                        </select>
+                                    </div>
+
                                     {/* Type Filter */}
                                     <div className="space-y-2">
                                         <label className="text-sm font-semibold text-gray-300">Event Type</label>
@@ -1100,7 +1111,7 @@ const Calendar = () => {
 
                                     {/* Status Filter */}
                                     <div className="space-y-2">
-                                        <label className="text-sm font-semibold text-gray-300">Tier / Status</label>
+                                        <label className="text-sm font-semibold text-gray-300">Tier</label>
                                         <div className="relative">
                                             <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4 pointer-events-none" />
                                             <select
@@ -1111,7 +1122,7 @@ const Calendar = () => {
                                                 }}
                                                 className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-12 pr-10 text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green transition-colors font-semibold text-sm"
                                             >
-                                                <option value="All" className="bg-[#141414]">All Statuses</option>
+                                                <option value="All" className="bg-[#141414]">All tiers</option>
                                                 {uniqueStatuses.filter(s => s !== 'All').map(s => (
                                                     <option key={s} value={s} className="bg-[#141414]">{s}</option>
                                                 ))}
@@ -1165,7 +1176,7 @@ const Calendar = () => {
                                 <div className="pt-2 flex gap-3">
                                     <button
                                         onClick={() => {
-                                            setStatusFilters([]);
+                                            setStatusFilters([]); setEventStateFilter('active');
                                             setCityFilter('All');
                                             setTimingFilter('Upcoming');
                                             setLeagueFilter('All');
@@ -1252,7 +1263,7 @@ const Calendar = () => {
                     <div className="text-center py-32 text-gray-400 bg-white/5 border border-white/10 rounded-3xl">
                         <p className="text-xl mb-4">No events found matching your criteria.</p>
                         <button
-                            onClick={() => { setSearchTerm(''); setStatusFilters([]); setCityFilter('All'); setTimingFilter('Upcoming'); setLeagueFilter('All'); }}
+                            onClick={() => { setSearchTerm(''); setStatusFilters([]); setEventStateFilter('active'); setCityFilter('All'); setTimingFilter('Upcoming'); setLeagueFilter('All'); }}
                             className="text-padel-green font-bold hover:text-white flex items-center gap-2 mx-auto transition-colors"
                         >
                             <X className="w-4 h-4" /> Clear all filters

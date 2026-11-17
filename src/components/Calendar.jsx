@@ -6,6 +6,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import tournamentBg from '../assets/tournament_bg.png';
 import { getEventImage } from '../utils/imageUtils';
+import { matchesCalendarStatus } from '../utils/calendarEvents';
 
 const extractRankedinId = (url) => {
     if (!url) return null;
@@ -186,7 +187,7 @@ const Calendar = () => {
         if (error) {
             console.error('Error fetching events:', error?.message || error);
         } else {
-            setEvents(data || []);
+            setEvents((data || []).filter(event => matchesCalendarStatus(event)));
         }
         setLoading(false);
     };

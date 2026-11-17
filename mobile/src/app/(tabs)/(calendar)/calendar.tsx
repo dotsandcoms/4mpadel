@@ -19,7 +19,7 @@ import { currentEmail, fetchCalendarEvents, fetchScheduledIds, setEventScheduled
 import { filterEvents, type EventFilters } from '@/lib/event-rules';
 import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 
-const defaultFilters: EventFilters = { search: '', timing: 'upcoming', city: '', tier: '' };
+const defaultFilters: EventFilters = { search: '', timing: 'upcoming', city: '', tier: '', status: 'active' };
 const timings = [{ value: 'upcoming', label: 'Upcoming' }, { value: 'past', label: 'Past' }, { value: 'saved', label: 'My schedule' }];
 const fieldColors = { ...b, soft: b.glass, selection: '#38601833' };
 
@@ -84,7 +84,7 @@ function SouthAfricaCalendar() {
     setFilters(f => ({ ...f, timing: value }));
   };
   const clear = () => { setFilters(defaultFilters); setEventType('All'); };
-  const count = Number(!!filters.city) + Number(eventType !== 'All');
+  const count = Number(!!filters.city) + Number(eventType !== 'All') + Number(filters.status !== 'active');
   return <View style={{ flex: 1 }}>
     <FlatList style={{ flex: 1 }} data={rows} keyExtractor={item => String(item.id)} refreshing={loading && events.length > 0} onRefresh={load}
       keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ paddingBottom: bottom }}
@@ -113,11 +113,14 @@ function SouthAfricaCalendar() {
       </View> : null}
       renderItem={({ item }) => <CalendarEventCard event={item} saved={saved.includes(item.id)} saving={savingIds.includes(item.id)}
         onSave={() => void toggleSaved(item.id)} onPress={() => router.push({ pathname: '/events/[id]', params: { id: String(item.id) } })} />} />
-    <DiscoveryFilterSheet visible={showFilters} onClose={() => setShowFilters(false)} onClear={() => { setFilters(f => ({ ...f, city: '' })); setEventType('All'); }} resultLabel={`Show ${rows.length} ${rows.length === 1 ? 'event' : 'events'}`}>
+    <DiscoveryFilterSheet visible={showFilters} onClose={() => setShowFilters(false)} onClear={() => { setFilters(f => ({ ...f, city: '', status: 'active' })); setEventType('All'); }} resultLabel={`Show ${rows.length} ${rows.length === 1 ? 'event' : 'events'}`}>
       <DiscoveryFilterGroup title="Event type"><NativeSegmentedControl label="Event type" value={eventType}
         options={['All', 'Leagues', 'Tournaments'].map(value => ({ value, label: value }))} onChange={value => {
           void trackEvent('feature_interaction', { feature: 'event_calendar', action: 'filter', selection: value.toLowerCase() }); setEventType(value);
         }} /></DiscoveryFilterGroup>
+      <DiscoveryFilterGroup title="Event status"><FieldColors.Provider value={fieldColors}>
+        <SelectField label="Event status" value={filters.status || 'active'} onChange={value => setFilters(f => ({ ...f, status: value as EventFilters['status'] }))} options={[{ value: 'active', label: 'Active events' }, { value: 'cancelled', label: 'Cancelled events' }, { value: 'all', label: 'All events' }]} />
+      </FieldColors.Provider></DiscoveryFilterGroup>
       <FieldColors.Provider value={fieldColors}><SelectField label="City" value={filters.city} searchable options={[{ value: '', label: 'All cities' }, ...cities.map(city => ({ value: city, label: city }))]}
         onChange={city => { void trackEvent('feature_interaction', { feature: 'event_calendar', action: 'filter', selection: city ? 'specific_city' : 'all_cities' }); setFilters(f => ({ ...f, city })); }} /></FieldColors.Provider>
     </DiscoveryFilterSheet>

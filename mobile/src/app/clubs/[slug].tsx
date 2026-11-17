@@ -8,6 +8,8 @@ import { ClubIdentity } from '@/components/club-identity';
 import { ClubTags, ClubVerifiedBadge } from '@/components/club-tags';
 import { clubHasOwner } from '@/lib/club-claims';
 import { HomeAction } from '@/components/home-action';
+import { ClubActions } from '@/components/club-actions';
+import { useClubFavourites } from '@/hooks/use-club-favourites';
 import { ErrorBanner } from '@/components/error-banner';
 import { EventArtwork } from '@/components/event-artwork';
 import { ClubPhotoRail, RatingStars, ReviewCard, Attributions } from '@/components/club-media';
@@ -28,6 +30,7 @@ function Section({ title, summary, children, initialOpen = false }: { title: str
 }
 
 export default function ClubScreen() {
+  const favourites = useClubFavourites();
   const { slug } = useLocalSearchParams<{ slug: string }>(), router = useRouter(), safe = useSafeAreaInsets();
   const [club, setClub] = useState<ClubDetails | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [revision, setRevision] = useState(0);
   const [events, setEvents] = useState<ClubEvent[] | null>(null), [organisations, setOrganisations] = useState<ClubOrganisation[] | null>(null), [venues, setVenues] = useState<Club[]>([]);
@@ -87,6 +90,8 @@ export default function ClubScreen() {
           {claimAvailable === true && <HomeAction size="small" label="Claim Club" accessibilityLabel={`Claim ${club.name}`} onPress={() => router.push({ pathname: '/claim-club', params: { slug: club.slug } })} />}
         </View>
         <ClubTags club={club} onGroup={() => router.push({ pathname: '/club-groups/[slug]', params: { slug: club.group!.slug } })} />
+        <ClubActions club={club} favourites={favourites} onError={setError} />
+        {!!favourites.error && <HomeAction label="Retry favourites" onPress={favourites.retry} />}
         {claimError && <HomeAction size="small" label="Retry club ownership check" onPress={() => setRevision(value => value + 1)} />}
         {place?.rating && <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}><Text style={{ color: b.premium, fontSize: 16, fontWeight: '600' }}>{place.rating.toFixed(1)}</Text><RatingStars rating={place.rating} /><Text style={{ color: '#5E5E5E', fontSize: 12 }}>Google Maps · {place.reviewCount ?? '—'} reviews</Text>{place.openNow !== null && <Text style={{ ...s.meta, color: place.openNow ? b.accent : b.muted }}>{place.openNow ? 'Open now' : 'Closed now'}</Text>}</View>}
         {place?.businessStatus && place.businessStatus !== 'OPERATIONAL' && <Text style={{ ...s.body, color: b.danger }}>{place.businessStatus === 'CLOSED_PERMANENTLY' ? 'Google lists this venue as permanently closed' : 'Google lists this venue as temporarily closed'}</Text>}
@@ -158,7 +163,7 @@ export default function ClubScreen() {
         {photo && <Image source={{ uri: photo.url }} style={{ flex: 1, width: '100%' }} contentFit="contain" />}
       </View>
     </Modal>
-    <ErrorBanner message={error || relatedError || placeError || null} top={8} />
+    <ErrorBanner message={error || favourites.error || relatedError || placeError || null} top={8} />
   </View>;
 }
 const s = StyleSheet.create({

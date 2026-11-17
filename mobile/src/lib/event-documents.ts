@@ -5,7 +5,7 @@ import { rankedinEventId } from './event-draws';
 import { resolveSapaMainRanking } from './sapa-main-ranking';
 
 export type SheetPlayer = { name: string; country: string | null; rank: number | null; points: number | null };
-export type EntrySheet = { eventName: string; dates: string; generatedAt: string; divisions: { name: string; teams: { position: number; players: SheetPlayer[]; total: number | null }[] }[] };
+export type EntrySheet = { eventName: string; dates: string; generatedAt: string; registrationClosesAt: string; divisions: { name: string; teams: { position: number; players: SheetPlayer[]; total: number | null }[] }[] };
 export type PointsSheet = { eventName: string; updatedAt: string | null; divisions: { name: string; rows: { position: string; players: string[]; points: number }[] }[] };
 const text = (value: unknown) => typeof value === 'string' ? value.trim() : '';
 const record = (value: unknown): Record<string, any> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {};
@@ -81,7 +81,7 @@ export async function fetchEventEntrySheet(eventId: number, now = new Date()): P
   }
   divisions = divisions.filter(division => division.teams.length > 0);
   if (!divisions.length) throw new Error('No players have been published yet. Please try again later.');
-  return { eventName: event.event_name || 'SAPA event', dates: [event.start_date, event.end_date].filter(Boolean).join(' - '), generatedAt: now.toISOString(), divisions };
+  return { eventName: event.event_name || 'SAPA event', dates: [event.start_date, event.end_date].filter(Boolean).join(' - '), generatedAt: now.toISOString(), registrationClosesAt: event.registration_closes_at!, divisions };
 }
 
 export function rankedinPointsRows(payload: unknown, rankingId: number) {

@@ -5,6 +5,8 @@ import { getForegroundPermissionsAsync } from 'expo-location';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, FlatList, Linking, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { HomeAction } from '@/components/home-action';
+import { ClubActions } from '@/components/club-actions';
+import { useClubFavourites } from '@/hooks/use-club-favourites';
 import { NativeSegmentedControl } from '@/components/native-segmented-control';
 import { ErrorBanner } from '@/components/error-banner';
 import { ClubIdentity } from '@/components/club-identity';
@@ -15,6 +17,7 @@ import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 
 export default function ClubsScreen() {
   const router = useRouter();
+  const favourites = useClubFavourites();
   const [clubs, setClubs] = useState<Club[]>([]), [loading, setLoading] = useState(true), [error, setError] = useState(''), [revision, setRevision] = useState(0);
   const [groups, setGroups] = useState<ClubGroup[]>([]), [groupError, setGroupError] = useState('');
   const [directory, setDirectory] = useState('venues');
@@ -39,7 +42,7 @@ export default function ClubsScreen() {
     });
     return () => { live = false; subscription.remove(); };
   }, [settingsNeeded]);
-  const rows = useMemo(() => filterClubs(clubs, query, origin, Number(radius)), [clubs, query, origin, radius]);
+  const rows = useMemo(() => filterClubs(directory === 'favourites' ? clubs.filter(club => favourites.ids.has(club.id)) : clubs, query, origin, Number(radius)), [clubs, query, origin, radius, directory, favourites.ids]);
   const groupMatches = useMemo(() => query.trim() && !origin ? filterClubGroups(groups, query) : [], [groups, query, origin]);
   async function nearMe() {
     if (locating) return;
@@ -63,11 +66,12 @@ export default function ClubsScreen() {
   return <>
     <Stack.Screen options={{ headerShown: true, title: 'Find clubs', headerBackTitle: 'Back', headerTintColor: b.premium, headerStyle: { backgroundColor: b.page }, headerShadowVisible: false }} />
     {Platform.OS !== 'web' && <Stack.SearchBar placeholder={placeholder} hideWhenScrolling={false} hideNavigationBar={false} obscureBackground={false} placement="stacked" tintColor={b.accent} onChangeText={event => setQuery(event.nativeEvent.text)} />}
-    <FlatList style={{ flex: 1, backgroundColor: b.page }} data={directory === 'venues' ? rows : []} keyExtractor={row => row.club.id} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentInsetAdjustmentBehavior="automatic" removeClippedSubviews={false}
+    <FlatList style={{ flex: 1, backgroundColor: b.page }} data={directory !== 'groups' ? rows : []} keyExtractor={row => row.club.id} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentInsetAdjustmentBehavior="automatic" removeClippedSubviews={false}
       contentContainerStyle={{ padding: 20, paddingBottom: 36, gap: 12 }} refreshing={loading && clubs.length > 0} onRefresh={() => setRevision(value => value + 1)}
       ListHeaderComponent={<View style={{ gap: 16, paddingBottom: 4 }}>
         {Platform.OS === 'web' && <TextInput value={query} onChangeText={setQuery} placeholder={placeholder} accessibilityLabel="Search clubs" style={{ minHeight: 44, backgroundColor: b.elevated, borderRadius: 12, padding: 12, color: b.premium }} />}
-        <NativeSegmentedControl label="Club directory" value={directory} options={[{ value: 'venues', label: 'Venues' }, { value: 'groups', label: 'Club groups' }]} onChange={value => { setDirectory(value); if (value === 'groups') showAll(); }} />
+        <NativeSegmentedControl label="Club directory" value={directory} options={[{ value: 'venues', label: 'Venues' }, { value: 'favourites', label: 'Favourites' }, { value: 'groups', label: 'Club groups' }]} onChange={value => { setDirectory(value); if (value !== 'venues') showAll(); }} />
+        {directory === 'favourites' && <Text accessibilityRole="header" style={{ color: b.premium, fontSize: 19, fontWeight: '600' }}>Favourite clubs</Text>}
         {directory === 'venues' && <View style={{ gap: 12 }}>
           <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
             <View style={{ flex: 1, gap: 4 }}><Text style={{ color: b.premium, fontSize: 18, fontWeight: '600' }}>{origin ? 'Clubs near me' : 'Find your next court'}</Text><Text style={{ color: b.muted, fontSize: 12, lineHeight: 18 }}>{origin ? 'Approximate distance · no location saved' : 'Search a venue, or find courts near you'}</Text></View>
@@ -85,8 +89,9 @@ export default function ClubsScreen() {
         {directory === 'venues' && <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><Text accessibilityRole="header" style={{ color: b.premium, fontSize: 19, fontWeight: '600' }}>{origin ? `Within ${radius} km` : query ? 'Venues' : 'All clubs'}</Text><Text style={{ color: b.muted, fontSize: 13 }}>{directory === 'venues' ? `${rows.length} ${rows.length === 1 ? 'club' : 'clubs'}` : ''}</Text></View>}
         {loading && clubs.length === 0 && <ActivityIndicator color={loadingBlue} accessibilityLabel="Loading clubs" />}
         {!!error && <HomeAction label="Retry clubs" onPress={() => setRevision(value => value + 1)} />}
+        {!!favourites.error && <HomeAction label="Retry favourites" onPress={favourites.retry} />}
       </View>}
-      renderItem={({ item: { club, distance } }) => <Pressable accessibilityRole="button" accessibilityLabel={`${club.name}. ${clubLocation(club)}${distance !== null ? `. Approximately ${distance.toFixed(1)} kilometres away` : ''}${clubTagsDescription(club) ? `. ${clubTagsDescription(club)}` : ''}. View club`} onPress={() => router.push({ pathname: '/clubs/[slug]', params: { slug: club.slug } })} style={{ padding: 12, borderRadius: 12, backgroundColor: b.elevated, flexDirection: 'row', gap: 12, alignItems: 'center', minHeight: 100 }}>
+      renderItem={({ item: { club, distance } }) => <View style={{ borderRadius: 12, backgroundColor: b.elevated }}><Pressable accessibilityRole="button" accessibilityLabel={`${club.name}. ${clubLocation(club)}${distance !== null ? `. Approximately ${distance.toFixed(1)} kilometres away` : ''}${clubTagsDescription(club) ? `. ${clubTagsDescription(club)}` : ''}. View club`} onPress={() => router.push({ pathname: '/clubs/[slug]', params: { slug: club.slug } })} style={{ padding: 12, flexDirection: 'row', gap: 12, alignItems: 'center', minHeight: 100 }}>
         {club.cover ? <Image source={{ uri: club.cover }} contentFit="cover" style={{ width: 88, height: 88, borderRadius: 8 }} /> : <ClubIdentity club={club} size={56} />}
         <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><Text style={{ color: b.premium, fontSize: 15, lineHeight: 21, fontWeight: '600', flexShrink: 1 }}>{club.name}</Text>{club.approved && <ClubVerifiedBadge size={16} />}</View>
@@ -96,8 +101,9 @@ export default function ClubsScreen() {
           <ClubTags club={club} compact />
         </View>
         <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} size={14} tintColor={b.muted} />
-      </Pressable>}
+      </Pressable><View style={{ paddingHorizontal: 12, paddingBottom: 8 }}><ClubActions club={club} favourites={favourites} onError={setError} /></View></View>}
+      ListFooterComponent={directory === 'favourites' && !loading && !favourites.loading && !rows.length ? <Text style={{ color: b.muted, fontSize: 13, lineHeight: 20 }}>{favourites.error ? 'Your favourites couldn’t load. Please try again.' : query ? 'No favourite clubs match your search.' : 'Tap a club’s heart to save it here.'}</Text> : null}
       ListEmptyComponent={directory === 'venues' && !loading && !error && !groupMatches.length ? <View style={{ paddingVertical: 16, gap: 8 }}><Text style={{ color: b.premium, fontSize: 16, fontWeight: '600' }}>No clubs found</Text><Text style={{ color: b.muted, fontSize: 14, lineHeight: 21 }}>{origin ? 'Try a wider radius or show all clubs. Some clubs do not have a map location yet.' : 'Try a different club name, city or province.'}</Text>{origin && <HomeAction label="Show all clubs" onPress={showAll} />}</View> : null} />
-    <ErrorBanner message={error || groupError || locationNotice || null} top={8} />
+    <ErrorBanner message={error || favourites.error || groupError || locationNotice || null} top={8} />
   </>;
 }

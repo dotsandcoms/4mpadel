@@ -1,4 +1,6 @@
 import { useHelpInbox } from '@/components/help-inbox-provider';
+import { useMessagingInbox } from '@/components/messaging/messaging-provider';
+import { useNotificationUnread } from '@/hooks/use-notification-unread';
 import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
 import { useEffect } from 'react';
@@ -24,17 +26,17 @@ import { lightBrand as brand } from '@/theme/tokens';
 type Props = {
   onSearch: () => void;
   onNotifications: () => void;
-  noticeCount?: number;
 };
 
 /**
  * Home chrome on a solid page fill so icons stay readable. Safe-area padding
  * lives on the parent — this row is 52pt of tappable header only.
  */
-export function HomeHeader({ onSearch, onNotifications, noticeCount = 0 }: Props) {
+export function HomeHeader({ onSearch, onNotifications }: Props) {
   const drawer = useDrawerOptional();
   const help = useHelpInbox();
-  noticeCount += help.unread;
+  const { owner } = useMessagingInbox();
+  const noticeCount = useNotificationUnread(owner) + help.unread;
   const noticeLabel =
     noticeCount > 0
       ? `Notifications, ${noticeCount} waiting`

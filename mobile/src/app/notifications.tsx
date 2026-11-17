@@ -1,7 +1,7 @@
 import { useHelpInbox } from '@/components/help-inbox-provider';
 import { SymbolView } from 'expo-symbols';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { HomeAction } from '@/components/home-action';
 import { EventArtwork } from '@/components/event-artwork';
@@ -19,26 +19,43 @@ import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 export default function NotificationsSheet() {
   const router = useRouter(), centre = useNotificationCentre(), help = useHelpInbox();
   const [filter, setFilter] = useState('actions'), [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const readQueue = useRef<Promise<unknown>>(Promise.resolve());
   useEffect(() => { setExpanded(new Set()); setFilter('actions'); }, [centre.ownerKey]);
   const groups = useMemo(() => groupNotifications(centre.actions, centre.notifications, centre.events), [centre.actions, centre.notifications, centre.events]);
   const visible = filter === 'actions' ? groups.filter(group => group.actions.length > 0) : groups;
   const actionCount = centre.actions.length;
+  function readNotifications(ids?: string[]) {
+    const task = readQueue.current.then(async () => {
+      if (!ids) return centre.markRead();
+      for (let offset = 0; offset < ids.length; offset += 50) {
+        if (!await centre.markRead(ids.slice(offset, offset + 50))) return false;
+      }
+      return true;
+    });
+    readQueue.current = task.catch(() => false);
+    return task;
+  }
   function leave() { if (router.canDismiss()) router.dismiss(); }
   function openAction(action: PendingAction) {
     leave();
     if (action.kind === 'profile') router.push('/edit-profile'); else void openSitePath(action.path);
   }
   async function openNotification(notification: PlayerNotification) {
-    if (notification.read_at === null && !await centre.markRead([notification.id])) return;
+    if (notification.read_at === null && !await readNotifications([notification.id])) return;
     const path = pathFromNotificationData({ type: notification.type, path: notification.path });
     if (path) { leave(); router.navigate(path as never); }
   }
-  function toggle(key: string) { setExpanded(previous => { const next = new Set(previous); if (next.has(key)) next.delete(key); else next.add(key); return next; }); }
+  function toggle(group: NotificationGroup) {
+    const opening = !expanded.has(group.key);
+    setExpanded(previous => { const next = new Set(previous); if (next.has(group.key)) next.delete(group.key); else next.add(group.key); return next; });
+    const unread = group.notifications.filter(notification => notification.read_at === null).map(notification => notification.id);
+    if (opening && unread.length) void readNotifications(unread);
+  }
   function renderGroup(group: NotificationGroup) {
     const open = expanded.has(group.key), event = group.event;
     const uri = event?.custom_image_url || event?.poster_image_url || event?.image_url;
     return <View style={s.group}>
-      <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={[group.title, group.actions.length ? `${group.actions.length} ${group.actions.length === 1 ? 'action' : 'actions'} needed` : '', group.notifications.length ? `${group.notifications.length} ${group.notifications.length === 1 ? 'update' : 'updates'}` : '', open ? 'Collapse' : 'Expand'].filter(Boolean).join('. ')} onPress={() => toggle(group.key)} style={s.groupHeader}>
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={[group.title, group.actions.length ? `${group.actions.length} ${group.actions.length === 1 ? 'action' : 'actions'} needed` : '', group.notifications.length ? `${group.notifications.length} ${group.notifications.length === 1 ? 'update' : 'updates'}` : '', open ? 'Collapse' : 'Expand'].filter(Boolean).join('. ')} onPress={() => toggle(group)} style={s.groupHeader}>
         {event ? <EventArtwork uri={uri} event={{ event_name: event.event_name, sapa_status: event.sapa_status ?? null }} style={s.eventImage} /> : <View style={s.eventImage}><SymbolView name={group.eventId ? { ios: 'calendar', android: 'calendar_month', web: 'calendar_month' } : { ios: 'person.crop.circle', android: 'account_circle', web: 'account_circle' }} size={24} tintColor={b.muted} /></View>}
         <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
           <Text numberOfLines={3} style={s.eventTitle}>{group.title}</Text>
@@ -84,7 +101,7 @@ export default function NotificationsSheet() {
         <View><Text style={s.summary}>{actionCount ? `${actionCount} ${actionCount === 1 ? 'action' : 'actions'} to review` : 'My event updates'}</Text><Text style={s.meta}>Entries, payments and account updates</Text></View>
         {help.unread > 0 && <Pressable accessibilityRole="button" accessibilityLabel={`Help messages, ${help.unread} unread`} onPress={() => { leave(); router.navigate({ pathname: '/(tabs)/messages', params: { filter: 'Help' } }); }} style={s.following}><Text style={{ flex: 1, color: b.accent, fontSize: 15, fontWeight: '500' }}>Help messages ({help.unread})</Text><Text style={{ color: b.muted }}>View replies ›</Text></Pressable>}
         <NativeSegmentedControl label="Notification view" value={filter} onChange={setFilter} options={[{ value: 'actions', label: actionCount ? `Action needed (${actionCount})` : 'Action needed' }, { value: 'all', label: centre.unread + help.unread ? `All updates (${centre.unread + help.unread > 99 ? '99+' : centre.unread + help.unread})` : 'All updates' }]} />
-        {filter === 'all' && centre.unread > 0 && <HomeAction kind="outline" label={help.unread ? 'Mark event updates read' : 'Mark all read'} disabled={centre.loading || !centre.through} onPress={() => void centre.markRead()} />}
+        {filter === 'all' && centre.unread > 0 && <HomeAction kind="outline" label={help.unread ? 'Mark event updates read' : 'Mark all read'} disabled={centre.loading || !centre.through} onPress={() => void readNotifications()} />}
         {filter === 'all' && <Pressable accessibilityRole="button" onPress={() => { leave(); router.navigate('/following'); }} style={s.following}>
           <SymbolView name={{ ios: 'heart', android: 'favorite_border', web: 'favorite_border' }} size={20} tintColor={b.accent} />
           <Text style={{ flex: 1, color: b.accent, fontSize: 14, fontWeight: '500' }}>My following activity</Text>

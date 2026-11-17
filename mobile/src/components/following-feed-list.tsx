@@ -4,7 +4,7 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View, typ
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeAction } from '@/components/home-action';
-import { ActivityCard, FeedEmpty, FeedError } from '@/components/following-feed';
+import { ActivityCard, FeedEmpty, FeedError, FollowPlayersPrompt } from '@/components/following-feed';
 import { useFollowingFeed } from '@/hooks/use-following-feed';
 import { FEED_FILTERS, type FeedFilter, type FeedItem } from '@/lib/following-feed';
 import { loadingBlue, lightBrand as b } from '@/theme/tokens';
@@ -29,9 +29,10 @@ export function FollowingFeedList({ header, bottomPadding, horizontalPadding = 1
         void trackEvent('feature_interaction', { feature: 'following_feed', action: 'filter', selection: value });
         list.current?.scrollToOffset({ offset: 0, animated: false }); setFilter(value);
       }} style={{ flex: 1, minHeight: 44, backgroundColor: filter === value ? b.accent : 'transparent', borderRadius: 10, justifyContent: 'center', alignItems: 'center' }}><Text style={{ fontSize: value === 'tournaments' ? 11 : 12, fontWeight: '700', color: filter === value ? '#FFF' : b.muted }}>{value[0].toUpperCase() + value.slice(1)}</Text></Pressable>)}</View>
+      {!state.loading && !state.error && !!state.userId && state.items.length > 0 && state.followedPlayers.length === 0 && <View style={{ marginTop: 12 }}><FollowPlayersPrompt /></View>}
     </View>}
     refreshControl={<RefreshControl colors={[loadingBlue]} refreshing={state.refreshing} onRefresh={() => void state.refresh()} tintColor={loadingBlue} />}
     onEndReached={() => { if (!state.error && !state.loading && !state.refreshing) void state.loadMore(); }} onEndReachedThreshold={0.4}
-    ListEmptyComponent={state.loading ? <ActivityIndicator color={loadingBlue} style={{ padding: 32 }} accessibilityLabel="Loading Following updates" /> : state.error ? <FeedError message={state.error} onRetry={() => void state.refresh()} /> : <FeedEmpty signedIn={!!state.userId} filter={filter} />}
+    ListEmptyComponent={state.loading ? <ActivityIndicator color={loadingBlue} style={{ padding: 32 }} accessibilityLabel="Loading Following updates" /> : state.error ? <FeedError message={state.error} onRetry={() => void state.refresh()} /> : <FeedEmpty signedIn={!!state.userId} filter={filter} hasFollowedPlayers={state.followedPlayers.length > 0} />}
     ListFooterComponent={state.items.length ? <View style={{ gap: 12 }}>{state.error && <FeedError message={state.error} onRetry={() => void (state.moreError ? state.loadMore() : state.refresh())} />}{state.loadingMore ? <ActivityIndicator color={loadingBlue} style={{ padding: 16 }} /> : state.hasMore ? <Pressable accessibilityRole="button" onPress={() => void state.loadMore()} style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: b.accent, fontWeight: '700' }}>Load more updates</Text></Pressable> : <Text style={{ color: b.faint, textAlign: 'center', fontSize: 12, padding: 16 }}>You’re all caught up. Updates cover the last 90 days.</Text>}</View> : null} />;
 }

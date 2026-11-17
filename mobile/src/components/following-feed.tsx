@@ -7,6 +7,7 @@ import { feedActors, feedCountdown, feedDeadline, feedEventPhoto, feedMatchResul
 import { playerCountryFlag } from '@/lib/player-hub';
 import type { useFollowingFeed } from '@/hooks/use-following-feed';
 import { HomeAccordion } from '@/components/home-accordion';
+import { HomeAction } from '@/components/home-action';
 import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 const labels = { entry: 'TOURNAMENT ENTRY', result: 'MATCH RESULT', profile: 'PLAYER UPDATE', ranking: 'RANKING UPDATE', match_live: 'MATCH STARTED', tournament: 'TOURNAMENT UPDATE' };
 const icons = { entry: 'calendar-outline', result: 'trophy-outline', profile: 'person-outline', ranking: 'trending-up-outline', match_live: 'play-circle-outline', match_schedule: 'time-outline', tournament: 'calendar-outline' } as const;
@@ -91,8 +92,17 @@ export const ActivityCard = memo(function ActivityCard({ item }: { item: FeedIte
     </View>}
   </Pressable>;
 });
-export function FeedEmpty({ signedIn, filter = 'all' }: { signedIn: boolean; filter?: FeedFilter }) {
+export function FollowPlayersPrompt() {
   const router = useRouter();
+  return <View style={{ ...card, gap: 12 }}>
+    <Text style={{ color: b.muted, fontSize: 13, lineHeight: 20 }}>You’re not following any players yet. Follow players to see their updates here.</Text>
+    <View style={{ alignSelf: 'flex-start' }}><HomeAction label="Discover players" kind="primary" compact size="small" icon="people"
+      onPress={() => router.navigate({ pathname: '/(tabs)/rankings', params: { view: 'Discover', source: 'all', query: '', gender: 'all' } })} /></View>
+  </View>;
+}
+export function FeedEmpty({ signedIn, filter = 'all', hasFollowedPlayers = true }: { signedIn: boolean; filter?: FeedFilter; hasFollowedPlayers?: boolean }) {
+  const router = useRouter();
+  if (signedIn && !hasFollowedPlayers) return <FollowPlayersPrompt />;
   return <View style={{ ...card, gap: 10 }}><Text style={{ fontSize: 17, fontWeight: '700', color: b.premium }}>{!signedIn ? 'Your padel, in one place.' : filter === 'all' ? 'Keep up with your favourites.' : `No ${filter === 'players' ? 'player' : filter === 'matches' ? 'match' : 'tournament'} updates yet.`}</Text><Text style={{ color: b.muted, fontSize: 13, lineHeight: 20 }}>{!signedIn ? 'Sign in to see updates from the players, matches and tournaments you follow.' : 'Follow players, star matches or subscribe to tournaments. Their latest updates will appear here.'}</Text><Pressable accessibilityRole="button" onPress={() => router.push(signedIn ? '/rankings?view=Discover' : '/(auth)/sign-in')} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}><Text style={{ color: b.accent, fontSize: 13, fontWeight: '700' }}>{signedIn ? 'Discover players →' : 'Sign in →'}</Text></Pressable></View>;
 }
 export function FeedError({ message, onRetry }: { message: string; onRetry: () => void }) { return <View style={{ ...card, gap: 8 }}><Text style={{ color: b.muted, fontSize: 13, lineHeight: 20 }}>{message}</Text><Pressable accessibilityRole="button" onPress={onRetry} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: b.accent, fontWeight: '700' }}>Retry</Text></Pressable></View>; }
@@ -103,7 +113,7 @@ export function FollowingPreview({ state }: { state: State }) {
   const badge = !count && (state.loading || state.error) ? undefined : [{ label: `${count}${state.hasMore ? '+' : ''}`, count: true }];
   return <HomeAccordion title="Following" open={open} onToggle={() => setOpen(value => !value)} badges={badge} showBadgesWhenOpen>
     <View style={{ marginBottom: 12, gap: 10 }}>
-      {state.loading ? <View style={{ ...card, minHeight: 90, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={loadingBlue} accessibilityLabel="Loading Following updates" /></View> : <>{state.error && <FeedError message={state.error} onRetry={() => void state.refresh()} />}{state.items.slice(0, 3).map(item => <ActivityCard key={item.id} item={item} />)}{!state.items.length && !state.error && <FeedEmpty signedIn={!!state.userId} />}</>}
+      {state.loading ? <View style={{ ...card, minHeight: 90, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={loadingBlue} accessibilityLabel="Loading Following updates" /></View> : <>{state.error && <FeedError message={state.error} onRetry={() => void state.refresh()} />}{state.items.slice(0, 3).map(item => <ActivityCard key={item.id} item={item} />)}{!state.items.length && !state.error && <FeedEmpty signedIn={!!state.userId} hasFollowedPlayers={state.followedPlayers.length > 0} />}</>}
       <Pressable accessibilityRole="button" accessibilityLabel="View all Following updates" onPress={() => router.push('/following')} style={{ minHeight: 44, minWidth: 70, alignSelf: 'flex-end', alignItems: 'flex-end', justifyContent: 'center' }}><Text style={{ color: b.accent, fontSize: 12, fontWeight: '700' }}>View all →</Text></Pressable>
     </View>
   </HomeAccordion>;

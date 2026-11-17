@@ -34,7 +34,7 @@ export default function HomeScreen() {
     '(calendar)': { screen: 'calendar'; params: { circuit: string; timing: string } };
     rankings: { view: string; source: string; query: string; gender: string };
   }>>();
-  const [tab, setTab] = useState<HomeFeedTab>('4m'), [refreshing, setRefreshing] = useState(false);
+  const [tab, setTab] = useState<HomeFeedTab>('following'), [refreshing, setRefreshing] = useState(false);
   const banner = useHomeBannerDismissal();
   const source: HomeSource = tab === 'international' ? 'international' : '4m';
   const following = tab === 'following';
@@ -160,7 +160,7 @@ export default function HomeScreen() {
 
   return <View style={s.page}>
     <ObserveReady ready={following ? !feed.profile.loading : local ? !feed.spotlight.loading : !feed.tour.loading} />
-    <View style={{ paddingTop: insets.top, backgroundColor: b.page }}><HomeHeader onSearch={() => open(local ? '/search' : '/search?source=international')} onNotifications={() => open('/notifications')} noticeCount={pending.length} /></View>
+    <View style={{ paddingTop: insets.top, backgroundColor: b.page }}><HomeHeader onSearch={() => open(local ? '/search' : '/search?source=international')} onNotifications={() => open('/notifications')} /></View>
     {following ? <FollowingFeedList header={listHeader} horizontalPadding={20} bottomPadding={tabPadding} /> : <FlatList ref={list} data={sections} extraData={feed} keyExtractor={section => `${source}:${section}`} renderItem={({ item }) => renderSection(item)}
       initialNumToRender={3} maxToRenderPerBatch={2} windowSize={5} showsVerticalScrollIndicator={false}
       contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 32 : tabPadding }}
