@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.fourmpadel.app",
+      "sha256_cert_fingerprints": [
+        "3B:D7:3C:69:E1:77:E9:B7:6F:14:FF:52:09:34:E2:C9:D3:D2:D6:17:E5:A6:09:AA:29:11:CF:0F:CB:69:D9:CC"
+      ]
+    }
+  }
+]

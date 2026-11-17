@@ -1,0 +1,16 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["52RX6X5X2T.com.fourmpadel.app"],
+        "components": [
+          { "/": "/players" },
+          { "/": "/rankings" },
+          { "/": "/calendar/*" },
+          { "/": "/clubs/*" },
+          { "/": "/pro/results" }
+        ]
+      }
+    ]
+  }
+}

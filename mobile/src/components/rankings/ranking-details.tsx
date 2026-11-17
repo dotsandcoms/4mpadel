@@ -1,6 +1,6 @@
 import { trackEvent } from '@/lib/analytics';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, Share, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, Share, View } from 'react-native';
 import { LocalFollowButton } from '@/components/players/local-follow-button';
 import { TrophyBreakdown } from './trophy-breakdown';
 import { useRouter } from 'expo-router';
@@ -11,6 +11,7 @@ import { fetchTournamentWins, type TrophyGroup, type PointResult, type RankingPl
 import { fetchPlayerTournamentResults } from '@/lib/player-results';
 import { lightSapaTone as sapaTone } from '@/theme/sapa';
 import { useForegroundClock } from '@/hooks/use-foreground-clock';
+import { siteUrl } from '@/lib/site';
 export function RankingDetails({player,age,onClose}:{player:RankingPlayer;age:number;onClose:()=>void}){
  const router=useRouter();const safe=useSafeAreaInsets();const [tab,setTab]=useState('Ranking Overview');const [best,setBest]=useState(true);const [all,setAll]=useState<PointResult[]>([]);const [counted,setCounted]=useState<PointResult[]>([]);const [loading,setLoading]=useState(true);const [error,setError]=useState('');const [retry,setRetry]=useState(0);
  const refreshKey=useForegroundClock(5*60*1000);
@@ -19,7 +20,13 @@ export function RankingDetails({player,age,onClose}:{player:RankingPlayer;age:nu
  const [wins,setWins]=useState<TrophyGroup[]>([]);
  const [winsError,setWinsError]=useState(false);
  useEffect(()=>{let active=true;setWinsError(false);fetchTournamentWins(player).then(rows=>{if(active)setWins(rows);}).catch(()=>{if(active)setWinsError(true);});return()=>{active=false;};},[player,retry,refreshKey]);
- const share=()=>{void Share.share({message:`${player.name} — #${player.rank}, ${player.points.toLocaleString()} points`,url:player.profile?.id?`https://4mpadel.co.za/players?id=${player.profile.id}`:'https://4mpadel.co.za/rankings'}).then(result => { if (result.action === Share.sharedAction) void trackEvent('share', { content_type: 'local_player', method: 'native' }); }).catch(()=>{});};
+ const share = () => {
+   const message = `${player.name} — #${player.rank}, ${player.points.toLocaleString()} points`;
+   const url = siteUrl(player.profile?.id ? `/players?id=${player.profile.id}` : '/rankings');
+   void Share.share(Platform.OS === 'ios' ? { message, url } : { message: `${message}\n${url}` })
+     .then(result => { if (result.action === Share.sharedAction) void trackEvent('share', { content_type: 'local_player', method: 'native' }); })
+     .catch(() => {});
+ };
  return <Modal visible animationType="slide" onRequestClose={onClose}><View style={{flex:1,backgroundColor:'#F5F6F3',paddingTop:safe.top,paddingBottom:safe.bottom}}>
  <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',padding:16,borderBottomWidth:1,borderColor:'#16251f10'}}><Pressable accessibilityLabel="Close ranking details" onPress={onClose} style={{minWidth:44,minHeight:44,alignItems:'center',justifyContent:'center'}}><EventIcon name="arrow.left" color="#16251F" size={24}/></Pressable><Text style={{fontSize:13,letterSpacing:1}}>RANKING DETAILS</Text><Pressable accessibilityLabel="Share ranking" onPress={share} style={{minWidth:44,minHeight:44,alignItems:'center',justifyContent:'center'}}><EventIcon name="square.and.arrow.up" color="#16251F" size={20}/></Pressable></View>
  <View style={{padding:24,flexDirection:'row',gap:16,alignItems:'center'}}><Avatar player={player} size={80}/><View style={{flex:1,gap:5}}><Text style={{fontSize:20}}>{player.name.toUpperCase()}</Text>{!!player.profile?.nationality&&<Text style={{color:'#65726B',fontSize:12}}>{player.profile.nationality}</Text>}{!!player.profile?.home_club&&<Text style={{color:'#65726B',fontSize:12}}>{player.profile.home_club}</Text>}</View></View>

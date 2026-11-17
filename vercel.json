@@ -2,6 +2,10 @@
   "ignoreCommand": "node scripts/workflow-vercel-ignore.mjs",
   "headers": [
     {
+      "source": "/.well-known/:file(apple-app-site-association|assetlinks\\.json)",
+      "headers": [{ "key": "Content-Type", "value": "application/json" }]
+    },
+    {
       "source": "/assets/(.*)",
       "headers": [
         {
@@ -21,6 +25,14 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/.well-known/apple-app-site-association",
+      "destination": "/.well-known/apple-app-site-association"
+    },
+    {
+      "source": "/.well-known/assetlinks.json",
+      "destination": "/.well-known/assetlinks.json"
+    },
     {
       "source": "/private-draw-rehearsal/index.html",
       "destination": "/private-draw-rehearsal/index.html"
@@ -74,7 +86,7 @@
       "destination": "/api/seo-preview?path=:path*"
     },
     {
-      "source": "/((?!assets/|api/).*)",
+      "source": "/((?!assets/|api/|\\.well-known/).*)",
       "destination": "/index.html"
     }
   ],
