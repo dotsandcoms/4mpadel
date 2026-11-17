@@ -29,7 +29,10 @@ before(async()=>{
 });
 after(async()=>{await browser?.close();fs.rmSync(dir,{recursive:true,force:true});});
 async function open(){const page=await browser.newPage();page.setDefaultTimeout(5000);page.on('pageerror',error=>console.error(error.message));await page.setViewport({width:1440,height:1000});await page.setContent('<style>body{background:#0d1112;color:#f0f3f2;font:14px system-ui;margin:48px}*{box-sizing:border-box}button,input,select,textarea{font:inherit}button{cursor:pointer}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.em-secondary{border:1px solid #465052;background:#20272a;color:#eaf0ec;padding:10px 14px;border-radius:10px}.em-error{padding:16px;background:#351d1d;color:#fcc}.em-feedback{color:#bcdac9}</style><div id="root"></div>');await page.addStyleTag({path:output.replace(/\.js$/,'.css')});await page.addScriptTag({path:output});await page.waitForSelector('.pm-conversation-link');return page;}
-async function click(page,text){await page.evaluate(text=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===text).click(),text);}
+async function click(page,text){
+ await page.waitForFunction(text=>[...document.querySelectorAll('button')].some(b=>!b.disabled&&b.textContent.trim()===text),{},text);
+ await page.evaluate(text=>[...document.querySelectorAll('button')].find(b=>!b.disabled&&b.textContent.trim()===text).click(),text);
+}
 async function field(page,selector,text){await page.$eval(selector,(input,text)=>{const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;setter.call(input,text);input.dispatchEvent(new Event('input',{bubbles:true}));},text);}
 async function chooseOrg(page){await page.click('#player-message-scope');await page.type('#player-message-scope','10by20');await page.waitForSelector('[role="option"]');await page.click('[role="option"]');}
 test('conversation list leads with previews, unread counts, senders and dates; pages beyond 100',async()=>{const page=await open();try{
