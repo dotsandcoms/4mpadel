@@ -1,7 +1,7 @@
 {
   "name": "mobile",
   "main": "expo-router/entry",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "dependencies": {
     "@bacons/apple-targets": "^5.0.0",
     "@config-plugins/react-native-blob-util": "^14.0.2",
