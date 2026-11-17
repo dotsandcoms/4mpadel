@@ -54,7 +54,12 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            mobile/package-lock.json
       - run: npm ci
+      # Cross-client regression tests load TypeScript/React from the mobile lockfile.
+      - run: npm ci --prefix mobile
       - run: npx puppeteer browsers install chrome
       - run: npm run check:web
 
