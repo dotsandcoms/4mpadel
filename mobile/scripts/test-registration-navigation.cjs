@@ -12,8 +12,10 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/event-rules.ts', 
 
 // Render the actual screen with an in-memory hook host and read-only API fixtures.
 // This checks its button handlers and conditional branches without a native device.
-async function screen(mode, eventOptions = {}, savedCheckout = null, quoteError = null) {
-  const values = [], effects = [], navigation = [], requests = [];
+async function screen(mode, eventOptions = {}, savedCheckout = null, quoteError = null, profileOptions = {}) {
+  const values = [], effects = [], focusEffects = [], navigation = [], requests = [], cancelled = [], removed = [];
+  const player = { id: '1', name: 'Mark', email: 'mark@example.com', contact_number: '0123', license_type: 'full', paid_registration: true, points: 1729, rankedin_id: 'R1', ...profileOptions };
+  let savedLevel = profileOptions.playtomic_level ?? null;
   let cursor = 0, mounted = false;
   const hooks = {
     useState(initial) { const i = cursor++; if (!(i in values)) values[i] = typeof initial === 'function' ? initial() : initial; return [values[i], v => { values[i] = typeof v === 'function' ? v(values[i]) : v; }]; },
@@ -38,22 +40,27 @@ async function screen(mode, eventOptions = {}, savedCheckout = null, quoteError 
     'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }), Fragment: 'Fragment' },
     'react-native': { ...native, Platform: { OS: 'ios' }, Linking: { addEventListener: () => ({ remove() {} }) } },
     '@/lib/payment-return': { parsePaymentReturn: () => null },
-    'expo-router': { useLocalSearchParams: () => ({ id: '524', mode, entry: 'reg1' }), useRouter: () => router, useFocusEffect: hooks.useEffect },
+    'expo-router': { useLocalSearchParams: () => ({ id: '524', mode, entry: 'reg1' }), useRouter: () => router, useFocusEffect: fn => { const i = cursor++; focusEffects[i] = fn; if (!mounted) effects.push(fn); } },
     '@/lib/foreground-task': { startForegroundTask: () => () => {} },
     'expo-image': { Image: 'Image' }, '@expo/vector-icons': { Ionicons: 'Ionicons' },
     'expo-crypto': { randomUUID: () => 'test-attempt' },
     'expo-web-browser': {}, 'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 20, bottom: 20 }) },
-    '@react-native-async-storage/async-storage': { default: { getItem: async () => savedCheckout } },
+    '@react-native-async-storage/async-storage': { default: { getItem: async () => savedCheckout, removeItem: async key => removed.push(key) } },
     '@/components/events/event-ui': { ActionButton: 'ActionButton', Chip: 'Chip', Notice: 'Notice' },
     '@/components/events/registration-options': { Choices: 'Choices', DivisionOptions: 'DivisionOptions', LicencePicker: 'LicencePicker' },
     '@/lib/home': { formatEventRange: () => '2–4 Oct' },
     '@/lib/events': { fetchEvent: async () => event, fetchDivisions: async () => divisions, currentEmail: async () => 'mark@example.com', fetchMyEventRegistrations: async () => mode === 'add-partner' ? [{ id: 'reg1', division_id: 'men40', tshirt_size: 'L', payment_status: 'paid' }] : mode === 'pay' ? [{ id: 'reg1', division_id: 'men40', partner_email: partner.email, partner_name: partner.name }] : [], eventImage: () => 1 },
     '@/lib/event-rules': { ...eventRules, formatMoney: n => `R ${n}`, entryFee: () => 600, registrationState: event => event.registration_closes_at && new Date(event.registration_closes_at) <= new Date() ? 'closed' : 'open' },
-    '@/lib/event-checkout': { invokeCheckout: async input => { requests.push(input); if (quoteError && !input.tshirtSize) throw new Error(quoteError); return { quote }; } },
+    '@/lib/event-checkout': { invokeCheckout: async input => { requests.push(input); if (quoteError && !input.tshirtSize) throw new Error(quoteError); return { quote }; },
+      eventCheckoutState: async () => ({ state: eventOptions.checkoutState || 'awaiting_payment' }),
+      confirmCheckout: async () => { throw Object.assign(new Error('Not paid'), { code: 'PAYMENT_NOT_CONFIRMED' }); },
+      cancelEventCheckout: async ref => cancelled.push(ref),
+    },
     '@/lib/site': {}, '@/theme/tokens': { brand: {}, lightBrand: {} },
     '@/lib/notifications': { requestPushPermission: async () => true },
+    '@/lib/profile-details': { fetchProfileDetails: async () => { if (profileOptions.levelError) throw new Error('Unavailable'); return { playtomic_level: savedLevel, playtomic_no_profile: profileOptions.playtomic_no_profile }; } },
     '@/lib/supabase': { supabase: {
-      from: table => { const q = { select: () => q, eq: () => q, ilike: () => q, maybeSingle: async () => ({ data: table === 'players' ? { id: '1', name: 'Mark', email: 'mark@example.com', contact_number: '0123', license_type: 'full', paid_registration: true, points: 1729, rankedin_id: 'R1' } : {} }) }; return q; },
+      from: table => { const q = { select: () => q, eq: () => q, ilike: () => q, maybeSingle: async () => ({ data: table === 'players' ? player : {} }) }; return q; },
       rpc: async () => ({ data: [partner] }),
     } },
   };
@@ -67,8 +74,50 @@ async function screen(mode, eventOptions = {}, savedCheckout = null, quoteError 
     const visit = node => { if (!node || typeof node !== 'object') return; if (Array.isArray(node)) { for (const child of node) { const found = visit(child); if (found) return found; } } else { if ((node.type === type || node.type?.name === type) && predicate(node.props)) return node; return visit(node.props?.children); } };
     return visit(render());
   }
-  return { find, navigation, requests, flush: () => new Promise(resolve => setImmediate(resolve)) };
+  return { find, navigation, requests, cancelled, removed, updateProfile: patch => { Object.assign(player, patch); if ('playtomic_level' in patch) savedLevel = patch.playtomic_level; }, focus: async () => { render(); focusEffects.forEach(fn => fn()); await new Promise(resolve => setImmediate(resolve)); }, flush: () => new Promise(resolve => setImmediate(resolve)) };
 }
+test('saved Playtomic level is loaded from private profile details, including zero', async () => {
+  for (const level of [0, 3.25]) {
+    const app = await screen(undefined, {}, null, null, { playtomic_level: level });
+    assert.equal(app.find('Field', p => p.label === 'Playtomic level').props.value, String(level));
+    assert.equal(app.find('Field', p => p.label === 'Playtomic level').props.editable, false);
+  }
+});
+test('RankedIn No and an optional missing or unavailable rating do not block Continue', async () => {
+  for (const detail of [{}, { levelError: true }, { playtomic_no_profile: true, playtomic_level: 3.25 }]) {
+    const app = await screen(undefined, {}, null, null, { ...detail, rankedin_id: null });
+    app.find('Choices').props.onChange('no');
+    assert.equal(app.find('ActionButton', p => p.label === 'Continue to Division').props.disabled, false);
+    assert.equal(app.find('Field', p => p.label === 'Playtomic level').props.value, '');
+  }
+});
+test('missing phone is explained and saving the profile enables Continue on return', async () => {
+  const app = await screen(undefined, {}, null, null, { contact_number: ' ', rankedin_id: null });
+  app.find('Choices').props.onChange('no');
+  assert.equal(app.find('ActionButton', p => p.label === 'Continue to Division').props.disabled, true);
+  assert.ok(app.find('Text', p => p.accessibilityRole === 'alert' && p.children.join('').includes('mobile number')));
+  app.find('ActionButton', p => p.label === 'Edit my profile').props.onPress();
+  assert.deepEqual(app.navigation.at(-1), ['push', '/edit-profile']);
+  app.updateProfile({ contact_number: '+27831234567', playtomic_level: 3.5 });
+  await app.focus();
+  assert.equal(app.find('ActionButton', p => p.label === 'Continue to Division').props.disabled, false);
+  assert.equal(app.find('Field', p => p.label === 'Playtomic level').props.value, '3.5');
+  app.find('ActionButton', p => p.label === 'Continue to Division').props.onPress();
+  assert.ok(app.find('DivisionOptions'));
+});
+test('closing an unpaid checkout requires a fresh registration and releases its hold', async () => {
+  const app = await screen(undefined, {}, JSON.stringify({ reference: 'unpaid-attempt', url: 'https://checkout.paystack.com/saved', returnedFromCheckout: true }));
+  assert.ok(app.find('Notice', p => p.title === 'Awaiting payment'));
+  assert.equal(app.find('ActionButton', p => p.label === 'Continue to checkout'), undefined);
+  await app.find('ActionButton', p => p.label === 'I did not pay — start registration again').props.onPress(); await app.flush();
+  assert.deepEqual(app.cancelled, ['unpaid-attempt']); assert.equal(app.removed.length, 1);
+  assert.equal(app.find('Notice', p => p.title === 'Your entry is confirmed'), undefined);
+});
+test('expired saved checkouts are discarded instead of reopening a payment URL', async () => {
+  const app = await screen(undefined, { checkoutState: 'expired' }, JSON.stringify({ reference: 'expired-attempt', url: 'https://checkout.paystack.com/old' }));
+  assert.equal(app.removed.length, 1);
+  assert.equal(app.find('ActionButton', p => p.label === 'Continue to checkout'), undefined);
+});
 test('existing-entry payment opens the existing division step and Back returns there', async () => {
   const app = await screen('pay');
   assert.ok(app.find('Text', p => p.children === "Men's 40+"));

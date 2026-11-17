@@ -33,6 +33,7 @@ async function finalizeManualEventPayment(
     if (meta.source !== 'manual_event') {
         return { processed: false, skipped: true, reason: 'not_manual_event' };
     }
+    if (meta.registration_review_required) return { processed: false, needsReview: true, message: 'Payment received after checkout closed. Contact support before paying again.' };
     const paymentId = payment.id as string;
     const reference = payment.reference as string;
     const amount = Number(payment.amount || 0);
@@ -53,24 +54,23 @@ async function finalizeManualEventPayment(
         .neq('status', 'success')
         .select('*');
     if (claimError) throw claimError;
-    if (!claimed || claimed.length === 0) {
-        // Re-run the canonical finalizer after verified delivery even if a
-        // browser or another callback already marked the ledger successful.
-        // Email/registration side effects remain claimed only once.
-        const { error: finalizeError } = await supabaseAdmin.from('payments').update({ status: 'success' }).eq('id', paymentId);
-        if (finalizeError) throw finalizeError;
-        return { processed: false, alreadyProcessed: true };
+    let receipt = claimed?.[0];
+    if (!receipt) {
+        const { data, error } = await supabaseAdmin.from('payments').select('*').eq('id', paymentId).maybeSingle();
+        if (error || !data) throw error || new Error('Verified receipt could not be loaded.');
+        receipt = data;
     }
-
-    meta = parseMetadata(claimed[0].metadata);
-    payment = claimed[0];
+    meta = parseMetadata(receipt.metadata);
+    payment = receipt;
     try {
-    const { savedRows, persisted } = await persistManualEventRegistrations(
+    const { savedRows, persisted, needsReview } = await persistManualEventRegistrations(
         supabaseAdmin,
         payment,
         meta,
         covers,
     );
+
+    if (needsReview) return { processed: false, needsReview: true, message: 'Payment received after checkout closed. Contact support before paying again.' };
 
     await markManualEventEntryCoversPaid(supabaseAdmin, payment, meta, covers);
 
@@ -79,6 +79,7 @@ async function finalizeManualEventPayment(
     // Split a bundled license into its own ledger row so it shows as a separate
     // entry in the User Ledger and reconciles per type. Idempotent.
     await recordLicensePaymentSplit(supabaseAdmin, payment, meta);
+    if (!persisted) return { processed: false, alreadyProcessed: true };
 
     const lineItems = Array.isArray(meta.line_items)
         ? (meta.line_items as Array<{ label: string; amount: number }>)
@@ -186,7 +187,8 @@ async function finalizeManualEventPayment(
         // Side-effects failed after we claimed the payment. Release the claim by
         // reverting status to 'pending' so a retry (webhook or browser) can safely
         // reprocess instead of leaving the registration half-finished.
-        await supabaseAdmin.from('payments').update({ status: 'pending' }).eq('id', paymentId);
+        // The gateway payment is verified. Keep that financial fact intact;
+        // webhook retries can finish the idempotent registration/receipt work.
         throw err;
     }
 }
@@ -257,6 +259,7 @@ async function finalizeWebLicensePayment(
             is_test: isTest,
             metadata: {
                 source: 'web_license_modal',
+                verified_paid_at: data.paid_at || null,
                 license_type: isFull ? 'full' : 'temporary',
                 client_reference: clientRef,
                 paystack_ref: txnId,

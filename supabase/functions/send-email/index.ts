@@ -1,3 +1,4 @@
+import { registrationEmailAllowed } from './registration-payment.ts';
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -1080,22 +1081,22 @@ async function generateEmailBody(
       break;
 
     case 'partner_invite':
-      subject = `${vars.inviterName || 'Your partner'} registered you for ${vars.eventName || 'a tournament'}! 🎾`;
+      subject = `${vars.inviterName || 'Your partner'} invited you to ${vars.eventName || 'a tournament'}! 🎾`;
       contentHtml = `
         <h2 style="font-size: 24px; font-weight: 800; color: #FFFFFF; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">You've Been Invited!</h2>
         <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
-          Hi ${vars.playerName || 'Player'}, <strong style="color: #FFFFFF;">${vars.inviterName || 'Your partner'}</strong> has registered you as their partner for <strong style="color: #FFFFFF;">${vars.eventName}</strong> in the <strong style="color: #FFFFFF;">${vars.division || 'Open'}</strong> division.
+          Hi ${vars.playerName || 'Player'}, <strong style="color: #FFFFFF;">${vars.inviterName || 'Your partner'}</strong> has invited you to register as their partner for <strong style="color: #FFFFFF;">${vars.eventName}</strong> in the <strong style="color: #FFFFFF;">${vars.division || 'Open'}</strong> division.
         </p>
         <p style="font-size: 14px; line-height: 1.6; color: #E2E8F0; margin-bottom: 24px;">
           ${usesManualEntryPayment
             ? `To secure your team's spot in the draw, complete your entry fee via ${manualPaymentName}. The organiser will confirm your entry after verifying payment.`
-            : `To secure your team's spot in the draw, please complete your entry fee payment using the link below.`}
+            : `To secure your team's spot in the draw, register and complete payment using the link below. Your registration is only confirmed once payment is successful.`}
         </p>
         ${manualPaymentNoticeHtml}
         ${eventCardHtml}
       `;
       actionUrl = paymentMethod === 'external' && externalPaymentUrl ? externalPaymentUrl : (vars.payUrl || 'https://4mpadel.co.za/calendar');
-      actionLabel = paymentMethod === 'external' && externalPaymentUrl ? 'Complete Payment' : (paymentMethod === 'platform' ? 'Pay My Entry Fee' : 'View Event Details');
+      actionLabel = paymentMethod === 'external' && externalPaymentUrl ? 'Complete Payment' : (paymentMethod === 'platform' ? 'Register and Pay' : 'View Event Details');
       break;
 
     case 'profile_invite': {
@@ -1305,6 +1306,10 @@ serve(async (req: Request) => {
       }
     }
     // ---------------------------------------------------------------------
+
+    if (!await registrationEmailAllowed(supabaseAdmin, template, variables, to)) {
+      return new Response(JSON.stringify({ success: true, skipped: true, reason: 'awaiting_payment' }), { headers: corsHeaders });
+    }
 
     if (template === 'organiser_payout_request') {
       const requestId = variables?.payoutRequestId;

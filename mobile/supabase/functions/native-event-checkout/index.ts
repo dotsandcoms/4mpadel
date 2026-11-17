@@ -272,6 +272,7 @@ Deno.serve(async req => {
         if (allowed && !allowed.includes(recipient)) continue;
         const entries = newRows.filter((row: any) => norm(row.email) === recipient);
         const paid = entries.every((row: any) => row.payment_status === 'paid');
+        if (!paid) continue; // Entry confirmations are sent only after payment.
         const amountDue = entries.filter((row: any) => row.payment_status !== 'paid')
           .reduce((sum: number, row: any) => sum + (divisionFees[row.division] || 0), 0);
         try {

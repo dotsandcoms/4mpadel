@@ -51,7 +51,7 @@ export function RegistrationEntries({ event, divisions, registrations, profiles,
     finally { setBusy(false); }
   };
   return <>
-    <Accordion highlighted highlightColor={pending ? '#D97706' : '#16A34A'} pending={pending} singleLineTitle icon="trophy" title={`You are Registered for this Event${registrations.length > 1 ? ` (${registrations.length} divisions)` : ''}`}>
+    <Accordion highlighted highlightColor={pending ? '#D97706' : '#16A34A'} pending={pending} singleLineTitle icon="trophy" title={`${pending ? 'Awaiting payment' : 'Your registration is confirmed'}${registrations.length > 1 ? ` (${registrations.length} divisions)` : ''}`}>
       {pending && <View style={{ borderRadius: 12, padding: 12, backgroundColor: '#fffbebcc', borderWidth: 1, borderColor: '#fef3c7', flexDirection: 'row', alignItems: 'center', gap: 10 }}><EventIcon name="exclamationmark.circle" color="#d97706" size={16} /><Text style={{ color: '#78350f', fontSize: 12, lineHeight: 18, flex: 1 }}>{registrations.some(paid) ? 'You have an outstanding payment to complete your registration.' : 'Complete your payment to secure your spot.'}</Text></View>}
       <Text style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>Your entries</Text>
       {registrations.map(r => <View key={r.id} style={{ borderRadius: 12, borderColor: '#e2e8f0', borderWidth: 1, backgroundColor: pending ? '#ffedd5' : '#f8fafc80', padding: 14 }}>

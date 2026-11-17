@@ -84,6 +84,7 @@
     "check": "npm run typecheck && npm test",
     "eas-build-post-install": "node scripts/check-build-env.cjs",
     "test:messaging": "node scripts/test-messaging.cjs",
+    "test:registration:db": "node scripts/test-paid-registration-db.cjs",
     "test:messaging:db": "node scripts/test-messaging-db.cjs",
     "test:following:db": "node scripts/test-following-ranking-db.cjs",
     "test:search": "node scripts/test-app-search.cjs",

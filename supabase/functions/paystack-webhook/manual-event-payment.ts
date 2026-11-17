@@ -46,86 +46,11 @@ export async function persistManualEventRegistrations(
     payment: Record<string, unknown>,
     meta: Record<string, unknown>,
     covers: ManualPaymentCover[],
-): Promise<{ savedRows: ManualRegistrationRow[]; persisted: boolean }> {
-    const rows = Array.isArray(meta.registration_rows)
-        ? (meta.registration_rows as ManualRegistrationRow[])
-        : [];
-    if (rows.length === 0 || meta.registrations_persisted) {
-        return { savedRows: [], persisted: false };
-    }
-
-    const registrantEmail = String(meta.registrant_email || '').toLowerCase();
-    const toUpsert = buildPersistedRegistrationRows(rows, covers, registrantEmail, Array.isArray(meta.server_free_entries) ? meta.server_free_entries as ManualRegistrationRow[] : []);
-    const entryCoverSet = new Set(
-        covers
-            .filter((c) => c.type === 'entry')
-            .map((c) => `${String(c.email).toLowerCase()}|${c.division}`),
-    );
-    const soloLinks = Array.isArray(meta.solo_link_updates)
-        ? (meta.solo_link_updates as SoloLinkUpdate[])
-        : [];
-
-    const savedRows: ManualRegistrationRow[] = [];
-    for (const row of toUpsert) {
-        const { data: candidates, error: lookupError } = await supabaseAdmin
-            .from('event_registrations')
-            .select('*')
-            .eq('event_id', row.event_id)
-            .ilike('email', String(row.email));
-        if (lookupError) throw lookupError;
-        const active = (candidates || []).filter((candidate) => candidate.status !== 'withdrawn');
-        // Division IDs survive renames. Reuse the original entry and invitation
-        // token instead of inserting another row under the new display name.
-        const existing = active.find((candidate) => row.division_id && candidate.division_id === row.division_id)
-            || active.find((candidate) => (!row.division_id || !candidate.division_id) && candidate.division === row.division);
-        const values: Record<string, any> = { ...row, is_test: payment.is_test === true };
-        if (existing) values.registered_by = existing.registered_by;
-        delete values.id;
-        if (existing?.payment_status === 'paid') {
-            values.payment_status = 'paid';
-            values.payment_method = existing.payment_method;
-            // Keep the label used by an earlier receipt when this checkout did
-            // not pay for that entry (e.g. an already-paid partner).
-            const covered = entryCoverSet.has(`${String(row.email).toLowerCase()}|${row.division}`);
-            if (!covered) values.division = existing.division;
-        }
-        if (existing?.partner_payment_status === 'paid') values.partner_payment_status = 'paid';
-        if (!existing && active.some((candidate) => candidate.division === row.division)) {
-            throw new Error('An existing entry with this name belongs to a different division');
-        }
-        const query = existing
-            ? supabaseAdmin.from('event_registrations').update(values).eq('id', existing.id)
-            : supabaseAdmin.from('event_registrations').upsert(values, { onConflict: 'event_id,email,division' });
-        const { data: saved, error: saveError } = await query.select('*');
-        if (saveError) throw saveError;
-        if (!saved?.length) throw new Error('Registration persistence did not save an entry');
-        savedRows.push(...saved);
-    }
-
-    for (const link of soloLinks) {
-        const updates: Record<string, unknown> = {
-            partner_name: link.partner_name,
-            partner_email: link.partner_email,
-            ...(link.partner_email == null ? { partner_payment_status: null } : {}),
-        };
-        const soloKey = `${String(link.email).toLowerCase()}|${link.division}`;
-        if (entryCoverSet.has(soloKey)) {
-            updates.payment_status = 'paid';
-        }
-        const { error: linkError } = await supabaseAdmin
-            .from('event_registrations')
-            .update(updates)
-            .eq('id', link.id);
-        if (linkError) throw linkError;
-    }
-
-    const { error: metadataError } = await supabaseAdmin
-        .from('payments')
-        .update({ metadata: { ...meta, registrations_persisted: true } })
-        .eq('id', payment.id as string);
-    if (metadataError) throw metadataError;
-
-    return { savedRows: savedRows || [], persisted: true };
+): Promise<{ savedRows: ManualRegistrationRow[]; persisted: boolean; needsReview?: boolean }> {
+    const { data, error } = await supabaseAdmin.rpc('finalize_paid_event_checkout', { p_payment_id: payment.id });
+    if (error) throw error;
+    if (!data || !Array.isArray(data.savedRows)) throw new Error('Payment registration could not be confirmed.');
+    return { savedRows: data.savedRows, persisted: data.persisted === true, needsReview: data.needsReview === true };
 }
 
 /** Apply covers and partner mirrors using the stable division identity. */

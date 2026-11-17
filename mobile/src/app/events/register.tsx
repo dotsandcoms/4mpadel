@@ -18,7 +18,7 @@ import { startForegroundTask } from '@/lib/foreground-task';
 import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, Switch, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActionButton, Notice } from '@/components/events/event-ui';
-import { confirmCheckout, invokeCheckout, type CheckoutInput, type Quote } from '@/lib/event-checkout';
+import { cancelEventCheckout, eventCheckoutState, confirmCheckout, invokeCheckout, type CheckoutInput, type Quote } from '@/lib/event-checkout';
 import { currentEmail, fetchDivisions, fetchEvent, fetchMyEventRegistrations, setEventScheduled, type Division, type EventDetail } from '@/lib/events';
 import { entryFee, formatMoney, registrationState, registrationPaymentClosed } from '@/lib/event-rules';
 import { openSitePath } from '@/lib/site';
@@ -26,7 +26,18 @@ import { supabase } from '@/lib/supabase';
 import { parsePaymentReturn } from '@/lib/payment-return';
 import { loadingBlue, lightBrand as brand } from '@/theme/tokens';
 import { requestPushPermission } from '@/lib/notifications';
+import { fetchProfileDetails } from '@/lib/profile-details';
 
+async function registrationProfile(email: string) {
+  const { data: player, error } = await supabase.from('players').select('id,name,email,contact_number,license_type,paid_registration,points,rankings,gender,category,image_url,rankedin_id,temporary_licenses(event_id,event_date)').ilike('email', email).maybeSingle();
+  if (error) throw error;
+  let details = null;
+  let levelUnavailable = false;
+  try { if (player) details = await fetchProfileDetails(Number(player.id)); }
+  catch { levelUnavailable = true; } // An optional rating must not block entry.
+  return { player,
+    level: details?.playtomic_no_profile || details?.playtomic_level == null ? '' : String(details.playtomic_level), levelUnavailable };
+}
 export default function RegisterScreen() {
   const { id, mode, entry } = useLocalSearchParams<{ id: string; mode?: string; entry?: string }>();
   return <RegistrationFlow key={`${id}:${mode || 'register'}:${entry || ''}`} />;
@@ -51,6 +62,9 @@ function RegistrationFlow() {
   const [step, setStep] = useState(mode === 'pay' ? 2 : 1);
   const [partners, setPartners] = useState<Record<string, PartnerChoice>>({});
   const [playtomic, setPlaytomic] = useState('');
+  const [levelUnavailable, setLevelUnavailable] = useState(false);
+  const editingProfile = useRef(false);
+  const [refreshingProfile, setRefreshingProfile] = useState(false);
   const [rankedinAccount, setRankedinAccount] = useState<boolean | null>(null);
   const [licences, setLicences] = useState<LicenceOption[]>([]);
   const [licenseChoice, setLicenseChoice] = useState<'temporary' | 'full'>();
@@ -102,6 +116,23 @@ function RegistrationFlow() {
   const attempt = useRef(Crypto.randomUUID());
   const submitted = useRef(false);
   const storageKey = useRef('');
+  useFocusEffect(useCallback(() => {
+    if (!editingProfile.current) return;
+    editingProfile.current = false;
+    let active = true;
+    setRefreshingProfile(true);
+    void (async () => {
+      const email = await currentEmail();
+      if (!email) throw new Error('Sign in before registering.');
+      const { player, level, levelUnavailable } = await registrationProfile(email);
+      if (!active) return;
+      setProfile(player ? withSapaMainRanking(player) : null); setPlaytomic(level); setLevelUnavailable(levelUnavailable);
+      if (player?.rankedin_id) setRankedinAccount(true);
+    })().catch(failure => { if (active) showError(failure instanceof Error ? failure.message : 'Could not refresh your profile. Reopen registration to try again.'); })
+      .finally(() => { if (active) setRefreshingProfile(false); });
+    return () => { active = false; };
+  }, [id]));
+  const missingProfileFields = [!profile?.name?.trim() && 'name', !profile?.contact_number?.trim() && 'mobile number'].filter(Boolean);
   const input: CheckoutInput = { ...(payOnly ? { mode: 'pay' as const } : {}), eventId: event?.id || Number(id), divisionIds: selected, partnerEmail: partnerEmail.trim().toLowerCase(),
     selections: event?.is_weekly ? undefined : selected.map(divisionId => ({ divisionId, ...partners[divisionId], ...(payOnly ? { payForSelf: paymentChoices[divisionId]?.self ?? false, payForPartner: paymentChoices[divisionId]?.partner ?? false } : {}) })), licenseChoice,
     ...(!payOnly || sponsorChanged ? { tshirtLogoUrl, tshirtSponsorName } : {}), partnerTshirtLogoUrl, partnerTshirtSponsorName,
@@ -117,9 +148,8 @@ function RegistrationFlow() {
       const email = await currentEmail();
       let restoredPartnerPayment = payForPartner;
       if (email) {
-        const { data: player, error: profileError } = await supabase.from('players').select('id,name,email,contact_number,license_type,paid_registration,points,rankings,gender,category,image_url,rankedin_id,temporary_licenses(event_id,event_date)').ilike('email', email).maybeSingle();
-        if (profileError) throw profileError;
-        setProfile(player ? withSapaMainRanking(player) : null);
+        const { player, level, levelUnavailable } = await registrationProfile(email);
+        setProfile(player ? withSapaMainRanking(player) : null); setPlaytomic(level); setLevelUnavailable(levelUnavailable);
         const { data: eligibility, error: licenseError } = await supabase.rpc('player_license_eligibility', { p_player_id: player?.id, p_event_id: row.id });
         if (licenseError) throw licenseError;
         setHasLicence(!!(eligibility?.full || eligibility?.temporary));
@@ -160,8 +190,11 @@ function RegistrationFlow() {
         storageKey.current = `native-checkout:${email}:${row.id}${payOnly ? ':pay' : ''}`;
         const stored = await AsyncStorage.getItem(storageKey.current);
         if (stored) {
-          try { const pending = JSON.parse(stored); setReference(pending.reference); setCheckoutUrl(pending.url); if (pending.quote) setQuote(pending.quote); if (pending.selected) setSelected(pending.selected); if (pending.paymentChoices) setPaymentChoices(pending.paymentChoices); restoredPartnerPayment = pending.payForPartner; setPayForPartner(restoredPartnerPayment); }
-          catch { setReference(stored); }
+          try { const pending = JSON.parse(stored); const savedState = await eventCheckoutState(pending.reference);
+            if (savedState.state === 'expired') { await AsyncStorage.removeItem(storageKey.current); showError('Your unpaid checkout expired. You are not registered. Start registration again.'); }
+            else { setReference(pending.reference); setCheckoutUrl(pending.url); setReturnedFromCheckout(!!pending.returnedFromCheckout); if (pending.quote) setQuote(pending.quote); if (pending.selected) setSelected(pending.selected); if (pending.paymentChoices) setPaymentChoices(pending.paymentChoices); restoredPartnerPayment = pending.payForPartner; setPayForPartner(restoredPartnerPayment); }
+          }
+          catch (failure) { if (stored.trim().startsWith('{')) throw failure; setReference(stored); }
         }
       }
       if (payOnly && row.is_manual && payment_return !== '1') {
@@ -242,6 +275,20 @@ function RegistrationFlow() {
     const browser = await WebBrowser.openBrowserAsync(result.authorizationUrl, { controlsColor: brand.accent });
     void trackEvent('checkout_outcome', { item_category: 'event_registration', status: browser.type === 'opened' ? 'opened' : 'browser_returned' });
     setReturnedFromCheckout(true);
+    if (browser.type !== 'opened' && storageKey.current) await AsyncStorage.setItem(storageKey.current, JSON.stringify({ reference: result.reference, url: result.authorizationUrl, payForPartner, selected, paymentChoices, quote: result.quote, returnedFromCheckout: true }));
+  });
+  const restartRegistration = () => run(async () => {
+    if (reference) {
+      try { await confirmCheckout(reference); await finish(false); return; }
+      catch (failure) { if ((failure as { code?: string }).code !== 'PAYMENT_NOT_CONFIRMED') throw failure; }
+      await cancelEventCheckout(reference);
+    }
+    if (storageKey.current) await AsyncStorage.removeItem(storageKey.current);
+    setReference(null); setCheckoutUrl(null); setQuote(null); setReturnedFromCheckout(false); setCheckoutStarted(false);
+    setSelected([]); setPartners({}); setAgreed(false); setObligations(false); setSapaAgreed(false);
+    attempt.current = Crypto.randomUUID(); goStep(1);
+    showError('No payment was completed, so you are not registered. Start registration again.');
+    if (payOnly) router.replace({ pathname: '/events/register', params: { id } });
   });
   const back = () => {
     if (busy) return;
@@ -306,20 +353,22 @@ function RegistrationFlow() {
         })} />}
         <ActionButton label="View my entry" onPress={() => router.replace({ pathname: '/events/[id]', params: { id } })} />
       </> : showPaymentStatus ? <>
-        <Notice title={returnedFromCheckout ? 'Check your payment' : checkoutUrl ? 'Continue your payment' : 'Check your payment'}>
+        <Notice title="Awaiting payment">
           {returnedFromCheckout
-            ? 'If you completed payment, check its status below. If you closed checkout before paying, you can continue your payment.'
+            ? 'Your registration is only confirmed once payment is successful. If you did not pay, you are not registered. Cancel this checkout and start registration again.'
             : checkoutUrl
-              ? 'You have a saved checkout for this event. Continue to secure checkout to complete payment. Already paid? Check your payment status below.'
+              ? 'Your registration is only confirmed once payment is successful. This checkout hold expires after 30 minutes. Already paid? Check your payment status below.'
               : 'A previous payment attempt was found. Check its status before continuing.'}
         </Notice>
-        {checkoutUrl && <ActionButton label="Continue to checkout" secondary={returnedFromCheckout} busy={busy} onPress={() => run(async () => {
+        {checkoutUrl && !returnedFromCheckout && <ActionButton label="Continue to checkout" secondary={returnedFromCheckout} busy={busy} onPress={() => run(async () => {
+          if ((await eventCheckoutState(reference!)).state === 'expired') throw new Error('Your checkout expired. You are not registered. Start registration again.');
           const url = new URL(checkoutUrl);
           if (url.protocol !== 'https:' || url.hostname !== 'checkout.paystack.com') throw new Error('This saved checkout address is invalid.');
           await WebBrowser.openBrowserAsync(url.href, { controlsColor: brand.accent });
           setReturnedFromCheckout(true);
         })} />}
         <ActionButton label="Check payment status" secondary={!!checkoutUrl && !returnedFromCheckout} busy={busy} onPress={verify} />
+        <ActionButton label="I did not pay — start registration again" secondary busy={busy} onPress={restartRegistration} />
         <ActionButton label="Return to event" secondary disabled={busy} onPress={() => router.back()} />
         <Text style={{ color: brand.faint, fontSize: 12 }}>Reference: {reference}</Text>
       </> : event && !loading && payOnly && selected.length > 0 && selected.every(id => registrationPaymentClosed(event, divisions.find(d => d.id === id))) ? <>
@@ -390,7 +439,8 @@ function RegistrationFlow() {
             <ActionButton label={quote.method === 'platform' && quote.total > 0 ? 'Pay & Complete Registration' : 'Confirm registration'} busy={busy} disabled={!agreementsComplete} onPress={checkout} />
           </View>
         </View>
-        {['eft', 'external'].includes(quote.method) && <Text style={{ color: brand.muted, lineHeight: 22 }}>Payment is made directly to the organiser after registering and will remain pending until confirmed.</Text>}
+        <Text style={{ color: brand.muted, lineHeight: 22 }}>Your registration is only confirmed once payment is successful. No confirmation email is sent before payment.</Text>
+        {['eft', 'external'].includes(quote.method) && <Text style={{ color: brand.muted, lineHeight: 22 }}>The organiser must verify your payment before confirming your entry.</Text>}
       </> : event && !loading && payOnly && step === 4 ? <>
         <Notice title="Existing entry payment">Your divisions and partner details stay unchanged. Payment review will include only outstanding fees.</Notice>
         <ActionButton label="Retry payment review" busy={loading} onPress={load} />
@@ -417,7 +467,10 @@ function RegistrationFlow() {
               <Text style={{ color: brand.premium, fontSize: 18, fontWeight: '600' }}>My 4M Profile</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}><Image source={profile?.image_url ? { uri: profile.image_url } : undefined} style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: brand.edge }} /><View style={{ flex: 1, gap: 5 }}><Text style={{ color: brand.premium }}>{profile?.name || 'Complete your profile'}</Text><Text style={{ color: brand.muted, fontSize: 12 }}>SAPA Points</Text></View><Text style={{ color: brand.accent, fontSize: 21, fontWeight: '600' }}>{profile?.points == null ? '—' : profile.points.toLocaleString('en-ZA')}</Text></View>
             </View>
-            <Field label="What is your current Playtomic level?" value={playtomic} onChangeText={setPlaytomic} />
+            <View style={{ gap: 8 }}>
+              <Field label="Playtomic level" value={playtomic} onChangeText={setPlaytomic} editable={false} />
+              <Text style={{ color: brand.muted, lineHeight: 21 }}>{levelUnavailable ? 'Your Playtomic level could not be loaded. You can continue without it or reopen registration to try again.' : playtomic ? 'Saved in your profile. Use Edit my profile to update it.' : 'No level saved. You can continue without one.'}</Text>
+            </View>
             <Notice title="SAPA licence status">{hasLicence ? '✓ Your SAPA licence is active.' : 'You do not have an active SAPA licence. If one is required for this tournament, add a temporary or annual licence when sales are open.'}</Notice>
             {!event.is_weekly && <View style={{ padding: 18, gap: 12, backgroundColor: brand.elevated, borderRadius: 16 }}>
               <Text style={{ color: brand.premium, fontSize: 18, fontWeight: '600' }}>RankedIn Account</Text>
@@ -426,8 +479,10 @@ function RegistrationFlow() {
               {rankedinAccount === false && <Text style={{ color: brand.muted, lineHeight: 21 }}>If you do not have a RankedIn account, please create one if you want ranking points.</Text>}
               {rankedinAccount && profile?.rankedin_id && <Text style={{ color: brand.accent, fontSize: 12 }}>RankedIn ID linked to your 4M profile: {profile.rankedin_id}</Text>}
             </View>}
-            <ActionButton label="Continue to Division" disabled={!profile?.name || !profile?.contact_number || (!event.is_weekly && rankedinAccount === null)} onPress={() => goStep(2)} />
-            <ActionButton label="Edit my profile" secondary onPress={() => router.push('/edit-profile')} />
+            {missingProfileFields.length > 0 && <Text accessibilityRole="alert" style={{ color: brand.danger, lineHeight: 22 }}>Add your {missingProfileFields.join(' and ')} in Edit my profile to continue.</Text>}
+            {!event.is_weekly && rankedinAccount === null && <Text style={{ color: brand.muted, lineHeight: 22 }}>Choose Yes or No for RankedIn to continue. An account is not required.</Text>}
+            <ActionButton label="Continue to Division" busy={refreshingProfile} disabled={missingProfileFields.length > 0 || (!event.is_weekly && rankedinAccount === null)} onPress={() => goStep(2)} />
+            <ActionButton label="Edit my profile" secondary disabled={refreshingProfile} onPress={() => { editingProfile.current = true; router.push('/edit-profile'); }} />
           </>}
           {payOnly && step === 2 && <>
             {!paymentOptions.length && <ActionButton label="Retry payment options" busy={busy} onPress={load} />}
@@ -489,9 +544,9 @@ function RegistrationFlow() {
     <Toast key={errorToast?.id ?? 0} message={errorToast?.message ?? null} fromTop onDismiss={dismissErrorToast} />
   </View>;
 }
-function Field({ label, value, onChangeText, email, secure }: { label: string; value: string; onChangeText: (v: string) => void; email?: boolean; secure?: boolean }) {
+function Field({ label, value, onChangeText, email, secure, editable = true }: { label: string; value: string; onChangeText: (v: string) => void; email?: boolean; secure?: boolean; editable?: boolean }) {
   return <View style={{ gap: 8 }}><Text style={{ color: brand.muted, fontSize: 13, fontWeight: '600' }}>{label}</Text>
-    <TextInput value={value} onChangeText={onChangeText} accessibilityLabel={label} autoCapitalize="none" autoCorrect={false}
+    <TextInput value={value} onChangeText={onChangeText} editable={editable} accessibilityLabel={label} autoCapitalize="none" autoCorrect={false}
       keyboardType={email ? 'email-address' : 'default'} secureTextEntry={secure}
       style={{ color: brand.premium, backgroundColor: brand.elevated, borderWidth: 1, borderColor: brand.edge, borderRadius: 14, padding: 14, minHeight: 50, fontSize: 16 }} />
   </View>;
