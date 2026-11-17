@@ -16,6 +16,7 @@ import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
 import { discoveryPlayers, filterHubPlayers, playerCountryFlag, localPlayerCountryFlag, proHubPlayer, searchProPlayers, type HubPlayer } from '@/lib/player-hub';
 import { playerPoints } from '@/lib/players';
 import { HomeAction } from '@/components/home-action';
+import { TourTarget, ContextualTip } from '@/components/guided-tour';
 import { NativeSegmentedControl } from '@/components/native-segmented-control';
 import { FeedPortrait } from '@/components/home-feed';
 import { ErrorBanner } from '@/components/error-banner';
@@ -130,22 +131,23 @@ export default function PlayerHub() {
   return <View style={{ flex: 1, backgroundColor: b.page, paddingTop: safe.top }}><WebsiteHeader />
     <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, gap: 8 }}>
       <Text accessibilityRole="header" style={{ color: b.premium, fontSize: 24, lineHeight: 30, fontWeight: '600' }}>Players</Text>
-      <NativeSegmentedControl label="Players view" variant="tabs" value={view} options={(['Discover', 'Following', 'Rankings'] as ViewName[]).map(value => ({ value, label: value }))} onChange={next => {
+      <ContextualTip chapter="players" />
+      <TourTarget id="players.views"><NativeSegmentedControl label="Players view" variant="tabs" value={view} options={(['Discover', 'Following', 'Rankings'] as ViewName[]).map(value => ({ value, label: value }))} onChange={next => {
         void trackEvent('feature_interaction', { feature: 'player_hub', action: 'tab', selection: next.toLowerCase() });
         setView(next as ViewName); setBrowse(false);
         if (next === 'Discover' && view !== 'Discover') setDiscoverySeed(Math.floor(Math.random() * 4294967296));
         if (next === 'Rankings') { if (source === 'all') setSource('4m'); if (gender === 'all') setGender('men'); }
-      }} />
+      }} /></TourTarget>
       <>
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: b.elevated, borderRadius: 12, paddingLeft: 12 }}>
+        <TourTarget id="players.search" style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: b.elevated, borderRadius: 12, paddingLeft: 12 }}>
           <Ionicons name="search" size={18} color={b.muted} />
           <TextInput accessibilityLabel="Search players" placeholder={source === '4m' ? 'Find a 4M player' : source === 'pro' ? 'Find a FIP player' : 'Find a player'} placeholderTextColor={b.muted} value={query} onChangeText={setQuery} autoCorrect={false} style={{ flex: 1, minHeight: 44, paddingHorizontal: 10, color: b.premium, fontSize: 15 }} />
           {!!query && <Pressable accessibilityRole="button" accessibilityLabel="Clear player search" onPress={() => setQuery('')} style={{ padding: 12 }}><Ionicons name="close-circle" size={18} color={b.muted} /></Pressable>}
-        </View>
-        <View style={{ flexDirection: Platform.OS === 'android' ? 'column' : 'row', gap: 8 }}>
+        </TourTarget>
+        <TourTarget id="players.filters" style={{ flexDirection: Platform.OS === 'android' ? 'column' : 'row', gap: 8 }}>
           <View style={{ flex: Platform.OS === 'android' ? undefined : 1, minWidth: 0 }}><NativeSegmentedControl label="Player directory" value={source} options={(view === 'Rankings' ? ['4m', 'pro'] : ['all', '4m', 'pro']).map(value => ({ value, label: value === 'all' ? 'All' : value === '4m' ? view === 'Rankings' ? 'SAPA' : '4M' : 'FIP' }))} onChange={setSource} /></View>
           {view !== 'Following' && <View style={{ flex: Platform.OS === 'android' ? undefined : 1, minWidth: 0 }}><NativeSegmentedControl label="Player category" value={gender} options={(view === 'Rankings' ? ['men', 'women'] : ['all', 'men', 'women']).map(value => ({ value, label: value === 'all' ? 'All' : value === 'men' ? 'Men' : 'Women' }))} onChange={setGender} /></View>}
-        </View>
+        </TourTarget>
       </>
     </View>
     {view === 'Rankings' && source !== 'pro' ? <LocalRankings embedded query={query} gender={gender} renderFollow={id => { const player = localPlayersById.get(id); return player ? followButton(player) : null; }} /> : <FlatList data={view === 'Rankings' ? filterHubPlayers(remote.length ? remote : pros, query, 'pro', gender).sort((a, z) => (a.rank ?? Infinity) - (z.rank ?? Infinity)) : searchingDirectory || view === 'Following' ? results : []} keyExtractor={p => p.key} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ padding: 16, paddingBottom: bottom, gap: 10 }} refreshing={state.loading && locals.length > 0} onRefresh={() => { setDiscoverySeed(Math.floor(Math.random() * 4294967296)); setReload(n => n + 1); void state.refresh(); }} renderItem={({ item }) => row(item, view === 'Rankings')}

@@ -20,6 +20,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { DrawerMenu } from '@/components/drawer-menu';
+import { useGuidedTour } from '@/components/guided-tour';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { hapticLight, hapticMedium } from '@/lib/haptics';
 import { lightBrand as brand, motion } from '@/theme/tokens';
@@ -58,6 +59,7 @@ function clamp(n: number, min: number, max: number) {
  */
 export function AppDrawer({ children }: { children: ReactNode }) {
   const reduced = useReducedMotion();
+  const tour = useGuidedTour(), registerMenu = tour?.registerMenu, menuVisibility = tour?.menuVisibility;
   const [open, setOpen] = useState(false);
   const progress = useSharedValue(0);
   const dragStart = useSharedValue(0);
@@ -78,6 +80,8 @@ export function AppDrawer({ children }: { children: ReactNode }) {
   const openDrawer = useCallback(() => settle(true), [settle]);
   const closeDrawer = useCallback(() => settle(false), [settle]);
   const toggleDrawer = useCallback(() => settle(!open), [open, settle]);
+  useEffect(() => registerMenu?.({ open: openDrawer, close: closeDrawer }), [registerMenu, openDrawer, closeDrawer]);
+  useEffect(() => { menuVisibility?.(open); }, [menuVisibility, open]);
   const settleFromGesture = useCallback((next: boolean) => settle(next, true), [settle]);
 
   useEffect(() => {

@@ -1,6 +1,7 @@
 import { MessagingProvider } from '@/components/messaging/messaging-provider';
 import { AppIconBadge } from '@/components/app-icon-badge';
 import { IncomingMessageBanner } from '@/components/messaging/incoming-banner';
+import { GuidedTourProvider } from '@/components/guided-tour';
 import { watchWelcomeEmailRetries } from '@/lib/welcome-email';
 import 'react-native-gesture-handler';
 import type { Session } from '@supabase/supabase-js';
@@ -221,6 +222,7 @@ function RootLayout() {
           border: brand.edge,
         },
       }}>
+      <GuidedTourProvider enabled={revealed && !bootError && !isAuth && !recoveryRoute.current}>
       <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: brand.page } }}>
         <Stack.Screen name="(tabs)" />
@@ -296,6 +298,7 @@ function RootLayout() {
           setBootAttempt(value => value + 1);
         }}>Check your connection and try again.</Notice>
       </View>}
+      </GuidedTourProvider>
     </ThemeProvider>
     </StartupRevealedContext.Provider>
   );

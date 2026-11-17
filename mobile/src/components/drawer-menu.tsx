@@ -5,13 +5,13 @@ import { usePathname, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
-  ScrollView,
   Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PressableScale } from '@/components/pressable-scale';
+import { TourTarget, TourScrollView, ContextualTip } from '@/components/guided-tour';
 import { hapticLight } from '@/lib/haptics';
 import { nameFromUser } from '@/lib/profile';
 import { openSitePath } from '@/lib/site';
@@ -243,7 +243,7 @@ export function DrawerMenu({
       </View>
 
       {player ? (
-        <View className="px-5 pt-5">
+        <TourTarget id="menu.profile" enabled={visible} onActivate={() => go({ kind: 'tab', href: '/profile' })}><View className="px-5 pt-5">
           <PressableScale
             onPress={() => go({ kind: 'tab', href: '/profile' })}
             accessibilityRole="button"
@@ -285,19 +285,21 @@ export function DrawerMenu({
               </View>
             </View>
           </PressableScale>
-        </View>
+        </View></TourTarget>
       ) : null}
 
-      <ScrollView
+      <TourScrollView
         className="flex-1"
         contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 }}
         keyboardShouldPersistTaps="handled">
+        <ContextualTip chapter="menu" ready={visible} matchPath={false} style={{ marginBottom: 12 }} />
+        <TourTarget id="menu.items" enabled={visible}>
         {NAV.filter((item) => !item.hidden).map((item) => {
           const expanded = openMenus.includes(item.name);
           const active = item.dest?.kind === 'tab' ? tabActive(pathname, item.dest.href) : false;
           return (
             <View key={item.name} className="mb-1.5">
-              <Pressable
+              <TourTarget id={`menu.${({ Home: 'home', Following: 'following', Players: 'players', Calendar: 'calendar', Media: 'media', 'Help & enquiries': 'help' } as Record<string, string>)[item.name]}`} enabled={visible} onActivate={item.dest ? () => go(item.dest!) : undefined}><Pressable
                 onPress={() => {
                   if (item.children) {
                     setOpenMenus((current) =>
@@ -340,7 +342,7 @@ export function DrawerMenu({
                     />
                   </View>
                 ) : null}
-              </Pressable>
+              </Pressable></TourTarget>
 
               {item.children && expanded
                 ? item.children.map((child) => {
@@ -367,16 +369,17 @@ export function DrawerMenu({
           );
         })}
 
-      </ScrollView>
+        </TourTarget>
+      </TourScrollView>
 
       {signedIn ? (
         <View className="border-t border-court-edge px-5 py-3">
-          <PressableScale onPress={() => go({ kind: 'tab', href: '/settings' })} accessibilityRole="button" accessibilityLabel="Account & settings" className="w-full">
+          <TourTarget id="menu.settings" enabled={visible} onActivate={() => go({ kind: 'tab', href: '/settings' })}><PressableScale onPress={() => go({ kind: 'tab', href: '/settings' })} accessibilityRole="button" accessibilityLabel="Account & settings" className="w-full">
             <View className="min-h-12 w-full flex-row items-center rounded-xl bg-court-elevated px-4">
               <SymbolView name={{ ios: 'gearshape', android: 'settings', web: 'settings' }} size={20} tintColor="#2449D8" />
               <Text className="ml-3 text-[13px] font-bold text-court-ink">Account & settings</Text>
             </View>
-          </PressableScale>
+          </PressableScale></TourTarget>
 
 
 

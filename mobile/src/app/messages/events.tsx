@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, Text, TextInput, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { messaging, type Conversation, type MessagingEvent } from '@/lib/messaging';
 import { useMessagingInbox } from '@/components/messaging/messaging-provider';
 import { ChatButton, ChatNotice } from '@/components/messaging/ui';
+import { TourTarget, TourScrollView, ContextualTip } from '@/components/guided-tour';
 import { ErrorBanner } from '@/components/error-banner';
 import { EventChannelOption, EventChatHeading, EventDirectoryItem } from '@/components/messaging/event-channels';
 import { usePrivateMessagingScreen } from '@/hooks/use-private-messaging-screen';
@@ -46,13 +47,14 @@ export default function EventMessages() {
     finally { if (current === epoch.current) setJoining(false); }
   };
   return <View style={{ flex: 1, backgroundColor: b.page }}><Stack.Screen options={{ headerShown: true, headerBackButtonDisplayMode: 'minimal', title: 'Event chats', headerTintColor: b.premium, headerStyle: { backgroundColor: b.page }, headerShadowVisible: false }} />
-    {!active ? null : selectedId ? <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 36 }}>
+    {!active ? null : selectedId ? <TourScrollView contentContainerStyle={{ padding: 16, paddingBottom: 36 }}>
+      <ContextualTip chapter="eventChat" label="Explain these conversations" ready={!loading && !error && !!announcement} replayLabel="Conversation guide" style={{ marginBottom: 12 }} />
       {title ? <><EventChatHeading title={title} onDetails={() => router.push({ pathname: '/events/[id]', params: { id: String(selectedId) } })} /><Text style={{ color: b.premium, fontSize: 15, fontWeight: '600', marginBottom: 12 }}>Choose a conversation</Text></> : null}
       {notices}
-      {announcement && <EventChannelOption kind="event_announcements" eventTitle={title} conversation={currentRow(announcement)} onPress={() => open(announcement)} />}
-      {discussion ? <EventChannelOption kind="event_discussion" eventTitle={title} conversation={currentRow(discussion)} onPress={() => open(discussion)} /> : announcement && <EventChannelOption kind="event_discussion" eventTitle={title} setupDetail={setupDetail} actionLabel={inbox.status?.needsBirthDate ? 'Complete private profile' : !inbox.status?.interactive ? 'Finish messaging setup' : 'Join discussion'} busy={joining} onPress={() => void setup()} />}
+      {announcement && <TourTarget id="eventChat.announcements"><EventChannelOption kind="event_announcements" eventTitle={title} conversation={currentRow(announcement)} onPress={() => open(announcement)} /></TourTarget>}
+      <TourTarget id="eventChat.discussion">{discussion ? <EventChannelOption kind="event_discussion" eventTitle={title} conversation={currentRow(discussion)} onPress={() => open(discussion)} /> : announcement && <EventChannelOption kind="event_discussion" eventTitle={title} setupDetail={setupDetail} actionLabel={inbox.status?.needsBirthDate ? 'Complete private profile' : !inbox.status?.interactive ? 'Finish messaging setup' : 'Join discussion'} busy={joining} onPress={() => void setup()} />}</TourTarget>
       {!loading && !error && !channels.length && <ChatNotice title="Event conversations unavailable">Open an event you have entered or manage to see its announcements and discussion.</ChatNotice>}
-    </ScrollView> : <FlatList data={filtered} keyExtractor={event => String(event.id)} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, paddingBottom: 36 }}
+    </TourScrollView> : <FlatList data={filtered} keyExtractor={event => String(event.id)} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, paddingBottom: 36 }}
       ListHeaderComponent={<View style={{ gap: 12, marginBottom: 12 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <Text accessibilityRole="header" style={{ color: b.premium, fontSize: 17, fontWeight: '600' }}>Your events</Text>

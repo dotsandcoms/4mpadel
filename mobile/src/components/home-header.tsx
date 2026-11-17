@@ -18,6 +18,7 @@ import Animated, {
 
 import { useDrawerOptional } from '@/components/app-drawer';
 import { HomeAction } from '@/components/home-action';
+import { TourTarget } from '@/components/guided-tour';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { useScreenActive } from '@/hooks/use-screen-active';
 import { hapticLight } from '@/lib/haptics';
@@ -57,12 +58,12 @@ export function HomeHeader({ onSearch, onNotifications }: Props) {
       </View>
 
       <View className="flex-row items-center">
-        <View>
+        <TourTarget id="header.notifications" onActivate={onNotifications}>
           <HomeAction label={noticeLabel} icon="bell" kind="icon" onPress={onNotifications} />
           {noticeCount > 0 && <View pointerEvents="none" style={{ position: 'absolute', top: 8, right: 8, minWidth: 18, height: 18, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: '#B7352D' }}><Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '600' }}>{noticeCount > 99 ? '99+' : noticeCount}</Text></View>}
-        </View>
-        <HomeAction label="Search" icon="search" kind="icon" onPress={onSearch} />
-        {drawer && <HomeAction label="Menu" icon="menu" kind="icon" onPress={drawer.openDrawer} />}
+        </TourTarget>
+        <TourTarget id="header.search" onActivate={onSearch}><HomeAction label="Search" icon="search" kind="icon" onPress={onSearch} /></TourTarget>
+        {drawer && <TourTarget id="header.menu" onActivate={drawer.openDrawer}><HomeAction label="Menu" icon="menu" kind="icon" onPress={drawer.openDrawer} /></TourTarget>}
       </View>
     </View>
   );

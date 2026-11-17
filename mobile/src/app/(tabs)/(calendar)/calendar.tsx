@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ErrorBanner } from '@/components/error-banner';
 import { FieldColors } from '@/components/field-colors';
 import { HomeAction } from '@/components/home-action';
+import { TourTarget, ContextualTip } from '@/components/guided-tour';
 import { HomeSourcePicker } from '@/components/home-source-picker';
 import { NativeSegmentedControl } from '@/components/native-segmented-control';
 import { SelectField } from '@/components/select-field';
@@ -30,13 +31,13 @@ export default function CalendarScreen() {
   const pro = circuit === 'pro';
   return <View style={{ flex: 1, backgroundColor: b.page, paddingTop: insets.top }}>
     <WebsiteHeader />
-    <View style={{ marginHorizontal: 16, marginTop: 8, marginBottom: 4 }}>
+    <TourTarget id="events.circuits" style={{ marginHorizontal: 16, marginTop: 8, marginBottom: 4 }}>
       <HomeSourcePicker value={pro ? 'international' : '4m'} onChange={next => {
         const value = next === 'international' ? 'pro' : 'sa';
         void trackEvent('feature_interaction', { feature: 'event_calendar', action: 'tab', selection: value });
         router.setParams({ circuit: value });
       }} />
-    </View>
+    </TourTarget>
     {pro ? <ProTourCalendar initialTiming={timing === 'past' ? 'past' : 'upcoming'} /> : <SouthAfricaCalendar />}
   </View>;
 }
@@ -44,6 +45,7 @@ export default function CalendarScreen() {
 function SouthAfricaCalendar() {
   const router = useRouter();
   const bottom = useTabScenePadding();
+  const list = useRef<FlatList<EventDetail>>(null);
   const [events, setEvents] = useState<EventDetail[]>([]);
   const [saved, setSaved] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,21 +88,22 @@ function SouthAfricaCalendar() {
   const clear = () => { setFilters(defaultFilters); setEventType('All'); };
   const count = Number(!!filters.city) + Number(eventType !== 'All') + Number(filters.status !== 'active');
   return <View style={{ flex: 1 }}>
-    <FlatList style={{ flex: 1 }} data={rows} keyExtractor={item => String(item.id)} refreshing={loading && events.length > 0} onRefresh={load}
+    <FlatList ref={list} style={{ flex: 1 }} data={rows} keyExtractor={item => String(item.id)} refreshing={loading && events.length > 0} onRefresh={load}
       keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" contentContainerStyle={{ paddingBottom: bottom }}
       ListHeaderComponent={<>
         <View style={s.headingBlock}>
           <Text accessibilityRole="header" style={s.heading}>Tournaments</Text>
           <Text style={s.description}>Find tournaments, enter and earn ranking points</Text>
+          <ContextualTip chapter="events" style={{ marginTop: 12 }} />
         </View>
-        <View style={s.searchBlock}><DiscoverySearch value={filters.search} onChange={search => setFilters(f => ({ ...f, search }))}
-          placeholder="Event, city or venue" filterCount={count} onFilters={() => setShowFilters(true)} /></View>
+        <TourTarget id="events.search" onReveal={() => list.current?.scrollToOffset({ offset: 0, animated: false })} style={s.searchBlock}><DiscoverySearch value={filters.search} onChange={search => setFilters(f => ({ ...f, search }))}
+          placeholder="Event, city or venue" filterCount={count} onFilters={() => setShowFilters(true)} /></TourTarget>
         <DiscoveryChoices label="Tier" value={filters.tier} options={['', 'Major', 'Super Gold', 'Gold', 'Silver', 'Bronze'].map(tier => ({ value: tier, label: tier || 'All tiers' }))}
           onChange={tier => {
             void trackEvent('feature_interaction', { feature: 'event_calendar', action: 'filter', selection: tier ? tier.toLowerCase().replaceAll(' ', '_') : 'all_tiers' });
             setFilters(f => ({ ...f, tier }));
           }} />
-        <View style={s.timing}><NativeSegmentedControl label="Event dates" value={filters.timing} options={timings} onChange={changeTiming} /></View>
+        <TourTarget id="events.dates" onReveal={() => list.current?.scrollToOffset({ offset: 0, animated: false })} style={s.timing}><NativeSegmentedControl label="Event dates" value={filters.timing} options={timings} onChange={changeTiming} /></TourTarget>
         <View style={s.results}>
           <Text accessibilityLiveRegion="polite" style={s.caption}>{loading && !events.length ? 'Loading events…' : `${rows.length} ${rows.length === 1 ? 'event' : 'events'}${filters.city ? ` · ${filters.city}` : ''}${eventType !== 'All' ? ` · ${eventType}` : ''}`}</Text>
         </View>
@@ -111,7 +114,7 @@ function SouthAfricaCalendar() {
         <Text style={s.caption}>{filters.timing === 'saved' && !saved.length ? 'Save an event to keep it in My schedule' : 'Try another search, or clear your filters'}</Text>
         <HomeAction label="Clear filters" onPress={clear} />
       </View> : null}
-      renderItem={({ item }) => <CalendarEventCard event={item} saved={saved.includes(item.id)} saving={savingIds.includes(item.id)}
+      renderItem={({ item, index }) => <CalendarEventCard tour={index === 0} onTourReveal={() => list.current?.scrollToIndex({ index: 0, animated: false, viewOffset: 16 })} event={item} saved={saved.includes(item.id)} saving={savingIds.includes(item.id)}
         onSave={() => void toggleSaved(item.id)} onPress={() => router.push({ pathname: '/events/[id]', params: { id: String(item.id) } })} />} />
     <DiscoveryFilterSheet visible={showFilters} onClose={() => setShowFilters(false)} onClear={() => { setFilters(f => ({ ...f, city: '', status: 'active' })); setEventType('All'); }} resultLabel={`Show ${rows.length} ${rows.length === 1 ? 'event' : 'events'}`}>
       <DiscoveryFilterGroup title="Event type"><NativeSegmentedControl label="Event type" value={eventType}
