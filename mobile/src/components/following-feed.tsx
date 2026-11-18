@@ -3,7 +3,7 @@ import { ActivityIndicator, AppState, Pressable, Text, View } from 'react-native
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
-import { feedActors, feedCountdown, feedDeadline, feedEventPhoto, feedMatchResult, feedParticipants, feedRankingChange, feedScheduleLabel, feedScores, feedTime, type FeedItem, type FeedFilter, type FeedPlayer } from '@/lib/following-feed';
+import { feedActors, feedCountdown, feedDeadline, feedEventPhoto, feedMatchResult, feedParticipants, feedRankingChange, feedScheduleLabel, feedScores, feedTime, feedTournamentUpdate, type FeedItem, type FeedFilter, type FeedPlayer } from '@/lib/following-feed';
 import { playerCountryFlag } from '@/lib/player-hub';
 import type { useFollowingFeed } from '@/hooks/use-following-feed';
 import { HomeAccordion } from '@/components/home-accordion';
@@ -42,7 +42,9 @@ export const ActivityCard = memo(function ActivityCard({ item }: { item: FeedIte
   const router = useRouter(), score = ['result', 'match_live', 'match_schedule'].includes(item.kind) ? feedScores(item) : null;
   const result = item.path === '/match-result' ? feedMatchResult(item) : null;
   const open = () => { if (item.path === '/match-result') { if (result) router.push({ pathname: '/match-result', params: { match: result, context: 'following' } }); } else router.push(item.path as Href); };
-  const headline = score && score.winner !== null ? `${score.teams[score.winner ?? 0]} ${item.payload.result_type === 'walkover' ? 'advanced by walkover' : 'won'}` : item.kind === 'tournament' && item.payload.update_type === 'details' && typeof item.payload.event_name === 'string' ? item.payload.event_name : item.title;
+  const tournament = feedTournamentUpdate(item);
+  const eventName = tournament && typeof item.payload.event_name === 'string' ? item.payload.event_name.trim() : '';
+  const headline = score && score.winner !== null ? `${score.teams[score.winner ?? 0]} ${item.payload.result_type === 'walkover' ? 'advanced by walkover' : 'won'}` : eventName || item.title;
   const ranking = feedRankingChange(item);
   const rank = ranking?.rank, previousRank = ranking?.beforeRank, points = ranking?.points;
   const pointNumber = typeof points === 'number' && Number.isFinite(points) ? points : null;
@@ -51,18 +53,29 @@ export const ActivityCard = memo(function ActivityCard({ item }: { item: FeedIte
   const headerPhoto = item.kind === 'tournament' ? eventPhoto || item.photo : score ? null : person?.photo || item.photo;
   const eventStart = typeof item.payload.event_start_date === 'string' ? new Date(item.payload.event_start_date) : null;
   const eventDay = eventStart && Number.isFinite(eventStart.getTime()) ? eventStart.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', timeZone: 'Africa/Johannesburg' }) : null;
-  const body = item.kind === 'tournament' && Array.isArray(item.payload.changes) ? item.payload.changes.filter(change => change && typeof change === 'object' && !(deadline && (change as Record<string, unknown>).field === 'registration_closes_at')).map(change => { const row = change as Record<string, unknown>; return row.field === 'event_name' ? 'Tournament name updated' : `${String(row.label || '')}: ${String(row.after || '')}`; }).join(' · ') : item.body;
+  const changes = tournament?.changes.filter(change => !deadline || change.field !== 'registration_closes_at' || !!change.before) ?? [];
+  const body = tournament?.changes.length || (deadline && item.payload.update_type === 'registration_closing') ? '' : item.body;
+  const updateLabel = tournament?.label.toUpperCase();
+  const summary = tournament ? [tournament.label, headline, ...changes.map(change => change.before ? `${change.label}, from ${change.before} to ${change.after}` : `${change.label}, ${change.after}`), body].filter(Boolean).join('. ')
+    : `${item.title}. ${item.body}`;
   const deadlineLabel = deadline ? `. ${feedCountdown(deadline)?.closed ? 'Entries closed' : 'Entries close'} ${new Date(deadline).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' })} SAST` : '';
-  return <Pressable accessibilityRole="button" accessibilityLabel={`${item.title}. ${item.body}. ${feedTime(item.occurredAt)}${deadlineLabel}`} disabled={item.path === '/match-result' && !result} onPress={open} className="active:opacity-70" style={card}>
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${summary}. ${feedTime(item.occurredAt)}${deadlineLabel}`} disabled={item.path === '/match-result' && !result} onPress={open} className="active:opacity-70" style={card}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
       {headerPhoto && failedHeaderPhoto !== headerPhoto ? <Image source={{ uri: headerPhoto }} contentFit="cover" accessibilityLabel={item.kind === 'tournament' ? `${String(item.payload.event_name || item.title)} tournament poster` : `${person?.name || item.title} photo`} onError={() => setFailedHeaderPhoto(headerPhoto)} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: b.surface }} /> : <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: b.glass }}><Ionicons name={icons[item.kind]} size={17} color={b.accent} /></View>}
       <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 8, rowGap: 2 }}>
-        <Text style={{ flexShrink: 1, fontSize: 10, lineHeight: 16, letterSpacing: 0.8, fontWeight: '700', color: b.muted }}>{item.kind === 'entry' && item.payload.update_type === 'withdrawal' ? 'PLAYER WITHDREW' : item.kind === 'match_schedule' ? feedScheduleLabel(item) : labels[item.kind]}</Text>
+        <Text style={{ flexShrink: 1, fontSize: 10, lineHeight: 16, letterSpacing: 0.8, fontWeight: '700', color: updateLabel ? b.accent : b.muted }}>{updateLabel || (item.kind === 'entry' && item.payload.update_type === 'withdrawal' ? 'PLAYER WITHDREW' : item.kind === 'match_schedule' ? feedScheduleLabel(item) : labels[item.kind])}</Text>
         <Text numberOfLines={1} style={{ marginLeft: 'auto', flexShrink: 0, color: b.faint, fontSize: 11, lineHeight: 16 }}>{!score && person?.country ? `${playerCountryFlag(person.country)}  ` : ''}{feedTime(item.occurredAt)}</Text>
       </View>
       {item.kind === 'tournament' && eventDay && <Text style={{ color: b.accent, backgroundColor: b.glass, borderRadius: 7, paddingVertical: 6, paddingHorizontal: 8, fontSize: 10, fontWeight: '700' }}>{eventDay.toUpperCase()}</Text>}<Ionicons name="chevron-forward" size={17} color={b.faint} />
     </View>
     <Text style={{ color: b.premium, fontSize: 15, fontWeight: '700', lineHeight: 21, marginTop: 12 }}>{headline}</Text>
+    {changes.length > 0 && <View style={{ backgroundColor: b.surface, borderRadius: 10, padding: 12, gap: 10, marginTop: 10 }}>
+      {changes.map(change => <View key={change.field} style={{ gap: 3 }}>
+        {tournament && tournament.changes.length > 1 && <Text style={{ color: b.muted, fontSize: 11, lineHeight: 16, fontWeight: '600' }}>{change.label}</Text>}
+        {!!change.before && <Text style={{ color: b.muted, fontSize: 12, lineHeight: 18 }}>Previously {change.before}</Text>}
+        <Text style={{ color: b.premium, fontSize: 13, lineHeight: 19, fontWeight: '700' }}>{change.before ? 'Now ' : ''}{change.after}</Text>
+      </View>)}
+    </View>}
     {!!body && <Text style={{ color: b.muted, fontSize: 12, lineHeight: 18, marginTop: 4 }}>{body}</Text>}
     {score && <View style={{ marginTop: 13, backgroundColor: b.surface, borderRadius: 12, padding: 12, gap: 12 }}>
       {!!score.scores.length && <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', paddingHorizontal: 10 }}><Text style={{ flex: 1, color: b.faint, fontSize: 10 }}>{score.points ? 'RALLY POINTS' : score.summary ? 'SETS WON' : 'FINAL SCORE'}</Text>{score.scores.map((_set, i) => <Text key={i} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ width: 34, textAlign: 'center', fontSize: 9, color: b.faint }}>{score.summary || score.points ? '' : `S${i + 1}`}</Text>)}</View>}

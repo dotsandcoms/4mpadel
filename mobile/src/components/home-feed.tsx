@@ -11,7 +11,7 @@ import { SpotlightCountdown } from './spotlight-countdown';
 import { eventDayParts, eventLocation, firstNameOf, formatEventRange, greetingForNow, resolveFeaturedCta, resolveScheduleEntryCta, type CalendarEvent, type HomePlayer } from '@/lib/home';
 import { type FeedPlayer } from '@/lib/following-feed';
 import type { HomeWeather } from '@/lib/home-weather';
-import { proDate, proRound, type ProMatch, type ProTournament } from '@/lib/pro-padel';
+import { isProFinal, proDate, proRound, type ProMatch, type ProTournament } from '@/lib/pro-padel';
 import { tourMatchesToday } from '@/lib/home-tour-presentation';
 import { tourLevelLabel, tourSource } from '@/lib/home-feed';
 import { playerCountryFlag } from '@/lib/player-hub';
@@ -93,8 +93,10 @@ function SourceTag({ label, live = false }: { label: string; live?: boolean }) {
 const artwork = (event: CalendarEvent) => event.custom_image_url || event.poster_image_url || event.image_url;
 
 type ScorePlayer = { name: string; photo?: string | null; country?: string | null };
-function ScoreTeam({ players, scores, winner, overlap = false }: { players: ScorePlayer[]; scores: (number | string | null)[]; winner: boolean; overlap?: boolean }) {
-  return <View style={[s.scoreTeam, winner && s.scoreTeamWinner]}>
+function ScoreTeam({ players, scores, winner, final = false, overlap = false }: {
+  players: ScorePlayer[]; scores: (number | string | null)[]; winner: boolean; final?: boolean; overlap?: boolean;
+}) {
+  return <View style={[s.scoreTeam, winner && (final ? s.finalWinner : s.scoreTeamWinner)]}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 140 }}>
       {overlap && <View style={{ flexDirection: 'row', flexShrink: 0 }}>
         {players.slice(0, 2).map((player, index) => <View key={`${player.name}:${index}`} style={{ marginLeft: index ? -8 : 0, borderWidth: 2, borderColor: winner ? b.surface : b.elevated, borderRadius: 20, zIndex: 2 - index }}><FeedPortrait name={player.name} uri={player.photo} size={28} /></View>)}
@@ -235,9 +237,20 @@ export function TourLiveRail({ events, matches = [], onOpen }: { events: ProTour
 
 function TourResult({ match, current, onOpen }: { match: ProMatch; current: boolean; onOpen: () => void }) {
   const portraits = useHomeResultPortraits(match.teams.flat().map(player => player.id), current);
-  return <Pressable accessibilityRole="button" accessibilityLabel={`${match.tournamentName}, ${proRound(match)}. ${match.teams.map((team, side) => `${team.map(player => player.name).join(' and ')}${match.winner === `team_${side + 1}` ? ', winners' : ''}, ${match.score.map(set => set[side] ?? '–').join(', ')}`).join('. ')}`} onPress={onOpen} style={s.matchCard}>
-    <View style={[s.tagRow, { alignItems: 'flex-start' }]}><Text numberOfLines={2} style={[s.meta, { flex: 1 }]}>{match.tournamentName} · {proRound(match)}</Text><Text style={s.small}>{proDate(match.playedAt)}</Text></View>
-    <View style={{ gap: 4 }}>{match.teams.map((team, side) => <ScoreTeam key={side} players={team.map(player => ({ name: player.name, photo: portraits[player.id]?.photoUrl, country: portraits[player.id]?.nationality || player.nationality }))} scores={match.score.map(set => set[side])} winner={match.winner === `team_${side + 1}`} />)}</View>
+  const final = isProFinal(match);
+  const round = final ? 'Final' : proRound(match);
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${match.tournamentName}, ${round}. ${match.teams.map((team, side) => `${team.map(player => player.name).join(' and ')}${match.winner === `team_${side + 1}` ? ', winners' : ''}, ${match.score.map(set => set[side] ?? '–').join(', ')}`).join('. ')}`} onPress={onOpen} style={[s.matchCard, final && s.finalCard]}>
+    <View style={[s.tagRow, { alignItems: 'flex-start' }]}>
+      <View style={s.matchHeading}>
+        {final && <View style={s.finalBadge}>
+          <SymbolView name={{ ios: 'trophy.fill', android: 'trophy', web: 'trophy' }} size={14} tintColor="#775316" />
+          <Text style={s.finalBadgeText}>Final</Text>
+        </View>}
+        <Text numberOfLines={2} style={final ? s.rowTitle : s.meta}>{match.tournamentName}{final ? '' : ` · ${round}`}</Text>
+      </View>
+      <Text style={s.small}>{proDate(match.playedAt)}</Text>
+    </View>
+    <View style={{ gap: 4 }}>{match.teams.map((team, side) => <ScoreTeam key={side} players={team.map(player => ({ name: player.name, photo: portraits[player.id]?.photoUrl, country: portraits[player.id]?.nationality || player.nationality }))} scores={match.score.map(set => set[side])} winner={match.winner === `team_${side + 1}`} final={final} />)}</View>
     <Text style={[s.date, { fontWeight: '600' }]}>View match →</Text>
   </Pressable>;
 }
@@ -316,6 +329,11 @@ const s = StyleSheet.create({
   liveContent: { flex: 1, padding: 20, gap: 16 },
   liveTitle: { color: '#FFFFFF', fontSize: 24, lineHeight: 29, fontWeight: '600', letterSpacing: -.4 },
   matchCard: { padding: 16, gap: 16, backgroundColor: b.elevated, borderRadius: 12 },
+  matchHeading: { flex: 1, minWidth: 0, gap: 6 },
+  finalCard: { borderWidth: 1, borderColor: '#C79C44' },
+  finalBadge: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#FFF0CC', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  finalBadgeText: { fontSize: 12, fontWeight: '700', color: '#775316' },
+  finalWinner: { backgroundColor: '#FFF6DD' },
   scoreTeam: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, padding: 8, borderRadius: 8 },
   scoreTeamWinner: { backgroundColor: b.surface },
   scorePlayer: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 18, color: b.premium },

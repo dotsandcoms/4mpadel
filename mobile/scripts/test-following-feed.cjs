@@ -283,6 +283,23 @@ test('match cards preserve all exact player portraits and countries without unsa
   const fallback=feed.feedParticipants({...activity,payload:{...activity.payload,participants:null}});
   assert.equal(fallback[1][0].name,'Brad');assert.equal(fallback[1][0].photo,null);
 });
+test('tournament cards identify what changed for new and older feed posts', () => {
+  const detail = { kind: 'tournament', body: 'Venue: New courts · Main clubhouse', payload: { update_type: 'details' } };
+  const legacy = feed.feedTournamentUpdate(detail);
+  assert.equal(legacy.label, 'Venue changed');
+  assert.equal(legacy.changes[0].after, 'New courts · Main clubhouse');
+  assert.equal(legacy.changes[0].before, '');
+  const venue = { field: 'venue', before: 'Old courts', after: 'New courts' };
+  const one = feed.feedTournamentUpdate({ ...detail, payload: { ...detail.payload, changes: [venue] } });
+  assert.equal(one.label, 'Venue changed');
+  assert.equal(one.changes[0].before, 'Old courts');
+  const multiple = feed.feedTournamentUpdate({ ...detail, payload: { ...detail.payload, changes: [venue, { field: 'start_date', after: '20 November 2026' }, { field: 'internal', after: 'Unsupported' }] } });
+  assert.equal(multiple.label, 'Tournament details changed');
+  assert.deepEqual(Array.from(multiple.changes, change => change.label), ['Venue', 'Start date']);
+  assert.equal(feed.feedTournamentUpdate({ ...detail, payload: { update_type: 'schedule' } }).label, 'Schedule published');
+  assert.equal(feed.feedTournamentUpdate({ ...detail, kind: 'entry' }), null);
+});
+
 test('entry timers use current structured deadlines and distinguish closed, future and invalid dates', () => {
   const item={kind:'tournament',body:'Entries close: old date',payload:{registration_closes_at:'2026-10-08T11:00:00Z',changes:[{field:'registration_closes_at',after:'old date'}]}};
   assert.equal(feed.feedDeadline(item),'2026-10-08T11:00:00.000Z');
