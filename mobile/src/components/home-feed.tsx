@@ -271,7 +271,7 @@ const s = StyleSheet.create({
   location: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   locationAction: { minHeight: 24 },
   locationText: { flexShrink: 1, fontSize: 11, lineHeight: 15, color: b.muted },
-  weather: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0, paddingStart: 8, borderStartWidth: StyleSheet.hairlineWidth, borderStartColor: b.edge },
+  weather: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0, marginEnd: 8, paddingStart: 8, borderStartWidth: StyleSheet.hairlineWidth, borderStartColor: b.edge },
   weatherTemp: { color: b.premium, fontSize: 13, fontWeight: '700' },
   portrait: { flexShrink: 0, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: b.surface, borderWidth: 1, borderColor: '#0000001A' },
   nameButton: { flexShrink: 1, minWidth: 0 },
