@@ -87,7 +87,7 @@ export function useHomeFeed(source: HomeSource, enabled = true) {
   const happening = useHomeResource(owner, active, 'happening', 60000, () => fetchHappeningNow(true), local);
   const results = useHomeResource(owner, active, 'results:all-divisions', 180000, () => fetchRecentResults(true), local);
   const media = useHomeResource(owner, active, 'media', 300000, () => fetchMediaAlbums(undefined, 6), local);
-  const news = useHomeResource(owner, active, 'premier-news', 900000, fetchPremierNews, !local);
+  const news = useHomeResource(owner, active, 'premier-news', 900000, () => fetchPremierNews().then(page => page.articles), !local);
   const tour = useHomeResource(owner, active, 'tour', 120000, () => fetchProSnapshot('tour'), !local);
   const fixtures = useHomeResource(owner, active, 'fixtures', 60000, () => fetchProSnapshot('fixtures'), !local);
   const live = useHomeResource(owner, active, 'live', 60000, fetchLiveTournaments, !local);

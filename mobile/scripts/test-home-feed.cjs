@@ -40,31 +40,35 @@ const { resultHighlight, resultHighlights, resultPortraits, resultHighlightKey }
 const { createHomePortraitCache } = load('src/lib/home-pro-portraits.ts');
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 
-test('Premier Padel headlines use official article links and trusted thumbnails', () => {
+test('Premier Padel news uses official photos and renders published story blocks as native text', () => {
   const mod = { exports: {} };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/premier-news.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText,
     { module: mod, exports: mod.exports, URL, require });
-  const first = `<a href="/en/news/tour-final">
-      <img src="/_next/image?url=https%3A%2F%2Fcdn.premierpadel.com%2Ffinal.jpg&amp;w=1080&amp;q=75">
-      <p>17 November 2026</p><h3>Finals &amp; <strong>more</strong></h3>
-    </a>`;
-  const articles = mod.exports.parsePremierNews(`
-    <a href="/en/news">View all</a>
-    ${first}${first}
-    <a href="/en/news/second"><img src="https://example.com/photo.jpg"><h3>Another headline</h3></a>
-    <a href="https://example.com/en/news/same"><h3>External story</h3></a>`);
-  assert.deepEqual(JSON.parse(JSON.stringify(articles)), [
-    { url: 'https://premierpadel.com/en/news/tour-final', title: 'Finals & more', date: '17 November 2026',
-      image: 'https://premierpadel.com/_next/image?url=https%3A%2F%2Fcdn.premierpadel.com%2Ffinal.jpg&w=640&q=75' },
-    { url: 'https://premierpadel.com/en/news/second', title: 'Another headline', date: null, image: null },
+  const { parsePremierNews, parsePremierStory, isPremierNewsSlug } = mod.exports;
+  const first = { slug: 'tour-final', title: 'Finals & more', published_at: '2026-11-17T10:00:00Z',
+    hero_image_url: '/uploads/hero/final.jpg', hero_media_thumbnail: '/uploads/thumb/final.jpg' };
+  const page = parsePremierNews({ status: true, totalPages: 2, data: [
+    first, first, { slug: 'second', title: 'Another headline', hero_image_url: 'https://example.com/photo.jpg' },
+    { slug: '../outside', title: 'Invalid story' },
+  ] }, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(page)), { nextPage: 2, articles: [
+    { slug: 'tour-final', title: 'Finals & more', publishedAt: '2026-11-17T10:00:00Z', image: 'https://cdn.premierpadel.com/uploads/thumb/final.jpg' },
+    { slug: 'second', title: 'Another headline', publishedAt: null, image: null },
+  ] });
+  const data = { ...first, status: 'published', blocks: [
+    { block_type: 'text', sort_order: 2, content: { text: '<p>Match &amp; results <a href="https://example.com">here</a>.</p>' } },
+    { block_type: 'text', sort_order: 1, content: { text: '<h2>Finals</h2><script>hidden()</script>' } },
+    { block_type: 'text', content: { is_active: false, text: '<p>Inactive</p>' } },
+  ] };
+  const story = parsePremierStory({ status: true, data }, 'tour-final');
+  assert.equal(story.image, 'https://cdn.premierpadel.com/uploads/hero/final.jpg');
+  assert.deepEqual(JSON.parse(JSON.stringify(story.paragraphs)), [
+    { style: 'heading', text: 'Finals' }, { style: 'body', text: 'Match & results here.' },
   ]);
-  const { isPremierNewsUrl, premierNewsIndex } = mod.exports;
-  assert.equal(isPremierNewsUrl(articles[0].url), true);
-  assert.equal(isPremierNewsUrl(premierNewsIndex), true);
-  assert.equal(isPremierNewsUrl([articles[0].url]), false);
-  for (const value of ['https://premierpadel.com.evil.test/en/news/story', 'https://example.com/en/news/story', 'http://premierpadel.com/en/news/story', 'https://premierpadel.com/en/other', 'file:///en/news/story']) {
-    assert.equal(isPremierNewsUrl(value), false);
-  }
+  assert.throws(() => parsePremierStory({ status: true, data: { ...data, status: 'draft' } }, 'tour-final'));
+  assert.throws(() => parsePremierStory({ status: true, data }, 'other-story'));
+  assert.equal(isPremierNewsSlug('tour-final'), true);
+  for (const value of [['tour-final'], '../other', 'https://example.com/story', 'tour?other']) assert.equal(isPremierNewsSlug(value), false);
 });
 
 test('Home card controls follow arrow presses and swipes and hide when all cards fit', () => {
@@ -129,7 +133,7 @@ test('FIP Home shortcuts and news open their destinations inside the app', () =>
   const mod = { exports: {} }, navigated = [], pushed = [];
   const empty = { data: null, loading: false, error: false };
   const feed = Object.fromEntries(['profile', 'following', 'payments', 'schedule', 'matches', 'spotlight', 'happening', 'results', 'media', 'tour', 'fixtures', 'live', 'fip'].map(name => [name, empty]));
-  const article = { url: 'https://premierpadel.com/en/news/tour-final', title: 'The tour final' };
+  const article = { slug: 'tour-final', title: 'The tour final' };
   feed.profile = { ...empty, data: { id: 73 } };
   feed.news = { ...empty, data: [article] };
   let stateIndex = 0;
@@ -175,10 +179,12 @@ test('FIP Home shortcuts and news open their destinations inside the app', () =>
   header.props.followers.onPress();
   const news = list.props.renderItem({ item: 'news' });
   assert.equal(news.props.children.type, 'PremierNewsRail');
-  news.props.children.props.onOpen(article.url);
+  news.props.children.props.onOpen(article.slug);
+  news.props.onMore();
   assert.deepEqual(JSON.parse(JSON.stringify(pushed)), [
     { pathname: '/followers', params: { playerId: '73' } },
-    { pathname: '/pro/news', params: { url: article.url } },
+    { pathname: '/pro/news', params: { slug: article.slug } },
+    { pathname: '/pro/news', params: {} },
   ]);
 });
 
@@ -543,7 +549,7 @@ function homeHarness() {
     },
     '@/lib/following-feed': { fetchFollowingFeed: response('following', { items: [] }) },
     '@/lib/media': { fetchMediaAlbums: response('media', []) },
-    '@/lib/premier-news': { fetchPremierNews: response('news', [{ title: 'Tour headlines' }]) },
+    '@/lib/premier-news': { fetchPremierNews: response('news', { articles: [{ title: 'Tour headlines' }] }) },
     '@/lib/pro-padel': { fetchProSnapshot: response('snapshot', { matches: [], tournaments: [], tournament: null }) },
     '@/lib/pro-padel-live': { fetchLiveTournaments: response('live', []) },
     '@/lib/matches': { fetchPlayerMatches: response('matches', { upcoming: [] }) },
