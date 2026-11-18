@@ -29,13 +29,10 @@ type Props = {
   onSearch: () => void;
   onNotifications: () => void;
   followers?: { playerId: string; onPress: () => void };
+  transparent?: boolean;
 };
 
-/**
- * Home chrome on a solid page fill so icons stay readable. Safe-area padding
- * lives on the parent — this row is 52pt of tappable header only.
- */
-export function HomeHeader({ onSearch, onNotifications, followers }: Props) {
+export function HomeHeader({ onSearch, onNotifications, followers, transparent }: Props) {
   const drawer = useDrawerOptional();
   const help = useHelpInbox();
   const { owner } = useMessagingInbox();
@@ -47,8 +44,8 @@ export function HomeHeader({ onSearch, onNotifications, followers }: Props) {
 
   return (
     <View
-      className="flex-row items-center justify-between bg-court-page px-4"
-      style={{ height: 52, zIndex: 30, elevation: 30 }}>
+      className="flex-row items-center justify-between px-4"
+      style={{ height: 52, zIndex: 30, elevation: 30, backgroundColor: transparent ? 'transparent' : brand.page }}>
       <View className="flex-row items-center">
         <Image
           source={require('@/assets/images/4m-logo.png')}

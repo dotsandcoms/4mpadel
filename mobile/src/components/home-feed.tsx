@@ -31,9 +31,9 @@ const weatherIcons = {
   Fog: 'cloud-outline', Rain: 'rainy-outline', Snow: 'snow-outline', Thunderstorm: 'thunderstorm-outline',
 } as const;
 
-export function HomeIdentity({ player, loading, onProfile, onRankings, location, weather, onEnableLocation }: {
+export function HomeIdentity({ player, loading, onProfile, onRankings, location, weather, onEnableLocation, now }: {
   player?: HomePlayer | null; loading: boolean; onProfile: () => void; onRankings: () => void;
-  location: string | null; weather: HomeWeather | null; onEnableLocation?: () => void;
+  location: string | null; weather: HomeWeather | null; onEnableLocation?: () => void; now: Date;
 }) {
   const { width, fontScale } = useWindowDimensions();
   const stacked = width < 360 || fontScale > 1.3;
@@ -52,7 +52,7 @@ export function HomeIdentity({ player, loading, onProfile, onRankings, location,
         <FeedPortrait name={player?.name || 'Player'} uri={player?.image_url} size={48} />
       </Pressable>
       <View style={s.identityDetails}>
-        <Text style={s.meta}>{greetingForNow()}</Text>
+        <Text style={s.meta}>{greetingForNow(now)}</Text>
         <View style={s.nameRow}>
           <Pressable accessible={false} onPress={onProfile} style={s.nameButton}>
             <Text numberOfLines={1} style={s.name}>{loading && !player ? '…' : firstNameOf(player?.name) || 'Your padel'}</Text>

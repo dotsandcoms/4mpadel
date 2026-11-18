@@ -1,6 +1,6 @@
 import { trackEvent } from '@/lib/analytics';
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
-import { ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, View, type ListRenderItemInfo } from 'react-native';
+import { ActivityIndicator, Animated, type FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, View, type FlatListProps, type ListRenderItemInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MenuView } from '@expo/ui/community/menu';
 import { useRouter } from 'expo-router';
@@ -21,8 +21,9 @@ const filterLabels: Record<FeedFilter, string> = {
 const supportsNativeMenu = Platform.OS === 'ios' || Platform.OS === 'android';
 
 /** The same account-scoped, paginated feed on Home and the standalone route. */
-export function FollowingFeedList({ header, bottomPadding, horizontalPadding = 16, onTourScrollReady }: {
+export function FollowingFeedList({ header, bottomPadding, horizontalPadding = 16, onTourScrollReady, onScroll }: {
   header?: ReactElement; bottomPadding?: number; horizontalPadding?: number; onTourScrollReady?: (reveal: () => void) => void;
+  onScroll?: FlatListProps<FeedItem>['onScroll'];
 }) {
   const [filter, setFilter] = useState<FeedFilter>('all');
   const list = useRef<FlatList<FeedItem>>(null);
@@ -34,7 +35,8 @@ export function FollowingFeedList({ header, bottomPadding, horizontalPadding = 1
     list.current?.scrollToOffset({ offset: 0, animated: false });
     setFilter(value);
   };
-  return <FlatList ref={list} initialNumToRender={6} maxToRenderPerBatch={6} windowSize={7} data={state.items} keyExtractor={item => item.id} renderItem={renderItem}
+  return <Animated.FlatList ref={list} initialNumToRender={6} maxToRenderPerBatch={6} windowSize={7} data={state.items} keyExtractor={item => item.id} renderItem={renderItem}
+    onScroll={onScroll} scrollEventThrottle={16}
     showsVerticalScrollIndicator={false} contentInsetAdjustmentBehavior="automatic"
     contentContainerStyle={{ paddingHorizontal: horizontalPadding, paddingBottom: bottomPadding ?? safe.bottom + 24, gap: 12 }}
     ListHeaderComponent={<View>{header}
