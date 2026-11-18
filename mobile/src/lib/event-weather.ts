@@ -1,5 +1,8 @@
 import type { EventDetail } from './events';
 export type EventWeather = { temp: number; condition: string; date: string };
+export function weatherCondition(code: number) {
+  return code <= 1 ? 'Clear' : code === 2 ? 'Partly Cloudy' : code === 3 ? 'Overcast' : code >= 45 && code <= 48 ? 'Fog' : (code >= 51 && code <= 67) || (code >= 80 && code <= 82) ? 'Rain' : (code >= 71 && code <= 77) || code === 85 || code === 86 ? 'Snow' : code >= 95 ? 'Thunderstorm' : 'Sunny';
+}
 /** Same city lookup, daily forecast and WMO labels as EventDetails.jsx. */
 export async function fetchEventWeather(event: EventDetail, signal?: AbortSignal): Promise<EventWeather | null> {
   const location = event.city || event.venue;
@@ -13,7 +16,5 @@ export async function fetchEventWeather(event: EventDetail, signal?: AbortSignal
   const daily = (await response.json()).daily;
   if (!daily?.time?.length) return null;
   const index = Math.max(0, daily.time.indexOf(event.start_date?.slice(0, 10)));
-  const code = daily.weather_code[index];
-  const condition = code <= 1 ? 'Clear' : code === 2 ? 'Partly Cloudy' : code === 3 ? 'Overcast' : code >= 45 && code <= 48 ? 'Fog' : (code >= 51 && code <= 67) || (code >= 80 && code <= 82) ? 'Rain' : (code >= 71 && code <= 77) || code === 85 || code === 86 ? 'Snow' : code >= 95 ? 'Thunderstorm' : 'Sunny';
-  return { temp: daily.temperature_2m_max[index], condition, date: daily.time[index] };
+  return { temp: daily.temperature_2m_max[index], condition: weatherCondition(daily.weather_code[index]), date: daily.time[index] };
 }

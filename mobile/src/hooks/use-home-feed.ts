@@ -4,6 +4,7 @@ import { fetchProfileDetails } from '@/lib/profile-details';
 import { homeFeedCache } from '@/lib/home-feed-cache';
 import { fetchFeatured, fetchHappeningNow, fetchPendingPayments, fetchPlayer, fetchRecentResults, fetchSchedule } from '@/lib/home';
 import { fetchFollowingFeed } from '@/lib/following-feed';
+import { fetchPublicClubArea } from '@/lib/clubs';
 import { fetchMediaAlbums } from '@/lib/media';
 import { fetchProSnapshot } from '@/lib/pro-padel';
 import { fetchPlayerMatches } from '@/lib/matches';
@@ -62,10 +63,13 @@ export function useHomeFeed(source: HomeSource, enabled = true) {
   }, []);
   const email = owner?.email ?? '';
   const signedIn = owner?.id != null && email !== '';
-  const profile = useHomeResource(owner, screenActive, 'profile:sapa-main-v1', 60000, async () => {
+  const profile = useHomeResource(owner, screenActive, 'profile:sapa-main-v2', 60000, async () => {
     const player = await fetchPlayer(email, true);
     return player ? { ...player, winLoss: null } : null;
   }, signedIn);
+  const clubId = String(profile.data?.club_id ?? ''), clubName = profile.data?.home_club?.trim() ?? '';
+  const clubArea = useHomeResource(owner, screenActive, `home-club-area:${JSON.stringify([clubId, clubName])}`, 300000,
+    () => fetchPublicClubArea(clubId, clubName), signedIn && !!(clubId || clubName));
   const completionPlayerId = profile.data?.id;
   const completion = useHomeResource(owner, screenActive, `profile-completion:${completionPlayerId ?? ''}`, 30000, async () => {
     if (!completionPlayerId) throw new Error('Profile is not ready.');
@@ -95,8 +99,8 @@ export function useHomeFeed(source: HomeSource, enabled = true) {
     return () => clearInterval(timer);
   }, [active, local, live.refresh]);
   const refresh = async () => {
-    await Promise.allSettled([profile, completion, schedule, payments, following, matches,
+    await Promise.allSettled([profile, clubArea, completion, schedule, payments, following, matches,
       ...(local ? [spotlight, happening, results, media] : [tour, fixtures, live, fip])].map(resource => resource.refresh(true)));
   };
-  return { completion, owner, active, signedIn, profile, schedule, payments, following, matches, spotlight, happening, results, media, tour, fixtures, live, fip, tourPresentation, refresh };
+  return { completion, owner, active, signedIn, profile, clubArea, schedule, payments, following, matches, spotlight, happening, results, media, tour, fixtures, live, fip, tourPresentation, refresh };
 }

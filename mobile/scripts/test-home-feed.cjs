@@ -9,6 +9,31 @@ function load(file) {
     { module: mod, exports: mod.exports, Date, Map, Promise, Intl, require: () => ({}) });
   return mod.exports;
 }
+
+test('Home weather sends only rounded area coordinates and renders the current temperature', async () => {
+  const mod = { exports: {} }, requests = [];
+  const signal = new AbortController().signal;
+  const modules = { './event-weather': load('src/lib/event-weather.ts'), './registration': load('src/lib/registration.ts') };
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/home-weather.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText,
+    { module: mod, exports: mod.exports, URLSearchParams, require: id => modules[id], fetch: async (url, options) => {
+      requests.push({ url: new URL(url), signal: options.signal });
+      return { ok: true, json: async () => ({ current: { temperature_2m: 18.6, weather_code: 61, is_day: 0 } }) };
+    } });
+  const { fetchHomeWeather, areaLabel, profileRegionLabel } = mod.exports;
+  const weather = await fetchHomeWeather(-26.2041, 28.0473, signal);
+  assert.equal(requests.length, 1);
+  const [{ url, signal: requestSignal }] = requests;
+  assert.equal(url.origin, 'https://api.open-meteo.com');
+  assert.deepEqual(Object.fromEntries(url.searchParams), { latitude: '-26.2', longitude: '28.0', current: 'temperature_2m,weather_code,is_day' });
+  assert.equal(requestSignal, signal);
+  assert.equal(weather.temp, 19);
+  assert.equal(weather.condition, 'Rain');
+  assert.equal(weather.daylight, false);
+  assert.equal(areaLabel('Johannesburg', 'South Africa'), 'Johannesburg, South Africa');
+  assert.equal(profileRegionLabel('Gauteng'), 'Gauteng, South Africa');
+  assert.equal(profileRegionLabel('Lisbon'), 'Lisbon');
+  assert.equal(profileRegionLabel(null), '');
+});
 const { createHomeFeedCache } = load('src/lib/home-feed-cache.ts');
 const { homeEventState, homeFeedSource, homeTourEvents, tourPath, tourSource, tourLevelLabel, spotlightCountdown, homeFollowingTeam, homeOfficialFipEvents } = load('src/lib/home-feed.ts');
 const { resultHighlight, resultHighlights, resultPortraits, resultHighlightKey } = load('src/lib/home-results.ts');
@@ -48,6 +73,7 @@ test('FIP Home shortcuts select the native calendar and Players tabs with their 
   const mod = { exports: {} }, navigated = [], pushed = [];
   const empty = { data: null, loading: false, error: false };
   const feed = Object.fromEntries(['profile', 'following', 'payments', 'schedule', 'matches', 'spotlight', 'happening', 'results', 'media', 'tour', 'fixtures', 'live', 'fip'].map(name => [name, empty]));
+  feed.profile = { ...empty, data: { id: 73 } };
   let stateIndex = 0;
   const modules = {
     react: { useState: value => [stateIndex++ === 0 ? 'international' : value, () => {}], useMemo: fn => fn(), useRef: current => ({ current }), useEffect() {} },
@@ -56,7 +82,8 @@ test('FIP Home shortcuts select the native calendar and Players tabs with their 
     'expo-router': { useRouter: () => ({ push: path => pushed.push(path) }), useNavigation: () => ({ navigate: (name, params) => navigated.push({ name, params }) }) },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 0 }) },
     '@/hooks/use-tab-scene-padding': { useTabScenePadding: () => 0 },
-    '@/hooks/use-home-feed': { useHomeFeed: () => ({ ...feed, completion: empty }) },
+    '@/hooks/use-home-feed': { useHomeFeed: () => ({ ...feed, completion: empty, clubArea: empty }) },
+    '@/hooks/use-home-conditions': { useHomeConditions: () => ({ location: null, weather: null }) },
     '@/hooks/use-home-banner-dismissal': { useHomeBannerDismissal: () => ({ ready: true, hidden: false, dismiss() {} }) },
     '@/components/guided-tour': { useGuidedTour: () => null, TourTarget: 'TourTarget', ContextualTip: 'ContextualTip' },
     '@/lib/profile-completion': { missingProfileFields: () => [] },
@@ -72,7 +99,8 @@ test('FIP Home shortcuts select the native calendar and Players tabs with their 
     { module: shortcuts, exports: shortcuts.exports, require: id => id === 'react/jsx-runtime' ? runtime : { HomeAction: 'HomeAction' } });
   vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/app/(tabs)/index.tsx', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText,
     { module: mod, exports: mod.exports, URLSearchParams, require: id => modules[id] || new Proxy({}, { get: (_, key) => key }) });
-  const list = mod.exports.default().props.children.find(child => child?.type === 'FlatList');
+  const screen = mod.exports.default();
+  const list = screen.props.children.find(child => child?.type === 'FlatList');
   const shortcutProps = list.props.renderItem({ item: 'shortcuts' }).props.children.props;
   assert.equal(shortcutProps.source, 'international');
   const actions = shortcuts.exports.HomeShortcuts(shortcutProps).props.children;
@@ -83,6 +111,10 @@ test('FIP Home shortcuts select the native calendar and Players tabs with their 
     { name: 'rankings', params: { view: 'Discover', source: 'pro', query: '', gender: 'all' } },
   ]);
   assert.equal(pushed.length, 0);
+  const header = screen.props.children.find(child => child?.props?.children?.type === 'HomeHeader').props.children;
+  assert.equal(header.props.followers.playerId, '73');
+  header.props.followers.onPress();
+  assert.deepEqual(JSON.parse(JSON.stringify(pushed)), [{ pathname: '/followers', params: { playerId: '73' } }]);
 });
 
 test('bundled event defaults follow the website tier and name rules', () => {

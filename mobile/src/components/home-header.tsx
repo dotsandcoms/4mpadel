@@ -18,6 +18,7 @@ import Animated, {
 
 import { useDrawerOptional } from '@/components/app-drawer';
 import { HomeAction } from '@/components/home-action';
+import { PlayerFollowerCount } from '@/components/players/player-follower-count';
 import { TourTarget } from '@/components/guided-tour';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { useScreenActive } from '@/hooks/use-screen-active';
@@ -27,13 +28,14 @@ import { lightBrand as brand } from '@/theme/tokens';
 type Props = {
   onSearch: () => void;
   onNotifications: () => void;
+  followers?: { playerId: string; onPress: () => void };
 };
 
 /**
  * Home chrome on a solid page fill so icons stay readable. Safe-area padding
  * lives on the parent — this row is 52pt of tappable header only.
  */
-export function HomeHeader({ onSearch, onNotifications }: Props) {
+export function HomeHeader({ onSearch, onNotifications, followers }: Props) {
   const drawer = useDrawerOptional();
   const help = useHelpInbox();
   const { owner } = useMessagingInbox();
@@ -62,6 +64,7 @@ export function HomeHeader({ onSearch, onNotifications }: Props) {
           <HomeAction label={noticeLabel} icon="bell" kind="icon" onPress={onNotifications} />
           {noticeCount > 0 && <View pointerEvents="none" style={{ position: 'absolute', top: 8, right: 8, minWidth: 18, height: 18, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: '#B7352D' }}><Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '600' }}>{noticeCount > 99 ? '99+' : noticeCount}</Text></View>}
         </TourTarget>
+        {followers && <PlayerFollowerCount header playerId={followers.playerId} onPress={followers.onPress} />}
         <TourTarget id="header.search" onActivate={onSearch}><HomeAction label="Search" icon="search" kind="icon" onPress={onSearch} /></TourTarget>
         {drawer && <TourTarget id="header.menu" onActivate={drawer.openDrawer}><HomeAction label="Menu" icon="menu" kind="icon" onPress={drawer.openDrawer} /></TourTarget>}
       </View>

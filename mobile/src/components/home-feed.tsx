@@ -1,5 +1,6 @@
 import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
+import { Ionicons } from '@expo/vector-icons';
 import { type ReactNode, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { HomeAction } from './home-action';
@@ -9,6 +10,7 @@ import { SwipeCards } from './swipe-cards';
 import { SpotlightCountdown } from './spotlight-countdown';
 import { eventDayParts, eventLocation, firstNameOf, formatEventRange, greetingForNow, resolveFeaturedCta, resolveScheduleEntryCta, type CalendarEvent, type HomePlayer } from '@/lib/home';
 import { type FeedPlayer } from '@/lib/following-feed';
+import type { HomeWeather } from '@/lib/home-weather';
 import { proDate, proRound, type ProMatch, type ProTournament } from '@/lib/pro-padel';
 import { tourMatchesToday } from '@/lib/home-tour-presentation';
 import { tourLevelLabel, tourSource } from '@/lib/home-feed';
@@ -24,22 +26,47 @@ export function FeedPortrait({ name, uri, size = 40 }: { name: string; uri?: str
   </View>;
 }
 
-export function HomeIdentity({ player, loading, onProfile, onRankings }: { player?: HomePlayer | null; loading: boolean; onProfile: () => void; onRankings: () => void }) {
+const weatherIcons = {
+  Clear: 'sunny-outline', Sunny: 'sunny-outline', 'Partly Cloudy': 'partly-sunny-outline', Overcast: 'cloud-outline',
+  Fog: 'cloud-outline', Rain: 'rainy-outline', Snow: 'snow-outline', Thunderstorm: 'thunderstorm-outline',
+} as const;
+
+export function HomeIdentity({ player, loading, onProfile, onRankings, location, weather, onEnableLocation }: {
+  player?: HomePlayer | null; loading: boolean; onProfile: () => void; onRankings: () => void;
+  location: string | null; weather: HomeWeather | null; onEnableLocation?: () => void;
+}) {
   const { width, fontScale } = useWindowDimensions();
   const stacked = width < 360 || fontScale > 1.3;
-  return <View style={[s.identity, stacked && { flexDirection: 'column', alignItems: 'stretch' }]}>
-    <Pressable accessibilityRole="button" accessibilityLabel="View my profile" onPress={onProfile} style={[s.identityPerson, stacked && { flex: undefined }]}>
-      <FeedPortrait name={player?.name || 'Player'} uri={player?.image_url} size={48} />
-      <View style={{ flex: 1, gap: 2 }}>
+  const locationContent = <>
+    <Ionicons name="location-outline" color={location ? b.muted : b.accent} size={14} accessible={false} />
+    <Text numberOfLines={2} style={[s.locationText, !location && { color: b.accent }]}>{location || 'Use location'}</Text>
+  </>;
+  const ranking = player && <Pressable accessibilityRole="button" accessibilityLabel={`SAPA rankings. Rank ${player.rank_label || 'unranked'}, ${player.points == null ? 'unavailable' : player.points} points`} onPress={onRankings} style={s.ranking}>
+    <View style={s.stat}><Text style={s.statValue}>{player.rank_label && player.rank_label !== 'Unranked' ? `#${player.rank_label.replace(/^#/, '')}` : '—'}</Text><Text style={s.statLabel}>SAPA rank</Text></View>
+    <View style={s.statDivider} />
+    <View style={s.stat}><Text style={s.statValue}>{player.points == null ? '—' : Number(player.points).toLocaleString('en-ZA')}</Text><Text style={s.statLabel}>Points</Text></View>
+  </Pressable>;
+  return <View style={[s.identity, stacked && s.identityStacked]}>
+    <View style={s.identityLead}>
+      <Pressable accessibilityRole="button" accessibilityLabel="View my profile" onPress={onProfile}>
+        <FeedPortrait name={player?.name || 'Player'} uri={player?.image_url} size={48} />
+      </Pressable>
+      <View style={s.identityDetails}>
         <Text style={s.meta}>{greetingForNow()}</Text>
-        <Text numberOfLines={1} style={s.name}>{loading && !player ? '…' : firstNameOf(player?.name) || 'Your padel'}</Text>
+        <View style={s.nameRow}>
+          <Pressable accessible={false} onPress={onProfile} style={s.nameButton}>
+            <Text numberOfLines={1} style={s.name}>{loading && !player ? '…' : firstNameOf(player?.name) || 'Your padel'}</Text>
+          </Pressable>
+          {weather && <View accessible accessibilityLabel={`${weather.temp} degrees Celsius, ${weather.condition.toLowerCase()}`} style={s.weather}>
+            <Ionicons name={weather.condition === 'Clear' && !weather.daylight ? 'moon-outline' : weatherIcons[weather.condition]} size={19} color={b.premium} accessible={false} />
+            <Text style={s.weatherTemp}>{weather.temp}°C</Text>
+          </View>}
+        </View>
+        {onEnableLocation ? <Pressable accessibilityRole="button" accessibilityLabel={location ? `${location}. Use device location` : 'Use location'} accessibilityHint="Shows your city and uses an approximate area for local weather" onPress={onEnableLocation} hitSlop={{ bottom: 10 }} style={[s.location, s.locationAction]}>{locationContent}</Pressable>
+          : location && <View style={s.location}>{locationContent}</View>}
       </View>
-    </Pressable>
-    {player && <Pressable accessibilityRole="button" accessibilityLabel={`SAPA rankings. Rank ${player.rank_label || 'unranked'}, ${player.points == null ? 'unavailable' : player.points} points`} onPress={onRankings} style={s.ranking}>
-      <View style={s.stat}><Text style={s.statValue}>{player.rank_label && player.rank_label !== 'Unranked' ? `#${player.rank_label.replace(/^#/, '')}` : '—'}</Text><Text style={s.statLabel}>SAPA rank</Text></View>
-      <View style={s.statDivider} />
-      <View style={s.stat}><Text style={s.statValue}>{player.points == null ? '—' : Number(player.points).toLocaleString('en-ZA')}</Text><Text style={s.statLabel}>Points</Text></View>
-    </Pressable>}
+    </View>
+    {ranking}
   </View>;
 }
 
@@ -236,14 +263,23 @@ export function TourCalendar({ events, onOpen }: { events: ProTournament[]; onOp
 }
 
 const s = StyleSheet.create({
-  identity: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 16, paddingBottom: 20, flexShrink: 0, minHeight: 88 },
-  identityPerson: { flex: 1, minWidth: 0, flexDirection: 'row', gap: 12, alignItems: 'center', minHeight: 48 },
+  identity: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 14, flexShrink: 0, minHeight: 88 },
+  identityStacked: { flexDirection: 'column', alignItems: 'stretch' },
+  identityLead: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  identityDetails: { flex: 1, minWidth: 0 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
+  location: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  locationAction: { minHeight: 24 },
+  locationText: { flexShrink: 1, fontSize: 11, lineHeight: 15, color: b.muted },
+  weather: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0, paddingStart: 8, borderStartWidth: StyleSheet.hairlineWidth, borderStartColor: b.edge },
+  weatherTemp: { color: b.premium, fontSize: 13, fontWeight: '700' },
   portrait: { flexShrink: 0, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: b.surface, borderWidth: 1, borderColor: '#0000001A' },
+  nameButton: { flexShrink: 1, minWidth: 0 },
   name: { color: b.premium, fontSize: 23, lineHeight: 28, fontWeight: '600', letterSpacing: -.5 },
-  ranking: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 8, borderRadius: 12, backgroundColor: b.surface },
-  stat: { alignItems: 'center', gap: 2, paddingHorizontal: 8 },
+  ranking: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4, borderRadius: 12, backgroundColor: b.surface },
+  stat: { alignItems: 'center', gap: 2, paddingHorizontal: 6 },
   statValue: { fontSize: 16, fontWeight: '600', color: b.premium, fontVariant: ['tabular-nums'] },
-  statLabel: { fontSize: 11, color: b.muted },
+  statLabel: { fontSize: 10, color: b.muted },
   statDivider: { width: StyleSheet.hairlineWidth, height: 24, backgroundColor: b.edge },
   section: { marginBottom: 24 },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 44, marginBottom: 8 },

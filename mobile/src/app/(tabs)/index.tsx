@@ -16,6 +16,7 @@ import { FollowingFeedList } from '@/components/following-feed-list';
 import { FeedSection, FollowingRail, HomeIdentity, LocalNowRail, LocalResults, MediaRail, OfficialFipRail, SectionState, SpotlightRail, TourLiveRail, TourResults, TourSpotlight, UpcomingEntries } from '@/components/home-feed';
 import { ObserveReady } from '@/components/observe-ready';
 import { useHomeFeed, type HomeSource } from '@/hooks/use-home-feed';
+import { useHomeConditions } from '@/hooks/use-home-conditions';
 import { useTabScenePadding } from '@/hooks/use-tab-scene-padding';
 import { EMPTY_HOME, profileGaps, resolveFeaturedCta, resolveScheduleEntryCta, type CalendarEvent, type PendingAction } from '@/lib/home';
 import { homeEventState, homeOfficialFipEvents, homeTourEvents, tourPath } from '@/lib/home-feed';
@@ -41,6 +42,8 @@ export default function HomeScreen() {
   const source: HomeSource = tab === 'international' ? 'international' : '4m';
   const following = tab === 'following';
   const feed = useHomeFeed(source, !following);
+  const conditions = useHomeConditions(feed.signedIn, feed.profile.data?.region, feed.clubArea.data);
+  const playerId = feed.profile.data?.id;
   const list = useRef<FlatList<Section>>(null), mounted = useRef(true);
   const local = source === '4m';
   const followedPlayers = (feed.following.data?.followedPlayers ?? []).filter(player => player.source === (local ? 'local' : 'pro'));
@@ -154,7 +157,7 @@ export default function HomeScreen() {
   }
 
   const listHeader = <View style={{ flexShrink: 0 }}>
-        <HomeIdentity player={feed.profile.data} loading={feed.profile.loading} onProfile={() => open('/(tabs)/profile')} onRankings={() => open('/rankings?view=Rankings&source=4m')} />
+        <HomeIdentity player={feed.profile.data} loading={feed.profile.loading} {...conditions} onProfile={() => open('/(tabs)/profile')} onRankings={() => open('/rankings?view=Rankings&source=4m')} />
         <TourTarget id="home.feed" onReveal={() => { if (following) revealFollowing.current(); else list.current?.scrollToOffset({ offset: 0, animated: false }); }} style={{ marginBottom: 16, flexShrink: 0 }}><HomeSourcePicker following value={tab} onChange={setTab} /></TourTarget>
         <ContextualTip chapter="home" style={{ marginBottom: 12 }} />
         {feed.signedIn && <ProfileCompletionBanner missing={profileMissing} onEdit={() => router.push('/edit-profile')} />}
@@ -163,7 +166,7 @@ export default function HomeScreen() {
 
   return <View style={s.page}>
     <ObserveReady ready={following ? !feed.profile.loading : local ? !feed.spotlight.loading : !feed.tour.loading} />
-    <View style={{ paddingTop: insets.top, backgroundColor: b.page }}><HomeHeader onSearch={() => open(local ? '/search' : '/search?source=international')} onNotifications={() => open('/notifications')} /></View>
+    <View style={{ paddingTop: insets.top, backgroundColor: b.page }}><HomeHeader onSearch={() => open(local ? '/search' : '/search?source=international')} onNotifications={() => open('/notifications')} followers={playerId != null ? { playerId: String(playerId), onPress: () => router.push({ pathname: '/followers', params: { playerId: String(playerId) } }) } : undefined} /></View>
     {following ? <FollowingFeedList onTourScrollReady={reveal => { revealFollowing.current = reveal; }} header={listHeader} horizontalPadding={20} bottomPadding={tabPadding} /> : <FlatList ref={list} data={sections} extraData={feed} keyExtractor={section => `${source}:${section}`} renderItem={({ item }) => renderSection(item)}
       initialNumToRender={3} maxToRenderPerBatch={2} windowSize={5} showsVerticalScrollIndicator={false}
       contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 32 : tabPadding }}
