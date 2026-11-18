@@ -12,6 +12,28 @@ function load(file, deps = {}) {
 const tokens = load('src/theme/tokens.ts');
 const native = { Pressable: 'Pressable', View: 'View', Text: 'Text', ScrollView: 'ScrollView', useWindowDimensions: () => ({ width: 360, fontScale: 1 }) };
 const { HomeAction } = load('src/components/home-action.android.tsx', { 'react-native': native, 'expo-symbols': { SymbolView: 'Symbol' }, './home-action.types': load('src/components/home-action.types.ts'), '@/theme/tokens': tokens });
+test('Android declares portrait-screen and Wi-Fi hardware optional after repeated prebuilds', () => {
+  const plugin = './plugins/with-optional-android-hardware';
+  assert.ok(require('../app.json').expo.plugins.includes(plugin));
+  const module = { exports: undefined };
+  vm.runInNewContext(fs.readFileSync(`${plugin}.js`, 'utf8'), {
+    module,
+    require: () => ({ withAndroidManifest: (config, modify) => modify(config) }),
+  });
+  const features = [
+    { $: { 'android:name': 'android.hardware.wifi', 'android:required': 'true' } },
+    { $: { 'android:glEsVersion': '0x00020000', 'android:required': 'true' } },
+  ];
+  const config = { modResults: { manifest: { 'uses-feature': features } } };
+  module.exports(config);
+  module.exports(config);
+  assert.equal(features.length, 3);
+  assert.equal(features[1].$['android:required'], 'true');
+  for (const name of ['android.hardware.screen.portrait', 'android.hardware.wifi']) {
+    assert.equal(features.find((feature) => feature.$['android:name'] === name).$['android:required'], 'false');
+  }
+});
+
 test('Android header icons use one labelled touch target and fire the action immediately', () => {
   for (const [label, icon] of [['Notifications', 'bell'], ['Search', 'search'], ['Menu', 'menu']]) {
     let presses = 0;
