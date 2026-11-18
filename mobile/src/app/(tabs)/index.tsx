@@ -11,6 +11,7 @@ import { ErrorBanner } from '@/components/error-banner';
 import { HomeAction } from '@/components/home-action';
 import { HomeHeader } from '@/components/home-header';
 import { HomeSky } from '@/components/home-sky';
+import { PremierNewsRail } from '@/components/home-premier-news';
 import { TourTarget, ContextualTip, useGuidedTour } from '@/components/guided-tour';
 import { HomeSourcePicker, type HomeFeedTab } from '@/components/home-source-picker';
 import { FollowingFeedList } from '@/components/following-feed-list';
@@ -24,13 +25,14 @@ import { EMPTY_HOME, profileGaps, resolveFeaturedCta, resolveScheduleEntryCta, t
 import { homeEventState, homeOfficialFipEvents, homeTourEvents, tourPath } from '@/lib/home-feed';
 import { upcomingTourEvents } from '@/lib/home-tour-presentation';
 import { selectProMatches, type ProTournament } from '@/lib/pro-padel';
+import { premierNewsIndex } from '@/lib/premier-news';
 import { makeCompanionSchedule } from '@/lib/companion-schedule';
 import { publishCompanionSchedule } from '@/lib/companion';
 import { markPushPromptSeen, requestPushPermission, shouldPromptForPush } from '@/lib/notifications';
 import { openSitePath } from '@/lib/site';
 import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 
-type Section = 'spotlight' | 'shortcuts' | 'now' | 'following' | 'upcoming' | 'results' | 'media' | 'fip';
+type Section = 'spotlight' | 'shortcuts' | 'now' | 'following' | 'upcoming' | 'results' | 'media' | 'fip' | 'news';
 
 export default function HomeScreen() {
   const router = useRouter(), insets = useSafeAreaInsets(), tabPadding = useTabScenePadding();
@@ -66,7 +68,7 @@ export default function HomeScreen() {
   const comingUpEvents = upcomingTourEvents(internationalEvents, liveEvents).map(presentTour);
   const officialEvents = homeOfficialFipEvents(feed.fip.data?.tournaments ?? []);
   const internationalResults = selectProMatches(feed.tour.data?.matches ?? [], null).filter(match => match.status === 'finished' && match.score.length > 0);
-  const sections: Section[] = local ? ['spotlight', 'shortcuts', 'now', 'following', 'upcoming', 'results', 'media'] : ['now', 'shortcuts', 'spotlight', 'following', 'results', 'fip'];
+  const sections: Section[] = local ? ['spotlight', 'shortcuts', 'now', 'following', 'upcoming', 'results', 'media'] : ['now', 'news', 'shortcuts', 'spotlight', 'following', 'results', 'fip'];
 
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => {
@@ -111,6 +113,7 @@ export default function HomeScreen() {
   };
   const openPending = (action: PendingAction) => action.kind === 'profile' ? router.push('/edit-profile') : void openSitePath(action.path);
   const openTour = (event: ProTournament) => open(tourPath(event));
+  const openPremierNews = (url: string) => router.push({ pathname: '/pro/news', params: { url } });
   const refresh = async () => {
     if (refreshing) return;
     setRefreshing(true);
@@ -142,6 +145,10 @@ export default function HomeScreen() {
       case 'following':
         return <FeedSection title="Following" onMore={() => open(`/rankings?view=Following&source=${local ? '4m' : 'pro'}`)}>
           {followedPlayers.length ? <FollowingRail players={followedPlayers} onPlayer={player => open(`${player.source === 'pro' ? '/pro/player' : '/players'}/${player.id}`)} /> : state(feed.following, feed.signedIn ? 'Follow players to see their current rankings here.' : 'Sign in to follow players.')}
+        </FeedSection>;
+      case 'news':
+        return <FeedSection title="Premier Padel news" onMore={() => openPremierNews(premierNewsIndex)}>
+          {feed.news.data?.length ? <PremierNewsRail articles={feed.news.data} onOpen={openPremierNews} /> : state(feed.news, 'Headlines will appear when available.')}
         </FeedSection>;
       case 'upcoming':
         if (!feed.signedIn) return null;

@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { SymbolView } from 'expo-symbols';
 import { Ionicons } from '@expo/vector-icons';
 import { type ReactNode, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { HomeAction } from './home-action';
 import { EventArtwork } from './event-artwork';
 import { EventNotificationBell } from './events/follow-tournament';
@@ -203,8 +203,8 @@ export function LocalResults({ events, onOpen, onWinners }: { events: CalendarEv
 }
 
 export function MediaRail({ albums, onOpen }: { albums: MediaAlbum[]; onOpen: (album: MediaAlbum) => void }) {
-  return <FlatList horizontal data={albums.filter(album => !!album.cover_image_url).slice(0, 6)} keyExtractor={album => album.id} showsHorizontalScrollIndicator={false} contentContainerStyle={s.rail} renderItem={({ item: album }) => <Pressable accessibilityRole="button" accessibilityLabel={`Photos, ${album.title}`} onPress={() => onOpen(album)} style={{ width: 232, gap: 8 }}>
-    <EventArtwork uri={album.cover_image_url} style={{ width: 232, height: 144, borderRadius: 12 }} />
+  return <SwipeCards maxCardWidth={232} items={albums.filter(album => !!album.cover_image_url).slice(0, 6)} itemKey={album => album.id} renderCard={album => <Pressable accessibilityRole="button" accessibilityLabel={`Photos, ${album.title}`} onPress={() => onOpen(album)} style={{ gap: 8 }}>
+    <EventArtwork uri={album.cover_image_url} style={{ width: '100%', height: 144, borderRadius: 12 }} />
     <Text numberOfLines={2} style={s.rowTitle}>{album.title}</Text><Text style={s.small}>{album.photographer_name || 'Around the courts'}</Text>
   </Pressable>} />;
 }
@@ -227,10 +227,10 @@ function TourEventHero({ event, onOpen, live = false, matches = [] }: { event: P
   </View>;
 }
 export function TourSpotlight({ events, onOpen }: { events: ProTournament[]; onOpen: (event: ProTournament) => void }) {
-  return <SwipeCards controls items={events} itemKey={event => String(event.id)} renderCard={event => <TourEventHero event={event} onOpen={onOpen} />} />;
+  return <SwipeCards items={events} itemKey={event => String(event.id)} renderCard={event => <TourEventHero event={event} onOpen={onOpen} />} />;
 }
 export function TourLiveRail({ events, matches = [], onOpen }: { events: ProTournament[]; matches?: ProMatch[]; onOpen: (event: ProTournament) => void }) {
-  return <SwipeCards controls items={events.slice(0, 6)} itemKey={event => String(event.id)} renderCard={event => <TourEventHero event={event} matches={matches} live onOpen={onOpen} />} />;
+  return <SwipeCards items={events.slice(0, 6)} itemKey={event => String(event.id)} renderCard={event => <TourEventHero event={event} matches={matches} live onOpen={onOpen} />} />;
 }
 
 function TourResult({ match, current, onOpen }: { match: ProMatch; current: boolean; onOpen: () => void }) {
@@ -299,7 +299,6 @@ const s = StyleSheet.create({
   spotlightName: { fontSize: 16, lineHeight: 21, color: b.premium, fontWeight: '600', letterSpacing: -.2 },
   date: { color: b.accent, fontSize: 13, lineHeight: 18, fontWeight: '500' },
   spotlightFooter: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: b.edge, paddingTop: 4, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  rail: { gap: 12 },
   nowCard: { flexDirection: 'row', gap: 12, padding: 16, borderRadius: 12, backgroundColor: '#08251D', overflow: 'hidden', borderLeftWidth: 3, borderLeftColor: '#D12F3B' },
   rowTitle: { fontSize: 14, lineHeight: 19, fontWeight: '600', color: b.premium },
   followMini: { padding: 10, gap: 4, alignItems: 'center', backgroundColor: b.elevated, borderRadius: 12 },

@@ -6,6 +6,7 @@ import { fetchFeatured, fetchHappeningNow, fetchPendingPayments, fetchPlayer, fe
 import { fetchFollowingFeed } from '@/lib/following-feed';
 import { fetchPublicClubArea } from '@/lib/clubs';
 import { fetchMediaAlbums } from '@/lib/media';
+import { fetchPremierNews } from '@/lib/premier-news';
 import { fetchProSnapshot } from '@/lib/pro-padel';
 import { fetchPlayerMatches } from '@/lib/matches';
 import { fetchLiveTournaments } from '@/lib/pro-padel-live';
@@ -86,6 +87,7 @@ export function useHomeFeed(source: HomeSource, enabled = true) {
   const happening = useHomeResource(owner, active, 'happening', 60000, () => fetchHappeningNow(true), local);
   const results = useHomeResource(owner, active, 'results:all-divisions', 180000, () => fetchRecentResults(true), local);
   const media = useHomeResource(owner, active, 'media', 300000, () => fetchMediaAlbums(undefined, 6), local);
+  const news = useHomeResource(owner, active, 'premier-news', 900000, fetchPremierNews, !local);
   const tour = useHomeResource(owner, active, 'tour', 120000, () => fetchProSnapshot('tour'), !local);
   const fixtures = useHomeResource(owner, active, 'fixtures', 60000, () => fetchProSnapshot('fixtures'), !local);
   const live = useHomeResource(owner, active, 'live', 60000, fetchLiveTournaments, !local);
@@ -100,7 +102,7 @@ export function useHomeFeed(source: HomeSource, enabled = true) {
   }, [active, local, live.refresh]);
   const refresh = async () => {
     await Promise.allSettled([profile, clubArea, completion, schedule, payments, following, matches,
-      ...(local ? [spotlight, happening, results, media] : [tour, fixtures, live, fip])].map(resource => resource.refresh(true)));
+      ...(local ? [spotlight, happening, results, media] : [tour, fixtures, live, fip, news])].map(resource => resource.refresh(true)));
   };
-  return { completion, owner, active, signedIn, profile, clubArea, schedule, payments, following, matches, spotlight, happening, results, media, tour, fixtures, live, fip, tourPresentation, refresh };
+  return { completion, owner, active, signedIn, profile, clubArea, schedule, payments, following, matches, spotlight, happening, results, media, news, tour, fixtures, live, fip, tourPresentation, refresh };
 }
