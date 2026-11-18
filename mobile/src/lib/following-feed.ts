@@ -40,9 +40,11 @@ function mainRanking(value: unknown): MainRanking | null {
 export function feedRankingChange(item: Pick<FeedItem, 'kind' | 'path' | 'payload'>) {
   if (item.kind !== 'ranking') return null;
   const beforeRank = rankingPosition(item.payload.before_rank), rank = rankingPosition(item.payload.rank);
-  if (beforeRank === null || rank === null || !(Math.abs(beforeRank - rank) > 5
-    || [10, 20, 100].some(threshold => beforeRank > threshold && rank <= threshold))) return null;
-  const movement = { beforeRank, rank, change: beforeRank - rank };
+  if (beforeRank === null || rank === null || rank >= 500) return null;
+  const change = beforeRank - rank;
+  const enteredMilestone = [10, 100].some(threshold => beforeRank > threshold && rank <= threshold);
+  if (change < 25 && !enteredMilestone) return null;
+  const movement = { beforeRank, rank, change };
   if (item.path.startsWith('/pro/player/')) return { ...movement, label: 'FIP ranking', points: typeof item.payload.points === 'number' && Number.isFinite(item.payload.points) ? item.payload.points : null, scope: 'fip' };
   const main = item.payload.ranking_source === 'sapa_main_v1' ? mainRanking(item.payload) : null;
   return main ? { ...movement, label: `SAPA ${main.label}`, points: main.points, scope: main.scope } : null;
