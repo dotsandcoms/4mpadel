@@ -1,9 +1,13 @@
 import { readAll } from './playersData.js';
+import { normaliseOrganisationField, organisationFields, organisationImageExtension } from './organisationProfileFields.js';
 
 export const ENTITY_FIELDS = {
-  organisations: ['name','contact_email','contact_phone','logo_url','website_url'],
+  organisations: organisationFields,
   federations: ['name','short_name','slug','about','website_url','brand_color','contact_email','contact_phone','whatsapp_number','logo_url','cover_image_url','rankedin_events_org_id','rankedin_rankings_org_id','status','verified','is_national_governing_body','socials','personnel','committees'],
 };
+const projection = kind => ['id', 'status', ...ENTITY_FIELDS[kind],
+  ...(kind === 'organisations' ? ['created_by','slug','federation_id','verified','sapa_sanctioned'] : []),
+].filter((value,index,fields)=>fields.indexOf(value)===index).join(',');
 const normal = value => String(value || '').trim().toLowerCase();
 const check = context => { if (context.signal?.aborted || context.isCurrent?.() === false) throw new Error('The workspace changed. Reopen this record.'); };
 const tableFor = kind => { if (!ENTITY_FIELDS[kind]) throw new Error('Unknown organisation workspace.'); return kind; };
@@ -54,7 +58,7 @@ export async function verifyEntityAccess(client, kind, context) {
 export async function loadEntities(client, kind, context) {
   const access = await verifyEntityAccess(client,kind,context);
   const rows = await readAll(() => {
-    let query = client.from(tableFor(kind)).select('*').order('name').order('id');
+    let query = client.from(tableFor(kind)).select(projection(kind)).order('name').order('id');
     if (access.ids) query = query.in('id',access.ids);
     if (access.ids && kind === 'organisations') query=query.eq('status','approved');
     if (context.scopeId !== 'all') query = query.eq('id',context.scopeId.slice(4));
@@ -73,7 +77,7 @@ export function entityPatch(kind, original, draft) {
   for (const key of ENTITY_FIELDS[kind]) {
     if (entityEqual(draft[key] ?? '',original[key] ?? '')) continue;
     let value = draft[key] ?? '';
-    if (kind === 'organisations' && key !== 'logo_url') value = String(value).trim();
+    if (kind === 'organisations') value = normaliseOrganisationField(key,value);
     if (kind === 'federations') {
       if(['verified','is_national_governing_body'].includes(key)){patch[key]=!!value;continue;}
       if(key==='status'){if(!['draft','published'].includes(value))throw new Error('Choose a supported federation status.');patch[key]=value;continue;}
@@ -91,6 +95,9 @@ export function entityPatch(kind, original, draft) {
 
 export async function saveEntityProfile(client,kind,original,draft,context) {
   const patch = entityPatch(kind,original,draft);
+  const media = Object.entries(context.files || {});
+  if (media.length && kind !== 'organisations') throw new Error('Choose a supported organisation image.');
+  const files = media.map(([field,file]) => ({field,file,extension:organisationImageExtension(field,file)}));
   const access = await verifyEntityAccess(client,kind,context);
   const requireWrite = async grant => {
     if(grant.superAdmin)return;
@@ -100,10 +107,25 @@ export async function saveEntityProfile(client,kind,original,draft,context) {
   };
   await requireWrite(access);
   if (context.scopeId !== 'all' && context.scopeId.slice(4) !== String(original.id)) throw new Error('This record is outside the selected workspace.');
-  const {data:fresh,error} = await client.from(kind).select('*').eq('id',original.id).single(); check(context);
-  const keys=Object.keys(patch);
+  const {data:fresh,error} = await client.from(kind).select(projection(kind)).eq('id',original.id).single(); check(context);
+  const keys=[...new Set([...Object.keys(patch),...files.map(file=>file.field)])];
   if(error || !fresh || String(fresh.id)!==String(original.id) || fresh.status!==original.status || keys.some(key=>!entityEqual(fresh[key]??null,original[key]??null))) throw new Error('This profile changed. Close and reload before saving.');
   if(!keys.length)return fresh;
+  for (const {field,file,extension} of files) {
+    const auth = await verifyEntityAccess(client,kind,context);
+    await requireWrite(auth);
+    check(context);
+    const folder = field === 'logo_url' ? 'logos' : 'covers';
+    const path = `organisations/${folder}/${original.id}_${crypto.randomUUID()}.${extension}`;
+    const store = client.storage.from('profile-pics');
+    context.onAttempt?.();
+    const {error: uploadError} = await store.upload(path,file,{upsert:false,contentType:file.type,cacheControl:'3600'});
+    check(context);
+    if (uploadError) throw new Error('The image upload did not complete. The profile was not changed.');
+    const url = store.getPublicUrl(path).data?.publicUrl;
+    if (!url) throw new Error('The uploaded image could not be linked. The profile was not changed.');
+    patch[field] = normaliseOrganisationField(field,url);
+  }
   await requireWrite(await verifyEntityAccess(client,kind,context)); check(context);
   const finalActor=await client.auth.getUser();check(context);
   if(finalActor.error||finalActor.data?.user?.id!==context.userId||finalActor.data?.user?.email!==access.user.email)throw new Error('Your signed-in account changed. Reopen this workspace.');
@@ -111,7 +133,7 @@ export async function saveEntityProfile(client,kind,original,draft,context) {
   query=original.status==null?query.is('status',null):query.eq('status',original.status);
   for(const key of keys)query=original[key]==null?query.is(key,null):query.eq(key,typeof original[key]==='object'?JSON.stringify(original[key]):original[key]);
   context.onAttempt?.();
-  const saved=await query.select('*').single();
+  const saved=await query.select(projection(kind)).single();
   if(saved.error || !saved.data || String(saved.data.id)!==String(original.id) || keys.some(key=>!entityEqual(saved.data[key],patch[key])))throw new Error('Save outcome could not be confirmed. Reload before trying again.');
   return saved.data;
 }

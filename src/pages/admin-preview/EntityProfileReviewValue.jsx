@@ -6,6 +6,10 @@ export default function EntityProfileReviewValue({field,value}){
  }
  if(field==='personnel')return Array.isArray(value)&&value.filter(Boolean).length?<ul>{value.filter(Boolean).map((person,index)=><li key={index}>{person.name||person.title||'Unnamed person'} — {person.role||person.position||'Role not set'}</li>)}</ul>:<span>No personnel</span>;
  if(field==='committees')return Array.isArray(value)&&value.filter(Boolean).length?<ul>{value.filter(Boolean).map((committee,index)=><li key={index}><strong>{committee.name||committee.title||'Unnamed committee'}</strong>: {Array.isArray(committee.members)?committee.members.join(', '):committee.membersText||committee.members||'No members'}</li>)}</ul>:<span>No committees</span>;
+ if(field==='contacts' || field==='sponsors')return Array.isArray(value)&&value.length
+   ? <ul>{value.filter(Boolean).map((entry,index)=><li key={index}><strong>{entry.name||'Unnamed'}</strong>
+     {['role','email','phone','whatsapp','tier','logo_url'].filter(key=>entry[key]).map(key=><span key={key}>{' · '}{entry[key]}</span>)}</li>)}</ul>
+   : <span>No {field}</span>;
  if(field==='socials')return <ul>{['instagram','facebook','tiktok','youtube'].map(platform=><li key={platform}><strong>{platform[0].toUpperCase()+platform.slice(1)}</strong>: {value?.[platform]||'Not set'}</li>)}</ul>;
  return <span>{value==null||value===''?'Not set':String(value)}</span>;
 }

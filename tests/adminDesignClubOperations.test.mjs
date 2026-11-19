@@ -10,25 +10,28 @@ export const application={id:'club-a',name:'Fixture venue',status:'pending',cont
  city:'Fixture city',group_id:null,updated_at:'2026-11-02T00:00:00Z',website_url:null,logo_url:null};
 const claim={id:'claim-a',club_id:'club-a',status:'pending',requester_email:'claimant@example.invalid',requester_player_id:8,full_name:'Claimant',
  primary_role:'owner',created_at:'2026-11-01T00:00:00Z'};
-const group={id:'group-a',name:'Fixture group',status:'published',share_logo:true,share_website:true,logo_url:'https://example.invalid/group.png',website_url:'https://example.invalid/'};
+const group={id:'group-a',name:'Fixture group',slug:'fixture-group',status:'published',share_logo:true,share_website:true,logo_url:'https://example.invalid/group.png',website_url:'https://example.invalid/'};
 if(['claim','stale-claim','queue'].includes(fixture.mode))application.status='unclaimed';
 const member={id:'member-a',club_id:'club-a',player_id:9,user_email:'member@example.invalid',role:'staff',created_at:'2026-11-02T00:00:00Z',players:{name:'Original member'}};
 const now='2026-11-01T00:00:00Z';
-const database={clubs:[application,{...application,id:'club-b',name:'Other venue',status:'published'}],club_groups:[group],
+const database={organisations:[{id:'org-a',name:'Fixture organiser',status:'approved'}],club_organisations:[],clubs:[application,{...application,id:'club-b',name:'Other venue',status:'published'}],club_groups:[group],
  club_claim_requests:[claim,{...claim,id:'claim-b',club_id:'club-b',full_name:'Other claimant'}],club_claim_invites:[],
  club_members:[member,{...member,id:'member-b',club_id:'club-b',players:{name:'Other member'}}],
  players:[{id:7,name:'Applicant',email:'applicant@example.invalid'},{id:8,name:'Claimant',email:'claimant@example.invalid'},{id:10,name:'New teammate',email:'teammate@example.invalid'}]};
+if (fixture.mode==='group-branding') for (const club of database.clubs) club.group_id=group.id;
 fixture.data=database;
 const base=value=>typeof value==='object'&&value!==null?JSON.stringify(value):String(value);
 export const client={
  auth:{async getUser(){return {data:{user:actor}}},async signInWithOtp(params){fixture.calls.push(['otp',params]);return {data:{}}}},
- async rpc(name){fixture.calls.push(['rpc',name]);return {data:name==='is_super_admin'?fixture.mode!=='denied':true}},
+ async rpc(name){fixture.calls.push(['rpc',name]);return {data:name==='is_super_admin'?fixture.mode!=='denied'&&!fixture.revoked:true}},
+ storage:{from(bucket){return {async upload(path,file,options){fixture.calls.push(['upload',bucket,path,file.type,options]);return {data:{path}}},getPublicUrl(path){return {data:{publicUrl:'https://fixture.invalid/'+path}}}}}},
  functions:{async invoke(name,args){fixture.calls.push(['function',name,args.body]);return {data:{success:true}}}},
  from(table){
     const predicates=[]; let operation, patch, start=0, end=Infinity, projection;
     function select(row){
       const result=Object.fromEntries(projection.split(',').filter(field=>field in row).map(field=>[field,row[field]]));
       if(table==='club_claim_requests'&&projection.includes('clubs('))result.clubs=database.clubs.find(club=>club.id===row.club_id);
+      if(table==='club_organisations'&&projection.includes('organisations('))result.organisations=database.organisations.find(org=>org.id===row.organisation_id);
       return result;
     }
     function execute(single=false){
@@ -66,12 +69,13 @@ before(async () => {
       import ClubManagement from './src/pages/admin-preview/ClubManagement.jsx';
       import ClubInvitations from './src/pages/admin-preview/ClubInvitations.jsx';
       import ClubGroupsView from './src/pages/admin-preview/ClubGroupsView.jsx';
+      import ClubOrganisations from './src/pages/admin-preview/ClubOrganisations.jsx';
       import ClubClaimsQueue from './src/pages/admin-preview/ClubClaimsQueue.jsx';
       import {liveClubDecisionApi,liveClubMemberApi,liveClubMemberAddApi,liveClubInvitationApi} from './src/pages/admin-preview/liveClubOperations.js';
       import {application,client} from 'fixture-club';
       const context={client,scopeId:'all',session:{user:{id:'fixture-account'}},permissions:{role:'super_admin'}};
       const {mode}=window.fixture;
-      const component=mode==='queue'? <ClubClaimsQueue {...context}/>: mode==='group'? <ClubGroupsView {...context}/> : mode==='invitation'? <ClubInvitations {...context} clubId={application.id} creationApi={liveClubInvitationApi}/>
+      const component=mode==='relationship'? <ClubOrganisations {...context} club={application}/> : mode==='queue'? <ClubClaimsQueue {...context}/>: mode.startsWith('group')? <ClubGroupsView {...context}/> : mode==='invitation'? <ClubInvitations {...context} clubId={application.id} creationApi={liveClubInvitationApi}/>
         : mode.startsWith('application')||mode==='owner-failure'||mode==='denied' ? <ClubApplicationDecision {...context} record={application} decisionApi={liveClubDecisionApi}/>
         : <ClubManagement {...context} clubId={application.id} decisionApi={liveClubDecisionApi} memberApi={liveClubMemberApi} addApi={liveClubMemberAddApi}/>;
       createRoot(document.getElementById('root')).render(component);
@@ -91,6 +95,8 @@ async function withPage(mode, run) {
   const page = await browser.newPage();
   page.setDefaultTimeout(6000);
   try {
+    await page.setRequestInterception(true);
+    page.on('request', request => /^https?:/.test(request.url()) ? request.abort() : request.continue());
     await page.setContent('<main id="root"></main>');
     await page.evaluate(mode => {
       window.fixture={mode,calls:[]};
@@ -246,5 +252,93 @@ test('pending queue reviews and approves only the selected venue claim', async (
     await text(page,'No pending claims match this view.');
     await page.locator('input[aria-label="Search pending claims"]').fill('Other venue');
     await text(page,'Other venue');
+  });
+});
+
+test('club organisation link and unlink change the exact association only after review', async () => {
+  await withPage('relationship', async page => {
+    await click(page,'Load linked organisations');
+    await dropdown(page,'Approved organisation','Fixture organiser');
+    await click(page,'Review link');
+    await expectNoMutation(page);
+    await click(page,'Confirm link');
+    await text(page,'Organisation linked.');
+    await click(page,'Review unlink');
+    assert.deepEqual(await writes(page), [['insert','club_organisations',[],{club_id:'club-a',organisation_id:'org-a'}]]);
+    await click(page,'Confirm unlink');
+    await text(page,'Organisation unlinked.');
+    assert.deepEqual((await writes(page)).at(-1), ['delete','club_organisations',['synthetic-new'],null]);
+  });
+});
+
+test('club organisation confirmation fails closed when platform authority is revoked', async () => {
+  await withPage('relationship', async page => {
+    await click(page,'Load linked organisations');
+    await dropdown(page,'Approved organisation','Fixture organiser');
+    await click(page,'Review link');
+    await page.evaluate(() => { window.fixture.revoked=true; });
+    await click(page,'Confirm link');
+    await text(page,'Current super-admin authority is required.');
+    await expectNoMutation(page);
+  });
+});
+
+async function fillGroup(page, field, value) {
+  await page.$eval('dialog [name="'+field+'"]', (node, value)=>{
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(node,value);
+    node.dispatchEvent(new Event('input',{bubbles:true}));
+  },value);
+}
+
+test('platform creates and edits a club group with a reviewed media upload', async () => {
+  await withPage('group', async page => {
+    await click(page,'Create club group');
+    await fillGroup(page,'name','Synthetic group');
+    await click(page,'Generate group slug');
+    await page.$eval('dialog input[type=file]', node=>{
+      const transfer=new DataTransfer();
+      transfer.items.add(new File(['fixture'],'group-logo.webp',{type:'image/webp'}));
+      node.files=transfer.files;
+      node.dispatchEvent(new Event('change',{bubbles:true}));
+    });
+    await click(page,'Review group changes');
+    await expectNoMutation(page);
+    await click(page,'Confirm group changes');
+    await click(page,'Done');
+    await text(page,'Synthetic group');
+    const writesAfterCreate=await writes(page);
+    assert.deepEqual(writesAfterCreate.map(([action,table])=>[action,table]), [['upload','profile-pics'],['insert','club_groups']]);
+    assert.match(writesAfterCreate[0][2],/^club-groups\/.+\/logo-.+\.webp$/);
+    assert.equal(writesAfterCreate[1][3].slug,'synthetic-group');
+    await page.evaluate(()=>[...document.querySelectorAll('summary')].find(node=>node.textContent.includes('Synthetic group')).click());
+    await page.evaluate(()=>{
+      const group=[...document.querySelectorAll('details.clubs-group')].find(node=>node.querySelector('summary').textContent.includes('Synthetic group'));
+      [...group.querySelectorAll('button')].find(node=>node.textContent.trim()==='Edit club group').click();
+    });
+    await fillGroup(page,'city','Cape Town');
+    await click(page,'Review group changes');
+    await click(page,'Confirm group changes');
+    await text(page,'Club group saved.');
+    const change=(await writes(page)).at(-1);
+    assert.equal(change[0],'update');
+    assert.equal(change[1],'club_groups');
+    assert.deepEqual(change[2],[writesAfterCreate[1][3].id]);
+    assert.equal(change[3].city,'Cape Town');
+  });
+});
+
+test('reviewed bulk group branding reports a partial result and preserves a changed venue', async () => {
+  await withPage('group-branding', async page => {
+    await page.waitForSelector('.clubs-group summary');
+    await page.click('.clubs-group summary');
+    await click(page,'Review shared branding');
+    await text(page,'Fixture venue');
+    await text(page,'Other venue');
+    await page.evaluate(()=>{window.fixture.data.clubs[1].updated_at='2030-01-01T11:00:00Z';});
+    await click(page,'Confirm shared branding');
+    await text(page,'Only 1 venue updates were confirmed.');
+    const clubs=await page.evaluate(()=>window.fixture.data.clubs);
+    assert.equal(clubs[0].logo_url,'https://example.invalid/group.png');
+    assert.equal(clubs[1].logo_url,null);
   });
 });
