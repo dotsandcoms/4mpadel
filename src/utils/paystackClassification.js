@@ -1,3 +1,5 @@
+import { isEventCheckoutReference } from './eventPaymentReference.js';
+
 const metadataObject = value => {
     if (value && typeof value === 'object' && !Array.isArray(value)) return value;
     if (typeof value === 'string') {
@@ -29,7 +31,7 @@ export function classifyPaystackTransaction({ reference = '', metadata, matchedL
         return { paymentType: 'event_entry_fee', licenseType: null };
     }
     const explicitLicense = ['full', 'temporary'].includes(meta.license_type) ? meta.license_type : null;
-    const eventPayment = /^(REGEV-|MANUAL-(?!ADMIN-))/.test(reference)
+    const eventPayment = isEventCheckoutReference(reference)
         || meta.source === 'manual_event' || (!!meta.event_id && !explicitLicense);
     if (eventPayment) return { paymentType: 'event_entry_fee', licenseType: null };
 
