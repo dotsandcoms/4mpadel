@@ -1,6 +1,7 @@
 // Native adapter for website ManualEventRegistration.jsx. Paystack confirmation
 // remains owned by the existing confirm-manual-payment and webhook functions.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { nativeAppReference, nativePaystackReference, nativeCheckoutReturn, nativeCheckoutDetailsMatch } from './references.mjs';
 
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
@@ -14,16 +15,16 @@ const feeFor = (event: any, division: any) => event.early_bird_ends_at && new Da
 
 Deno.serve(async req => {
   if (req.method === 'GET' && new URL(req.url).pathname.endsWith('/native-event-checkout/return')) {
-    const params = new URL(req.url).searchParams;
-    const eventId = params.get('event_id') || '';
-    const reference = params.get('reference') || params.get('trxref') || '';
-    if (!/^[1-9]\d*$/.test(eventId) || !/^MOBILE-[a-f0-9]{8}-[a-f0-9-]{36}$/i.test(reference)) return json({ error: 'Invalid payment return.' }, 400);
-    const target = new URL('fourmpadel://events/register');
-    target.searchParams.set('id', eventId);
-    target.searchParams.set('pay_ref', reference);
-    target.searchParams.set('payment_return', '1');
-    if (params.get('mode') === 'pay') target.searchParams.set('mode', 'pay');
-    return new Response(null, { status: 302, headers: { Location: target.href, 'Cache-Control': 'no-store' } });
+    try {
+      const target = await nativeCheckoutReturn(new URL(req.url).searchParams, (reference: string) => {
+        const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+        return checked(admin.rpc('resolve_native_checkout_reference', { p_reference: reference }));
+      });
+      if (!target) return json({ error: 'Invalid payment return.' }, 400);
+      return new Response(null, { status: 302, headers: { Location: target.href, 'Cache-Control': 'no-store' } });
+    } catch {
+      return json({ error: 'Payment return is temporarily unavailable. Open your event entry to check the payment.' }, 503);
+    }
   }
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -314,7 +315,10 @@ Deno.serve(async req => {
     const secret = Deno.env.get(input.isTest === true ? 'PAYSTACK_SECRET_KEY_TEST' : 'PAYSTACK_SECRET_KEY');
     if (!secret) fail('Checkout is not configured for this payment mode. Contact the organiser.');
     const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-    const reference = `MOBILE-${user.id.slice(0, 8)}-${input.attemptId}`;
+    const reference = nativeAppReference(user.id, input.attemptId);
+    // Keep resolving already-created references if named generation is disabled.
+    const suggestedReference = Deno.env.get('NATIVE_NAMED_PAYSTACK_REFERENCES') === 'off'
+      ? reference : nativePaystackReference(event);
     const eventUrl = `https://4mpadel.co.za/calendar/${event.slug || eventId}`;
     const metadata = { source: 'manual_event', is_test: input.isTest === true, event_id: eventId,
       event_name: event.event_name, is_weekly: !!event.is_weekly, series_id: event.series_id || null,
@@ -322,27 +326,31 @@ Deno.serve(async req => {
       event_url: eventUrl, registration_rows: rows, solo_link_updates: soloLinks,
       division_names: quote.divisionNames.join(', '), primary_partner_name: [...new Set(partnerNames)].join(', ') || 'TBD',
       event_dates: event.event_dates || '', event_venue: [event.venue, event.city].filter(Boolean).join(', '),
-      division_entry_fees: divisionFees, commerce, reference };
-    const existing = await checked(admin.from('payments').select('status, amount, metadata, is_test, player_id, event_id').eq('reference', reference).maybeSingle());
-    if (existing) {
-      if (existing.player_id !== profile.id || existing.event_id !== eventId || norm(existing.metadata?.registrant_email) !== email) fail('This checkout belongs to another account. Start again.');
-      if (existing.status === 'success') return json({ registered: true, quote });
-      if (existing.amount !== total || existing.is_test !== (input.isTest === true)
-        || JSON.stringify(existing.metadata?.registration_rows) !== JSON.stringify(rows)
-        || JSON.stringify(existing.metadata?.covers) !== JSON.stringify(covers)) fail('This checkout attempt has changed. Start again.');
-      if (existing.metadata?.native_authorization_url) return json({ authorizationUrl: existing.metadata.native_authorization_url, reference, quote });
-    } else await checked(admin.from('payments').insert({ player_id: profile.id, event_id: eventId, amount: total,
-      currency: 'ZAR', status: 'processing', payment_type: 'event_entry_fee', payment_method: 'paystack',
-      reference, is_test: input.isTest === true, metadata }));
+      division_entry_fees: divisionFees, commerce };
+    const saved = await checked(admin.rpc('prepare_native_checkout_payment', {
+      p_app_reference: reference, p_gateway_reference: suggestedReference, p_player_id: profile.id,
+      p_event_id: eventId, p_amount: total, p_is_test: input.isTest === true, p_metadata: metadata,
+    }));
+    if (!saved || saved.player_id !== profile.id || saved.event_id !== eventId || norm(saved.metadata?.registrant_email) !== email) {
+      fail('This checkout belongs to another account. Start again.');
+    }
+    if (saved.status === 'success') return json({ registered: true, quote });
+    if (!nativeCheckoutDetailsMatch(saved, rows, covers, total, input.isTest === true)) fail('This checkout attempt has changed. Start again.');
+    if (saved.metadata?.native_authorization_url) return json({ authorizationUrl: saved.metadata.native_authorization_url, reference, quote });
     const gateway = await fetch('https://api.paystack.co/transaction/initialize', { method: 'POST',
       headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, amount: Math.round(total * 100), currency: 'ZAR', reference,
-        callback_url: `${url}/functions/v1/native-event-checkout/return?event_id=${eventId}${payOnly ? '&mode=pay' : ''}`, metadata,
+      body: JSON.stringify({ email, amount: Math.round(total * 100), currency: 'ZAR', reference: saved.reference,
+        callback_url: `${url}/functions/v1/native-event-checkout/return?event_id=${eventId}${payOnly ? '&mode=pay' : ''}`, metadata: saved.metadata,
         channels: ['card', 'eft', 'bank_transfer', 'apple_pay'] }) });
     const result = await gateway.json();
-    if (!gateway.ok || !result.status || !result.data?.authorization_url) fail('Could not start checkout. Please try again.');
-    await checked(admin.from('payments').update({ metadata: { ...metadata, native_authorization_url: result.data.authorization_url } }).eq('reference', reference));
-    return json({ authorizationUrl: result.data.authorization_url, reference, quote });
+    if (!gateway.ok || !result.status || !result.data?.authorization_url || result.data.reference !== saved.reference) {
+      fail('Could not start checkout. Please try again.');
+    }
+    const authorizationUrl = await checked(admin.rpc('save_native_checkout_url', {
+      p_reference: saved.reference, p_url: result.data.authorization_url,
+    }));
+    if (!authorizationUrl) fail('Could not save checkout. Please try again.');
+    return json({ authorizationUrl, reference, quote });
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : 'Registration could not be completed.' }, 400);
   }

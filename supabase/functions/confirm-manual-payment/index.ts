@@ -223,8 +223,8 @@ serve(async (req: Request) => {
             });
         }
 
-        const { reference } = await req.json();
-        if (!reference) {
+        const { reference: requestedReference } = await req.json();
+        if (typeof requestedReference !== 'string' || !requestedReference) {
             return new Response(JSON.stringify({ error: 'Missing reference' }), {
                 status: 400,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -243,6 +243,12 @@ serve(async (req: Request) => {
         }
 
         const supabaseAdmin = createClient(supabaseUrl, serviceKey);
+        let reference = requestedReference;
+        if (/^MOBILE-[a-f0-9]{8}-[a-f0-9-]{36}$/i.test(reference)) {
+            const { data: mapping, error } = await supabaseAdmin.rpc('resolve_native_checkout_reference', { p_reference: reference });
+            if (error) throw new Error('Could not resolve your checkout. Please try again.');
+            reference = mapping?.gateway_reference || reference;
+        }
         const { data: payment, error: payError } = await supabaseAdmin
             .from('payments')
             .select('*')
