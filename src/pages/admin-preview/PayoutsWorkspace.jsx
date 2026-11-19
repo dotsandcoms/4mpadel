@@ -8,9 +8,11 @@ import { canReadFinanceOverview } from './financeOverviewData.js';
 import { loadRecordedPayouts, filterRecordedPayouts } from './payoutsData.js';
 import RecordLoading from './RecordLoading.jsx';
 import DatePicker from './DatePicker.jsx';
+import PayoutRequestWorkspace from './PayoutRequestWorkspace.jsx';
 import './FinanceOverview.css';
+import './LicensesWorkspace.css';
 
-export default function PayoutsWorkspace({ session, permissions, scopeId, client = supabase, refreshRevision = 0 }) {
+function RecordedPayouts({ session, permissions, scopeId, client = supabase, refreshRevision = 0 }) {
   const allowed = canReadFinanceOverview(session, permissions, scopeId);
   const [state, setState] = useState({ loading: true });
   const [reload, setReload] = useState(0);
@@ -77,4 +79,24 @@ export default function PayoutsWorkspace({ session, permissions, scopeId, client
       {selected && <PayoutDetails row={selected} onClose={() => setSelected(null)}/>}
     </>}
   </section>;
+}
+
+export default function PayoutsWorkspace(props) {
+  const query = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search);
+  const initialEventId = props.initialEventId ?? query.get('event');
+  const initialOrganisationId = props.initialOrganisationId ?? query.get('organisation');
+  const link = JSON.stringify([initialOrganisationId, initialEventId]);
+  const [selection, setSelection] = useState(null);
+  const view = selection?.link === link ? selection.view : initialEventId ? 'requests' : 'recorded';
+  const setView = next => setSelection({ link, view: next });
+  const platform = canReadFinanceOverview(props.session, props.permissions, props.scopeId);
+  const requestView = () => <PayoutRequestWorkspace key={link} client={supabase} {...props} initialEventId={initialEventId} initialOrganisationId={initialOrganisationId} />;
+  if (!platform) return requestView();
+  return <div className="fo-root">
+    <nav className="fo-report-actions" aria-label="Payout views">
+      <button type="button" className="ap-secondary" aria-pressed={view === 'recorded'} onClick={() => setView('recorded')}>Recorded payouts</button>
+      <button type="button" className="ap-secondary" aria-pressed={view === 'requests'} onClick={() => setView('requests')}>Payout requests</button>
+    </nav>
+    {view === 'recorded' ? <RecordedPayouts {...props} /> : requestView()}
+  </div>;
 }

@@ -10,9 +10,11 @@ import { financeReportExcel } from './financeExport.js';
 import { saveAs } from 'file-saver';
 import FinanceTypeDetails from './FinanceTypeDetails.jsx';
 import RecordLoading from './RecordLoading.jsx';
+import EventSettlementOverview from './EventSettlementOverview.jsx';
+import FinanceUserLedger from './FinanceUserLedger.jsx';
 
 const money = cents => new Intl.NumberFormat('en-ZA', {style:'currency',currency:'ZAR'}).format(cents / 100);
-export default function FinanceOverview({session, permissions, scopeId, client = supabase, refreshRevision = 0}) {
+function ReceiptOverview({session, permissions, scopeId, client = supabase, refreshRevision = 0}) {
   const [state,setState] = useState({loading:true});
   const [reload,setReload] = useState(0);
   const [draft,setDraft] = useState({mode:'all',year:String(new Date().getFullYear()),month:financeDate(new Date().toISOString()).slice(0,7),from:'',to:''});
@@ -92,5 +94,20 @@ export default function FinanceOverview({session, permissions, scopeId, client =
       {summaryView && <FinanceTypeDetails groupedSummary summaryKind={summaryView==='event' ? 'event':'player'} key={`${summaryView}-${JSON.stringify(period)}-${reload}`} data={state.data} linkCache={linkCache} period={period} client={client} session={session} permissions={permissions} scopeId={scopeId} onClose={()=>setSummaryView(null)}/>}
       {detailType!==null && <FinanceTypeDetails key={`${detailType}-${JSON.stringify(period)}-${reload}`} type={detailType} data={state.data} linkCache={linkCache} period={period} client={client} session={session} permissions={permissions} scopeId={scopeId} onClose={()=>setDetailType(null)}/>}
     </>}
+  </div>;
+}
+
+export default function FinanceOverview(props) {
+  const [view, setView] = useState('receipts');
+  const platform = canReadFinanceOverview(props.session, props.permissions, props.scopeId);
+  if (!platform) return <EventSettlementOverview client={supabase} {...props} />;
+  return <div className="fo-root">
+    <nav className="fo-report-actions" aria-label="Finance report views">
+      <button type="button" className="ap-secondary" aria-pressed={view === 'receipts'} onClick={() => setView('receipts')}>Receipts and refunds</button>
+      <button type="button" className="ap-secondary" aria-pressed={view === 'settlements'} onClick={() => setView('settlements')}>Event settlements</button>
+      <button type="button" className="ap-secondary" aria-pressed={view === 'users'} onClick={() => setView('users')}>User ledger</button>
+    </nav>
+    {view === 'receipts' ? <ReceiptOverview {...props} /> : view === 'users'
+      ? <FinanceUserLedger client={supabase} {...props} /> : <EventSettlementOverview client={supabase} {...props} />}
   </div>;
 }

@@ -1,6 +1,7 @@
 import SearchableDropdown from "../../components/SearchableDropdown";
 import RecordLoading from './RecordLoading.jsx';
 import PaystackGateway from './PaystackGateway.jsx';
+import { canReadPlatformPaystack } from './platformPaystack.js';
 import React,{useEffect,useRef,useState} from 'react';
 import {saveAs} from 'file-saver';
 import {recordedPaymentsExcel} from './paymentsExport.js';
@@ -24,7 +25,22 @@ function PaymentIdentity({row}) {
 
 export default function PaymentsWorkspace(props) {
   const [view,setView]=useState('recorded');
-  return <div><nav className="fo-report-actions" aria-label="Payment views" style={{marginBottom:24}}><button className="ap-secondary" aria-pressed={view==='recorded'} onClick={()=>setView('recorded')}>Recorded payments</button><button className="ap-secondary" aria-pressed={view==='gateway'} onClick={()=>setView('gateway')}>Paystack gateway</button></nav>{view==='gateway' ? <PaystackGateway {...props} client={props.client || supabase}/> : <RecordedPayments {...props}/>}</div>;
+  const [gatewayEnabled,setGatewayEnabled]=useState(true);
+  const hasLedger = canReadFinanceOverview(props.session, props.permissions, props.scopeId);
+  const hasGateway = canReadPlatformPaystack(props.session, props.permissions, props.scopeId);
+  if (!hasLedger && hasGateway) return <PaystackGateway {...props} client={props.client || supabase}/>;
+  return <div className="fo-root">
+    <nav className="fo-report-actions" aria-label="Payment views">
+      <button className="ap-secondary" aria-pressed={view==='recorded'} onClick={()=>setView('recorded')}>Recorded payments</button>
+      {hasGateway && <button className="ap-secondary" aria-pressed={view==='gateway'} onClick={()=>setView('gateway')}>Paystack gateway</button>}
+      {hasGateway && <button className="ap-secondary" aria-pressed={view==='settings'} onClick={()=>setView('settings')}>Gateway settings</button>}
+    </nav>
+    {view==='recorded' ? <RecordedPayments {...props}/> : view==='settings' ? <section className="ap-section" style={{padding:18}}>
+      <h1>Gateway settings</h1><label><input type="checkbox" checked={gatewayEnabled} onChange={event=>setGatewayEnabled(event.target.checked)}/> Load Paystack in this workspace</label>
+    </section> : gatewayEnabled ? <PaystackGateway {...props} client={props.client || supabase}/> : <section className="ap-section">
+      <h1>Paystack gateway</h1><p>Gateway loading is paused.</p><button className="ap-secondary" onClick={()=>setGatewayEnabled(true)}>Resume gateway loading</button>
+    </section>}
+  </div>;
 }
 
 function RecordedPayments({session,permissions,scopeId,client=supabase,refreshRevision=0}) {
@@ -55,7 +71,7 @@ function RecordedPayments({session,permissions,scopeId,client=supabase,refreshRe
       .finally(()=>clearTimeout(timeout));
     return ()=>{clearTimeout(timeout);controller.abort();};
   },[allowed,client,session?.user?.id,permissions?.role,scopeId,reload,refreshRevision]);
-  if(!allowed)return <section className="ap-section"><h1>Payments / Paystack</h1><p>This first batch requires super-admin access in All 4M Padel. Delegated Payments access is not yet enabled. No payment records have been requested.</p></section>;
+  if(!allowed)return <section className="ap-section"><h1>Payments / Paystack</h1><p>Recorded payments require platform super-admin access. Use Finance reports for your organisation’s event payments.</p></section>;
   const invalid=filters.from && filters.to && filters.from>filters.to;
   const rows=invalid ? []:sortRecordedPayments(filterRecordedPayments(state.rows || [],filters),sort);
   const pages=Math.max(1,Math.ceil(rows.length/10)),current=Math.min(page,pages);
@@ -77,7 +93,7 @@ function RecordedPayments({session,permissions,scopeId,client=supabase,refreshRe
     <header className="fo-heading"><div><p className="ap-kicker">Money / Payments</p><h1>Payments / Paystack</h1><p>Review payment records stored in 4M.</p></div><div className="fo-report-actions"><button className="ap-secondary" disabled={state.loading || Boolean(state.error) || Boolean(invalid) || !rows.length || exporting} onClick={exportPayments}>{exporting ? 'Preparing Excel…':'Export Excel'}</button><button className="ap-secondary" disabled={state.loading} onClick={()=>setReload(n=>n+1)}>Refresh records</button></div></header>
     {exportStatus && <p role="status" className="fo-note">{exportStatus}</p>}
     <p className="fo-scope">Read-only · Recorded Paystack payments, not a live gateway balance or complete gateway history. Only records explicitly marked with payment method “paystack” are included.</p>
-    <p className="fo-note">Gateway verification, single/bulk sync and refunds are not enabled in this preview yet. The existing admin remains unchanged. Legacy records with no test/live flag are available under “Unspecified”.</p>
+    <p className="fo-note">Use Paystack gateway to verify matched live event checkouts. Refunds remain in Event Manager. Legacy records with no test/live flag are available under “Unspecified”.</p>
     <div className="fo-ledger-filters">
       <label className="fo-search"><input aria-label="Search recorded payments" placeholder="Search player, event, reference, payment type or ID…" value={filters.query} onChange={e=>update('query',e.target.value)}/></label>
       <label className="fo-status-filter">Status<SearchableDropdown value={filters.status} onChange={e=>update('status',e.target.value)}><option value="">All statuses</option>{statuses.map(status=><option key={status} value={status}>{status}</option>)}</SearchableDropdown></label>

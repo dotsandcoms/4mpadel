@@ -5,8 +5,8 @@ import { gatewayComparisonLabel } from './gatewayComparison.js';
 export async function gatewayPageExcel(data, filters) {
   const rows = data?.transactions;
   if (!rows?.length) throw new Error('No gateway transactions to export.');
-  if (data.environment !== 'test' || !Number.isSafeInteger(data.pagination?.page) || data.pagination.page < 1
-    || rows.some(row => row.environment !== 'test' || !Number.isSafeInteger(row.amountMinor) || row.amountMinor < 0)) {
+  if (!['live', 'test'].includes(data.environment) || !Number.isSafeInteger(data.pagination?.page) || data.pagination.page < 1
+    || rows.some(row => row.environment !== data.environment || !Number.isSafeInteger(row.amountMinor) || row.amountMinor < 0)) {
     throw new Error('Invalid gateway export data.');
   }
   const { default: ExcelJS } = await import('exceljs');
@@ -17,7 +17,7 @@ export async function gatewayPageExcel(data, filters) {
   context.addRows([
     ['4M Padel — Paystack gateway page'],
     ['Scope', 'Current page only. Not the full gateway history.'],
-    ['Environment', 'Test'], ['Page', data.pagination.page],
+    ['Environment', data.environment === 'test' ? 'Test' : 'Live'], ['Page', data.pagination.page],
     ['Records exported', rows.length], ['Matching records reported by gateway', data.pagination.total],
     ['Start date (SA)', String(filters.from || 'Unbounded')], ['End date (SA)', String(filters.to || 'Unbounded')],
     ['Status', String(filters.status || 'All statuses')],

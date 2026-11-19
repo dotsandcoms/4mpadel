@@ -1,8 +1,8 @@
 import { supabase } from '../supabaseClient';
 
 // No banking values may be logged, persisted in browser storage, or sent to emails.
-export async function organisationBanking(action, organisationId, data = {}) {
-    const result = await supabase.rpc('organisation_banking', {
+export async function organisationBanking(action, organisationId, data = {}, client = supabase) {
+    const result = await client.rpc('organisation_banking', {
         p_action: action, p_org_id: organisationId || null, p_data: data,
     });
     if (result.error) {
