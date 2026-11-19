@@ -4,7 +4,7 @@ import { ArrowRight, CalendarDays, ChevronRight, Search, Layers, Radio, CircleCh
 import { AnimatedCount } from './PlayersWorkspace';
 import { dateLabel } from './playersData';
 import { tierTone } from './calendarData';
-import { activeEventEntries, registrationWindow, compareEventDates } from './eventManagerData';
+import { activeEventEntries, registrationWindow, compareEventDates, eventManagerListed } from './eventManagerData';
 import './EventManagerDashboard.css';
 import { supabase } from '../../supabaseClient';
 import { loadEventSnapshots } from './eventSnapshots';
@@ -14,23 +14,25 @@ const Badge = ({ tone = 'neutral', children }) => <span className={`ap-status ap
 export default function EventManagerDashboard({ events, registrations, go, canReadSnapshots = false, client = supabase, session, scopeId = 'all' }) {
   const [query, setQuery] = useState('');
   const [phase, setPhase] = useState('Upcoming');
+  const [showBronze, setShowBronze] = useState(false);
   const [page, setPage] = useState(1);
   const list = useRef(null);
   const [snapshotState, setSnapshotState] = useState({ key: '', data: {}, error: null });
   const [retry, setRetry] = useState(0);
   const [completionState, setCompletionState] = useState({ loading: true, map: new Map() });
+  const listedEvents = useMemo(() => canReadSnapshots ? events.filter(event => eventManagerListed(event, showBronze)) : events, [canReadSnapshots, events, showBronze]);
   useEffect(() => {
     let alive = true; setCompletionState({ loading: true, map: new Map() });
     if (!canReadSnapshots) { setCompletionState({ loading: false, map: new Map() }); return; }
     (async () => {
       const { data, error } = await client.auth.getUser();
       if (error || !session?.user?.id || data?.user?.id !== session.user.id) throw new Error('Sign in again to load completion status.');
-      const map = await loadManagedEventCompletions(client);
+      const map = await loadManagedEventCompletions(client, listedEvents.map(event => event.id));
       if (alive) setCompletionState({ loading: false, map });
     })().catch(error => { if (alive) setCompletionState({ loading: false, map: new Map(), error: error.message }); });
     return () => { alive = false; };
-  }, [client, session?.user?.id, scopeId, canReadSnapshots, events, retry]);
-  const managedEvents = events.map(event => ({ ...event, management_completed_at: completionState.map.get(Number(event.id)) || null }));
+  }, [client, session?.user?.id, scopeId, canReadSnapshots, listedEvents, retry]);
+  const managedEvents = listedEvents.map(event => ({ ...event, management_completed_at: completionState.map.get(Number(event.id)) || null }));
   const stage = event => managedEventStage(event);
   const entries = useMemo(() => {
     const result = new Map();
@@ -48,18 +50,19 @@ export default function EventManagerDashboard({ events, registrations, go, canRe
     if (!canReadSnapshots) return;
     const controller = new AbortController();
     const ids = new Set(JSON.parse(snapshotKey).map(String));
-    loadEventSnapshots(client, events.filter(event => ids.has(String(event.id))), controller.signal)
+    loadEventSnapshots(client, listedEvents.filter(event => ids.has(String(event.id))), controller.signal)
       .then(data => { if (!controller.signal.aborted) setSnapshotState({ key: snapshotKey, data, error: null }); })
       .catch(error => { if (!controller.signal.aborted) setSnapshotState({ key: snapshotKey, data: {}, error: error.message }); });
     return () => controller.abort();
-  }, [snapshotKey, client, events, canReadSnapshots, retry]);
+  }, [snapshotKey, client, listedEvents, canReadSnapshots, retry]);
   const filter = value => { setPhase(value); setPage(1); if (list.current) list.current.scrollTop = 0; };
-  const stats = [['All events', '', events.length], ['In progress', 'In progress', managedEvents.filter(e => stage(e) === 'In progress').length], ['Upcoming', 'Upcoming', managedEvents.filter(e => stage(e) === 'Upcoming').length], ['Completed', 'Completed', managedEvents.filter(e => stage(e) === 'Completed').length]];
+  const stats = [['All events', '', listedEvents.length], ['In progress', 'In progress', managedEvents.filter(e => stage(e) === 'In progress').length], ['Upcoming', 'Upcoming', managedEvents.filter(e => stage(e) === 'Upcoming').length], ['Completed', 'Completed', managedEvents.filter(e => stage(e) === 'Completed').length]];
   return <div className="em-workspace">
     <header className="ap-page-heading"><div><p className="ap-kicker">Operate / Event manager</p><h1>Event manager</h1><p>Teams, registrations, draws and settlement — organised by event.</p></div><button className="ap-secondary" onClick={() => go('calendar')}><CalendarDays size={16} /> Calendar & setup <ArrowRight size={16} /></button></header>
     <div className="em-stats">{stats.map(([title, value, count]) => <button key={title} className="ap-section" data-state={value || 'all'} aria-pressed={phase === value} onClick={() => filter(value)}><span className="em-stat-label">{title}<span className="em-stat-icon" aria-hidden="true">{value === 'In progress' ? <Radio size={20} /> : value === 'Upcoming' ? <CalendarDays size={20} /> : value === 'Completed' ? <CircleCheck size={20} /> : <Layers size={20} />}</span></span><strong>{completionState.loading || completionState.error ? '—' : <AnimatedCount value={count} />}</strong><small>{phase === value ? <>Showing events <Check size={14} /></> : <>View events <ArrowRight size={14} /></>}</small></button>)}</div>
     <section className="ap-section em-guide"><div><h2>Inside each event</h2><p>Open an event to review its overview, players and teams, registrations, draws, income statement and activity log.</p></div><small>Completed is an explicit Event Manager status, independent of calendar dates.</small></section>
     <div className="ap-filter-bar"><label className="ap-filter-search"><Search size={17} /><span className="ap-visually-hidden">Search events</span><input value={query} onChange={e => { setQuery(e.target.value); setPage(1); }} placeholder="Search event, organiser, venue or city" /></label><label>Event status <SearchableDropdown value={phase} onChange={e => filter(e.target.value)}><option value="">All statuses</option>{['Upcoming', 'In progress', 'Awaiting completion', 'Completed', 'Active'].map(value => <option key={value}>{value}</option>)}</SearchableDropdown></label></div>
+    {canReadSnapshots && <label className="em-bronze-filter"><input type="checkbox" role="switch" checked={showBronze} onChange={event => { setShowBronze(event.target.checked); setPage(1); }} /> Show Bronze events</label>}
     {completionState.error && <p role="alert">Completion status unavailable: {completionState.error} <button className="ap-text-button" onClick={() => setRetry(value => value + 1)}>Retry status</button></p>}
     <p className="em-note">Registration-fee snapshot · same basis as the existing Event Manager. Collected / billed is separate from the refund-adjusted income statement. Licences count unique players.</p>
     {snapshotState.key === snapshotKey && snapshotState.error && <p role="alert">Snapshot unavailable: {snapshotState.error} <button className="ap-text-button" onClick={() => setRetry(value => value + 1)}>Retry snapshots</button></p>}

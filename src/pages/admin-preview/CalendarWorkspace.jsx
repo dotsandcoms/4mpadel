@@ -123,9 +123,9 @@ function EventDrawer({ event, client, onClose, onAction, canManageEvents }) {
   </Dialog>;
 }
 
-export default function CalendarWorkspace({ session, scopeId = 'all', client = supabase, canManageEvents = false, DetailsDialog = AdvancedEventDetailsDialog, CreationDialog = CreateEventDialog, QuickCreationDialog = CreateQuickEventDialog, QuickDetailsDialog = QuickEventDetailsDialog }) {
+export default function CalendarWorkspace({ session, permissions, scope, scopeId = 'all', client = supabase, canManageEvents = false, DetailsDialog = AdvancedEventDetailsDialog, CreationDialog = CreateEventDialog, QuickCreationDialog = CreateQuickEventDialog, QuickDetailsDialog = QuickEventDetailsDialog }) {
   const [params, setParams] = useSearchParams();
-  const [data, setData] = useState(null), [error, setError] = useState(''), [refresh, setRefresh] = useState(0), [loading, setLoading] = useState(true);
+  const [storedData, setData] = useState(null), [error, setError] = useState(''), [refresh, setRefresh] = useState(0), [loading, setLoading] = useState(true);
   const [overrides, setOverrides] = useState({}), [action, setAction] = useState(null), [notice, setNotice] = useState(''), [exporting, setExporting] = useState(false);
   const listRef = useRef(null);
   const today = localToday();
@@ -133,12 +133,29 @@ export default function CalendarWorkspace({ session, scopeId = 'all', client = s
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(params.get('month') || '') ? params.get('month') : today.slice(0, 7);
   const update = values => setParams(previous => { const next = new URLSearchParams(previous); Object.entries(values).forEach(([k, v]) => v ? next.set(k, v) : next.delete(k)); return next; });
   const sessionId = session?.user?.id;
+  const scopeRevision = JSON.stringify({ permissions, scope, scopeId });
+  const readAccess = permissions !== undefined || client === supabase;
+  const data = storedData?.key === `${sessionId}:${scopeRevision}` ? storedData.result : null;
   useEffect(() => {
     if (!sessionId) { setLoading(false); return; }
     const controller = new AbortController(); setLoading(true); setError('');
-    loadCalendar(client, controller.signal).then(result => { if (!controller.signal.aborted) setData(result); }).catch(() => { if (!controller.signal.aborted) setError('The calendar could not be loaded. Check your access and try again.'); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    loadCalendar(client, controller.signal, readAccess ? JSON.parse(scopeRevision) : undefined).then(result => { if (!controller.signal.aborted) setData({ key: `${sessionId}:${scopeRevision}`, result }); }).catch(error => {
+      if (!controller.signal.aborted) { setData(null); setError(error.message || 'The calendar could not be loaded. Check your access and try again.'); }
+    }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [sessionId, client, refresh]);
+  }, [sessionId, client, refresh, scopeRevision, readAccess]);
+  const create = params.get('create');
+  useEffect(() => {
+    if (create !== 'full' && create !== 'quick') return;
+    if (sessionId && canManageEvents) setAction({ mode: create === 'quick' ? 'create-quick' : 'create' });
+    else setNotice('Event creation is unavailable in this workspace.');
+    setParams(previous => {
+      const next = new URLSearchParams(previous);
+      next.delete('create');
+      next.delete('calendarEvent');
+      return next;
+    }, { replace: true });
+  }, [canManageEvents, create, sessionId, setParams]);
   const events = useMemo(() => [...(data?.events || []).map(e => overrides[e.id] || e), ...Object.values(overrides).filter(e => String(e.id).startsWith('demo-'))], [data, overrides]);
   const filters = Object.fromEntries(['q', 'phase', 'tier', 'visibility', 'source', 'flag', 'sort'].map(k => [k, params.get(`cal_${k}`) || '']));
   const filtered = filterCalendar(events, filters, today);

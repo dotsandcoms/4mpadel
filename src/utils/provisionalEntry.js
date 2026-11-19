@@ -1,5 +1,12 @@
 import { createPendingRegistrations } from './adminEventRegistration.js';
 import { registrationMatchesDivision } from './registrationDivision.js';
+
+export function registrationPaymentLink(event, registration) {
+  if (!registration?.pay_token || !event?.id || event.allow_payments === false || (event.payment_method && event.payment_method !== 'platform')) return null;
+  const url = new URL(`/calendar/${encodeURIComponent(event.slug || event.id)}`, 'https://4mpadel.co.za');
+  url.searchParams.set('pay_token', registration.pay_token);
+  return url.href;
+}
 // Existing admin-add semantics, shared by both interfaces.
 export async function addProvisionalEntries({ client, event, division, players, registrations, adminEmail, note = '', sendEmail, logEventActivity }) {
   if (!adminEmail || !division?.id || !division.name || !event?.id) throw new Error('A signed-in administrator, event and division are required.');
@@ -28,7 +35,7 @@ export async function addProvisionalEntries({ client, event, division, players, 
         eventDates: event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString(undefined, {weekday:'short',year:'numeric',month:'short',day:'numeric'}) : ''),
         venue: [event.venue,event.city].filter(Boolean).join(', '), paid: false,
         amountDue: new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR'}).format(Number(division.entry_fee || 0)),
-        eventUrl: `https://4mpadel.co.za/calendar/${event.slug || event.id}`,
+        eventUrl: registrationPaymentLink(event, data[index]) || `https://4mpadel.co.za/calendar/${event.slug || event.id}`,
       });
       if (result?.success === false) warnings.push(`Confirmation email could not be sent to ${email}.`);
     } catch { warnings.push(`Confirmation email could not be sent to ${email}.`); }

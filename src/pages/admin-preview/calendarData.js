@@ -1,17 +1,32 @@
 import { readAll } from './playersData.js';
+import { resolveEventWorkspace, scopeCalendarQuery } from '../../utils/adminCalendarScope.js';
 
 // Deliberately independent of CalendarManager: that module promotes results on load.
 // Only SELECTs belong here. No sync, promotion, RPC, storage upload or database writes.
-export async function loadCalendar(client, signal) {
-  const events = await readAll(() => client.from('calendar').select('*').order('id'), signal);
+export async function loadCalendar(client, signal, options) {
+  const access = options
+    ? resolveEventWorkspace(options.permissions, options.scope?.id || options.scopeId || 'all', 'calendar')
+    : { scopeId: 'all', allowedEvents: [] };
+  if (!access) throw new Error('Choose an authorised Calendar workspace.');
+  const events = await readAll(() => {
+    let query = scopeCalendarQuery(client.from('calendar').select('*'), access.scopeId);
+    if (access.allowedEvents.length) query = query.in('id', access.allowedEvents);
+    return query.order('id');
+  }, signal);
   const warnings = [];
-  const optional = async (table, fields, order = 'id') => {
-    try { return await readAll(() => client.from(table).select(fields).order(order), signal); }
+  const optional = async (table, fields, values, key = 'id') => {
+    try {
+      const rows = [];
+      for (let offset = 0; offset < values.length; offset += 100) {
+        rows.push(...await readAll(() => client.from(table).select(fields).in(key, values.slice(offset, offset + 100)).order(key), signal));
+      }
+      return rows;
+    }
     catch (error) { if (signal?.aborted) throw error; warnings.push(`${table.replaceAll('_', ' ')} could not be read. Related information is unavailable.`); return []; }
   };
   const [organisations, audit] = await Promise.all([
-    optional('organisations', 'id,name,logo_url'),
-    optional('event_creation_audit', 'event_id,creator_name,creator_email,created_at', 'event_id'),
+    optional('organisations', 'id,name,logo_url', [...new Set(events.map(event => event.organisation_id).filter(Boolean))]),
+    optional('event_creation_audit', 'event_id,creator_name,creator_email,created_at', events.map(event => event.id), 'event_id'),
   ]);
   return { events: events.map(e => ({ ...e, _organisation: organisations.find(o => String(o.id) === String(e.organisation_id)), _audit: audit.find(a => String(a.event_id) === String(e.id)) })), warnings };
 }

@@ -1,4 +1,12 @@
 // Pure presentation helpers; no database mutations or inferred financial totals.
+const MANAGED_TIERS = new Set(['silver', 'gold', 'super gold', 's gold', 'major']);
+
+export function eventManagerListed(event, showBronze) {
+  if (event.finance_managed !== true) return false;
+  const tier = String(event.sapa_status || '').trim().toLowerCase();
+  return MANAGED_TIERS.has(tier) || (showBronze && tier === 'bronze');
+}
+
 export function compareEventDates(a, b) {
   const left = String(a.start_date || '');
   const right = String(b.start_date || '');

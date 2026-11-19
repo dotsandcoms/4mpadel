@@ -63,3 +63,5 @@
 .em-table .ap-text-button {display:block;width:100%;max-width:100%;min-width:0;text-align:left;white-space:normal;overflow-wrap:anywhere;line-height:1.5;}
 .em-workspace .ap-filter-bar :is(select, .ap-select-trigger) {margin-left:8px;padding:8px;border:1px solid var(--ap-line);background:var(--ap-surface);color:var(--ap-ink);}
 @media(max-width:700px) {.em-stats {grid-template-columns:repeat(2,minmax(0,1fr));}.em-stats>button {padding:16px;}}
+.em-bronze-filter { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; font-weight: 600; }
+.em-bronze-filter input { width: 18px; height: 18px; accent-color: #53731e; }
