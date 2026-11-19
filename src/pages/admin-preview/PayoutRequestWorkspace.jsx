@@ -49,11 +49,8 @@ function BankingEditor({ summary, onReview, onCancel }) {
   </form>;
 }
 
-function EventPayoutForm({ client, organisationId, data, onReview, initialEventId }) {
-  const [eventId, setEventId] = useState(() => {
-    const id = Number(initialEventId);
-    return Number.isSafeInteger(id) && id > 0 && data.events.some(event => Number(event.id) === id) ? String(id) : '';
-  });
+function EventPayoutForm({ client, organisationId, data, onReview, selectedEventId, onEventChange }) {
+  const eventId = data.events.some(event => String(event.id) === String(selectedEventId)) ? String(selectedEventId) : '';
   const [amount, setAmount] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [manual, setManual] = useState({ amount:'', note:'', paidAt:southAfricanToday() });
@@ -83,7 +80,7 @@ function EventPayoutForm({ client, organisationId, data, onReview, initialEventI
     });
   }
   return <section className="lw-editor"><h2>Request event payout</h2>
-    <label className="lw-field"><span>Event</span><SearchableDropdown value={eventId} onChange={event => { setEventId(event.target.value); setAmount(''); setConfirmed(false); }}>
+    <label className="lw-field"><span>Event</span><SearchableDropdown value={eventId} onChange={event => { onEventChange(event.target.value); setAmount(''); setConfirmed(false); }}>
       <option value="">Select a manual event</option>{data.events.map(event => <option key={event.id} value={String(event.id)}>{event.event_name}</option>)}
     </SearchableDropdown></label>
     {eventId && !reply && <p role="status">Verifying current event receipts…</p>}
@@ -125,6 +122,8 @@ function OrganisationPayouts({ client, session, organisationId, revision, initia
   const [reply, setReply] = useState(null);
   const [refresh, setRefresh] = useState(0);
   const [editing, setEditing] = useState(false);
+  const [eventSelection, setEventSelection] = useState(null);
+  const selectedEventId = eventSelection?.initialEventId === initialEventId ? eventSelection?.eventId : initialEventId;
   const [action, setAction] = useState(null);
   const [revealed, setRevealed] = useState(null);
   const [notice, setNotice] = useState('');
@@ -209,7 +208,7 @@ function OrganisationPayouts({ client, session, organisationId, revision, initia
           onVerified={confirm} onCancel={() => { if (!running.current) setAction(null); }} allowEnrollment />}
       </div>}
     </section>
-    {!editing && !action && <EventPayoutForm client={client} organisationId={organisationId} data={data} onReview={review} initialEventId={initialEventId} />}
+    {!editing && !action && <EventPayoutForm client={client} organisationId={organisationId} data={data} onReview={review} selectedEventId={selectedEventId} onEventChange={eventId => setEventSelection({ initialEventId, eventId })} />}
     <section className="lw-editor"><header className="lw-actions"><div><h2>Payout requests</h2><p>4M processes bank transfers manually.</p></div>
       <button className="ap-secondary" disabled={Boolean(action)} onClick={() => { setRevealed(null); setRefresh(n => n + 1); }}>Refresh requests</button></header>
       {revealed && <div className="lw-review" data-private="true"><header className="lw-actions"><h3>Confidential payout destination</h3><button className="ap-secondary" onClick={() => setRevealed(null)}>Hide account details</button></header>

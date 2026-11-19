@@ -29,11 +29,12 @@ function select(table) {
     const rows=()=> (tables[table] || []).filter(row => predicates.every(fn=>fn(row)));
     const execute=(mode='all')=>{
         const result=rows();
+        if(update && table==='calendar') counters.push(['update',table,result.map(r=>r.id),update]);
         if(remove) tables[table]=tables[table].filter(row=>!result.includes(row));
         if(update) for(const row of result) Object.assign(row,update);
         return {data: structuredClone(mode==='single'?result[0]||null:result.slice(from,to+1))};
     };
-    return { select(){return this}, eq(key,value){predicates.push(row=>String(row[key])===String(value));return this}, neq(key,value){predicates.push(row=>row[key]!==value);return this},
+    return { select(){return this}, eq(key,value){predicates.push(row=>(row[key] !== null && typeof row[key] === 'object' ? JSON.stringify(row[key]) : String(row[key]))===String(value));return this}, neq(key,value){predicates.push(row=>row[key]!==value);return this},
         in(key,ids){predicates.push(row=>ids.includes(row[key]));return this}, is(key,val){predicates.push(row=>row[key]===val);return this},
         order(){return this}, limit(){return this}, abortSignal(){return this},
         update(value){update=value;return this}, delete(){remove=true;return this},
@@ -127,7 +128,8 @@ async function withPage(mode, permissions, scopeId, run) {
         await page.setContent('<main id="root"></main>');
         await page.evaluate((mode,permissions,scopeId)=>{
             window.fixture={mode,permissions,scopeId,calls:[]};
-            if (!crypto.randomUUID) Object.defineProperty(crypto,'randomUUID',{value:()=> '11111111-1111-4111-8111-111111111111'});
+            let nextId=0;
+            if (!crypto.randomUUID) Object.defineProperty(crypto,'randomUUID',{value:()=> `11111111-1111-4111-8111-${String(++nextId).padStart(12,'0')}`});
         },mode,permissions,scopeId);
         await page.addScriptTag({content:bundle});
         await run(page);
@@ -260,5 +262,46 @@ test('an exact recorded native Paystack checkout is reconciled through the exist
         const references='MOBILE-ROCKETS-CUP-17949878596810000000000';
         const actions=(await calls(page)).filter(([name])=>['event_checkout_state','confirm-manual-payment'].includes(name));
         assert.deepEqual(actions,[['event_checkout_state',{p_reference:references}],['confirm-manual-payment',{reference:references}]]);
+    });
+});
+
+test('payout banking replacement and cancellation require separate reviewed MFA actions',async()=>{
+    await withPage('payout-admin',platform,'org:our-org',async page=>{
+        await click(page,'Replace banking details');
+        await input(page,'input[name="bank_name"]','Replacement Bank');
+        await input(page,'input[name="account_holder"]','Fixture Account');
+        await input(page,'input[name="account_number"]','0000000123');
+        await input(page,'input[name="confirmation"]','0000000123');
+        await input(page,'input[name="branch_code"]','001234');
+        await click(page,'Select account type');await click(page,'Savings','[role="option"]');
+        await click(page,'I confirm these are the organisation','label');
+        await click(page,'Review banking details');
+        assert.equal((await calls(page)).some(([name,args])=>name==='organisation_banking'&&args.p_action==='save'),false);
+        await verifyMfa(page);await includesText(page,'Replacement Bank');
+        await click(page,'Cancel request');await verifyMfa(page);await includesText(page,'Payout status updated.');
+        const writes=(await calls(page)).filter(([name,args])=>name==='organisation_banking'&&['save','resolve'].includes(args.p_action));
+        assert.equal(writes[0][1].p_org_id,'our-org');
+        assert.equal(writes[0][1].p_data.expected_version,'account-version');
+        assert.equal(writes[0][1].p_data.account_type,'savings');
+        assert.equal(writes[1][1].p_data.status,'cancelled');
+        assert.equal(writes[1][1].p_data.request_id,'existing-payout');
+    });
+});
+test('recording and removing an interim payout changes only the selected event after review',async()=>{
+    await withPage('payout-admin',platform,'org:our-org',async page=>{
+        await click(page,'Select a manual event');await click(page,'Our fixture event','[role="option"]');
+        await click(page,'Recorded interim payments','summary');
+        await input(page,'input[type="number"][step="0.01"]','45');
+        await input(page,'input[type="date"]','2026-08-02');
+        await click(page,'Review recorded payment');
+        assert.equal((await calls(page)).some(([name])=>name==='update'),false);
+        await click(page,'Confirm recorded payout change');await includesText(page,'Interim payment recorded.');
+        await click(page,'Recorded interim payments','summary');
+        await click(page,'Remove recorded payment');await click(page,'Confirm recorded payout change');
+        await includesText(page,'Interim payment removed.');
+        const updates=(await calls(page)).filter(([name])=>name==='update');
+        assert.deepEqual(updates.map(([,table,ids])=>[table,ids]),[['calendar',[14]],['calendar',[14]]]);
+        assert.equal(updates[0][3].organiser_interim_payments[0].amount,45);
+        assert.deepEqual(updates[1][3].organiser_interim_payments,[]);
     });
 });

@@ -33,15 +33,15 @@ const event = {
 };
 function query(table) {
   let rows = table === 'organisation_members' ? [
-    { role: 'admin', user_email: email, organisations: north },
-    { role: 'owner', user_email: 'other@example.invalid', organisations: south },
-  ] : table === 'calendar' || table === 'events' ? [event] : [];
+    { role: 'admin', user_email: email, organisation_id: north.id, organisations: north },
+    { role: 'owner', user_email: 'other@example.invalid', organisation_id: south.id, organisations: south },
+  ] : table === 'calendar' || table === 'events' ? [event] : table === 'organisations' ? [north, south] : [];
   if (table === 'admin_sidebar_permissions' && !tenant()) rows = [{ email, role: 'super_admin' }];
   let fields = '';
   let single = false;
   const builder = {
     select(value) { fields = value; return builder; },
-    eq(key, value) { rows = rows.filter(row => row[key] === value); return builder; },
+    eq(key, value) { rows = rows.filter(row => row[key] === value || (key === 'id' && String(row.id) === String(value))); return builder; },
     in(key, values) { rows = rows.filter(row => values.map(String).includes(String(row[key]))); return builder; },
     order() { return builder; },
     range(start, end) { rows = rows.slice(start, end + 1); return builder; },
@@ -94,6 +94,13 @@ export const supabase = {
     if (name === 'messaging_api') {
       if (action === 'status') return result({ enabled: true, rulesAccepted: true, groupsEnabled: true, interactive: true });
       return result({ rows: [], next: null });
+    }
+    if (name === 'can_manage_event') return result(Number(args.p_event_id) === event.id);
+    if (name === 'is_organisation_admin') return result(args.p_organisation_id === north.id);
+    if (name === 'event_finance_overview_source') return result({events:[event],registrations:[],payments:[],divisions:[],refunds:[]});
+    if (name === 'organisation_banking') {
+      if (action === 'summary') return result({ saved: false });
+      if (action === 'list') return result({ requests: [], can_process: !tenant() });
     }
     if (name === 'list_push_broadcasts_page') return result({ items: [], total: 0, page: 1 });
     return result([]);
@@ -363,4 +370,27 @@ test('the old Player URL opens the original Players workspace and preserves the 
   const page = await open(t, '/admin-preview/player?view=directory');
   await route(page, '/admin-preview/players?view=directory');
   await heading(page, 'Players');
+});
+
+
+test('the Event Manager payout button opens the exact organisation and event for an organisation admin', async t => {
+  const page = await open(t, '/admin-preview/event?event=101&tab=statement', 'tenant');
+  await heading(page, 'North open');
+  await clickText(page, '.ap-main button', 'Open payout requests');
+  await route(page, '/admin-preview/payouts?organisation=north-fixture&event=101');
+  await heading(page, 'Organiser payouts');
+  await page.waitForFunction(() => window.fixtureCalls.some(call => call[0] === 'rpc'
+    && call[1] === 'organisation_banking' && call[2].p_org_id === 'north-fixture'));
+  assert.equal(await page.evaluate(() => window.fixtureCalls.some(call => call[0] === 'rpc'
+    && call[1] === 'organisation_banking' && call[2].p_org_id === 'south-fixture')), false);
+});
+
+test('an organisation profile opens its own banking workspace in the request view', async t => {
+  const page = await open(t, '/admin-preview/organisations', 'platform');
+  await heading(page, 'Organisations');
+  await clickText(page, 'tr:first-child button', 'View profile');
+  await clickText(page, 'dialog[open] button', 'Banking and payouts');
+  await route(page, '/admin-preview/payouts?organisation=north-fixture');
+  await heading(page, 'Organiser payouts');
+  assert.equal(await page.$eval('nav[aria-label="Payout views"] button[aria-pressed="true"]', node => node.textContent), 'Payout requests');
 });

@@ -87,7 +87,7 @@ export default function PayoutsWorkspace(props) {
   const initialOrganisationId = props.initialOrganisationId ?? query.get('organisation');
   const link = JSON.stringify([initialOrganisationId, initialEventId]);
   const [selection, setSelection] = useState(null);
-  const view = selection?.link === link ? selection.view : initialEventId ? 'requests' : 'recorded';
+  const view = selection?.link === link ? selection.view : (initialOrganisationId || initialEventId) ? 'requests' : 'recorded';
   const setView = next => setSelection({ link, view: next });
   const platform = canReadFinanceOverview(props.session, props.permissions, props.scopeId);
   const requestView = () => <PayoutRequestWorkspace key={link} client={supabase} {...props} initialEventId={initialEventId} initialOrganisationId={initialOrganisationId} />;
