@@ -121,6 +121,10 @@ jobs:
       - run: npm run test:data-api
       - run: npm run test:data-api:db
       - run: psql -X -q -v ON_ERROR_STOP=1 -d fourm_data_api_grant_test -f tests/refundReadAuthorization.sql
+      - name: Verify native checkout reference compatibility
+        run: |
+          createdb fourm_native_checkout_test
+          psql -X -q -d fourm_native_checkout_test -f tests/nativeCheckoutReferences.sql
 
   gate:
     name: Repository checks

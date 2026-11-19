@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const ts = require('typescript');
 const fs = require('node:fs');
 const vm = require('node:vm');
+const references = require('../supabase/functions/native-event-checkout/references.mjs');
 const source = ts.transpileModule(fs.readFileSync('supabase/functions/native-event-checkout/index.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
@@ -15,9 +16,15 @@ function server(overrides = {}) {
     event_registrations: [], commerce_config: { event_fee_percent: 5, fee_label: 'Booking fee' }, ...overrides.tables,
   };
   const client = {
-    auth: { getUser: async () => ({ data: { user: overrides.user === null ? null : { id: 'user-123456', email: 'player@example.com', ...overrides.user } } }) },
+    auth: { getUser: async () => ({ data: { user: overrides.user === null ? null : { id: '12345678-0000-4000-8000-000000000000', email: 'player@example.com', ...overrides.user } } }) },
     rpc: (name, args) => {
       rpcCalls.push({ name, args });
+      if (name === 'prepare_native_checkout_payment') {
+        return Promise.resolve({ data: tables.payments ?? { player_id: args.p_player_id, event_id: args.p_event_id,
+          amount: args.p_amount, is_test: args.p_is_test, status: 'processing', reference: args.p_gateway_reference,
+          metadata: { ...args.p_metadata, reference: args.p_gateway_reference } } });
+      }
+      if (name === 'save_native_checkout_url') return Promise.resolve({ data: args.p_url });
       return Promise.resolve({ data: overrides.rpc ? overrides.rpc(name, args) : [], error: name === 'reserve_event_registration_places' ? overrides.capacityError || null : null });
     },
     from: table => {
@@ -27,11 +34,15 @@ function server(overrides = {}) {
       return query;
     },
   };
-  vm.runInNewContext(source, { exports: {}, require: () => ({ createClient: () => client }),
+  vm.runInNewContext(source, { exports: {}, require: name => name === './references.mjs' ? references : { createClient: () => client },
     Deno: { env: { get: name => name === 'PUSH_TEST_RECIPIENTS' ? overrides.testRecipients : 'test' }, serve: fn => { handler = fn; } },
     Response, Request, URL, Date: overrides.now ? class extends Date { constructor(...args) { super(...(args.length ? args : [overrides.now])); } static now() { return new Date(overrides.now).getTime(); } } : Date, Intl, Number, Set, Error, JSON, AbortSignal,
     fetch: async (url, options) => {
-      if (url === 'https://api.paystack.co/transaction/initialize' && overrides.gateway) { gatewayCalls.push(JSON.parse(options.body)); return Response.json({ status: true, data: { authorization_url: 'https://checkout.paystack.com/test' } }); }
+      if (url === 'https://api.paystack.co/transaction/initialize' && overrides.gateway) {
+        const payment = JSON.parse(options.body);
+        gatewayCalls.push(payment);
+        return Response.json({ status: true, data: { authorization_url: 'https://checkout.paystack.com/test', reference: payment.reference } });
+      }
       if (!url.endsWith('/functions/v1/send-email')) throw new Error('Tests must not contact a payment gateway');
       emails.push(JSON.parse(options.body));
       return Response.json(overrides.emailFailure ? { error: 'provider unavailable' } : { success: true }, { status: overrides.emailFailure ? 500 : 200 });
@@ -282,6 +293,8 @@ test('new native checkout gives Paystack the app return endpoint', async () => {
  const result=await app.call({action:'checkout',agreed:true,acceptedTotal:367.5,attemptId:'11111111-1111-1111-1111-111111111111'});
  assert.equal(result.status,200);assert.equal(app.gatewayCalls.length,1);
  assert.equal(app.gatewayCalls[0].callback_url,'test/functions/v1/native-event-checkout/return?event_id=1');
+ assert.match(app.gatewayCalls[0].reference, /^MOBILE-TEST-EVENT-\d{23}$/);
+ assert.equal(result.body.reference,'MOBILE-12345678-11111111-1111-1111-1111-111111111111');
  assert.equal(result.body.authorizationUrl,'https://checkout.paystack.com/test');
 });
 
