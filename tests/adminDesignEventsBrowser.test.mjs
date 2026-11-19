@@ -21,6 +21,7 @@ before(async () => {
             import EventManagerDashboard from './src/pages/admin-preview/EventManagerDashboard.jsx';
             import EventEntryForm, { EventEntryPaymentLinks } from './src/pages/admin-preview/EventEntryForm.jsx';
             import EventReplacementDialog from './src/pages/admin-preview/EventReplacementDialog.jsx';
+            import EventPaymentDialog from './src/pages/admin-preview/EventPaymentDialog.jsx';
             import EventRehearsal from './src/pages/admin-preview/EventRehearsal.jsx';
             import NativeDrawOperationsDialog from './src/pages/admin-preview/NativeDrawOperationsDialog.jsx';
             import EventGroupDrawDialog from './src/pages/admin-preview/EventGroupDrawDialog.jsx';
@@ -35,6 +36,9 @@ before(async () => {
             const other = { ...event, id:13, organisation_id:'org-b', event_name:'Other Open' };
             const search = async () => [{ id: 31, name: 'New Player', email:'new@example.invalid' }];
             const registration = { id:'reg-1', full_name:'Previous Player', event_id:11, email:'old@example.invalid', division:'Open' };
+            const paid = { ...registration, payment_status:'paid', status:'registered', payment_method:'eft' };
+            const receipt = { id:'receipt-1', event_id:11, payment_type:'event_entry_fee', status:'success', payment_method:'eft', amount:700,
+                reference:'MANUAL-ADMIN-reg-1', metadata:{ registration_id:'reg-1', source:'manual_event_admin', collection_recipient:'organiser', payment_note:'Original note' } };
             const division = { id: 51, name: 'Open', entry_fee:500, is_active:true };
             const groupRows = [{ id:'ga', name:'Group A' }, { id:'gb', name:'Group B' }].map((group,index)=>({
                 ...group,entries:[0,1].map(offset=>({id:'team-'+(index*2+offset+1),team_name:'Team '+(index*2+offset+1),group_id: group.id,seed_number:index*2+offset+1}))
@@ -69,6 +73,14 @@ before(async () => {
             const manualLinked = { ...event, id:21, slug:'rankedin-manual', event_name:'Manual Linked Cup', rankedin_id:'8903', rankedin_url:'https://www.rankedin.com/en/tournament/8903' };
             const nativeDraw = { ...tournamentDraw, event_id:11, tournament_divisions:{name:'Open'} };
             const nativeMatch = { ...tournamentMatch, is_featured:false };
+            const courtMatches = [
+                { ...nativeMatch, id:'court-a', stage:'group', round_label:'Group 1', round_number:1, bracket_position:1, status:'pending',
+                    court_name:'Court 4', scheduled_start:null, scheduled_end:null },
+                { ...nativeMatch, id:'court-b', stage:'group', round_label:'Group 2', round_number:1, bracket_position:2, status:'pending',
+                    court_name:null, scheduled_start:null, scheduled_end:null },
+                { ...nativeMatch, id:'draw-finished', status:'completed', court_name:null, scheduled_start:null, scheduled_end:null },
+                { ...nativeMatch, id:'court-other', draw_id:'other-draw', court_name:null, scheduled_start:null, scheduled_end:null },
+            ];
             const otherNativeDraw = { ...nativeDraw, id:'other-draw', event_id:13, tournament_divisions:{name:'Other org'} };
             const existingAnnouncement = { id:'announcement-1', event_id:11, division_id:51, draw_id:draw.id, message:'Use court entrance', updated_at:'notice-v1' };
             window.calls = [];
@@ -79,6 +91,7 @@ before(async () => {
                     window.calls.push([name,args]);
                     const request = (async()=>{
                     if (name==='can_manage_event') return { data: args.p_event_id===11 };
+                    if (name==='correct_manual_event_payment') return {data:{paymentId:receipt.id,method:args.p_method,recipient:args.p_recipient}};
                     if (name==='reopen_native_draw_for_corrections') { nativeDraw.status='draft'; return { data:null }; }
                     if (name==='account_is_active' || name==='is_super_admin') return { data:true };
                     if (name==='tm_snapshot') {
@@ -104,7 +117,10 @@ before(async () => {
                     let rows=table==='calendar'?(window.kind.startsWith('rankedin-')?[pastLinked,failedLinked,manualLinked]:[event,bronze,other]):[];
                     if (table==='federations') rows=[{slug:'sapa',rankedin_events_org_id:'11331'}];
                     if (table==='draws') rows=[nativeDraw,otherNativeDraw];
-                    if (table==='draw_matches') rows=[nativeMatch];
+                    if (table==='event_registrations' && window.kind.startsWith('payment-')) rows=[paid];
+                    if (table==='payments' && window.kind.startsWith('payment-')) rows=[window.kind==='payment-stale' ? {...receipt, payment_method:'cash'} : receipt];
+                    if (table==='draw_matches') rows=window.kind.startsWith('court-bulk') ? courtMatches : [nativeMatch];
+                    if (table==='event_play_days') rows=[{event_id:11,play_date:'2035-01-21',match_duration_minutes:45,is_active:true}];
                     if (table==='draw_entries') rows=tournament.entries.map(row=>({...row,draw_id:draw.id}));
                     if (table==='native_draw_announcements') rows=[existingAnnouncement, {...existingAnnouncement,id:'other-announcement',event_id:13,message:'Other announcement'}];
                     let bounds=null;
@@ -116,6 +132,7 @@ before(async () => {
                         range(start,end){bounds=[start,end];return query;},abortSignal(){return query;},limit(max){rows=rows.slice(0,max);return query;},
                         single(){
                             if(write && rows[0]){
+                                if(window.failSecondCourt && table==='draw_matches' && rows[0].id==='court-b') return Promise.resolve({ error:{message:'Changed by another operator'} });
                                 window.calls.push([write.kind,table,filters,write.fields]);
                                 if(write.kind==='update') Object.assign(rows[0],write.fields);
                             }
@@ -157,8 +174,11 @@ before(async () => {
                         'tournament-schedule':'?event=11&workspace=schedule', 'tournament-result':'?event=11&workspace=results' }[kind];
                     return <MemoryRouter initialEntries={['/admin-preview/tournaments'+route]}><TournamentWorkspace client={client} session={session} scopeId="all" /></MemoryRouter>;
                 }
+                if (kind.startsWith('payment-')) return <EventPaymentDialog action={{ type:'correct', registration:{...paid, _editablePayment:receipt} }} client={client} session={session}
+                    event={event} divisions={[division]} scopeId={kind==='payment-tenant'?'org:org-a':'all'} onClose={result=>window.calls.push(['closed',result])}/>;
                 if (kind==='draw-generator') return <MemoryRouter initialEntries={['/admin-preview/event?event=505']}><GeneratorFixture /></MemoryRouter>;
-                if (kind==='native-draw') return <NativeDrawOperationsDialog client={client} session={session} event={event} scopeId="all" onClose={()=>window.calls.push(['closed'])} />;
+                if (kind==='native-draw' || kind.startsWith('court-')) return <NativeDrawOperationsDialog client={client} session={session} event={event}
+                    scopeId={kind==='court-tenant'?'org:org-a':'all'} onClose={()=>window.calls.push(['closed'])} />;
                 if (kind.startsWith('rankedin-')) return <MemoryRouter><CalendarWorkspace session={session} client={client}
                   scope={{id:'all'}} permissions={{role:'super_admin'}} scopeId="all" canManageEvents /></MemoryRouter>;
                 if (kind==='calendar') return <MemoryRouter initialEntries={['/?create=quick&keep=1']}><CalendarFixture /></MemoryRouter>;
@@ -495,4 +515,113 @@ test('Event Manager Draw generator selects a division with no saved draw and sav
         assert.equal(mutation[1].p_draw.matches.length, 1);
         assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'tm_publish_draw')), false);
     } finally { await page.close(); }
+});
+
+test('per-match court setup saves only the reviewed fixture and preserves a start time when the court changes', async () => {
+    const page = await open('court-single');
+    try {
+        await page.waitForFunction(() => [...document.querySelectorAll('dialog label')].some(node => node.textContent.startsWith('Match')));
+        await page.evaluate(() => [...document.querySelectorAll('dialog label')].find(node => node.textContent.startsWith('Match')).querySelector('button').click());
+        await clickText(page, 'Final · First Pair vs Second Pair', '[role=option]');
+        await clickText(page, 'Match court setup');
+        const courtInput = '.ap-native-court-setup input[placeholder="Court 1"]';
+        await page.$eval(courtInput, input => { input.focus(); input.select(); });
+        await page.keyboard.type('Court 3');
+        await clickText(page, 'Review court changes');
+        await page.waitForFunction(() => document.querySelector('.ap-native-court-review')?.textContent.includes('Court 3 · 2035-01-21 14:00 SAST'));
+        await clickText(page, 'Back');
+        assert.equal(await page.$eval(courtInput, input => input.value), 'Court 3');
+        await clickText(page, 'Review court changes');
+        assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'update')), false);
+        await clickText(page, 'Confirm draw action');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Match court setup saved.');
+        const update = await page.evaluate(() => window.calls.find(call => call[0] === 'update'));
+        assert.deepEqual(update[2], {id:'match-tm-1',draw_id:'draw-a',status:'scheduled',updated_at:'match-v1'});
+        assert.equal(update[3].court_name, 'Court 3');
+        assert.equal(update[3].scheduled_start, undefined);
+    } finally { await page.close(); }
+});
+
+test('bulk court setup uses SAST, keeps existing court assignments, and updates only the reviewed draw fixtures', async () => {
+    const page = await open('court-bulk');
+    try {
+        await clickText(page, 'Bulk court setup');
+        await page.type('.ap-native-court-setup input[placeholder="Court 1"]', 'Court 2');
+        await page.$eval('.ap-native-court-setup input[type=datetime-local]', input => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '2035-01-21T14:00');
+            input.dispatchEvent(new Event('input', {bubbles:true}));
+            input.dispatchEvent(new Event('change', {bubbles:true}));
+        });
+        await clickText(page, 'Review court changes');
+        await page.waitForFunction(() => document.querySelector('.ap-native-court-review')?.textContent.includes('Court 2 · 2035-01-21 15:00 SAST'));
+        assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'update')), false);
+        await clickText(page, 'Confirm draw action');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Court setup saved for 2 matches.');
+        const updates = await page.evaluate(() => window.calls.filter(call => call[0] === 'update'));
+        assert.deepEqual(updates.map(row => row[2].id), ['court-a', 'court-b']);
+        assert.ok(updates.every(row => row[2].draw_id === 'draw-a'));
+        assert.equal(updates[0][3].court_name, undefined);
+        assert.equal(updates[0][3].scheduled_start, '2035-01-21T12:00:00.000Z');
+        assert.equal(updates[0][3].scheduled_end, '2035-01-21T12:45:00.000Z');
+        assert.equal(updates[1][3].court_name, 'Court 2');
+        assert.equal(updates[1][3].scheduled_start, '2035-01-21T13:00:00.000Z');
+    } finally { await page.close(); }
+});
+
+test('bulk court setup accounts for a partial write and denies a tenant scope before reading draw controls', async () => {
+    const partial = await open('court-bulk');
+    try {
+        await clickText(partial, 'Bulk court setup');
+        await partial.type('.ap-native-court-setup input[placeholder="Court 1"]', 'Court 2');
+        await partial.$eval('.ap-native-court-setup input[type=datetime-local]', input => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '2035-01-21T14:00');
+            input.dispatchEvent(new Event('input', {bubbles:true}));
+        });
+        await partial.evaluate(() => { window.failSecondCourt=true; });
+        await clickText(partial, 'Review court changes');
+        await clickText(partial, 'Confirm draw action');
+        await partial.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('Saved 1 of 2 reviewed matches'));
+        const writes = await partial.evaluate(() => window.calls.filter(call => call[0] === 'update').map(call => call[2].id));
+        assert.deepEqual(writes, ['court-a']);
+    } finally { await partial.close(); }
+
+    const tenant = await open('court-tenant');
+    try {
+        await tenant.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('all-workspaces administrator'));
+        assert.equal(await tenant.evaluate(() => window.calls.length), 0);
+        assert.doesNotMatch(await tenant.$eval('dialog', node => node.textContent), /Bulk court setup|Match court setup/);
+    } finally { await tenant.close(); }
+});
+
+
+test('the original correction dialog confirms the same receipt through the audited RPC', async () => {
+    const page = await open('payment-correct');
+    try {
+        await page.waitForSelector('dialog[open]');
+        assert.match(await page.$eval('dialog .ap-payment-amount', node => node.textContent), /700/);
+        await page.click('button[aria-label="Payment received via"]');
+        await clickText(page, 'Cash', '[role="option"] span');
+        await page.click('button[aria-label="Payment received by"]');
+        await clickText(page, '4M', '[role="option"] span');
+        assert.deepEqual(await page.evaluate(() => window.calls), []);
+        await clickText(page, 'Save payment');
+        await page.waitForSelector('dialog [role="status"]');
+        assert.deepEqual(await page.evaluate(() => window.calls.filter(([action]) => action === 'correct_manual_event_payment')), [
+            ['correct_manual_event_payment', { p_event:11, p_registration:'reg-1', p_payment:'receipt-1', p_method:'cash', p_recipient:'4m', p_note:'Original note' }],
+        ]);
+        await clickText(page, 'Done');
+        assert.deepEqual(await page.evaluate(() => window.calls.at(-1)), ['closed', { refresh:true }]);
+    } finally { await page.close(); }
+});
+
+test('manual receipt corrections stop when the receipt changes or the workspace is scoped to a tenant', async () => {
+    for (const [kind, message] of [['payment-stale', 'The receipt changed.'], ['payment-tenant', 'all-workspaces administrator']]) {
+        const page = await open(kind);
+        try {
+            await clickText(page, 'Save payment');
+            await page.waitForSelector('dialog [role="alert"]');
+            assert.ok((await page.$eval('dialog [role="alert"]', node => node.textContent)).includes(message));
+            assert.equal(await page.evaluate(() => window.calls.some(([action]) => action === 'correct_manual_event_payment')), false);
+        } finally { await page.close(); }
+    }
 });

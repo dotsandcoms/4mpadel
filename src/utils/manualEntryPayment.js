@@ -1,7 +1,7 @@
 import { findAdminMarkedPayment } from './paymentRegistrationMatch.js';
 
 // Shared legacy persistence. Multiple database requests: callers must surface partial failures.
-export async function saveManualEntryPayment({ supabase, event, reg, method, note, fee, logEventActivity }) {
+export async function saveManualEntryPayment({ supabase, event, reg, method, note, fee, logEventActivity, recipient }) {
  const isComp = method === 'comp';
  if (!note?.trim()) throw new Error('A payment note is required.');
  if (!['comp','manual','cash','eft','external','paystack'].includes(method)) throw new Error('Invalid payment method.');
@@ -29,7 +29,7 @@ export async function saveManualEntryPayment({ supabase, event, reg, method, not
                 marked_by_admin: true,
                 note,
                 payment_note: note,
-                ...(isComp ? { free_entry: true, comp_entry: true } : {}),
+                ...(isComp ? { free_entry: true, comp_entry: true } : { collection_recipient: recipient }),
             };
             const { data: existing, error: lookupError } = await supabase.from('payments').select('id, metadata').eq('reference', reference).maybeSingle();
             if (lookupError) throw lookupError;
@@ -71,7 +71,7 @@ export async function saveManualEntryPayment({ supabase, event, reg, method, not
                     player_email: reg.email,
                     division: reg.division,
                     note,
-                    ...(isComp ? { free_entry: true } : { method: method }),
+                    ...(isComp ? { free_entry: true } : { method, collection_recipient: recipient }),
                 },
             });
 

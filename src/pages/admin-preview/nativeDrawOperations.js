@@ -1,8 +1,11 @@
+import { buildEventPlayDays, mergeEventPlayDays } from '../../utils/nativeDrawScheduler.js';
+import { planNativeMatchSchedule, sameReviewedSchedule } from './nativeMatchScheduling.js';
 import { readAll } from './playersData.js';
 import { verifyCalendarPlatformActor } from './calendarRecordActions.js';
 import { verifyEventOperationAccess } from './eventOperationAccess.js';
 
 const drawFields = 'id,event_id,division_id,draw_kind,format,status,updated_at,tournament_divisions(name)';
+const matchFields = 'id,draw_id,entry_one_id,entry_two_id,round_label,round_number,bracket_position,stage,status,court_name,scheduled_start,scheduled_end,updated_at';
 const announcementFields = 'id,event_id,division_id,draw_id,title,message,is_pinned,is_active,created_at,updated_at';
 const liveStatuses = ['pending', 'scheduled', 'in_progress'];
 const optionalSchema = new Set(['42P01', '42703', 'PGRST204', 'PGRST205']);
@@ -47,15 +50,26 @@ function featuredMatches(client, draw, signal) {
     .select('id,is_featured').eq('draw_id', draw.id).eq('is_featured', true).order('id'), signal));
 }
 
+function nativeMatches(client, draw, signal) {
+  return readAll(() => client.from('draw_matches').select(matchFields).eq('draw_id', draw.id).order('id'), signal);
+}
+
+async function nativeEventPlayDays(client, event, signal) {
+  const days = await readAll(() => client.from('event_play_days').select('play_date,match_duration_minutes,is_active,is_removed,start_time,end_time,courts_count,minimum_break_minutes')
+    .eq('event_id', event.id).order('play_date'), signal);
+  return mergeEventPlayDays(buildEventPlayDays(event), days);
+}
+
 export async function loadNativeDrawOperations({ client, event, drawId, signal, ...access }) {
   await verifyNativeEvent({ client, event, signal, ...access });
   const draw = await readNativeDraw(client, event, drawId);
   if (!access.isCurrent()) throw new Error('The draw workspace changed.');
-  const [matches, entries, featured, announcements] = await Promise.all([
-    readAll(() => client.from('draw_matches').select('id,draw_id,entry_one_id,entry_two_id,round_label,status,court_name,scheduled_start,updated_at').eq('draw_id', draw.id).order('id'), signal),
+  const [matches, entries, featured, announcements, playDays] = await Promise.all([
+    nativeMatches(client, draw, signal),
     readAll(() => client.from('draw_entries').select('id,team_name').eq('draw_id', draw.id).order('id'), signal),
     featuredMatches(client, draw, signal),
     eventAnnouncements(client, event, signal),
+    canScheduleNativeDraw(draw) ? nativeEventPlayDays(client, event, signal) : [],
   ]);
   const names = new Map(entries.map(entry => [entry.id, entry.team_name]));
   return {
@@ -65,18 +79,54 @@ export async function loadNativeDrawOperations({ client, event, drawId, signal, 
       is_featured: featured?.some(item => item.id === match.id),
     })),
     featuredAvailable: featured !== null,
+    playDays,
     announcements: announcements?.filter(item => !item.division_id || item.division_id === draw.division_id && (!item.draw_id || item.draw_id === draw.id)) ?? null,
   };
 }
 
 export const canUpdateNativeMatches = draw => ['published', 'in_progress'].includes(draw.status);
+export const canScheduleNativeDraw = draw => draw.format !== 'americano' && ['draft', 'published', 'in_progress'].includes(draw.status);
 export const canReopenNativeDraw = draw => draw.draw_kind === 'main' && draw.status === 'published';
+
+async function updateNativeMatch(client, draw, match, fields) {
+  const { data, error } = await client.from('draw_matches').update({ ...fields, updated_at: new Date().toISOString() })
+    .eq('id', match.id).eq('draw_id', draw.id).eq('status', match.status).eq('updated_at', match.updated_at).select('id').single();
+  if (error || data?.id !== match.id) throw error || new Error('The match changed before the update was saved.');
+}
+
+async function applyNativeMatchSchedule({ client, event, draw, operation, isCurrent, onAttempt, signal }) {
+  if (!canScheduleNativeDraw(draw)) throw new Error('Court setup is unavailable for this draw.');
+  const [matches, playDays] = await Promise.all([nativeMatches(client, draw, signal), nativeEventPlayDays(client, event, signal)]);
+  const plan = planNativeMatchSchedule(matches, playDays, operation.mode, operation.form);
+  if (!plan.length || !sameReviewedSchedule(operation.plan, plan)) throw new Error('The bookings changed after review. Reload before continuing.');
+  const confirmedDraw = await readNativeDraw(client, event, draw.id);
+  if (confirmedDraw.updated_at !== draw.updated_at || confirmedDraw.status !== draw.status || !isCurrent()) {
+    throw new Error('The draw changed after review.');
+  }
+  let saved = 0;
+  for (const update of plan) {
+    if (!isCurrent()) break;
+    try {
+      onAttempt();
+      await updateNativeMatch(client, draw, update.match, update.fields);
+      saved++;
+    } catch (error) {
+      throw new Error('Saved ' + saved + ' of ' + plan.length + ' reviewed matches before stopping. ' + (error.message || 'The next booking could not be verified.'));
+    }
+  }
+  if (saved !== plan.length) throw new Error('Saved ' + saved + ' of ' + plan.length + ' reviewed matches before the workspace changed.');
+  return saved === 1 ? 'Match court setup saved.' : 'Court setup saved for ' + saved + ' matches.';
+}
 
 export async function saveNativeDrawOperation({ client, event, draw, operation, onAttempt, ...access }) {
   const context = { client, event, ...access };
   await verifyNativeEvent(context);
   const fresh = await readNativeDraw(client, event, draw.id);
   if (fresh.updated_at !== draw.updated_at || !access.isCurrent()) throw new Error('The draw changed. Reopen it before continuing.');
+
+  if (operation.type === 'schedule') {
+    return applyNativeMatchSchedule({ client, event, draw: fresh, operation, onAttempt, ...access });
+  }
 
   if (operation.type === 'reopen') {
     if (!canReopenNativeDraw(fresh)) throw new Error('Only a published main draw can be reopened here.');
@@ -134,9 +184,7 @@ export async function saveNativeDrawOperation({ client, event, draw, operation, 
   }
   if (!access.isCurrent()) throw new Error('The draw workspace changed.');
   onAttempt();
-  const { data, error } = await client.from('draw_matches').update({ ...fields, updated_at: new Date().toISOString() })
-    .eq('id', match.id).eq('draw_id', fresh.id).eq('status', match.status).eq('updated_at', match.updated_at).select('id').single();
-  if (error || data?.id !== match.id) throw error || new Error('The match changed before the update was saved.');
+  await updateNativeMatch(client, fresh, match, fields);
   return updatingFeature ? fields.is_featured ? 'Match featured on the public draw.' : 'Match removed from the featured list.'
     : fields.status === 'in_progress' ? 'Match marked live.' : 'Live status cleared.';
 }

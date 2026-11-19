@@ -1,8 +1,9 @@
 import { useEffect, useId, useState } from 'react';
 import SearchableDropdown from '../../components/SearchableDropdown';
+import NativeDrawCourtSetup, { NativeDrawCourtReview } from './NativeDrawCourtSetup.jsx';
 import { useEventOperation } from './useEventOperation.js';
 import {
-  canReopenNativeDraw, canUpdateNativeMatches, listNativeDrawOperations, loadNativeDrawOperations,
+  canReopenNativeDraw, canScheduleNativeDraw, canUpdateNativeMatches, listNativeDrawOperations, loadNativeDrawOperations,
   saveNativeDrawOperation, validNativeLiveMatch,
 } from './nativeDrawOperations.js';
 import './EventPaymentDialog.css';
@@ -24,6 +25,7 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
   const [matchId, setMatchId] = useState('');
   const [form, setForm] = useState(blankAnnouncement);
   const [review, setReview] = useState(null);
+  const [courtReview, setCourtReview] = useState(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -54,6 +56,7 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
   const changeDraw = id => {
     setDrawId(id);
     setMatchId('');
+    setCourtReview(null);
     setStored(null);
     setLoadError('');
   };
@@ -64,6 +67,14 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
       client, event, draw: selected.draw, operation: review, expectedUserId: userId, scopeId, ...checks,
     }));
   };
+  const changeMatch = id => {
+    setMatchId(id);
+    setCourtReview(null);
+  };
+  const back = () => {
+    if (review.type === 'schedule') setCourtReview(review);
+    setReview(null);
+  };
   const reviewMatch = (type, heading) => setReview({ type, match, heading, summary: match.label });
   const matchLive = match?.status === 'in_progress';
   const announcementScope = { event: 'Whole event', division: 'This division', draw: 'This draw only' };
@@ -73,6 +84,7 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
     <form onSubmit={confirm}>
       {result ? <p role="status">{result}</p> : review ? <>
         <h3>{review.heading}</h3><p>{review.summary}</p>
+        {review.type === 'schedule' && <NativeDrawCourtReview plan={review.plan} />}
         {review.type === 'reopen' && <p className="ap-payment-live-note">The draw returns to a draft and stays private until it is published again. Recorded play can prevent reopening.</p>}
         {review.type === 'announce' && <p className="ap-payment-live-note">{announcementScope[review.scope]}{review.pinned ? ' · Pinned announcement' : ''}. Confirming publishes this message on the public draw.</p>}
         {error && <p role="alert">{error}</p>}
@@ -86,16 +98,17 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
         {drawId && !selected && !loadError && <p role="status">Loading draw matches…</p>}
         {selected && <>
           {canReopenNativeDraw(selected.draw) && <button type="button" className="ap-secondary" onClick={() => setReview({ type: 'reopen', heading: 'Reopen draw for corrections', summary: drawLabel(selected.draw) })}>Reopen draw for corrections</button>}
-          {canUpdateNativeMatches(selected.draw) && selected.matches.length > 0 && <>
-            <label>Match<SearchableDropdown value={matchId} onChange={event => setMatchId(event.target.value)}><option value="">Choose a match</option>
+          {(canUpdateNativeMatches(selected.draw) || canScheduleNativeDraw(selected.draw)) && selected.matches.length > 0 && <>
+            <label>Match<SearchableDropdown value={matchId} onChange={event => changeMatch(event.target.value)}><option value="">Choose a match</option>
               {selected.matches.map(row => <option key={row.id} value={row.id}>{row.round_label} · {row.label}{row.is_featured ? ' · Featured' : ''}</option>)}
             </SearchableDropdown></label>
-            {match && <div className="ap-modal-actions">
+            {canUpdateNativeMatches(selected.draw) && match && <div className="ap-modal-actions">
               {validNativeLiveMatch(match) && <button type="button" className="ap-secondary" onClick={() => reviewMatch('live', matchLive ? 'Clear live status' : 'Mark match live')}>{matchLive ? 'Clear live status' : 'Mark match live'}</button>}
               {selected.featuredAvailable && <button type="button" className="ap-secondary" onClick={() => reviewMatch('feature', match.is_featured ? 'Remove featured match' : 'Feature match')}>{match.is_featured ? 'Remove featured match' : 'Feature match'}</button>}
             </div>}
-            {!selected.featuredAvailable && <p>Featured-match controls are unavailable on this connection.</p>}
+            {canUpdateNativeMatches(selected.draw) && !selected.featuredAvailable && <p>Featured-match controls are unavailable on this connection.</p>}
           </>}
+          {canScheduleNativeDraw(selected.draw) && <NativeDrawCourtSetup key={drawId + ':' + matchId} match={match} snapshot={selected} previousReview={courtReview} onReview={setReview} />}
           {selected.announcements ? <section className="ap-draw-announcements">
             <h3>Public announcements</h3>
             {selected.announcements.length > 0 && <ul>{selected.announcements.map(item => <li key={item.id}>
@@ -113,7 +126,7 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
         </>}
       </>}
       <footer>
-        {review && !result && <button type="button" className="ap-secondary" disabled={busy || Boolean(error)} onClick={() => setReview(null)}>Back</button>}
+        {review && !result && <button type="button" className="ap-secondary" disabled={busy || Boolean(error)} onClick={back}>Back</button>}
         <button type="button" className="ap-secondary" onClick={close} disabled={busy}>{result ? 'Done' : 'Close'}</button>
         {review && !result && <button type="submit" className="ap-primary" disabled={busy || Boolean(error)}>{busy ? 'Saving…' : 'Confirm draw action'}</button>}
       </footer>
