@@ -1,3 +1,4 @@
+import { adminPublicOrigin } from '../../utils/adminPublicOrigin';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
@@ -2743,7 +2744,10 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                         onClick={() => {
                                             const slug = selectedOrgDetails.slug;
                                             setSelectedOrgDetails(null);
-                                            navigate(`/organisations/${slug}`);
+                                            const path = `/organisations/${slug}`;
+                                            const origin = adminPublicOrigin();
+                                            if (origin === window.location.origin) navigate(path);
+                                            else window.location.assign(`${origin}${path}`);
                                         }}
                                         className="w-full py-3.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-extrabold text-xs rounded-xl transition-all cursor-pointer text-center flex items-center justify-center gap-2"
                                     >

@@ -15,9 +15,9 @@ import { useCommerceConfig } from '../../hooks/useCommerceConfig';
 import { licenseQuote, matchLicenseTypeByAmount } from '../../utils/commerce';
 import { classifyPaystackTransaction, paystackMetadata } from '../../utils/paystackClassification';
 
-const FinanceManager = () => {
+const FinanceManager = ({ initialTab = 'dashboard' } = {}) => {
     const { config: commerce } = useCommerceConfig();
-    const [activeTab, setActiveTab] = useState('dashboard');
+    const [activeTab, setActiveTab] = useState(initialTab);
     const [financeEventId, setFinanceEventId] = useState(null); // 'dashboard', 'users', 'events', 'transactions', 'summary'
     const [paystackEnabled, setPaystackEnabled] = useState(true);
     const [transactions, setTransactions] = useState([]);
@@ -78,6 +78,8 @@ const FinanceManager = () => {
     }, []);
 
     const activeAllowedEvents = baseAllowedEvents.length > 0 ? baseAllowedEvents : managedEventIds;
+    const canViewTransactions = !permissionsLoading && Boolean(permissions)
+        && (permissions.role === 'super_admin' || allowedTabs.includes('transactions'));
 
     // Safety redirect if current tab is not allowed
     useEffect(() => {
@@ -203,13 +205,13 @@ const FinanceManager = () => {
         } finally {
             setLoading(false);
         }
-    }, [fetchPlayers, fetchPayments]);
+    }, [fetchPlayers, fetchPayments, syncPeriod]);
 
     useEffect(() => {
-        if (paystackEnabled) {
+        if (paystackEnabled && canViewTransactions && activeTab === 'transactions') {
             fetchTransactions();
         }
-    }, [paystackEnabled, fetchTransactions, syncPeriod]);
+    }, [paystackEnabled, canViewTransactions, activeTab, fetchTransactions]);
 
     const handleSyncPlayer = async (trx) => {
         try {
@@ -870,7 +872,7 @@ const FinanceManager = () => {
 
                     {activeTab === 'users' && allowedTabs.includes('users') && <UserPayments allowedEvents={activeAllowedEvents} />}
                     
-                    {activeTab === 'transactions' && (
+                    {activeTab === 'transactions' && canViewTransactions && (
                         <div className="space-y-6">
                             {/* Original Paystack Transaction View Integrated Here */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

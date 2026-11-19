@@ -1,3 +1,4 @@
+import { adminPublicOrigin } from '../../utils/adminPublicOrigin';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../supabaseClient';
@@ -802,7 +803,7 @@ const ClubManager = ({ permissions }) => {
                 .single();
             if (error) throw error;
 
-            const acceptUrl = `${window.location.origin}/claim-club?token=${invite.token}`;
+            const acceptUrl = `${adminPublicOrigin()}/claim-club?token=${invite.token}`;
             await sendEmail(email, 'club_claim_invite', {
                 clubName: inviteClub.name,
                 inviterName: session?.session?.user?.user_metadata?.full_name || '4M Padel Admin',
@@ -811,7 +812,7 @@ const ClubManager = ({ permissions }) => {
 
             // If they don't have a player profile yet, invite them to create it first.
             if (!existingPlayer?.id) {
-                const redirectTo = `${window.location.origin}/profile?new_invite=true&claim_token=${invite.token}`;
+                const redirectTo = `${adminPublicOrigin()}/profile?new_invite=true&claim_token=${invite.token}`;
                 const { error: otpError } = await supabase.auth.signInWithOtp({
                     email,
                     options: { emailRedirectTo: redirectTo },

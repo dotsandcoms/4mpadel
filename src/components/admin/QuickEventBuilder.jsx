@@ -1,3 +1,4 @@
+import { adminPublicOrigin } from '../../utils/adminPublicOrigin';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, Check, Copy, Eye, EyeOff, FileText,
@@ -626,7 +627,7 @@ const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, edit
             setSavedDetails({
                 eventId,
                 eventName: form.event_name,
-                shareUrl: `${window.location.origin}/calendar/${slug}`,
+                shareUrl: `${adminPublicOrigin()}/calendar/${slug}`,
                 accessCode: form.require_access_code && form.access_code ? form.access_code.trim() : null,
                 wasEditing: isEditing,
             });
@@ -640,7 +641,7 @@ const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, edit
 
     const selectedEntry = ENTRY_OPTIONS.find((option) => option.value === form.partner_requirement)?.label || 'Either';
     const selectedPayment = PAYMENT_OPTIONS.find((option) => option.value === form.payment_method)?.label || 'Not set';
-    const reviewLink = `${window.location.origin}/calendar/${slugify(form.event_name) || 'quick-event'}${form.start_date ? `-${form.start_date}` : ''}`;
+    const reviewLink = `${adminPublicOrigin()}/calendar/${slugify(form.event_name) || 'quick-event'}${form.start_date ? `-${form.start_date}` : ''}`;
     const quickReviewIssues = useMemo(() => {
         const issues = [];
         if (!form.event_name.trim()) issues.push('Add an event name.');

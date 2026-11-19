@@ -30,6 +30,7 @@ import { readOverviewCache, writeOverviewCache, invalidateOverviewSummary, clear
 
 const ManualEventRegistrations = React.lazy(() => import('./ManualEventRegistrations'));
 const EventBuilder = React.lazy(() => import('./EventBuilder'));
+const QuickEventBuilder = React.lazy(() => import('./QuickEventBuilder'));
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const EMPTY_ALLOWED_EVENTS = Object.freeze([]);
@@ -75,7 +76,7 @@ const getParticipantPaidAmount = (p) => {
 
 const isWithdrawnRegistration = (reg) => String(reg?.status || '').toLowerCase() === 'withdrawn';
 
-const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementModule = false, initialEventId = null, onStartRehearsal }) => {
+const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementModule = false, initialEventId = null, initialRegistrationTab, onStartRehearsal, scopeId = 'all' }) => {
     const [events, setEvents] = useState([]);
     const [selectedEventId, setSelectedEventId] = useState(null);
     const openedInitialEvent = useRef(null);
@@ -92,7 +93,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
     const [eventLoadError, setEventLoadError] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [eventSearch, setEventSearch] = useState('');
-    const [showBronze, setShowBronze] = useState(false);
+    const [showBronze, setShowBronze] = useState(() => isEventManagementModule && Boolean(initialEventId));
     const allowedEventIdsKey = JSON.stringify(allowedEvents || []);
     const [showCompleted, setShowCompleted] = useState(false);
     const [completionBusyId, setCompletionBusyId] = useState(null);
@@ -112,6 +113,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
     const [updatingWhatsApp, setUpdatingWhatsApp] = useState(null);
     const [refunds, setRefunds] = useState([]);
     const [eventPayments, setEventPayments] = useState([]);
+    const EditEventBuilder = editingCalendarEvent?.is_quick_event ? QuickEventBuilder : EventBuilder;
 
     const { getTournamentPlayerTabs, getTournamentParticipants } = useRankedin();
 
@@ -316,13 +318,13 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
             const { data: { session } } = await supabase.auth.getSession();
             if (request !== eventLoadRequest.current) return;
             if (!session?.user?.id) throw new Error('Sign in to view events.');
-            const key = JSON.stringify([session.user.id, allowedEventIdsKey, isEventManagementModule, showBronze]);
+            const key = JSON.stringify([session.user.id, allowedEventIdsKey, isEventManagementModule, showBronze, scopeId]);
             cacheScope.current = key;
             const cached = readOverviewCache(key);
             setEvents(cached || []);
             setLoading(prev => ({ ...prev, events: !cached }));
             const eData = await loadFinanceOverviewEvents(supabase, {
-                isEventManagementModule, showBronze, allowedEventIds: JSON.parse(allowedEventIdsKey),
+                isEventManagementModule, showBronze, allowedEventIds: JSON.parse(allowedEventIdsKey), scopeId,
             });
             if (request !== eventLoadRequest.current) return;
             let completions = new Map();
@@ -349,7 +351,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
         } finally {
             if (request === eventLoadRequest.current) setLoading(prev => ({ ...prev, events: false, refreshing: false }));
         }
-    }, [isEventManagementModule, showBronze, allowedEventIdsKey]);
+    }, [isEventManagementModule, showBronze, allowedEventIdsKey, scopeId]);
 
     // Only visible rows need summaries. Completed events join this set when
     // expanded/searched; event-detail screens perform their own fresh reads.
@@ -1578,6 +1580,8 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                     </div>
                 </div>
 
+                {isEventManagementModule && initialEventId && !openedInitialEvent.current && !loading.events && !loading.refreshing && !eventLoadError && !events.some(event => event.id === initialEventId) && <p role="status" className="mb-5 rounded-xl border border-amber-300/30 p-4 text-amber-200">The linked event is outside this Event Manager list. Check the selected workspace or look for the event in Calendar.</p>}
+
                 {eventLoadError && !completionLoadError && <div role="alert" className="mb-5 rounded-xl border border-red-400/30 p-4 text-red-200 flex flex-wrap items-center justify-between gap-3">
                     <p>Could not load event data. {eventLoadError}</p>
                     <button type="button" onClick={fetchInitialData} disabled={loading.events} className="border border-red-300/40 rounded-lg px-3 py-2 text-sm disabled:opacity-50">Retry</button>
@@ -1705,6 +1709,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                     variant="inline"
                     isOpen
                     event={selectedEvent}
+                    initialTab={initialRegistrationTab}
                     onStartRehearsal={onStartRehearsal ? () => onStartRehearsal(selectedEvent.id) : undefined}
                     onEventCancelled={(updatedEvent) => {
                         setEvents((prev) => prev.map((item) => item.id === updatedEvent.id ? { ...item, ...updatedEvent } : item));
@@ -2483,7 +2488,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                         </div>
                     )}
             </AnimatePresence>
-            {isEventBuilderOpen && <React.Suspense fallback={<p role="status">Loading event editor…</p>}><EventBuilder
+            {isEventBuilderOpen && <React.Suspense fallback={<p role="status">Loading event editor…</p>}><EditEventBuilder
                 isOpen={isEventBuilderOpen}
                 editingEvent={editingCalendarEvent}
                 onClose={() => {

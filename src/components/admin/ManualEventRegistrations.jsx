@@ -188,7 +188,7 @@ const TeamPlayerRows = ({ players, children }) => (
     </div>
 );
 
-const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEventCancelled, onStartRehearsal, event, variant = 'modal', backLabel = '← Back to Events List' }) => {
+const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEventCancelled, onStartRehearsal, event, initialTab = 'overview', variant = 'modal', backLabel = '← Back to Events List' }) => {
     const [showCancelDivision, setShowCancelDivision] = useState(false);
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
     const [cancelledEventId, setCancelledEventId] = useState(null);
@@ -250,7 +250,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, onEditEvent, onEven
     const [profileLinkResults, setProfileLinkResults] = useState([]);
     const [profileLinkBusy, setProfileLinkBusy] = useState(false);
     const [searchingProfiles, setSearchingProfiles] = useState(false);
-    const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'players', 'list', 'activity', 'statement'
+    const [activeTab, setActiveTab] = useState(initialTab);
     const [expandedDivisions, setExpandedDivisions] = useState({});
     const [openPaymentNoteId, setOpenPaymentNoteId] = useState(null);
     const [updatingWhatsApp, setUpdatingWhatsApp] = useState(null);

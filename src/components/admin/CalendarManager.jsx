@@ -1,3 +1,4 @@
+import { adminPublicOrigin } from '../../utils/adminPublicOrigin';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -8,6 +9,7 @@ import EventBuilder from './EventBuilder';
 import QuickEventBuilder from './QuickEventBuilder';
 import { getDefaultBackgroundForStatus } from '../../utils/imageUtils';
 import { promoteFinishedTiersToRecentResults } from '../../utils/recentResults';
+import { scopeCalendarQuery } from '../../utils/adminCalendarScope';
 import {
     PieChart,
     Pie,
@@ -81,7 +83,7 @@ const formatEventDates = (start, end) => {
     }
 };
 
-const CalendarManager = () => {
+const CalendarManager = ({ scopeId = 'all', initialEditEventId = null, createMode = null, onRouteActionOpened }) => {
     const { getTournamentClasses, getTournamentWinners, getTournamentMatches } = useRankedin();
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -103,12 +105,12 @@ const CalendarManager = () => {
     const [orgSearchQuery, setOrgSearchQuery] = useState('');
     const orgSearchRef = useRef(null);
     const orgSelectedRef = useRef(false);
-    const handledEditEventRef = useRef(false);
+    const handledEditEventRef = useRef(null);
 
     const openBuilder = (event = null) => {
         setBuilderEvent(event);
-        if (event?.is_quick_event) setIsQuickBuilderOpen(true);
-        else setIsBuilderOpen(true);
+        setIsQuickBuilderOpen(Boolean(event?.is_quick_event));
+        setIsBuilderOpen(!event?.is_quick_event);
     };
 
     // Form State
@@ -158,25 +160,39 @@ const CalendarManager = () => {
         fetchEvents();
     }, []);
 
+    useEffect(() => {
+        if (createMode !== 'full' && createMode !== 'quick') return;
+        setBuilderEvent(null);
+        setIsBuilderOpen(createMode === 'full');
+        setIsQuickBuilderOpen(createMode === 'quick');
+        onRouteActionOpened?.();
+    }, [createMode, onRouteActionOpened]);
+
     // Event Finance links here when the calendar icon is clicked. Open the
     // appropriate editable form, then clear the one-time deep-link parameter.
     useEffect(() => {
-        if (handledEditEventRef.current || events.length === 0) return;
-        const editEventId = new URLSearchParams(window.location.search).get('editEvent');
-        if (!editEventId) return;
+        const editEventId = new URLSearchParams(window.location.search).get('editEvent') || initialEditEventId;
+        if (!editEventId) {
+            handledEditEventRef.current = null;
+            return;
+        }
+        if (createMode || handledEditEventRef.current === editEventId) return;
 
         const event = events.find((item) => String(item.id) === editEventId);
         if (!event) return;
 
-        handledEditEventRef.current = true;
+        handledEditEventRef.current = editEventId;
         if (event.is_manual) openBuilder(event);
         else handleEdit(event);
 
         const params = new URLSearchParams(window.location.search);
-        params.delete('editEvent');
-        const query = params.toString();
-        window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
-    }, [events]);
+        if (onRouteActionOpened) onRouteActionOpened();
+        else if (params.has('editEvent')) {
+            params.delete('editEvent');
+            const query = params.toString();
+            window.history.replaceState(window.history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+        }
+    }, [events, initialEditEventId, createMode, onRouteActionOpened]);
 
     // Type-ahead organisation search for the legacy edit modal
     useEffect(() => {
@@ -244,10 +260,9 @@ const CalendarManager = () => {
     const fetchEvents = async () => {
         try {
             setLoading(true);
-            await promoteFinishedTiersToRecentResults(supabase);
-            const { data, error } = await supabase
-                .from('calendar')
-                .select('*, organisations:organisation_id(id, name, logo_url)')
+            if (scopeId === 'all') await promoteFinishedTiersToRecentResults(supabase);
+            const calendar = supabase.from('calendar').select('*, organisations:organisation_id(id, name, logo_url)');
+            const { data, error } = await scopeCalendarQuery(calendar, scopeId)
                 .order('start_date', { ascending: true }) // Order by start_date 
                 .order('id', { ascending: true }); // Fallback
 
@@ -492,7 +507,7 @@ const CalendarManager = () => {
     const getEventPublicUrl = (event) => {
         const path = `/calendar/${event.slug || event.id}`;
         if (typeof window !== 'undefined' && window.location?.origin) {
-            return `${window.location.origin}${path}`;
+            return `${adminPublicOrigin()}${path}`;
         }
         return `https://4mpadel.co.za${path}`;
     };
@@ -1132,14 +1147,14 @@ const CalendarManager = () => {
                         <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
                         {isSyncing ? 'Syncing Past Events...' : 'Sync Past Event Data'}
                     </button>
-                    <button
+                    {scopeId === 'all' && <button
                         onClick={handleSyncRankedin}
                         disabled={isSyncing}
                         className={`bg-[#1a1a1a] text-white border border-white/20 px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10 transition-colors ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                         <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
                         {isSyncing ? 'Syncing...' : 'Sync Event List'}
-                    </button>
+                    </button>}
                     <button
                         type="button"
                         onClick={() => { setBuilderEvent(null); setIsQuickBuilderOpen(true); }}

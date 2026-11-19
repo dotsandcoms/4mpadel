@@ -8,7 +8,7 @@ const button = 'min-h-[52px] rounded-lg border border-[#465155] px-4 py-3 text-s
 const field = 'w-full rounded-lg border border-[#465155] bg-[#20272A] p-3 text-[#F0F3F2] placeholder:text-[#A6B1B4] focus:outline-none focus:ring-2 focus:ring-[#B9D8C7]';
 const eventTitleColor = 'text-[#B9D8C7]';
 const helpTypeColor = 'text-[#D5BDE8]';
-export default function HelpRequestsAdmin({ unread = 0, revision = 0, initialTicket = null, onChange = () => {} }) {
+export default function HelpRequestsAdmin({ unread = 0, revision = 0, initialTicket = null, onChange = () => {}, onCloseTicket }) {
     const [auth, setAuth] = useState({ ready: false, verified: false, email: '', ...emptyMessagingAuthenticator() }), [code, setCode] = useState('');
     const [rows, setRows] = useState([]), [next, setNext] = useState(null), [status, setStatus] = useState(''), [team, setTeam] = useState(''), [query, setQuery] = useState('');
     const [thread, setThread] = useState(null), [body, setBody] = useState(''), [loading, setLoading] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -52,16 +52,17 @@ export default function HelpRequestsAdmin({ unread = 0, revision = 0, initialTic
         const refresh = setInterval(() => void load(), 30000);
         return () => { clearTimeout(timer); clearInterval(refresh); generation.current++; };
     }, [load, auth.verified, query]);
-    const open = async id => {
+    const open = useCallback(async id => {
         const version = ++readGeneration.current; sending.current = false; setBusy(false); setThread(null); setBody(''); retry.current = null; setError('');
         try { const page = await helpRequestApi('read', { id }); if (alive.current && version === readGeneration.current) { setThread(page); const latest = page.messages.at(-1); if (latest) { await helpRequestApi('mark_read', { id, messageId: latest.id }); if (alive.current && version === readGeneration.current) { onChange(); void load(); } } } }
         catch (e) { if (alive.current && version === readGeneration.current) setError(e.message); }
-    };
+    }, [load, onChange]);
+    useEffect(() => { pendingTicket.current = initialTicket; }, [initialTicket]);
     useEffect(() => {
         if (auth.verified && pendingTicket.current) {
             const id = pendingTicket.current; pendingTicket.current = null; void open(id);
         }
-    }, [auth.verified]);
+    }, [auth.verified, initialTicket, open]);
     const act = async (action, data = {}) => {
         if (!thread || sending.current) return;
         if (thread.request.status === 'resolved' && ['reply', 'escalate'].includes(action)) { setError('This request is resolved. Reopen it before sending a message.'); return; }
@@ -114,7 +115,22 @@ export default function HelpRequestsAdmin({ unread = 0, revision = 0, initialTic
         catch (e) { if (alive.current && version === readGeneration.current) setError(e.message); }
         finally { if (alive.current && version === readGeneration.current) setBusy(false); }
     };
-    const back = () => { const params = new URLSearchParams(window.location.search); params.delete('ticket'); const query = params.toString(); window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`); readGeneration.current++; sending.current = false; setBusy(false); setThread(null); setBody(''); retry.current = null; void load(); };
+    const back = () => {
+        if (onCloseTicket) onCloseTicket();
+        else {
+            const params = new URLSearchParams(window.location.search);
+            params.delete('ticket');
+            const query = params.toString();
+            window.history.replaceState(window.history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+        }
+        readGeneration.current++;
+        sending.current = false;
+        setBusy(false);
+        setThread(null);
+        setBody('');
+        retry.current = null;
+        void load();
+    };
     const date = value => new Date(value).toLocaleString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const statusClass = value => value === 'resolved' ? 'bg-[#23342D] text-[#B9D8C7]' : value === 'waiting_on_player' ? 'bg-[#393124] text-[#E3CEA6]' : 'bg-[#27323B] text-[#C1D7E8]';
     const statusBadge = value => <span className={`inline-flex rounded-md px-2 py-1 text-xs font-medium ${statusClass(value)}`}>{helpStatusText[value]}</span>;
@@ -139,7 +155,7 @@ export default function HelpRequestsAdmin({ unread = 0, revision = 0, initialTic
             </>}
             <div className={`grid gap-3 ${thread.request.status === 'resolved' ? 'grid-cols-1' : thread.request.team === 'organiser' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>{thread.request.status !== 'resolved' && <button className={`${button} bg-[#EAF0EC] text-[#17271F] hover:bg-white`} disabled={busy || !body.trim()} onClick={() => { if (retry.current?.body !== body.trim()) retry.current = { body: body.trim(), key: crypto.randomUUID() }; void act('reply', { body: retry.current.body, clientId: retry.current.key }); }}>{busy ? 'Saving…' : 'Send reply'}</button>}<button className={button} disabled={busy} onClick={() => void act('status', { status: thread.request.status === 'resolved' ? 'open' : 'resolved' })}>{thread.request.status === 'resolved' ? 'Reopen request' : 'Mark resolved'}</button>{thread.request.status !== 'resolved' && thread.request.team === 'organiser' && <button className={button} disabled={busy} onClick={() => void act('escalate')}>Send to 4M support</button>}</div>
         </> : <>
-            <div className="grid gap-4 sm:grid-cols-[minmax(220px,1fr)_180px_180px]"><label className="text-sm text-[#B7C0C2]">Search<input type="search" placeholder="Name, email, event or ticket" value={query} onChange={event => { setCursors([null]); setQuery(event.target.value); }} className={`${field} mt-2`} /></label><label className="text-sm text-[#B7C0C2]">Status<select value={status} onChange={event => { setCursors([null]); setStatus(event.target.value); }} className={`${field} mt-2`}><option value="">All statuses</option>{Object.entries(helpStatusText).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="text-sm text-[#B7C0C2]">Team<select value={team} onChange={event => { setCursors([null]); setTeam(event.target.value); }} className={`${field} mt-2`}><option value="">All teams</option><option value="organiser">Organisers</option><option value="4m">4M support</option></select></label></div>
+            <div className="grid gap-4 sm:grid-cols-[minmax(0,1.5fr)_repeat(2,minmax(0,1fr))]"><label className="text-sm text-[#B7C0C2]">Search<input type="search" placeholder="Name, email, event or ticket" value={query} onChange={event => { setCursors([null]); setQuery(event.target.value); }} className={`${field} mt-2`} /></label><label className="text-sm text-[#B7C0C2]">Status<select value={status} onChange={event => { setCursors([null]); setStatus(event.target.value); }} className={`${field} mt-2`}><option value="">All statuses</option>{Object.entries(helpStatusText).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="text-sm text-[#B7C0C2]">Team<select value={team} onChange={event => { setCursors([null]); setTeam(event.target.value); }} className={`${field} mt-2`}><option value="">All teams</option><option value="organiser">Organisers</option><option value="4m">4M support</option></select></label></div>
             <div className="overflow-x-auto rounded-xl border border-[#343B3E]"><table className="w-full min-w-[960px] border-collapse text-left text-sm"><caption className="sr-only">Help request queue. Open a ticket to read its history and reply.</caption><thead className="bg-[#20272A] text-[#C8CFD1]"><tr>{['Ticket', 'From', 'Event / topic', 'Status', 'Team', 'Updated'].map(label => <th key={label} scope="col" className="px-4 py-3 font-medium">{label}</th>)}</tr></thead><tbody>
                 {rows.map(row => <tr key={row.id} onClick={event => { if (!event.target.closest('button')) void open(row.id); }} className={`cursor-pointer border-t border-[#343B3E] transition-colors hover:bg-[#252D30] ${row.unread > 0 ? 'bg-[#1D2527]' : ''}`}>
                     <td className="max-w-[280px] px-4 py-4"><button type="button" onClick={() => void open(row.id)} className="rounded text-left font-mono font-medium text-[#D0E5D7] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#B9D8C7]" aria-label={`Open ${row.reference} from ${row.requester.name || row.requester.email || 'player'}`}>{row.reference}{row.unread > 0 && <span className="ml-2 font-sans text-xs">({row.unread})</span>}</button><p className="mt-1 truncate text-[#B7C0C2]">{row.preview}</p></td>

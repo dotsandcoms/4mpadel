@@ -1,3 +1,4 @@
+import { adminPublicOrigin } from '../../utils/adminPublicOrigin';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -5174,8 +5175,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                 <div className="rounded-xl border border-white/10 bg-black/20 p-4">
                                     <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">Event link</p>
                                     <div className="mt-2 flex items-center gap-2">
-                                        <code className="min-w-0 flex-1 truncate rounded-lg bg-black/30 px-3 py-2 text-xs text-gray-300">{`${window.location.origin}/calendar/${form.slug || slugify(form.event_name) || 'event'}`}</code>
-                                        <button type="button" onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/calendar/${form.slug || slugify(form.event_name) || 'event'}`).then(() => toast.success('Event link copied'))} aria-label="Copy event link" className="rounded-lg border border-white/10 p-2.5 text-gray-300 hover:border-padel-green/40 hover:text-padel-green"><Copy size={16} /></button>
+                                        <code className="min-w-0 flex-1 truncate rounded-lg bg-black/30 px-3 py-2 text-xs text-gray-300">{`${adminPublicOrigin()}/calendar/${form.slug || slugify(form.event_name) || 'event'}`}</code>
+                                        <button type="button" onClick={() => navigator.clipboard?.writeText(`${adminPublicOrigin()}/calendar/${form.slug || slugify(form.event_name) || 'event'}`).then(() => toast.success('Event link copied'))} aria-label="Copy event link" className="rounded-lg border border-white/10 p-2.5 text-gray-300 hover:border-padel-green/40 hover:text-padel-green"><Copy size={16} /></button>
                                     </div>
                                 </div>
 

@@ -29,10 +29,10 @@ const players = target.map((r,i)=>({id:i+1,email:r.email,license_type:'none'}));
 const tables = {
  calendar:[
   {id:520,event_name:'Earlier event',sapa_status:'Silver',start_date:'2026-10-01',is_manual:true,finance_managed:true},
-  {id:521,event_name:${JSON.stringify(eventName)},sapa_status:'Major',start_date:'2026-10-30',is_manual:true,finance_managed:true},
+  {id:521,event_name:${JSON.stringify(eventName)},sapa_status:'Major',start_date:'2026-10-30',is_manual:true,finance_managed:true,organisation_id:'org-a'},
   {id:522,event_name:'RankedIn event',sapa_status:'Gold',start_date:'2026-11-01',entry_fee:100,finance_managed:true,rankedin_id:123},
-  {id:523,event_name:'Bronze tournament',sapa_status:'Bronze',start_date:'2026-11-20',is_manual:true,finance_managed:true},
-  {id:524,event_name:'Super Gold tournament',sapa_status:'Super Gold',start_date:'2026-11-21',is_manual:true,finance_managed:true},
+  {id:523,event_name:'Bronze tournament',sapa_status:'Bronze',start_date:'2026-11-20',is_manual:true,finance_managed:true,organisation_id:'org-a'},
+  {id:524,event_name:'Super Gold tournament',sapa_status:'Super Gold',start_date:'2026-11-21',is_manual:true,finance_managed:true,organisation_id:'org-b'},
   {id:525,event_name:'Legacy Super Gold',sapa_status:'S Gold',start_date:'2026-11-22',is_manual:true,finance_managed:true},
   {id:526,event_name:'Social tournament',sapa_status:'None',start_date:'2026-11-23',is_manual:true,finance_managed:true},
   {id:527,event_name:'Unmanaged Gold',sapa_status:'Gold',start_date:'2026-11-24',is_manual:true,finance_managed:false}
@@ -95,7 +95,7 @@ export const supabase = {
 before(async () => {
     await build({
         stdin: {
-            contents: "import React from 'react';import {createRoot} from 'react-dom/client';import EventFinance from './src/components/admin/EventFinance.jsx';const root=createRoot(document.getElementById('root'));window.__renderOverview=props=>root.render(<EventFinance {...props}/>);window.__hideOverview=()=>root.render(null);window.__renderOverview({isEventManagementModule:true,onStartRehearsal:id=>{window.__rehearsalEvent=id}});",
+            contents: "import React from 'react';import {createRoot} from 'react-dom/client';import EventFinance from './src/components/admin/EventFinance.jsx';const root=createRoot(document.getElementById('root'));window.__renderOverview=props=>root.render(<EventFinance {...props}/>);window.__hideOverview=()=>root.render(null);window.__renderOverview({isEventManagementModule:true,onStartRehearsal:id=>{window.__rehearsalEvent=id},...window.__overviewProps});",
             resolveDir: root,
             loader: 'jsx',
         },
@@ -108,13 +108,14 @@ before(async () => {
             builder.onResolve({ filter: /supabaseClient$/ }, () => ({ path: 'supabase', namespace: 'mock' }));
             builder.onResolve({ filter: /useRankedin$/ }, () => ({ path: 'rankedin', namespace: 'mock' }));
             builder.onResolve({ filter: /\/utils\/licenses$/ }, () => ({ path: 'licenses', namespace: 'mock' }));
-            builder.onResolve({ filter: /^\.\/(ManualEventRegistrations|EventBuilder)$/ }, args => ({ path: args.path, namespace: 'mock' }));
+            builder.onResolve({ filter: /^\.\/(ManualEventRegistrations|EventBuilder|QuickEventBuilder)$/ }, args => ({ path: args.path, namespace: 'mock' }));
             builder.onLoad({ filter: /./, namespace: 'mock' }, args => ({ contents: {
                 supabase: mockSupabase,
                 rankedin: 'export const useRankedin=()=>({getTournamentPlayerTabs:async()=>[]});',
                 licenses: `export const hydrateEventLicenses=async(players,eventId)=>{if(players.length)window.__licenseEvents.push(eventId);return players.map(p=>({...p,event_license:{event_id:Number(eventId),full:p.id<=60,temporary:p.id>60&&p.id<=90}}));};`,
-                './ManualEventRegistrations': 'import React from "react";export default function Manager({onBack}){return <button onClick={onBack}>Back to events</button>}',
+                './ManualEventRegistrations': 'import React from "react";export default function Manager({event,initialTab,onBack}){return <button data-event-id={event.id} data-initial-tab={initialTab} onClick={onBack}>Back to events</button>}',
                 './EventBuilder': 'export default function Builder(){return null}',
+                './QuickEventBuilder': 'export default function QuickBuilder(){return null}',
             }[args.path], loader: 'jsx', resolveDir: root }));
         } }],
         loader: { '.png': 'dataurl' },
@@ -133,7 +134,8 @@ async function openOverview(failure = null, options = {}) {
     await page.setContent('<!doctype html><html><body><div id="root"></div></body></html>');
     await page.evaluate((value, options) => { window.__failure = value; Object.assign(window, options); }, failure, options);
     await page.addScriptTag({ path: output });
-    if (options.__holdSummaries) await page.waitForFunction(() => typeof window.__releaseSummaries === 'function');
+    if (options.__overviewProps?.initialEventId) await page.waitForSelector('[data-event-id]');
+    else if (options.__holdSummaries) await page.waitForFunction(() => typeof window.__releaseSummaries === 'function');
     else await page.waitForFunction(() => !!document.querySelector('[data-summary-state="ready"],[data-summary-state="error"],[role="alert"]'));
     return page;
 }
@@ -219,6 +221,26 @@ test('manager defaults to the four SAPA tiers and loads only their data', async 
         const queries = await page.evaluate(() => window.__queries);
         assert.deepEqual(queries.map(query=>query.table), ['calendar','event_management_completion']);
         assert.deepEqual(await page.evaluate(()=>window.__summaryCalls.flat().sort((a,b)=>a-b)), [520,521,522,524,525]);
+    } finally { await page.close(); }
+});
+
+test('a scoped overview intersects its workspace with assigned event IDs', async () => {
+    const page = await openOverview(null, { __overviewProps: { scopeId: 'org:org-a', allowedEvents: [521, 524] } });
+    try {
+        assert.ok(await eventRow(page, eventName));
+        assert.equal(await eventRow(page, 'Super Gold tournament'), null);
+        assert.deepEqual(await page.evaluate(() => window.__summaryCalls), [[521]]);
+    } finally { await page.close(); }
+});
+
+test('a linked Bronze event opens its requested management tab', async () => {
+    const page = await openOverview(null, { __overviewProps: { scopeId: 'org:org-a', initialEventId: 523, initialRegistrationTab: 'draws' } });
+    try {
+        assert.equal(await page.$eval('[data-event-id="523"]', button => button.dataset.initialTab), 'draws');
+        await page.click('[data-event-id="523"]');
+        await page.waitForSelector('[data-summary-state="ready"]');
+        assert.equal(await page.$eval('[role="switch"]', input => input.checked), true);
+        assert.ok(await eventRow(page, 'Bronze tournament'));
     } finally { await page.close(); }
 });
 
