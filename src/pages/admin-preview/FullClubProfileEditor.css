@@ -1,0 +1,25 @@
+.clubs-full-dialog.pp-dialog { width:min(1120px,calc(100vw - 32px)); max-width:1120px; max-height:calc(100dvh - 32px); padding:0; overflow:auto; overscroll-behavior:contain; }
+.clubs-full-dialog .pp-dialog-inner { padding:0; }
+.clubs-full-dialog .pp-dialog-header { padding:24px 28px; margin:0; border-bottom:1px solid var(--ap-border,#d7ddd5); }
+.clubs-full-dialog .pp-dialog-header h2 { font-size:28px; }
+.clubs-full-form { padding:24px 28px 0; }
+.clubs-full-form > fieldset { border:0; margin:0; padding:0; min-width:0; }
+.clubs-editor-intro { margin:0 0 24px; color:var(--ap-muted,#687068); line-height:1.6; }
+.clubs-full-error { padding:14px 16px; background:#faeae5; color:#96372b; border:1px solid #e5b9b2; border-radius:10px; overflow-wrap:anywhere; }
+.clubs-full-footer { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:12px; padding:18px 0; margin-top:24px; position:sticky; bottom:0; z-index:2; background:var(--ap-card,#fafcf9); border-top:1px solid var(--ap-border,#d7ddd5); }
+.clubs-full-review h3,.clubs-discard h3 { font-size:22px; margin:0 0 16px; }
+.clubs-full-review > p,.clubs-discard p { line-height:1.6; margin:12px 0 20px; }
+.clubs-full-review article { border-top:1px solid var(--ap-border,#d7ddd5); padding:18px 0; }
+.clubs-full-review h4 { font-size:17px; margin:0 0 12px; }
+.clubs-full-review h5 { font-size:12px; color:var(--ap-muted,#687068); text-transform:uppercase; letter-spacing:.07em; margin:0 0 10px; }
+.clubs-review-columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; }
+.clubs-review-columns section { min-width:0; overflow-wrap:anywhere; white-space:pre-wrap; }
+.clubs-review-columns dl { margin:0; }
+.clubs-review-columns dl > div { margin-bottom:8px; }
+.clubs-review-columns dt { font-size:12px; color:var(--ap-muted,#687068); }
+.clubs-review-columns dd { margin:3px 0 0; }
+.clubs-review-columns ol { margin:0; padding-left:20px; }
+.clubs-review-columns li { margin-bottom:12px; }
+.clubs-review-columns img { width:120px; height:90px; max-width:100%; object-fit:contain; border:1px solid var(--ap-border,#d7ddd5); border-radius:8px; background:#fff; }
+.clubs-review-empty { color:var(--ap-muted,#687068); }
+@media(max-width:600px) { .clubs-full-dialog.pp-dialog { width:calc(100vw - 16px); max-height:calc(100dvh - 16px); }.clubs-full-dialog .pp-dialog-header { padding:18px; }.clubs-full-dialog .pp-dialog-header h2 { font-size:22px; }.clubs-full-form { padding:18px 18px 0; }.clubs-review-columns { grid-template-columns:1fr; gap:16px; }.clubs-full-footer > button { flex:1 1 auto; } }

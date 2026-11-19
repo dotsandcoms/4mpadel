@@ -1,0 +1,27 @@
+.ap-event-details-dialog { width:min(1080px,calc(100vw - 32px)); }
+.ap-editor-content-fieldset { border:0; padding:0; margin:0; min-width:0; display:grid; gap:20px; }
+.ap-event-details-fields { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+.ap-event-details-fields label:first-child { grid-column:1/-1; }
+.ap-event-details-fields input { box-sizing:border-box; width:100%; min-width:0; min-height:44px; padding:12px; font:inherit; color:inherit; background:transparent; border:1px solid #b9c1b8; border-radius:8px; }
+.ap-event-details-review { margin:0; display:grid; gap:16px; }
+.ap-event-details-review > div { border-bottom:1px solid #d9ded8; padding-bottom:12px; }
+.ap-event-details-review dt { font-size:13px; color:#687069; margin-bottom:6px; }
+.ap-event-details-review dd { margin:0; display:grid; grid-template-columns:1fr 1fr; gap:16px; overflow-wrap:anywhere; }
+.ap-event-details-review dd span { color:#687069; }
+.ap-event-details-review dd > section { min-width:0; }
+.ap-event-details-review dd > section > small { display:block; margin-bottom:8px; color:#687069; }
+.ap-event-details-review .ap-rich-content { padding:0; }
+@media(max-width:560px) { .ap-event-details-fields,.ap-event-details-review dd { grid-template-columns:1fr; } }
+.ap-editor-sections { display:flex; gap:8px; flex-wrap:wrap; border-bottom:1px solid #d9ded8; padding-bottom:12px; }
+.ap-editor-sections button { min-height:40px; padding:8px 12px; border:1px solid transparent; background:transparent; border-radius:6px; color:inherit; font:inherit; }
+.ap-editor-sections button[aria-current] { background:#e7eddf; border-color:#b9c1b8; font-weight:600; }
+.ap-event-details-fields .ap-editor-wide { grid-column:1/-1; }
+.ap-event-details-fields .ap-editor-checkbox { display:flex; justify-content:space-between; align-items:center; gap:16px; }
+.ap-editor-checkbox input { width:20px; min-height:20px; }
+.ap-editor-divisions details { border:1px solid #d9ded8; border-radius:8px; margin-top:12px; }
+.ap-editor-divisions summary { padding:16px; cursor:pointer; font-weight:600; }
+.ap-editor-divisions .ap-event-details-fields { padding:16px; border-top:1px solid #d9ded8; }
+.ap-event-details-review strong { white-space:pre-wrap; }
+.ap-event-details-dialog footer { position:sticky; bottom:0; background:var(--ap-surface,#fafbf8); border-top:1px solid #d9ded8; padding:16px 0; }
+.ap-editor-warning { color:#7e5800; background:#faf3dd; border-radius:8px; padding:12px; }
+.ap-editor-gifts { grid-column:1/-1; border:1px solid #d9ded8; border-radius:8px; padding:16px; display:grid; gap:12px; }

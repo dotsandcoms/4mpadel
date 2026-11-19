@@ -1,0 +1,24 @@
+.ap-entry-payment-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+  padding: 18px 20px;
+  border: 1px solid #e8dab3;
+  border-radius: 12px;
+  background: #faf6e9;
+  color: #62512c;
+  text-align: left;
+}
+.ap-entry-payment-summary .ap-entry-payment-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #806015;
+}
+.ap-entry-payment-summary strong { font-size: 16px; line-height: 1.4; color: #302a1c; }
+.ap-entry-payment-summary > span:not(.ap-entry-payment-label),
+.ap-entry-payment-summary p { margin: 0; font-size: 13px; line-height: 1.5; }
+@media (max-width: 480px) { .ap-entry-payment-summary { padding: 16px; } }

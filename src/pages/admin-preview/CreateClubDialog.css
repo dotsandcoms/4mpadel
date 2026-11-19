@@ -1,0 +1,7 @@
+.clubs-create-dialog.pp-dialog { width:min(860px,calc(100vw - 32px)); }
+.clubs-create-body { padding:24px; overflow:auto; overscroll-behavior:contain; }
+.clubs-create-notice { margin:0 0 22px; padding:12px 14px; border:1px solid var(--ap-line); border-radius:8px; background:var(--ap-panel); color:var(--ap-muted); font-size:13px; line-height:1.6; }
+.clubs-create-error { color:var(--ap-danger,#a5362b); padding:16px; }
+.clubs-create-discard h3 { margin:0 0 12px; font-size:22px; }
+.clubs-create-discard p { margin:0 0 20px; }
+@media(max-width:600px) { .clubs-create-dialog.pp-dialog { width:calc(100vw - 16px); }.clubs-create-body { padding:16px; } }
