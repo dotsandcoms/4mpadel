@@ -1,4 +1,9 @@
 \set ON_ERROR_STOP on
+do $$ begin
+    if current_database() <> 'fourm_permission_boundary_test' or to_regclass('public.payments') is not null then
+        raise exception 'Use the empty disposable fourm_permission_boundary_test database required by the checkout fixture';
+    end if;
+end $$;
 \ir ../mobile/tests/paid-registration-checkout.sql
 reset role;
 select set_config('request.jwt.claims','{}',false);

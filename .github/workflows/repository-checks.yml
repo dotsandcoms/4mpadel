@@ -108,6 +108,19 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      backfill:
+        image: postgres:17
+        env:
+          POSTGRES_USER: fixture_owner
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fourm_permission_boundary_test
+        ports:
+          - 55444:5432
+        options: >-
+          --health-cmd "pg_isready -U fixture_owner"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       PGHOST: 127.0.0.1
       PGPORT: '55443'
@@ -125,12 +138,19 @@ jobs:
         run: |
           createdb fourm_native_checkout_test
           psql -X -q -d fourm_native_checkout_test -f tests/nativeCheckoutReferences.sql
-      - name: Verify reviewed draw and club operations
+      - name: Verify reviewed draw, club and organisation operations
         run: |
           createdb fourm_native_draw_specialist_test
           psql -X -q -d fourm_native_draw_specialist_test -f tests/adminNativeDrawSpecialist.sql
           createdb fourm_club_lifecycle_test
           psql -X -q -d fourm_club_lifecycle_test -f tests/adminClubLifecycle.sql
+          createdb fourm_admin_organisation_test
+          psql -X -q -d fourm_admin_organisation_test -f tests/adminOrganisationRecords.sql
+      - name: Verify Paystack receipt recovery and checkout compatibility
+        env:
+          PGPORT: '55444'
+          PGUSER: fixture_owner
+        run: psql -X -q -d fourm_permission_boundary_test -f tests/adminPaystackBackfill.sql
 
   gate:
     name: Repository checks

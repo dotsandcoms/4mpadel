@@ -1,8 +1,13 @@
 \set ON_ERROR_STOP on
 -- Run against a separate empty local fixture database, never a shared project.
-create role anon;
-create role authenticated;
-create role service_role;
+do $$ begin
+  if current_database() <> 'fourm_admin_organisation_test' or to_regclass('public.organisations') is not null then
+    raise exception 'Use an empty disposable fourm_admin_organisation_test database';
+  end if;
+  if not exists(select from pg_roles where rolname='anon') then create role anon; end if;
+  if not exists(select from pg_roles where rolname='authenticated') then create role authenticated; end if;
+  if not exists(select from pg_roles where rolname='service_role') then create role service_role; end if;
+end $$;
 create schema auth;
 create schema private;
 create schema banking_private;
