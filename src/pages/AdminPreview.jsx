@@ -951,6 +951,7 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
     const nextQuery = new URLSearchParams(location.search);
     if (target !== page) nextQuery.delete('event');
     nextQuery.delete('create');
+    nextQuery.delete('ticket');
     nextQuery.delete('action');
     nextQuery.delete('registration');
     const keepPublicPreview = import.meta.env.DEV && (nextQuery.has('event') || nextQuery.get('preview-live') === '1');
