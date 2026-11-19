@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Edit2, ExternalLink, Plus, Search, Trash2 } from 'lucide-react';
 import SearchableDropdown from '../../components/SearchableDropdown';
+import { FOURM_PUBLIC_ORIGIN } from '../../constants/site.js';
 import { ReviewDialog } from './ReviewNavigationDialogs';
 import RecordLoading from './RecordLoading';
 import { verifyHostedReviewAccess } from './hostedReviewAccess';
@@ -185,7 +186,7 @@ export default function ReviewBlogWorkspace({ client, session, refreshRevision }
             <td><strong>{post.title}</strong><small>{post.author || 'Author unassigned'}</small></td>
             <td>{post.category || 'Uncategorised'}</td><td>{String(post.date || '').slice(0, 10)}</td><td>{post.status}</td>
             <td><div className="ap-heading-actions">
-              {post.status === 'Published' && <a className="ap-secondary" href={`/blog/${encodeURIComponent(post.slug || post.id)}`} target="_blank" rel="noreferrer" aria-label={`View ${post.title}`}><ExternalLink size={16}/></a>}
+              {post.status === 'Published' && <a className="ap-secondary" href={`${FOURM_PUBLIC_ORIGIN}/blog/${encodeURIComponent(post.slug || post.id)}`} target="_blank" rel="noreferrer" aria-label={`View ${post.title}`}><ExternalLink size={16}/></a>}
               <button className="ap-secondary" aria-label={`Edit ${post.title}`} onClick={() => openEditor(post)}><Edit2 size={16}/></button>
               <button className="ap-secondary" aria-label={`Delete ${post.title}`} onClick={() => { setError(''); setRemove(post); }}><Trash2 size={16}/></button>
             </div></td>

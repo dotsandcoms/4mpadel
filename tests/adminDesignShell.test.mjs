@@ -18,6 +18,7 @@ const listeners = new Set();
 const result = data => ({ data, error: null });
 const calls = () => window.fixtureCalls;
 const tenant = () => window.fixtureAccount === 'tenant';
+const player = { id: 12, name: 'Fixture Player', email: 'player@example.invalid', home_club: 'Fixture Club', approved: true };
 const north = { id: 'north-fixture', name: 'North organisation', status: 'approved' };
 const south = { id: 'south-fixture', name: 'South organisation', status: 'approved' };
 let signedIn = true;
@@ -35,8 +36,13 @@ function query(table) {
   let rows = table === 'organisation_members' ? [
     { role: 'admin', user_email: email, organisation_id: north.id, organisations: north },
     { role: 'owner', user_email: 'other@example.invalid', organisation_id: south.id, organisations: south },
-  ] : table === 'calendar' || table === 'events' ? [event] : table === 'organisations' ? [north, south] : [];
-  if (table === 'admin_sidebar_permissions' && !tenant()) rows = [{ email, role: 'super_admin' }];
+  ].filter(row => window.fixtureAccount !== 'players-only' || row.user_email !== email)
+   : table === 'calendar' || table === 'events' ? [event]
+   : table === 'organisations' ? [north, south]
+   : table === 'players' ? [player]
+   : table === 'event_registrations' ? [{ id: 3, event_id: event.id, email: player.email, status: 'registered', payment_status: 'pending', division: 'Open', calendar: event }]
+   : [];
+  if (table === 'admin_sidebar_permissions') rows = window.fixtureAccount === 'platform' ? [{ email, role: 'super_admin' }] : [{ email, role: 'custom', allowed_tabs: ['players'] }];
   let fields = '';
   let single = false;
   const builder = {
@@ -47,13 +53,13 @@ function query(table) {
     range(start, end) { rows = rows.slice(start, end + 1); return builder; },
     limit(size) { rows = rows.slice(0, size); return builder; },
     abortSignal() { return builder; },
-    ilike() { return builder; },
+    ilike(key, value) { rows = rows.filter(row => String(row[key] || '').toLowerCase() === String(value).toLowerCase()); return builder; },
     is() { return builder; },
     or() { return builder; },
     not() { return builder; },
     gte() { return builder; },
     lte() { return builder; },
-    neq() { return builder; },
+    neq(key, value) { rows = rows.filter(row => row[key] !== value); return builder; },
     maybeSingle() { single = true; return builder; },
     single() { return builder.maybeSingle(); },
     then(resolve, reject) { calls().push(['read', table, fields]); return Promise.resolve(result(single ? rows[0] || null : rows)).then(resolve, reject); },
@@ -69,6 +75,8 @@ export const supabase = {
     },
     getSession: async () => result({ session: session() }),
     getUser: async () => result({ user: signedIn ? user : null }),
+    signInWithOtp: async options => { calls().push(['invite', options]); return result(null); },
+    resetPasswordForEmail: async (email, options) => { calls().push(['recovery', email, options]); return result(null); },
     signOut: async options => {
       calls().push(['sign-out', options]);
       signedIn = false;
@@ -370,6 +378,75 @@ test('the old Player URL opens the original Players workspace and preserves the 
   const page = await open(t, '/admin-preview/player?view=directory');
   await route(page, '/admin-preview/players?view=directory');
   await heading(page, 'Players');
+});
+
+test('verified platform permission reaches the Players page and its account controls', async t => {
+  const page = await open(t, '/admin-preview/players?player=12');
+  await page.waitForSelector('dialog[open][aria-label="Player record"]');
+  assert.equal(await page.$eval('.pp-drawer-footer a', node => node.href), 'https://4mpadel.co.za/players?id=12');
+  await clickText(page, 'dialog[open] nav button', 'Manage');
+  assert.deepEqual(await page.$$eval('.pp-manage-grid button', nodes => nodes.map(node => node.textContent)), [
+    'Edit profile', 'Send login invite', 'Reset password', 'Preview player account', 'Delete player',
+  ]);
+  assert.equal(await page.$eval('dialog[open] .pp-drawer-body a', node => node.pathname + node.search), '/admin-preview/licenses?license_player=12');
+
+  await clickText(page, '.pp-manage-grid button', 'Preview player account');
+  const preview = 'dialog[open][aria-label="Preview player account"]';
+  await page.waitForFunction(selector => document.querySelector(selector)?.textContent.includes('North open'), {}, preview);
+  assert.match(await page.$eval(preview, node => node.textContent), /Fixture Player.*Fixture Club.*North open.*Open.*pending/);
+  assert.equal(await page.evaluate(() => sessionStorage.length), 0);
+  assert.equal(await page.evaluate(() => window.fixtureCalls.some(([call]) => ['invite', 'recovery', 'sign-out'].includes(call))), false);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector(preview, { hidden: true });
+  assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Preview player account');
+
+  await clickText(page, '.pp-manage-grid button', 'Send login invite');
+  const invite = 'dialog[open][aria-label="Send login invite"]';
+  await page.waitForSelector(invite);
+  assert.equal(await page.$eval(invite + ' .ap-primary', node => node.disabled), true);
+  await page.click(invite + ' input[type="checkbox"]');
+  await page.click(invite + ' .ap-primary');
+  await page.waitForFunction(() => window.fixtureCalls.some(([call]) => call === 'invite'));
+  assert.deepEqual(await page.evaluate(() => window.fixtureCalls.find(([call]) => call === 'invite')), ['invite', {
+    email: 'player@example.invalid', options: { emailRedirectTo: 'https://4mpadel.co.za/profile?new_invite=true' },
+  }]);
+  await page.waitForFunction(selector => document.querySelector(selector)?.textContent.includes('Invitation requested'), {}, invite);
+  await page.keyboard.press('Escape');
+  await clickText(page, '.pp-manage-grid button', 'Reset password');
+  const reset = 'dialog[open][aria-label="Reset password"]';
+  await page.click(reset + ' input[type="checkbox"]');
+  await page.click(reset + ' .ap-primary');
+  await page.waitForFunction(() => window.fixtureCalls.some(([call]) => call === 'recovery'));
+  assert.deepEqual(await page.evaluate(() => window.fixtureCalls.find(([call]) => call === 'recovery')), [
+    'recovery', 'player@example.invalid', { redirectTo: 'https://4mpadel.co.za/reset-password' },
+  ]);
+  await page.waitForFunction(selector => document.querySelector(selector)?.textContent.includes('Password reset requested'), {}, reset);
+  await page.keyboard.press('Escape');
+  await clickText(page, '.pp-manage-grid button', 'Delete player');
+  const deletion = 'dialog[open][aria-label="Delete player"]';
+  await page.waitForSelector(deletion);
+  assert.equal(await page.$eval(deletion + ' .ap-danger-button', node => node.disabled), true);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector(deletion, { hidden: true });
+  await page.keyboard.press('Escape');
+  await clickText(page, '.pp-heading button', 'Add player');
+  await page.waitForSelector('dialog[open][aria-label="Add player profile"] input[name="name"]');
+});
+
+test('a standalone Players editor sees profile editing only and a tenant grant opens no directory', async t => {
+  const staff = await open(t, '/admin-preview/players?player=12', 'players-only');
+  await staff.waitForSelector('dialog[open][aria-label="Player record"]');
+  await clickText(staff, 'dialog[open] nav button', 'Manage');
+  assert.deepEqual(await staff.$$eval('.pp-manage-grid button', nodes => nodes.map(node => node.textContent)), ['Edit profile']);
+  assert.equal(await staff.$('dialog[open] a[href*="/licenses"]'), null);
+  await clickText(staff, '.pp-manage-grid button', 'Edit profile');
+  await staff.waitForSelector('dialog[open][aria-label="Edit Fixture Player profile"]');
+
+  const tenantPage = await open(t, '/admin-preview/players?player=12', 'tenant');
+  await heading(tenantPage, 'Workspace unavailable');
+  assert.equal(await tenantPage.$('.pp-workspace'), null);
+  assert.equal(await tenantPage.evaluate(() => window.fixtureCalls.some(([kind, table, fields]) =>
+    kind === 'read' && table === 'players' && fields.includes('contact_number'))), false);
 });
 
 

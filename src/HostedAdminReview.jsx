@@ -3,12 +3,12 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import AdminLogin from './components/admin/AdminLogin.jsx';
 import AdminPreview from './pages/AdminPreview.jsx';
+import { FOURM_PUBLIC_ORIGIN } from './constants/site.js';
 import { supabase, isSupabaseConfigured } from './supabaseClient.js';
 import { verifyHostedReviewAccess } from './pages/admin-preview/hostedReviewAccess.js';
 import './HostedAdminReview.css';
 
-const LIVE_SITE = 'https://4mpadel.co.za';
-const CURRENT_ADMIN = `${LIVE_SITE}/admin`;
+const CURRENT_ADMIN = `${FOURM_PUBLIC_ORIGIN}/admin`;
 
 function ReviewNotice() {
   return <aside className="hosted-review-notice" aria-label="Live database review">
@@ -106,7 +106,7 @@ export default function HostedAdminReview() {
     finally { setBusy(false); }
   };
 
-  if (access.state === 'signed-out') return <><ReviewNotice /><AdminLogin preview siteUrl={LIVE_SITE} email={email} password={password} onEmail={event => setEmail(event.target.value)} onPassword={event => setPassword(event.target.value)} onSubmit={signIn} busy={busy} error={loginError} /></>;
+  if (access.state === 'signed-out') return <><ReviewNotice /><AdminLogin preview siteUrl={FOURM_PUBLIC_ORIGIN} email={email} password={password} onEmail={event => setEmail(event.target.value)} onPassword={event => setPassword(event.target.value)} onSubmit={signIn} busy={busy} error={loginError} /></>;
   if (access.state === 'denied') return <><ReviewNotice /><main className="ap-denied hosted-review-gate"><h1>Review access is required</h1><p role="alert">{access.message}</p><button className="ap-secondary" onClick={signOut} disabled={busy}>{busy ? 'Signing out…' : 'Sign out and use another account'}</button><a href={CURRENT_ADMIN}>Return to the current admin</a></main></>;
   if (access.state !== 'ready' || access.user?.id !== candidate?.user?.id || access.user?.email !== candidate?.user?.email) return <><ReviewNotice /><main className="ap-loading"><p role="status">Checking your live admin access…</p></main></>;
   return <><Routes>

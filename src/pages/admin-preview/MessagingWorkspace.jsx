@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import SearchableDropdown from '../../components/SearchableDropdown';
+import { FOURM_PUBLIC_ORIGIN } from '../../constants/site.js';
 import { useEventMessaging } from '../../components/admin/useEventMessaging';
 import { CommunicationFeedback, CommunicationHeading } from './CommunicationControls';
 import { communicationDate } from './communicationDate';
@@ -182,7 +183,7 @@ function Messenger({ actor, initialEventId }) {
     {!status && !error && !authError && <p role="status">Checking messaging access…</p>}
     {status && !status.enabled && <p className="ap-comms-notice">Messaging is awaiting activation.</p>}
     {status?.enabled && <>
-      {status.needsBirthDate && <div className="ap-section ap-comms-panel"><h2>Complete your private profile</h2><p>Add your date of birth to use messaging.</p><div className="ap-comms-actions"><a className="ap-primary" href="/profile">Update my profile</a></div></div>}
+      {status.needsBirthDate && <div className="ap-section ap-comms-panel"><h2>Complete your private profile</h2><p>Add your date of birth to use messaging.</p><div className="ap-comms-actions"><a className="ap-primary" href={`${FOURM_PUBLIC_ORIGIN}/profile`}>Update my profile</a></div></div>}
       {!status.rulesAccepted && <section className="ap-section ap-comms-panel"><h2>Messaging community rules</h2><p>Respect other players. Threats, harassment, exploitation, scams, spam and sharing private contact or identity details are prohibited. Authorised teams review reports.</p>
         <div className="ap-comms-actions"><button className="ap-primary" type="button" disabled={busy} onClick={() => void state.act('accept_rules', { version: '2026-11-05' }, 'Messaging rules accepted.')}>Accept messaging rules</button></div>
       </section>}

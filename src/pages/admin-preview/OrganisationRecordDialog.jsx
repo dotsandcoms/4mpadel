@@ -42,7 +42,7 @@ export default function OrganisationRecordDialog({ client, session, scopeId, mod
     if(review?.action==='invite_owner'){
       run(async checks=>{
         checks.onAttempt();
-        await sendPlayerLoginInvitation(client,review.player,'https://4mpadel.co.za',{scopeId,userId,...checks});
+        await sendPlayerLoginInvitation(client,review.player,{scopeId,userId,...checks});
         return {action:'invite_owner'};
       });
     }else if(review)run(checks=>submitOrganisationRecord(client,review,{scopeId,userId,...checks}));

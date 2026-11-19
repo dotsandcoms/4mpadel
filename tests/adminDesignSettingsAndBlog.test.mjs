@@ -135,7 +135,7 @@ test('New Admin Settings and Blog use the preview layout and exercise existing w
     await browse(blog, 'Previous');
     await blog.type('input[type="search"]', 'Fixture news 19');
     await blog.waitForFunction(() => document.querySelectorAll('tbody tr').length === 1);
-    assert.equal(await blog.$eval('td a', node => node.getAttribute('href')), '/blog/fixture-news-19');
+    assert.equal(await blog.$eval('td a', node => node.getAttribute('href')), 'https://4mpadel.co.za/blog/fixture-news-19');
     await browse(blog, 'Edit Fixture news 19');
     await blog.waitForSelector('dialog[open] textarea');
     await fill(blog, 'dialog textarea', 'Updated body');

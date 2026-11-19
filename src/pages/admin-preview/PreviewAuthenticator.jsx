@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { KeyRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SearchableDropdown from '../../components/SearchableDropdown';
+import { FOURM_PUBLIC_ORIGIN } from '../../constants/site.js';
 import { authenticatorQrSource } from '../../utils/messagingAuthenticator';
 import './CommunicationsWorkspace.css';
 
@@ -40,7 +41,7 @@ export default function PreviewAuthenticator({
         {onCancel && <button type="button" className="ap-secondary" onClick={onCancel} disabled={busy}>Cancel</button>}
         {showSecurityLink && <Link className="ap-text-button" to="/admin-preview/security">Manage authenticators and backup access</Link>}
       </div>
-      {!secret && <details><summary>Can’t find your code?</summary><p>Use the phone or app that you connected to this account. If it is unavailable, <a href="/contact" target="_blank" rel="noopener noreferrer">contact 4M support</a>.</p></details>}
+      {!secret && <details><summary>Can’t find your code?</summary><p>Use the phone or app that you connected to this account. If it is unavailable, <a href={`${FOURM_PUBLIC_ORIGIN}/contact`} target="_blank" rel="noopener noreferrer">contact 4M support</a>.</p></details>}
     </section>
   );
 }

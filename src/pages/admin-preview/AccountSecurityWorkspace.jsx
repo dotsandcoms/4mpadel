@@ -1,4 +1,5 @@
 import { supabase } from '../../supabaseClient';
+import { FOURM_PUBLIC_ORIGIN } from '../../constants/site.js';
 import { useAccountSecurity } from '../../components/admin/useAccountSecurity';
 import { CommunicationFeedback, CommunicationHeading } from './CommunicationControls';
 import { communicationDate } from './communicationDate';
@@ -100,7 +101,7 @@ function Security({ actor, client, canRecover }) {
     <CommunicationFeedback error={error} message={feedback} />
     {!account ? <p role="status">Loading authenticators…</p> : hidden ? <p className="ap-comms-notice">Account details hidden while this page is in the background.</p> : <>
       <Authenticators state={state} actor={actor} client={client} />
-      {canRecover ? <Recovery state={state} /> : <p className="ap-comms-subtext">Lost access to all your authenticators? Ask a verified 4M Super Admin to recover this account or <a href="/contact">contact 4M support</a>.</p>}
+      {canRecover ? <Recovery state={state} /> : <p className="ap-comms-subtext">Lost access to all your authenticators? Ask a verified 4M Super Admin to recover this account or <a href={`${FOURM_PUBLIC_ORIGIN}/contact`}>contact 4M support</a>.</p>}
     </>}
   </section>;
 }

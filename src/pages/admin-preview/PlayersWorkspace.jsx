@@ -5,6 +5,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { animate, motion as Motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight, ChevronLeft, ChevronRight, Download, ExternalLink, LockKeyhole, RefreshCw, Search, UserRound, X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import { FOURM_PUBLIC_ORIGIN } from '../../constants/site.js';
 import { findPaymentForRegistration, getRegistrationEntryFeePaid, normalizePaymentMetadata, resolveRegistrationPaymentMethod, resolveRegistrationPayer } from '../../utils/paymentRegistrationMatch';
 import { resolveRegistrationLicenseDisplay } from '../../utils/registrationLicense';
 import { PAGE_SIZE, dateLabel, directoryLicense, distribution, filterPlayers, isPublicPlayer, loadDirectory, loadPlayerConnections, moneyLabel, playerStats, textValue } from './playersData';
@@ -87,7 +88,7 @@ function PlayerDrawer({ player, events, onClose, onAction, canEditProfile, canMa
     loadPlayerConnections(client, player, controller.signal).then(result => { if (!controller.signal.aborted) setConnections(result); }).catch(err => { if (!controller.signal.aborted) setError(err.message || 'Unable to read linked records'); });
     return () => controller.abort();
   }, [player, retry, client]);
-  const accountActions = [...(canEditProfile ? ['Edit profile'] : []), ...(canManageAccounts ? ['Send login invite', 'Reset password', 'Test login', 'Delete player'] : [])];
+  const accountActions = [...(canEditProfile ? ['Edit profile'] : []), ...(canManageAccounts ? ['Send login invite', 'Reset password', 'Preview player account', 'Delete player'] : [])];
   const licence = directoryLicense(player);
   const selectedPayments = connections ? [...new Map([...connections.ownPayments, ...connections.registrations.map(r => findPaymentForRegistration(connections.payments, r)).filter(Boolean)].map(p => [p.id, p])).values()].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))) : [];
   const ledgerPayments = selectedPayments.map(p => ({ ...p, metadata: normalizePaymentMetadata(p.metadata) }));
@@ -120,7 +121,7 @@ function PlayerDrawer({ player, events, onClose, onAction, canEditProfile, canMa
           <button key={action} className={`ap-secondary ${action === 'Delete player' ? 'pp-danger' : ''}`} onClick={() => onAction(action, player)}>{action}<ChevronRight size={16}/></button>
         )}</div> : <p>Platform admin access is required for account actions.</p>}
       </>}
-    </div><footer className="pp-drawer-footer"><a href={`/players?id=${encodeURIComponent(player.id)}`} className="ap-secondary" target="_blank" rel="noreferrer">Public profile <ExternalLink size={15} /></a>{canEditProfile && <button className="ap-primary" onClick={() => onAction('Edit profile', player)}>Edit profile</button>}</footer>
+    </div><footer className="pp-drawer-footer"><a href={`${FOURM_PUBLIC_ORIGIN}/players?id=${encodeURIComponent(player.id)}`} className="ap-secondary" target="_blank" rel="noreferrer">Public profile <ExternalLink size={15} /></a>{canEditProfile && <button className="ap-primary" onClick={() => onAction('Edit profile', player)}>Edit profile</button>}</footer>
   </Dialog>;
 }
 
