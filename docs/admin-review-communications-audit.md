@@ -49,6 +49,10 @@ The merge base of `999fb2f9e2cb6f1c27c60a18ec445114bcd7d513` and `f17c90b655f522
 | `ab65623e` | Replaced old Player preview alias with canonical Players workspace routing. | Direct link preserves the requested view. |
 | `50427604` | Added integrated synthetic Chromium regression for the hosted review entry and routes. | 22 passed. No network traffic; auth and database connectors synthetic. |
 
+## Email delivery release candidate
+
+Commit `1fd9249d` verifies an active user and either platform super-admin authority or an unambiguous standalone Email Broadcast grant. Organisation, club and federation memberships remain scoped, including legacy organisation owner records. The reviewed BCC path normalises addresses, verifies the delivery configuration and reuses the provider key on retry. Registration and payout notification checks passed alongside the broadcast suite. The currently deployed shared Email function is version 78. It predates these changes and the saved-request MFA check from the current payout caller.
+
 ## Push user path and remaining evidence
 
 - Open **Publish → Push broadcasts** and fill **Title** and **Message**. For a self-test use **Review test to me → Send test to me**. The signed-in email must match a player profile with an eligible registered app device.
