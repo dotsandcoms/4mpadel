@@ -20,7 +20,7 @@ function server(overrides = {}) {
     rpc: (name, args) => {
       rpcCalls.push({ name, args });
       if (name === 'prepare_native_checkout_payment') {
-        return Promise.resolve({ data: { player_id: args.p_player_id, event_id: args.p_event_id,
+        return Promise.resolve({ data: tables.payments ?? { player_id: args.p_player_id, event_id: args.p_event_id,
           amount: args.p_amount, is_test: args.p_is_test, status: 'processing', reference: args.p_gateway_reference,
           metadata: { ...args.p_metadata, reference: args.p_gateway_reference } } });
       }
