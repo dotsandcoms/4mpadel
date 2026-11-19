@@ -12,6 +12,7 @@ import FinanceEventAccess from './FinanceEventAccess';
 import AccessEmailPreview from './AccessEmailPreview';
 import GalleryAlbumAccess from './GalleryAlbumAccess';
 import { actionPolicyChanges } from './eventActionPolicy';
+import { removeAccessGrant, saveAccessGrant } from './permissionsWrites';
 
 function AccessStatCount({ value, delay }) {
   const ref = useRef(null);
@@ -31,7 +32,7 @@ function Avatar({ profile }) {
   return <span className="ax-avatar">{profile?.image_url && !failed ? <img src={profile.image_url} alt="" onError={() => setFailed(true)} /> : <UserRound size={22} />}</span>;
 }
 
-function AccessEditor({ record, operator, onClose, client }) {
+function AccessEditor({ record, operator, session, onClose, onSaved, client }) {
   const original = useMemo(() => accessDraft(record), [record]);
   const [draft, setDraft] = useState(() => accessDraft(record));
   const [actionPolicy, setActionPolicy] = useState({});
@@ -43,7 +44,31 @@ function AccessEditor({ record, operator, onClose, client }) {
   const [review, setReview] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [retry, setRetry] = useState(0);
-  const changes = [...accessChanges(original, draft, { events: context.events }), ...actionPolicyChanges(actionPolicy)];
+  const [removing, setRemoving] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [writeError, setWriteError] = useState('');
+  const request = useRef(null);
+  const changes = accessChanges(original, draft, { events: context.events });
+  const proposedActionRules = actionPolicyChanges(actionPolicy);
+  const editorChanged = changes.length > 0 || proposedActionRules.length > 0;
+  useEffect(() => () => request.current?.abort(), []);
+  const write = async remove => {
+    if (request.current) return;
+    const controller = new AbortController();
+    request.current = controller;
+    setBusy(true);
+    setWriteError('');
+    try {
+      if (remove) await removeAccessGrant(client, session, record, controller.signal);
+      else await saveAccessGrant(client, session, record, draft, controller.signal);
+      if (!controller.signal.aborted) onSaved(remove ? 'Direct permissions removed.' : 'Permissions saved.');
+    } catch (error) {
+      if (!controller.signal.aborted) setWriteError(error instanceof Error ? error.message : 'The permission change could not be confirmed.');
+    } finally {
+      request.current = null;
+      if (!controller.signal.aborted) setBusy(false);
+    }
+  };
   useEffect(() => {
     const controller = new AbortController();
     // Clear prior access context while the new external lookup is pending.
@@ -64,14 +89,14 @@ function AccessEditor({ record, operator, onClose, client }) {
   const events = context.events.filter(event => `${event.event_name} ${event.id}`.toLowerCase().includes(eventQuery.toLowerCase()));
   const pickerPages = Math.max(1, Math.ceil(events.length / 4));
   const pickerPage = Math.min(eventPickerPage, pickerPages);
-  const close = () => changes.length ? setConfirmClose(true) : onClose();
-  return <Dialog title="Access & permissions" onClose={close} drawer>
+  const close = () => { if (!busy) { if (editorChanged) setConfirmClose(true); else onClose(); } };
+  return <Dialog title="Access & permissions" onClose={close} busy={busy} drawer>
     <div className="ax-editor">
       <div className="ax-person"><Avatar profile={record.profile} /><div><h2>{record.profile?.name || record.email}</h2><p>{record.email}</p></div><span className="ap-status ap-status--info">Local draft</span></div>
-      <p className="ax-note">Review access without changing this user’s account. Drafts are discarded when you leave this editor.</p>
+      <p className="ax-note">Review direct permissions before applying a change.</p>
       {confirmClose ? <section className="ax-block"><h3>Discard this draft?</h3><p>Your {changes.length} proposed changes have not been applied.</p><div className="ax-actions"><button className="ap-secondary" onClick={() => setConfirmClose(false)}>Keep editing</button><button className="ap-primary" onClick={onClose}>Discard draft</button></div></section> : <>
       {locked && <p role="status">Only a super admin can draft changes to a super-admin account.</p>}
-      <fieldset disabled={locked} className="ax-fieldset">
+      <fieldset disabled={locked || busy || removing} className="ax-fieldset">
         <section className="ax-block"><h3>01 · Account role</h3><label className="ax-label">Access level<SearchableDropdown value={draft.role} onChange={event => { setReview(false); setDraft(current => ({ ...current, role: event.target.value })); }}><option value="custom">Custom permissions</option><option value="super_admin" disabled={operator.role !== 'super_admin'}>Super admin · all modules</option>{!['custom', 'super_admin'].includes(draft.role) && <option value={draft.role}>{draft.role} · existing role</option>}</SearchableDropdown></label><p>{superAdmin ? 'Super admin overrides individual module and event restrictions.' : 'Choose direct module access below. Membership access is listed separately.'}</p></section>
         <section className="ax-block"><h3>02 · Modules</h3><div className="ax-module-grid">{ACCESS_MODULES.map(([id, label, group]) => <label key={id} className="ax-module"><input type="checkbox" checked={superAdmin || draft.allowed_tabs.includes(id)} disabled={superAdmin || (operator.role !== 'super_admin' && !operator.allowed_tabs?.includes(id))} onChange={() => { setReview(false); toggleModule(id); }} /><span><b>{label}</b><small>{group}</small></span></label>)}</div></section>
         <section className="ax-block"><h3>03 · Event Manager assignments</h3><p>{superAdmin ? 'All events through the super-admin role.' : selectedEvents.length ? `Access is assigned to ${selectedEvents.length} ${selectedEvents.length === 1 ? 'event' : 'events'}.` : 'No specific event restriction is set. The existing module uses its default access rules; this does not mean “no access”.'}</p>
@@ -83,7 +108,7 @@ function AccessEditor({ record, operator, onClose, client }) {
             })}</div>{selectedEvents.length > 4 && <nav className="ax-pagination ax-assigned-pages" aria-label="Assigned event pages"><span role="status">Showing {(currentAssignedPage - 1) * 4 + 1}–{Math.min(currentAssignedPage * 4, selectedEvents.length)} of {selectedEvents.length} events · Page {currentAssignedPage} of {assignedPages}</span><button className="ap-secondary" disabled={currentAssignedPage === 1} onClick={() => setAssignedPage(currentAssignedPage - 1)}>Previous</button><button className="ap-secondary" disabled={currentAssignedPage === assignedPages} onClick={() => setAssignedPage(currentAssignedPage + 1)}>Next</button></nav>}</>}
             {operator.role === 'super_admin' && <div className="ax-event-edit-action"><button className="ap-secondary" aria-expanded={editingEvents} onClick={() => { setEditingEvents(value => !value); setEventQuery(''); setAssignedPage(1); setEventPickerPage(1); }}>{editingEvents ? 'Done · show assigned events' : 'Edit event access'}</button></div>}
             {editingEvents && <div className="ax-event-picker">
-            <p className="ax-note">Choose events for this local draft. Changes are not applied to the account.</p>
+            <p className="ax-note">Choose the events this account may manage.</p>
             <label className="ax-search"><Search size={16} /><input placeholder="Find an event by name or ID" aria-label="Find an event" value={eventQuery} onChange={event => { setEventQuery(event.target.value); setEventPickerPage(1); }} /></label>
             <small role="status">{selectedEvents.length} selected · {events.length ? `Showing ${(pickerPage - 1) * 4 + 1}–${Math.min(pickerPage * 4, events.length)} of ${events.length} matching events` : 'No matching events'}</small><div className="ax-events ax-picker-results">{events.slice((pickerPage - 1) * 4, pickerPage * 4).map(event => <label key={event.id}><input type="checkbox" disabled={superAdmin || operator.role !== 'super_admin'} checked={selectedEvents.some(id => String(id) === String(event.id))} onChange={() => { setReview(false); updateModule('event-mgmt', { allowedEvents: selectedEvents.some(id => String(id) === String(event.id)) ? selectedEvents.filter(id => String(id) !== String(event.id)) : [...selectedEvents, event.id] }); }} /><span>{event.event_name || `Event ${event.id}`}<small>Event #{event.id}{event.start_date ? ` · ${String(event.start_date).slice(0, 10)}` : ''}</small></span></label>)}{!events.length && <p>No matching events. Try a different name or event ID.</p>}</div>
             {events.length > 0 && <nav className="ax-pagination" aria-label="Event selection pages"><span>Page {pickerPage} of {pickerPages}</span><button className="ap-secondary" disabled={pickerPage === 1} onClick={() => setEventPickerPage(pickerPage - 1)}>Previous</button><button className="ap-secondary" disabled={pickerPage === pickerPages} onClick={() => setEventPickerPage(pickerPage + 1)}>Next</button></nav>}
@@ -96,18 +121,37 @@ function AccessEditor({ record, operator, onClose, client }) {
         <FinanceEventAccess selected={draft.module_permissions.finance?.allowedEvents || []} events={context.events} loading={context.loading} error={context.error} inheritedCount={selectedEvents.length} disabled={superAdmin || !draft.allowed_tabs.includes('finance') || operator.role !== 'super_admin'} onChange={allowedEvents => { setReview(false); updateModule('finance', { allowedEvents, allowedTabs: draft.module_permissions.finance ? (draft.module_permissions.finance.allowedTabs || ['transactions']) : FINANCE_SECTIONS }); }} />
         <GalleryAlbumAccess client={client} selected={draft.module_permissions.gallery?.allowedAlbums || []} disabled={superAdmin || !draft.allowed_tabs.includes('gallery') || operator.role !== 'super_admin'} onChange={allowedAlbums => { setReview(false); updateModule('gallery', { allowedAlbums }); }} />
       </fieldset>
-      <EventActionControls draft={draft} policy={actionPolicy} onChange={value => { setActionPolicy(value); setReview(false); }} operator={operator} events={context.events} loading={context.loading} error={context.error} />
+      <fieldset disabled={busy || removing} className="ax-fieldset"><EventActionControls draft={draft} policy={actionPolicy} onChange={setActionPolicy} operator={operator} events={context.events} loading={context.loading} error={context.error} /></fieldset>
       <section className="ax-block"><h3>Membership access · existing records</h3><p>Direct module changes do not remove these memberships. Ownership, status and backend rules still determine their effective access.</p>{context.loading ? <p>Checking memberships…</p> : context.error ? <p>Membership access is unknown until the lookup succeeds.</p> : context.memberships.length ? context.memberships.map(item => <div className="ax-membership" key={`${item.type}-${item.id}`}><span><b>{item.name}</b><small>{item.type}</small></span><span className="ap-status ap-status--violet">{item.role}</span></div>) : <p>No direct membership records found. Legacy ownership and server-side grants still require verification.</p>}</section>
       <section className="ax-block ax-summary"><h3><ShieldCheck size={18} /> Draft access summary</h3><p>{superAdmin ? 'All modules through the super-admin role. Individual action proposals do not restrict this role.' : `${draft.allowed_tabs.length} direct modules · ${selectedEvents.length ? `${selectedEvents.length} selected Event Manager events` : 'default Event Manager event rules'}.`}</p><p>{actionPolicyChanges(actionPolicy).length} proposed action rules. This summary describes the draft, not a verified backend access decision.</p></section>
-      {review && <section className="ax-block" role="status"><h3>Proposed changes · not applied</h3><ul>{changes.map(change => <li key={change}>{change}</li>)}</ul><p>No permissions have been saved or granted.</p></section>}
+      {review && <section className="ax-block" aria-label="Review direct permissions">
+        <h3>Review permission changes</h3>
+        <ul>{changes.map(change => <li key={change}>{change}</li>)}</ul>
+        {proposedActionRules.length > 0 && <p>Individual event-action proposals are a local review. Direct module and record access are the changes saved here.</p>}
+        <button className="ap-primary" type="button" onClick={() => void write(false)} disabled={busy || locked || !changes.length}>Confirm permission changes</button>
+      </section>}
+      {removing && <section className="ax-block" aria-label="Review permission removal">
+        <h3>Remove direct access for {record.email}?</h3>
+        <p>Existing club, organisation and federation memberships remain in effect.</p>
+        <div className="ax-actions">
+          <button className="ap-secondary" disabled={busy} onClick={() => setRemoving(false)}>Keep permissions</button>
+          <button className="ap-danger-button" disabled={busy} onClick={() => void write(true)}>Remove direct permissions</button>
+        </div>
+      </section>}
+      {writeError && <p role="alert" className="ax-note">{writeError}</p>}
       <AccessEmailPreview draft={draft} name={record.profile?.name} events={context.events} />
-      <footer className="ax-footer"><span>{changes.length ? `${changes.length} proposed changes` : 'No changes'}</span><button className="ap-secondary" disabled={!changes.length} onClick={() => { setDraft(accessDraft(record)); setActionPolicy({}); setReview(false); }}>Reset</button><button className="ap-primary" disabled={!changes.length || locked} onClick={() => setReview(true)}>Review draft <ArrowRight size={16} /></button></footer>
+      <footer className="ax-footer">
+        <span>{changes.length ? `${changes.length} proposed changes` : 'No changes'}</span>
+        {!record.isNew && !locked && <button className="ap-secondary" disabled={busy || removing} onClick={() => { setReview(false); setRemoving(true); }}>Remove access</button>}
+        <button className="ap-secondary" disabled={!editorChanged || busy || removing} onClick={() => { setDraft(accessDraft(record)); setActionPolicy({}); setReview(false); }}>Reset</button>
+        <button className="ap-primary" disabled={!changes.length || locked || busy || removing} onClick={() => setReview(true)}>Review draft <ArrowRight size={16} /></button>
+      </footer>
       </>}
     </div>
   </Dialog>;
 }
 
-export default function AccessWorkspace({ session, permissions, client = supabase }) {
+export default function AccessWorkspace({ session, permissions, onRefreshPermissions, client = supabase }) {
   const reduceMotion = useReducedMotion();
   const [state, setState] = useState({ loading: true, rows: [], error: '' });
   const [query, setQuery] = useState('');
@@ -119,6 +163,7 @@ export default function AccessWorkspace({ session, permissions, client = supabas
   const [search, setSearch] = useState('');
   const [users, setUsers] = useState({ loading: false, rows: [], error: '' });
   const [refresh, setRefresh] = useState(0);
+  const [notice, setNotice] = useState('');
   const allowed = Boolean(session?.user?.id) && canManageAccess(permissions);
   useEffect(() => {
     if (!allowed) return;
@@ -150,12 +195,13 @@ export default function AccessWorkspace({ session, permissions, client = supabas
   </nav>;
   const openUser = profile => {
     const existing = state.rows.find(row => normalEmail(row.email) === normalEmail(profile.email));
-    setLookup(false); setSearch(''); setSelected(existing || { email: profile.email, role: 'custom', allowed_tabs: [], module_permissions: {}, profile });
+    setLookup(false); setSearch(''); setSelected(existing || { email: profile.email, role: 'custom', allowed_tabs: [], module_permissions: {}, profile, isNew: true });
   };
   return <div className="ax-workspace">
     <header className="ax-heading"><div><p className="ap-kicker">System / Access & permissions</p><h1>Give the right people the right access.</h1><p>Review direct grants, event assignments and membership access in one place.</p></div><button className="ap-primary" disabled={state.loading || Boolean(state.error)} onClick={() => setLookup(true)}><Users size={17} /> Choose existing user</button></header>
     <div className="ax-stats">{[[Users, 'Permission records', state.rows.length], [ShieldCheck, 'Super-admin records', state.rows.filter(row => row.role === 'super_admin').length], [KeyRound, 'Custom / other records', state.rows.filter(row => row.role !== 'super_admin').length]].map(([Icon, label, value], index) => <Motion.section key={label} initial={reduceMotion ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduceMotion ? 0 : .3, delay: reduceMotion ? 0 : index * .08, ease: 'easeOut' }}>{createElement(Icon, { className: 'ax-watermark', size: 86, 'aria-hidden': true })}<span>{label}</span><strong>{state.loading || state.error ? '—' : <AccessStatCount value={value} delay={index * .08} />}</strong></Motion.section>)}</div>
-    <p className="ax-note"><ShieldCheck size={17} /> Read-only preview. Review a local draft; live access stays as currently configured. Counts cover direct permission records, not every user with inherited access.</p>
+    <p className="ax-note"><ShieldCheck size={17} /> Direct permission records are shown here. Memberships and tournament assignments also affect access.</p>
+    {notice && <p className="ax-note" role="status">{notice}</p>}
     <div className="ax-toolbar"><label className="ax-search"><Search size={17} /><input aria-label="Search permission records" placeholder="Search name or email" value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} /></label><label>Role <SearchableDropdown value={role} onChange={event => { setRole(event.target.value); setPage(1); }}><option value="all">All roles</option><option value="super_admin">Super admin</option><option value="custom">Custom / other</option></SearchableDropdown></label><button className="ap-icon-button" aria-label="Refresh permission records" onClick={() => setRefresh(value => value + 1)}><RefreshCw size={17} /></button></div>
     {state.loading ? <section className="ax-block" role="status">Loading permission records…</section> : state.error ? <section className="ax-block" role="alert"><h2>Permission records could not be loaded</h2><p>{state.error}</p><button className="ap-secondary" onClick={() => setRefresh(value => value + 1)}>Try again</button></section> : <>
       {pagination('top')}
@@ -178,6 +224,11 @@ export default function AccessWorkspace({ session, permissions, client = supabas
       {pagination('bottom')}
     </>}
     {lookup && <Dialog title="Choose an existing user" onClose={() => { setLookup(false); setSearch(''); }}><div className="ax-block"><label className="ax-search"><Search size={17} /><input aria-label="Search existing users" placeholder="Type at least 3 characters of a name or email" value={search} onChange={event => setSearch(event.target.value)} /></label><p>Searches existing player records with an email address. No account is created.</p>{users.loading ? <p role="status">Searching…</p> : users.error ? <p role="alert">{users.error}</p> : users.rows.map(profile => <button className="ax-row" key={profile.id} onClick={() => openUser(profile)}><Avatar profile={profile} /><span className="ax-name"><b>{profile.name}</b><small>{profile.email}</small></span><Check size={17} /></button>)}{!users.loading && !users.error && search.trim().length >= 3 && !users.rows.length && <p>No matching users.</p>}{users.rows.length === 20 && <p>Showing the first 20 matches. Refine your search to find someone specific.</p>}</div></Dialog>}
-    {selected && <AccessEditor key={selected.email} record={selected} operator={permissions} client={client} onClose={() => setSelected(null)} />}
+    {selected && <AccessEditor key={selected.email} record={selected} operator={permissions} session={session} client={client} onClose={() => setSelected(null)} onSaved={message => {
+      setSelected(null);
+      setNotice(message);
+      onRefreshPermissions?.();
+      setRefresh(value => value + 1);
+    }} />}
   </div>;
 }
