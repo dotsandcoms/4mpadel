@@ -5,6 +5,13 @@ import RecordLoading from './RecordLoading';
 import { canReadGallery, loadGallery, loadGalleryPhotos, galleryAlbumDraft, galleryAlbumPayload, gallerySlug, galleryImageUrl, filterGallery, prepareGalleryFiles, permittedAlbumIds } from './galleryData';
 import './GalleryWorkspace.css';
 import { galleryMutationApi } from './galleryMutations.js';
+
+function fileCleanupSummary({ cleaned, retained }) {
+  return [
+    cleaned && `${cleaned} owned image file${cleaned === 1 ? '' : 's'} cleared.`,
+    retained && `${retained} shared or unverified image file${retained === 1 ? '' : 's'} kept.`,
+  ].filter(Boolean).join(' ');
+}
 function Thumbnail({
   src,
   alt = '',
@@ -112,6 +119,7 @@ export default function GalleryWorkspace({
     [viewer, setViewer] = useState(null),
     [action, setAction] = useState(null),
     [notice, setNotice] = useState(''),
+    [cleanupRetries, setCleanupRetries] = useState([]),
     [changed, setChanged] = useState(false);
   const urls = useRef(new Set()),
     fileInput = useRef(null);
@@ -121,9 +129,10 @@ export default function GalleryWorkspace({
   const currentAlbum=useRef(selected?.id);currentAlbum.current=selected?.id;
   const mounted=useRef(true);useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
   const persistent=mutationApi.enabled(client);
-  const runMutation=async work=>{
-    if(busyRef.current||blocked)return;
-    busyRef.current=true;setBusy(true);setSaveError('');setUploadProgress(null);
+  const runMutation=async (work, storageOnly = false)=>{
+    if(busyRef.current || (blocked && !storageOnly)) return;
+    busyRef.current=true;setBusy(true);setUploadProgress(null);
+    if (!storageOnly) setSaveError('');
     const snapshot=context;
     const albumSnapshot=selected?.id;
     const isCurrent=()=>mounted.current&&currentContext.current===snapshot&&currentClient.current===client&&currentAlbum.current===albumSnapshot;
@@ -131,6 +140,14 @@ export default function GalleryWorkspace({
     catch(error){if(isCurrent()){setBlocked(true);setSaveError(`${error.message} Reload the gallery to check the outcome before retrying.`);}}
     finally{busyRef.current=false;if(mounted.current)setBusy(false);}
   };
+  const pendingCleanup = cleanupRetries.find(item => item.context === context && item.albumId === selected?.id);
+  const retryCleanup = () => runMutation(async options => {
+    const outcome = await pendingCleanup.retry(options.isCurrent);
+    if (!options.isCurrent()) return;
+    setCleanupRetries(previous => previous.flatMap(item => item !== pendingCleanup ? [item]
+      : outcome.retry ? [{ ...item, retry: outcome.retry, count: outcome.pending }] : []));
+    setNotice(fileCleanupSummary(outcome) || 'The storage provider has not confirmed file cleanup yet.');
+  }, true);
   const closeAction=()=>{
     if(busyRef.current)return;
     if(action?.kind==='upload')action.rows.forEach(row=>{URL.revokeObjectURL(row.image_url);urls.current.delete(row.image_url);});
@@ -309,9 +326,16 @@ export default function GalleryWorkspace({
         const result = await mutationApi.removePhotos({ ...options, album: selected, photos: photos.rows.filter(photo => action.ids.includes(photo.id)) });
         if (!options.isCurrent()) return;
         setPhotos({ id: selected.id, rows: photos.rows.filter(photo => !result.removed_ids.includes(photo.id)) });
-        setChecked([]);
+        setChecked(ids => ids.filter(id => !result.removed_ids.includes(id)));
         setViewer(null);
-        message = `${result.removed_ids.length} photo records removed. Original image files are retained.`;
+        message = `${result.removed_ids.length} photo records removed. ${fileCleanupSummary(result.cleanup)}`.trim();
+        if (result.cleanup.retry) {
+          setCleanupRetries(previous => [...previous, { context, albumId: selected.id, retry: result.cleanup.retry, count: result.cleanup.pending }]);
+        }
+        if (result.failure) {
+          setBlocked(true);
+          setSaveError(`Only ${result.removed_ids.length} photo records were confirmed removed. ${result.failure} Reload the gallery before removing the remaining photos.`);
+        }
       } else if (action.kind === 'cover') {
         const row = await mutationApi.setCover({ ...options, album: selected, photo: action.photo });
         if (!options.isCurrent()) return;
@@ -396,7 +420,7 @@ export default function GalleryWorkspace({
           })}>{persistent ? 'Remove album' : 'Remove album locally'}</button>}</> : <>{!restricted && <button className="ap-primary" onClick={() => setEditor({album:null,operationId:crypto.randomUUID()})}>{persistent ? 'Create album' : 'Create album draft'}</button>}<button className="ap-secondary" onClick={() => changed ? setAction({
             kind: 'refresh'
           }) : setReload(n => n + 1)}>Reload gallery</button></>}</div></header>
-    <p className="gw-notice">{persistent ? 'Review changes before publishing or removing records. Original image files are retained when photo records are removed.' : 'Read authorised live records. All create, edit, upload and removal actions below are local drafts only; nothing is published or deleted. Reloading discards drafts.'}</p>{notice && <p role="status">{notice}</p>}{saveError && <p role="alert">{saveError} <button className="ap-secondary" disabled={busy} onClick={()=>setReload(n=>n+1)}>Reload gallery</button></p>}
+    <p className="gw-notice">{persistent ? 'Review changes before publishing or removing records. Owned image files are only cleared when their references can be checked.' : 'Read authorised live records. All create, edit, upload and removal actions below are local drafts only; nothing is published or deleted. Reloading discards drafts.'}</p>{notice && <p role="status">{notice}</p>}{pendingCleanup && <p role="alert">{pendingCleanup.count} image {pendingCleanup.count === 1 ? 'file needs' : 'files need'} storage confirmation. <button type="button" className="ap-secondary" disabled={busy} onClick={retryCleanup}>Retry file cleanup</button></p>}{saveError && <p role="alert">{saveError} <button className="ap-secondary" disabled={busy} onClick={()=>setReload(n=>n+1)}>Reload gallery</button></p>}
     {!selected ? <><div className="gw-filters"><label>Search albums<input placeholder="Title, event or photographer…" value={filters.query} onChange={e => {
             setFilters(f => ({
               ...f,
@@ -422,9 +446,9 @@ export default function GalleryWorkspace({
             }));
             setPage(1);
           }}><option value="">All albums</option><option value="top">Top-level albums</option>{state.albums.map(a => <option key={a.id} value={a.id}>{a.title}</option>)}</SearchableDropdown></label></div><div className="gw-grid">{albums.slice((current - 1) * 12, current * 12).map(album => <button className="gw-album" key={album.id} onClick={() => setSelected(album)}><Thumbnail src={album.cover_image_url} local={!!album.localChanged} /><span className="gw-card-body"><span className="gw-badges">{album.is_featured && <span>Featured</span>}<span>{album.is_active ? 'Active' : 'Hidden'}</span>{album.localChanged && <span>Local draft</span>}</span><strong>{album.title}</strong><span>{album.calendar?.event_name || album.organisations?.name || 'Standalone album'}</span><small>{album.album_date?.slice(0, 10) || 'Date not recorded'}{album.photographer_name && ` · ${album.photographer_name}`}</small></span></button>)}</div>{!albums.length && <p className="ap-section">No albums match these filters.</p>}<div className="gw-pagination"><button className="ap-secondary" disabled={current === 1} onClick={() => setPage(current - 1)}>Previous</button><span>{albums.length} albums · Page {current} of {Math.max(1, Math.ceil(albums.length / 12))}</span><button className="ap-secondary" disabled={current * 12 >= albums.length} onClick={() => setPage(current + 1)}>Next</button></div></> : <>
-    {photos.loading || photos.id !== selected.id ? <RecordLoading label="Loading album photos…" /> : photos.error ? <p role="alert">{photos.error}</p> : <><div className="gw-actions"><input ref={fileInput} type="file" accept="image/*" multiple hidden onChange={stageFiles} /><button className="ap-primary" onClick={() => fileInput.current.click()}>{persistent ? 'Upload photos' : 'Add photo drafts'}</button><button className="ap-secondary" disabled={!photoRows.length} onClick={() => setChecked(checked.length === photoRows.length ? [] : photoRows.map(p => p.id))}>{checked.length === photoRows.length && photoRows.length ? 'Deselect all' : 'Select all photos'}</button>{photoRows.length > 0 && <button type="button" className="ap-secondary" disabled={busy} onClick={() => setChecked(checked.length === photoRows.length ? [] : photoRows.map(photo => photo.id))}>
-      {checked.length === photoRows.length ? 'Clear selection' : 'Select all photos'}
-    </button>}<button className="ap-danger" disabled={!checked.length} onClick={() => setAction({
+    {photos.loading || photos.id !== selected.id ? <RecordLoading label="Loading album photos…" /> : photos.error ? <p role="alert">{photos.error}</p> : <><div className="gw-actions"><input ref={fileInput} type="file" accept="image/*" multiple hidden onChange={stageFiles} /><button className="ap-primary" onClick={() => fileInput.current.click()}>{persistent ? 'Upload photos' : 'Add photo drafts'}</button><button type="button" className="ap-secondary" disabled={busy || !photoRows.length} onClick={() => setChecked(checked.length === photoRows.length ? [] : photoRows.map(photo => photo.id))}>
+      {checked.length === photoRows.length && photoRows.length ? 'Clear selection' : 'Select all photos'}
+    </button><button className="ap-danger" disabled={!checked.length} onClick={() => setAction({
             kind: 'photos',
             ids: checked
           })}>{persistent ? 'Remove selected' : 'Remove selected locally'} ({checked.length})</button></div><div className="gw-grid gw-photos">{photoRows.slice((currentPhoto - 1) * 24, currentPhoto * 24).map((photo, index) => <article key={photo.id} className="gw-photo"><button className="gw-photo-open" aria-label={`Open photo ${(currentPhoto - 1) * 24 + index + 1}`} onClick={() => setViewer(photo)}><Thumbnail src={photo.thumbnail_url || photo.image_url} local={photo.local} /></button><label className="gw-check"><input type="checkbox" checked={checked.includes(photo.id)} onChange={() => setChecked(ids => ids.includes(photo.id) ? ids.filter(id => id !== photo.id) : [...ids, photo.id])} />Photo {(currentPhoto - 1) * 24 + index + 1}{selected.cover_image_url === photo.image_url ? ' · Cover' : ''}{photo.local ? ' · Local' : ''}</label></article>)}</div>{!photoRows.length && <p className="ap-section">This album has no photos yet.</p>}<div className="gw-pagination"><button className="ap-secondary" disabled={currentPhoto === 1} onClick={() => setPhotoPage(currentPhoto - 1)}>Previous photos</button><span>Page {currentPhoto} of {photoPages}</span><button className="ap-secondary" disabled={currentPhoto === photoPages} onClick={() => setPhotoPage(currentPhoto + 1)}>Next photos</button></div></>}
@@ -439,7 +463,7 @@ export default function GalleryWorkspace({
           })}>{persistent ? 'Remove photo' : 'Remove photo locally'}</button>{galleryImageUrl(viewer.image_url, viewer.local) && <a className="ap-secondary" target="_blank" rel="noopener noreferrer" href={galleryImageUrl(viewer.image_url, viewer.local)}>Open original image</a>}</div></section></GalleryDialog>}
     {action && <GalleryDialog title={persistent ? 'Review gallery change' : 'Review local gallery change'} onClose={closeAction}>
       <section className="gw-body">{saveError&&<p role="alert">{saveError}</p>}
-        <p>{action.kind === 'visibility' ? (action.visible ? 'Publish this album to the public gallery?' : 'Hide this album from the public gallery?') : persistent && action.kind!=='refresh' ? (action.kind==='upload' ? `Upload ${action.rows.length} photos and register them in this album?` : action.kind==='cover' ? 'Set this album cover?' : action.kind==='album' ? 'Delete this album and associated image records? Original storage files will be retained.' : `Remove ${action.ids.length} photo records from this album? Original storage files will be retained.`) : action.kind === 'refresh' ? 'Discard all local drafts and reload authorised records?' : action.kind === 'upload' ? `Add ${action.rows.length} photo previews? Files stay on this device; no storage upload occurs.` : action.kind === 'cover' ? 'Use this photo as the cover in this local preview?' : action.kind === 'album' ? 'Remove this album from the local preview? The live album and all storage files remain unchanged.' : `Remove ${action.ids.length} selected photos from the local preview?`}</p>
+        <p>{action.kind === 'visibility' ? (action.visible ? 'Publish this album to the public gallery?' : 'Hide this album from the public gallery?') : persistent && action.kind!=='refresh' ? (action.kind==='upload' ? `Upload ${action.rows.length} photos and register them in this album?` : action.kind==='cover' ? 'Set this album cover?' : action.kind==='album' ? 'Delete this album and associated image records? Original storage files will be retained.' : `Remove ${action.ids.length} photo records from this album? Owned image files without remaining references will be cleared when your account can verify them.`) : action.kind === 'refresh' ? 'Discard all local drafts and reload authorised records?' : action.kind === 'upload' ? `Add ${action.rows.length} photo previews? Files stay on this device; no storage upload occurs.` : action.kind === 'cover' ? 'Use this photo as the cover in this local preview?' : action.kind === 'album' ? 'Remove this album from the local preview? The live album and all storage files remain unchanged.' : `Remove ${action.ids.length} selected photos from the local preview?`}</p>
         {action.kind === 'upload' && <>{busy && uploadProgress && <p role="status">Processed {uploadProgress.current} of {uploadProgress.total} photos</p>}<div className="gw-grid">{action.rows.map(p => <Thumbnail key={p.id} src={p.image_url} local />)}</div><p>Live source upload uses JPEG full images up to 1920px (.82 quality) and 600px thumbnails (.7 quality). {persistent ? 'Files upload only after confirmation.' : 'Upload integration is not enabled.'}</p></>}
         <div className="gw-actions"><button className="ap-secondary" disabled={busy} onClick={closeAction}>Cancel</button><button className={['album','photos'].includes(action.kind) ? 'ap-danger' : 'ap-primary'} disabled={busy||(blocked&&action.kind!=='refresh')} onClick={() => action.kind === 'refresh' ? (setAction(null), setReload(n => n + 1)) : confirm()}>{busy ? 'Working…' : action.kind === 'refresh' ? 'Discard and reload' : persistent ? 'Confirm change' : 'Apply local change'}</button></div>
       </section></GalleryDialog>}

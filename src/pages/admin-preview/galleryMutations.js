@@ -1,5 +1,6 @@
 import { verifyGalleryAccess, permittedAlbumIds, galleryAlbumPayload, GALLERY_FIELDS } from './galleryData.js';
 import { readAll } from './playersData.js';
+import { cleanupConfirmedGalleryPhotos } from './galleryPhotoCleanup.js';
 
 export const isGalleryWriteEnabled = client => typeof client?.auth?.getUser === 'function'
   && typeof client?.rpc === 'function' && typeof client?.from === 'function';
@@ -98,19 +99,33 @@ export async function removeGalleryPhotos(options) {
   gate(options);
   if (fresh.length !== photos.length || photos.some(p => !fresh.some(row => row.id === p.id && sameFields(row, p, PHOTO_COLUMNS)))) throw new Error('Selected photos changed. Reload before removing them.');
   const removed = [];
+  let failure = null;
   try {
     for (const photo of photos) {
-      gate(options);
+      await access(options, album.id);
       let query = options.client.from('gallery_images').delete().eq('id', photo.id).eq('album_id', album.id);
       query = originalPredicate(query, photo, PHOTO_COLUMNS.filter(key => !['id', 'album_id'].includes(key)));
+      gate(options);
       const { data, error } = await query.select('id').maybeSingle();
-      complete(data, error, 'Photo could not be removed.'); removed.push(photo.id);
+      if (complete(data, error, 'Photo could not be removed.').id !== photo.id) throw new Error('Photo removal could not be verified.');
+      removed.push(photo);
     }
-    return { removed_ids: removed, retained_storage: true };
   } catch (error) {
-    error.removed_ids = removed; error.retained_storage = true;
-    throw error;
+    if (!removed.length) throw error;
+    failure = error.message;
   }
+  const cleanup = await cleanupConfirmedGalleryPhotos({
+    client: options.client, albumId: album.id, photos: removed, isCurrent: options.isCurrent,
+    async verify(isCurrent) {
+      const scopedOptions = { ...options, isCurrent };
+      const grant = await access(scopedOptions, album.id);
+      const { data, error } = await options.client.rpc('is_super_admin', { user_email: grant.email });
+      gate(scopedOptions);
+      if (error) throw new Error('Storage permission could not be verified.');
+      return data === true;
+    },
+  });
+  return { removed_ids: removed.map(photo => photo.id), failure, cleanup };
 }
 
 // Same resizing rules as GalleryManager; decoding/toBlob failures now reject.
