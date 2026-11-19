@@ -37,6 +37,7 @@ create table public.tournament_draws(id uuid, division_id uuid, name text, type 
 create table public.tournament_matches(id uuid, division_id uuid, draw_id uuid, round_name text, match_index integer, team_1_reg_id uuid, team_2_reg_id uuid, score text, winner_reg_id uuid, status text, scheduled_time timestamp with time zone, court_name text, duration_minutes integer, notes text, created_at timestamp with time zone);
 create table public.tournament_participants(id uuid, event_id bigint, rankedin_participant_id text, full_name text, class_name text, profile_id bigint, is_paid boolean, last_synced_at timestamp with time zone, metadata jsonb, is_test boolean, email text, whatsapp_added boolean);
 create table public.whatsapp_queue(id uuid, recipient_phone text, template_name text, variables jsonb, status text, error_message text, created_at timestamp with time zone, processed_at timestamp with time zone);
+create table storage.buckets(id text primary key,name text,public boolean,allowed_mime_types text[]);
 create table storage.objects(id uuid,bucket_id text,name text,owner_id text);
 create table public.push_deliveries(id uuid);
 create table public.event_notification_follows(id uuid);
@@ -669,7 +670,9 @@ create function public.plan_event_change_push(bigint,text,text,jsonb,jsonb) retu
 
 do $$ declare t text; begin foreach t in array array['clubs','club_groups','club_google_matches','club_organisations','albums','gallery_images','events','settings','blogs','coach_applications','calendar','tournament_divisions','tournament_draws','tournament_matches','ranking_history','ranking_points_config','rankedin_cache','rankedin_results_cache','player_matches','whatsapp_queue'] loop execute format('alter table public.%I enable row level security',t); if t not in('albums','gallery_images','coach_applications') then execute format('create policy legacy_all on public.%I for all to authenticated using(true) with check(true)',t); execute format('create policy public_read on public.%I for select using(true)',t); end if; end loop; end $$;
 alter table storage.objects enable row level security;
-create policy legacy_storage_write on storage.objects for all to authenticated using(true) with check(true);
+create policy legacy_storage_write on storage.objects for all to authenticated
+using (bucket_id in ('blog-images','gallery','tournament-media','coach-profiles'))
+with check (bucket_id in ('blog-images','gallery','tournament-media','coach-profiles'));
 create policy "Admins can manage albums" on public.albums for all to authenticated using(true) with check(true);
 create policy "Admins can view all albums" on public.albums for select to authenticated using(true);
 create policy public_albums on public.albums for select using(is_active);
