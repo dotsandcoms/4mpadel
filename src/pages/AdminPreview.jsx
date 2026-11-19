@@ -31,6 +31,8 @@ import HelpRequestsWorkspace from './admin-preview/HelpRequestsWorkspace.jsx';
 import AccountSecurityWorkspace from './admin-preview/AccountSecurityWorkspace.jsx';
 import ReviewSettingsWorkspace from './admin-preview/ReviewSettingsWorkspace.jsx';
 import ReviewBlogWorkspace from './admin-preview/ReviewBlogWorkspace.jsx';
+import ReviewAuditWorkspace from './admin-preview/ReviewAuditWorkspace.jsx';
+import ReviewIntegrationsWorkspace from './admin-preview/ReviewIntegrationsWorkspace.jsx';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, LayoutGroup, motion as Motion, useReducedMotion } from 'framer-motion';
 import {
@@ -110,7 +112,7 @@ const PREVIEW_REGISTRATIONS = [
 ];
 const EMPTY_RELATED = { payments: [], divisions: [], activity: [], draws: [], refunds: [] };
 const REGISTRATION_PAGE_SIZE = 50;
-const RECORD_WORKSPACE_PAGES = ['messaging', 'help', 'security', 'settings', 'blog', 'players', 'calendar', 'coaches', 'clubs', 'organisations', 'federations', 'reports', 'payments', 'payouts', 'team-access', 'gallery', 'email', 'push', 'licenses', 'tournaments'];
+const RECORD_WORKSPACE_PAGES = ['messaging', 'help', 'security', 'settings', 'blog', 'audit-log', 'integrations', 'players', 'calendar', 'coaches', 'clubs', 'organisations', 'federations', 'reports', 'payments', 'payouts', 'team-access', 'gallery', 'email', 'push', 'licenses', 'tournaments'];
 const REFRESH_WORKSPACE_PAGES = RECORD_WORKSPACE_PAGES;
 
 const WORKSPACES = [
@@ -144,7 +146,9 @@ const WORKSPACES = [
   ] },
   { id: 'system', label: 'System', icon: Settings2, caption: 'Access and configuration', items: [
     { label: 'Access & permissions', icon: ShieldCheck, page: 'team-access' },
+    { label: 'Integrations', icon: Link2, page: 'integrations' },
     { label: 'Settings', icon: Settings2, page: 'settings' },
+    { label: 'Audit log', icon: Clock3, page: 'audit-log' },
     { label: 'Account security', icon: KeyRound, page: 'security' },
   ] },
 ];
@@ -1005,6 +1009,8 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
   else if (page === 'messaging') content = <MessagingWorkspace session={session} />;
   else if (page === 'help') content = <HelpRequestsWorkspace session={session} />;
   else if (page === 'security') content = <AccountSecurityWorkspace session={session} permissions={permissions} client={supabase} targetEmail={session?.user?.email} />;
+  else if (page === 'audit-log') content = <ReviewAuditWorkspace key={scope.id} client={supabase} permissions={permissions} scope={scope} refreshRevision={playerRefresh} />;
+  else if (page === 'integrations') content = <ReviewIntegrationsWorkspace canOpen={canOpen} />;
   else if (page === 'settings') content = <ReviewSettingsWorkspace client={supabase} session={session} refreshRevision={playerRefresh} mayOpenLicences={canOpen('licenses')} />;
   else if (page === 'blog') content = <ReviewBlogWorkspace client={supabase} session={session} refreshRevision={playerRefresh} />;
   else if (page === 'players' && session && (permissionsLoading || !permissions)) content = <section className="ap-section ap-live-loading" role="status">Checking Players access…</section>;

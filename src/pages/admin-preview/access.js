@@ -5,13 +5,13 @@ import { resolveEventWorkspace, scopeCalendarQuery } from '../../utils/adminCale
 export const reviewPages = [
   'home', 'events', 'registrations', 'calendar', 'messaging', 'help', 'federations', 'organisations',
   'clubs', 'players', 'coaches', 'payments', 'licenses', 'payouts', 'reports', 'gallery', 'email', 'push',
-  'blog', 'team-access', 'settings', 'security', 'tournaments',
+  'blog', 'team-access', 'settings', 'security', 'tournaments', 'integrations', 'audit-log',
 ];
 
 const moduleTabs = { home: 'dashboard', email: 'email-broadcast', push: 'email-broadcast' };
 const managed = row => row.member_role === 'owner' || row.member_role === 'admin';
-const scopedPages = ['events', 'registrations', 'calendar', 'reports', 'payouts', 'organisations', 'clubs'];
-const routeAliases = { event: 'events', payment: 'registrations', player: 'players' };
+const scopedPages = ['events', 'registrations', 'calendar', 'reports', 'payouts', 'organisations', 'clubs', 'audit-log'];
+const routeAliases = { event: 'events', payment: 'registrations', player: 'players', integrations: 'settings' };
 const reviewPage = page => routeAliases[page] || page;
 
 export function isReviewTenant(permissions) {
@@ -39,7 +39,7 @@ export function canOpenReviewPage(permissions, page) {
   if (page === 'federations') return federationAdmin || (!tenant && tabs.includes('federations'));
   if (page === 'reports') return organisationAdmin || (!tenant && tabs.includes('finance') && permissions.module_permissions?.finance?.allowedEvents?.length > 0);
   if (page === 'payments') return !tenant && hasExplicitPlatformPaystackGrant(permissions);
-  if (page === 'events' || page === 'registrations') return organisationAdmin || clubAdmin || (!tenant && (assignedEvents.length > 0 || tabs.includes('event-mgmt')));
+  if (page === 'events' || page === 'registrations' || page === 'audit-log') return organisationAdmin || clubAdmin || (!tenant && (assignedEvents.length > 0 || tabs.includes('event-mgmt')));
   if (page === 'calendar') return organisationAdmin || clubAdmin || (!tenant && tabs.includes('calendar'));
   if (page === 'messaging' || page === 'help') return organisationAdmin || (!tenant && assignedEvents.length > 0);
   if (page === 'gallery') return !tenant && (tabs.includes('gallery') || permissions.module_permissions?.gallery?.allowedAlbums?.length > 0);
