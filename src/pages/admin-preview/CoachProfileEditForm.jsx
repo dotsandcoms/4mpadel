@@ -5,7 +5,7 @@ import { readAll } from './playersData';
 import { coachProfilePatch, createCoachDraft, loadCoachProfile, saveCoachProfile } from './coachProfileEdit';
 
 const labels = { firstName: 'Name', lastName: 'Surname', full_name: 'Full name', email: 'Email address', contact_number: 'Contact number', city: 'City', gender: 'Gender', coaching_location: 'Coaching clubs', website_link: 'Website link', instagram_link: 'Instagram link', youtube_link: 'YouTube link', bio: 'Coaching bio' };
-export default function CoachProfileEditForm({ row, client, scopeId, onCancel, onSaved, onBusyChange }) {
+export default function CoachProfileEditForm({ row, actor, client, scopeId, onCancel, onSaved, onBusyChange }) {
   const [original, setOriginal] = useState(null), [draft, setDraft] = useState(null), [clubs, setClubs] = useState([]), [clubError, setClubError] = useState('');
   const [file, setFile] = useState(null), [preview, setPreview] = useState(''), [review, setReview] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false), [blocked, setBlocked] = useState(false);
   const generation = useRef(0), lock = useRef(false), busyCallback = useRef(onBusyChange); busyCallback.current = onBusyChange;
@@ -13,7 +13,7 @@ export default function CoachProfileEditForm({ row, client, scopeId, onCancel, o
     const current = ++generation.current;
     lock.current = false; setBusy(false);
     setOriginal(null); setDraft(null); setError(''); setReview(null); setFile(null); setBlocked(false);
-    loadCoachProfile(client, row.id, scopeId).then(async value => {
+    loadCoachProfile(client, row.id, scopeId, actor).then(async value => {
       if (generation.current !== current) return;
       setOriginal(value); setDraft(createCoachDraft(value));
       try {
@@ -22,7 +22,7 @@ export default function CoachProfileEditForm({ row, client, scopeId, onCancel, o
       } catch { if (generation.current === current) setClubError('Club directory unavailable. Existing club names are retained; reopen to retry.'); }
     }).catch(err => { if (generation.current === current) setError(err.message); });
     return () => { generation.current++; busyCallback.current?.(false); };
-  }, [client, row.id, scopeId]);
+  }, [actor, client, row.id, scopeId]);
   useEffect(() => {
     if (!file) { setPreview(''); return; }
     const url = URL.createObjectURL(file); setPreview(url); return () => URL.revokeObjectURL(url);
@@ -35,7 +35,7 @@ export default function CoachProfileEditForm({ row, client, scopeId, onCancel, o
       const patch = coachProfilePatch(original, draft);
       if (!review) { if (!Object.keys(patch).length && !file) throw new Error('No changes to save.'); setReview(patch); setError(''); return; }
       lock.current = true; setBusy(true); busyCallback.current?.(true); setError('');
-      const saved = await saveCoachProfile(client, original, draft, scopeId, { file });
+      const saved = await saveCoachProfile(client, original, draft, scopeId, { actor, file });
       if (generation.current === current) onSaved(saved);
     } catch (err) { if (generation.current === current) { setError(err.message); if (lock.current) setBlocked(true); } }
     finally { if (generation.current === current) { lock.current = false; setBusy(false); busyCallback.current?.(false); } }

@@ -1,20 +1,28 @@
-import { verifyGalleryAccess, permittedAlbumIds, galleryAlbumPayload, galleryFolder, GALLERY_FIELDS } from './galleryData.js';
+import { verifyGalleryAccess, permittedAlbumIds, galleryAlbumPayload, GALLERY_FIELDS } from './galleryData.js';
 import { readAll } from './playersData.js';
 
-const STAGING_URL = 'https://cefmzkwabdqqoagxhekc.supabase.co';
-const environment = () => ({ enable: import.meta.env?.VITE_ENABLE_GALLERY_WRITES });
-export const isGalleryWriteEnabled = (client, config = environment()) => config?.enable === 'staging' && client?.supabaseUrl === STAGING_URL;
+export const isGalleryWriteEnabled = client => typeof client?.auth?.getUser === 'function'
+  && typeof client?.rpc === 'function' && typeof client?.from === 'function';
+const albumIdPattern = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 const ALBUM_COLUMNS = ['id', ...GALLERY_FIELDS, 'updated_at'];
 const PHOTO_COLUMNS = ['id', 'album_id', 'image_url', 'thumbnail_url', 'caption', 'sort_order', 'created_at'];
 const sameFields = (left, right, fields) => fields.every(key => JSON.stringify(left?.[key] ?? null) === JSON.stringify(right?.[key] ?? null));
-function gate({ client, config, isCurrent = () => true }) {
-  if (!isGalleryWriteEnabled(client, config)) throw new Error('Gallery writes are enabled only on the verified staging project.');
+function gate({ client, isCurrent = () => true }) {
+  if (!isGalleryWriteEnabled(client)) throw new Error('Sign in to use Gallery changes.');
   if (!isCurrent()) throw new Error('The gallery account or album changed. Review again.');
 }
 async function access(options, albumId, albumManagement = false) {
   gate(options);
-  const grant = await verifyGalleryAccess(options.client, options.session, options.scopeId ?? 'all');
+  const { client, session } = options;
+  const grant = await verifyGalleryAccess(client, session, options.scopeId ?? 'all');
+  const { data: active, error: activeError } = await client.rpc('account_is_active');
+  const { data: actor, error: actorError } = await client.auth.getUser();
   gate(options);
+  const email = String(session?.user?.email || '').trim().toLowerCase();
+  if (activeError || active !== true || actorError || actor?.user?.id !== session?.user?.id
+    || !email || grant.email !== email || String(actor.user.email || '').trim().toLowerCase() !== email) {
+    throw new Error('An active account with current Gallery access is required.');
+  }
   const ids = permittedAlbumIds(grant);
   if (ids && (albumManagement || !ids.some(id => String(id) === String(albumId)))) throw new Error('Your album assignment does not allow this gallery action.');
   return grant;
@@ -52,6 +60,15 @@ export async function saveGalleryAlbum(options) {
   if (!options.operationId) throw new Error('Review the new album before saving.');
   const { data, error } = await client.from('albums').insert({ ...payload, id: options.operationId }).select('*').single();
   return complete(data, error, 'Album could not be created.');
+}
+export async function setGalleryVisibility(options, visible) {
+  if (typeof visible !== 'boolean') throw new Error('Choose a valid album visibility.');
+  const album = await currentAlbum(options, options.album, true);
+  let query = options.client.from('albums').update({ is_active: visible }).eq('id', album.id);
+  query = originalPredicate(query, album, [...GALLERY_FIELDS, 'updated_at']);
+  gate(options);
+  const { data, error } = await query.select('*').maybeSingle();
+  return complete(data, error, 'Album visibility could not be updated.');
 }
 export async function removeGalleryAlbum(options) {
   const album = await currentAlbum(options, options.album, true);
@@ -122,18 +139,20 @@ export async function uploadGalleryPhotos(options) {
   const existing = await readAll(() => options.client.from('gallery_images').select(PHOTO_COLUMNS.join(',')).eq('album_id', album.id).order('sort_order').order('created_at', { ascending: false }).order('id'));
   gate(options);
   const resize = options.resize || resizeGalleryPhoto, results = [], failures = []; let attempted = 0;
-  const base = Number(existing.at(-1)?.sort_order) || 0, folder = galleryFolder(album.title) || 'unnamed-album';
+  const albumId = String(album.id).toLowerCase();
+  if (!albumIdPattern.test(albumId)) throw new Error('The album storage folder could not be verified.');
+  const base = Number(existing.at(-1)?.sort_order) || 0, folder = `albums/${albumId}`;
   for (let i = 0; i < files.length; i++) {
     attempted++;
     try {
       await access(options, album.id);
       const [full, thumb] = await Promise.all([resize(files[i], 1920, .82), resize(files[i], 600, .7)]);
-      gate(options);
+      await access(options, album.id);
       const name = crypto.randomUUID(), fullPath = `${folder}/${name}_full.jpg`, thumbPath = `${folder}/${name}_thumb.jpg`;
       const storage = options.client.storage.from('gallery');
       const uploads = await Promise.all([storage.upload(fullPath, full, { cacheControl: '3600', upsert: false }), storage.upload(thumbPath, thumb, { cacheControl: '3600', upsert: false })]);
       if (uploads.some(result => result.error)) throw new Error('Image storage upload failed. Any uploaded file is retained for recovery.');
-      gate(options);
+      await access(options, album.id);
       const image_url = storage.getPublicUrl(fullPath).data.publicUrl, thumbnail_url = storage.getPublicUrl(thumbPath).data.publicUrl;
       const { data, error } = await options.client.from('gallery_images').insert({ id: name, album_id: album.id, image_url, thumbnail_url, sort_order: base + results.length + 1 }).select('*').single();
       const row = complete(data, error, 'The uploaded image could not be registered.'); results.push(row);
@@ -149,4 +168,4 @@ export async function uploadGalleryPhotos(options) {
   // Every result is explicit: callers reload after a partial or uncertain outcome.
   return { photos: results, album: updatedAlbum, failures, attempted, retained_storage: true };
 }
-export const galleryMutationApi = { enabled: isGalleryWriteEnabled, saveAlbum: saveGalleryAlbum, uploadPhotos: uploadGalleryPhotos, removePhotos: removeGalleryPhotos, removeAlbum: removeGalleryAlbum, setCover: setGalleryCover };
+export const galleryMutationApi = { enabled: isGalleryWriteEnabled, saveAlbum: saveGalleryAlbum, uploadPhotos: uploadGalleryPhotos, removePhotos: removeGalleryPhotos, removeAlbum: removeGalleryAlbum, setCover: setGalleryCover, setVisibility: setGalleryVisibility };

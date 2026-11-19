@@ -18,8 +18,8 @@ export function coachProfilePatch(original, draft) {
   if (JSON.stringify(draft.clubs) !== JSON.stringify(initial.clubs)) patch.coaching_location = draft.clubs.filter(Boolean).join(' · ');
   return patch;
 }
-export async function loadCoachProfile(client, id, scopeId) {
-  await verifyCoachAccess(client, scopeId);
+export async function loadCoachProfile(client, id, scopeId, actor) {
+  await verifyCoachAccess(client, scopeId, actor);
   const { data, error } = await client.from('coach_applications').select(['id', 'status', ...COACH_FIELDS].join(',')).eq('id', id).single();
   if (error || !data) throw new Error('The coach profile could not be loaded.');
   return data;
@@ -45,11 +45,11 @@ export function resizeCoachPhoto(file) {
     try { reader.readAsDataURL(file); } catch (error) { finish(error); }
   });
 }
-export async function saveCoachProfile(client, original, draft, scopeId, { file, resize = resizeCoachPhoto } = {}) {
+export async function saveCoachProfile(client, original, draft, scopeId, { actor, file, resize = resizeCoachPhoto } = {}) {
   const patch = coachProfilePatch(original, draft);
   const keys = [...Object.keys(patch), ...(file ? ['profile_pic_url'] : [])];
   const check = async () => {
-    const fresh = await loadCoachProfile(client, original.id, scopeId);
+    const fresh = await loadCoachProfile(client, original.id, scopeId, actor);
     if (keys.some(key => fresh[key] !== original[key])) throw new Error('Coach details changed since opening. Reopen before saving.');
     return fresh;
   };

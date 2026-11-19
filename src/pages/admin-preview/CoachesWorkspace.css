@@ -47,3 +47,18 @@
 .pp-coach-edit .pp-facts dd {white-space:pre-wrap;overflow-wrap:anywhere;}
 .pp-coach-edit p {font-size:13px;line-height:1.6;margin:12px 0;}
 @media(max-width:650px) {.co-profile-layout {grid-template-columns:1fr;gap:24px;}.co-profile-summary {border-right:0;border-bottom:1px solid var(--ap-line);padding:0 0 20px;}.co-profile-portrait,.co-profile-placeholder {width:96px;height:96px;}.co-profile-dialog {width:calc(100vw - 16px);}}
+
+.co-charts { display: grid; grid-template-columns: minmax(200px,.75fr) minmax(0,1.25fr); gap: 12px; margin: 14px 0; align-items: start; }
+.co-chart { margin: 0; padding: 15px; }
+.co-chart figcaption { font-weight: 750; margin: 0 0 9px; }
+.co-chart-description { color: var(--ap-muted); font-size: 12px; margin: 0 0 10px; }
+.co-chart-rows { list-style: none; display: grid; gap: 6px; margin: 0; padding: 0; }
+.co-chart-rows li { display: grid; grid-template-columns: 62px minmax(0,1fr) 32px; gap: 9px; align-items: center; font-size: 12px; }
+.co-chart-rows strong { text-align: right; }
+.co-chart-track { background: var(--ap-surface-2); border-radius: 2px; overflow: hidden; }
+.co-chart-value { height: 8px; min-width: 0; }
+.co-chart-approved { background: var(--ap-positive); }
+.co-chart-pending { background: var(--ap-warning); }
+.co-chart-rejected { background: var(--ap-danger); }
+.co-chart-days { background: var(--ap-info); }
+@media (max-width: 720px) { .co-charts { grid-template-columns: minmax(0,1fr); } }
