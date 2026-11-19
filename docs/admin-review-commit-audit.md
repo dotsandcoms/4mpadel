@@ -116,4 +116,3 @@ The source comparison uses New Admin candidate `217a7e26cae8377b9c46120c18e66e2d
 | [`44d3bdb7`](https://github.com/dotsandcoms/4mpadel/commit/44d3bdb76c0e51be672f5075eb2be0b96552830d) | Main | Include event names in web Paystack checkout references (#12) | 4 / 0 | **Money.** Event-name web reference introduced; current unambiguous prefix handled by later commit. |
 | [`a90a0e43`](https://github.com/dotsandcoms/4mpadel/commit/a90a0e439bf84dd395da66494f2bd89de05afe95) | Main | Use event-name-first Paystack references (#13) | 4 / 0 | **Money.** Event-name-first gateway reference and classifier; independently review unmatched receipt backfill. |
 | [`f17c90b6`](https://github.com/dotsandcoms/4mpadel/commit/f17c90b655f522e7188c81c85f1195c048427b03) | Main | Use readable Paystack references for native event payments (#14) | 8 / 0 | **Money.** Canonical mobile reference and legacy alias; compare both formats through exact saved-checkout reconciliation. |
-
