@@ -875,23 +875,6 @@ function PaymentException({ registration, event, payments, go }) {
   </>;
 }
 
-function PlayerRecord({ registration, event, go }) {
-  const row = registration || PREVIEW_REGISTRATIONS[0]; const [tab, setTab] = useState('Overview');
-  return <>
-    <button className="ap-back-button" onClick={() => go('registrations', { event, registration: row })}><ArrowLeft size={17} /> Registration {row.id}</button>
-    <div className="ap-player-hero">
-      <div className="ap-player-monogram">{personName(row).split(' ').map((part) => part[0]).slice(0, 2).join('')}</div>
-      <div><p className="ap-eyebrow">Player record</p><h1>{personName(row)}</h1><p>{row.email || 'Email unavailable'}</p></div>
-      <div className="ap-player-actions"><Status tone={row._player ? 'positive' : 'neutral'}>{row._player ? 'Matched player' : 'Public entry'}</Status><button className="ap-secondary" title="Actions are disabled in this read-only preview"><Mail size={16} /> Send message</button></div>
-    </div>
-    <div className="ap-record-tabs" role="tablist">{['Overview', 'Registrations', 'Payments', 'Results', 'Activity'].map((item) => <button key={item} role="tab" aria-selected={tab === item} onClick={() => setTab(item)}>{item}</button>)}</div>
-    <AnimatePresence mode="wait" initial={false}><Motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="ap-player-grid">
-      <section className="ap-section"><div className="ap-section-heading"><div><p className="ap-kicker">Identity</p><h2>Player details</h2></div><ShieldCheck size={21} /></div><dl className="ap-details-list"><div><dt>Player ID</dt><dd>{row._player?.id || row.player_id || 'Not exposed in public view'}</dd></div><div><dt>Email</dt><dd>{row.email || 'Unavailable'}</dd></div><div><dt>Partner</dt><dd>{row.partner_name || 'Not assigned'}</dd></div><div><dt>Division</dt><dd>{registrationDivision(row)}</dd></div><div><dt>Registration</dt><dd>{row.id}</dd></div></dl></section>
-      <section className="ap-section ap-linked-section"><div className="ap-section-heading"><div><p className="ap-kicker">Connected record</p><h2>Current registration</h2></div><Status tone={normalizePayment(row) === 'failed' ? 'danger' : 'positive'}>{normalizePayment(row)}</Status></div><button className="ap-linked-card" onClick={() => go('registrations', { event, registration: row })}><span><b>{event?.event_name || event?.title || PREVIEW_EVENT.event_name}</b><small>{registrationDivision(row)}, {row.id}</small></span><ChevronRight size={18} /></button><div className="ap-relationship-line"><span>Player</span><i /><span>Registration</span><i /><span>Event</span></div></section>
-    </Motion.div></AnimatePresence>
-  </>;
-}
-
 function WorkspaceLanding({ workspace, setWorkspace, page, go }) {
   const current = WORKSPACES.find((item) => item.id === workspace);
   const connected = { players: 'Directory and profile editing', clubs: 'Directory and contact/details editing', coaches: 'Application directory · read-only', payments: 'Recorded payments and refunds · read-only', payouts: 'Recorded organiser payments · read-only', reports: 'Finance reports · read-only', 'team-access': 'Access workspace', gallery: 'Albums and photos · local drafts; staging writes gated', email: 'Audience and message review · sending not connected', push: 'Targeted app audience, message review and delivery history · sending held', organisations: 'Organisation profiles and linked events', federations: 'Federation profiles, personnel and committees' };
@@ -1002,10 +985,11 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
   const userName = effectiveSession.user.email?.split('@')[0]?.split(/[._-]/)[0]?.replace(/^./, (letter) => letter.toUpperCase()) || 'there';
   let content;
   if (!canSeeWorkspace) content = <section className="ap-section"><ShieldCheck size={28}/><h1>Workspace unavailable</h1><p>This account has no access to this workspace.</p><button className="ap-primary" onClick={() => go(firstPage)}>Open my workspace</button></section>;
+  else if (page === 'player') content = <Navigate replace to={{ pathname: '/admin-preview/players', search: location.search }} />;
   else if (scope.id !== 'all' && page === 'players') content = <section className="ap-section"><ShieldCheck size={28} /><h2>This workspace is not yet available in {scope.label}</h2><p>Organisation and club access for this module is still being connected.</p><button className="ap-secondary" onClick={() => setScope(scopes[0])}>Return to my authorised access</button></section>;
   else if (permissions?.role === 'private_rehearsal' && page === 'events') content = <EventRehearsalWorkspace client={supabase} session={session} />;
   else if (!localFixture && ['events', 'event', 'registrations', 'payment'].includes(page) && !canReadPreviewEvents(permissions, scope)) content = <section className="ap-section"><ShieldCheck size={28} /><h2>Event Manager access is required</h2><p>Your account has no Event Manager permission. Choose one of your authorised modules.</p></section>;
-  else if (['event', 'registrations', 'payment', 'player'].includes(page) && (data.loading || !activeEvent)) content = <EventRecordState loading={data.loading} error={data.error}/>;
+  else if (['event', 'registrations', 'payment'].includes(page) && (data.loading || !activeEvent)) content = <EventRecordState loading={data.loading} error={data.error}/>;
   else if (page === 'messaging') content = <MessagingWorkspace session={session} />;
   else if (page === 'help') content = <HelpRequestsWorkspace session={session} />;
   else if (page === 'security') content = <AccountSecurityWorkspace session={session} permissions={permissions} client={supabase} targetEmail={session?.user?.email} />;
@@ -1053,7 +1037,6 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
   else if (page === 'calendar') content = <CalendarWorkspace key={`${session?.user?.id || 'signed-out'}-${scope.id}-${playerRefresh}`} session={session} permissions={permissions} scope={scope} scopeId={scope.id} canManageEvents={Boolean(session) && !localFixture && permissions?.role === 'super_admin' && scope.id === 'all'} />;
   else if (page === 'registrations') content = <RegistrationsWorkspace key={`${session?.user?.id}-${scope.id}`} event={activeEvent} events={data.events} registrations={data.registrations} go={go} initialRegistration={activeRegistration} canOpenMessages={canOpen('messaging')} />;
   else if (page === 'payment') content = <PaymentException registration={activeRegistration} event={activeEvent} payments={data.payments} go={go} />;
-  else if (page === 'player') content = <PlayerRecord registration={activeRegistration} event={activeEvent} go={go} />;
   else content = <OperationsHome events={data.events} registrations={data.registrations} go={go} userName={userName} />;
 
   return <div className="ap-root">
