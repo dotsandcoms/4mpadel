@@ -6,7 +6,7 @@ alter table public.players alter column id set default nextval('public.test_play
 alter table public.tournament_participants alter column id set default gen_random_uuid();
 
 insert into auth.users(id,email) select ('00000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid,
-  'actor'||n||'@example.test' from generate_series(1,12) n;
+  'actor'||n||'@example.test' from generate_series(1,14) n;
 insert into auth.sessions select id,id,null from auth.users;
 insert into public.admin_sidebar_permissions(email,role,allowed_tabs,module_permissions) values
   ('actor4@example.test','custom',array['gallery'],'{"gallery":{"allowedAlbums":["10000000-0000-0000-0000-000000000001"]}}'),
@@ -23,8 +23,9 @@ insert into public.organisations(id,name) values
 insert into public.organisation_members(organisation_id,user_email,role) values
   ('20000000-0000-0000-0000-000000000001','actor2@example.test','owner'),
   ('20000000-0000-0000-0000-000000000002','actor3@example.test','owner');
-insert into public.calendar(id,event_name,organisation_id) values
-  (101,'Event A','20000000-0000-0000-0000-000000000001'),(102,'Event B','20000000-0000-0000-0000-000000000002');
+insert into public.calendar(id,event_name,organisation_id,organiser_email,event_co_admins) values
+  (101,'Event A','20000000-0000-0000-0000-000000000001','actor13@example.test',array['actor14@example.test']),
+  (102,'Event B','20000000-0000-0000-0000-000000000002',null,null);
 insert into public.clubs(id,name) values
   ('30000000-0000-0000-0000-000000000001','Club A'),('30000000-0000-0000-0000-000000000002','Club B');
 insert into public.club_members(club_id,user_email,role) values
@@ -146,6 +147,54 @@ select pg_temp.expect(pg_temp.affected('update public.clubs set name=''Clubs adm
 select pg_temp.identity(12);
 select pg_temp.expect(pg_temp.affected('update public.calendar set event_name=''Assigned event'' where id=101')=1,'explicit event assignment allowed');
 select pg_temp.expect(pg_temp.affected('update public.calendar set event_name=''Foreign event'' where id=102')=0,'explicit event assignment does not grant foreign event');
+
+-- Cover uploads use the event scope, with a separate path before the first save.
+select pg_temp.identity(13);
+select pg_temp.expect(pg_temp.denied(
+  $q$insert into storage.objects(bucket_id,name) values('gallery','covers/covers_old_path.jpg')$q$
+),'legacy gallery path rejects an authorised event organiser');
+reset role;
+\ir ../../supabase/migrations/20261119045848_scope_event_cover_uploads.sql
+select pg_temp.expect((select public from storage.buckets where id='event-covers'),'event covers can be served by public URL');
+
+create function pg_temp.can_upload_cover(path text) returns boolean language sql as $$
+  select not pg_temp.denied(format('insert into storage.objects(bucket_id,name) values (%L,%L)','event-covers',path))
+$$;
+
+set role anon;
+select pg_temp.expect(not pg_temp.can_upload_cover('events/101/cover_anon.jpg'),'anonymous cover upload denied');
+reset role;
+set role authenticated;
+select pg_temp.identity(1);
+select pg_temp.expect(not pg_temp.can_upload_cover('events/101/cover_player.jpg'),'player cannot upload event covers');
+select pg_temp.identity(5);
+select pg_temp.expect(not pg_temp.can_upload_cover('events/101/cover_gallery.jpg'),'Gallery access alone does not grant event cover access');
+select pg_temp.identity(2);
+select pg_temp.expect(pg_temp.can_upload_cover('drafts/20000000-0000-0000-0000-000000000001/cover_org.jpg'),'organisation owner can upload before first save');
+select pg_temp.expect(not pg_temp.can_upload_cover('drafts/20000000-0000-0000-0000-000000000002/cover_org.jpg'),'organisation owner cannot upload another organisation’s draft cover');
+select pg_temp.identity(7);
+select pg_temp.expect(pg_temp.can_upload_cover('drafts/calendar/cover_calendar.jpg'),'Calendar admin can upload before first save');
+select pg_temp.expect(pg_temp.can_upload_cover('events/102/cover_calendar.jpg'),'Calendar admin can upload for any saved event');
+select pg_temp.expect(not pg_temp.can_upload_cover('events/9223372036854775808/cover_invalid.jpg'),'out-of-range event id denied without a cast error');
+select pg_temp.expect(not pg_temp.can_upload_cover('events/999/cover_missing.jpg'),'nonexistent event id denied');
+select pg_temp.identity(12);
+select pg_temp.expect(pg_temp.can_upload_cover('events/101/cover_assigned.jpg'),'assigned Event Manager can upload for own event');
+select pg_temp.expect(not pg_temp.can_upload_cover('events/102/cover_assigned.jpg'),'assigned Event Manager cannot upload to another event');
+select pg_temp.identity(13);
+select pg_temp.expect(pg_temp.can_upload_cover('events/101/cover_organiser.jpg'),'named organiser can upload an event cover');
+select pg_temp.expect(pg_temp.can_upload_cover('events/101/cover_replacement.jpg'),'named organiser can upload a replacement cover under a fresh path');
+select pg_temp.expect(pg_temp.affected($q$
+  update public.calendar set custom_image_url='https://example.test/storage/v1/object/public/event-covers/events/101/cover_replacement.jpg' where id=101
+$q$)=1,'named organiser can save the replacement cover to the event card');
+select pg_temp.expect(not pg_temp.can_upload_cover('events/102/cover_organiser.jpg'),'named organiser cannot upload to another event');
+select pg_temp.expect(not pg_temp.can_upload_cover('events/101/assets/cover_nested.jpg'),'only the cover folder is writable');
+select pg_temp.expect(not pg_temp.can_upload_cover('drafts/calendar/cover_organiser.jpg'),'event-only organiser cannot upload a platform draft cover');
+select pg_temp.expect(pg_temp.affected('update storage.objects set name=''events/101/cover_changed.jpg''')=0,'event covers cannot be overwritten');
+select pg_temp.expect(pg_temp.affected('delete from storage.objects')=0,'event covers cannot be deleted by organisers');
+select pg_temp.identity(14);
+select pg_temp.expect(pg_temp.can_upload_cover('events/101/cover_coadmin.jpg'),'event co-admin can upload a cover');
+select pg_temp.identity(13,1);
+select pg_temp.expect(not pg_temp.can_upload_cover('events/101/cover_wrong_session.jpg'),'cover upload requires an active matching session');
 
 -- Session revocation, deletion and bans also deny a previously privileged actor.
 select pg_temp.identity(9,1);

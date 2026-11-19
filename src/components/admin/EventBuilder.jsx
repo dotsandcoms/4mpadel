@@ -571,15 +571,16 @@ const resizeImage = (file, maxWidth = 1200, quality = 0.8, preserveAlpha = false
         reader.onerror = reject;
     });
 
-const uploadToGallery = async (file, prefix) => {
+const uploadResizedImage = async (file, prefix, { bucket = 'gallery', folder = prefix } = {}) => {
     const preserveAlpha = prefix === 'sponsors' || prefix === 'org-logos';
     const resized = await resizeImage(file, 1200, 0.8, preserveAlpha);
     const ext = preserveAlpha ? 'png' : 'jpg';
     const fileName = `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}.${ext}`;
-    const filePath = `${prefix}/${fileName}`;
-    const { error } = await supabase.storage.from('gallery').upload(filePath, resized);
+    const filePath = `${folder}/${fileName}`;
+    const storage = supabase.storage.from(bucket);
+    const { error } = await storage.upload(filePath, resized, { upsert: false });
     if (error) throw error;
-    const { data: { publicUrl } } = supabase.storage.from('gallery').getPublicUrl(filePath);
+    const { data: { publicUrl } } = storage.getPublicUrl(filePath);
     return publicUrl;
 };
 
@@ -882,6 +883,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     const hasExistingAccessCode = activeEvent?.registration_access === 'code'
         && (!form.is_weekly || !seriesSiblings.some((event) => event.registration_access !== 'code'));
     const [uploadingCover, setUploadingCover] = useState(false);
+    const coverUploadRef = useRef(null);
     const [uploadingPoster, setUploadingPoster] = useState(false);
     const [uploadingOrgLogo, setUploadingOrgLogo] = useState(false);
     const [uploadingSponsor, setUploadingSponsor] = useState(false);
@@ -1127,6 +1129,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         setShowAccessCode(false);
         setAccessCodeError('');
         setSavedAccessCode(null);
+        setUploadingCover(false);
         if (!isOpen) {
             setWorkingEvent(null);
             setSeriesSiblings([]);
@@ -1193,6 +1196,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
             setDivisions([emptyDivision(base.license_required_default)]);
             setShowPrizeBreakdown(false);
         }
+        return () => { coverUploadRef.current = null; };
         // Only re-init when the modal opens or a different event is loaded — not after in-session saves.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, editingEvent?.id]);
@@ -1731,18 +1735,35 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
     };
 
     const handleCoverUpload = async (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+        const input = e.currentTarget;
+        const file = input.files?.[0];
+        input.value = '';
+        if (!file || saving || coverUploadRef.current) return;
+
+        const request = Symbol();
+        coverUploadRef.current = request;
+        setUploadingCover(true);
         try {
-            setUploadingCover(true);
-            const url = await uploadToGallery(file, 'covers');
+            const folder = activeEvent?.id
+                ? `events/${activeEvent.id}`
+                : `drafts/${organisation?.id || form.organisation_id || 'calendar'}`;
+            const url = await uploadResizedImage(file, 'cover', { bucket: 'event-covers', folder });
+            if (coverUploadRef.current !== request) return;
             setField('custom_image_url', url);
             toast.success('Cover photo uploaded');
         } catch (err) {
-            toast.error('Failed to upload cover photo');
+            if (coverUploadRef.current !== request) return;
+            console.error('Error uploading event cover:', err);
+            const permissionDenied = Number(err?.statusCode ?? err?.status) === 403
+                || err?.message?.includes('row-level security');
+            toast.error(permissionDenied
+                ? 'You don’t have permission to upload a cover photo for this event.'
+                : 'Failed to upload cover photo');
         } finally {
-            setUploadingCover(false);
-            e.target.value = '';
+            if (coverUploadRef.current === request) {
+                coverUploadRef.current = null;
+                setUploadingCover(false);
+            }
         }
     };
 
@@ -1755,7 +1776,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                 const url = await uploadEventAsset(file, 'event-posters');
                 setForm((prev) => ({ ...prev, poster_document_url: url, poster_image_url: '' }));
             } else {
-                const url = await uploadToGallery(file, 'posters');
+                const url = await uploadResizedImage(file, 'posters');
                 setForm((prev) => ({ ...prev, poster_image_url: url, poster_document_url: '' }));
             }
             toast.success('Event poster uploaded');
@@ -1789,7 +1810,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         try {
             setUploadingGallery(true);
             const urls = [];
-            for (const file of files) urls.push(await uploadToGallery(file, 'event-media'));
+            for (const file of files) urls.push(await uploadResizedImage(file, 'event-media'));
             setForm((prev) => ({
                 ...prev,
                 media_gallery_urls: [...(prev.media_gallery_urls || []), ...urls],
@@ -1808,7 +1829,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         if (!file) return;
         try {
             setUploadingOrgLogo(true);
-            const url = await uploadToGallery(file, 'org-logos');
+            const url = await uploadResizedImage(file, 'org-logos');
             setField('organiser_logo_url', url);
             toast.success('Organisation logo uploaded');
         } catch (err) {
@@ -1826,7 +1847,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
         try {
             setUploadingSponsor(true);
             const urls = [];
-            for (const file of files) urls.push(await uploadToGallery(file, 'sponsors'));
+            for (const file of files) urls.push(await uploadResizedImage(file, 'sponsors'));
             setForm((prev) => {
                 const current = [...(prev.sponsor_logos || [])];
                 if (asMain) {
@@ -2528,6 +2549,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
      * @param {{ stayOpen?: boolean }} options - stayOpen (default true) keeps the builder open after save
      */
     const handleSave = async (mode = 'publish', { stayOpen = true } = {}) => {
+        if (coverUploadRef.current) return;
         if (mode === 'draft') {
             if (!validateDraft()) return;
         } else {
@@ -4723,10 +4745,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                                             {uploadingCover ? <Loader2 className="animate-spin" size={18} /> : <UploadCloud size={18} />}
                                                             <span className="text-xs font-bold">{uploadingCover ? 'Uploading...' : (form.custom_image_url ? 'Replace Cover' : 'Upload Cover')}</span>
                                                             <span className="text-center text-[10px] text-gray-500">Event page hero / calendar card</span>
-                                                            <input type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} disabled={uploadingCover} />
+                                                            <input type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} disabled={uploadingCover || saving} />
                                                         </label>
                                                         {form.custom_image_url && (
-                                                            <button type="button" onClick={() => setField('custom_image_url', '')} className="text-left text-[11px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300">
+                                                            <button type="button" onClick={() => setField('custom_image_url', '')} disabled={uploadingCover || saving} className="text-left text-[11px] font-bold uppercase tracking-wider text-red-400 hover:text-red-300">
                                                                 Use tier default
                                                             </button>
                                                         )}
@@ -5191,7 +5213,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                     <button
                                         type="button"
                                         onClick={() => handleSave('draft', { stayOpen: true })}
-                                        disabled={saving}
+                                        disabled={saving || uploadingCover}
                                         title="Save progress and keep editing"
                                         className="px-4 py-2 rounded-xl font-bold text-gray-200 border border-white/15 hover:bg-white/5 flex items-center gap-2 transition-colors disabled:opacity-50"
                                     >
@@ -5208,7 +5230,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                     <button
                                         type="button"
                                         onClick={() => handleSave('draft', { stayOpen: true })}
-                                        disabled={saving}
+                                        disabled={saving || uploadingCover}
                                         title="Save progress and keep editing"
                                         className="px-4 py-2 rounded-xl font-bold text-gray-200 border border-white/15 hover:bg-white/5 flex items-center gap-2 transition-colors disabled:opacity-50"
                                     >
@@ -5225,7 +5247,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organisat
                                     <button
                                         type="button"
                                         onClick={() => handleSave('publish', { stayOpen: true })}
-                                        disabled={saving || reviewIssues.errors.length > 0}
+                                        disabled={saving || uploadingCover || reviewIssues.errors.length > 0}
                                         title={reviewIssues.errors.length > 0 ? 'Fix blocking issues before publishing' : (form.sanction_requested ? 'Submit for federation approval' : 'Publish and keep editing')}
                                         className="bg-padel-green text-black px-5 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white transition-colors disabled:opacity-50"
                                     >
