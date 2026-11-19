@@ -15,3 +15,10 @@
 .ap-payment-dialog [role=alert] { color:#a3352b; }
 .ap-payment-dialog footer { display:flex; gap:12px; flex-wrap:wrap; justify-content:flex-end; }
 @media(max-width:480px) { .ap-payment-dialog header,.ap-payment-dialog form { padding:20px; } }
+
+.ap-draw-announcements { display: grid; gap: 12px; }
+.ap-draw-announcements h3 { margin: 0; }
+.ap-draw-announcements ul { display: grid; gap: 10px; margin: 0; padding-inline-start: 20px; }
+.ap-draw-announcements input:not([type=checkbox]) { width: 100%; padding: 10px; border: 1px solid var(--ap-line-strong, #b9c1b8); border-radius: 8px; background: transparent; font: inherit; }
+.ap-draw-announcements textarea { min-height: 78px; }
+.ap-payment-dialog .ap-draw-pinned { display: flex; align-items: center; gap: 8px; }

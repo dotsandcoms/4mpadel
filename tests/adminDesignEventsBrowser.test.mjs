@@ -16,11 +16,13 @@ before(async () => {
         stdin: { contents: `
             import React, { useState } from 'react';
             import { createRoot } from 'react-dom/client';
-            import { MemoryRouter, useLocation } from 'react-router-dom';
+            import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
+            import EventDrawWorkspace from './src/pages/admin-preview/EventDrawWorkspace.jsx';
             import EventManagerDashboard from './src/pages/admin-preview/EventManagerDashboard.jsx';
             import EventEntryForm, { EventEntryPaymentLinks } from './src/pages/admin-preview/EventEntryForm.jsx';
             import EventReplacementDialog from './src/pages/admin-preview/EventReplacementDialog.jsx';
             import EventRehearsal from './src/pages/admin-preview/EventRehearsal.jsx';
+            import NativeDrawOperationsDialog from './src/pages/admin-preview/NativeDrawOperationsDialog.jsx';
             import EventGroupDrawDialog from './src/pages/admin-preview/EventGroupDrawDialog.jsx';
             import TournamentWorkspace from './src/pages/admin-preview/tournament/TournamentWorkspace.jsx';
             import CalendarWorkspace from './src/pages/admin-preview/CalendarWorkspace.jsx';
@@ -49,31 +51,77 @@ before(async () => {
                 playDays:[{play_date:'2035-01-21', start_time:'10:00', end_time:'19:00', courts_count:1, is_active:true}],
                 settings:{}, confirmations:[], finalisations:[], audit:[], access:[], capabilities:['draws','schedule','results'],
                 sourceFingerprint:'source-fingerprint', schedule:{revision:2, status:'draft', source_fingerprint:'source-fingerprint', assignments:{'match-tm-1':booking}} };
+            const generatorEvent = { ...event, id:505, event_name:'Fixture Eastern Cape Open', slug:'fixture-eastern-cape' };
+            const generatorDivision = { ...division, id:'fixture-open-division', name:'Men’s Open' };
+            const generatorSecond = { ...division, id:'fixture-advanced-division', name:'Men’s Advanced' };
+            const generator = { ...tournament, event:generatorEvent, divisions:[generatorDivision,generatorSecond],
+                draws:[], matches:[], entries:[], schedule:null, settings:{},
+                capabilities:['draws','players','seeds'],
+                registrations:[
+                  {id:'entry-one',division_id:generatorDivision.id,full_name:'One',email:'one@example.invalid',partner_name:'Two',partner_email:'two@example.invalid',payment_status:'paid',status:'registered'},
+                  {id:'entry-two',division_id:generatorDivision.id,full_name:'Three',email:'three@example.invalid',partner_name:'Four',partner_email:'four@example.invalid',payment_status:'paid',status:'registered'},
+                ],
+                confirmations:[{division_id:generatorDivision.id, revision:7, players_confirmed_at:'checked', players_valid:true, format_confirmed_at:'checked', seeds_confirmed_at:'checked',
+                    configuration:{format:'knockout',sets_to_win:1,seeded_team_count:2}, review:{excluded:[],exceptions:{},seeds:['entry-one','entry-two']}}],
+            };
             const pastLinked = { ...event, id:19, slug:'rankedin-past', is_manual:false, start_date:'2024-08-15', event_name:'Past Linked Cup', rankedin_id:'8901', rankedin_url:'https://www.rankedin.com/en/tournament/8901' };
             const failedLinked = { ...pastLinked, id:20, slug:'rankedin-failed', event_name:'Unavailable Cup', rankedin_id:'8902', rankedin_url:'https://www.rankedin.com/en/tournament/8902' };
             const manualLinked = { ...event, id:21, slug:'rankedin-manual', event_name:'Manual Linked Cup', rankedin_id:'8903', rankedin_url:'https://www.rankedin.com/en/tournament/8903' };
+            const nativeDraw = { ...tournamentDraw, event_id:11, tournament_divisions:{name:'Open'} };
+            const nativeMatch = { ...tournamentMatch, is_featured:false };
+            const otherNativeDraw = { ...nativeDraw, id:'other-draw', event_id:13, tournament_divisions:{name:'Other org'} };
+            const existingAnnouncement = { id:'announcement-1', event_id:11, division_id:51, draw_id:draw.id, message:'Use court entrance', updated_at:'notice-v1' };
             window.calls = [];
             const verifyAccess = async () => ({ event });
             const client = {
                 auth:{ getUser: async () => ({ data:{ user:session.user } }) },
-                async rpc(name,args) {
+                rpc(name,args) {
                     window.calls.push([name,args]);
+                    const request = (async()=>{
+                    if (name==='can_manage_event') return { data: args.p_event_id===11 };
+                    if (name==='reopen_native_draw_for_corrections') { nativeDraw.status='draft'; return { data:null }; }
                     if (name==='account_is_active' || name==='is_super_admin') return { data:true };
-                    if (name==='tm_snapshot') return args.p_event === '11' ? { data: tournament } : { error: { message:'No access to this tournament' } };
+                    if (name==='tm_snapshot') {
+                        if (args.p_event === '505') return { data: generator };
+                        return args.p_event === '11' ? { data: tournament } : { error: { message:'No access to this tournament' } };
+                    }
+                    if (name==='tm_save_draw') {
+                        generator.draws=[{id:'saved-test-draw',event_id:505,division_id:args.p_division,format:args.p_draw.format,status:'draft',draw_kind:'main',updated_at:'saved'}];
+                        generator.entries=args.p_draw.entries.map(entry=>({...entry,draw_id:'saved-test-draw'}));
+                        generator.matches=args.p_draw.matches.map(match=>({...match,draw_id:'saved-test-draw'}));
+                        return {data:'saved-test-draw'};
+                    }
                     if (name==='tm_publish_schedule') { tournament.schedule.status = 'published'; return { data:true }; }
                     if (name==='tm_record_result') return { data:true };
                     if (name==='replace_registration_player') return { data:{ registration_id:'reg-1',new_email:'new@example.invalid',new_name:'New Player' } };
                     if (name==='private_draw_rehearsal_snapshot') return { data:{ version:1, owner_id:session.user.id, event } };
                     return { data:0 };
+                    })();
+                    request.abortSignal=()=>request;
+                    return request;
                 },
                 from(table) {
                     let rows=table==='calendar'?(window.kind.startsWith('rankedin-')?[pastLinked,failedLinked,manualLinked]:[event,bronze,other]):[];
                     if (table==='federations') rows=[{slug:'sapa',rankedin_events_org_id:'11331'}];
+                    if (table==='draws') rows=[nativeDraw,otherNativeDraw];
+                    if (table==='draw_matches') rows=[nativeMatch];
+                    if (table==='draw_entries') rows=tournament.entries.map(row=>({...row,draw_id:draw.id}));
+                    if (table==='native_draw_announcements') rows=[existingAnnouncement, {...existingAnnouncement,id:'other-announcement',event_id:13,message:'Other announcement'}];
                     let bounds=null;
-                    const query={select(){return query;},order(){return query;},eq(key,value){rows=rows.filter(r=>r[key]===value);return query;},
+                    let write=null;
+                    const filters={};
+                    const query={select(){return query;},order(){return query;},eq(key,value){filters[key]=value;rows=rows.filter(r=>r[key]===value);return query;},
+                        is(key,value){return query.eq(key,value);},
                         in(key,values){rows=rows.filter(r=>values.includes(r[key]));return query;},
                         range(start,end){bounds=[start,end];return query;},abortSignal(){return query;},limit(max){rows=rows.slice(0,max);return query;},
-                        single(){return Promise.resolve({data:rows[0]});},maybeSingle(){return query.single();},
+                        single(){
+                            if(write && rows[0]){
+                                window.calls.push([write.kind,table,filters,write.fields]);
+                                if(write.kind==='update') Object.assign(rows[0],write.fields);
+                            }
+                            return Promise.resolve({data:rows[0]});
+                        },maybeSingle(){return query.single();},
+                        update(fields){write={kind:'update',fields};return query;},delete(){write={kind:'delete'};return query;},
                         insert(payload){window.calls.push(['insert',table,payload]);rows=[{id:99}];return query;},
                         upsert(payload){window.calls.push(['upsert',table,payload]);return Promise.resolve({data:[]});},
                         then(resolve){return Promise.resolve({data:bounds?rows.slice(bounds[0],bounds[1]+1):rows}).then(resolve);} };
@@ -89,6 +137,19 @@ before(async () => {
                 scope={{id:'org:org-a'}} permissions={{role:'org_owner',orgs:[{id:'org-a',member_role:'owner'}]}}
                 scopeId="org:org-a" canManageEvents QuickCreationDialog={Editor} /></>;
             }
+            function GeneratorFixture() {
+                const { pathname, search } = useLocation();
+                const go = useNavigate();
+                const open = (division, workspace) => {
+                    const params = new URLSearchParams({event:generatorEvent.id,workspace});
+                    if(division?.id) params.set('division',division.id);
+                    go('/admin-preview/tournaments?'+params);
+                };
+                return <><output data-query={search}/>{pathname.endsWith('/event') ?
+                    <EventDrawWorkspace event={generatorEvent} divisions={generator.divisions} draws={[]} registrationCount={d=>generator.registrations.filter(r=>r.division_id===d.id).length}
+                        tournamentWorkspaces={generator.capabilities} onOpenTournament={open} onDrawDetails={()=>{}} /> :
+                    <TournamentWorkspace client={client} session={session} scopeId="all" />}</>;
+            }
             function Fixture({ kind }) {
                 const [added,setAdded]=useState(null);
                 if (kind.startsWith('tournament-')) {
@@ -96,6 +157,8 @@ before(async () => {
                         'tournament-schedule':'?event=11&workspace=schedule', 'tournament-result':'?event=11&workspace=results' }[kind];
                     return <MemoryRouter initialEntries={['/admin-preview/tournaments'+route]}><TournamentWorkspace client={client} session={session} scopeId="all" /></MemoryRouter>;
                 }
+                if (kind==='draw-generator') return <MemoryRouter initialEntries={['/admin-preview/event?event=505']}><GeneratorFixture /></MemoryRouter>;
+                if (kind==='native-draw') return <NativeDrawOperationsDialog client={client} session={session} event={event} scopeId="all" onClose={()=>window.calls.push(['closed'])} />;
                 if (kind.startsWith('rankedin-')) return <MemoryRouter><CalendarWorkspace session={session} client={client}
                   scope={{id:'all'}} permissions={{role:'super_admin'}} scopeId="all" canManageEvents /></MemoryRouter>;
                 if (kind==='calendar') return <MemoryRouter initialEntries={['/?create=quick&keep=1']}><CalendarFixture /></MemoryRouter>;
@@ -134,7 +197,7 @@ before(async () => {
             }[args.path] }));
         } }],
     });
-    browser = await puppeteer.launch({ headless: true, protocolTimeout: 20000, args: ['--no-sandbox'] });
+    browser = await puppeteer.launch({ headless: true, protocolTimeout: 20000, args: ['--no-sandbox', '--unsafely-treat-insecure-origin-as-secure=http://fixture.invalid'] });
 });
 
 after(async () => {
@@ -353,5 +416,83 @@ test('Calendar bulk refresh writes only the reviewed past cache and preserves it
         assert.equal(mutations[0][1], 'rankedin_results_cache');
         assert.equal(mutations[0][2].event_id, 19);
         assert.equal(mutations[0][2].winners[0].resultSource, 'rankedin-standings');
+    } finally { await page.close(); }
+});
+
+test('native draw operations mark live and feature the exact reviewed version, one reviewed action at a time', async () => {
+    for (const [label, expected] of [['Mark match live', { status:'in_progress' }], ['Feature match', { is_featured:true }]]) {
+        const page = await open('native-draw');
+        try {
+            await page.waitForFunction(() => [...document.querySelectorAll('dialog label')].some(label => label.textContent.startsWith('Match')));
+            assert.doesNotMatch(await page.$eval('dialog', dialog => dialog.textContent), /Other org|Other announcement/);
+            await page.evaluate(() => [...document.querySelectorAll('dialog label')].find(label => label.textContent.startsWith('Match')).querySelector('button').click());
+            await clickText(page, 'Final · First Pair vs Second Pair', '[role=option]');
+            await clickText(page, label);
+            assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'update')), false);
+            await clickText(page, 'Confirm draw action');
+            await page.waitForFunction(() => /Match marked live|Match featured/.test(document.querySelector('dialog [role=status]')?.textContent));
+            const mutation = await page.evaluate(() => window.calls.find(call => call[0] === 'update'));
+            assert.equal(mutation[1], 'draw_matches');
+            assert.deepEqual(mutation[2], {id:'match-tm-1',draw_id:'draw-a',status:'scheduled',updated_at:'match-v1'});
+            delete mutation[3].updated_at;
+            assert.deepEqual(mutation[3], expected);
+        } finally { await page.close(); }
+    }
+});
+
+test('native draw corrections reopen only the reviewed main draw and verify the saved draft', async () => {
+    const page = await open('native-draw');
+    try {
+        await clickText(page, 'Reopen draw for corrections');
+        assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'reopen_native_draw_for_corrections')), false);
+        await clickText(page, 'Confirm draw action');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Draw reopened for corrections.');
+        assert.deepEqual(await page.evaluate(() => window.calls.find(call => call[0] === 'reopen_native_draw_for_corrections')), ['reopen_native_draw_for_corrections',{p_draw_id:'draw-a'}]);
+    } finally { await page.close(); }
+});
+
+test('native draw announcements publish and remove only the reviewed event and draw scope', async () => {
+    const publish = await open('native-draw');
+    try {
+        await publish.waitForSelector('dialog textarea');
+        await publish.type('dialog textarea', 'Use the south door');
+        await clickText(publish, 'Review announcement');
+        assert.equal(await publish.evaluate(() => window.calls.some(call => call[0] === 'insert')), false);
+        await clickText(publish, 'Confirm draw action');
+        await publish.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Announcement published.');
+        assert.deepEqual(await publish.evaluate(() => window.calls.find(call => call[0] === 'insert')), ['insert','native_draw_announcements',
+            {event_id:11,division_id:51,draw_id:'draw-a',title:null,message:'Use the south door',is_pinned:false}]);
+    } finally { await publish.close(); }
+
+    const remove = await open('native-draw');
+    try {
+        await clickText(remove, 'Remove announcement');
+        assert.equal(await remove.evaluate(() => window.calls.some(call => call[0] === 'delete')), false);
+        await clickText(remove, 'Confirm draw action');
+        await remove.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Announcement removed.');
+        const mutation = await remove.evaluate(() => window.calls.find(call => call[0] === 'delete'));
+        assert.deepEqual(mutation.slice(0, 3), ['delete','native_draw_announcements',
+            { id:'announcement-1',event_id:11,updated_at:'notice-v1',division_id:51,draw_id:'draw-a' }]);
+    } finally { await remove.close(); }
+});
+
+test('Event Manager Draw generator selects a division with no saved draw and saves the reviewed private bracket', async () => {
+    const page = await open('draw-generator');
+    try {
+        await clickText(page, 'Draw generator');
+        await page.waitForSelector('[data-query="?event=505&workspace=draws&division=fixture-open-division"]');
+        await clickText(page, 'Generate draw preview');
+        await page.waitForFunction(() => document.body.textContent.includes('One / Two') && document.body.textContent.includes('Three / Four'));
+        assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'tm_save_draw')), false);
+        await clickText(page, 'Save draft');
+        await page.waitForFunction(() => document.body.textContent.includes('Private draw saved'));
+        const mutation = await page.evaluate(() => window.calls.find(call => call[0] === 'tm_save_draw'));
+        assert.equal(mutation[1].p_event, 505);
+        assert.equal(mutation[1].p_division, 'fixture-open-division');
+        assert.equal(mutation[1].p_expected, 7);
+        assert.equal(mutation[1].p_draw.format, 'knockout');
+        assert.equal(mutation[1].p_draw.entries.length, 2);
+        assert.equal(mutation[1].p_draw.matches.length, 1);
+        assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'tm_publish_draw')), false);
     } finally { await page.close(); }
 });
