@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
+import { sendPlayerLoginInvitation } from './playerAccountActions.js';
 import { useEventOperation } from './useEventOperation.js';
 import { findOrganisationPlayers, loadOrganisationMembers, organisationRoles, organisationSlug, organisationWorkflowReview, submitOrganisationRecord } from './organisationRecords.js';
 
 const titles = {create:'Create organisation',delete:'Delete organisation',team:'Organisation members'};
-const actions = {create:'Create organisation',delete:'Delete organisation',add_member:'Add member',change_role:'Change role',remove_member:'Remove member'};
+const actions = {create:'Create organisation',delete:'Delete organisation',add_member:'Add member',change_role:'Change role',remove_member:'Remove member',invite_owner:'Send owner login invitation'};
 
 export default function OrganisationRecordDialog({ client, session, scopeId, mode, organisation, onClose, onSaved, onBusyChange }) {
   const [id]=useState(()=>organisation?.id||crypto.randomUUID());
@@ -38,7 +39,13 @@ export default function OrganisationRecordDialog({ client, session, scopeId, mod
   };
   const submit=event=>{
     event.preventDefault();
-    if(review)run(checks=>submitOrganisationRecord(client,review,{scopeId,userId,...checks}));
+    if(review?.action==='invite_owner'){
+      run(async checks=>{
+        checks.onAttempt();
+        await sendPlayerLoginInvitation(client,review.player,'https://4mpadel.co.za',{scopeId,userId,...checks});
+        return {action:'invite_owner'};
+      });
+    }else if(review)run(checks=>submitOrganisationRecord(client,review,{scopeId,userId,...checks}));
     else choose(mode==='team'?'add_member':mode,{...details,player:selected});
   };
   const roleSelect=(label,value,onChange)=><label>{label}<select value={value} onChange={onChange}>{organisationRoles.map(role=><option key={role} value={role}>{role}</option>)}</select></label>;
@@ -52,9 +59,10 @@ export default function OrganisationRecordDialog({ client, session, scopeId, mod
   return <dialog ref={bindDialog} className="ap-payment-dialog of-dialog" aria-label={titles[mode]} onCancel={event=>{event.preventDefault();close();}}>
     <header><h2>{titles[mode]}</h2><button type="button" aria-label="Close organisation action" className="ap-secondary" onClick={close} disabled={busy}>×</button></header>
     <form onSubmit={submit}>
-      {result ? <p role="status">Organisation action confirmed.</p> : review ? <section className="of-notice">
-        <h3>Review {actions[review.action].toLowerCase()}</h3><p>{review.input.name||organisation?.name}</p>
-        {review.label&&<p>{review.label} {review.input.role&&`· ${review.input.role}`}</p>}
+      {result ? <p role="status">{result.action==='invite_owner'?'Login link requested. After the owner signs in, return to create their organisation.':'Organisation action confirmed.'}</p> : review ? <section className="of-notice">
+        <h3>Review {actions[review.action].toLowerCase()}</h3><p>{review.input?.name||organisation?.name||review.player?.email}</p>
+        {review.label&&<p>{review.label} {review.input?.role&&`· ${review.input.role}`}</p>}
+        {review.action==='invite_owner'&&<p>The selected account will receive the usual 4M Padel sign-in link. The organisation can be created after the owner confirms their login.</p>}
         {review.action==='create'&&<p>The organisation will be published and the selected account will receive owner access.</p>}
         {review.action==='delete'&&<p>Linked albums and events will be unlinked. Membership and club access links will be removed. Organisations with banking or payout records cannot be deleted.</p>}
       </section> : mode==='create' ? <fieldset className="of-fields">
@@ -62,6 +70,7 @@ export default function OrganisationRecordDialog({ client, session, scopeId, mod
         <label>Public page slug<input name="slug" required value={details.slug} onChange={event=>update('slug',event.target.value)}/></label>
         <button className="ap-secondary" type="button" onClick={()=>update('slug',organisationSlug(details.name))}>Generate slug</button>
         {playerPicker}
+        {selected&&<button type="button" className="ap-secondary" onClick={()=>setReview({action:'invite_owner',player:selected,label:selected.name})}>Review owner login invitation</button>}
       </fieldset> : mode==='delete' ? <section className="of-notice">
         <p>Type {organisation.name} exactly to review permanent deletion.</p>
         <label>Organisation name confirmation<input value={details.confirmation} onChange={event=>update('confirmation',event.target.value)}/></label>

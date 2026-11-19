@@ -18,12 +18,19 @@ const database={organisations:[{id:'org-a',name:'Fixture organiser',status:'appr
  club_claim_requests:[claim,{...claim,id:'claim-b',club_id:'club-b',full_name:'Other claimant'}],club_claim_invites:[],
  club_members:[member,{...member,id:'member-b',club_id:'club-b',players:{name:'Other member'}}],
  players:[{id:7,name:'Applicant',email:'applicant@example.invalid'},{id:8,name:'Claimant',email:'claimant@example.invalid'},{id:10,name:'New teammate',email:'teammate@example.invalid'}]};
-if (fixture.mode==='group-branding') for (const club of database.clubs) club.group_id=group.id;
+if (['group-branding','group-team'].includes(fixture.mode)) for (const club of database.clubs) club.group_id=group.id;
+if (fixture.mode==='group-team') database.club_members.push({id:'exact-owner',club_id:'club-b',player_id:10,role:'owner',user_email:'teammate@example.invalid'});
 fixture.data=database;
 const base=value=>typeof value==='object'&&value!==null?JSON.stringify(value):String(value);
 export const client={
  auth:{async getUser(){return {data:{user:actor}}},async signInWithOtp(params){fixture.calls.push(['otp',params]);return {data:{}}}},
- async rpc(name){fixture.calls.push(['rpc',name]);return {data:name==='is_super_admin'?fixture.mode!=='denied'&&!fixture.revoked:true}},
+ async rpc(name,args){fixture.calls.push(['rpc',name,args]);
+   if(name==='admin_club_group_team_access'){
+     if(!args.p_group_id)return {data:{can_assign:fixture.mode==='group-team'}};
+     return {data:{group_id:args.p_group_id,player_id:args.p_player_id,role:args.p_role,changed:['club-a'],preserved:['club-b']}};
+   }
+   return {data:name==='is_super_admin'?fixture.mode!=='denied'&&!fixture.revoked:true};
+ },
  storage:{from(bucket){return {async upload(path,file,options){fixture.calls.push(['upload',bucket,path,file.type,options]);return {data:{path}}},getPublicUrl(path){return {data:{publicUrl:'https://fixture.invalid/'+path}}}}}},
  functions:{async invoke(name,args){fixture.calls.push(['function',name,args.body]);return {data:{success:true}}}},
  from(table){
@@ -51,7 +58,7 @@ export const client={
       return {data:structuredClone(single?result[0]||null:result)};
     }
     return {select(fields){projection=fields;return this},eq(key,value){predicates.push(row=>base(row[key])===String(value));return this},
-     is(key,value){predicates.push(row=>(row[key]??null)===value);return this},ilike(key,value){predicates.push(row=>String(row[key]).includes(value.replaceAll('%','')));return this},
+     is(key,value){predicates.push(row=>(row[key]??null)===value);return this},in(key,values){predicates.push(row=>values.includes(row[key]));return this},ilike(key,value){predicates.push(row=>String(row[key]).includes(value.replaceAll('%','')));return this},
      or(){return this},not(){return this},order(){return this},range(a,b){start=a;end=b;return this},limit(n){end=n-1;return this},abortSignal(){return this},
      update(value){operation='update';patch=value;return this},insert(value){operation='insert';patch=value;return this},delete(){operation='delete';return this},
      async maybeSingle(){return execute(true)},async single(){return execute(true)},then(resolve,reject){return Promise.resolve(execute()).then(resolve,reject)}
@@ -340,5 +347,29 @@ test('reviewed bulk group branding reports a partial result and preserves a chan
     const clubs=await page.evaluate(()=>window.fixture.data.clubs);
     assert.equal(clubs[0].logo_url,'https://example.invalid/group.png');
     assert.equal(clubs[1].logo_url,null);
+  });
+});
+
+test('group team assignment previews every linked club, preserves existing owners and sends one reviewed RPC', async () => {
+  await withPage('group-team',async page=>{
+    await page.waitForSelector('.clubs-group summary');
+    await page.click('.clubs-group summary');
+    await click(page,'Assign team access');
+    await page.$eval('dialog input[type=search]', node=>{
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(node,'teammate');
+      node.dispatchEvent(new Event('input',{bubbles:true}));
+    });
+    await click(page,'Select New teammate (teammate@example.invalid)');
+    await click(page,'Review group team access');
+    await text(page,'Other venue · Keep current owner');
+    await text(page,'Fixture venue · Assign admin');
+    const mutation=()=>page.evaluate(()=>window.fixture.calls.filter(([kind,name,args])=>kind==='rpc'&&name==='admin_club_group_team_access'&&args.p_group_id));
+    assert.deepEqual(await mutation(),[]);
+    await click(page,'Confirm group team access');
+    await text(page,'1 venue memberships updated. 1 existing roles preserved.');
+    const [[,,input]]=await mutation();
+    assert.equal(input.p_group_id,'group-a');
+    assert.equal(input.p_player_id,10);
+    assert.deepEqual(input.p_expected.venues.map(row=>({id:row.id,member:row.member?.id||null})),[{id:'club-a',member:null},{id:'club-b',member:'exact-owner'}]);
   });
 });

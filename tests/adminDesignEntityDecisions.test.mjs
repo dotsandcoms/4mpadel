@@ -8,6 +8,10 @@ const view=window.fixture.mode, actor={id:'fixture-account',email:'operator@exam
 const calls=window.fixture.calls;
 const federation={id:'our-fed',name:'Our federation',slug:'our-fed',status:'published'};
 const org={id:'our-org',name:'Fixture applicant',status:view.startsWith('organisation-profile')||view.startsWith('organisation-control')?'approved':'pending',contact_email:'applicant@example.invalid',created_by:7,federation_id:'our-fed'};
+if(view==='organisation-profile-sponsor')org.sponsors=[
+  {name:'Old partner',tier:'Official Partner',logo_url:''},
+  {name:'Current partner',tier:'Official Partner',logo_url:''},
+];
 const sanction={id:10,event_name:'Fixture sanction',organisation_id:'our-org',federation_id:'our-fed',sanction_status:'pending',federation_sanction_status:'pending',is_visible:false};
 const amendment={id:11,event_name:'Fixture amendment',city:'Old city',organisation_id:'our-org',federation_id:null,sanction_status:'approved',pending_changes_status:'pending',
  pending_changes_submitted_at:'2026-11-01T12:00:00Z',pending_changes:{payload:{city:'New city'},removed_division_ids:view==='federation-complex'?['division-5']:[]},is_visible:true};
@@ -20,7 +24,7 @@ const data={albums:[{id:'album-a',title:'Fixture album',parent_album_id:null,org
  players:[{id:7,name:'Existing Owner',email:'owner@example.invalid'},{id:8,name:'Group Teammate',email:'teammate@example.invalid'}],admin_sidebar_permissions:[],tournament_divisions:[]};
 window.fixture.data=data;
 export const client={
- auth:{async getUser(){return {data:{user:actor}}}},
+ auth:{async getUser(){return {data:{user:actor}}},async signInWithOtp(input){calls.push(['owner-invite',input]);return {data:{}}}},
  async rpc(name,args){calls.push(['rpc',name,args]);if(name==='admin_organisation_records'){
    if(args.p_action==='capability')return {data:{can_manage:view.startsWith('organisation-control')}};
    if(args.p_action==='create')data.organisations.push({id:args.p_organisation_id,name:args.p_data.name,status:'approved'});
@@ -314,5 +318,46 @@ test('organisation relationships unlink and link exact gallery albums and federa
          ['update','albums',['album-a'],{organisation_id:'our-org'}], ['update','albums',['album-a'],{organisation_id:null}],
          ['update','organisations',['our-org'],{federation_id:null}], ['update','organisations',['our-org'],{federation_id:'our-fed'}],
         ]);
+    });
+});
+
+test('sponsor logo follows its sponsor if a prior sponsor is removed before confirmation',async()=>{
+    await withPage('organisation-profile-sponsor',async page=>{
+        await click(page,'Sponsors and partners','summary');
+        await page.evaluate(()=>{
+          const label=[...document.querySelectorAll('label')].find(node=>node.textContent.trim()==='Upload sponsor 2 logo');
+          const input=label.querySelector('input');
+          const transfer=new DataTransfer();
+          transfer.items.add(new File(['fixture'],'sponsor.webp',{type:'image/webp'}));
+          input.files=transfer.files;
+          input.dispatchEvent(new Event('change',{bubbles:true}));
+        });
+        await click(page,'Remove sponsor');
+        await click(page,'Review changes');
+        await text(page,'Upload sponsor.webp');
+        assert.equal((await calls(page)).some(([kind])=>kind==='upload'||kind==='update'),false);
+        await click(page,'Confirm profile changes');
+        await text(page,'Profile changes saved.');
+        const results=(await calls(page)).filter(([kind])=>kind==='upload'||kind==='update');
+        assert.match(results[0][2],/^organisations\/sponsors\/our-org_.*\.webp$/);
+        assert.deepEqual(results[1][3].sponsors,[{name:'Current partner',tier:'Official Partner',logo_url:'https://fixture.invalid/'+results[0][2]}]);
+    });
+});
+
+test('owner login invitation uses reviewed OTP recipient and never invokes a password or creates the organisation',async()=>{
+    await withPage('organisation-control-create',async page=>{
+        await page.$eval('[aria-label="Close profile"]',button=>button.click());
+        await click(page,'Create organisation');
+        await fillField(page,'dialog [type=search]','Existing Owner');
+        await click(page,'Select Existing Owner');
+        await click(page,'Review owner login invitation');
+        assert.equal((await calls(page)).some(([kind])=>kind==='owner-invite'),false);
+        await click(page,'Confirm send owner login invitation');
+        await text(page,'Login link requested.');
+        assert.deepEqual((await calls(page)).filter(([kind])=>kind==='owner-invite'),[
+          ['owner-invite',{email:'owner@example.invalid',options:{emailRedirectTo:'https://4mpadel.co.za/profile?new_invite=true'}}],
+        ]);
+        assert.deepEqual(await orgActions(page),[]);
+        assert.equal((await calls(page)).some(([kind,name])=>kind==='function'&&name==='admin-set-password'),false);
     });
 });

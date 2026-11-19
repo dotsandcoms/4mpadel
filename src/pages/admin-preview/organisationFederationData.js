@@ -1,4 +1,5 @@
 import { readAll } from './playersData.js';
+import { sponsorFileIndex } from './organisationSponsorMedia.js';
 import { normaliseOrganisationField, organisationFields, organisationImageExtension } from './organisationProfileFields.js';
 
 export const ENTITY_FIELDS = {
@@ -97,7 +98,12 @@ export async function saveEntityProfile(client,kind,original,draft,context) {
   const patch = entityPatch(kind,original,draft);
   const media = Object.entries(context.files || {});
   if (media.length && kind !== 'organisations') throw new Error('Choose a supported organisation image.');
-  const files = media.map(([field,file]) => ({field,file,extension:organisationImageExtension(field,file)}));
+  const sponsors = Array.isArray(draft.sponsors) ? [...draft.sponsors] : [];
+  const files = media.map(([field,file]) => {
+    const sponsorIndex = sponsorFileIndex(field);
+    if (sponsorIndex != null && !String(sponsors[sponsorIndex]?.name || '').trim()) throw new Error('Name each sponsor with a staged logo.');
+    return {field,file,sponsorIndex,extension:organisationImageExtension(sponsorIndex!=null?'sponsor_logo':field,file)};
+  });
   const access = await verifyEntityAccess(client,kind,context);
   const requireWrite = async grant => {
     if(grant.superAdmin)return;
@@ -108,14 +114,14 @@ export async function saveEntityProfile(client,kind,original,draft,context) {
   await requireWrite(access);
   if (context.scopeId !== 'all' && context.scopeId.slice(4) !== String(original.id)) throw new Error('This record is outside the selected workspace.');
   const {data:fresh,error} = await client.from(kind).select(projection(kind)).eq('id',original.id).single(); check(context);
-  const keys=[...new Set([...Object.keys(patch),...files.map(file=>file.field)])];
+  const keys=[...new Set([...Object.keys(patch),...files.map(file=>file.sponsorIndex!=null?'sponsors':file.field)])];
   if(error || !fresh || String(fresh.id)!==String(original.id) || fresh.status!==original.status || keys.some(key=>!entityEqual(fresh[key]??null,original[key]??null))) throw new Error('This profile changed. Close and reload before saving.');
   if(!keys.length)return fresh;
-  for (const {field,file,extension} of files) {
+  for (const {field,file,extension,sponsorIndex} of files) {
     const auth = await verifyEntityAccess(client,kind,context);
     await requireWrite(auth);
     check(context);
-    const folder = field === 'logo_url' ? 'logos' : 'covers';
+    const folder = sponsorIndex != null ? 'sponsors' : field === 'logo_url' ? 'logos' : 'covers';
     const path = `organisations/${folder}/${original.id}_${crypto.randomUUID()}.${extension}`;
     const store = client.storage.from('profile-pics');
     context.onAttempt?.();
@@ -124,8 +130,11 @@ export async function saveEntityProfile(client,kind,original,draft,context) {
     if (uploadError) throw new Error('The image upload did not complete. The profile was not changed.');
     const url = store.getPublicUrl(path).data?.publicUrl;
     if (!url) throw new Error('The uploaded image could not be linked. The profile was not changed.');
-    patch[field] = normaliseOrganisationField(field,url);
+    const safeUrl = normaliseOrganisationField('logo_url',url);
+    if (sponsorIndex != null) sponsors[sponsorIndex] = {...sponsors[sponsorIndex],logo_url:safeUrl};
+    else patch[field] = safeUrl;
   }
+  if (files.some(file=>file.sponsorIndex!=null)) patch.sponsors = normaliseOrganisationField('sponsors',sponsors);
   await requireWrite(await verifyEntityAccess(client,kind,context)); check(context);
   const finalActor=await client.auth.getUser();check(context);
   if(finalActor.error||finalActor.data?.user?.id!==context.userId||finalActor.data?.user?.email!==access.user.email)throw new Error('Your signed-in account changed. Reopen this workspace.');

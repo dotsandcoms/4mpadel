@@ -1,3 +1,4 @@
+import { sponsorFileKey } from './organisationSponsorMedia.js';
 import { organisationCollections, organisationLabels, socialFields, organisationImageExtension } from './organisationProfileFields.js';
 
 const areas = [
@@ -6,13 +7,13 @@ const areas = [
   ['Branding and images', ['brand_color','logo_url','cover_image_url']],
 ];
 
-export default function OrganisationProfileFields({ draft, onChange, files, onFile, onValidation }) {
+export default function OrganisationProfileFields({ draft, onChange, files, onFile, onRemoveSponsor, onValidation }) {
   const stage = (key, event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
     try {
-      organisationImageExtension(key, file);
+      organisationImageExtension(key.startsWith('sponsor:') ? 'sponsor_logo' : key, file);
       onFile(key, file);
     } catch (error) {
       onValidation(error.message);
@@ -42,9 +43,18 @@ export default function OrganisationProfileFields({ draft, onChange, files, onFi
         {rows.map((row, index) => <fieldset className="of-fields" key={index}>
           <legend>{config.singular} {index+1}</legend>
           {Object.entries(config.fields).map(([field,label]) => <label key={field}>{label}
-            <input value={row?.[field] || ''} onChange={event => onChange(key, rows.map((entry, at) =>
-              at === index ? { ...entry, [field]: event.target.value } : entry))} /></label>)}
-          <button className="ap-secondary" type="button" onClick={() => onChange(key,rows.filter((_,at)=>at!==index))}>Remove {config.singular}</button>
+            <input value={row?.[field] || ''} onChange={event => {
+              if (key==='sponsors'&&field==='logo_url'&&files[sponsorFileKey(index)]) onFile(sponsorFileKey(index),null);
+              onChange(key,rows.map((entry,at)=>at===index?{...entry,[field]:event.target.value}:entry));
+            }} /></label>)}
+          {key==='sponsors'&&<><label>Upload sponsor {index+1} logo<input type="file" accept="image/jpeg,image/png,image/webp"
+            onChange={event=>stage(sponsorFileKey(index),event)} /></label>
+            {files[sponsorFileKey(index)]&&<p>{files[sponsorFileKey(index)].name} <button className="ap-secondary" type="button"
+              onClick={()=>onFile(sponsorFileKey(index),null)}>Remove staged sponsor logo</button></p>}</>}
+          <button className="ap-secondary" type="button" onClick={() => {
+            if (key==='sponsors') onRemoveSponsor(index);
+            onChange(key,rows.filter((_,at)=>at!==index));
+          }}>Remove {config.singular}</button>
         </fieldset>)}
         <button className="ap-secondary" type="button" onClick={() => onChange(key,[...rows,{}])}>Add {config.singular}</button>
       </details>;
