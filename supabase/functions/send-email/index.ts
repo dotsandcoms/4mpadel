@@ -1280,11 +1280,15 @@ serve(async (req: Request) => {
     const authHeader = req.headers.get('Authorization');
     const trustedService = isTrustedServiceCaller(authHeader);
     const isBroadcast = template === 'broadcast';
+    const verifiedSender = Deno.env.get('RESEND_VERIFIED_SENDER') || 'notifications.4mpadel.co.za';
     if (action === 'broadcast_capability' || isBroadcast) {
       const caller = authHeader && !trustedService ? buildEmailCaller(authHeader) : null;
       const allowed = trustedService || await emailBroadcastAuthorized(caller, supabaseAdmin);
       if (!allowed) {
         return new Response(JSON.stringify({ error: 'Broadcast permission required' }), { status: 403, headers: corsHeaders });
+      }
+      if ((action === 'broadcast_capability' || broadcastRequestId !== undefined) && verifiedSender === 'onboarding@resend.dev') {
+        return new Response(JSON.stringify({ error: 'Broadcast delivery requires a verified sender domain' }), { status: 503, headers: corsHeaders });
       }
       if (action === 'broadcast_capability') {
         return new Response(JSON.stringify({ version: broadcastCapability, batchSize: broadcastBatchSize }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -1361,7 +1365,6 @@ serve(async (req: Request) => {
     const { subject, html } = await generateEmailBody(supabaseAdmin, template, emailVars);
 
     // Check if verified sender domain exists, otherwise fallback to custom domain
-    const verifiedSender = Deno.env.get('RESEND_VERIFIED_SENDER') || 'notifications.4mpadel.co.za';
     const fromAddress = verifiedSender === 'onboarding@resend.dev' 
       ? '"4M Padel SA" <onboarding@resend.dev>' 
       : verifiedSender.includes('@')

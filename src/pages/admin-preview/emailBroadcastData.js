@@ -1,7 +1,9 @@
 import { readAll } from './playersData.js';
 import { verifyPublishingAccess } from './publishingAccess.js';
+import { hasTenantMembership } from '../../../supabase/functions/_shared/admin-finance-access.mjs';
 
-export const canReviewBroadcast = permissions => permissions?.role === 'super_admin' || (Array.isArray(permissions?.allowed_tabs) && permissions.allowed_tabs.includes('email-broadcast'));
+export const canReviewBroadcast = permissions => permissions?.role === 'super_admin' || (!hasTenantMembership(permissions)
+  && Array.isArray(permissions?.allowed_tabs) && permissions.allowed_tabs.includes('email-broadcast'));
 export async function verifyBroadcastAccess(client, userId, scopeId, signal) {
   const grant = await verifyPublishingAccess(client, scopeId, userId, 'email-broadcast', signal);
   let activeRequest = client.rpc('account_is_active');
