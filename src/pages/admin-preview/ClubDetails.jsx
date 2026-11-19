@@ -10,15 +10,17 @@ import ClubManagement from './ClubManagement.jsx';
 import ClubInvitations from './ClubInvitations.jsx';
 import ClubOrganisations from './ClubOrganisations.jsx';
 import ClubApplicationDecision from './ClubApplicationDecision.jsx';
+import ClubLifecycleDialog from './ClubLifecycleDialog.jsx';
 import { liveClubDecisionApi, liveClubMemberApi, liveClubMemberAddApi, liveClubInvitationApi } from './liveClubOperations.js';
 
 function Fields({ rows }) {
   return <dl className="clubs-fields">{rows.map(([label, value]) => <React.Fragment key={label}><dt>{label}</dt><dd>{recordedText(value)}</dd></React.Fragment>)}</dl>;
 }
-export default function ClubDetails({ club, client, session, permissions, scopeId, onClose, onUpdated }) {
+export default function ClubDetails({ club, client, session, permissions, scopeId, onClose, onUpdated, clubDirectory = [], onLifecycleCompleted }) {
   const dialogRef = useRef(null), heading = useRef(null), titleId = useId();
   const [state, setState] = useState({ loading: true }), [reload, setReload] = useState(0);
   const [editing, setEditing] = useState(false);
+  const [lifecycle, setLifecycle] = useState(null);
   const [applicationDecided, setApplicationDecided] = useState(false);
   const busyRef = useRef(false), [saving, setSaving] = useState(false);
   const contextRef = useRef(''); contextRef.current = `${club.id}:${session?.user?.id}:${scopeId}`;
@@ -87,6 +89,12 @@ export default function ClubDetails({ club, client, session, permissions, scopeI
         <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}><ClubManagement key={`management-${club.id}`} client={client} session={session} permissions={permissions} scopeId={scopeId} clubId={club.id} onBusyChange={decisionBusy} onDecisionSaved={refreshDecision} decisionApi={liveClubDecisionApi} memberApi={liveClubMemberApi} addApi={liveClubMemberAddApi}/></fieldset>
         <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}><ClubInvitations key={`invitations-${club.id}`} client={client} session={session} scopeId={scopeId} clubId={club.id} creationApi={liveClubInvitationApi} onBusyChange={decisionBusy}/></fieldset></>}
         <section><h3>Record information</h3><Fields rows={[['Created', data.created_at], ['Last updated', data.updated_at]]}/></section>
+        {platform && onLifecycleCompleted && <section><h3>Club record actions</h3><div className="fo-report-actions">
+          <button className="ap-secondary" type="button" disabled={saving} onClick={() => setLifecycle('merge')}>Merge duplicate club</button>
+          <button className="ap-danger-button" type="button" disabled={saving} onClick={() => setLifecycle('delete')}>Delete club</button>
+        </div></section>}
+        {platform && lifecycle && <ClubLifecycleDialog key={lifecycle} kind={lifecycle} club={{ ...club, ...data }} directory={clubDirectory}
+          client={client} session={session} scopeId={scopeId} onBusyChange={decisionBusy} onClose={() => setLifecycle(null)} onComplete={onLifecycleCompleted}/>}
       </>}
     </div>
   </dialog>;

@@ -99,7 +99,10 @@ export default function ClubsWorkspace({ session, permissions, scopeId, client =
         </tr>)}</tbody></table></div> : <div className="clubs-empty"><h2>{all.length ? 'No matching clubs' : 'No clubs available'}</h2><p>{all.length ? 'Try a different search or reset the filters.' : 'No club records were returned for your account.'}</p></div>}
         <nav className="fo-pagination" aria-label="Club pages"><span>{rows.length ? (current - 1) * 10 + 1 : 0}–{Math.min(current * 10, rows.length)} of {rows.length}</span><button className="ap-secondary" disabled={current === 1} onClick={() => setPage(current - 1)}>Previous</button><span>Page {current} of {pages}</span><button className="ap-secondary" disabled={current === pages} onClick={() => setPage(current + 1)}>Next</button></nav>
       </section></>}
-      {selected?.context === context && <ClubDetails key={selected.club.id} club={selected.club} client={client} session={session} permissions={permissions} scopeId={scopeId} onClose={() => setSelected(null)} onUpdated={updateClub}/>}
+      {selected?.context === context && <ClubDetails key={selected.club.id} club={selected.club} client={client} session={session} permissions={permissions} scopeId={scopeId}
+        clubDirectory={all} onClose={() => setSelected(null)} onUpdated={updateClub} onLifecycleCompleted={() => {
+          setSelected(null); setReload(value => value + 1);
+        }}/>}
       {platform && creating === context && <CreateClubDialog key={context} client={client} scopeId={scopeId} session={session} onClose={() => setCreating(null)} onComplete={record => {
         setCreating(null);
         setState(previous => ({ ...previous, rows: [...(previous.rows || []).filter(row => String(row.id) !== String(record.id)), record].sort((a, b) => (a.name || '').localeCompare(b.name || '')) }));

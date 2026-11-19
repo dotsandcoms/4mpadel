@@ -125,6 +125,12 @@ jobs:
         run: |
           createdb fourm_native_checkout_test
           psql -X -q -d fourm_native_checkout_test -f tests/nativeCheckoutReferences.sql
+      - name: Verify reviewed draw and club operations
+        run: |
+          createdb fourm_native_draw_specialist_test
+          psql -X -q -d fourm_native_draw_specialist_test -f tests/adminNativeDrawSpecialist.sql
+          createdb fourm_club_lifecycle_test
+          psql -X -q -d fourm_club_lifecycle_test -f tests/adminClubLifecycle.sql
 
   gate:
     name: Repository checks

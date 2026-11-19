@@ -1,10 +1,17 @@
 \set ON_ERROR_STOP on
+do $$ begin
+    if current_database() <> 'fourm_native_draw_specialist_test' or to_regclass('public.draws') is not null then
+        raise exception 'Use the empty disposable fourm_native_draw_specialist_test database';
+    end if;
+end $$;
 begin;
 
 -- Run on an empty disposable local database, never on an existing project.
-create role anon nologin;
-create role authenticated nologin;
-create role service_role nologin;
+do $$ begin
+    if not exists (select from pg_roles where rolname='anon') then create role anon; end if;
+    if not exists (select from pg_roles where rolname='authenticated') then create role authenticated; end if;
+    if not exists (select from pg_roles where rolname='service_role') then create role service_role; end if;
+end $$;
 create schema auth;
 grant usage on schema auth to authenticated, anon, service_role;
 create function auth.email() returns text language sql stable as
