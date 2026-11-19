@@ -12,14 +12,14 @@ const CURRENT_ADMIN = `${LIVE_SITE}/admin`;
 
 function ReviewNotice() {
   return <aside className="hosted-review-notice" aria-label="Live database review">
-    <p><strong>4M Admin review · Live database</strong><span>Enabled saves change the same records as the current admin. Unfinished actions remain held.</span></p>
+    <p><strong>4M Admin review · Live database</strong><span>Actions in this review use the same records as the current Admin.</span></p>
     <a href={CURRENT_ADMIN} target="_blank" rel="noopener noreferrer">Open current admin ↗</a>
   </aside>;
 }
 
 function StartReview() {
   const location = useLocation();
-  return <Navigate replace to={{ pathname: '/admin-preview/events', search: location.search, hash: location.hash }} />;
+  return <Navigate replace to={{ pathname: '/admin-preview', search: location.search, hash: location.hash }} />;
 }
 
 export default function HostedAdminReview() {
@@ -40,7 +40,7 @@ export default function HostedAdminReview() {
       // away open editors. Identity changes and failed checks still unmount.
       setAccess(previous => session?.user && previous.state === 'ready' && previous.user.id === session.user.id && previous.user.email === session.user.email
         ? previous : { state: session?.user ? 'checking' : 'signed-out' });
-      setCandidate(session?.user || null);
+      setCandidate(session?.user ? session : null);
       setAuthRevision(value => value + 1);
     };
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -63,13 +63,24 @@ export default function HostedAdminReview() {
   useEffect(() => {
     if (!candidate) return;
     const controller = new AbortController();
-    verifyHostedReviewAccess(supabase, candidate, controller.signal).then(user => {
-      if (!controller.signal.aborted) setAccess({ state: 'ready', user });
+    verifyHostedReviewAccess(supabase, candidate.user, controller.signal).then(verified => {
+      if (!controller.signal.aborted) setAccess(previous => {
+        const sameActor = previous.state === 'ready' && previous.user.id === verified.user.id && previous.user.email === verified.user.email;
+        if (sameActor && JSON.stringify(previous.permissions) === JSON.stringify(verified.permissions)) return previous;
+        return { state: 'ready', ...verified, version: (previous.version || 0) + 1 };
+      });
     }).catch(error => {
       if (!controller.signal.aborted) setAccess({ state: 'denied', message: error.message });
     });
     return () => controller.abort();
   }, [candidate, authRevision]);
+
+  useEffect(() => {
+    if (!candidate) return;
+    const refresh = () => setAuthRevision(value => value + 1);
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, [candidate]);
 
   const signIn = async event => {
     event.preventDefault();
@@ -97,9 +108,9 @@ export default function HostedAdminReview() {
 
   if (access.state === 'signed-out') return <><ReviewNotice /><AdminLogin preview siteUrl={LIVE_SITE} email={email} password={password} onEmail={event => setEmail(event.target.value)} onPassword={event => setPassword(event.target.value)} onSubmit={signIn} busy={busy} error={loginError} /></>;
   if (access.state === 'denied') return <><ReviewNotice /><main className="ap-denied hosted-review-gate"><h1>Review access is required</h1><p role="alert">{access.message}</p><button className="ap-secondary" onClick={signOut} disabled={busy}>{busy ? 'Signing out…' : 'Sign out and use another account'}</button><a href={CURRENT_ADMIN}>Return to the current admin</a></main></>;
-  if (access.state !== 'ready' || access.user?.id !== candidate?.id || access.user?.email !== candidate?.email) return <><ReviewNotice /><main className="ap-loading"><p role="status">Checking your live admin access…</p></main></>;
+  if (access.state !== 'ready' || access.user?.id !== candidate?.user?.id || access.user?.email !== candidate?.user?.email) return <><ReviewNotice /><main className="ap-loading"><p role="status">Checking your live admin access…</p></main></>;
   return <><Routes>
-    <Route path="/admin-preview/*" element={<AdminPreview key={`${access.user.id}:${access.user.email}`} reviewNotice={<ReviewNotice />} currentAdminUrl={CURRENT_ADMIN} />} />
+    <Route path="/admin-preview/*" element={<AdminPreview key={`${access.user.id}:${access.user.email}:${access.version}`} session={candidate} permissions={access.permissions} onRefreshPermissions={() => setAuthRevision(value => value + 1)} reviewNotice={<ReviewNotice />} currentAdminUrl={CURRENT_ADMIN} />} />
     <Route path="*" element={<StartReview />} />
   </Routes><Toaster position="top-right" /></>;
 }

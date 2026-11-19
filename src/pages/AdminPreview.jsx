@@ -19,6 +19,7 @@ import { saveEventEntry } from './admin-preview/saveEventEntry';
 import EventEntryForm from './admin-preview/EventEntryForm.jsx';
 import EventPaymentDialog from './admin-preview/EventPaymentDialog.jsx';
 import RecordLoading from './admin-preview/RecordLoading.jsx';
+import { CreateEventMenu, ReviewNotifications } from './admin-preview/ReviewNavigationDialogs.jsx';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, LayoutGroup, motion as Motion, useReducedMotion } from 'framer-motion';
 import {
@@ -30,11 +31,11 @@ import {
   Trophy, UserPlus, FileSpreadsheet, Shuffle, Trash2, Link2,
   Users, WalletCards, X, Zap, Info, RotateCcw,
 } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
 import { useAdminPermissions } from '../hooks/useAdminPermissions';
 import AccessWorkspace from './admin-preview/AccessWorkspace';
-import { canReadPreviewEvents, restrictPreviewEvents, previewScopes } from './admin-preview/access';
+import { canOpenReviewPage, canReadPreviewEvents, restrictPreviewEvents, previewScopes } from './admin-preview/access';
 import {
   findPaymentForRegistration, getRegistrationEntryFeePaid,
   isEntryFeeRefund, isExplicitAdminMarkedPayment, isLicensePaymentRow, isCompedEntryPayment, hasBlockingProcessedRefund, normalizePaymentMetadata,
@@ -134,9 +135,7 @@ const WORKSPACES = [
   ] },
   { id: 'system', label: 'System', icon: Settings2, caption: 'Access and configuration', items: [
     { label: 'Access & permissions', icon: ShieldCheck, page: 'team-access' },
-    { label: 'Integrations', icon: Link2, page: 'integrations' },
     { label: 'Settings', icon: Settings2, page: 'settings' },
-    { label: 'Audit log', icon: Clock3, page: 'audit-log' },
   ] },
 ];
 
@@ -221,7 +220,7 @@ function usePreviewData(session, permissions, forceFixture = false, focusEventId
     }
     publish({ events: [], registrations: [], players: [], ...EMPTY_RELATED, loading: true, error: null });
     try {
-      if (!canReadPreviewEvents(permissions)) throw new Error('Event Manager access is required.');
+      if (!canReadPreviewEvents(permissions, scope)) throw new Error('Event Manager access is required.');
       if (!isSupabaseConfigured()) throw new Error('Supabase is not configured for this local preview.');
       const eventFields = '*, organisations:organisation_id(id,name,slug), clubs:club_id(id,name,short_name,slug)';
       const events = await readAll(() => {
@@ -245,8 +244,9 @@ function usePreviewData(session, permissions, forceFixture = false, focusEventId
       let draws = [];
       let refunds = [];
       if (focusEventId) {
+        const canReadFinance = !publicLive && permissions.role === 'super_admin';
         const [paymentResult, divisionResult, activityResult, drawResult] = await Promise.all([
-          publicLive ? [] : readAll(() => supabase.from('payments').select('*').eq('event_id', focusEventId).order('id')),
+          !canReadFinance ? [] : readAll(() => supabase.from('payments').select('*').eq('event_id', focusEventId).order('id')),
           readAll(() => supabase.from('tournament_divisions').select('*').eq('event_id', focusEventId).order('id')),
           publicLive ? [] : readAll(() => supabase.from('event_activity_log').select('*').eq('event_id', focusEventId).order('id')),
           readAll(() => supabase.from('draws').select('id, division_id, draw_kind, format, status, generated_at, public_announcement, tournament_divisions(name)').eq('event_id', focusEventId).order('id')),
@@ -323,7 +323,7 @@ function LoginGate({ onSession }) {
   return <AdminLogin preview email={email} password={password} onEmail={event => setEmail(event.target.value)} onPassword={event => setPassword(event.target.value)} onSubmit={submit} busy={busy} error={error} />;
 }
 
-function Sidebar({ activeWorkspace, setActiveWorkspace, page, go, open, setOpen, session }) {
+function Sidebar({ activeWorkspace, workspaces, setActiveWorkspace, page, go, open, setOpen, session, currentAdminUrl }) {
   const navigate = useNavigate();
   const accountId = session?.user?.id;
   const accountEmail = session?.user?.email || '';
@@ -370,16 +370,16 @@ function Sidebar({ activeWorkspace, setActiveWorkspace, page, go, open, setOpen,
         <div className="ap-brand"><strong>4M</strong><span>PADEL</span><small>Admin</small></div>
         <nav className="ap-sidebar-nav">
           <p className="ap-nav-label">Workspaces</p>
-          <LayoutGroup id="workspaces">{WORKSPACES.map(({ id, label, icon: Icon, caption, items }) => (
+          <LayoutGroup id="workspaces">{workspaces.map(({ id, label, icon: Icon, caption, items }) => (
             <section className={`ap-nav-group ${activeWorkspace === id ? 'is-active' : ''}`} key={id}>
-              <button className="ap-workspace-heading" onClick={() => { setActiveWorkspace(id); if (id === 'operate') go('home'); setOpen(false); }} aria-expanded="true">
+              <button className="ap-workspace-heading" onClick={() => { setActiveWorkspace(id); setOpen(false); }} aria-expanded="true">
                 {React.createElement(Icon, { size: 16, 'aria-hidden': true })}<span><b>{label}</b><small>{caption}</small></span>
               </button>
               <div className="ap-nav-destinations">{items.map((item) => {
                 const ItemIcon = item.icon;
                 const activePages = item.activePages || [item.page];
                 const isActive = activeWorkspace === id && activePages.includes(page);
-                return <button key={item.label} className={`ap-nav-destination ${isActive ? 'is-active' : ''}`} onClick={() => openDestination(id, item)}>
+                return <button key={item.label} className={`ap-nav-destination ${isActive ? 'is-active' : ''}`} aria-current={isActive ? 'page' : undefined} onClick={() => openDestination(id, item)}>
                   {isActive && <Motion.span className="ap-workspace-active" layoutId="workspace-active" transition={{ type: 'spring', duration: .28, bounce: 0 }} />}
                   <ItemIcon size={15} aria-hidden="true" /><span>{item.label}</span>
                 </button>;
@@ -390,7 +390,7 @@ function Sidebar({ activeWorkspace, setActiveWorkspace, page, go, open, setOpen,
         <div className="ap-sidebar-account">
           <div className="ap-avatar">{photo && failedPhoto !== photo ? <img src={photo} alt="" width={32} height={32} onError={() => setFailedPhoto(photo)} /> : accountName.slice(0, 1).toUpperCase()}</div>
           <span><b title={accountName}>{accountName}</b><small>Operations team</small></span>
-          <a href="/admin" aria-label="Open current admin"><ExternalLink size={16} /></a>
+          <a href={currentAdminUrl} aria-label="Open current admin"><ExternalLink size={16} /></a>
         </div>
         <button className="ap-logout" onClick={logout} disabled={loggingOut} aria-label={loggingOut ? 'Logging out' : 'Log out'} title="Log out of this browser">
           {loggingOut ? <LoaderCircle size={16} className="ap-spin" aria-hidden="true" /> : <LogOut size={16} aria-hidden="true" />}<span>{loggingOut ? 'Logging out…' : 'Log out'}</span>
@@ -416,7 +416,7 @@ function ScopeSwitcher({ scopes, scope, setScope }) {
   </div>;
 }
 
-function CommandPalette({ open, onClose, events, registrations, go }) {
+function CommandPalette({ open, onClose, events, registrations, workspaces, go }) {
   const [query, setQuery] = useState('');
   const inputRef = useRef(null);
   useEffect(() => { if (open) requestAnimationFrame(() => inputRef.current?.focus()); }, [open]);
@@ -425,17 +425,19 @@ function CommandPalette({ open, onClose, events, registrations, go }) {
     document.addEventListener('keydown', key); return () => document.removeEventListener('keydown', key);
   }, [onClose]);
   const commands = useMemo(() => [
-    { id: 'overview', label: 'Open operations overview', type: 'Go to', icon: LayoutDashboard, run: () => go('home') },
-    { id: 'events', label: 'Browse all events', type: 'Go to', icon: CalendarDays, run: () => go('events') },
-    { id: 'regs', label: 'Review registrations', type: 'Go to', icon: FileText, run: () => go('registrations') },
+    ...workspaces.flatMap(workspace => workspace.items.map(item => ({
+      id: item.page, label: item.label, type: workspace.label, icon: item.icon, run: () => go(item.page),
+    }))),
     ...events.slice(0, 8).map((item) => ({ id: `event-${item.id}`, label: item.event_name || item.title || 'Untitled event', type: 'Event', icon: CalendarDays, run: () => go('event', { event: item }) })),
     ...registrations.slice(0, 8).map((item) => ({ id: `reg-${item.id}`, label: `${personName(item)}, ${item.id}`, type: 'Registration', icon: Users, run: () => go('registrations', { registration: item }) })),
-  ], [events, registrations, go]);
+  ], [events, registrations, workspaces, go]);
   const results = commands.filter((item) => `${item.label} ${item.type}`.toLowerCase().includes(query.toLowerCase())).slice(0, 10);
   return <AnimatePresence>{open && <Motion.div className="ap-command-layer" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
     <button className="ap-command-dismiss" aria-label="Close command palette" onClick={onClose} />
     <Motion.div className="ap-command" role="dialog" aria-modal="true" aria-label="Search and commands" initial={{ opacity: 0, y: -12, scale: .985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -8, scale: .99 }} transition={{ type: 'spring', duration: .28, bounce: 0 }}>
-      <div className="ap-command-input"><Search size={20} /><label className="ap-visually-hidden" htmlFor="admin-command-search">Search records and actions</label><input ref={inputRef} id="admin-command-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search events, players, registrations…" /><kbd>ESC</kbd></div>
+      <div className="ap-command-input"><Search size={20} /><label className="ap-visually-hidden" htmlFor="admin-command-search">Search records and actions</label><input ref={inputRef} id="admin-command-search" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={event => {
+        if (event.key === 'Enter' && results[0]) { event.preventDefault(); results[0].run(); onClose(); }
+      }} placeholder="Search workspaces and loaded records…" /><kbd>ESC</kbd></div>
       <div className="ap-command-results">
         {results.length ? results.map(({ id, label, type, icon: Icon, run }) => <button key={id} onClick={() => { run(); onClose(); }}>{React.createElement(Icon, { size: 17 })}<span><b>{label}</b><small>{type}</small></span><ArrowRight size={15} /></button>) : <div className="ap-empty-compact"><Search size={22} /><b>No matching records</b><span>Try a player, event or registration name.</span></div>}
       </div>
@@ -444,16 +446,16 @@ function CommandPalette({ open, onClose, events, registrations, go }) {
   </Motion.div>}</AnimatePresence>;
 }
 
-function Topbar({ onMenu, scopes, scope, setScope, onCommand, onReload }) {
+function Topbar({ onMenu, scopes, scope, setScope, onCommand, onReload, onNotifications, onCreate }) {
   return <header className="ap-topbar">
     <button className="ap-icon-button ap-mobile-menu" onClick={onMenu} aria-label="Open navigation"><Menu size={20} /></button>
     <ScopeSwitcher scopes={scopes} scope={scope} setScope={setScope} />
-    <button className="ap-search-button" onClick={onCommand}><Search size={18} /><span>Search players, clubs, events…</span><kbd><Command size={11} />K</kbd></button>
+    <button className="ap-search-button" onClick={onCommand}><Search size={18} /><span>Find a workspace</span><kbd><Command size={11} />K</kbd></button>
     <div className="ap-top-actions">
       <PreviewTag />
       <button className="ap-icon-button" onClick={onReload} aria-label="Reload live data"><RefreshCw size={17} /></button>
-      <button className="ap-icon-button" aria-label="Open notifications"><Bell size={18} /><span className="ap-notification-dot" /></button>
-      <button className="ap-primary ap-create" title="Actions are disabled in this read-only preview"><Plus size={18} /> Create</button>
+      {onNotifications && <button className="ap-icon-button" aria-label="Open notifications" onClick={onNotifications}><Bell size={18} /></button>}
+      {onCreate && <button className="ap-primary ap-create" onClick={onCreate}><Plus size={18} /> Create</button>}
     </div>
   </header>;
 }
@@ -860,36 +862,62 @@ function WorkspaceLanding({ workspace, setWorkspace, page, go }) {
   return <><PageHeading eyebrow={`${current.label} / Integration status`} title={selected?.label || current.label} description="This module is not connected in the new UI yet." /><div className="ap-workspace-landing"><section><h2>{current.label} tools</h2><p>Available modules are listed below. Unconnected modules remain disabled here; their existing admin workflows have not been replaced.</p><div className="ap-destination-list">{current.items.map(item => <button key={item.label} disabled={!connected[item.page]} onClick={() => go(item.page)}><b>{item.label}</b><span>{connected[item.page] || 'Not integrated yet'}</span>{connected[item.page] && <ArrowRight size={17}/>}</button>)}</div><button className="ap-primary" onClick={() => setWorkspace('operate')}>Open Operate <ArrowRight size={16}/></button></section></div></>;
 }
 
-export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/admin' }) {
+export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/admin', session: verifiedSession, permissions: verifiedPermissions, onRefreshPermissions }) {
   const location = useLocation(); const navigate = useNavigate(); const reduceMotion = useReducedMotion();
-  const page = location.pathname.split('/').filter(Boolean)[1] || 'home';
+  const requestedPage = location.pathname.split('/').filter(Boolean)[1];
+  const page = requestedPage || 'home';
   const [playerRefresh, setPlayerRefresh] = useState(0);
-  const [session, setSession] = useState(null); const [authLoading, setAuthLoading] = useState(true); const [sidebarOpen, setSidebarOpen] = useState(false); const [commandOpen, setCommandOpen] = useState(false);
+  const [localSession, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [shellDialog, setShellDialog] = useState(null);
+  const session = verifiedSession || localSession;
   const [context, setContext] = useState({ event: null, registration: null });
   const queryParams = new URLSearchParams(location.search);
   const localFixture = import.meta.env.DEV && queryParams.get('preview-fixture') === '1';
   const focusEventId = localFixture ? null : queryParams.get('event');
   const localLivePreview = false;
   const previewBypass = localFixture;
-  useEffect(() => { supabase.auth.getSession().then(({ data }) => { setSession(data.session); setAuthLoading(false); }).catch(() => setAuthLoading(false)); const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, next) => { setSession(next); setAuthLoading(false); }); return () => subscription.unsubscribe(); }, []);
+  useEffect(() => {
+    if (verifiedSession) return;
+    let active = true;
+    const update = next => { if (active) { setSession(next); setAuthLoading(false); } };
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, next) => update(next));
+    supabase.auth.getSession().then(({ data }) => update(data.session)).catch(() => update(null));
+    return () => { active = false; subscription.unsubscribe(); };
+  }, [verifiedSession]);
   const effectiveSession = useMemo(() => session || (previewBypass ? { user: { email: 'preview@4mpadel.local' } } : null), [session, previewBypass]);
-  const { permissions, loading: permissionsLoading } = useAdminPermissions(['players', 'calendar'].includes(page) ? session?.user?.email : previewBypass ? null : effectiveSession?.user?.email);
+  const { permissions: localPermissions, loading: localPermissionsLoading } = useAdminPermissions(verifiedPermissions || previewBypass ? null : effectiveSession?.user?.email);
+  const permissions = verifiedPermissions || localPermissions;
+  const permissionsLoading = !verifiedPermissions && localPermissionsLoading;
   const fixturePermissions = useMemo(() => previewBypass ? { role: 'super_admin', orgs: [], clubs: [] } : permissions, [previewBypass, permissions]);
+  const canOpen = useCallback(target => canOpenReviewPage(fixturePermissions, target), [fixturePermissions]);
+  const workspaces = useMemo(() => WORKSPACES.map(group => ({
+    ...group, items: group.items.filter(item => canOpen(item.page)),
+  })).filter(group => group.items.length), [canOpen]);
   const [scopeSelection, setScopeSelection] = useState(null);
-  const scopes = useMemo(() => previewScopes(fixturePermissions), [fixturePermissions]);
+  const scopes = useMemo(() => previewScopes(fixturePermissions, page), [fixturePermissions, page]);
   const scope = scopes.find(item => scopeSelection?.identity === session?.user?.id && item.id === scopeSelection?.id) || scopes[0];
   const setScope = item => {
     setContext({ event: null, registration: null });
     setCommandOpen(false);
     setScopeSelection({ id: item.id, identity: session?.user?.id });
-    navigate('/admin-preview/events');
+    const query = new URLSearchParams(location.search);
+    for (const key of ['event', 'calendarEvent', 'create', 'detail', 'player', 'ticket', 'division']) query.delete(key);
+    navigate({ pathname: location.pathname, search: query.toString() }, { replace: true });
   };
-  const data = usePreviewData(!['home', 'events', 'event', 'registrations', 'payment', 'player'].includes(page) || permissionsLoading ? null : effectiveSession, fixturePermissions, localFixture, focusEventId, false, scope);
-  const activeWorkspace = WORKSPACES.find(workspace => workspace.items.some(item => (item.activePages || [item.page]).includes(page)))?.id || 'operate';
-  const setActiveWorkspace = (id) => { const first = WORKSPACES.find(workspace => workspace.id === id)?.items[0]; if (first) go(first.page); };
+  const mayLoadEvents = ['home', 'events', 'event', 'registrations', 'payment'].includes(page)
+    && canOpen(page) && canReadPreviewEvents(fixturePermissions, scope);
+  const data = usePreviewData(!mayLoadEvents || permissionsLoading ? null : effectiveSession, fixturePermissions, localFixture, focusEventId, false, scope);
+  const activeWorkspace = workspaces.find(workspace => workspace.items.some(item => (item.activePages || [item.page]).includes(page)))?.id || 'operate';
+  const setActiveWorkspace = (id) => { const first = workspaces.find(workspace => workspace.id === id)?.items[0]; if (first) go(first.page); };
   const go = useCallback((target, payload = {}) => {
+    if (!canOpen(target)) return;
     setContext((current) => ({ event: payload.event || current.event, registration: payload.registration || (target === 'events' ? null : current.registration) }));
     const nextQuery = new URLSearchParams(location.search);
+    if (target !== page) nextQuery.delete('event');
+    nextQuery.delete('create');
     const keepPublicPreview = import.meta.env.DEV && (nextQuery.has('event') || nextQuery.get('preview-live') === '1');
     if (['events', 'home', ...RECORD_WORKSPACE_PAGES].includes(target)) {
       nextQuery.delete('event');
@@ -906,24 +934,32 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
       if (registration?._player?.id || registration?.player_id) nextQuery.set('player', registration._player?.id || registration.player_id);
       else if (registration) nextQuery.set('q', registration.email || personName(registration));
     }
-    if (['event', 'tournaments'].includes(target) && payload.event?.id) nextQuery.set('event', payload.event.id);
+    if (['event', 'tournaments', 'messaging', 'help'].includes(target) && payload.event?.id) nextQuery.set('event', payload.event.id);
+    if (target === 'tournaments' && payload.workspace) nextQuery.set('workspace', payload.workspace);
+    if (target === 'tournaments' && payload.division) nextQuery.set('division', payload.division);
+    if (target === 'calendar' && payload.create) nextQuery.set('create', payload.create);
+    if (target === 'calendar' && payload.event?.id) nextQuery.set('calendarEvent', payload.event.id);
     const search = nextQuery.toString();
     navigate(`/admin-preview/${target === 'player' ? 'players' : target}${search ? `?${search}` : ''}`);
-  }, [navigate, location.search, setContext]);
+  }, [navigate, location.search, canOpen, page]);
   useEffect(() => { const key = (event) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setCommandOpen(true); } }; document.addEventListener('keydown', key); return () => document.removeEventListener('keydown', key); }, []);
-  useEffect(() => { if (activeWorkspace !== 'operate') return; if (!['home', 'events', 'event', 'registrations', 'payment', 'player', 'calendar', 'tournaments'].includes(page)) navigate(`/admin-preview/home${location.search}`, { replace: true }); }, [activeWorkspace, page, navigate, location.search]);
 
-  if ((!previewBypass && authLoading) || (effectiveSession && permissionsLoading && !previewBypass)) return <main className="ap-loading"><LoaderCircle className="ap-spin" /><p>Preparing your operations brief…</p></main>;
+  if ((!verifiedSession && !previewBypass && authLoading) || (effectiveSession && permissionsLoading && !previewBypass)) return <main className="ap-loading"><LoaderCircle className="ap-spin" /><p>Preparing your operations brief…</p></main>;
   if (!effectiveSession) return <LoginGate onSession={setSession} />;
-  const canAccess = fixturePermissions?.role === 'super_admin' || fixturePermissions?.allowed_tabs?.length || fixturePermissions?.orgs?.length || fixturePermissions?.clubs?.length || fixturePermissions?.federations?.length
-    || fixturePermissions?.module_permissions?.gallery?.allowedAlbums?.length || fixturePermissions?.module_permissions?.['event-mgmt']?.allowedEvents?.length || fixturePermissions?.tournamentAssignments?.length;
-  if (!canAccess) return <main className="ap-denied"><ShieldCheck size={36} /><h1>Admin access is required</h1><p>This preview uses the same permissions as the current admin.</p><a className="ap-primary" href={currentAdminUrl}>Return to current admin</a></main>;
+  const firstPage = workspaces[0]?.items[0]?.page;
+  if (!firstPage) return <main className="ap-denied"><ShieldCheck size={36} /><h1>Admin access is required</h1><p>Your account has no assigned Admin workspaces.</p><a className="ap-primary" href={currentAdminUrl}>Return to current admin</a></main>;
+  if (!requestedPage) return <Navigate replace to={`/admin-preview/${canOpen('events') ? 'events' : firstPage}`} />;
+  const canSeeWorkspace = canOpen(page) && Boolean(scope);
+  const displayedScope = scope || { id: 'all', label: 'My authorised access' };
+  const canCreateEvents = canOpen('calendar') && (permissions?.role === 'super_admin'
+    || permissions?.orgs?.some(org => ['owner', 'admin'].includes(org.member_role)));
   const activeEvent = data.events.find(item => String(item.id) === String(focusEventId || context.event?.id || context.registration?.event_id)) || data.events[0];
   const activeRegistration = data.registrations.find(item => item.id === context.registration?.id) || data.registrations.find((item) => normalizePayment(item) === 'failed') || data.registrations[0];
   const userName = effectiveSession.user.email?.split('@')[0]?.split(/[._-]/)[0]?.replace(/^./, (letter) => letter.toUpperCase()) || 'there';
   let content;
-  if (scope.id !== 'all' && ['players', 'calendar'].includes(page)) content = <section className="ap-section"><ShieldCheck size={28} /><h2>This workspace is not yet available in {scope.label}</h2><p>Organisation and club access for this module is still being connected.</p><button className="ap-secondary" onClick={() => setScope(scopes[0])}>Return to my authorised access</button></section>;
-  else if (!localFixture && ['home', 'events', 'event', 'registrations', 'payment', 'player'].includes(page) && !canReadPreviewEvents(permissions)) content = <section className="ap-section"><ShieldCheck size={28} /><h2>Event Manager access is required</h2><p>Your account has no Event Manager permission. Choose one of your authorised modules.</p></section>;
+  if (!canSeeWorkspace) content = <section className="ap-section"><ShieldCheck size={28}/><h1>Workspace unavailable</h1><p>This account has no access to this workspace.</p><button className="ap-primary" onClick={() => go(firstPage)}>Open my workspace</button></section>;
+  else if (scope.id !== 'all' && page === 'players') content = <section className="ap-section"><ShieldCheck size={28} /><h2>This workspace is not yet available in {scope.label}</h2><p>Organisation and club access for this module is still being connected.</p><button className="ap-secondary" onClick={() => setScope(scopes[0])}>Return to my authorised access</button></section>;
+  else if (!localFixture && ['events', 'event', 'registrations', 'payment'].includes(page) && !canReadPreviewEvents(permissions, scope)) content = <section className="ap-section"><ShieldCheck size={28} /><h2>Event Manager access is required</h2><p>Your account has no Event Manager permission. Choose one of your authorised modules.</p></section>;
   else if (['event', 'registrations', 'payment', 'player'].includes(page) && (data.loading || !activeEvent)) content = <EventRecordState loading={data.loading} error={data.error}/>;
   else if (page === 'players' && session && (permissionsLoading || !permissions)) content = <section className="ap-section ap-live-loading" role="status">Checking Players access…</section>;
   else if (page === 'players' && session && permissions?.role !== 'super_admin' && !permissions?.allowed_tabs?.includes('players')) content = <section className="ap-section ap-live-loading"><ShieldCheck size={28} /><h2>Players access is required</h2><p>This account does not have access to the existing Players admin module.</p></section>;
@@ -949,11 +985,11 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
   else if (page === 'event' && focusEventId && data.loading) content = <section className="ap-section ap-live-loading"><LoaderCircle className="ap-spin" /><h2>Loading the live event</h2><p>Reading the event, registrations, payments, divisions and activity available to your admin account.</p></section>;
   else if (page === 'event' && focusEventId && data.error) content = <section className="ap-section ap-live-loading"><AlertCircle size={24} /><h2>The live event could not be loaded</h2><p>{data.error}</p><button className="ap-secondary" onClick={data.reload}>Try again</button></section>;
   else if (page === 'event' && focusEventId && !activeEvent.is_manual) content = <EventParticipantsWorkspace key={`${activeEvent.id}-${session?.user?.id}-${scope.id}`} event={activeEvent} go={go} session={session} scopeId={scope.id} onRefresh={data.reload} />;
-  else if (page === 'event' && focusEventId) content = <LiveEventCommandCentre session={session} scopeId={scope.id} event={activeEvent} registrations={data.registrations} payments={data.payments} divisions={data.divisions} activity={data.activity} draws={data.draws} refunds={data.refunds} go={go} financeRestricted={localLivePreview && !session} canManagePayments={Boolean(session) && !localFixture && permissions?.role === 'super_admin' && scope.id === 'all'} onRefresh={data.reload} />;
+  else if (page === 'event' && focusEventId) content = <LiveEventCommandCentre session={session} scopeId={scope.id} event={activeEvent} registrations={data.registrations} payments={data.payments} divisions={data.divisions} activity={data.activity} draws={data.draws} refunds={data.refunds} go={go} financeRestricted={permissions?.role !== 'super_admin' || (localLivePreview && !session)} canManagePayments={Boolean(session) && !localFixture && permissions?.role === 'super_admin' && scope.id === 'all'} onRefresh={data.reload} />;
   else if (page === 'event') content = <EventCommandCentre event={activeEvent} registrations={data.registrations} go={go} />;
   else if (page === 'calendar' && session && (permissionsLoading || !permissions)) content = <section className="ap-section" role="status">Checking Calendar access…</section>;
   else if (page === 'calendar' && session && permissions?.role !== 'super_admin' && !permissions?.allowed_tabs?.includes('calendar')) content = <section className="ap-section"><h2>Calendar access is required</h2><p>Your account does not have Calendar admin permission.</p></section>;
-  else if (page === 'calendar') content = <CalendarWorkspace key={`${session?.user?.id || 'signed-out'}-${scope.id}-${playerRefresh}`} session={session} scopeId={scope.id} canManageEvents={Boolean(session) && !localFixture && permissions?.role === 'super_admin' && scope.id === 'all'} />;
+  else if (page === 'calendar') content = <CalendarWorkspace key={`${session?.user?.id || 'signed-out'}-${scope.id}-${playerRefresh}`} session={session} permissions={permissions} scope={scope} scopeId={scope.id} canManageEvents={Boolean(session) && !localFixture && permissions?.role === 'super_admin' && scope.id === 'all'} />;
   else if (page === 'registrations') content = <RegistrationsWorkspace key={`${session?.user?.id}-${scope.id}`} event={activeEvent} events={data.events} registrations={data.registrations} go={go} initialRegistration={data.registrations.find(item => item.id === context.registration?.id)} />;
   else if (page === 'payment') content = <PaymentException registration={activeRegistration} event={activeEvent} go={go} />;
   else if (page === 'player') content = <PlayerRecord registration={activeRegistration} event={activeEvent} go={go} />;
@@ -961,10 +997,17 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
 
   return <div className="ap-root">
     <a className="ap-skip" href="#admin-preview-content">Skip to content</a>
-    <Sidebar activeWorkspace={activeWorkspace} setActiveWorkspace={setActiveWorkspace} page={page} go={go} open={sidebarOpen} setOpen={setSidebarOpen} session={effectiveSession} />
-    <div className="ap-app">{reviewNotice}<Topbar onMenu={() => setSidebarOpen(true)} scopes={scopes} scope={scope} setScope={setScope} onCommand={() => setCommandOpen(true)} onReload={REFRESH_WORKSPACE_PAGES.includes(page) ? () => setPlayerRefresh(n => n + 1) : data.reload} />
+    <Sidebar activeWorkspace={activeWorkspace} setActiveWorkspace={setActiveWorkspace} page={page} go={go} open={sidebarOpen} setOpen={setSidebarOpen} session={effectiveSession} workspaces={workspaces} currentAdminUrl={currentAdminUrl} />
+    <div className="ap-app">{reviewNotice}<Topbar onMenu={() => setSidebarOpen(true)} scopes={scopes.length ? scopes : [displayedScope]} scope={displayedScope} setScope={setScope} onCommand={() => setCommandOpen(true)} onReload={() => {
+      onRefreshPermissions?.();
+      if (REFRESH_WORKSPACE_PAGES.includes(page)) setPlayerRefresh(n => n + 1);
+      else data.reload();
+    }} onNotifications={permissions?.role === 'super_admin' ? () => setShellDialog('notifications') : canOpen('help') ? () => go('help') : null}
+      onCreate={canCreateEvents ? () => setShellDialog('create') : null} />
       <main id="admin-preview-content" className="ap-main" tabIndex="-1"><ScreenReaderStatus>{RECORD_WORKSPACE_PAGES.includes(page) ? `${page === 'email' ? 'Email broadcast' : page} workspace` : data.loading ? 'Loading records' : `${data.events.length} events and ${data.registrations.length} registrations loaded`}</ScreenReaderStatus>{!RECORD_WORKSPACE_PAGES.includes(page) && data.error && !focusEventId && <div className="ap-data-notice"><AlertCircle size={16} /><span><b>Live data unavailable.</b> Live data could not be loaded: {data.error}</span></div>}<AnimatePresence mode="wait" initial={false}><Motion.div key={`${activeWorkspace}-${page}-${focusEventId || 'all'}`} className="ap-screen" initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }} transition={{ duration: reduceMotion ? .1 : .18 }}>{content}</Motion.div></AnimatePresence></main>
     </div>
-    <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} events={data.events} registrations={data.registrations} go={go} />
+    {shellDialog === 'notifications' && permissions?.role === 'super_admin' && <ReviewNotifications canOpen={canOpen} go={go} onClose={() => setShellDialog(null)} />}
+    {shellDialog === 'create' && canCreateEvents && <CreateEventMenu onClose={() => setShellDialog(null)} onSelect={create => { setShellDialog(null); go('calendar', { create }); }} />}
+    <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} events={data.events} registrations={data.registrations} workspaces={workspaces} go={go} />
   </div>;
 }
