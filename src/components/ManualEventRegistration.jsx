@@ -26,6 +26,7 @@ import sapaLogo from '../assets/sapa-logo.svg';
 
 import { isPaystackConfigured, isPaystackTestMode } from '../utils/paystackConfig';
 import { buildPaystackCheckoutConfig, isInAppBrowser } from '../utils/paystackCheckout';
+import { eventPaymentReference } from '../utils/eventPaymentReference';
 import PartnerProfileInvite from './PartnerProfileInvite';
 import ManualRegistrationEntryCard from './ManualRegistrationEntryCard';
 import ReplacePartnerDialog from './ReplacePartnerDialog';
@@ -2455,7 +2456,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const buildManualPaymentPayload = useCallback(() => {
         const { rows, covers, soloLinks } = buildRegistrationRows();
-        const reference = `REGEV-${event.id}-${Date.now()}`;
+        const reference = eventPaymentReference(event);
         const divisionEntryFees = isWeeklyEvent
             ? { [WEEKLY_OPEN_DIVISION]: Number(selectedWeeks[0]?.fee ?? resolveDivisionEntryFee(null, event)) }
             : Object.fromEntries(

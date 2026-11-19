@@ -1,5 +1,6 @@
 import LicensePaymentModal from '../components/LicensePaymentModal';
 import { legacyEventCheckout } from '../utils/legacyEventCheckout';
+import { eventPaymentReference } from '../utils/eventPaymentReference';
 import { eventLicense } from '../utils/licenses';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useParams, useLocation, Link } from 'react-router-dom';
@@ -1771,7 +1772,7 @@ const EventDetails = () => {
                 }
             }
             // Generate a stable payment reference for this registration attempt
-            setPaymentReference(`REGEV-${event.id}-${Date.now()}`);
+            setPaymentReference(eventPaymentReference(event));
         };
         prefillFromSession();
     }, [isModalOpen, event?.id]);
@@ -3129,7 +3130,7 @@ const EventDetails = () => {
         if (!payer?.email || payer.email.toLowerCase() !== formData.email.trim().toLowerCase()) {
             toast.error('Use your signed-in player profile to register.');return;
         }
-        const reference = paymentReference || `REGEV-${event.id}-${Date.now()}`;
+        const reference = paymentReference || eventPaymentReference(event);
         let pending;
         try {
             pending = legacyEventCheckout({ event, profile: playerProfileData, email: payer.email,
