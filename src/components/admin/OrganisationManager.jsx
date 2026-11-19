@@ -154,7 +154,7 @@ const CollapsibleSection = ({
     </div>
 );
 
-const OrganisationManager = ({ permissions, initialView = 'platform', onViewChange }) => {
+const OrganisationManager = ({ permissions, initialView = 'platform', onViewChange, restrictToOrganisation = false }) => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [activeSection, setActiveSection] = useState('overview'); // overview, create-event, my-events
@@ -282,9 +282,9 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
     const isStandalonePlatformAdmin = permissions?.role === 'custom'
         && !hasOrganisationMembership
         && (permissions?.allowed_tabs || []).includes('organisations');
-    const canAccessPlatformOversight = permissions?.role === 'super_admin'
+    const canAccessPlatformOversight = !restrictToOrganisation && (permissions?.role === 'super_admin'
         || hasExplicitPlatformOversight
-        || isStandalonePlatformAdmin;
+        || isStandalonePlatformAdmin);
     // Linked membership org (host membership), including for super admins
     const membershipOrg = permissions?.org;
     // Platform admins can temporarily open any approved org's host dashboard
@@ -1805,6 +1805,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                ======================================================== */}
             {managingEvent && (
                 <ManualEventRegistrations
+                    allowPlatformActions={!restrictToOrganisation}
                     variant="inline"
                     isOpen
                     event={managingEvent}
@@ -2874,6 +2875,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                 divisions, per-division deadlines & ManualEventRegistration
                ======================================================== */}
             <EventBuilder
+                allowPlatformActions={!restrictToOrganisation}
                 isOpen={builderOpen}
                 onClose={() => { setBuilderOpen(false); setBuilderEvent(null); }}
                 onSaved={handleBuilderSaved}

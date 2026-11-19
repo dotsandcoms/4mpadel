@@ -8,6 +8,7 @@ import puppeteer from 'puppeteer';
 
 const firstTicket = '20000000-0000-0000-0000-000000000001';
 const secondTicket = '20000000-0000-0000-0000-000000000002';
+const personalTicket = '20000000-0000-0000-0000-000000000003';
 let directory, bundle, browser;
 
 const fixture = `
@@ -24,6 +25,7 @@ const fixture = `
     const path = location.pathname.split('/').at(-1);
     return <>
       <button onClick={() => navigate('/admin-preview/help?ticket=${secondTicket}&source=fixture#queue', { state: { from: 'second' } })}>Open second link</button>
+      <button onClick={() => navigate('/admin-preview/help?ticket=${personalTicket}')}>Open personal link</button>
       <button onClick={() => navigate('/admin-preview/messaging')}>Open messages</button>
       <button onClick={() => navigate('/admin-preview/security')}>Open security</button>
       <button onClick={() => navigate('/admin-preview/security?view=other')}>Open delegated view</button>
@@ -76,10 +78,14 @@ const mockClient = `
         if (action === 'status') statuses.set(data.id, data.status);
         if (action === 'escalate') teams.set(data.id, '4m');
         if (action === 'read') {
-          const number = data.id === '${firstTicket}' ? 1 : 2;
+          const number = data.id === '${firstTicket}' ? 1 : data.id === '${secondTicket}' ? 2 : 3;
+          const organisation = number === 1 ? 'North Court' : 'South Court';
+          const canManage = !window.helpActorOrganisation || organisation === window.helpActorOrganisation || data.id === window.helpAssignedTicket;
+          if (!canManage && number !== 3) return { error: { code: '42501', message: 'This help request is unavailable.' } };
           return result({ request: {
             id: data.id, reference: '4M-TEST-' + number, requester: { name: 'Fictional player' },
-            topic: 'entry', eventName: 'Fictional event ' + number, status: statuses.get(data.id) || 'open',
+            canManage,
+            topic: 'entry', eventName: organisation + ' event', status: statuses.get(data.id) || 'open',
             team: teams.get(data.id) || 'organiser', recipient: 'Fictional support', createdAt: '2026-11-16T07:10:00Z',
           }, messages: [{ id: 'fictional-message', role: 'player', body: 'Fictional question', createdAt: '2026-11-16T07:10:00Z' }] });
         }
@@ -115,6 +121,39 @@ before(async () => {
   browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
 });
 
+test('an organiser can open its own Help queue and explicitly assigned events while other staff tickets stay private', async () => {
+  const page = await browser.newPage();
+  page.setDefaultTimeout(5000);
+  try {
+    await page.setContent('<div id="root"></div>');
+    await page.evaluate(() => { window.helpActorOrganisation = 'North Court'; });
+    await page.addScriptTag({ path: bundle });
+    const code = 'input[name="messaging-authenticator-code"]';
+    await page.waitForSelector(code);
+    await page.type(code, '123456');
+    await click(page, 'Verify code');
+    await waitForTicket(page, 'North Court event');
+    await page.waitForFunction(id => window.helpCalls.some(call => call.action === 'mark_read' && call.data.id === id), {}, firstTicket);
+    await click(page, 'Open second link');
+    await page.waitForFunction(() => document.querySelector('[role="alert"]')?.textContent === 'This help request is unavailable.');
+    await click(page, 'Open personal link');
+    await page.waitForFunction(() => document.querySelector('[role="alert"]')?.textContent.includes('unavailable for your staff access'));
+    assert.doesNotMatch(await page.$eval('body', body => body.textContent), /South Court event|Fictional question|Send reply|Send to 4M support/);
+    assert.equal(await page.evaluate(id => window.helpCalls.some(call => call.data.id !== id && ['mark_read', 'reply', 'status', 'escalate'].includes(call.action)), firstTicket), false);
+    assert.equal(await page.evaluate(() => window.helpCalls.filter(call => call.action === 'list').every(call => call.data.staff === true)), true);
+
+    await page.evaluate(id => { window.helpAssignedTicket = id; }, secondTicket);
+    await click(page, 'Open second link');
+    await page.waitForFunction(() => document.body.textContent.includes('South Court event'));
+    await page.evaluate(() => { window.helpAssignedTicket = null; });
+    await click(page, 'Refresh');
+    await page.waitForFunction(() => document.querySelector('[role="alert"]')?.textContent === 'This help request is unavailable.');
+    assert.doesNotMatch(await page.$eval('body', body => body.textContent), /South Court event|Fictional question|Send reply/);
+  } finally {
+    await page.close();
+  }
+});
+
 after(async () => {
   await browser?.close();
   if (directory) await rm(directory, { recursive: true, force: true });
@@ -123,6 +162,15 @@ after(async () => {
 async function click(page, text) {
   await page.waitForFunction(label => [...document.querySelectorAll('button')].some(button => !button.disabled && button.textContent.trim() === label), {}, text);
   await page.evaluate(label => [...document.querySelectorAll('button')].find(button => !button.disabled && button.textContent.trim() === label).click(), text);
+}
+
+async function waitForTicket(page, text) {
+  try {
+    await page.waitForFunction(expected => document.body.textContent.includes(expected), {}, text);
+  } catch (error) {
+    const state = await page.evaluate(() => ({ visible: document.body.textContent, calls: window.helpCalls }));
+    throw new Error('Synthetic Help fixture did not display ' + text + ': ' + JSON.stringify(state), { cause: error });
+  }
 }
 
 test('new Admin uses verified current workflows and preserves Help ticket navigation', async () => {
@@ -136,7 +184,7 @@ test('new Admin uses verified current workflows and preserves Help ticket naviga
     assert.equal(await page.evaluate(() => window.helpCalls.some(call => call.action === 'read')), false);
     await page.type(code, '123456');
     await click(page, 'Verify code');
-    await page.waitForFunction(() => document.body.textContent.includes('4M-TEST-1'));
+    await waitForTicket(page, '4M-TEST-1');
     await page.type('#help-reply', 'Synthetic reply');
     await click(page, 'Send reply');
     await page.waitForFunction(() => window.helpCalls.some(call => call.action === 'reply'));

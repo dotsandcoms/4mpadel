@@ -572,7 +572,9 @@ const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, edit
             };
 
             if (isEditing) {
-                const { error } = await supabase.from('calendar').update(payload).eq('id', eventId);
+                let query = supabase.from('calendar').update(payload).eq('id', eventId);
+                if (organisation) query = query.eq('organisation_id', organisation.id);
+                const { error } = await query.select('id').single();
                 if (error) throw error;
             } else {
                 const { data, error } = await supabase.from('calendar').insert([payload]).select('id').single();
@@ -597,7 +599,7 @@ const QuickEventBuilder = ({ isOpen, onClose, onSaved, organisation = null, edit
                 divisionId = data?.id || null;
             }
             if (divisionId) {
-                const { error } = await supabase.from('tournament_divisions').update(division).eq('id', divisionId);
+                const { error } = await supabase.from('tournament_divisions').update(division).eq('id', divisionId).eq('event_id', eventId);
                 if (error) throw error;
             } else {
                 const { error } = await supabase.from('tournament_divisions').insert([division]);

@@ -1,20 +1,21 @@
-import { createElement, lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { createElement, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowRight, Banknote, Bell, Building2, CalendarDays, ChevronDown, Command,
   CreditCard, ExternalLink, FileText, GalleryVerticalEnd, KeyRound, LayoutDashboard,
-  LoaderCircle, LogOut, Mail, MapPin, Menu, MessageSquare, Network, Plus, RefreshCw,
+  LogOut, Mail, MapPin, Menu, MessageSquare, Network, Plus, RefreshCw,
   Search, Settings2, ShieldCheck, Trophy, UserPlus, Users, WalletCards, X, Zap,
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
-import { useAdminPermissions } from '../hooks/useAdminPermissions';
 import { useAdminFeedNotifications } from '../hooks/useAdminFeedNotifications';
-import { previewScopes } from './admin-preview/access.js';
+import { canOpenReviewPage, isReviewTenant, previewScopes } from './admin-preview/access.js';
+import { resolveEventWorkspace } from '../utils/adminCalendarScope.js';
 import './AdminPreview.css';
 
 const Dashboard = lazy(() => import('../components/admin/DashboardHome'));
 const Federations = lazy(() => import('../components/admin/FederationManager'));
 const Organisations = lazy(() => import('../components/admin/OrganisationManager'));
+const OrganisationMember = lazy(() => import('./admin-preview/current/OrganisationMember.jsx'));
 const Clubs = lazy(() => import('../components/admin/ClubManager'));
 const Players = lazy(() => import('../components/admin/PlayerManager'));
 const Coaches = lazy(() => import('../components/admin/CoachManager'));
@@ -93,6 +94,16 @@ function WorkspaceSearch({ items, onClose, go }) {
   </Dialog>;
 }
 
+function OrganisationPanel({ permissions, scopeId }) {
+  const org = permissions.orgs?.find(row => scopeId === `org:${row.id}`);
+  const scoped = useMemo(() => {
+    if (!org) return permissions;
+    return { ...permissions, org, orgs: [org], orgRole: org.member_role };
+  }, [permissions, org]);
+  if (org?.member_role === 'staff' && permissions.role !== 'super_admin') return <OrganisationMember organisation={org} />;
+  return <Organisations permissions={scoped} initialView={org || new URLSearchParams(window.location.search).get('view') === 'host' ? 'host' : 'platform'} restrictToOrganisation={Boolean(org)} />;
+}
+
 function CurrentPanel({ page, props, canOpen, go }) {
   switch (page) {
     case 'home': return <Dashboard onTabChange={tab => go(controllerRoutes[tab] || tab)} />;
@@ -106,9 +117,9 @@ function CurrentPanel({ page, props, canOpen, go }) {
     case 'payouts':
     case 'reports': return <Finance {...props} />;
     case 'licenses': return <Licences {...props} />;
-    case 'federations': return <Federations permissions={props.permissions} />;
-    case 'organisations': return <Organisations permissions={props.permissions} initialView={new URLSearchParams(window.location.search).get('view') === 'host' ? 'host' : 'platform'} />;
-    case 'clubs': return <Clubs permissions={props.permissions} />;
+    case 'federations': return <Federations permissions={props.permissions} restrictToMembership={isReviewTenant(props.permissions) && props.permissions.role !== 'super_admin'} />;
+    case 'organisations': return <OrganisationPanel permissions={props.permissions} scopeId={props.scopeId} />;
+    case 'clubs': return <Clubs permissions={props.permissions} restrictToMembership={isReviewTenant(props.permissions) && props.permissions.role !== 'super_admin'} />;
     case 'players': return <Players canManageLicenses={canOpen('licenses')} licenseHrefForPlayer={playerId => `/admin-preview/licenses?license_player=${encodeURIComponent(playerId)}`} />;
     case 'coaches': return <Coaches />;
     case 'gallery': return <Gallery permissions={props.permissions} />;
@@ -121,7 +132,7 @@ function CurrentPanel({ page, props, canOpen, go }) {
   }
 }
 
-export default function AdminPreview({ session, reviewNotice, currentAdminUrl }) {
+export default function AdminPreview({ session, permissions, onRefreshPermissions, reviewNotice, currentAdminUrl }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [scopeId, setScopeId] = useState('all');
@@ -131,18 +142,15 @@ export default function AdminPreview({ session, reviewNotice, currentAdminUrl })
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState('');
   const targetEmail = session.user.email;
-  const { permissions, loading, hasPermission } = useAdminPermissions(targetEmail);
-  const requested = pathname.split('/').filter(Boolean)[1] || 'events';
+  const requested = pathname.split('/').filter(Boolean)[1];
   const page = oldRoutes[requested] || requested;
-  const scopes = previewScopes(permissions);
+  const canOpen = id => canOpenReviewPage(permissions, id);
+  const scopes = previewScopes(permissions, page);
   const scope = scopes.find(item => item.id === scopeId) || scopes[0];
-  const canOpen = id => {
-    if (id === 'payouts' && permissions?.orgs?.some(org => ['owner', 'admin'].includes(org.member_role || permissions.orgRole))) return true;
-    if (id === 'team-access' && permissions?.role !== 'super_admin') return false;
-    if (['messaging', 'help'].includes(id) && permissions?.role === 'private_rehearsal') return false;
-    const destination = destinations.find(([key]) => key === id);
-    return Boolean(destination && hasPermission(destination[3] || id));
-  };
+  const calendarScopes = previewScopes(permissions, 'calendar');
+  const calendarScope = calendarScopes.find(item => item.id === scopeId) || calendarScopes[0];
+  const calendarAccess = canOpen('calendar') && calendarScope ? resolveEventWorkspace(permissions, calendarScope.id, 'calendar') : null;
+  const canCreateEvent = Boolean(calendarAccess?.allowPlatformActions || (calendarAccess?.scopeId?.startsWith('org:') && !calendarAccess.allowedEvents?.length));
   const go = (id, query = '') => {
     if (!canOpen(id)) return;
     navigate(`/admin-preview/${id}${query}`);
@@ -173,11 +181,10 @@ export default function AdminPreview({ session, reviewNotice, currentAdminUrl })
     }
   }
 
-  if (loading) return <main className="ap-loading" role="status"><LoaderCircle className="ap-spin" />Checking your Admin permissions…</main>;
   const available = destinations.filter(([id]) => canOpen(id));
-  const active = available.find(([id]) => id === page);
-  const moduleScope = ['events', 'registrations', 'calendar', 'reports', 'payments', 'payouts'].includes(page);
-  const props = { session, permissions, targetEmail, scopeId: moduleScope ? scope.id : 'all', page, refreshRevision: revision, onLegacyTab: tab => go(controllerRoutes[tab] || tab) };
+  if (!requested && available.length) return <Navigate replace to={`/admin-preview/${canOpen('events') ? 'events' : available[0][0]}`} />;
+  const active = scope && available.find(([id]) => id === page);
+  const props = { session, permissions, targetEmail, scopeId: scope?.id, page, refreshRevision: revision, onLegacyTab: tab => go(controllerRoutes[tab] || tab) };
   const accountName = targetEmail.split('@')[0];
 
   return <div className="ap-root">
@@ -201,12 +208,12 @@ export default function AdminPreview({ session, reviewNotice, currentAdminUrl })
       {reviewNotice}
       <header className="ap-topbar">
         <button type="button" className="ap-icon-button ap-mobile-menu" onClick={() => setSidebarOpen(true)} aria-label="Open navigation" aria-expanded={sidebarOpen}><Menu size={20} /></button>
-        {moduleScope && scopes.length > 1 ? <label className="ap-scope ap-shell-scope"><Building2 size={16} /><span className="ap-visually-hidden">Working in</span><select value={scope.id} onChange={event => setScopeId(event.target.value)}>{scopes.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><ChevronDown size={15} aria-hidden="true" /></label> : <div className="ap-shell-account-scope"><Building2 size={16} />{scopes[0].label}</div>}
+        {scopes.length > 1 ? <label className="ap-scope ap-shell-scope"><Building2 size={16} /><span className="ap-visually-hidden">Working in</span><select value={scope.id} onChange={event => setScopeId(event.target.value)}>{scopes.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><ChevronDown size={15} aria-hidden="true" /></label> : <div className="ap-shell-account-scope"><Building2 size={16} />{scope?.label || 'My authorised access'}</div>}
         <button type="button" className="ap-search-button" aria-label="Find a workspace" onClick={() => setDialog('search')}><Search size={18} /><span>Find a workspace</span><kbd><Command size={11} />K</kbd></button>
         <div className="ap-top-actions">
-          <button type="button" className="ap-icon-button" onClick={() => setRevision(count => count + 1)} aria-label="Reload workspace"><RefreshCw size={17} /></button>
+          <button type="button" className="ap-icon-button" onClick={() => { onRefreshPermissions?.(); setRevision(count => count + 1); }} aria-label="Reload workspace"><RefreshCw size={17} /></button>
           {permissions?.role === 'super_admin' && <button type="button" className="ap-icon-button" onClick={() => setDialog('notifications')} aria-label="Open notifications"><Bell size={18} /></button>}
-          {canOpen('calendar') && <button type="button" className="ap-primary ap-create" aria-label="Create an event" onClick={() => setDialog('create')}><Plus size={18} /><span>Create</span></button>}
+          {canCreateEvent && <button type="button" className="ap-primary ap-create" aria-label="Create an event" onClick={() => setDialog('create')}><Plus size={18} /><span>Create</span></button>}
         </div>
       </header>
       <main id="admin-preview-content" className="ap-main" tabIndex="-1">
@@ -218,7 +225,7 @@ export default function AdminPreview({ session, reviewNotice, currentAdminUrl })
     </div>
     {dialog === 'search' && <WorkspaceSearch items={available} onClose={() => setDialog(null)} go={go} />}
     {dialog === 'notifications' && <Notifications onClose={() => setDialog(null)} go={go} canOpen={canOpen} />}
-    {dialog === 'create' && <Dialog title="Create an event" onClose={() => setDialog(null)}><ul className="ap-shell-list">
+    {dialog === 'create' && canCreateEvent && <Dialog title="Create an event" onClose={() => setDialog(null)}><ul className="ap-shell-list">
       {['full', 'quick'].map(kind => <li key={kind}><button type="button" className="ap-shell-result" onClick={() => { setDialog(null); go('calendar', `?create=${kind}`); }}><Plus size={17} />{kind === 'full' ? 'Full event' : 'Quick event'}<ArrowRight size={15} /></button></li>)}
     </ul></Dialog>}
   </div>;

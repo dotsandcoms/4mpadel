@@ -66,14 +66,20 @@ export default function EventMessaging() {
         if (!eventId || !verified || document.hidden) return;
         const epoch = ++version.current;
         try {
-            const next = await rpc('open_event', { eventId: Number(eventId) });
-            const selected = next.find(c => c.kind === kind);
-            const [result, stats] = await Promise.all([selected ? rpc('read', { conversationId: selected.id }) : null, rpc('event_analytics', { eventId: Number(eventId) })]);
+            const event = Number(eventId);
+            const stats = await rpc('event_analytics', { eventId: event });
+            if (!alive.current || epoch !== version.current) return;
+            // The shared open RPC also serves players. Admin only opens a manager channel.
+            const next = (await rpc('open_event', { eventId: event })).filter(channel => channel.manager === true);
+            if (!alive.current || epoch !== version.current) return;
+            if (!next.length) throw new Error('Event messaging access denied.');
+            const selected = next.find(channel => channel.kind === kind);
+            const result = selected ? await rpc('read', { conversationId: selected.id }) : null;
             if (!alive.current || epoch !== version.current) return;
             setChannels(next); setPage(result); setAnalytics(stats); setError('');
             if (selected && result?.messages?.length) await rpc('mark_read', { conversationId: selected.id, seq: result.messages.at(-1).seq });
-        } catch (e) { if (alive.current && epoch === version.current) { setPage(null); setAnalytics(null); setChannels([]); setError(e.message); } }
-    }, [eventId, kind, verified]);
+        } catch (e) { if (alive.current && epoch === version.current) { clearEvent(); setError(e.message); } }
+    }, [clearEvent, eventId, kind, verified]);
     useEffect(() => { audienceEpoch.current++; setTargetDivisions(null); setAudience(null); setPage(null); setChannels([]); setBody(''); setReply(null); setReview(false); setReports([]); setEntrants([]); void open(); }, [open]);
     useEffect(() => {
         if (!status?.enabled || !verified) return;

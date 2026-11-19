@@ -5,7 +5,8 @@ import { scopeCalendarQuery } from './adminCalendarScope.js';
 const DEFAULT_SAPA_STATUSES = ['Silver', 'Gold', 'Super Gold', 'S Gold', 'Major'];
 const EVENT_COLUMNS = 'id, event_name, sapa_status, start_date, end_date, registration_closes_at, rankedin_id, rankedin_url, entry_fee, category_fees, early_bird_fee, early_bird_ends_at, finance_managed, is_manual, allow_payments, slug, venue, venues, event_status, organisation_id, club_id, organiser_interim_payments, organiser_settlement_confirmation, organiser_name, organiser_email, organisations:organisation_id(id, name, slug), clubs:club_id(id, name, short_name, slug)';
 
-export function loadFinanceOverviewEvents(client, { isEventManagementModule, showBronze, allowedEventIds = [], scopeId = 'all' }) {
+export function loadFinanceOverviewEvents(client, { isEventManagementModule, showBronze, allowedEventIds = [], scopeId = 'all', requireEventScope = false }) {
+    if (requireEventScope && scopeId === 'all' && allowedEventIds.length === 0) return Promise.resolve([]);
     return fetchAllRows(() => {
         let query = scopeCalendarQuery(client.from('calendar').select(EVENT_COLUMNS), scopeId);
         if (isEventManagementModule) {

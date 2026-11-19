@@ -19,7 +19,7 @@ function ReviewNotice() {
 
 function StartReview() {
   const location = useLocation();
-  return <Navigate replace to={{ pathname: '/admin-preview/events', search: location.search, hash: location.hash }} />;
+  return <Navigate replace to={{ pathname: '/admin-preview', search: location.search, hash: location.hash }} />;
 }
 
 export default function HostedAdminReview() {
@@ -63,13 +63,24 @@ export default function HostedAdminReview() {
   useEffect(() => {
     if (!candidate) return;
     const controller = new AbortController();
-    verifyHostedReviewAccess(supabase, candidate.user, controller.signal).then(user => {
-      if (!controller.signal.aborted) setAccess({ state: 'ready', user });
+    verifyHostedReviewAccess(supabase, candidate.user, controller.signal).then(verified => {
+      if (!controller.signal.aborted) setAccess(previous => {
+        const sameActor = previous.state === 'ready' && previous.user.id === verified.user.id && previous.user.email === verified.user.email;
+        if (sameActor && JSON.stringify(previous.permissions) === JSON.stringify(verified.permissions)) return previous;
+        return { state: 'ready', ...verified, version: (previous.version || 0) + 1 };
+      });
     }).catch(error => {
       if (!controller.signal.aborted) setAccess({ state: 'denied', message: error.message });
     });
     return () => controller.abort();
   }, [candidate, authRevision]);
+
+  useEffect(() => {
+    if (!candidate) return;
+    const refresh = () => setAuthRevision(value => value + 1);
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, [candidate]);
 
   const signIn = async event => {
     event.preventDefault();
@@ -99,7 +110,7 @@ export default function HostedAdminReview() {
   if (access.state === 'denied') return <><ReviewNotice /><main className="ap-denied hosted-review-gate"><h1>Review access is required</h1><p role="alert">{access.message}</p><button className="ap-secondary" onClick={signOut} disabled={busy}>{busy ? 'Signing out…' : 'Sign out and use another account'}</button><a href={CURRENT_ADMIN}>Return to the current admin</a></main></>;
   if (access.state !== 'ready' || access.user?.id !== candidate?.user?.id || access.user?.email !== candidate?.user?.email) return <><ReviewNotice /><main className="ap-loading"><p role="status">Checking your live admin access…</p></main></>;
   return <><Routes>
-    <Route path="/admin-preview/*" element={<AdminPreview key={`${access.user.id}:${access.user.email}`} session={candidate} reviewNotice={<ReviewNotice />} currentAdminUrl={CURRENT_ADMIN} />} />
+    <Route path="/admin-preview/*" element={<AdminPreview key={`${access.user.id}:${access.user.email}:${access.version}`} session={candidate} permissions={access.permissions} onRefreshPermissions={() => setAuthRevision(value => value + 1)} reviewNotice={<ReviewNotice />} currentAdminUrl={CURRENT_ADMIN} />} />
     <Route path="*" element={<StartReview />} />
   </Routes><Toaster position="top-right" /></>;
 }

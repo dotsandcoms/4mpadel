@@ -76,7 +76,7 @@ const getParticipantPaidAmount = (p) => {
 
 const isWithdrawnRegistration = (reg) => String(reg?.status || '').toLowerCase() === 'withdrawn';
 
-const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementModule = false, initialEventId = null, initialRegistrationTab, onStartRehearsal, scopeId = 'all' }) => {
+const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementModule = false, initialEventId = null, initialRegistrationTab, onStartRehearsal, scopeId = 'all', requireEventScope = false, allowPlatformActions = true }) => {
     const [events, setEvents] = useState([]);
     const [selectedEventId, setSelectedEventId] = useState(null);
     const openedInitialEvent = useRef(null);
@@ -126,7 +126,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
     // Always hydrate the complete calendar row before opening EventBuilder so this
     // entry point has the exact same editable source as Calendar Manager.
     const openEventEditor = useCallback(async (eventId) => {
-        if (!eventId || loadingEventEditorId) return;
+        if (!allowPlatformActions || !eventId || loadingEventEditorId) return;
         setLoadingEventEditorId(eventId);
         try {
             const { data, error } = await supabase
@@ -144,7 +144,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
         } finally {
             setLoadingEventEditorId(null);
         }
-    }, [loadingEventEditorId]);
+    }, [allowPlatformActions, loadingEventEditorId]);
 
     const getResolvedLicenseType = useCallback((p, eventId) => {
         if (!p?.players) return 'none';
@@ -292,6 +292,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
     // The full player directory is needed for RankedIn matching/sync only,
     // never to display the event list. Reuse it across those explicit actions.
     const loadSystemProfiles = useCallback(() => {
+        if (!allowPlatformActions) return Promise.reject(new Error('Platform directory access is required.'));
         if (!systemProfilesPromise.current) {
             setLoading(prev => ({ ...prev, profiles: true }));
             systemProfilesPromise.current = fetchAllRows(() => supabase.from('players')
@@ -302,7 +303,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                 .finally(() => setLoading(prev => ({ ...prev, profiles: false })));
         }
         return systemProfilesPromise.current;
-    }, []);
+    }, [allowPlatformActions]);
 
     useEffect(() => {
         if (matchingProfile) loadSystemProfiles().catch(() => toast.error('Could not load player profiles. Please try again.'));
@@ -318,13 +319,13 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
             const { data: { session } } = await supabase.auth.getSession();
             if (request !== eventLoadRequest.current) return;
             if (!session?.user?.id) throw new Error('Sign in to view events.');
-            const key = JSON.stringify([session.user.id, allowedEventIdsKey, isEventManagementModule, showBronze, scopeId]);
+            const key = JSON.stringify([session.user.id, allowedEventIdsKey, isEventManagementModule, showBronze, scopeId, requireEventScope, allowPlatformActions]);
             cacheScope.current = key;
             const cached = readOverviewCache(key);
             setEvents(cached || []);
             setLoading(prev => ({ ...prev, events: !cached }));
             const eData = await loadFinanceOverviewEvents(supabase, {
-                isEventManagementModule, showBronze, allowedEventIds: JSON.parse(allowedEventIdsKey), scopeId,
+                isEventManagementModule, showBronze, allowedEventIds: JSON.parse(allowedEventIdsKey), scopeId, requireEventScope,
             });
             if (request !== eventLoadRequest.current) return;
             let completions = new Map();
@@ -351,7 +352,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
         } finally {
             if (request === eventLoadRequest.current) setLoading(prev => ({ ...prev, events: false, refreshing: false }));
         }
-    }, [isEventManagementModule, showBronze, allowedEventIdsKey, scopeId]);
+    }, [isEventManagementModule, showBronze, allowedEventIdsKey, scopeId, requireEventScope, allowPlatformActions]);
 
     // Only visible rows need summaries. Completed events join this set when
     // expanded/searched; event-detail screens perform their own fresh reads.
@@ -710,8 +711,8 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
     }, []);
 
     useEffect(() => {
-        if (selectedEventId && viewMode !== 'list' && !selectedEvent?.is_manual) fetchParticipants(selectedEventId);
-    }, [selectedEventId, selectedEvent?.is_manual, viewMode, fetchParticipants]);
+        if (selectedEvent?.id && viewMode !== 'list' && !selectedEvent.is_manual) fetchParticipants(selectedEvent.id);
+    }, [selectedEvent?.id, selectedEvent?.is_manual, viewMode, fetchParticipants]);
 
     // 3. Sync from Rankedin (Core Engine)
     const runSyncForEvent = async (eventId, rId, eventName) => {
@@ -951,6 +952,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
     };
 
     const handleSyncFromRankedin = async (targetEvent = null) => {
+        if (!allowPlatformActions) return;
         const eventToSync = targetEvent || events.find(e => e.id === selectedEventId);
         if (!eventToSync) return;
         
@@ -978,6 +980,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
     };
 
     const handleBulkSync = async () => {
+        if (!allowPlatformActions) return;
         const syncableFiltered = filteredEvents
             .filter(e => e.rankedin_id || e.rankedin_url?.match(/\/(\d+)(?:\/|$)/)?.[1]);
 
@@ -1011,6 +1014,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
     // finance_managed flag — the calendar event, its registrations and payments
     // are left untouched, so it can be re-added later.
     const handleRemoveFromManager = async (e) => {
+        if (!allowPlatformActions) return;
         if (!confirm(`Remove "${e.event_name}" from the Event Manager?\n\nThe event stays in your calendar with all registrations and payments intact — this only hides it from this list. You can re-add it later.`)) return;
         try {
             const { error } = await supabase
@@ -1034,6 +1038,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
     // 4. Mark as Paid (Explicit Manual Marking)
     const handleMarkAsPaid = async (participant) => {
         const selEvent = events.find(e => e.id === selectedEventId);
+        if (!selEvent) return;
         const amountToCharge = selEvent.entry_fee || 0;
 
         // Capture a reason/description for this manual payment (e.g. "EFT paid", "Cash").
@@ -1056,7 +1061,8 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
             const { error: pError } = await supabase
                 .from('tournament_participants')
                 .update({ is_paid: true, metadata: newMetadata })
-                .eq('id', participant.id);
+                .eq('id', participant.id)
+                .eq('event_id', selEvent.id);
             if (pError) throw pError;
 
             // Record transaction record
@@ -1082,6 +1088,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
 
     // 5. Unmark as Paid (Correcting Errors)
     const handleUnmarkPaid = async (participant) => {
+        if (!selectedEvent) return;
         if (!confirm(`Are you sure you want to unmark ${participant.full_name} as paid? This will also update any linked registration records to 'unpaid' and ensure the sync doesn't re-mark them.`)) return;
         
         setMarkingPaid(participant.id);
@@ -1091,7 +1098,8 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
             const { error: pError } = await supabase
                 .from('tournament_participants')
                 .update({ is_paid: false, metadata: newMetadata })
-                .eq('id', participant.id);
+                .eq('id', participant.id)
+                .eq('event_id', selectedEventId);
             if (pError) throw pError;
 
             // 2. Also try to update system registration records to prevent re-sync issues
@@ -1131,11 +1139,13 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
 
     // 5. Link Profile Manual Match
     const handleMatchProfile = async (participantId, profileId) => {
+        if (!allowPlatformActions || !selectedEventId) return;
         try {
             const { error } = await supabase
                 .from('tournament_participants')
                 .update({ profile_id: profileId })
-                .eq('id', participantId);
+                .eq('id', participantId)
+                .eq('event_id', selectedEventId);
             if (error) throw error;
             toast.success("Profile linked successfully");
             setMatchingProfile(null);
@@ -1146,13 +1156,15 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
     };
 
     const handleToggleWhatsApp = async (participant) => {
+        if (!selectedEvent) return;
         setUpdatingWhatsApp(participant.id);
         const newState = !participant.whatsapp_added;
         try {
             const { error } = await supabase
                 .from('tournament_participants')
                 .update({ whatsapp_added: newState })
-                .eq('id', participant.id);
+                .eq('id', participant.id)
+                .eq('event_id', selectedEventId);
             
             if (error) throw error;
             
@@ -1468,7 +1480,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                 </td>
                 <td className="px-2 py-2.5 text-right whitespace-nowrap">
                     <div className="flex flex-wrap items-center justify-end gap-1">
-                        {e.id && (
+                        {allowPlatformActions && e.id && (
                             <button
                                 type="button"
                                 onClick={(event) => {
@@ -1509,7 +1521,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                         >
                             <UserPlus size={15} strokeWidth={1.8} />
                         </button>
-                        {isEventManagementModule && (
+                        {allowPlatformActions && isEventManagementModule && (
                         <button
                             type="button"
                             onClick={(ev) => { ev.stopPropagation(); handleRemoveFromManager(e); }}
@@ -1569,14 +1581,14 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                                 className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-3.5 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-600"
                             />
                         </div>
-                        <button
+                        {allowPlatformActions && <button
                             onClick={handleBulkSync}
                             disabled={loading.syncing || loading.events || loading.refreshing}
                             className="flex items-center gap-2 bg-padel-green/10 hover:bg-padel-green text-padel-green hover:text-black px-8 py-3.5 rounded-2xl border border-padel-green/20 transition-all font-black uppercase tracking-widest text-[10px] disabled:opacity-30 whitespace-nowrap"
                         >
                             {loading.syncing ? <Loader2 className="animate-spin" size={16} /> : <RefreshCcw size={16} />}
                             Bulk Sync All
-                        </button>
+                        </button>}
                     </div>
                 </div>
 
@@ -1703,13 +1715,14 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
             </div>
             )}
 
-            {selectedEventId && viewMode !== 'list' && selectedEvent?.is_manual ? (
+            {viewMode !== 'list' && selectedEvent?.is_manual ? (
                 <React.Suspense fallback={<p role="status" className="py-8 text-gray-400">Loading event manager…</p>}>
                 <ManualEventRegistrations
                     variant="inline"
                     isOpen
                     event={selectedEvent}
                     initialTab={initialRegistrationTab}
+                    allowPlatformActions={allowPlatformActions}
                     onStartRehearsal={onStartRehearsal ? () => onStartRehearsal(selectedEvent.id) : undefined}
                     onEventCancelled={(updatedEvent) => {
                         setEvents((prev) => prev.map((item) => item.id === updatedEvent.id ? { ...item, ...updatedEvent } : item));
@@ -1721,7 +1734,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                     }}
                 />
                 </React.Suspense>
-            ) : selectedEventId && viewMode !== 'list' && (
+            ) : selectedEvent && viewMode !== 'list' && (
                 <React.Fragment>
                 <div className="space-y-6 text-white pt-2">
                     {/* Navigation Bar */}
@@ -1758,14 +1771,14 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                                     <Trophy size={12} /> Selected Tournament
                                 </div>
                                 
-                                <button
+                                {allowPlatformActions && <button
                                     onClick={() => handleSyncFromRankedin()}
                                     disabled={loading.syncing}
                                     className="flex items-center justify-center gap-2 bg-black/40 hover:bg-black/60 border border-white/10 text-white px-4 py-1.5 rounded-lg transition-all font-black uppercase tracking-widest text-[9px] sm:text-[10px] disabled:opacity-30 h-fit"
                                 >
                                     {loading.syncing ? <Loader2 className="animate-spin" size={14} /> : <RefreshCcw size={14} />}
                                     SYNC
-                                </button>
+                                </button>}
                                 
                                 {selectedEvent?.rankedin_url && (
                                     <a 
@@ -2145,22 +2158,22 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                                                     <div className="flex flex-col">
                                                         <div className="flex items-center gap-2 text-padel-green font-bold text-sm">
                                                             <CheckCircle size={14} /> {p.players.name}
-                                                            <button 
+                                                            {allowPlatformActions && <button
                                                                 onClick={() => { setMatchingProfile(p); setProfileSearchQuery(''); }}
                                                                 className="text-gray-600 hover:text-white transition-colors"
                                                             >
                                                                 <Link2 size={12} />
-                                                            </button>
+                                                            </button>}
                                                         </div>
                                                     </div>
-                                                ) : (
+                                                ) : allowPlatformActions ? (
                                                     <button 
                                                         onClick={() => { setMatchingProfile(p); setProfileSearchQuery(''); }}
                                                         className="flex items-center gap-2 text-gray-600 hover:text-white transition-colors italic text-sm"
                                                     >
                                                         <UserPlus size={14} /> Link Profile
                                                     </button>
-                                                )}
+                                                ) : <span className="text-xs text-gray-500">Unlinked</span>}
                                             </td>
                                             <td className="px-2 py-4 whitespace-nowrap">
                                                 <span className="text-gray-300 font-mono text-xs font-bold">{p.players?.contact_number || '-'}</span>
@@ -2325,14 +2338,14 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
                                                     <CheckCircle size={12} className="shrink-0" />
                                                     <span className="truncate">{p.players.name}</span>
                                                 </div>
-                                            ) : (
+                                            ) : allowPlatformActions ? (
                                                 <button 
                                                     onClick={() => { setMatchingProfile(p); setProfileSearchQuery(''); }}
                                                     className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors italic text-xs font-medium"
                                                 >
                                                     <UserPlus size={12} /> Link Profile
                                                 </button>
-                                            )}
+                                            ) : <span className="text-xs text-gray-500">Unlinked</span>}
                                         </div>
                                         <div className="space-y-1">
                                             <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Contact</p>
@@ -2413,7 +2426,7 @@ const EventFinance = ({ allowedEvents = EMPTY_ALLOWED_EVENTS, isEventManagementM
 
             {/* Profile Matching Modal */}
             <AnimatePresence>
-                {matchingProfile && (
+                {allowPlatformActions && matchingProfile && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                         <motion.div 
                             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}

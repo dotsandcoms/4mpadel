@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../../../supabaseClient';
 import { fetchAllRows } from '../../../utils/fetchAllRows';
+import { hasExplicitPlatformPaystackGrant, hasTenantMembership } from '../../../../supabase/functions/_shared/admin-finance-access.mjs';
 
 const FinanceManager = lazy(() => import('../../../components/admin/FinanceManager.jsx'));
 const EventFinance = lazy(() => import('../../../components/admin/EventFinance.jsx'));
@@ -25,10 +26,55 @@ function FinanceSurface({ children }) {
 }
 
 function payoutOrganisations(permissions) {
-  return (permissions?.orgs || []).filter(org => ['owner', 'admin'].includes(org.member_role || permissions.orgRole));
+  return (permissions?.orgs || []).filter(org => ['owner', 'admin'].includes(org.member_role));
 }
 
-function PayoutWorkspace({ permissions, scopeId }) {
+function authorisedEventIds(permissions) {
+  const financeIds = permissions?.module_permissions?.finance?.allowedEvents;
+  const managerIds = permissions?.module_permissions?.['event-mgmt']?.allowedEvents;
+  const assigned = Array.isArray(financeIds) && financeIds.length ? financeIds : managerIds;
+  return Array.isArray(assigned)
+    ? [...new Set(assigned.filter(id => typeof id === 'number' || (typeof id === 'string' && /^\d+$/.test(id)))
+      .map(Number).filter(id => Number.isSafeInteger(id) && id > 0))]
+    : [];
+}
+
+function VerifiedFinanceAccess({ session, title, check, organisationId, children }) {
+  const [result, setResult] = useState(null);
+  const userId = session.user.id;
+  const email = session.user.email;
+  const key = JSON.stringify([userId, email, check, organisationId]);
+  useEffect(() => {
+    let current = true;
+    async function verify() {
+      const { data, error } = await supabase.auth.getUser();
+      if (!current) return false;
+      if (error || data?.user?.id !== userId || data.user.email !== email) return false;
+      if (check === 'banking') {
+        const result = await supabase.rpc('organisation_banking', {
+          p_action: 'summary', p_org_id: organisationId, p_data: {},
+        });
+        return !result.error && typeof result.data?.saved === 'boolean';
+      }
+      const result = check === 'organisation'
+        ? await supabase.rpc('is_organisation_admin', { p_organisation_id: organisationId })
+        : await supabase.rpc('can_manage_licenses');
+      return !result.error && result.data === true;
+    }
+    verify().then(allowed => {
+      if (current) setResult({ key, allowed });
+    }).catch(() => {
+      if (current) setResult({ key, allowed: false });
+    });
+    return () => { current = false; };
+  }, [userId, email, check, organisationId, key]);
+
+  if (result?.key !== key) return <p role="status">Checking {title.toLowerCase()} access…</p>;
+  if (!result.allowed) return <p role="alert">{title} access could not be verified for this account. Reload the workspace to try again.</p>;
+  return children;
+}
+
+function PayoutWorkspace({ session, permissions, scopeId }) {
   const platform = permissions.role === 'super_admin';
   const scopeOrganisation = scopeId.startsWith('org:') ? scopeId.slice(4) : null;
   const authorisedOrganisations = payoutOrganisations(permissions);
@@ -72,13 +118,15 @@ function PayoutWorkspace({ permissions, scopeId }) {
       )}
       {scopeOrganisation && organisations && !organisation && <p role="status">This organisation is unavailable.</p>}
       {organisation && (
-        <OrganisationPayoutTools key={organisation.id} organisation={organisation} />
+        <VerifiedFinanceAccess key={organisation.id} session={session} title="Payouts" check="banking" organisationId={organisation.id}>
+          <OrganisationPayoutTools organisation={organisation} allowPlatformActions={platform && scopeId === 'all'} />
+        </VerifiedFinanceAccess>
       )}
     </div>
   );
 }
 
-function OrganisationPayoutTools({ organisation }) {
+function OrganisationPayoutTools({ organisation, allowPlatformActions }) {
   const [events, setEvents] = useState(null);
   const [selection, setSelection] = useState('');
   const [request, setRequest] = useState(null);
@@ -120,6 +168,7 @@ function OrganisationPayoutTools({ organisation }) {
       isOpen
       variant="inline"
       initialTab="statement"
+      allowPlatformActions={allowPlatformActions}
       event={event}
       backLabel="← Back to organiser payouts"
       onEventCancelled={updated => setEvent(current => ({ ...current, ...updated }))}
@@ -168,50 +217,61 @@ function OrganisationPayoutTools({ organisation }) {
 export function CurrentFinance({ session, permissions, scopeId = 'all', page, refreshRevision = 0 }) {
   const location = useLocation();
   const platform = permissions?.role === 'super_admin';
+  const tenant = hasTenantMembership(permissions);
   const key = `${session?.user?.id || ''}:${scopeId}:${page}:${refreshRevision}`;
+  const organisationId = scopeId.startsWith('org:') ? scopeId.slice(4) : null;
+  const managesOrganisation = payoutOrganisations(permissions).some(org => org.id === organisationId);
+
+  if (!session?.user?.id) return <AccessRequired title="Finance">Sign in to use Finance.</AccessRequired>;
 
   if (page === 'payouts') {
-    const organisationScope = scopeId.startsWith('org:');
-    const mayManageAny = payoutOrganisations(permissions).some(org => !organisationScope || scopeId === `org:${org.id}`);
-    if (!session?.user?.id || !(platform || mayManageAny)) {
-      return <AccessRequired title="Payouts">Payouts are available to organisation owners and admins, and 4M super admins.</AccessRequired>;
+    if (!(platform || managesOrganisation)) {
+      return <AccessRequired title="Payouts">Select an organisation you own or administer to manage payouts.</AccessRequired>;
     }
-    if (scopeId !== 'all' && !organisationScope) {
-      return <AccessRequired title="Payouts">Select your account or an organisation workspace to manage organiser payouts.</AccessRequired>;
+    if (scopeId !== 'all' && !organisationId) {
+      return <AccessRequired title="Payouts">Select an organisation workspace to manage organiser payouts.</AccessRequired>;
     }
-    return <FinanceSurface><PayoutWorkspace key={key} permissions={permissions} scopeId={scopeId} /></FinanceSurface>;
+    return <FinanceSurface><PayoutWorkspace key={key} session={session} permissions={permissions} scopeId={scopeId} /></FinanceSurface>;
   }
 
-  if (!session?.user?.id || !(platform || permissions?.allowed_tabs?.includes('finance'))) {
-    return <AccessRequired title="Finance">Finance access is required.</AccessRequired>;
+  if (page === 'payments') {
+    if (scopeId !== 'all' || !(platform || (!tenant && hasExplicitPlatformPaystackGrant(permissions)))) {
+      return <AccessRequired title="Payments">Platform Paystack access is required. Use Finance reports to review payments for your own events.</AccessRequired>;
+    }
+    return <FinanceSurface><FinanceManager key={key} initialTab="transactions" transactionsOnly={!platform} /></FinanceSurface>;
   }
 
-  if (scopeId !== 'all') {
-    const financePermission = permissions?.module_permissions?.finance;
-    const allowedFinanceEvents = financePermission?.allowedEvents || [];
-    const allowedEvents = allowedFinanceEvents.length ? allowedFinanceEvents : permissions?.module_permissions?.['event-mgmt']?.allowedEvents || [];
-    if (!platform && !allowedEvents.length && financePermission?.allowedTabs && !financePermission.allowedTabs.includes('events')) {
-      return <AccessRequired title="Event finance">Event finance access is required for this workspace.</AccessRequired>;
-    }
-    const eventId = Number(new URLSearchParams(location.search).get('event'));
-    const initialEventId = Number.isSafeInteger(eventId) && eventId > 0 ? eventId : null;
-    return (
-      <FinanceSurface>
-        <EventFinance key={key} allowedEvents={allowedEvents} initialEventId={initialEventId} scopeId={scopeId} />
-      </FinanceSurface>
-    );
+  if (platform && scopeId === 'all') {
+    return <FinanceSurface><FinanceManager key={key} /></FinanceSurface>;
   }
-  return <FinanceSurface><FinanceManager key={key} initialTab={page === 'payments' ? 'transactions' : 'dashboard'} /></FinanceSurface>;
+
+  const allowedEvents = !tenant && permissions?.allowed_tabs?.includes('finance') ? authorisedEventIds(permissions) : [];
+  if (!platform && !managesOrganisation && (scopeId !== 'all' || !allowedEvents.length)) {
+    return <AccessRequired title="Finance reports">Select an organisation you own or administer, or ask for access to specific events.</AccessRequired>;
+  }
+
+  const eventId = Number(new URLSearchParams(location.search).get('event'));
+  const initialEventId = Number.isSafeInteger(eventId) && eventId > 0
+    && (!allowedEvents.length || allowedEvents.includes(eventId)) ? eventId : null;
+  const reports = <EventFinance key={key} allowedEvents={allowedEvents} initialEventId={initialEventId}
+    scopeId={scopeId} requireEventScope allowPlatformActions={false} />;
+  return (
+    <FinanceSurface>
+      {platform || !managesOrganisation ? reports : (
+        <VerifiedFinanceAccess key={key} session={session} title="Finance reports" check="organisation" organisationId={organisationId}>
+          {reports}
+        </VerifiedFinanceAccess>
+      )}
+    </FinanceSurface>
+  );
 }
 
 export function CurrentLicences({ session, permissions, scopeId = 'all', refreshRevision = 0 }) {
   const location = useLocation();
   const navigate = useNavigate();
-  if (!session?.user?.id || !(permissions?.role === 'super_admin' || permissions?.allowed_tabs?.includes('licenses'))) {
-    return <AccessRequired title="Licences">Licences access is required.</AccessRequired>;
-  }
-  if (scopeId !== 'all') {
-    return <AccessRequired title="Licences">Select your account workspace to manage licences.</AccessRequired>;
+  const platform = permissions?.role === 'super_admin';
+  if (!session?.user?.id || scopeId !== 'all' || !(platform || (!hasTenantMembership(permissions) && permissions?.allowed_tabs?.includes('licenses')))) {
+    return <AccessRequired title="Licences">Platform Licences access is required.</AccessRequired>;
   }
 
   const search = new URLSearchParams(location.search);
@@ -231,5 +291,11 @@ export function CurrentLicences({ session, permissions, scopeId = 'all', refresh
     closePlayer: () => navigate(playerHref(null), { replace: true }),
   };
 
-  return <FinanceSurface><LicenceManager key={`${session.user.id}:${refreshRevision}`} navigation={navigation} /></FinanceSurface>;
+  return (
+    <FinanceSurface>
+      <VerifiedFinanceAccess key={`${session.user.id}:${refreshRevision}`} session={session} title="Licences" check="licences">
+        <LicenceManager navigation={navigation} />
+      </VerifiedFinanceAccess>
+    </FinanceSurface>
+  );
 }

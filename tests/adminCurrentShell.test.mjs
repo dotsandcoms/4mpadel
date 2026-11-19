@@ -13,12 +13,25 @@ const wrapperNames = {
 };
 
 const mock = {
-  useAdminPermissions: `export const useAdminPermissions = () => {
-    const permissions = {role: 'super_admin', orgs: [{id: 'org1', name: 'Fixture organiser'}]};
-    return {permissions, loading: false, hasPermission: () => true};
-  };`,
   useAdminFeedNotifications: `export const useAdminFeedNotifications = () => ({notifications: [{id:'p', type:'payment', title:'Received a payment', subtitle:'Fixture only', timeAgo:'1 minute ago'}]});`,
-  supabaseClient: `export const supabase = {auth: {signOut: async () => {window.logoutCalled = true; return {};}}};`,
+  supabaseClient: `
+    let session = null, notify = () => {};
+    const org = {id:'org1', name:'Fixture organiser', status:'approved'};
+    export const isSupabaseConfigured = () => true;
+    export const supabase = {
+      rpc: async name => ({data: name === 'account_is_active' || (name === 'is_super_admin' && window.fixtureRole === 'super_admin')}),
+      from: table => {
+        const rows = table === 'organisation_members' && window.fixtureRole === 'custom' ? [{role:'owner', user_email: session.user.email, organisations:org}] : [];
+        const query = {select: () => query, eq: () => query, ilike: () => query, order: () => query, maybeSingle: async () => ({data: rows[0] || null}), then: resolve => Promise.resolve({data: rows}).then(resolve)};
+        return query;
+      },
+      auth: {
+        getSession: async () => ({data:{session}}), getUser: async () => ({data:{user:session?.user}}),
+        onAuthStateChange: listener => {notify = listener; return {data:{subscription:{unsubscribe(){}}}}},
+        signInWithPassword: async ({email}) => {session = {user:{id:'fixture-id',email}}; notify('SIGNED_IN',session); return {};},
+        signOut: async () => {window.logoutCalled = true; session = null; notify('SIGNED_OUT',null); return {};},
+      }
+    };`,
 };
 
 async function choose(page, text, selector = 'button') {
@@ -44,14 +57,14 @@ test('review navigation, create, notifications, refresh and scope reach the curr
       format: 'iife',
       jsx: 'automatic',
       outfile: bundle,
-      stdin: { contents: `import React from 'react'; import {createRoot} from 'react-dom/client'; import {MemoryRouter} from 'react-router-dom'; import Admin from './src/pages/AdminPreview.jsx';
-        createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={['/admin-preview/events']}><Admin session={{user:{id:'fixture', email:'admin@fixture.invalid'}}} currentAdminUrl="https://4mpadel.co.za/admin" /></MemoryRouter>);`, resolveDir: process.cwd(), loader: 'jsx' },
+      stdin: { contents: `import React from 'react'; import {createRoot} from 'react-dom/client'; import {MemoryRouter} from 'react-router-dom'; import Admin from './src/pages/AdminPreview.jsx'; import Hosted from './src/HostedAdminReview.jsx';
+        createRoot(document.getElementById('root')).render(<MemoryRouter initialEntries={[window.fixtureRoute || '/admin-preview/events']}>{window.fixtureUseLogin ? <Hosted /> : <Admin session={{user:{id:'fixture', email:'admin@fixture.invalid'}}} permissions={{role: window.fixtureRole || "super_admin", orgs:[{id:"org1", name:"Fixture organiser", member_role:"owner"}], allowed_tabs:["finance","licenses","players"], module_permissions:{finance:{allowedTabs:["transactions"]}}}} currentAdminUrl="https://4mpadel.co.za/admin" />}</MemoryRouter>);`, resolveDir: process.cwd(), loader: 'jsx' },
       loader: { '.css': 'empty' },
       plugins: [{ name: 'isolated-admin-controllers', setup(builder) {
         builder.onResolve({ filter: /(?:CurrentEvents|CurrentCommunications|CurrentFinance)\.jsx$/ }, ({ path }) => ({ path, namespace: 'controller' }));
-        builder.onResolve({ filter: /\/(useAdminPermissions|useAdminFeedNotifications|supabaseClient)$/ }, ({ path }) => ({ path, namespace: 'context' }));
+        builder.onResolve({ filter: /\/(useAdminFeedNotifications|supabaseClient)(?:\.js)?$/ }, ({ path }) => ({ path, namespace: 'context' }));
         builder.onResolve({ filter: /^\.\.\/components\/admin\// }, ({ path }) => ({ path, namespace: 'legacy' }));
-        builder.onLoad({ filter: /.*/, namespace: 'context' }, ({ path }) => ({ contents: mock[path.split('/').at(-1)], loader: 'js' }));
+        builder.onLoad({ filter: /.*/, namespace: 'context' }, ({ path }) => ({ contents: mock[path.split('/').at(-1).replace(/\.js$/, '')], loader: 'js' }));
         builder.onLoad({ filter: /.*/, namespace: 'legacy' }, () => ({ contents: 'export default function Module(){return null}', loader: 'js' }));
         builder.onLoad({ filter: /.*/, namespace: 'controller' }, ({ path }) => ({
           loader: 'jsx', resolveDir: process.cwd(),
@@ -88,7 +101,7 @@ test('review navigation, create, notifications, refresh and scope reach the curr
     await workspace(page, 'CurrentFinance', 'org:org1', 'payouts');
     await choose(page, 'Open notifications');
     await choose(page, 'Open', 'dialog button');
-    await workspace(page, 'CurrentFinance', 'org:org1', 'payments');
+    await workspace(page, 'CurrentFinance', 'all', 'payments');
     await choose(page, 'Finance reports');
     await workspace(page, 'CurrentFinance', 'org:org1', 'reports');
     await choose(page, 'Create an event');
@@ -97,6 +110,30 @@ test('review navigation, create, notifications, refresh and scope reach the curr
     assert.equal(await page.$eval('[data-workspace="CurrentCalendar"]', panel => panel.dataset.search), '?create=quick');
     await choose(page, 'Log out');
     await page.waitForFunction(() => window.logoutCalled);
+
+    const organiser = await browser.newPage();
+    await organiser.setRequestInterception(true);
+    organiser.on('request', request => request.abort());
+    await organiser.setContent('<div id="root"></div>');
+    await organiser.evaluate(() => { window.fixtureRole = 'custom'; window.fixtureUseLogin = true; window.fixtureRoute = '/admin-preview/licenses'; });
+    await organiser.addScriptTag({ path: bundle });
+    await organiser.waitForSelector('#admin-email');
+    await organiser.type('#admin-email', 'owner@fixture.invalid');
+    await organiser.type('#admin-password', 'synthetic-test-password');
+    await choose(organiser, 'Open admin preview');
+    await organiser.waitForFunction(() => document.querySelector('main#admin-preview-content h1')?.textContent === 'Workspace unavailable');
+    await choose(organiser, 'Event Manager');
+    await workspace(organiser, 'CurrentEvents', 'org:org1');
+    assert.equal(await organiser.$('select'), null);
+    for (const label of ['Open notifications', 'Licences', 'Payments', 'Players', 'Access & permissions']) {
+      assert.equal(await organiser.$(`button[aria-label="${label}"]`), null, label);
+    }
+    await choose(organiser, 'Finance reports');
+    await workspace(organiser, 'CurrentFinance', 'org:org1', 'reports');
+    await choose(organiser, 'Payouts');
+    await workspace(organiser, 'CurrentFinance', 'org:org1', 'payouts');
+    await choose(organiser, 'Help requests');
+    await workspace(organiser, 'CurrentHelp', 'all');
   } finally {
     await browser?.close();
     await rm(directory, { recursive: true, force: true });

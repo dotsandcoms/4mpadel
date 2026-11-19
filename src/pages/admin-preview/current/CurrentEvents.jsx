@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback } from 'react';
 import { useMatch, useSearchParams } from 'react-router-dom';
+import { resolveEventWorkspace } from '../../../utils/adminCalendarScope';
 
 const EventManagement = lazy(() => import('../../../components/admin/EventManagement'));
 const CalendarManager = lazy(() => import('../../../components/admin/CalendarManager'));
@@ -14,20 +15,20 @@ function eventIdFromSearch(search) {
 export function CurrentEvents({ session, permissions, targetEmail, scopeId = 'all', page, refreshRevision }) {
     const [search] = useSearchParams();
     const tournamentRoute = useMatch('/admin-preview/tournaments');
-    const allowedEvents = permissions?.module_permissions?.['event-mgmt']?.allowedEvents;
-    const canAccess = permissions?.role === 'super_admin' || permissions?.allowed_tabs?.includes('event-mgmt') || allowedEvents?.length;
-    if (!session?.user?.id || !canAccess) return <p role="alert">Event Manager access is required.</p>;
+    const rehearsalOnly = permissions?.role === 'private_rehearsal';
+    const workspace = resolveEventWorkspace(permissions, scopeId, 'event-mgmt');
+    if (!session?.user?.id || (!workspace && !rehearsalOnly)) return <p role="alert">Event Manager access is required.</p>;
 
     const eventId = eventIdFromSearch(search);
     const registrationTab = page === 'registrations' ? 'list' : tournamentRoute ? 'draws' : undefined;
 
     return <Suspense fallback={<p role="status">Loading Event Manager…</p>}>
         <EventManagement
-            key={`${session.user.id}:${scopeId}:${page}:${eventId}:${registrationTab}:${search.get('section')}:${search.get('ticket')}:${refreshRevision}`}
-            allowedEvents={allowedEvents}
+            key={`${session.user.id}:${workspace?.scopeId}:${workspace?.allowedEvents.join(',')}:${workspace?.allowPlatformActions}:${page}:${eventId}:${registrationTab}:${refreshRevision}`}
+            {...workspace}
+            entriesOnly
             permissions={permissions}
             userEmail={targetEmail || session.user.email}
-            scopeId={scopeId}
             initialEventId={eventId}
             initialRegistrationTab={registrationTab}
         />
@@ -43,7 +44,8 @@ export function CurrentCalendar({ session, permissions, scopeId = 'all', refresh
             return next;
         }, { replace: true });
     }, [setSearch]);
-    if (!session?.user?.id || !(permissions?.role === 'super_admin' || permissions?.allowed_tabs?.includes('calendar'))) {
+    const workspace = resolveEventWorkspace(permissions, scopeId, 'calendar');
+    if (!session?.user?.id || !workspace) {
         return <p role="alert">Calendar access is required.</p>;
     }
 
@@ -51,8 +53,8 @@ export function CurrentCalendar({ session, permissions, scopeId = 'all', refresh
     const createMode = create === 'full' || create === 'quick' ? create : null;
     return <Suspense fallback={<p role="status">Loading Calendar…</p>}>
         <CalendarManager
-            key={`${session.user.id}:${scopeId}:${refreshRevision}`}
-            scopeId={scopeId}
+            key={`${session.user.id}:${workspace.scopeId}:${workspace.allowedEvents.join(',')}:${workspace.allowPlatformActions}:${refreshRevision}`}
+            {...workspace}
             initialEditEventId={search.get('editEvent') || search.get('calendarEvent')}
             createMode={createMode}
             onRouteActionOpened={clearAction}

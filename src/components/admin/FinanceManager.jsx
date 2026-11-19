@@ -14,8 +14,9 @@ import { useAdminPermissions } from '../../hooks/useAdminPermissions';
 import { useCommerceConfig } from '../../hooks/useCommerceConfig';
 import { licenseQuote, matchLicenseTypeByAmount } from '../../utils/commerce';
 import { classifyPaystackTransaction, paystackMetadata } from '../../utils/paystackClassification';
+import { hasExplicitPlatformPaystackGrant, hasTenantMembership } from '../../../supabase/functions/_shared/admin-finance-access.mjs';
 
-const FinanceManager = ({ initialTab = 'dashboard' } = {}) => {
+const FinanceManager = ({ initialTab = 'dashboard', transactionsOnly = false } = {}) => {
     const { config: commerce } = useCommerceConfig();
     const [activeTab, setActiveTab] = useState(initialTab);
     const [financeEventId, setFinanceEventId] = useState(null); // 'dashboard', 'users', 'events', 'transactions', 'summary'
@@ -70,30 +71,30 @@ const FinanceManager = ({ initialTab = 'dashboard' } = {}) => {
 
     const [managedEventIds, setManagedEventIds] = useState([]);
     useEffect(() => {
+        if (transactionsOnly) return;
         const fetchManagedEvents = async () => {
             const { data } = await supabase.from('calendar').select('id').eq('finance_managed', true);
             if (data) setManagedEventIds(data.map(e => e.id));
         };
         fetchManagedEvents();
-    }, []);
+    }, [transactionsOnly]);
 
     const activeAllowedEvents = baseAllowedEvents.length > 0 ? baseAllowedEvents : managedEventIds;
-    const canViewTransactions = !permissionsLoading && Boolean(permissions)
-        && (permissions.role === 'super_admin' || allowedTabs.includes('transactions'));
+    const canViewTransactions = !permissionsLoading && (permissions?.role === 'super_admin'
+        || (!hasTenantMembership(permissions) && hasExplicitPlatformPaystackGrant(permissions)));
 
     // Safety redirect if current tab is not allowed
     useEffect(() => {
-        if (!permissionsLoading && permissions && permissions.role !== 'super_admin') {
+        if (!transactionsOnly && !permissionsLoading && permissions && permissions.role !== 'super_admin') {
             // Find first available tab if current one is banned
-            if (!allowedTabs.includes(activeTab)) {
-                // If dashboard is banned and currently active, jump to the first permitted item
-                const firstAvailable = allowedTabs[0] || '';
+            if (!allowedTabs.includes(activeTab) || (activeTab === 'transactions' && !canViewTransactions)) {
+                const firstAvailable = allowedTabs.find(tab => tab !== 'transactions' || canViewTransactions);
                 if (firstAvailable) {
                     setActiveTab(firstAvailable);
                 }
             }
         }
-    }, [activeTab, allowedTabs, permissions, permissionsLoading]);
+    }, [activeTab, allowedTabs, canViewTransactions, permissions, permissionsLoading, transactionsOnly]);
 
     const fetchAllRows = useCallback(async (buildQuery) => {
         const pageSize = 1000;
@@ -816,9 +817,10 @@ const FinanceManager = ({ initialTab = 'dashboard' } = {}) => {
         { id: 'settings', label: 'Settings', icon: Settings },
     ];
 
-    const tabs = permissions?.role === 'super_admin' 
-        ? allTabs 
-        : allTabs.filter(t => allowedTabs.includes(t.id));
+    const tabs = allTabs.filter(tab => {
+        if (tab.id === 'transactions') return canViewTransactions;
+        return !transactionsOnly && (permissions?.role === 'super_admin' || allowedTabs.includes(tab.id));
+    });
 
     if (permissionsLoading) {
         return (
@@ -828,6 +830,8 @@ const FinanceManager = ({ initialTab = 'dashboard' } = {}) => {
             </div>
         );
     }
+
+    if (!tabs.length) return <p role="status">Finance access is required.</p>;
 
     return (
         <div className="space-y-8">

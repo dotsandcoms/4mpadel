@@ -113,7 +113,7 @@ before(async () => {
                 supabase: mockSupabase,
                 rankedin: 'export const useRankedin=()=>({getTournamentPlayerTabs:async()=>[]});',
                 licenses: `export const hydrateEventLicenses=async(players,eventId)=>{if(players.length)window.__licenseEvents.push(eventId);return players.map(p=>({...p,event_license:{event_id:Number(eventId),full:p.id<=60,temporary:p.id>60&&p.id<=90}}));};`,
-                './ManualEventRegistrations': 'import React from "react";export default function Manager({event,initialTab,onBack}){return <button data-event-id={event.id} data-initial-tab={initialTab} onClick={onBack}>Back to events</button>}',
+                './ManualEventRegistrations': 'import React from "react";export default function Manager({event,initialTab,onBack,allowPlatformActions}){return <button data-event-id={event.id} data-initial-tab={initialTab} data-platform={String(allowPlatformActions)} onClick={onBack}>Back to events</button>}',
                 './EventBuilder': 'export default function Builder(){return null}',
                 './QuickEventBuilder': 'export default function QuickBuilder(){return null}',
             }[args.path], loader: 'jsx', resolveDir: root }));
@@ -134,7 +134,7 @@ async function openOverview(failure = null, options = {}) {
     await page.setContent('<!doctype html><html><body><div id="root"></div></body></html>');
     await page.evaluate((value, options) => { window.__failure = value; Object.assign(window, options); }, failure, options);
     await page.addScriptTag({ path: output });
-    if (options.__overviewProps?.initialEventId) await page.waitForSelector('[data-event-id]');
+    if (options.__overviewProps?.initialEventId && !options.__expectUnavailable) await page.waitForSelector('[data-event-id]');
     else if (options.__holdSummaries) await page.waitForFunction(() => typeof window.__releaseSummaries === 'function');
     else await page.waitForFunction(() => !!document.querySelector('[data-summary-state="ready"],[data-summary-state="error"],[role="alert"]'));
     return page;
@@ -225,11 +225,18 @@ test('manager defaults to the four SAPA tiers and loads only their data', async 
 });
 
 test('a scoped overview intersects its workspace with assigned event IDs', async () => {
-    const page = await openOverview(null, { __overviewProps: { scopeId: 'org:org-a', allowedEvents: [521, 524] } });
+    const page = await openOverview(null, { __expectUnavailable: true, __overviewProps: {
+        scopeId: 'org:org-a', allowedEvents: [521, 524], initialEventId: 524, requireEventScope: true, allowPlatformActions: false
+    } });
     try {
         assert.ok(await eventRow(page, eventName));
         assert.equal(await eventRow(page, 'Super Gold tournament'), null);
         assert.deepEqual(await page.evaluate(() => window.__summaryCalls), [[521]]);
+        assert.equal(await page.$('[data-event-id], button[aria-label^="Edit "],button[aria-label*="from Event Manager"]'), null);
+        assert.equal(await page.evaluate(() => [...document.querySelectorAll('button')].some(button => button.textContent.includes('Bulk Sync All'))), false);
+        await page.click(`button[aria-label="Manage registrations for ${eventName}"]`);
+        await page.waitForSelector('[data-event-id="521"][data-platform="false"]');
+        assert.equal(await page.evaluate(() => window.__queries.some(query => query.table === 'players')), false);
     } finally { await page.close(); }
 });
 
