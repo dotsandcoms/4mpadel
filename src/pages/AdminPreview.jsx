@@ -25,6 +25,9 @@ import { downloadRegistrations } from './admin-preview/registrationExports.js';
 import EventPaymentDialog from './admin-preview/EventPaymentDialog.jsx';
 import RecordLoading from './admin-preview/RecordLoading.jsx';
 import { CreateEventMenu, ReviewNotifications } from './admin-preview/ReviewNavigationDialogs.jsx';
+import MessagingWorkspace from './admin-preview/MessagingWorkspace.jsx';
+import HelpRequestsWorkspace from './admin-preview/HelpRequestsWorkspace.jsx';
+import AccountSecurityWorkspace from './admin-preview/AccountSecurityWorkspace.jsx';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, LayoutGroup, motion as Motion, useReducedMotion } from 'framer-motion';
 import {
@@ -34,7 +37,7 @@ import {
   LayoutDashboard, LoaderCircle, LockKeyhole, LogOut, Mail, MapPin, Menu, MessageSquare,
   MoreHorizontal, Network, Plus, Radio, RefreshCw, Search, Settings2, ShieldCheck,
   Trophy, UserPlus, FileSpreadsheet, Shuffle, Trash2, Link2,
-  Users, WalletCards, X, Zap, Info, RotateCcw,
+  Users, WalletCards, X, Zap, Info, RotateCcw, KeyRound,
 } from 'lucide-react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
@@ -108,7 +111,7 @@ const PRETORIA_FINANCE_SNAPSHOT = {
 };
 const EMPTY_RELATED = { payments: [], divisions: [], activity: [], draws: [], refunds: [] };
 const REGISTRATION_PAGE_SIZE = 50;
-const RECORD_WORKSPACE_PAGES = ['players', 'calendar', 'coaches', 'clubs', 'organisations', 'federations', 'reports', 'payments', 'payouts', 'team-access', 'gallery', 'email', 'push', 'licenses', 'tournaments'];
+const RECORD_WORKSPACE_PAGES = ['messaging', 'help', 'security', 'players', 'calendar', 'coaches', 'clubs', 'organisations', 'federations', 'reports', 'payments', 'payouts', 'team-access', 'gallery', 'email', 'push', 'licenses', 'tournaments'];
 const REFRESH_WORKSPACE_PAGES = RECORD_WORKSPACE_PAGES;
 
 const WORKSPACES = [
@@ -118,6 +121,8 @@ const WORKSPACES = [
     { label: 'Tournament Manager', icon: Trophy, page: 'tournaments' },
     { label: 'Registrations', icon: FileText, page: 'registrations', activePages: ['registrations', 'payment', 'player'] },
     { label: 'Calendar', icon: CalendarDays, page: 'calendar' },
+    { label: 'Messaging', icon: MessageSquare, page: 'messaging' },
+    { label: 'Help requests', icon: Bell, page: 'help' },
   ] },
   { id: 'network', label: 'Network', icon: Network, caption: 'People and places', items: [
     { label: 'Federations', icon: Network, page: 'federations' },
@@ -141,6 +146,7 @@ const WORKSPACES = [
   { id: 'system', label: 'System', icon: Settings2, caption: 'Access and configuration', items: [
     { label: 'Access & permissions', icon: ShieldCheck, page: 'team-access' },
     { label: 'Settings', icon: Settings2, page: 'settings' },
+    { label: 'Account security', icon: KeyRound, page: 'security' },
   ] },
 ];
 
@@ -1013,6 +1019,9 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
   else if (permissions?.role === 'private_rehearsal' && page === 'events') content = <EventRehearsalWorkspace client={supabase} session={session} />;
   else if (!localFixture && ['events', 'event', 'registrations', 'payment'].includes(page) && !canReadPreviewEvents(permissions, scope)) content = <section className="ap-section"><ShieldCheck size={28} /><h2>Event Manager access is required</h2><p>Your account has no Event Manager permission. Choose one of your authorised modules.</p></section>;
   else if (['event', 'registrations', 'payment', 'player'].includes(page) && (data.loading || !activeEvent)) content = <EventRecordState loading={data.loading} error={data.error}/>;
+  else if (page === 'messaging') content = <MessagingWorkspace session={session} />;
+  else if (page === 'help') content = <HelpRequestsWorkspace session={session} />;
+  else if (page === 'security') content = <AccountSecurityWorkspace session={session} permissions={permissions} client={supabase} targetEmail={session?.user?.email} />;
   else if (page === 'players' && session && (permissionsLoading || !permissions)) content = <section className="ap-section ap-live-loading" role="status">Checking Players access…</section>;
   else if (page === 'players' && session && permissions?.role !== 'super_admin' && !permissions?.allowed_tabs?.includes('players')) content = <section className="ap-section ap-live-loading"><ShieldCheck size={28} /><h2>Players access is required</h2><p>This account does not have access to the existing Players admin module.</p></section>;
   else if (page === 'players') content = <PlayersWorkspace key={`${session?.user?.id || 'signed-out'}-${scope.id}-${playerRefresh}`} session={session} scopeId={scope.id} />;
