@@ -13,7 +13,7 @@ import {
 } from './nativeDrawOperations.js';
 import './EventPaymentDialog.css';
 
-const planActions = ['play-days', 'remove-day', 'division-plan'];
+const planActions = ['play-days', 'remove-day', 'division-plan', 'automatic-courts'];
 const blankAnnouncement = { scope: 'draw', title: '', message: '', pinned: false };
 const drawLabel = draw => {
   const kind = { main: 'Main draw', silver: 'Silver plate', bronze: 'Bronze plate' }[draw.draw_kind] || 'Draw';
@@ -92,7 +92,7 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
   };
   const back = () => {
     if (review.type === 'schedule') setCourtReview(review);
-    if (planActions.includes(review.type)) setCalendarReview(review);
+    if (planActions.includes(review.type)) setCalendarReview(review.type === 'automatic-courts' ? null : review);
     setReview(null);
   };
   const reviewMatch = (type, heading) => setReview({ type, match, heading, summary: match.label });
@@ -116,7 +116,7 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
         {loadError && <p role="alert">{loadError}</p>}
         {!loadError && !draws && <p role="status">Loading event draws…</p>}
         {draws && <NativeDrawPlayPlan client={client} event={event} session={session} scopeId={scopeId}
-          activeDivisionId={selected?.draw.division_id} previous={calendarReview} onReview={setReview} />}
+          activeDivisionId={selected?.draw.division_id} allowAuto={draws.length > 0} previous={calendarReview} onReview={setReview} />}
         {draws?.length === 0 && <p>Save a draw in Tournament Manager to manage live matches and announcements.</p>}
         {draws?.length > 0 && <label>Draw<SearchableDropdown value={drawId} onChange={event => changeDraw(event.target.value)}>
           {draws.map(draw => <option key={draw.id} value={draw.id}>{drawLabel(draw)}</option>)}

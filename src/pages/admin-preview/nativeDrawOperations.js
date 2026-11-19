@@ -1,5 +1,6 @@
 import { buildEventPlayDays, mergeEventPlayDays } from '../../utils/nativeDrawScheduler.js';
 import { planNativeMatchSchedule, sameReviewedSchedule } from './nativeMatchScheduling.js';
+import { nativeAutoBookingRows, prepareNativeAutoCourtPlan, readNativeAutoCourtPlan } from './nativeAutoCourtPlan.js';
 import { readNativeDivisionSchedule, readNativeEventPlayPlan, writeNativeDivisionSchedule } from './nativeDrawPlayPlan.js';
 import { readAll } from './playersData.js';
 import { verifyCalendarPlatformActor } from './calendarRecordActions.js';
@@ -133,8 +134,25 @@ export async function loadNativeDivisionPlan({ client, event, divisionId, ...acc
   return readNativeDivisionSchedule(client, event.id, divisionId);
 }
 
+export async function previewNativeAutomaticCourts({ client, event, ...access }) {
+  await verifyNativeEvent({ client, event, ...access });
+  const data = await readNativeAutoCourtPlan(client, event, access.signal);
+  if (!access.isCurrent()) throw new Error('The event workspace changed.');
+  return prepareNativeAutoCourtPlan(data);
+}
+
 export async function saveNativeEventCalendarPlan({ client, event, operation, onAttempt, ...access }) {
   const user = await verifyNativeEvent({ client, event, ...access });
+  if (operation.type === 'automatic-courts') {
+    const plan = nativeAutoBookingRows(prepareNativeAutoCourtPlan(await readNativeAutoCourtPlan(client, event, access.signal)));
+    if (!plan.length || !access.isCurrent() || JSON.stringify(plan) !== JSON.stringify(nativeAutoBookingRows(operation.plan))) {
+      throw new Error('Court availability or division priorities changed after review. Generate the court plan again.');
+    }
+    onAttempt();
+    const { data, error } = await client.rpc('native_apply_court_schedule', { p_event_id: event.id, p_bookings: plan });
+    if (error || data !== plan.length) throw error || new Error('Could not confirm every reviewed court booking.');
+    return 'Court bookings saved for ' + plan.length + (plan.length === 1 ? ' match.' : ' matches.');
+  }
   if (operation.type === 'division-plan') {
     return writeNativeDivisionSchedule({ client, event, userId: user.id, operation, onAttempt, ...access });
   }

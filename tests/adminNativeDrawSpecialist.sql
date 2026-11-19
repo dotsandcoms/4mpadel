@@ -38,6 +38,8 @@ grant select, update on public.calendar, public.tournament_divisions to authenti
 \ir ../supabase/migrations/20260910200000_resolve_draw_routes.sql
 alter table public.event_play_days add column is_removed boolean not null default false;
 \ir ../supabase/migrations/20261119111803_transactional_native_draw_specialist_actions.sql
+alter table public.draw_matches add column court_name text, add column americano_fixture_key text;
+\ir ../supabase/migrations/20261119112841_atomic_native_court_schedule.sql
 
 insert into public.calendar values (101, 1000, true, 'active'), (102, 1001, true, 'active');
 insert into public.tournament_divisions values
@@ -99,6 +101,9 @@ declare
   versions jsonb;
   receipt jsonb;
   clock_version timestamptz;
+  bookings jsonb;
+  conflicting jsonb;
+  booking_version timestamptz;
   changes integer;
   days jsonb := '[{"play_date":"2035-01-21","start_time":"09:00","end_time":"17:00","courts_count":2,
       "match_duration_minutes":45,"minimum_break_minutes":10,"is_active":true}]';
@@ -159,6 +164,42 @@ begin
     raise exception 'Incorrect Bronze source or bracket';
   end if;
 
+  select jsonb_agg(jsonb_build_object(
+    'match_id', id, 'draw_id', draw_id, 'expected_version', updated_at, 'court_name', 'Court 1',
+    'scheduled_start', case when draw_id=bronze_id then '2035-01-21T09:00:00Z' else '2035-01-21T08:00:00Z' end,
+    'scheduled_end', case when draw_id=bronze_id then '2035-01-21T09:45:00Z' else '2035-01-21T08:45:00Z' end
+  ) order by id) into bookings from public.draw_matches where draw_id in (bronze_id, silver_id) and status='pending';
+  if jsonb_array_length(bookings) <> 2 then raise exception 'Expected two fixture bookings'; end if;
+  conflicting := jsonb_set(bookings,'{0,scheduled_start}',bookings->1->'scheduled_start');
+  conflicting := jsonb_set(conflicting,'{0,scheduled_end}',bookings->1->'scheduled_end');
+  begin
+    perform public.native_apply_court_schedule(101, conflicting);
+    raise exception 'An overlapping court booking unexpectedly saved';
+  exception when raise_exception then
+    if sqlerrm not like 'A reviewed court booking overlaps%' then raise; end if;
+  end;
+  begin
+    perform public.native_apply_court_schedule(102, bookings);
+    raise exception 'A cross-event booking unexpectedly saved';
+  exception when raise_exception then
+    if sqlerrm not like 'A match is outside%' then raise; end if;
+  end;
+  begin
+    perform public.native_apply_court_schedule(101, jsonb_set(bookings,'{1,expected_version}','"2035-01-01T00:00:00Z"'));
+    raise exception 'A stale court plan unexpectedly saved';
+  exception when raise_exception then
+    if sqlerrm not like 'A reviewed match changed%' then raise; end if;
+  end;
+  if exists (select 1 from public.draw_matches where draw_id in (bronze_id, silver_id) and scheduled_start is not null) then
+    raise exception 'Rejected schedule left partial bookings';
+  end if;
+  if public.native_apply_court_schedule(101, bookings) <> 2 then raise exception 'Court plan was not fully applied'; end if;
+  select updated_at into booking_version from public.draw_matches where id=(bookings->0->>'match_id')::uuid;
+  if public.native_apply_court_schedule(101, bookings) <> 2 or booking_version is distinct from (
+     select updated_at from public.draw_matches where id=(bookings->0->>'match_id')::uuid) then
+    raise exception 'Identical court-plan retry changed the fixture timestamp';
+  end if;
+
   select public.native_save_event_play_days(101, days, '{"2035-01-21":null}') into changes;
   if changes <> 1 or (select match_duration_minutes from public.event_play_days where event_id=101 and play_date='2035-01-21') <> 45 then
     raise exception 'Play day did not save correctly';
@@ -171,6 +212,16 @@ begin
     raise exception 'Stale version unexpectedly changed play day';
   exception when raise_exception then
     if sqlerrm not like 'Play day % changed after review%' then raise; end if;
+  end;
+  select jsonb_build_array(jsonb_build_object(
+    'match_id',id,'draw_id',draw_id,'expected_version',updated_at,'court_name','Court 5',
+    'scheduled_start','2035-01-21T08:00:00Z','scheduled_end','2035-01-21T08:45:00Z'
+  )) into bookings from public.draw_matches where draw_id = bronze_id;
+  begin
+    perform public.native_apply_court_schedule(101, bookings);
+    raise exception 'Booking outside stored court count unexpectedly saved';
+  exception when raise_exception then
+    if sqlerrm not like 'A reviewed booking falls outside%' then raise; end if;
   end;
 end $$;
 reset role;

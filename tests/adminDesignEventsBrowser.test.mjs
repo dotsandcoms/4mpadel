@@ -101,6 +101,7 @@ before(async () => {
                     window.calls.push([name,args]);
                     const request = (async()=>{
                     if (name==='native_create_linked_plate') return {data:{id:'plate-new',kind:window.kind==='special-bronze'?'bronze':'silver',created:true}};
+                    if (name==='native_apply_court_schedule') return {data:args.p_bookings.length};
                     if (name==='native_save_event_play_days') return {data:args.p_days.length};
                     if (name==='remove_event_play_day') return {data:null};
                     if (name==='can_manage_event') return { data: args.p_event_id===11 };
@@ -148,6 +149,7 @@ before(async () => {
                         if (window.kind==='special-days' || window.kind==='special-division' || window.kind==='special-remove') rows=[];
                         else { nativeDraw.scoring_rules={plate_mode:'triple'}; nativeDraw.draw_kind=window.kind==='special-bronze'?'silver':'main'; }
                     }
+                    if (window.kind==='special-automatic' && table==='draw_matches') rows=courtMatches.map(row=>({...row,court_name:null}));
                     if (['special-silver','special-bronze'].includes(window.kind) && table==='draw_matches') rows=linkedPlateMatches;
                     if (['special-silver','special-bronze'].includes(window.kind) && table==='draw_entries') rows=linkedPlateEntries;
                     if (window.kind.startsWith('special-') && table==='event_play_days') rows=[
@@ -158,7 +160,7 @@ before(async () => {
                         {id:51,event_id:11,name:'Open',is_active:true}, {id:52,event_id:13,name:'Other Event Open',is_active:true},
                     ];
                     if (window.kind.startsWith('special-') && table==='draw_player_reviews') rows=[
-                        {division_id:51,event_id:11,updated_at:'review-v1',state:{fingerprint:'retain-fingerprint',workflow:{format:'knockout'}}},
+                        {division_id:51,event_id:11,updated_at:'review-v1',state:{fingerprint:'retain-fingerprint',workflow:{format:'knockout', ...(window.kind==='special-automatic'?{schedule_days:{'2035-01-21':{start_time:'10:00',rounds:2}}}:{})}}},
                     ];
                     if (table==='native_draw_announcements') rows=[existingAnnouncement, {...existingAnnouncement,id:'other-announcement',event_id:13,message:'Other announcement'}];
                     let bounds=null;
@@ -787,5 +789,25 @@ test('division schedule never offers another event and preserves its shared play
         assert.deepEqual(mutation.slice(1,3), ['draw_player_reviews',{event_id:11,division_id:51,updated_at:'review-v1'}]);
         assert.equal(mutation[3].confirmed_by,'fixture-user');
         assert.deepEqual(mutation[3].state,{fingerprint:'retain-fingerprint',workflow:{format:'knockout',schedule_days:{'2035-01-21':{start_time:'',rounds:3}},schedule_priority:2}});
+    } finally { await page.close(); }
+});
+
+test('automatic court planning consumes saved division hours and confirms the entire reviewed set atomically', async () => {
+    const page = await open('special-automatic');
+    try {
+        await clickText(page, 'Preview automatic court plan');
+        await page.waitForFunction(() => document.querySelector('.ap-native-court-review, dialog [role=alert]'));
+        const review = await page.evaluate(() => document.querySelector('.ap-native-court-review, dialog [role=alert]').textContent);
+        assert.match(review, /2035-01-21 10:00 SAST/);
+        assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'native_apply_court_schedule')), false);
+        await clickText(page, 'Confirm draw action');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Court bookings saved for 2 matches.');
+        const calls = await page.evaluate(() => window.calls.filter(call => call[0] === 'native_apply_court_schedule'));
+        assert.equal(calls.length,1);
+        assert.equal(calls[0][1].p_event_id,11);
+        const planned = calls[0][1].p_bookings;
+        assert.deepEqual(planned.map(item => [item.match_id,item.draw_id,item.expected_version]),
+            [['court-a','draw-a','match-v1'],['court-b','draw-a','match-v1']]);
+        assert.equal(planned[0].scheduled_start, '2035-01-21T08:00:00.000Z');
     } finally { await page.close(); }
 });

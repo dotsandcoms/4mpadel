@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import SearchableDropdown from '../../components/SearchableDropdown';
 import { addEventPlayDay } from '../../utils/nativeDrawScheduler.js';
-import { loadNativeCalendarPlan, loadNativeDivisionPlan } from './nativeDrawOperations.js';
+import { loadNativeCalendarPlan, loadNativeDivisionPlan, previewNativeAutomaticCourts } from './nativeDrawOperations.js';
+import { NativeDrawCourtReview } from './NativeDrawCourtSetup.jsx';
 import { prepareNativeDivisionSchedule, prepareNativePlayDays } from './nativeDrawPlayPlan.js';
 
 const hourFields = [
@@ -10,8 +11,9 @@ const hourFields = [
   ['minimum_break_minutes', 'Rest minutes', 'number', 0],
 ];
 
-export default function NativeDrawPlayPlan({ client, session, scopeId, event, activeDivisionId, previous, onReview }) {
+export default function NativeDrawPlayPlan({ client, session, scopeId, event, activeDivisionId, allowAuto, previous, onReview }) {
   const [mode, setMode] = useState(previous?.type === 'division-plan' ? 'division' : previous ? 'days' : null);
+  const [automaticRevision, setAutomaticRevision] = useState(0);
   const [loaded, setLoaded] = useState(null);
   const [days, setDays] = useState([]);
   const [date, setDate] = useState('');
@@ -23,7 +25,7 @@ export default function NativeDrawPlayPlan({ client, session, scopeId, event, ac
   const userId = session?.user?.id;
 
   useEffect(() => {
-    if (!mode || loaded) return;
+    if (!mode || mode === 'automatic' || loaded) return;
     const controller = new AbortController();
     loadNativeCalendarPlan({ client, event, expectedUserId: userId, scopeId, signal: controller.signal, isCurrent: () => !controller.signal.aborted })
       .then(result => {
@@ -52,7 +54,28 @@ export default function NativeDrawPlayPlan({ client, session, scopeId, event, ac
     return () => controller.abort();
   }, [mode, divisionId, client, event, userId, scopeId, previous]);
 
-  const show = next => { setError(''); setMode(next); };
+  useEffect(() => {
+    if (mode !== 'automatic') return;
+    const controller = new AbortController();
+    previewNativeAutomaticCourts({ client, event, expectedUserId: userId, scopeId, signal: controller.signal, isCurrent: () => !controller.signal.aborted })
+      .then(plan => {
+        if (controller.signal.aborted) return;
+        if (!plan.length) {
+          setError('Every schedulable match already has a court and start time.');
+          return;
+        }
+        onReview({ type: 'automatic-courts', plan, heading: 'Review automatic court plan',
+          summary: plan.length + (plan.length === 1 ? ' match is ready to book.' : ' matches are ready to book.') });
+      })
+      .catch(issue => { if (!controller.signal.aborted) setError(issue.message); });
+    return () => controller.abort();
+  }, [mode, automaticRevision, client, event, scopeId, userId, onReview]);
+
+  const show = next => {
+    setError('');
+    if (next === 'automatic') setAutomaticRevision(value => value + 1);
+    setMode(next);
+  };
   const setDay = (selectedDate, field, value) => setDays(old =>
     old.map(day => day.play_date === selectedDate ? { ...day, [field]: value } : day));
   const setDivisionDay = (selectedDate, field, value) =>
@@ -89,10 +112,13 @@ export default function NativeDrawPlayPlan({ client, session, scopeId, event, ac
   return <section className="ap-native-court-setup" aria-label="Play days and division plans">
     <div className="ap-modal-actions">
       <button type="button" className="ap-secondary" aria-pressed={mode === 'days'} onClick={() => show('days')}>Play days &amp; courts</button>
+      {allowAuto && <button type="button" className="ap-secondary" aria-pressed={mode === 'automatic'}
+        onClick={() => show('automatic')}>Preview automatic court plan</button>}
       <button type="button" className="ap-secondary" aria-pressed={mode === 'division'} onClick={() => show('division')}>Division schedule</button>
     </div>
     {error && <p role="alert">{error}</p>}
-    {mode && !loaded && !error && <p role="status">Loading event planning records…</p>}
+    {mode === 'automatic' && !error && <p role="status">Planning courts with saved division priorities and opening hours…</p>}
+    {mode && mode !== 'automatic' && !loaded && !error && <p role="status">Loading event planning records…</p>}
     {mode === 'days' && loaded && <>
       <label>Additional play date<input type="date" value={date} onChange={event => setDate(event.target.value)} /></label>
       <button type="button" className="ap-secondary" disabled={!date} onClick={addDay}>Add play day</button>
@@ -124,6 +150,7 @@ export default function NativeDrawPlayPlan({ client, session, scopeId, event, ac
 }
 
 export function NativeDrawPlayPlanReview({ action }) {
+  if (action.type === 'automatic-courts') return <NativeDrawCourtReview plan={action.plan} />;
   if (action.type === 'remove-day') return <p>Existing matches on this day must be moved before it can be removed.</p>;
   if (action.type === 'play-days') return <ul className="ap-native-court-review">{action.days.map(day => <li key={day.play_date}>
     <b>{day.play_date}</b> · {day.is_active ? day.start_time + '–' + day.end_time + ' SAST · ' + day.courts_count + ' courts · ' + day.match_duration_minutes + ' min matches' : 'Inactive'}
