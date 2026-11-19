@@ -1,3 +1,5 @@
+import { scopeCalendarQuery } from '../../utils/adminCalendarScope.js';
+
 // Source authority: deployed can_manage_event, shared with current Event Manager.
 // This boundary performs reads only; it does not grant permissions.
 export async function verifyEventOperationAccess({ client, eventId, expectedUserId, scopeId = 'all', signal }) {
@@ -7,7 +9,7 @@ export async function verifyEventOperationAccess({ client, eventId, expectedUser
   if (scopeId !== 'all' && !/^(org|club):[^:]+$/.test(scopeId)) throw new Error('Choose an authorised event workspace.');
   const { data: auth, error: authError } = await client.auth.getUser(); cancel();
   if (authError || auth?.user?.id !== expectedUserId) throw new Error('The signed-in account changed. Reopen this event.');
-  let query = client.from('calendar').select('id,is_manual,event_status,organisation_id,club_id').eq('id', eventId);
+  let query = scopeCalendarQuery(client.from('calendar').select('id,is_manual,event_status,organisation_id,club_id').eq('id', eventId), scopeId);
   if (signal) query = query.abortSignal(signal);
   const { data: event, error } = await query.single(); cancel();
   if (error || !event || String(event.id) !== String(eventId)) throw new Error('The event is no longer available. Reload before continuing.');

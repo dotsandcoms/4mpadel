@@ -20,5 +20,7 @@ export async function saveEventEntry(event, draft, { session, scopeId = 'all', c
     return match;
   }));
   const registrations = await readAll(()=>client.from('event_registrations').select('id,email,division,division_id,status').eq('event_id',event.id).order('id'));
+  const current = await verifyEventOperationAccess({ client, eventId: event.id, expectedUserId: session?.user?.id, scopeId });
+  if (current.user.email !== access.user.email || current.event.event_status === 'cancelled') throw new Error('The event workspace changed. Reopen before saving.');
   return addProvisionalEntries({client,event,division,players,registrations,adminEmail:access.user.email,note:draft.note,sendEmail,logEventActivity});
 }

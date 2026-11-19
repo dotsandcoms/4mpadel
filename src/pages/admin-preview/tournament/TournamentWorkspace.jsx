@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, CalendarDays, MapPin, RefreshCw, Trophy, Check, Circle, ChevronRight } from 'lucide-react';
 import { createTournamentClient } from './rpcClient';
 import { tournamentWorkflow, defaultSettings } from './utils/tournament/workflow';
-import { visibleWorkspaces, defaultWorkspace, CAPABILITIES, ROLE_PRESETS } from './utils/tournament/permissions';
+import { visibleWorkspaces, defaultWorkspace, CAPABILITIES, ROLE_PRESETS, tournamentDivisionForLink } from './utils/tournament/permissions';
 import { buildEventPlayDays } from './utils/nativeDrawScheduler';
 import { tournamentDivisionColors as divisionColorMap } from './utils/tournament/colors';
 import Preparation from './Preparation';
@@ -100,6 +100,7 @@ function TournamentController({ client, demo = false, canBuildEvents = false, on
     const tabs = visibleWorkspaces(caps);
     const requested = params.get('workspace') || defaultWorkspace(caps);
     const workspace = tabs.some(([id]) => id === requested) ? requested : defaultWorkspace(caps);
+    const selectedDivision = data ? tournamentDivisionForLink(data.divisions, params.get('division')) : undefined;
     const workflow = data ? tournamentWorkflow(data) : null;
     useEffect(() => {
         if (workspace !== 'results' || busy || needsRefresh || !eventId) return;
@@ -138,7 +139,7 @@ function TournamentController({ client, demo = false, canBuildEvents = false, on
                     {workspace === 'overview' && <Overview data={data} workflow={workflow} go={go} />}
                     {workspace === 'details' && canBuildEvents && onEditEvent && <button className="tm-button" disabled={busy || needsRefresh} onClick={() => onEditEvent(data.event, load)}>Edit event, entry fees & ranking settings</button>}
                     {workspace === 'details' && <Details key={data.settingsRevision} data={data} client={client} act={act} busy={busy || needsRefresh} />}
-                    {['players', 'divisions', 'draws'].includes(workspace) && <Preparation key={workspace + (params.get('division') || '')} workspace={workspace} selectedDivision={params.get('division')} data={data} client={client} act={act} busy={busy || needsRefresh} saving={busy} error={error} go={go} />}
+                    {['players', 'divisions', 'draws'].includes(workspace) && <Preparation key={`${workspace}:${selectedDivision || ''}`} workspace={workspace} selectedDivision={selectedDivision} data={data} client={client} act={act} busy={busy || needsRefresh} saving={busy} error={error} go={go} />}
                     {workspace === 'schedule' && <Schedule key={data.event.id + ":" + (data.schedule?.revision || 0)} data={data} client={client} act={act} busy={busy || needsRefresh} go={go} />}
                     {workspace === 'results' && <Results data={data} client={client} act={act} busy={busy || needsRefresh} saving={busy} error={error} />}
                     {workspace === 'access' && <Access data={data} client={client} act={act} busy={busy || needsRefresh} />}

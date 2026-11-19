@@ -20,3 +20,14 @@ export const can = (capabilities, capability) => capabilities?.includes(capabili
 export const visibleWorkspaces = capabilities => WORKSPACES.filter(([id, , capability]) =>
     !capability || can(capabilities, capability) || (id === 'results' && can(capabilities, 'corrections')));
 export const defaultWorkspace = capabilities => capabilities.length === 1 && capabilities[0] === 'results' ? 'results' : 'overview';
+
+export function eventTournamentWorkspaces(permissions, scopeId, event) {
+    if (scopeId !== 'all' || !event?.is_manual || !event.id) return [];
+    const caps = permissions?.role === 'super_admin' ? Object.keys(CAPABILITIES)
+        : permissions?.tournamentAssignments?.find(row => String(row.id) === String(event.id))?.capabilities || [];
+    return visibleWorkspaces(caps).map(([id]) => id).filter(id => ['draws', 'schedule', 'results'].includes(id));
+}
+
+export function tournamentDivisionForLink(divisions, requested) {
+    return requested ? divisions.find(division => String(division.id) === requested)?.id : undefined;
+}

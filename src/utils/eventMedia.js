@@ -40,16 +40,16 @@ export const resizeImage = (file, maxWidth = 1200, quality = 0.8, preserveAlpha 
         reader.onerror = reject;
     });
 
-export const uploadToGallery = async (file, prefix, beforeWrite = async () => {}) => {
+export const uploadToGallery = async (file, prefix, beforeWrite = async () => {}, { bucket = 'gallery', folder = prefix } = {}) => {
     const preserveAlpha = prefix === 'sponsors' || prefix === 'org-logos';
     const resized = await resizeImage(file, 1200, 0.8, preserveAlpha);
     const ext = preserveAlpha ? 'png' : 'jpg';
     const fileName = `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}.${ext}`;
-    const filePath = `${prefix}/${fileName}`;
+    const filePath = `${folder}/${fileName}`;
     await beforeWrite();
-    const { error } = await supabase.storage.from('gallery').upload(filePath, resized);
+    const { error } = await supabase.storage.from(bucket).upload(filePath, resized);
     if (error) throw error;
-    const { data: { publicUrl } } = supabase.storage.from('gallery').getPublicUrl(filePath);
+    const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(filePath);
     return publicUrl;
 };
 

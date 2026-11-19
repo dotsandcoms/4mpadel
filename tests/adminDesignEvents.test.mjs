@@ -5,6 +5,7 @@ import { eventManagerListed } from '../src/pages/admin-preview/eventManagerData.
 import { saveEventReplacement } from '../src/pages/admin-preview/saveEventReplacement.js';
 import { currentGroupQualification, latestUndoableGroupEdit, prepareGroupElimination, previewNativeGroupEdit } from '../src/pages/admin-preview/nativeGroupDraw.js';
 import { registrationCsv } from '../src/pages/admin-preview/registrationExports.js';
+import { eventTournamentWorkspaces, tournamentDivisionForLink } from '../src/pages/admin-preview/tournament/utils/tournament/permissions.js';
 import { registrationPaymentLink } from '../src/utils/provisionalEntry.js';
 
 const ownEvent = { id: 11, organisation_id: 'org-a', event_name: 'Own event' };
@@ -121,4 +122,16 @@ test('registration exports escape both CSV quoting and spreadsheet formulas', ()
     const content = registrationCsv([{ id: 'r1', full_name: '=1+1', partner_name: 'Player "B"' }]);
     assert.match(content, /"'=1\+1"/);
     assert.match(content, /"Player ""B"""/);
+});
+
+test('Tournament links use exact verified capabilities for the selected event and all-workspaces scope', () => {
+    const event = { ...ownEvent, is_manual: true };
+    const assigned = { tournamentAssignments: [{ id: String(event.id), capabilities: ['schedule', 'corrections'] }, { id: otherEvent.id, capabilities: ['draws'] }] };
+    assert.deepEqual(eventTournamentWorkspaces(assigned, 'all', event), ['schedule', 'results']);
+    assert.deepEqual(eventTournamentWorkspaces(assigned, 'org:org-a', event), []);
+    assert.deepEqual(eventTournamentWorkspaces(assigned, 'all', { id: 99, is_manual: true }), []);
+    assert.deepEqual(eventTournamentWorkspaces({ role: 'super_admin' }, 'all', event), ['draws', 'schedule', 'results']);
+    assert.deepEqual(eventTournamentWorkspaces({ role: 'super_admin' }, 'all', ownEvent), []);
+    assert.equal(tournamentDivisionForLink([{ id: 51 }], '51'), 51);
+    assert.equal(tournamentDivisionForLink([{ id: 'own-division' }], 'other-division'), undefined);
 });
