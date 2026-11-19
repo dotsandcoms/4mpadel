@@ -42,6 +42,8 @@ The original New Admin pages, sidebars, dialogs and drawers are the visual basel
 
 ## Release evidence
 
-The dedicated review URL serves deployment `dpl_DsjmbvmxMzUfxfPywdzsEFy2ZUTh`, built from `561022ec0b85a0b481b6c8beb1b1bd3c204ba560`. Changes include Draw Generator, the Bronze switch and reviewed Push sending. The repository gate passed for that exact revision. The served Event Manager, Push and Tournament paths reference the exact checked bundle. The public site continues to serve deployment `dpl_6CPfpCEkztw5HbUrjkSkNvnfmpeb` from `f17c90b6`.
+The [New Admin review](https://4madmin.vercel.app/admin-preview/events) serves deployment `dpl_CS1hHXy4ux6z79JyUkv3QbjtGowm` from `21d12fd2bab7e6e6eb3ca0310f6d347ee90263ee`. The [repository gate](https://github.com/dotsandcoms/4mpadel/actions/runs/44510268450) passed for that exact revision.
+
+The Event Manager, Payouts, Organisations and Push routes reference the same checked production bundle. The 46 combined shell, payout, income statement and current finance browser checks passed. The earlier review-only rollout `dpl_DsjmbvmxMzUfxfPywdzsEFy2ZUTh` restored Draw Generator, the Bronze switch and reviewed Push sending. The current rollout also includes current draw seeding and ranking operations, organisation banking and payout navigation, detailed income statements and saved native Paystack reconciliation. The public site continues to serve deployment `dpl_6CPfpCEkztw5HbUrjkSkNvnfmpeb` from `f17c90b6`.
 
 Synthetic accounts and fixtures exercise the confirmed write paths. Hosted verification checked deployed services and metadata read-only. No real money movement, support email, account changes or audience sends were used for verification.
