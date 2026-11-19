@@ -33,8 +33,8 @@ export default function ClubMemberAdd({ clubId, members, client, scopeId, sessio
   };
   return <section className="clubs-draft" aria-label="Add club member" style={{ padding: 20, display: 'grid', gap: 16, minWidth: 0, overflowWrap: 'anywhere' }}>
     <h4 style={{ fontSize: 18, margin: 0 }}>Add club member</h4>
-    <p className="fo-note">{enabled ? 'Staging only. Confirmation grants access immediately and queues a notification. No acceptance step is required.' : 'Local review preview only. Search existing players and review access; nothing is saved and no notification is queued.'}</p>
-    {saved ? <p role="status">Member added — access granted. {saved.notification === 'pending' ? 'Notification queued; email delivery is not confirmed.' : 'Email delivery is not confirmed.'}</p> : <>
+    <p className="fo-note">{addApi.live ? 'The selected player gets access as soon as you confirm.' : enabled ? 'Staging only. Confirmation grants access immediately and queues a notification. No acceptance step is required.' : 'Local review preview only. Search existing players and review access; nothing is saved and no notification is queued.'}</p>
+    {saved ? <p role="status">Member added. {({ pending: 'Notification queued.', submitted: 'Notification submitted.', unconfirmed: 'Email delivery could not be confirmed.' })[saved.notification] || 'Access granted.'}</p> : <>
       <fieldset disabled={busy || blocked} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: 'grid', gap: 16 }}>
         {player ? <div><strong>{player.name || 'Name unavailable'}</strong><p>{player.email}</p><button type="button" className="ap-secondary" onClick={() => { setPlayer(null); setReview(null); }}>Change player</button></div> : <>
           <label className="clubs-feedback">Search existing players<input type="search" value={query} placeholder="Name or email…" onChange={e => setQuery(e.target.value)} /></label>
@@ -44,7 +44,7 @@ export default function ClubMemberAdd({ clubId, members, client, scopeId, sessio
         <label className="fo-status-filter">Member role<SearchableDropdown value={role} onChange={e => { setRole(e.target.value); setReview(null); }}>{CLUB_MEMBER_ROLES.map(value => <option key={value} value={value}>{value}</option>)}</SearchableDropdown></label>
         <button type="button" className="ap-secondary" disabled={!player} onClick={() => { try { setReview(clubMemberAddArguments(clubId, player, role, crypto.randomUUID())); setError(''); } catch (err) { setError(err.message); } }}>Review new member</button>
       </fieldset>
-      {review && <div role="status" style={{ display: 'grid', gap: 16 }}><p>Grant <strong>{review.p_role}</strong> access to <strong>{review.p_expected_player.name || review.p_expected_player.email}</strong> ({review.p_expected_player.email}) for this club. Access begins immediately when confirmed.</p>{enabled ? <button type="button" className="ap-primary" disabled={busy || blocked} onClick={confirm}>{busy ? 'Adding member…' : 'Confirm staging member addition'}</button> : <p>Preview only — no access has been granted.</p>}</div>}
+      {review && <div role="status" style={{ display: 'grid', gap: 16 }}><p>Grant <strong>{review.p_role}</strong> access to <strong>{review.p_expected_player.name || review.p_expected_player.email}</strong> ({review.p_expected_player.email}) for this club. Access begins immediately when confirmed.</p>{enabled ? <button type="button" className="ap-primary" disabled={busy || blocked} onClick={confirm}>{busy ? 'Adding member…' : addApi.live ? 'Confirm member addition' : 'Confirm staging member addition'}</button> : <p>Preview only — no access has been granted.</p>}</div>}
     </>}
     {error && <p role="alert">{error}</p>}
     <button type="button" className="ap-secondary" disabled={busy} onClick={() => onCancel?.(blocked)}>{blocked ? 'Close and reload members' : saved ? 'Close new member' : 'Discard new member'}</button>

@@ -26,7 +26,7 @@ export default function ClubMemberDecision({ record, ownerCount, client, session
   };
   return <section className="clubs-draft" aria-label="Member access review" style={{ padding: 20, display: 'grid', gap: 16, minWidth: 0, overflowWrap: 'anywhere' }}>
     <h4 style={{ fontSize: 18, margin: 0 }}>Manage member — {record.players?.name || record.user_email}</h4>
-    <p className="fo-note">{enabled ? 'Staging only. Review the access change before confirming. No email is sent.' : 'Local review preview only. No member access will change and no email is sent.'}</p>
+    <p className="fo-note">{memberApi.live ? 'Review the access change before confirming.' : enabled ? 'Staging only. Review the access change before confirming. No email is sent.' : 'Local review preview only. No member access will change and no email is sent.'}</p>
     {result ? <p role="status">{result.removed ? 'Member removed from this club.' : 'Member role updated.'} No email was sent.</p> : <>
       <fieldset disabled={busy || blocked} style={{ border: 0, padding: 0, margin: 0, display: 'grid', gap: 16, minWidth: 0 }}>
         <label className="fo-status-filter">Member action<SearchableDropdown value={action} onChange={event => { setAction(event.target.value); setReview(null); }}><option value="change_role">Change role</option><option value="remove">Remove member</option></SearchableDropdown></label>
@@ -35,7 +35,7 @@ export default function ClubMemberDecision({ record, ownerCount, client, session
       </fieldset>
       {review && <div role="status" style={{ display: 'grid', gap: 16 }}><p><strong>{review.p_expected_member.user_email || 'Member without a recorded email'}</strong><br/>{review.p_action === 'remove' ? `Remove this ${review.p_expected_member.role} membership from this club. The player account is not deleted.` : `Change this member’s role from ${review.p_expected_member.role} to ${review.p_role}.`}</p>
         {record.role === 'owner' && ownerCount <= 1 && (action === 'remove' || role !== 'owner') && <p className="fo-note">Warning: this is the last recorded owner. This change will leave this club without an owner unless another owner has been added since this list loaded.</p>}
-        {enabled ? <button type="button" className={action === 'remove' ? 'ap-danger-button' : 'ap-primary'} disabled={busy || blocked} onClick={confirm}>{busy ? 'Saving member change…' : 'Confirm staging member change'}</button> : <p>Preview only — nothing has been saved.</p>}
+        {enabled ? <button type="button" className={action === 'remove' ? 'ap-danger-button' : 'ap-primary'} disabled={busy || blocked} onClick={confirm}>{busy ? 'Saving member change…' : memberApi.live ? 'Confirm member change' : 'Confirm staging member change'}</button> : <p>Preview only — nothing has been saved.</p>}
       </div>}
     </>}
     {error && <p role="alert">{error}</p>}

@@ -10,7 +10,7 @@ import ClubManagement from './ClubManagement.jsx';
 import ClubInvitations from './ClubInvitations.jsx';
 import ClubOrganisations from './ClubOrganisations.jsx';
 import ClubApplicationDecision from './ClubApplicationDecision.jsx';
-import { isClubDecisionEnabled } from './clubDecisionRpc.js';
+import { liveClubDecisionApi, liveClubMemberApi, liveClubMemberAddApi, liveClubInvitationApi } from './liveClubOperations.js';
 
 function Fields({ rows }) {
   return <dl className="clubs-fields">{rows.map(([label, value]) => <React.Fragment key={label}><dt>{label}</dt><dd>{recordedText(value)}</dd></React.Fragment>)}</dl>;
@@ -19,6 +19,7 @@ export default function ClubDetails({ club, client, session, permissions, scopeI
   const dialogRef = useRef(null), heading = useRef(null), titleId = useId();
   const [state, setState] = useState({ loading: true }), [reload, setReload] = useState(0);
   const [editing, setEditing] = useState(false);
+  const [applicationDecided, setApplicationDecided] = useState(false);
   const busyRef = useRef(false), [saving, setSaving] = useState(false);
   const contextRef = useRef(''); contextRef.current = `${club.id}:${session?.user?.id}:${scopeId}`;
   const close = () => { if (!busyRef.current) onClose(); };
@@ -70,7 +71,7 @@ export default function ClubDetails({ club, client, session, permissions, scopeI
       ]}/></section>
       {state.loading ? <section className="ap-section"><RecordLoading label="Loading club profile…" detail="Reading profile, facilities and opening hours for this club."/></section> : state.error ? <section role="alert"><h3>Profile unavailable</h3><p>{state.error}</p><button className="ap-secondary" onClick={() => setReload(n => n + 1)}>Try again</button></section> : data && <>
         {platform && <section className="clubs-draft"><h3>Edit club details</h3><p>Manage the complete profile, facilities, branding and media. Review all changes before saving.</p><button className="ap-secondary" disabled={saving} onClick={() => setEditing(true)}>Edit club details</button></section>}
-        {platform && isClubDecisionEnabled(client) && ['pending', 'in_review'].includes(data?.status ?? club.status) && <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}><ClubApplicationDecision key={`application-${club.id}`} record={{ ...club, ...data }} client={client} scopeId={scopeId} session={session} onBusyChange={decisionBusy} onSaved={refreshDecision}/></fieldset>}
+        {platform && (applicationDecided || ['pending', 'in_review'].includes(data?.status ?? club.status)) && <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}><ClubApplicationDecision key={`application-${club.id}`} record={{ ...club, ...data }} client={client} scopeId={scopeId} session={session} decisionApi={liveClubDecisionApi} onBusyChange={decisionBusy} onSaved={() => { setApplicationDecided(true); void refreshDecision(); }}/></fieldset>}
         {platform && editing && <FullClubProfileEditor key={`${session?.user?.id}-${club.id}`} record={{ ...club, ...data }} client={client} scopeId={scopeId} onClose={() => setEditing(false)} onBusyChange={value => { busyRef.current = value; setSaving(value); }}
           onSaved={record => { setState({ data: record }); onUpdated?.(record); setEditing(false); }}/ >}
         <section><h3>About the club</h3><p className="clubs-copy">{recordedText(data.tagline)}</p><p className="clubs-copy">{recordedText(data.about)}</p></section>
@@ -83,11 +84,10 @@ export default function ClubDetails({ club, client, session, permissions, scopeI
         <section><h3>Opening hours</h3><Fields rows={Object.entries({ mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' }).map(([key, label]) => { const hours = data.opening_hours?.[key]; return [label, hours?.closed === true ? 'Closed' : hours?.open && hours?.close ? `${recordedText(hours.open)}–${recordedText(hours.close)}` : 'Not recorded']; })}/></section>
         <ClubMedia key={club.id} data={data}/>
         {platform && <><ClubOrganisations club={{ ...club, ...data }} client={client} session={session} scopeId={scopeId}/>
-        <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}><ClubManagement key={`management-${club.id}`} client={client} session={session} permissions={permissions} scopeId={scopeId} clubId={club.id} onBusyChange={decisionBusy} onDecisionSaved={refreshDecision}/></fieldset>
-        <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}><ClubInvitations key={`invitations-${club.id}`} client={client} session={session} scopeId={scopeId} clubId={club.id} onBusyChange={decisionBusy}/></fieldset></>}
+        <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}><ClubManagement key={`management-${club.id}`} client={client} session={session} permissions={permissions} scopeId={scopeId} clubId={club.id} onBusyChange={decisionBusy} onDecisionSaved={refreshDecision} decisionApi={liveClubDecisionApi} memberApi={liveClubMemberApi} addApi={liveClubMemberAddApi}/></fieldset>
+        <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}><ClubInvitations key={`invitations-${club.id}`} client={client} session={session} scopeId={scopeId} clubId={club.id} creationApi={liveClubInvitationApi} onBusyChange={decisionBusy}/></fieldset></>}
         <section><h3>Record information</h3><Fields rows={[['Created', data.created_at], ['Last updated', data.updated_at]]}/></section>
       </>}
-      {platform && <p className="fo-note">Full club profile and media changes can be saved after review. Decisions, member changes and invitation creation have separate staging-only gates. Invitation delivery, organisation access changes and permanent club deletion remain held.</p>}
     </div>
   </dialog>;
 }

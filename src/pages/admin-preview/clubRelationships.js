@@ -63,8 +63,14 @@ export async function loadClubGroupDirectory(options) {
   await authorize(options);
   const [groups, clubs] = await Promise.all([
     pages(() => client.from('club_groups').select('id,name,short_name,slug,about,website_url,contact_email,contact_phone,whatsapp_number,city,province,logo_url,cover_image_url,status,share_logo,share_website').order('name').order('id'), signal),
-    pages(() => client.from('clubs').select('id,name,short_name,city,logo_url,status,group_id').order('name').order('id'), signal),
+    pages(() => client.from('clubs').select('id,name,short_name,city,logo_url,website_url,status,group_id,updated_at').order('name').order('id'), signal),
   ]);
   await finalIdentity(options);
-  return groups.map(group => ({ ...group, venues: clubs.filter(club => String(club.group_id) === String(group.id)) }));
+  const venuesByGroup = clubs.reduce((indexed, club) => {
+    if (!indexed.has(club.group_id)) indexed.set(club.group_id, []);
+    indexed.get(club.group_id).push(club);
+    return indexed;
+  }, new Map());
+  const rows = groups.map(group => ({ ...group, venues: venuesByGroup.get(group.id) || [] }));
+  return options.includeCandidates ? { rows, clubs } : rows;
 }

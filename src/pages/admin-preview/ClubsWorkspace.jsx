@@ -4,6 +4,7 @@ import { saveAs } from 'file-saver';
 import ClubDetails from './ClubDetails.jsx';
 import CreateClubDialog from './CreateClubDialog.jsx';
 import ClubGroupsView from './ClubGroupsView.jsx';
+import ClubClaimsQueue from './ClubClaimsQueue.jsx';
 import { clubsExcel } from './clubsExport.js';
 import { supabase } from '../../supabaseClient';
 import { canReadClubDirectory, loadClubDirectory, clubStatusLabel, filterClubDirectory, clubDirectorySummary } from './clubsData.js';
@@ -70,14 +71,17 @@ export default function ClubsWorkspace({ session, permissions, scopeId, client =
     } catch (error) { if (token.active) setExportStatus(error.message); }
     finally { if (token.active) setExporting(false); }
   };
+  const openRelatedClub = club => setSelected({ club: all.find(row => String(row.id) === String(club.id)) || club, context });
+  const updateClub = record => setState(previous => ({ ...previous, rows: previous.rows?.map(row => String(row.id) === String(record.id) ? { ...row, ...record } : row) }));
   return <section className="fo-root clubs-root">
     <header className="fo-heading"><div><p className="ap-kicker">Network / Clubs</p><h1>Club directory</h1><p>Find clubs and review their recorded status.</p></div><div className="fo-report-actions">{platform && <button className="ap-primary" disabled={loading} onClick={() => setCreating(context)}>Create club</button>}<button className="ap-secondary" disabled={loading || exporting || !rows.length} onClick={exportRows}>{exporting ? 'Preparing Excel…' : 'Export Excel'}</button><button className="ap-secondary" disabled={loading} onClick={() => setReload(n => n + 1)}>Refresh clubs</button></div></header>
     {exportStatus && <p className="fo-note" role="status">{exportStatus}</p>}
-    {platform && <nav className="fo-report-actions" aria-label="Club views"><button className={view === 'clubs' ? 'ap-primary' : 'ap-secondary'} aria-pressed={view === 'clubs'} onClick={() => setView('clubs')}>Clubs</button><button className={platform && view === 'groups' ? 'ap-primary' : 'ap-secondary'} aria-pressed={view === 'groups'} onClick={() => setView('groups')}>Club groups</button></nav>}
-    {platform && <details className="clubs-notice"><summary>Integration availability</summary><p>Full profiles, media and club creation are connected. Club groups and organisation links can be inspected; access-affecting changes remain held pending server protection. Group administration, permanent club deletion, a consolidated pending-claims queue and per-club membership / invitation metrics are not connected. Decision, membership and invitation mutations require their separate staging gates.</p></details>}
+    {platform && <nav className="fo-report-actions" aria-label="Club views"><button className={view === 'clubs' ? 'ap-primary' : 'ap-secondary'} aria-pressed={view === 'clubs'} onClick={() => setView('clubs')}>Clubs</button><button className={platform && view === 'groups' ? 'ap-primary' : 'ap-secondary'} aria-pressed={view === 'groups'} onClick={() => setView('groups')}>Club groups</button><button className={view === 'claims' ? 'ap-primary' : 'ap-secondary'} aria-pressed={view === 'claims'} onClick={() => setView('claims')}>Pending claims</button></nav>}
     {!platform && <p className="fo-note">Clubs available to this account.</p>}
     {loading ? <section className="ap-section"><RecordLoading label="Loading club records…" count={state.context === context ? state.count : undefined} detail="Reading accessible clubs and their directory details. The directory will appear when loading is complete."/></section> : state.error ? <section className="ap-section clubs-notice" role="alert"><h2>Clubs could not be loaded</h2><p>{state.error}</p><button className="ap-secondary" onClick={() => setReload(n => n + 1)}>Try again</button></section> : <>
-      {platform && view === 'groups' ? <ClubGroupsView key={context} client={client} session={session} scopeId={scopeId} onOpenClub={club => setSelected({ club: all.find(row => String(row.id) === String(club.id)) || club, context })}/> : <><div className="fo-cards clubs-cards">{[['Clubs', summary.total], ['Verified', summary.verified], ['Pending / in review', summary.inReview], ['SAPA registered', summary.sapaRegistered]].map(([label, count]) => <article className="fo-card" key={label}><h2>{label}</h2><strong>{count}</strong></article>)}</div>
+      {platform && view === 'groups' ? <ClubGroupsView key={context} client={client} session={session} scopeId={scopeId} onOpenClub={openRelatedClub}/>
+        : platform && view === 'claims' ? <ClubClaimsQueue key={context} client={client} session={session} scopeId={scopeId} onOpenClub={openRelatedClub} onClubUpdated={updateClub}/>
+        : <><div className="fo-cards clubs-cards">{[['Clubs', summary.total], ['Verified', summary.verified], ['Pending / in review', summary.inReview], ['SAPA registered', summary.sapaRegistered]].map(([label, count]) => <article className="fo-card" key={label}><h2>{label}</h2><strong>{count}</strong></article>)}</div>
       <section className="ap-section fo-breakdown">
         <div className="fo-ledger-filters"><label className="fo-search"><input aria-label="Search clubs" placeholder="Search club, location or ID…" value={filters.query} onChange={e => update('query', e.target.value)}/></label>
           <label className="fo-status-filter">Club status<SearchableDropdown value={filters.status} onChange={e => update('status', e.target.value)}><option value="">All statuses</option>{options('status').map(value => <option key={value} value={value}>{clubStatusLabel(value)}</option>)}</SearchableDropdown></label>
@@ -95,7 +99,7 @@ export default function ClubsWorkspace({ session, permissions, scopeId, client =
         </tr>)}</tbody></table></div> : <div className="clubs-empty"><h2>{all.length ? 'No matching clubs' : 'No clubs available'}</h2><p>{all.length ? 'Try a different search or reset the filters.' : 'No club records were returned for your account.'}</p></div>}
         <nav className="fo-pagination" aria-label="Club pages"><span>{rows.length ? (current - 1) * 10 + 1 : 0}–{Math.min(current * 10, rows.length)} of {rows.length}</span><button className="ap-secondary" disabled={current === 1} onClick={() => setPage(current - 1)}>Previous</button><span>Page {current} of {pages}</span><button className="ap-secondary" disabled={current === pages} onClick={() => setPage(current + 1)}>Next</button></nav>
       </section></>}
-      {selected?.context === context && <ClubDetails key={selected.club.id} club={selected.club} client={client} session={session} permissions={permissions} scopeId={scopeId} onClose={() => setSelected(null)} onUpdated={record => setState(previous => ({ ...previous, rows: previous.rows?.map(row => String(row.id) === String(record.id) ? { ...row, ...record } : row) }))}/>}
+      {selected?.context === context && <ClubDetails key={selected.club.id} club={selected.club} client={client} session={session} permissions={permissions} scopeId={scopeId} onClose={() => setSelected(null)} onUpdated={updateClub}/>}
       {platform && creating === context && <CreateClubDialog key={context} client={client} scopeId={scopeId} session={session} onClose={() => setCreating(null)} onComplete={record => {
         setCreating(null);
         setState(previous => ({ ...previous, rows: [...(previous.rows || []).filter(row => String(row.id) !== String(record.id)), record].sort((a, b) => (a.name || '').localeCompare(b.name || '')) }));
