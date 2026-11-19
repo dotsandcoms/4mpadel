@@ -83,7 +83,7 @@ The audited range does not introduce a separate new website Club/Organisation/Fe
 
 Commit `6bf38406` adds single and page review for a platform super admin. The Edge function verifies the exact reference, live status, amount, currency and refund state. The database rechecks the reviewed target and records the receipt and audit together. A retry returns the recorded outcome. Exact existing event entries, approved licence bundles and saved standalone licence purchases can be matched. An authorised decision can record otherwise unsupported receipts as unallocated funds while preserving existing player, entry and licence state.
 
-Synthetic Chromium exercised single/page review and rejected missing platform authority. `tests/adminPaystackBackfill.sql` passed with the protected checkout fixtures on PostgreSQL 17. The hosted recovery migration and Edge Function are rollout dependencies.
+Synthetic Chromium exercised single/page review and rejected missing platform authority. `tests/adminPaystackBackfill.sql` passed with the protected checkout fixtures on PostgreSQL 17. The hosted recovery migration and Edge Function v1 are installed. The live permission check confirmed that regular signed-in clients and anonymous users cannot execute the database writer.
 
 ## Organisation payouts commit trace
 
