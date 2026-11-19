@@ -28,6 +28,8 @@ import { CreateEventMenu, ReviewNotifications } from './admin-preview/ReviewNavi
 import MessagingWorkspace from './admin-preview/MessagingWorkspace.jsx';
 import HelpRequestsWorkspace from './admin-preview/HelpRequestsWorkspace.jsx';
 import AccountSecurityWorkspace from './admin-preview/AccountSecurityWorkspace.jsx';
+import ReviewSettingsWorkspace from './admin-preview/ReviewSettingsWorkspace.jsx';
+import ReviewBlogWorkspace from './admin-preview/ReviewBlogWorkspace.jsx';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, LayoutGroup, motion as Motion, useReducedMotion } from 'framer-motion';
 import {
@@ -111,7 +113,7 @@ const PRETORIA_FINANCE_SNAPSHOT = {
 };
 const EMPTY_RELATED = { payments: [], divisions: [], activity: [], draws: [], refunds: [] };
 const REGISTRATION_PAGE_SIZE = 50;
-const RECORD_WORKSPACE_PAGES = ['messaging', 'help', 'security', 'players', 'calendar', 'coaches', 'clubs', 'organisations', 'federations', 'reports', 'payments', 'payouts', 'team-access', 'gallery', 'email', 'push', 'licenses', 'tournaments'];
+const RECORD_WORKSPACE_PAGES = ['messaging', 'help', 'security', 'settings', 'blog', 'players', 'calendar', 'coaches', 'clubs', 'organisations', 'federations', 'reports', 'payments', 'payouts', 'team-access', 'gallery', 'email', 'push', 'licenses', 'tournaments'];
 const REFRESH_WORKSPACE_PAGES = RECORD_WORKSPACE_PAGES;
 
 const WORKSPACES = [
@@ -1022,6 +1024,8 @@ export default function AdminPreview({ reviewNotice = null, currentAdminUrl = '/
   else if (page === 'messaging') content = <MessagingWorkspace session={session} />;
   else if (page === 'help') content = <HelpRequestsWorkspace session={session} />;
   else if (page === 'security') content = <AccountSecurityWorkspace session={session} permissions={permissions} client={supabase} targetEmail={session?.user?.email} />;
+  else if (page === 'settings') content = <ReviewSettingsWorkspace client={supabase} session={session} refreshRevision={playerRefresh} mayOpenLicences={canOpen('licenses')} />;
+  else if (page === 'blog') content = <ReviewBlogWorkspace client={supabase} session={session} refreshRevision={playerRefresh} />;
   else if (page === 'players' && session && (permissionsLoading || !permissions)) content = <section className="ap-section ap-live-loading" role="status">Checking Players access…</section>;
   else if (page === 'players' && session && permissions?.role !== 'super_admin' && !permissions?.allowed_tabs?.includes('players')) content = <section className="ap-section ap-live-loading"><ShieldCheck size={28} /><h2>Players access is required</h2><p>This account does not have access to the existing Players admin module.</p></section>;
   else if (page === 'players') content = <PlayersWorkspace key={`${session?.user?.id || 'signed-out'}-${scope.id}-${playerRefresh}`} session={session} scopeId={scope.id} />;
