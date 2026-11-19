@@ -1,6 +1,6 @@
 // Contract: 20261021101301_admin_push_broadcasts.sql. Audience resolution stays
 // on the server: partner, withdrawal and notification preference rules are not reimplemented.
-export const PUSH_DESTINATIONS = [['/calendar','Tournament calendar'],['/(tabs)/rankings','Rankings'],['/(tabs)/explore','Explore'],['/(tabs)/profile','Player profile'],['/pro/live','International matches']];
+export const PUSH_DESTINATIONS = [['/(tabs)','Home'],['/calendar','Tournament calendar'],['/(tabs)/rankings','Rankings'],['/(tabs)/explore','Explore'],['/(tabs)/profile','Player profile'],['/pro/live','International matches']];
 export const pushHistoryDate = value => new Intl.DateTimeFormat('en-ZA', {timeZone:'Africa/Johannesburg',dateStyle:'medium',timeStyle:'short'}).format(new Date(value));
 const check = ({signal,isCurrent}) => { if (signal?.aborted || (isCurrent && !isCurrent())) throw new Error('This broadcast session changed. Reopen it before continuing.'); };
 const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -39,8 +39,7 @@ async function identity(options) {
   if (error || data?.user?.id !== options.userId || typeof data.user.email !== 'string' || !data.user.email.trim() || (options.expectedEmail != null && data.user.email !== options.expectedEmail)) throw new Error('The signed-in account changed. Reopen push broadcasts.');
   return data.user;
 }
-export async function pushBroadcastRead(options, name, args) {
-  if (!['admin_push_broadcast_events','admin_push_broadcast_players','preview_push_broadcast','list_push_broadcasts'].includes(name)) throw new Error('Unsupported broadcast read.');
+async function pushBroadcastRpc(options, name, args) {
   const user = await identity(options);
   let activeQuery = options.client.rpc('account_is_active');
   if(options.signal && activeQuery.abortSignal) activeQuery=activeQuery.abortSignal(options.signal);
@@ -54,7 +53,23 @@ export async function pushBroadcastRead(options, name, args) {
   const final = await identity(options);
   if(final.email !== user.email) throw new Error('The signed-in account changed.');
   if(data == null) throw new Error('The broadcast server returned no result. Please refresh.');
-  return name === 'preview_push_broadcast' ? validatePushPreview(data) : validatePushRows(name,data);
+  return data;
+}
+export async function pushBroadcastRead(options, name, args) {
+  if (!['admin_push_broadcast_events','admin_push_broadcast_players','preview_push_broadcast','list_push_broadcasts'].includes(name)) throw new Error('Unsupported broadcast read.');
+  const data = await pushBroadcastRpc(options, name, args);
+  return name === 'preview_push_broadcast' ? validatePushPreview(data) : validatePushRows(name, data);
+}
+export async function pushBroadcastHistory(options, page = 1) {
+  const data = await pushBroadcastRpc(options, 'list_push_broadcasts_page', { p_page: page });
+  if (!object(data) || !count(data.page) || !data.page || !count(data.pages) || data.pages < data.page || !count(data.total)
+    || !Array.isArray(data.items) || data.items.length > 5 || data.items.some(row => !object(row)
+      || typeof row.id !== 'string' || !Number.isFinite(Date.parse(row.created_at))
+      || ['title','body','path'].some(key => typeof row[key] !== 'string')
+      || ['recipient_count','pending','sent','skipped','failed'].some(key => !count(row[key])))) {
+    throw new Error('The broadcast history is incomplete. Retry to refresh this page.');
+  }
+  return data;
 }
 export function pushAudience({eventIds=[],playerIds=[],payment='all',partner='all',excluded=[]}={}) {
   const ids = (values,limit) => {
@@ -87,8 +102,29 @@ export function pushMessage({title,body,path}) {
   if(!PUSH_DESTINATIONS.some(([value])=>value===path)&&!/^\/events\/[1-9][0-9]*$/.test(path)) throw new Error('Choose a supported app destination.');
   return {p_title:title.trim(),p_body:body.trim(),p_path:path};
 }
-// No client prop or browser flag can activate delivery. The deployed definer
-// guard lacks an active-account check; both bulk and test sends remain held.
-export async function queuePushBroadcast() {
-  throw new Error('Push sending is held pending server-side active-account authorization review. No notification was queued.');
+export async function reviewPushTest(options, draft) {
+  const user = await identity(options);
+  const matches = await searchPushPlayers(options, user.email);
+  const player = matches.find(row => row.email.trim().toLowerCase() === user.email.trim().toLowerCase());
+  if (!player) throw new Error('Your admin email needs a matching player profile to receive a test push.');
+  const selection = pushAudience({ playerIds: [player.id] });
+  const audience = await previewPushAudience(options, selection);
+  if (!audience.ready) throw new Error(audience.disabled ? 'Push is disabled for your account.' : 'No app device is registered to this account.');
+  return { kind: 'test', message: pushMessage({ ...draft, title: [...`Test: ${draft.title.trim()}`].slice(0,80).join('') }), selection, audience };
+}
+
+export async function queuePushBroadcast(options, { requestId, message, selection, audience }) {
+  if (typeof requestId !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId)) throw new Error('A reviewed push request is required.');
+  const preview = validatePushPreview(audience);
+  if (!preview.ready || preview.total > 10000) throw new Error('Review a ready audience of up to 10,000 recipients.');
+  const content = pushMessage({ title: message?.p_title, body: message?.p_body, path: message?.p_path });
+  const target = pushAudience({
+    eventIds: selection?.p_event_ids, playerIds: selection?.p_player_ids,
+    payment: selection?.p_payment, partner: selection?.p_partner, excluded: selection?.p_excluded_emails,
+  });
+  const result = await pushBroadcastRpc(options, 'send_push_broadcast', { p_request_id: requestId, p_fingerprint: preview.fingerprint, ...content, ...target });
+  if (result.id !== requestId || !count(result.total) || !count(result.queued) || result.queued > result.total) {
+    throw new Error('The server did not confirm the queue result. Retry the same review or check broadcast history.');
+  }
+  return result;
 }

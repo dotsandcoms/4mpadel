@@ -3,7 +3,15 @@ import { verifyPublishingAccess } from './publishingAccess.js';
 
 export const canReviewBroadcast = permissions => permissions?.role === 'super_admin' || (Array.isArray(permissions?.allowed_tabs) && permissions.allowed_tabs.includes('email-broadcast'));
 export async function verifyBroadcastAccess(client, userId, scopeId, signal) {
-  return verifyPublishingAccess(client, scopeId, userId, 'email-broadcast', signal);
+  const grant = await verifyPublishingAccess(client, scopeId, userId, 'email-broadcast', signal);
+  let activeRequest = client.rpc('account_is_active');
+  if (signal && activeRequest.abortSignal) activeRequest = activeRequest.abortSignal(signal);
+  const active = await activeRequest;
+  const { data, error } = await client.auth.getUser();
+  if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
+  if (active.error || active.data !== true || error || data?.user?.id !== userId
+    || normalizeBroadcastEmail(data.user.email) !== grant.email) throw new Error('An active account with current Email Broadcast access is required.');
+  return grant;
 }
 export const normalizeBroadcastEmail = value => String(value || '').trim().toLowerCase();
 const valid = email => /^[^\s@,<>]+@[^\s@,<>]+\.[^\s@,<>]+$/.test(email) && email.length <= 254;
@@ -43,4 +51,20 @@ export async function loadBroadcastAudience({ client, userId, scopeId, eventIds,
 export function combineBroadcastAudience(eventEmails, manualEmails, excluded = []) {
   const removed = new Set(excluded.map(normalizeBroadcastEmail));
   return [...new Set([...eventEmails, ...manualEmails].map(normalizeBroadcastEmail).filter(valid))].filter(email => !removed.has(email));
+}
+
+export async function emailBroadcastCapability(client, signal) {
+  const { data, error } = await client.functions.invoke('send-email', { body: { action: 'broadcast_capability' }, signal });
+  if (error || data?.version !== 1 || data.batchSize !== 49) throw new Error('Secure email delivery is unavailable. Check delivery access again before sending.');
+  return data;
+}
+
+export async function sendReviewedBroadcastBatch(client, { signal, requestId, emails, subject, html }) {
+  const { data, error } = await client.functions.invoke('send-email', {
+    signal,
+    body: { template: 'broadcast', broadcastRequestId: requestId, bcc: emails, variables: { subject, message: html } },
+  });
+  if (error || data?.success !== true || typeof data.messageId !== 'string' || !data.messageId) {
+    throw new Error('The provider did not confirm this batch. Retry the same review to avoid sending it twice.');
+  }
 }
