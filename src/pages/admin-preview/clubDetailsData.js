@@ -1,8 +1,10 @@
-import { canReadClubDirectory } from './clubsData.js';
+import { canReadClubDirectory, clubDirectoryScope } from './clubsData.js';
 
 export async function loadClubDetails(client, session, permissions, scopeId, id, signal) {
-  if (!canReadClubDirectory(session, permissions, scopeId)) throw new Error('Platform Clubs access is required.');
+  if (!canReadClubDirectory(session, permissions, scopeId)) throw new Error('Current Clubs access is required.');
   if (!id) throw new Error('A club must be selected.');
+  const { clubId } = clubDirectoryScope(permissions, scopeId);
+  if (clubId && clubId !== String(id)) throw new Error('This club is outside the selected workspace.');
   signal?.throwIfAborted();
   const { data, error } = await client.from('clubs').select('id,name,short_name,city,about,tagline,address,website_url,contact_email,contact_phone,whatsapp_number,courts,services,cafe,opening_hours,socials,gallery,sponsors,principal_sponsor,created_at,updated_at').eq('id', id).abortSignal(signal).maybeSingle();
   signal?.throwIfAborted();

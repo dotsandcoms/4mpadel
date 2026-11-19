@@ -46,7 +46,7 @@ export async function verifyEntityAccess(client, kind, context) {
     }
   }
   const directGrant=Array.isArray(exact[0]?.allowed_tabs)&&exact[0].allowed_tabs.includes(kind);
-  const oversight=kind==='federations'?directGrant:exact[0]?.module_permissions?.organisations?.platformOversight===true||(exact[0]?.role==='custom'&&!ids.length&&directGrant);
+  const oversight=kind==='federations'?directGrant&&!ids.length:exact[0]?.module_permissions?.organisations?.platformOversight===true||(exact[0]?.role==='custom'&&!ids.length&&directGrant);
   if (!ids.length&&!oversight) throw new Error('A current module or membership permission is required.');
   return finish({ user, superAdmin: false, ids:oversight?null:ids, members: members.filter(row => normal(row.user_email) === email) });
 }

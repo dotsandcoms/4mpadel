@@ -1,16 +1,31 @@
+import { hasTenantMembership } from '../../../supabase/functions/_shared/admin-finance-access.mjs';
 import { readAll } from './playersData.js';
 
-// The initial directory is platform-only. Club/organisation delegation requires
-// its own reviewed membership boundary; a chosen workspace is not authority.
-export const canReadClubDirectory = (session, permissions, scopeId) => Boolean(
-  session?.user?.id && permissions?.role === 'super_admin' && scopeId === 'all',
-);
+export function clubDirectoryScope(permissions, scopeId) {
+  if (scopeId === 'all') {
+    return permissions?.role === 'super_admin' || (!hasTenantMembership(permissions) && permissions?.allowed_tabs?.includes('clubs'))
+      ? { clubId: null } : null;
+  }
+  const match = /^club:([^:]+)$/.exec(scopeId || '');
+  if (!match) return null;
+  const clubId = match[1];
+  const own = permissions?.clubs?.some(club => String(club.id) === clubId && ['owner', 'admin'].includes(club.member_role));
+  return permissions?.role === 'super_admin' || own ? { clubId } : null;
+}
+
+export const canReadClubDirectory = (session, permissions, scopeId) =>
+  Boolean(session?.user?.id && clubDirectoryScope(permissions, scopeId));
 
 export async function loadClubDirectory(client, session, permissions, scopeId, signal, onProgress) {
-  if (!canReadClubDirectory(session, permissions, scopeId)) throw new Error('Platform Clubs access is required.');
-  return readAll(() => client.from('clubs')
-    .select('id,name,short_name,slug,status,verified,sapa_registered,logo_url,city,province,country,club_type,created_at')
-    .order('id'), signal, onProgress);
+  if (!canReadClubDirectory(session, permissions, scopeId)) throw new Error('Current Clubs access is required.');
+  const { clubId } = clubDirectoryScope(permissions, scopeId);
+  return readAll(() => {
+    let query = client.from('clubs')
+      .select('id,name,short_name,slug,status,verified,sapa_registered,logo_url,city,province,country,club_type,created_at')
+      .order('id');
+    if (clubId) query = query.eq('id', clubId);
+    return query;
+  }, signal, onProgress);
 }
 
 export const clubStatusLabel = status => ({

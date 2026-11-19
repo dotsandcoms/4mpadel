@@ -10,7 +10,7 @@ export const reviewPages = [
 
 const moduleTabs = { home: 'dashboard', email: 'email-broadcast', push: 'email-broadcast' };
 const managed = row => row.member_role === 'owner' || row.member_role === 'admin';
-const scopedPages = ['events', 'registrations', 'calendar', 'reports', 'payouts', 'organisations'];
+const scopedPages = ['events', 'registrations', 'calendar', 'reports', 'payouts', 'organisations', 'clubs'];
 const routeAliases = { event: 'events', payment: 'registrations', player: 'players' };
 const reviewPage = page => routeAliases[page] || page;
 
@@ -53,7 +53,7 @@ export function previewScopes(permissions, page) {
   if (!permissions || !scopedPages.includes(page)) return [account];
   const memberships = [];
   for (const org of permissions.orgs || []) {
-    if (platform || page === 'organisations' || managed(org)) memberships.push({ id: `org:${org.id}`, recordId: org.id, label: org.name, kind: 'org', type: 'Organisation' });
+    if (page !== 'clubs' && (platform || page === 'organisations' || managed(org))) memberships.push({ id: `org:${org.id}`, recordId: org.id, label: org.name, kind: 'org', type: 'Organisation' });
   }
   if (!['organisations', 'payouts', 'reports'].includes(page) || (platform && page === 'reports')) {
     for (const club of permissions.clubs || []) {
