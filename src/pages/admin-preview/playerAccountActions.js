@@ -47,6 +47,34 @@ export async function sendPlayerLoginInvitation(client, player, origin, context)
   return { accepted: true };
 }
 
+async function verifySelectedPlayer(client, player, context) {
+  await verifyPlayerAccountAccess(client, context);
+  const { data, error } = await client.from('players').select('id,name,email').eq('id', player.id).single();
+  if (error || !data || String(data.id) !== String(player.id) || data.name !== player.name || data.email !== player.email) {
+    throw new Error('This player record changed. Close and reopen the action.');
+  }
+  await verifyPlayerAccountAccess(client, context);
+  return data;
+}
+
+export async function sendPlayerRecoveryEmail(client, player, context) {
+  const verified = await verifySelectedPlayer(client, player, context);
+  const email = String(verified.email || '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('A valid player email is required.');
+  const result = await client.auth.resetPasswordForEmail(email, { redirectTo: 'https://4mpadel.co.za/reset-password' });
+  if (result.error) throw new Error('The recovery request could not be confirmed. Check before sending it again.');
+  return { accepted: true };
+}
+
+export async function deletePlayerProfile(client, player, context) {
+  const verified = await verifySelectedPlayer(client, player, context);
+  let query = client.from('players').delete().eq('id', verified.id);
+  query = verified.email === null ? query.is('email', null) : query.eq('email', verified.email);
+  const { data, error } = await query.select('id').maybeSingle();
+  if (error || String(data?.id) !== String(verified.id)) throw new Error('Deletion could not be confirmed. Reload the directory before trying again.');
+  return data.id;
+}
+
 export async function withPlayerActionDeadline(operation, context, timeoutMs = 30000) {
   let expired = false, timer;
   const guarded = { ...context, isCurrent: () => !expired && context.isCurrent() };
@@ -58,8 +86,5 @@ export async function withPlayerActionDeadline(operation, context, timeoutMs = 3
 }
 
 export const HELD_PLAYER_ACTIONS = {
-  'Reset password': 'Password reset is held for security review. The existing endpoint can change any sign-in account password; target restrictions and an audit trail need review before activation. No password is collected here.',
   'Test login': 'Test login is held. The existing screen uses a browser email override rather than a separately authorised impersonation session. Your identity and session will not be changed.',
-  'Delete player': 'Deletion is held pending reviewed activation. The existing action deletes the player record, not the sign-in account, and may affect linked records. Nothing will be deleted here.',
-  'Send login invite': 'Login invitation sending is held for activation review. The existing action emails a sign-in link and may create a sign-in account when the address is new. No email is sent here.',
 };
