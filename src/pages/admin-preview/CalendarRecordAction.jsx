@@ -1,12 +1,13 @@
 import { useId, useState } from 'react';
 import { useEventOperation } from './useEventOperation.js';
 import { saveCalendarRecordAction } from './calendarRecordActions.js';
-import { useRankedin } from '../../hooks/useRankedin';
+import { createCalendarRankedinGateway } from './calendarRankedinGateway.js';
 import './EventPaymentDialog.css';
 
-export default function CalendarRecordAction({ client, event, action, session, scopeId, onClose, save = saveCalendarRecordAction }) {
+const provider = createCalendarRankedinGateway();
+
+export default function CalendarRecordAction({ client, event, action, session, scopeId, onClose, save = saveCalendarRecordAction, gateway = provider }) {
   const title = useId();
-  const rankedin = useRankedin();
   const [confirmation, setConfirmation] = useState('');
   const { bindDialog, busy, error, result, close, run } = useEventOperation({ client, event, session, scopeId, onClose });
   const deleting = action === 'delete';
@@ -18,7 +19,7 @@ export default function CalendarRecordAction({ client, event, action, session, s
   return <dialog ref={bindDialog} className="ap-payment-dialog" aria-labelledby={title} onCancel={event => { event.preventDefault(); close(); }}>
     <header><div><p>{event.event_name}</p><h2 id={title}>{label}</h2></div>
       <button type="button" className="ap-icon-button" disabled={busy} aria-label="Close event action" onClick={close}>×</button></header>
-    <form onSubmit={formEvent => { formEvent.preventDefault(); if (confirmed) run(checks => save({ client, event, action, rankedin, expectedUserId: session?.user?.id, scopeId, ...checks })); }}>
+    <form onSubmit={formEvent => { formEvent.preventDefault(); if (confirmed) run(checks => save({ client, event, action, gateway, expectedUserId: session?.user?.id, scopeId, ...checks })); }}>
       {result ? <p role="status">{result.message}</p> : <>
         <p>{deleting ? 'Deleting the event also permanently deletes its payout requests and saved banking details.'
           : syncing ? 'Refresh draws, published results and upcoming matches from the event’s existing RankedIn link.'

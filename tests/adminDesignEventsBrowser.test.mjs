@@ -49,12 +49,16 @@ before(async () => {
                 playDays:[{play_date:'2035-01-21', start_time:'10:00', end_time:'19:00', courts_count:1, is_active:true}],
                 settings:{}, confirmations:[], finalisations:[], audit:[], access:[], capabilities:['draws','schedule','results'],
                 sourceFingerprint:'source-fingerprint', schedule:{revision:2, status:'draft', source_fingerprint:'source-fingerprint', assignments:{'match-tm-1':booking}} };
+            const pastLinked = { ...event, id:19, slug:'rankedin-past', is_manual:false, start_date:'2024-08-15', event_name:'Past Linked Cup', rankedin_id:'8901', rankedin_url:'https://www.rankedin.com/en/tournament/8901' };
+            const failedLinked = { ...pastLinked, id:20, slug:'rankedin-failed', event_name:'Unavailable Cup', rankedin_id:'8902', rankedin_url:'https://www.rankedin.com/en/tournament/8902' };
+            const manualLinked = { ...event, id:21, slug:'rankedin-manual', event_name:'Manual Linked Cup', rankedin_id:'8903', rankedin_url:'https://www.rankedin.com/en/tournament/8903' };
             window.calls = [];
             const verifyAccess = async () => ({ event });
             const client = {
                 auth:{ getUser: async () => ({ data:{ user:session.user } }) },
                 async rpc(name,args) {
                     window.calls.push([name,args]);
+                    if (name==='account_is_active' || name==='is_super_admin') return { data:true };
                     if (name==='tm_snapshot') return args.p_event === '11' ? { data: tournament } : { error: { message:'No access to this tournament' } };
                     if (name==='tm_publish_schedule') { tournament.schedule.status = 'published'; return { data:true }; }
                     if (name==='tm_record_result') return { data:true };
@@ -63,11 +67,15 @@ before(async () => {
                     return { data:0 };
                 },
                 from(table) {
-                    let rows=table==='calendar'?[event,bronze,other]:[];
+                    let rows=table==='calendar'?(window.kind.startsWith('rankedin-')?[pastLinked,failedLinked,manualLinked]:[event,bronze,other]):[];
+                    if (table==='federations') rows=[{slug:'sapa',rankedin_events_org_id:'11331'}];
                     let bounds=null;
                     const query={select(){return query;},order(){return query;},eq(key,value){rows=rows.filter(r=>r[key]===value);return query;},
                         in(key,values){rows=rows.filter(r=>values.includes(r[key]));return query;},
-                        range(start,end){bounds=[start,end];return query;},abortSignal(){return query;},
+                        range(start,end){bounds=[start,end];return query;},abortSignal(){return query;},limit(max){rows=rows.slice(0,max);return query;},
+                        single(){return Promise.resolve({data:rows[0]});},maybeSingle(){return query.single();},
+                        insert(payload){window.calls.push(['insert',table,payload]);rows=[{id:99}];return query;},
+                        upsert(payload){window.calls.push(['upsert',table,payload]);return Promise.resolve({data:[]});},
                         then(resolve){return Promise.resolve({data:bounds?rows.slice(bounds[0],bounds[1]+1):rows}).then(resolve);} };
                     return query;
                 }
@@ -88,6 +96,8 @@ before(async () => {
                         'tournament-schedule':'?event=11&workspace=schedule', 'tournament-result':'?event=11&workspace=results' }[kind];
                     return <MemoryRouter initialEntries={['/admin-preview/tournaments'+route]}><TournamentWorkspace client={client} session={session} scopeId="all" /></MemoryRouter>;
                 }
+                if (kind.startsWith('rankedin-')) return <MemoryRouter><CalendarWorkspace session={session} client={client}
+                  scope={{id:'all'}} permissions={{role:'super_admin'}} scopeId="all" canManageEvents /></MemoryRouter>;
                 if (kind==='calendar') return <MemoryRouter initialEntries={['/?create=quick&keep=1']}><CalendarFixture /></MemoryRouter>;
                 if (kind==='dashboard') return <EventManagerDashboard events={[event,bronze,other]} registrations={[]} go={()=>{}} client={client} canReadSnapshots session={session} />;
                 if (kind==='replace') return <EventReplacementDialog client={client} session={session} scopeId="org:org-a" event={event} team={[registration]} search={search} verifyAccess={verifyAccess} onClose={()=>window.calls.push(['closed'])}/>;
@@ -100,7 +110,7 @@ before(async () => {
                     save={async draft=>{window.calls.push(['entry',draft]);return{registrations:[{id:'reg-new',pay_token:'fake-token'}]};}} onReview={setAdded}/>;
             }
             const root=createRoot(document.getElementById('root'));
-            window.show=kind=>root.render(<Fixture key={kind} kind={kind}/>);
+            window.show=kind=>{window.kind=kind;root.render(<Fixture key={kind} kind={kind}/>);};
         `, loader: 'jsx', resolveDir: root },
         bundle: true, jsx: 'automatic', platform: 'browser', format: 'iife', outfile: output,
         define: { 'import.meta.env': '{}' },
@@ -141,6 +151,22 @@ async function open(kind) {
         if (request.url() === 'http://fixture.invalid/') return request.respond({ contentType: 'text/html', body: '<main id="root"></main>' });
         if (request.url() === 'http://fixture.invalid/private-draw-rehearsal/index.html') {
             return request.respond({ contentType: 'text/html', body: '<main>Isolated fixture</main>' });
+        }
+        if (kind.startsWith('rankedin-') && request.url().startsWith('https://api.rankedin.com/v1/')) {
+            const url = new URL(request.url());
+            const useRoute = path => url.pathname.includes(path);
+            const response = body => request.respond({ headers: { 'access-control-allow-origin': '*' }, contentType: 'application/json', body: JSON.stringify(body) });
+            if (useRoute('GetOrganisationEventsAsync')) return response({ payload: url.searchParams.get('IsFinished') === 'true'
+                ? [{ Id: 8903, Name: 'Manual Linked Cup', StartDate: '2035-01-21' }]
+                : [{ eventId: 8904, eventName: 'Imported Silver Cup', startDate: '2035-01-22', city: 'Cape Town' }] });
+            if (useRoute('GetClassesAndDrawNamesAsync')) {
+                if (url.searchParams.get('tournamentId') === '8902') return request.respond({ status: 503, headers: { 'access-control-allow-origin': '*' } });
+                return response([{ Name: 'Open', IsPublished: true, TournamentDraws: [{}] }]);
+            }
+            if (useRoute('GetStandingsAsync')) return response({ IsFinished: true, Classes: [{ Id: 1, Name: 'Open' }], Rankings: [{ Id: 2 }] });
+            if (useRoute('GetResultsAsync')) return response({ Data: [{ Standing: 1, Player1Name: 'First Player', Player2Name: 'Second Player' }] });
+            if (useRoute('GetInfoAsync')) return response({ TournamentSidebarModel: { LocationName: 'Fixture Courts' } });
+            if (useRoute('GetRegulationsAsync')) return response('Synthetic regulations');
         }
         return request.abort();
     });
@@ -290,5 +316,42 @@ test('the original Tournament Results drawer saves an explicitly entered score t
         await clickText(page, 'Save result');
         await page.waitForFunction(() => document.body.textContent.includes('Result saved'));
         assert.deepEqual(await page.evaluate(() => window.calls.find(call => call[0] === 'tm_record_result')), ['tm_record_result', { p_event: 11, p_match: 'match-tm-1', p_expected: 'match-v1', p_result: {kind:'played',winner:'tm-1',reason:'',sets:[[6,4]]} }]);
+    } finally { await page.close(); }
+});
+
+test('Calendar RankedIn import reviews external IDs before making only the selected public import', async () => {
+    const page = await open('rankedin-import');
+    try {
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => !button.disabled && button.textContent.trim() === 'Import RankedIn events'));
+        await clickText(page, 'Import RankedIn events');
+        await page.waitForSelector('dialog .cw-bulk-rankedin-list input[type=checkbox]');
+        assert.match(await page.$eval('dialog', dialog => dialog.textContent), /Manual Linked Cup · Linked record needs manual review/);
+        assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'insert')), false);
+        await clickText(page, 'Confirm event import');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent.includes('Added 1, updated 0'));
+        const mutations = await page.evaluate(() => window.calls.filter(call => call[0] === 'insert'));
+        assert.equal(mutations.length, 1);
+        assert.equal(mutations[0][1], 'calendar');
+        assert.equal(mutations[0][2].rankedin_id, '8904');
+        assert.equal(mutations[0][2].venue, 'Fixture Courts');
+        assert.equal(mutations[0][2].is_visible, true);
+    } finally { await page.close(); }
+});
+
+test('Calendar bulk refresh writes only the reviewed past cache and preserves it on provider failure', async () => {
+    const page = await open('rankedin-refresh');
+    try {
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => !button.disabled && button.textContent.trim() === 'Refresh past RankedIn draws and results'));
+        await clickText(page, 'Refresh past RankedIn draws and results');
+        await page.waitForSelector('dialog [aria-label="Past RankedIn events"]');
+        assert.doesNotMatch(await page.$eval('dialog', dialog => dialog.textContent), /Manual Linked Cup/);
+        assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'upsert')), false);
+        await clickText(page, 'Confirm cache refresh');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent.includes('Refreshed 1 event caches. 1 could not be confirmed.'));
+        const mutations = await page.evaluate(() => window.calls.filter(call => call[0] === 'upsert'));
+        assert.equal(mutations.length, 1);
+        assert.equal(mutations[0][1], 'rankedin_results_cache');
+        assert.equal(mutations[0][2].event_id, 19);
+        assert.equal(mutations[0][2].winners[0].resultSource, 'rankedin-standings');
     } finally { await page.close(); }
 });

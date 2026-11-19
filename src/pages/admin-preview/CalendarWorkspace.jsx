@@ -14,12 +14,14 @@ import CreateEventDialog from './CreateEventDialog';
 import CreateQuickEventDialog from './CreateQuickEventDialog';
 import QuickEventDetailsDialog from './QuickEventDetailsDialog';
 import CalendarRecordAction from './CalendarRecordAction';
+import CalendarRankedinBulkDialog from './CalendarRankedinBulkDialog';
 import { calendarRankedinId } from './calendarRecordActions.js';
 import { calendarEditMode } from './calendarEditing';
 
 const Tag = ({ tone = 'neutral', children }) => <span className={`ap-status ap-status--${tone}`}>{children}</span>;
 const phaseTone = phase => ({ Upcoming: 'positive', 'In progress': 'info', Cancelled: 'danger', Unscheduled: 'warning' }[phase] || 'neutral');
 const flags = [['is_visible', 'Website visible'], ['featured_event', 'Homepage featured'], ['is_spotlight', 'Spotlight'], ['featured_live', 'Featured live'], ['featured_result', 'Featured result'], ['show_in_recent_results', 'Recent results'], ['is_league', 'League'], ['finance_managed', 'Finance managed'], ['allow_payments', 'Payments enabled']];
+const rankedinBulkActions = ['import-rankedin', 'refresh-past-rankedin'];
 const setupFields = ['event_name', 'slug', 'start_date', 'end_date', 'start_time', 'end_time', 'city', 'venue', 'address', 'organiser_name', 'organiser_email', 'organiser_phone', 'organiser_website', 'sapa_status', 'entry_fee', 'early_bird_fee', 'early_bird_ends_at', 'registration_opens_at', 'registration_closes_at', 'rankedin_id', 'rankedin_url'];
 const label = field => field.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase());
 const timestamp = value => value ? new Date(value).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' }) : 'Not recorded';
@@ -177,7 +179,7 @@ export default function CalendarWorkspace({ session, permissions, scope, scopeId
   const open = event => update({ calendarEvent: String(event.id) });
   const chooseAction = (mode, event) => {
     if (mode === 'edit' && !calendarEditMode(event, canManageEvents)) return;
-    if (['delete', 'visibility', 'finance', 'sync-source'].includes(mode) && !canManageRecords) return;
+    if (['delete', 'visibility', 'finance', 'sync-source', ...rankedinBulkActions].includes(mode) && !canManageRecords) return;
     if (mode !== 'edit') update({ calendarEvent: '' });
     setAction({ mode, event });
   };
@@ -209,6 +211,7 @@ export default function CalendarWorkspace({ session, permissions, scope, scopeId
     {Object.keys(overrides).length > 0 && <div className="pp-notice">{Object.keys(overrides).length} local demo changes <button className="ap-text-button" onClick={() => { setOverrides({}); setNotice('Demo reset. Original records restored.'); }}>Reset demo</button></div>}
     <nav className="pp-tabs" aria-label="Calendar views">{[['dashboard','Dashboard'], ['month','Month view'], ['list','All events']].map(([id,name]) => <button key={id} aria-current={view === id ? 'page' : undefined} onClick={() => update({ calView: id, calPage: '' })}>{name}</button>)}</nav>
     <div className="pp-load-status"><span role="status">{loading ? 'Reading calendar records…' : `${events.length.toLocaleString()} accessible events`}</span><button className="ap-text-button" disabled={loading} onClick={() => setRefresh(n => n + 1)}><RefreshCw size={14} />Refresh calendar</button></div>
+    {canManageRecords && <div className="cw-actions cw-rankedin-actions"><button className="ap-secondary" disabled={loading || !data} onClick={() => chooseAction('import-rankedin')}>Import RankedIn events</button><button className="ap-secondary" disabled={loading || !data} onClick={() => chooseAction('refresh-past-rankedin')}>Refresh past RankedIn draws and results</button></div>}
     {loading && <RecordLoading label="Loading calendar records…" detail="Reading accessible events and linked setup records. Existing results remain visible while refreshing."/>}
     {error && <p role="alert" className="cw-error">{error}</p>}{data?.warnings.map(w => <p className="pp-notice" key={w}>{w}</p>)}{notice && <p role="status" className="pp-notice">{notice}</p>}
     {data && <>{view === 'dashboard' ? <><div className="pp-stat-grid">{[['All events',events.length,{},'neutral'], ['Upcoming',events.filter(e=>eventPhase(e,today)==='Upcoming').length,{phase:'Upcoming'},'payment'], ['Homepage featured',events.filter(e=>e.featured_event).length,{flag:'featured_event'},'warning'], ['Featured live',events.filter(e=>e.featured_live).length,{flag:'featured_live'},'info']].map(([name,count,filter,tone]) => <button key={name} className={`pp-stat pp-stat--${tone}`} onClick={() => { update({cal_phase:'',cal_flag:'',cal_q:'',cal_tier:'',cal_source:'',cal_visibility:'',calView:'list',calPage:'',...Object.fromEntries(Object.entries(filter).map(([k,v])=>[`cal_${k}`,v]))}); }}><span>{name}<ArrowRight size={16} /></span><strong><AnimatedCount value={count} /></strong><small>{name==='Upcoming' ? 'Open upcoming events' : 'View matching events'}</small></button>)}</div>
@@ -221,7 +224,8 @@ export default function CalendarWorkspace({ session, permissions, scope, scopeId
     {action?.mode === 'create-quick' && canManageEvents && <QuickCreationDialog client={client} session={session} scopeId={scopeId} onClose={closeEditor}/>}
     {action?.mode === 'edit' && calendarEditMode(action.event, canManageEvents) === 'live-quick' && <QuickDetailsDialog key={action.event.id} event={action.event} client={client} session={session} scopeId={scopeId} onClose={closeEditor}/>}
     {action?.mode === 'edit' && calendarEditMode(action.event, canManageEvents) === 'live' && <DetailsDialog key={action.event.id} event={action.event} client={client} session={session} scopeId={scopeId} onClose={closeEditor}/>}
-    {action && !['delete', 'visibility', 'finance', 'sync-source', 'create', 'create-quick'].includes(action.mode) && (action.mode !== 'edit' || calendarEditMode(action.event, canManageEvents) === 'preview') && <SetupPreview key={action.event.id} event={action.event} mode={action.mode} onClose={()=>setAction(null)} onApply={draft=>{setOverrides(v=>({...v,[draft.id]:draft}));setAction(null);setNotice('Applied to this demo only. Reload or Reset demo to discard.');update({calendarEvent:String(draft.id)});}}/>}
+    {action && !['delete', 'visibility', 'finance', 'sync-source', 'create', 'create-quick', ...rankedinBulkActions].includes(action.mode) && (action.mode !== 'edit' || calendarEditMode(action.event, canManageEvents) === 'preview') && <SetupPreview key={action.event.id} event={action.event} mode={action.mode} onClose={()=>setAction(null)} onApply={draft=>{setOverrides(v=>({...v,[draft.id]:draft}));setAction(null);setNotice('Applied to this demo only. Reload or Reset demo to discard.');update({calendarEvent:String(draft.id)});}}/>}
+    {action && canManageRecords && rankedinBulkActions.includes(action.mode) && <CalendarRankedinBulkDialog key={action.mode} client={client} session={session} scopeId={scopeId} mode={action.mode} events={data?.events || []} onClose={closeEditor} />}
     {action && canManageRecords && ['delete', 'visibility', 'finance', 'sync-source'].includes(action.mode) && <CalendarRecordAction client={client} event={action.event} action={action.mode} session={session} scopeId={scopeId} onClose={closeEditor} />}
   </div>;
 }

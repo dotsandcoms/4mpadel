@@ -1,10 +1,10 @@
 import { extractRankedinId } from '../../utils/rankedinLink.js';
 import { eventPhase } from './calendarData.js';
 
-export const calendarRankedinId = event => event.rankedin_id || extractRankedinId(event.rankedin_url);
+export const calendarRankedinId = event => extractRankedinId(event.rankedin_id) || extractRankedinId(event.rankedin_url);
 
-async function verifyCalendarRecord({ client, event, expectedUserId, scopeId, isCurrent }) {
-  if (scopeId !== 'all' || !expectedUserId || !Number.isSafeInteger(Number(event.id)) || Number(event.id) <= 0) {
+export async function verifyCalendarPlatformActor({ client, expectedUserId, scopeId, isCurrent }) {
+  if (scopeId !== 'all' || !expectedUserId || !isCurrent()) {
     throw new Error('This action requires a verified all-workspaces administrator.');
   }
   const { data: auth, error: authError } = await client.auth.getUser();
@@ -12,7 +12,12 @@ async function verifyCalendarRecord({ client, event, expectedUserId, scopeId, is
   const [active, admin] = await Promise.all([
     client.rpc('account_is_active'), client.rpc('is_super_admin', { user_email: auth.user.email }),
   ]);
-  if (active.error || active.data !== true || admin.error || admin.data !== true) throw new Error('A verified super-admin account is required.');
+  if (active.error || active.data !== true || admin.error || admin.data !== true || !isCurrent()) throw new Error('A verified super-admin account is required.');
+}
+
+async function verifyCalendarRecord({ client, event, expectedUserId, scopeId, isCurrent }) {
+  if (!Number.isSafeInteger(Number(event.id)) || Number(event.id) <= 0) throw new Error('Choose a saved calendar event.');
+  await verifyCalendarPlatformActor({ client, expectedUserId, scopeId, isCurrent });
   const { data: fresh, error: readError } = await client.from('calendar')
     .select('id,event_name,slug,is_visible,finance_managed,is_weekly,series_id,rankedin_id,rankedin_url,start_date,end_date,event_status')
     .eq('id', event.id).single();
@@ -22,7 +27,7 @@ async function verifyCalendarRecord({ client, event, expectedUserId, scopeId, is
   return fresh;
 }
 
-export async function saveCalendarRecordAction({ client, event, action, rankedin, expectedUserId, scopeId, isCurrent, onAttempt }) {
+export async function saveCalendarRecordAction({ client, event, action, gateway, expectedUserId, scopeId, isCurrent, onAttempt, signal, pastOnly = false }) {
   const access = { client, event, expectedUserId, scopeId, isCurrent };
   const fresh = await verifyCalendarRecord(access);
   if (action === 'sync-source') {
@@ -31,10 +36,9 @@ export async function saveCalendarRecordAction({ client, event, action, rankedin
       throw new Error('This RankedIn event link changed. Close and reopen it.');
     }
     const past = eventPhase(fresh) === 'Past';
-    const [classes, results] = await Promise.all([
-      rankedin.getTournamentClasses(id),
-      past ? rankedin.getTournamentWinners(id) : rankedin.getTournamentMatches({ tournamentId: id, isFinished: false }),
-    ]);
+    if (pastOnly && !past) throw new Error('This event is no longer a past event.');
+    const classes = await gateway.draws(id, signal);
+    const results = past ? await gateway.winners(id, signal) : await gateway.upcoming(id, classes, signal);
     if (!Array.isArray(classes) || !Array.isArray(results)) throw new Error('RankedIn did not return a complete response. The existing cache was kept.');
     const current = await verifyCalendarRecord(access);
     if (String(calendarRankedinId(current)) !== String(id) || current.start_date !== fresh.start_date || current.end_date !== fresh.end_date || current.event_status !== fresh.event_status) {
@@ -43,7 +47,7 @@ export async function saveCalendarRecordAction({ client, event, action, rankedin
     onAttempt();
     const { error } = await client.from('rankedin_results_cache').upsert({
       event_id: fresh.id, rankedin_id: String(id), classes, winners: past ? results : [],
-      has_draw: classes.some(item => item.IsPublished && item.TournamentDraws?.length > 0), has_results: past && results.length > 0,
+      has_draw: classes.some(item => item.IsPublished && Array.isArray(item.TournamentDraws) && item.TournamentDraws.length > 0), has_results: past && results.length > 0,
       upcoming_matches: past ? [] : results.slice(0, 15), last_synced_at: new Date().toISOString(),
     }, { onConflict: 'event_id' });
     if (error) throw error;
