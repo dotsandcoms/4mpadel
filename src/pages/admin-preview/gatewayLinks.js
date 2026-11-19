@@ -16,13 +16,17 @@ export async function loadGatewayLinks(client, session, permissions, scopeId, tr
   const timer = setTimeout(abort, 8000);
   try {
     const records = await readAll(() => client.from('payments')
-      .select('id,reference,is_test,payment_method,amount,currency,status,players!payments_player_id_fkey(name),calendar!payments_event_id_fkey(event_name)')
+      .select('id,reference,is_test,payment_method,payment_type,event_id,checkout_source:metadata->>source,amount,currency,status,players!payments_player_id_fkey(name),calendar!payments_event_id_fkey(event_name)')
       .eq('payment_method', 'paystack').eq('is_test', test).in('reference', references).order('id'), controller.signal);
     return transactions.map(row => {
       const matches = records.filter(payment => payment.reference === row.reference && payment.is_test === test && payment.payment_method === 'paystack');
-      return { ...row, link: matches.length === 1 ? { state: 'matched', paymentId: matches[0].id,
-        playerName: matches[0].players?.name || null, eventName: matches[0].calendar?.event_name || null,
-        comparison: compareGatewayRecord(row, matches[0]) }
+      const payment = matches.length === 1 ? matches[0] : null;
+      const eventId = Number(payment?.event_id);
+      return { ...row, link: payment ? { state: 'matched', paymentId: payment.id,
+        savedEventCheckout: payment.payment_type === 'event_entry_fee' && payment.checkout_source === 'manual_event'
+          && Number.isSafeInteger(eventId) && eventId > 0,
+        playerName: payment.players?.name || null, eventName: payment.calendar?.event_name || null,
+        comparison: compareGatewayRecord(row, payment) }
         : { state: matches.length > 1 ? 'ambiguous' : 'unmatched' } };
     });
   } catch {

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { loadGatewayLinks } from '../src/pages/admin-preview/gatewayLinks.js';
 import {
     readLicenseRpc, licenseReviewPayload, writeLicenseReview,
 } from '../src/pages/admin-preview/licenseData.js';
@@ -90,4 +91,42 @@ test('checkout recovery verifies saved scoped references and refuses orphan or t
     const denied = mock(false);
     await assert.rejects(confirmGatewayCheckout(denied.client,session,platform,'all',event),/revoked/);
     assert.deepEqual(denied.calls.map(([name])=>name),['event_checkout_state']);
+});
+
+test('legacy and named native references use only exact saved live event checkouts', async () => {
+    const { client, calls } = mock();
+    const refs = ['MOBILE-ROCKETS-CUP-17949878596810000000000', 'MOBILE-aabbccdd-10ca1e57-2c22-43a8-b6c8-b53f050d62ca',
+        'MOBILE-LICENCE', 'MOBILE-ORPHAN', 'MOBILE-ENTRY-BALANCE', 'MOBILE-NO-EVENT'];
+    const saved = { payment_method:'paystack', payment_type:'event_entry_fee', event_id:14,
+        checkout_source:'manual_event', amount:600, currency:'ZAR', status:'success', is_test:false };
+    client.from = table => {
+        assert.equal(table, 'payments');
+        let offset;
+        return {
+            select(fields) { assert.ok(fields.includes('checkout_source:metadata->>source')); return this; },
+            eq() { return this; }, in() { return this; }, order() { return this; }, abortSignal() { return this; },
+            range(start) { offset = start; return this; },
+            then(resolve) { return resolve({ data:offset ? [] : [
+                { ...saved, id:'legacy', reference:refs[1] },
+                { ...saved, id:'named', reference:refs[0] },
+                { ...saved, id:'unrelated', payment_type:'license', reference:refs[2] },
+                { ...saved, id:'balance', checkout_source:'native_entry_balance', reference:refs[4] },
+                { ...saved, id:'no-event', event_id:null, reference:refs[5] },
+            ] }); },
+        };
+    };
+    const rows = await loadGatewayLinks(client, session, platform, 'all', refs.map(reference => ({
+        reference, environment:'live', status:'success', amountMinor:60000, currency:'ZAR',
+    })));
+    for (const row of rows.slice(0, 2)) {
+        assert.equal((await confirmGatewayCheckout(client,session,platform,'all',row)).status,'done');
+    }
+    assert.deepEqual(calls.map(([name, args]) => [name,args.p_reference || args.body.reference]), [
+        ['event_checkout_state',refs[0]], ['confirm-manual-payment',refs[0]],
+        ['event_checkout_state',refs[1]], ['confirm-manual-payment',refs[1]],
+    ]);
+    for (const row of rows.slice(2)) {
+        await assert.rejects(confirmGatewayCheckout(client,session,platform,'all',row),/verified successful/);
+    }
+    assert.equal(calls.length,4);
 });

@@ -14,7 +14,8 @@ const event = { id:14, event_name:'Our fixture event', organisation_id:'our-org'
 const other = { ...event, id:15,event_name:'Other organisation event',organisation_id:'other-org' };
 const player = { id:5, name:'Fixture player', email:'player@example.invalid' };
 const registration = {id:'reg-5',event_id:14,email:player.email,division:'Open',status:'registered',payment_status:'paid'};
-const pay = {id:'p1',event_id:14,player_id:5,reference:'EVREG-FIXTURE-14',created_at:'2026-08-01T12:00:00Z',status:'success',is_test:false,payment_type:'event_entry_fee',payment_method:'paystack',amount:600,currency:'ZAR',metadata:{covers:[{type:'entry',email:player.email,division:'Open'}]},players:player,calendar:event};
+const reference = fb.mode === 'gateway-native' ? 'MOBILE-ROCKETS-CUP-17949878596810000000000' : 'EVREG-FIXTURE-14';
+const pay = {id:'p1',event_id:14,player_id:5,reference,checkout_source:'manual_event',created_at:'2026-08-01T12:00:00Z',status:'success',is_test:false,payment_type:'event_entry_fee',payment_method:'paystack',amount:600,currency:'ZAR',metadata:{covers:[{type:'entry',email:player.email,division:'Open'}]},players:player,calendar:event};
 const season = { year:2026,price:650,renewal_price:500,coverage_starts_on:'2026-01-01',sales_open:true };
 const licence = { id:'fixture-licence', player_id:5, name:player.name, email:player.email, season_year:2026, license_type:'full', source:'manual',status:'active', starts_on:'2026-01-01',ends_on:'2026-12-31' };
 const request = {id:'existing-payout',event_id:14,event_name:event.event_name,amount:200,last_four:'0155',status:'pending',created_at:'2026-08-05T10:00:00Z'};
@@ -104,7 +105,7 @@ before(async()=>{
             const {mode,permissions,scopeId} = window.fixture;
             const linked = mode === 'payout-linked' ? {initialEventId:'14',initialOrganisationId:'our-org'}
                 : mode === 'payout-link-other' ? {initialEventId:'15',initialOrganisationId:'other-org'} : {};
-            const Component = mode.startsWith('licences') ? Licences : mode.startsWith('payout') ? Payouts : mode === 'gateway' ? Payments : Finance;
+            const Component = mode.startsWith('licences') ? Licences : mode.startsWith('payout') ? Payouts : mode.startsWith('gateway') ? Payments : Finance;
             createRoot(document.getElementById('root')).render(<MemoryRouter><Component {...linked} client={supabase} session={{user:{id:'synthetic-actor'}}} permissions={permissions} scopeId={scopeId} initialPlayerId={mode==='licences-player'?5:null} /></MemoryRouter>);
         `, resolveDir:process.cwd(), loader:'jsx',sourcefile:'synthetic-money.jsx'},
         jsx:'automatic', bundle:true, write:false, format:'iife', loader:{'.css':'empty'}, logLevel:'silent',
@@ -247,5 +248,17 @@ test('direct payout links preselect only an accessible organisation and its own 
     await withPage('payout-link-other',owner,'org:our-org',async page=>{
         await includesText(page,'Select a manual event');
         assert.equal((await calls(page)).some(([name])=>name==='event-cash-receipts'),false);
+    });
+});
+
+test('an exact recorded native Paystack checkout is reconciled through the existing server verification',async()=>{
+    await withPage('gateway-native',platform,'all',async page=>{
+        await click(page,'Paystack gateway');
+        await includesText(page,'MOBILE-ROCKETS-CUP-17949878596810000000000');
+        await click(page,'Verify checkout'); await click(page,'Confirm reconciliation');
+        await includesText(page,'Checkout reconciled.');
+        const references='MOBILE-ROCKETS-CUP-17949878596810000000000';
+        const actions=(await calls(page)).filter(([name])=>['event_checkout_state','confirm-manual-payment'].includes(name));
+        assert.deepEqual(actions,[['event_checkout_state',{p_reference:references}],['confirm-manual-payment',{reference:references}]]);
     });
 });

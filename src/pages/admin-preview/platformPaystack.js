@@ -42,7 +42,9 @@ export async function loadPlatformGatewayTransactions(client, session, permissio
 
 export function canConfirmGatewayCheckout(row) {
   return row?.environment === 'live' && row.status === 'success' && row.link?.state === 'matched'
-    && isEventCheckoutReference(row.reference);
+    // Native checkout aliases can differ from the stored gateway reference.
+    // The exact local receipt source establishes the same event checkout type.
+    && (row.link.savedEventCheckout === true || isEventCheckoutReference(row.reference));
 }
 
 export async function confirmGatewayCheckout(client, session, permissions, scopeId, row, signal) {
