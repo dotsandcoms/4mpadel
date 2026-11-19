@@ -1,4 +1,5 @@
-import { generateKnockoutDraft, generateGroupStageDraft } from '../nativeDrawGenerator.js';
+import { generateKnockoutDraft, generateGroupStageDraft } from '../../../../../utils/nativeDrawGenerator.js';
+import { dedupePairRegistrations } from '../../../../../utils/drawPairing.js';
 import { generateAmericano, americanoPlayers } from '../americano.js';
 import { generateTeamAmericano, teamAmericanoPlayers } from '../teamAmericano.js';
 import { resolvePlayerRanking } from '../playerRankingSelection.js';
@@ -6,21 +7,16 @@ import { resolvePlayerRanking } from '../playerRankingSelection.js';
 export function divisionEntries(data, divisionId, review = {}, rankingSource = 'active') {
     const profiles = new Map((data.players || []).map(p => [p.email?.toLowerCase(), p]));
     const rows = data.registrations.filter(r => r.division_id === divisionId && r.status !== 'withdrawn' && !review.excluded?.includes(r.id));
-    const seenPairs = new Set();
-    const entries = [];
-    for (const r of rows) {
-        const pairKey = [r.email, r.partner_email].filter(Boolean).map(s => s.trim().toLowerCase()).sort().join(':');
-        if (r.partner_email && seenPairs.has(pairKey)) continue;
-        seenPairs.add(pairKey);
+    const entries = dedupePairRegistrations(rows).map(r => {
         const one = profiles.get(r.email?.toLowerCase());
         const two = profiles.get(r.partner_email?.toLowerCase());
-        entries.push({ id: r.id, source_registration_id: r.id,
+        return { id: r.id, source_registration_id: r.id,
             team_name: [r.full_name, r.partner_name].filter(Boolean).join(' / '), player_one_name: r.full_name, player_two_name: r.partner_name || null,
             player_one_id: one?.id || null, player_two_id: two?.id || null,
             seeding_value: resolvePlayerRanking(one, rankingSource).points + resolvePlayerRanking(two, rankingSource).points,
             snapshot: { registration_email: r.email, partner_email: r.partner_email },
-        });
-    }
+        };
+    });
     return entries.sort((a, b) => {
         const ai = review.seeds?.indexOf(a.source_registration_id) ?? -1;
         const bi = review.seeds?.indexOf(b.source_registration_id) ?? -1;
@@ -53,7 +49,7 @@ export function generateDivisionDraw(data, divisionId, configuration, review, uu
     }
     const draft = format === 'knockout'
         ? generateKnockoutDraft(entries, { seedingMethod: 'manual', seededCount: configuration.seeded_team_count ?? Math.min(8, entries.length), plateMode: configuration.plate_mode || 'none', placementPlayoff: configuration.playoff_mode || 'none' })
-        : generateGroupStageDraft(entries, { format, groupCount: Number(configuration.groups || 1), seedingMethod: 'manual', seededCount: configuration.seeded_team_count ?? Math.min(8, entries.length) });
+        : generateGroupStageDraft(entries, { format, groupCount: Number(configuration.groups || 1), groupSeeding: configuration.group_seeding || 'snake', seedingMethod: 'manual', seededCount: configuration.seeded_team_count ?? Math.min(8, entries.length) });
     if (format === 'group_knockout' && (Number(configuration.advancers) < 1 || Number(configuration.advancers) > Math.floor(entries.length / Number(configuration.groups)))) throw new Error('The qualifier count must fit the smallest group.');
     return persistableDraft(draft, format, uuid);
 }
@@ -83,7 +79,7 @@ export function generateElimination(data, draw) {
         if (!standing || standing.requires_manual_resolution) throw new Error('Resolve tied group standings before creating elimination matches.');
         return data.entries.find(e => e.id === standing.entry_id);
     })).flat();
-    const draft = generateKnockoutDraft(qualifiers.map((e, i) => ({ ...e, seed_number: i + 1 })), { seedingMethod: 'manual', plateMode: draw.scoring_rules?.plate_mode || 'none', placementPlayoff: draw.scoring_rules?.playoff_mode || 'none' });
+    const draft = generateKnockoutDraft(qualifiers.map((e, i) => ({ ...e, seed_number: i + 1 })), { seedingMethod: 'manual', separateGroups: true, plateMode: draw.scoring_rules?.plate_mode || 'none', placementPlayoff: draw.scoring_rules?.playoff_mode || 'none' });
     const ids = new Map(draft.matches.map(m => [m.key, crypto.randomUUID()]));
     return draft.matches.map(m => ({ id: ids.get(m.key), key: m.key, stage: m.stage, round_code: m.round_code, round_label: m.round_label, round_number: m.round_number, bracket_position: m.bracket_position,
         entry_one_id: m.entry_one?.id || null, entry_two_id: m.entry_two?.id || null, winner_entry_id: m.winner?.id || null, status: m.status, result_type: m.result_type,

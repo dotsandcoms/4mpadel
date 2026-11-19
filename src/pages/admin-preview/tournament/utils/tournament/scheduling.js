@@ -1,5 +1,5 @@
 import { planningMatches } from '../drawPlanning.js';
-import { generateKnockoutDraft } from '../nativeDrawGenerator.js';
+import { generateKnockoutDraft } from '../../../../../utils/nativeDrawGenerator.js';
 import { RESOLVED, tournamentWorkflow, defaultSettings, activeDivisions } from './workflow.js';
 
 const minute = 60000;

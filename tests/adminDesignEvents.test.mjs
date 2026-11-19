@@ -5,6 +5,7 @@ import { eventManagerListed } from '../src/pages/admin-preview/eventManagerData.
 import { saveEventReplacement } from '../src/pages/admin-preview/saveEventReplacement.js';
 import { currentGroupQualification, latestUndoableGroupEdit, prepareGroupElimination, previewNativeGroupEdit } from '../src/pages/admin-preview/nativeGroupDraw.js';
 import { registrationCsv } from '../src/pages/admin-preview/registrationExports.js';
+import { divisionEntries, generateDivisionDraw } from '../src/pages/admin-preview/tournament/utils/tournament/draws.js';
 import { eventTournamentWorkspaces, tournamentDivisionForLink } from '../src/pages/admin-preview/tournament/utils/tournament/permissions.js';
 import { registrationPaymentLink } from '../src/utils/provisionalEntry.js';
 
@@ -134,4 +135,35 @@ test('Tournament links use exact verified capabilities for the selected event an
     assert.deepEqual(eventTournamentWorkspaces({ role: 'super_admin' }, 'all', ownEvent), []);
     assert.equal(tournamentDivisionForLink([{ id: 51 }], '51'), 51);
     assert.equal(tournamentDivisionForLink([{ id: 'own-division' }], 'other-division'), undefined);
+});
+
+function drawRegistration(index, overrides = {}) {
+    return {
+        id: 'registration-' + index, division_id: 'open', full_name: 'Player ' + index, email: index + '@example.invalid',
+        partner_name: 'Partner ' + index, partner_email: 'partner-' + index + '@example.invalid', ...overrides,
+    };
+}
+
+test('the New Admin generator collapses reciprocal rows and omits an already paired player’s separate solo registration', () => {
+    const first = drawRegistration(1, { created_at: '2035-02-01' });
+    const reciprocal = drawRegistration(2, {
+        full_name: first.partner_name, email: first.partner_email, partner_name: first.full_name, partner_email: first.email, created_at: '2035-02-02',
+    });
+    const solo = drawRegistration(3, { full_name: first.full_name, email: first.email, partner_name: null, partner_email: null });
+    const other = drawRegistration(4);
+    const entries = divisionEntries({ registrations: [reciprocal, solo, first, other], players: [] }, 'open');
+    assert.deepEqual(entries.map(entry => entry.source_registration_id).sort(), [first.id, other.id]);
+});
+
+test('the New Admin group generator uses the current seeded-snake final partial pot and full placement options', () => {
+    const registrations = Array.from({ length: 11 }, (_, index) => drawRegistration(index + 1));
+    const data = { registrations, players: [] };
+    const review = { seeds: registrations.map(registration => registration.id) };
+    let currentId = 0;
+    const uuid = () => 'draft-' + (++currentId);
+    const groups = generateDivisionDraw(data, 'open', { format: 'group_only', groups: 3, group_seeding: 'snake', seeded_team_count: 11 }, review, uuid);
+    assert.deepEqual(groups.groups.map(group => groups.entries.filter(entry => entry.group_id === group.id).map(entry => entry.seed_number)),
+        [[1, 6, 7, 10], [2, 5, 8, 11], [3, 4, 9]]);
+    const top8 = generateDivisionDraw({ ...data, registrations: registrations.slice(0, 8) }, 'open', { format: 'knockout', playoff_mode: 'top8' }, review, uuid);
+    assert.ok(top8.matches.some(match => match.round_code.startsWith('places_7_8_')));
 });
