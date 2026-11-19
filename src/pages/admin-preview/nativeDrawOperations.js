@@ -2,9 +2,11 @@ import { buildEventPlayDays, mergeEventPlayDays } from '../../utils/nativeDrawSc
 import { planNativeMatchSchedule, sameReviewedSchedule } from './nativeMatchScheduling.js';
 import { readAll } from './playersData.js';
 import { verifyCalendarPlatformActor } from './calendarRecordActions.js';
+import { completeReviewedNativeDraw } from './nativeDrawLifecycle.js';
+import { insertReviewedNativeAwards, readNativeRankingReview } from './nativeDrawRanking.js';
 import { verifyEventOperationAccess } from './eventOperationAccess.js';
 
-const drawFields = 'id,event_id,division_id,draw_kind,format,status,updated_at,tournament_divisions(name)';
+const drawFields = 'id,event_id,division_id,draw_kind,format,status,updated_at,scoring_rules,tournament_divisions(name)';
 const matchFields = 'id,draw_id,entry_one_id,entry_two_id,round_label,round_number,bracket_position,stage,status,court_name,scheduled_start,scheduled_end,updated_at';
 const announcementFields = 'id,event_id,division_id,draw_id,title,message,is_pinned,is_active,created_at,updated_at';
 const liveStatuses = ['pending', 'scheduled', 'in_progress'];
@@ -118,11 +120,27 @@ async function applyNativeMatchSchedule({ client, event, draw, operation, isCurr
   return saved === 1 ? 'Match court setup saved.' : 'Court setup saved for ' + saved + ' matches.';
 }
 
+export async function loadNativeDrawRanking({ client, event, draw, ...access }) {
+  await verifyNativeEvent({ client, event, ...access });
+  const current = await readNativeDraw(client, event, draw.id);
+  if (current.updated_at !== draw.updated_at || !access.isCurrent()) throw new Error('The draw changed. Reopen it before reviewing points.');
+  return readNativeRankingReview({ client, event, draw: current, signal: access.signal });
+}
+
 export async function saveNativeDrawOperation({ client, event, draw, operation, onAttempt, ...access }) {
   const context = { client, event, ...access };
   await verifyNativeEvent(context);
   const fresh = await readNativeDraw(client, event, draw.id);
   if (fresh.updated_at !== draw.updated_at || !access.isCurrent()) throw new Error('The draw changed. Reopen it before continuing.');
+
+  if (operation.type === 'complete') {
+    const matches = await nativeMatches(client, fresh, access.signal);
+    return completeReviewedNativeDraw({ client, event, draw: fresh, reviewed: operation.matches, matches, onAttempt, ...access });
+  }
+
+  if (operation.type === 'rank') {
+    return insertReviewedNativeAwards({ client, event, draw: fresh, operation, onAttempt, ...access });
+  }
 
   if (operation.type === 'schedule') {
     return applyNativeMatchSchedule({ client, event, draw: fresh, operation, onAttempt, ...access });

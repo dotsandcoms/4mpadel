@@ -73,6 +73,11 @@ before(async () => {
             const manualLinked = { ...event, id:21, slug:'rankedin-manual', event_name:'Manual Linked Cup', rankedin_id:'8903', rankedin_url:'https://www.rankedin.com/en/tournament/8903' };
             const nativeDraw = { ...tournamentDraw, event_id:11, tournament_divisions:{name:'Open'} };
             const nativeMatch = { ...tournamentMatch, is_featured:false };
+            const completedMatch = { ...nativeMatch, status:'completed', winner_entry_id:'tm-1', loser_entry_id:'tm-2', round_code:'final' };
+            const rankingEntries = [
+                { ...tournament.entries[0], player_one_id:1, player_one_name:'Avery', player_two_id:2, player_two_name:'Morgan' },
+                { ...tournament.entries[1], player_one_id:3, player_one_name:'Jordan', player_two_id:4, player_two_name:'Riley' },
+            ];
             const courtMatches = [
                 { ...nativeMatch, id:'court-a', stage:'group', round_label:'Group 1', round_number:1, bracket_position:1, status:'pending',
                     court_name:'Court 4', scheduled_start:null, scheduled_end:null },
@@ -120,8 +125,17 @@ before(async () => {
                     if (table==='event_registrations' && window.kind.startsWith('payment-')) rows=[paid];
                     if (table==='payments' && window.kind.startsWith('payment-')) rows=[window.kind==='payment-stale' ? {...receipt, payment_method:'cash'} : receipt];
                     if (table==='draw_matches') rows=window.kind.startsWith('court-bulk') ? courtMatches : [nativeMatch];
+                    if (window.kind==='draw-ranking' && table==='draws') { nativeDraw.status='completed'; }
+                    if (['draw-ranking','draw-complete'].includes(window.kind) && table==='draw_matches') rows=[window.changeResultRevision ? { ...completedMatch, updated_at:'match-v2' } : completedMatch];
+                    if (table==='tournament_divisions') rows=[{id:51,event_id:11,ranking_tier_id:'tier-a',ranking_category:1}];
+                    if (table==='ranking_tiers') rows=[{id:'tier-a',code:'silver',name:'Silver'}];
+                    if (table==='ranking_points_table') rows=[
+                        {id:'rule-winner',tier_id:'tier-a',category:1,round_code:'winner',round_label:'Winner',points:window.changeRankingRule?120:100},
+                        {id:'rule-finalist',tier_id:'tier-a',category:1,round_code:'finalist',round_label:'Finalist',points:65},
+                    ];
+                    if (table==='player_ranking_points') rows=[{id:'already-recorded',event_id:11,division_id:51,player_id:1}];
                     if (table==='event_play_days') rows=[{event_id:11,play_date:'2035-01-21',match_duration_minutes:45,is_active:true}];
-                    if (table==='draw_entries') rows=tournament.entries.map(row=>({...row,draw_id:draw.id}));
+                    if (table==='draw_entries') rows=(window.kind==='draw-ranking'?rankingEntries:tournament.entries).map(row=>({...row,draw_id:draw.id}));
                     if (table==='native_draw_announcements') rows=[existingAnnouncement, {...existingAnnouncement,id:'other-announcement',event_id:13,message:'Other announcement'}];
                     let bounds=null;
                     let write=null;
@@ -139,7 +153,9 @@ before(async () => {
                             return Promise.resolve({data:rows[0]});
                         },maybeSingle(){return query.single();},
                         update(fields){write={kind:'update',fields};return query;},delete(){write={kind:'delete'};return query;},
-                        insert(payload){window.calls.push(['insert',table,payload]);rows=[{id:99}];return query;},
+                        insert(payload){window.calls.push(['insert',table,payload]);
+                            rows=table==='player_ranking_points' ? payload.map(row=>({id:'award-'+row.player_id,player_id:row.player_id})) : [{id:99}];
+                            return query;},
                         upsert(payload){window.calls.push(['upsert',table,payload]);return Promise.resolve({data:[]});},
                         then(resolve){return Promise.resolve({data:bounds?rows.slice(bounds[0],bounds[1]+1):rows}).then(resolve);} };
                     return query;
@@ -177,7 +193,7 @@ before(async () => {
                 if (kind.startsWith('payment-')) return <EventPaymentDialog action={{ type:'correct', registration:{...paid, _editablePayment:receipt} }} client={client} session={session}
                     event={event} divisions={[division]} scopeId={kind==='payment-tenant'?'org:org-a':'all'} onClose={result=>window.calls.push(['closed',result])}/>;
                 if (kind==='draw-generator') return <MemoryRouter initialEntries={['/admin-preview/event?event=505']}><GeneratorFixture /></MemoryRouter>;
-                if (kind==='native-draw' || kind.startsWith('court-')) return <NativeDrawOperationsDialog client={client} session={session} event={event}
+                if (kind==='native-draw' || kind.startsWith('court-') || ['draw-complete','draw-ranking'].includes(kind)) return <NativeDrawOperationsDialog client={client} session={session} event={event}
                     scopeId={kind==='court-tenant'?'org:org-a':'all'} onClose={()=>window.calls.push(['closed'])} />;
                 if (kind.startsWith('rankedin-')) return <MemoryRouter><CalendarWorkspace session={session} client={client}
                   scope={{id:'all'}} permissions={{role:'super_admin'}} scopeId="all" canManageEvents /></MemoryRouter>;
@@ -624,4 +640,57 @@ test('manual receipt corrections stop when the receipt changes or the workspace 
             assert.equal(await page.evaluate(() => window.calls.some(([action]) => action === 'correct_manual_event_payment')), false);
         } finally { await page.close(); }
     }
+});
+
+test('marking a native draw complete checks exact reviewed match states, draw version, event and division', async () => {
+    const page = await open('draw-complete');
+    try {
+        await clickText(page, 'Mark draw complete');
+        assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'update')), false);
+        await clickText(page, 'Confirm draw action');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Draw marked complete.');
+        const mutation = await page.evaluate(() => window.calls.find(call => call[0] === 'update'));
+        assert.deepEqual(mutation.slice(1,3), ['draws', { id:'draw-a',event_id:11,division_id:51,status:'published',updated_at:'draw-v1' }]);
+        assert.equal(mutation[3].status, 'completed');
+        assert.ok(mutation[3].completed_at);
+    } finally { await page.close(); }
+});
+
+test('ranking awards review inserts exact finalists and winners into the scoped ledger without replacing prior awards', async () => {
+    const page = await open('draw-ranking');
+    try {
+        await clickText(page, 'Review ranking points');
+        await page.waitForFunction(() => document.querySelector('[aria-label="Final placements and points"]')?.textContent.includes('Avery (awarded)'));
+        await clickText(page, 'Review points to award');
+        await page.waitForFunction(() => document.querySelector('.ap-native-court-review')?.textContent.includes('Morgan'));
+        assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'insert')), false);
+        await clickText(page, 'Confirm draw action');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === '3 player awards recorded.');
+        const writes = await page.evaluate(() => window.calls.filter(call => call[0] === 'insert'));
+        assert.equal(writes.length, 1);
+        assert.equal(writes[0][1], 'player_ranking_points');
+        const awards = writes[0][2].map(row => [row.player_id,row.event_id,row.division_id,row.round_code,row.points,row.config_snapshot.draw_id]);
+        assert.deepEqual(awards, [[2,11,51,'winner',100,'draw-a'],[3,11,51,'finalist',65,'draw-a'],[4,11,51,'finalist',65,'draw-a']]);
+    } finally { await page.close(); }
+});
+
+test('native draw completion and ranking awards reject stale reviewed data without any write', async () => {
+    const completion = await open('draw-complete');
+    try {
+        await clickText(completion, 'Mark draw complete');
+        await completion.evaluate(() => { window.changeResultRevision=true; });
+        await clickText(completion, 'Confirm draw action');
+        await completion.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('reviewed results changed'));
+        assert.equal(await completion.evaluate(() => window.calls.some(call => call[0] === 'update')), false);
+    } finally { await completion.close(); }
+
+    const ranking = await open('draw-ranking');
+    try {
+        await clickText(ranking, 'Review ranking points');
+        await clickText(ranking, 'Review points to award');
+        await ranking.evaluate(() => { window.changeRankingRule=true; });
+        await clickText(ranking, 'Confirm draw action');
+        await ranking.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('placements, rules or award ledger changed'));
+        assert.equal(await ranking.evaluate(() => window.calls.some(call => call[0] === 'insert')), false);
+    } finally { await ranking.close(); }
 });

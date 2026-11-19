@@ -1,5 +1,8 @@
 import { useEffect, useId, useState } from 'react';
 import SearchableDropdown from '../../components/SearchableDropdown';
+import { canCompleteNativeDraw, nativeCompletionReview } from './nativeDrawLifecycle.js';
+import { canReviewNativeRanking } from './nativeDrawRanking.js';
+import NativeDrawRankingReview, { NativeDrawAwardReceiptReview } from './NativeDrawRankingReview.jsx';
 import NativeDrawCourtSetup, { NativeDrawCourtReview } from './NativeDrawCourtSetup.jsx';
 import { useEventOperation } from './useEventOperation.js';
 import {
@@ -26,6 +29,8 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
   const [form, setForm] = useState(blankAnnouncement);
   const [review, setReview] = useState(null);
   const [courtReview, setCourtReview] = useState(null);
+  const [rankingOpen, setRankingOpen] = useState(false);
+  const [rankingOverrides, setRankingOverrides] = useState({});
 
   useEffect(() => {
     const controller = new AbortController();
@@ -57,6 +62,8 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
     setDrawId(id);
     setMatchId('');
     setCourtReview(null);
+    setRankingOpen(false);
+    setRankingOverrides({});
     setStored(null);
     setLoadError('');
   };
@@ -84,6 +91,8 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
     <form onSubmit={confirm}>
       {result ? <p role="status">{result}</p> : review ? <>
         <h3>{review.heading}</h3><p>{review.summary}</p>
+        {review.type === 'rank' && <NativeDrawAwardReceiptReview rows={review.rows} />}
+        {review.type === 'complete' && <p className="ap-payment-live-note">Complete this draw to confirm final placements and restrict changes to recorded scores.</p>}
         {review.type === 'schedule' && <NativeDrawCourtReview plan={review.plan} />}
         {review.type === 'reopen' && <p className="ap-payment-live-note">The draw returns to a draft and stays private until it is published again. Recorded play can prevent reopening.</p>}
         {review.type === 'announce' && <p className="ap-payment-live-note">{announcementScope[review.scope]}{review.pinned ? ' · Pinned announcement' : ''}. Confirming publishes this message on the public draw.</p>}
@@ -108,6 +117,13 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
             </div>}
             {canUpdateNativeMatches(selected.draw) && !selected.featuredAvailable && <p>Featured-match controls are unavailable on this connection.</p>}
           </>}
+          {canCompleteNativeDraw(selected.draw, selected.matches) && <button type="button" className="ap-secondary" onClick={() => setReview({
+            type: 'complete', matches: nativeCompletionReview(selected.matches), heading: 'Review draw completion', summary: drawLabel(selected.draw),
+          })}>Mark draw complete</button>}
+          {canReviewNativeRanking(selected.draw) && (rankingOpen ? <NativeDrawRankingReview
+            client={client} event={event} draw={selected.draw} session={session} scopeId={scopeId}
+            overrides={rankingOverrides} setOverrides={setRankingOverrides} onReview={setReview}
+          /> : <button type="button" className="ap-secondary" onClick={() => setRankingOpen(true)}>Review ranking points</button>)}
           {canScheduleNativeDraw(selected.draw) && <NativeDrawCourtSetup key={drawId + ':' + matchId} match={match} snapshot={selected} previousReview={courtReview} onReview={setReview} />}
           {selected.announcements ? <section className="ap-draw-announcements">
             <h3>Public announcements</h3>
