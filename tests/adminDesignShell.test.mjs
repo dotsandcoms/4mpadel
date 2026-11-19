@@ -18,6 +18,7 @@ const listeners = new Set();
 const result = data => ({ data, error: null });
 const calls = () => window.fixtureCalls;
 const tenant = () => window.fixtureAccount === 'tenant';
+const playerFixture = () => window.fixturePlayersRoute === true;
 const player = { id: 12, name: 'Fixture Player', email: 'player@example.invalid', home_club: 'Fixture Club', approved: true };
 const north = { id: 'north-fixture', name: 'North organisation', status: 'approved' };
 const south = { id: 'south-fixture', name: 'South organisation', status: 'approved' };
@@ -39,10 +40,13 @@ function query(table) {
   ].filter(row => window.fixtureAccount !== 'players-only' || row.user_email !== email)
    : table === 'calendar' || table === 'events' ? [event]
    : table === 'organisations' ? [north, south]
-   : table === 'players' ? [player]
-   : table === 'event_registrations' ? [{ id: 3, event_id: event.id, email: player.email, status: 'registered', payment_status: 'pending', division: 'Open', calendar: event }]
+   : table === 'players' && playerFixture() ? [player]
+   : table === 'event_registrations' && playerFixture() ? [{ id: 3, event_id: event.id, email: player.email, status: 'registered', payment_status: 'pending', division: 'Open', calendar: event }]
    : [];
-  if (table === 'admin_sidebar_permissions') rows = window.fixtureAccount === 'platform' ? [{ email, role: 'super_admin' }] : [{ email, role: 'custom', allowed_tabs: ['players'] }];
+  if (table === 'admin_sidebar_permissions') {
+    if (window.fixtureAccount === 'platform') rows = [{ email, role: 'super_admin' }];
+    else if (playerFixture()) rows = [{ email, role: 'custom', allowed_tabs: ['players'] }];
+  }
   let fields = '';
   let single = false;
   const builder = {
@@ -53,13 +57,16 @@ function query(table) {
     range(start, end) { rows = rows.slice(start, end + 1); return builder; },
     limit(size) { rows = rows.slice(0, size); return builder; },
     abortSignal() { return builder; },
-    ilike(key, value) { rows = rows.filter(row => String(row[key] || '').toLowerCase() === String(value).toLowerCase()); return builder; },
+    ilike(key, value) {
+      if (playerFixture()) rows = rows.filter(row => String(row[key] || '').toLowerCase() === String(value).toLowerCase());
+      return builder;
+    },
     is() { return builder; },
     or() { return builder; },
     not() { return builder; },
     gte() { return builder; },
     lte() { return builder; },
-    neq(key, value) { rows = rows.filter(row => row[key] !== value); return builder; },
+    neq(key, value) { if (playerFixture()) rows = rows.filter(row => row[key] !== value); return builder; },
     maybeSingle() { single = true; return builder; },
     single() { return builder.maybeSingle(); },
     then(resolve, reject) { calls().push(['read', table, fields]); return Promise.resolve(result(single ? rows[0] || null : rows)).then(resolve, reject); },
@@ -179,6 +186,7 @@ async function open(t, initial = '/admin-preview/home', account = 'platform', mo
   await page.evaluate((initial, account) => {
     window.fixtureCalls = [];
     window.fixtureAccount = account;
+    window.fixturePlayersRoute = /^\/admin-preview\/players?(?:\?|$)/.test(initial);
     window.fixtureStart(initial);
   }, initial, account);
   return page;
