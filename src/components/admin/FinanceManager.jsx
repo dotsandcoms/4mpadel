@@ -1,3 +1,4 @@
+import { isEventCheckoutReference, legacyEventIdFromPaymentReference } from '../../utils/eventPaymentReference';
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -226,10 +227,8 @@ const FinanceManager = () => {
                 }
             }
             
-            // 1. Identify if it's an Event Registration (REGEV) or a standalone Membership
             const reference = trx.id || '';
-            const isEventReg = reference.startsWith('REGEV-')
-                || (reference.startsWith('MANUAL-') && !reference.startsWith('MANUAL-ADMIN-'));
+            const isEventReg = isEventCheckoutReference(reference);
             
             // Preserve reviewed classifications when a transaction is synced again.
             const { data: existingPayment, error: existingPaymentError } = await supabase
@@ -240,19 +239,11 @@ const FinanceManager = () => {
             if (existingPaymentError) throw existingPaymentError;
             const localMetadata = paystackMetadata(existingPayment?.metadata);
 
-            let enrichedEventId = trx.metadata?.event_id || localMetadata?.event_id || null;
+            const enrichedEventId = trx.metadata?.event_id || localMetadata?.event_id || existingPayment?.event_id
+                || legacyEventIdFromPaymentReference(reference);
             let enrichedEventName = trx.metadata?.event_name || localMetadata?.event_name || null;
             let enrichedEventDate = trx.metadata?.event_date || localMetadata?.event_date || trx.rawDate;
             let enrichedDivision = trx.metadata?.division || localMetadata?.division || null;
-
-            // Extract Event ID from reference if missing from metadata
-            if (isEventReg && !enrichedEventId) {
-                const parts = reference.split('-');
-                if (parts.length >= 2) {
-                    const extractedId = parseInt(parts[1], 10);
-                    if (!isNaN(extractedId)) enrichedEventId = extractedId;
-                }
-            }
 
             const fullLicenseTotal = licenseQuote('full', commerce).total;
             const tempLicenseTotal = licenseQuote('temporary', commerce).total;
@@ -989,8 +980,7 @@ const FinanceManager = () => {
                                                                 if (!p) return <span className="text-[10px] text-gray-600">No Profile</span>;
                                                                 
                                                                 // Allow re-syncing if it's an event registration that might have been misidentified
-                                                                const isEventReg = trx.id?.startsWith('REGEV-')
-                                                                    || (trx.id?.startsWith('MANUAL-') && !trx.id?.startsWith('MANUAL-ADMIN-'));
+                                                                const isEventReg = isEventCheckoutReference(trx.id);
                                                                 if (isRecorded && !isEventReg) return <CheckCircle size={14} className="text-padel-green ml-auto" />;
                                                                 
                                                                 return (
