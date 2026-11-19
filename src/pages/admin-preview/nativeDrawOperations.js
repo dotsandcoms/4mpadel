@@ -1,5 +1,6 @@
 import { buildEventPlayDays, mergeEventPlayDays } from '../../utils/nativeDrawScheduler.js';
 import { planNativeMatchSchedule, sameReviewedSchedule } from './nativeMatchScheduling.js';
+import { readNativeDivisionSchedule, readNativeEventPlayPlan, writeNativeDivisionSchedule } from './nativeDrawPlayPlan.js';
 import { readAll } from './playersData.js';
 import { verifyCalendarPlatformActor } from './calendarRecordActions.js';
 import { completeReviewedNativeDraw } from './nativeDrawLifecycle.js';
@@ -7,7 +8,7 @@ import { insertReviewedNativeAwards, readNativeRankingReview } from './nativeDra
 import { verifyEventOperationAccess } from './eventOperationAccess.js';
 
 const drawFields = 'id,event_id,division_id,draw_kind,format,status,updated_at,scoring_rules,tournament_divisions(name)';
-const matchFields = 'id,draw_id,entry_one_id,entry_two_id,round_label,round_number,bracket_position,stage,status,court_name,scheduled_start,scheduled_end,updated_at';
+const matchFields = 'id,draw_id,entry_one_id,entry_two_id,round_label,round_number,bracket_position,stage,round_code,winner_entry_id,status,court_name,scheduled_start,scheduled_end,updated_at';
 const announcementFields = 'id,event_id,division_id,draw_id,title,message,is_pinned,is_active,created_at,updated_at';
 const liveStatuses = ['pending', 'scheduled', 'in_progress'];
 const optionalSchema = new Set(['42P01', '42703', 'PGRST204', 'PGRST205']);
@@ -18,6 +19,7 @@ async function verifyNativeEvent({ client, event, expectedUserId, scopeId, isCur
   if (!access.event.is_manual || access.event.event_status === 'cancelled' || !isCurrent()) {
     throw new Error('Choose an active 4M-hosted event.');
   }
+  return access.user;
 }
 
 function nativeDrawSelect(client, event) {
@@ -68,7 +70,7 @@ export async function loadNativeDrawOperations({ client, event, drawId, signal, 
   if (!access.isCurrent()) throw new Error('The draw workspace changed.');
   const [matches, entries, featured, announcements, playDays] = await Promise.all([
     nativeMatches(client, draw, signal),
-    readAll(() => client.from('draw_entries').select('id,team_name').eq('draw_id', draw.id).order('id'), signal),
+    readAll(() => client.from('draw_entries').select('id,team_name,status').eq('draw_id', draw.id).order('id'), signal),
     featuredMatches(client, draw, signal),
     eventAnnouncements(client, event, signal),
     canScheduleNativeDraw(draw) ? nativeEventPlayDays(client, event, signal) : [],
@@ -80,6 +82,7 @@ export async function loadNativeDrawOperations({ client, event, drawId, signal, 
       ...match, label: [names.get(match.entry_one_id), names.get(match.entry_two_id)].filter(Boolean).join(' vs ') || match.round_label || 'Match',
       is_featured: featured?.some(item => item.id === match.id),
     })),
+    entries,
     featuredAvailable: featured !== null,
     playDays,
     announcements: announcements?.filter(item => !item.division_id || item.division_id === draw.division_id && (!item.draw_id || item.draw_id === draw.id)) ?? null,
@@ -120,6 +123,43 @@ async function applyNativeMatchSchedule({ client, event, draw, operation, isCurr
   return saved === 1 ? 'Match court setup saved.' : 'Court setup saved for ' + saved + ' matches.';
 }
 
+export async function loadNativeCalendarPlan({ client, event, ...access }) {
+  await verifyNativeEvent({ client, event, ...access });
+  return readNativeEventPlayPlan(client, event, access.signal);
+}
+
+export async function loadNativeDivisionPlan({ client, event, divisionId, ...access }) {
+  await verifyNativeEvent({ client, event, ...access });
+  return readNativeDivisionSchedule(client, event.id, divisionId);
+}
+
+export async function saveNativeEventCalendarPlan({ client, event, operation, onAttempt, ...access }) {
+  const user = await verifyNativeEvent({ client, event, ...access });
+  if (operation.type === 'division-plan') {
+    return writeNativeDivisionSchedule({ client, event, userId: user.id, operation, onAttempt, ...access });
+  }
+  if (operation.type === 'remove-day') {
+    const { data, error } = await client.from('event_play_days').select('updated_at,is_removed')
+      .eq('event_id', event.id).eq('play_date', operation.day).maybeSingle();
+    if (data?.is_removed) return 'Play day already removed.';
+    if (error || (data?.updated_at ?? null) !== operation.expected || !access.isCurrent()) {
+      throw error || new Error('The play day changed. Review it again.');
+    }
+    onAttempt();
+    const receipt = await client.rpc('remove_event_play_day', { p_event_id: event.id, p_play_date: operation.day });
+    if (receipt.error) throw receipt.error;
+    return 'Play day removed.';
+  }
+  if (operation.type !== 'play-days' || !access.isCurrent()) throw new Error('The review changed.');
+  onAttempt();
+  const { data, error } = await client.rpc('native_save_event_play_days', {
+    p_event_id: event.id, p_days: operation.days, p_expected: operation.versions,
+  });
+  if (error) throw error;
+  if (!Number.isSafeInteger(data) || data < 0 || data > operation.days.length) throw new Error('Could not verify the playing hours.');
+  return data ? 'Playing hours and courts saved.' : 'Playing hours and courts are already current.';
+}
+
 export async function loadNativeDrawRanking({ client, event, draw, ...access }) {
   await verifyNativeEvent({ client, event, ...access });
   const current = await readNativeDraw(client, event, draw.id);
@@ -132,6 +172,17 @@ export async function saveNativeDrawOperation({ client, event, draw, operation, 
   await verifyNativeEvent(context);
   const fresh = await readNativeDraw(client, event, draw.id);
   if (fresh.updated_at !== draw.updated_at || !access.isCurrent()) throw new Error('The draw changed. Reopen it before continuing.');
+
+  if (operation.type === 'plate') {
+    onAttempt();
+    const { data, error } = await client.rpc('native_create_linked_plate', {
+      p_event_id: event.id, p_parent_draw: fresh.id, p_expected_parent: fresh.updated_at, p_expected_matches: operation.plate.versions,
+    });
+    if (error) throw error;
+    if (!data?.id || data.kind !== operation.plate.kind) throw new Error('Could not verify the linked plate.');
+    const name = data.kind === 'silver' ? 'Silver plate' : 'Bronze plate';
+    return data.created ? name + ' created and published.' : name + ' is already available.';
+  }
 
   if (operation.type === 'complete') {
     const matches = await nativeMatches(client, fresh, access.signal);

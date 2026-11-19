@@ -1,16 +1,19 @@
 import { useEffect, useId, useState } from 'react';
 import SearchableDropdown from '../../components/SearchableDropdown';
+import { prepareLinkedPlate } from './nativeLinkedPlate.js';
 import { canCompleteNativeDraw, nativeCompletionReview } from './nativeDrawLifecycle.js';
 import { canReviewNativeRanking } from './nativeDrawRanking.js';
 import NativeDrawRankingReview, { NativeDrawAwardReceiptReview } from './NativeDrawRankingReview.jsx';
+import NativeDrawPlayPlan, { NativeDrawPlayPlanReview } from './NativeDrawPlayPlan.jsx';
 import NativeDrawCourtSetup, { NativeDrawCourtReview } from './NativeDrawCourtSetup.jsx';
 import { useEventOperation } from './useEventOperation.js';
 import {
   canReopenNativeDraw, canScheduleNativeDraw, canUpdateNativeMatches, listNativeDrawOperations, loadNativeDrawOperations,
-  saveNativeDrawOperation, validNativeLiveMatch,
+  saveNativeDrawOperation, saveNativeEventCalendarPlan, validNativeLiveMatch,
 } from './nativeDrawOperations.js';
 import './EventPaymentDialog.css';
 
+const planActions = ['play-days', 'remove-day', 'division-plan'];
 const blankAnnouncement = { scope: 'draw', title: '', message: '', pinned: false };
 const drawLabel = draw => {
   const kind = { main: 'Main draw', silver: 'Silver plate', bronze: 'Bronze plate' }[draw.draw_kind] || 'Draw';
@@ -29,6 +32,7 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
   const [form, setForm] = useState(blankAnnouncement);
   const [review, setReview] = useState(null);
   const [courtReview, setCourtReview] = useState(null);
+  const [calendarReview, setCalendarReview] = useState(null);
   const [rankingOpen, setRankingOpen] = useState(false);
   const [rankingOverrides, setRankingOverrides] = useState({});
 
@@ -57,6 +61,9 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
 
   const selected = stored?.draw.id === drawId ? stored : null;
   const match = selected?.matches.find(row => row.id === matchId);
+  const candidate = selected && prepareLinkedPlate(selected.draw, selected.matches, selected.entries);
+  const plateName = candidate?.kind === 'silver' ? 'Silver plate' : 'Bronze plate';
+  const plate = candidate && !draws?.some(draw => draw.division_id === selected.draw.division_id && draw.draw_kind === candidate.kind) ? candidate : null;
   const updateForm = (key, value) => setForm(current => ({ ...current, [key]: value }));
   const changeDraw = id => {
     setDrawId(id);
@@ -69,7 +76,12 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
   };
   const confirm = formEvent => {
     formEvent.preventDefault();
-    if (!review || !selected) return;
+    if (!review) return;
+    if (planActions.includes(review.type)) {
+      run(checks => saveNativeEventCalendarPlan({ client, event, operation: review, expectedUserId: userId, scopeId, ...checks }));
+      return;
+    }
+    if (!selected) return;
     run(checks => saveNativeDrawOperation({
       client, event, draw: selected.draw, operation: review, expectedUserId: userId, scopeId, ...checks,
     }));
@@ -80,6 +92,7 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
   };
   const back = () => {
     if (review.type === 'schedule') setCourtReview(review);
+    if (planActions.includes(review.type)) setCalendarReview(review);
     setReview(null);
   };
   const reviewMatch = (type, heading) => setReview({ type, match, heading, summary: match.label });
@@ -91,6 +104,8 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
     <form onSubmit={confirm}>
       {result ? <p role="status">{result}</p> : review ? <>
         <h3>{review.heading}</h3><p>{review.summary}</p>
+        {planActions.includes(review.type) && <NativeDrawPlayPlanReview action={review} />}
+        {review.type === 'plate' && <><p role="status">The new plate will be published after confirmation.</p><ul>{review.plate.teams.map((team, index) => <li key={index}>{team}</li>)}</ul></>}
         {review.type === 'rank' && <NativeDrawAwardReceiptReview rows={review.rows} />}
         {review.type === 'complete' && <p className="ap-payment-live-note">Complete this draw to confirm final placements and restrict changes to recorded scores.</p>}
         {review.type === 'schedule' && <NativeDrawCourtReview plan={review.plan} />}
@@ -100,6 +115,8 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
       </> : <>
         {loadError && <p role="alert">{loadError}</p>}
         {!loadError && !draws && <p role="status">Loading event draws…</p>}
+        {draws && <NativeDrawPlayPlan client={client} event={event} session={session} scopeId={scopeId}
+          activeDivisionId={selected?.draw.division_id} previous={calendarReview} onReview={setReview} />}
         {draws?.length === 0 && <p>Save a draw in Tournament Manager to manage live matches and announcements.</p>}
         {draws?.length > 0 && <label>Draw<SearchableDropdown value={drawId} onChange={event => changeDraw(event.target.value)}>
           {draws.map(draw => <option key={draw.id} value={draw.id}>{drawLabel(draw)}</option>)}
@@ -117,6 +134,9 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
             </div>}
             {canUpdateNativeMatches(selected.draw) && !selected.featuredAvailable && <p>Featured-match controls are unavailable on this connection.</p>}
           </>}
+          {plate && (plate.issue ? <p>{plateName} · {plate.issue}</p> : <button type="button" className="ap-secondary" onClick={() => setReview({
+            type: 'plate', plate, heading: 'Create ' + plateName, summary: plate.teams.length + ' teams from the source draw’s opening round.',
+          })}>Create {plateName}</button>)}
           {canCompleteNativeDraw(selected.draw, selected.matches) && <button type="button" className="ap-secondary" onClick={() => setReview({
             type: 'complete', matches: nativeCompletionReview(selected.matches), heading: 'Review draw completion', summary: drawLabel(selected.draw),
           })}>Mark draw complete</button>}

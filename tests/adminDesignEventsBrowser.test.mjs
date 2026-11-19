@@ -74,6 +74,11 @@ before(async () => {
             const nativeDraw = { ...tournamentDraw, event_id:11, tournament_divisions:{name:'Open'} };
             const nativeMatch = { ...tournamentMatch, is_featured:false };
             const completedMatch = { ...nativeMatch, status:'completed', winner_entry_id:'tm-1', loser_entry_id:'tm-2', round_code:'final' };
+            const linkedPlateMatches = [
+                { ...completedMatch, id:'plate-first', entry_one_id:'plate-1', entry_two_id:'plate-2', winner_entry_id:'plate-1', bracket_position:1 },
+                { ...completedMatch, id:'plate-second', entry_one_id:'plate-3', entry_two_id:'plate-4', winner_entry_id:'plate-3', bracket_position:2 },
+            ];
+            const linkedPlateEntries = [1,2,3,4].map(number=>({id:'plate-'+number,team_name:'Plate Team '+number,draw_id:draw.id,status:'active'}));
             const rankingEntries = [
                 { ...tournament.entries[0], player_one_id:1, player_one_name:'Avery', player_two_id:2, player_two_name:'Morgan' },
                 { ...tournament.entries[1], player_one_id:3, player_one_name:'Jordan', player_two_id:4, player_two_name:'Riley' },
@@ -95,6 +100,9 @@ before(async () => {
                 rpc(name,args) {
                     window.calls.push([name,args]);
                     const request = (async()=>{
+                    if (name==='native_create_linked_plate') return {data:{id:'plate-new',kind:window.kind==='special-bronze'?'bronze':'silver',created:true}};
+                    if (name==='native_save_event_play_days') return {data:args.p_days.length};
+                    if (name==='remove_event_play_day') return {data:null};
                     if (name==='can_manage_event') return { data: args.p_event_id===11 };
                     if (name==='correct_manual_event_payment') return {data:{paymentId:receipt.id,method:args.p_method,recipient:args.p_recipient}};
                     if (name==='reopen_native_draw_for_corrections') { nativeDraw.status='draft'; return { data:null }; }
@@ -136,6 +144,22 @@ before(async () => {
                     if (table==='player_ranking_points') rows=[{id:'already-recorded',event_id:11,division_id:51,player_id:1}];
                     if (table==='event_play_days') rows=[{event_id:11,play_date:'2035-01-21',match_duration_minutes:45,is_active:true}];
                     if (table==='draw_entries') rows=(window.kind==='draw-ranking'?rankingEntries:tournament.entries).map(row=>({...row,draw_id:draw.id}));
+                    if (window.kind.startsWith('special-') && table==='draws') {
+                        if (window.kind==='special-days' || window.kind==='special-division' || window.kind==='special-remove') rows=[];
+                        else { nativeDraw.scoring_rules={plate_mode:'triple'}; nativeDraw.draw_kind=window.kind==='special-bronze'?'silver':'main'; }
+                    }
+                    if (['special-silver','special-bronze'].includes(window.kind) && table==='draw_matches') rows=linkedPlateMatches;
+                    if (['special-silver','special-bronze'].includes(window.kind) && table==='draw_entries') rows=linkedPlateEntries;
+                    if (window.kind.startsWith('special-') && table==='event_play_days') rows=[
+                        { id:501,event_id:11,play_date:'2035-01-21',start_time:'08:00',end_time:'18:00',courts_count:1,
+                          match_duration_minutes:45,minimum_break_minutes:10,is_active:true,updated_at:'day-v1' },
+                    ];
+                    if (window.kind.startsWith('special-') && table==='tournament_divisions') rows=[
+                        {id:51,event_id:11,name:'Open',is_active:true}, {id:52,event_id:13,name:'Other Event Open',is_active:true},
+                    ];
+                    if (window.kind.startsWith('special-') && table==='draw_player_reviews') rows=[
+                        {division_id:51,event_id:11,updated_at:'review-v1',state:{fingerprint:'retain-fingerprint',workflow:{format:'knockout'}}},
+                    ];
                     if (table==='native_draw_announcements') rows=[existingAnnouncement, {...existingAnnouncement,id:'other-announcement',event_id:13,message:'Other announcement'}];
                     let bounds=null;
                     let write=null;
@@ -193,7 +217,7 @@ before(async () => {
                 if (kind.startsWith('payment-')) return <EventPaymentDialog action={{ type:'correct', registration:{...paid, _editablePayment:receipt} }} client={client} session={session}
                     event={event} divisions={[division]} scopeId={kind==='payment-tenant'?'org:org-a':'all'} onClose={result=>window.calls.push(['closed',result])}/>;
                 if (kind==='draw-generator') return <MemoryRouter initialEntries={['/admin-preview/event?event=505']}><GeneratorFixture /></MemoryRouter>;
-                if (kind==='native-draw' || kind.startsWith('court-') || ['draw-complete','draw-ranking'].includes(kind)) return <NativeDrawOperationsDialog client={client} session={session} event={event}
+                if (kind==='native-draw' || kind.startsWith('special-') || kind.startsWith('court-') || ['draw-complete','draw-ranking'].includes(kind)) return <NativeDrawOperationsDialog client={client} session={session} event={event}
                     scopeId={kind==='court-tenant'?'org:org-a':'all'} onClose={()=>window.calls.push(['closed'])} />;
                 if (kind.startsWith('rankedin-')) return <MemoryRouter><CalendarWorkspace session={session} client={client}
                   scope={{id:'all'}} permissions={{role:'super_admin'}} scopeId="all" canManageEvents /></MemoryRouter>;
@@ -693,4 +717,75 @@ test('native draw completion and ranking awards reject stale reviewed data witho
         await ranking.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('placements, rules or award ledger changed'));
         assert.equal(await ranking.evaluate(() => window.calls.some(call => call[0] === 'insert')), false);
     } finally { await ranking.close(); }
+});
+
+test('linked Silver and Bronze plate reviews show only opening-round losers and submit exact revisions', async () => {
+    for (const [kind, label] of [['special-silver','Create Silver plate'], ['special-bronze','Create Bronze plate']]) {
+        const page = await open(kind);
+        try {
+            await clickText(page, label);
+            assert.match(await page.$eval('dialog', node => node.textContent), /Plate Team 2Plate Team 4/);
+            assert.doesNotMatch(await page.$eval('dialog', node => node.textContent), /Plate Team 1|Plate Team 3/);
+            assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'native_create_linked_plate')), false);
+            await clickText(page, 'Confirm draw action');
+            await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent.includes('created and published'));
+            const calls = await page.evaluate(() => window.calls.filter(call => call[0] === 'native_create_linked_plate'));
+            assert.deepEqual(calls, [['native_create_linked_plate', {
+                p_event_id:11,p_parent_draw:'draw-a',p_expected_parent:'draw-v1',p_expected_matches:{'plate-first':'match-v1','plate-second':'match-v1'},
+            }]]);
+        } finally { await page.close(); }
+    }
+});
+
+test('play-day changes work before a draw exists, using exact event and day versions', async () => {
+    const page = await open('special-days');
+    try {
+        await clickText(page, 'Play days & courts');
+        await page.waitForSelector('input[type=date]');
+        await page.$eval('input[type=date]', input => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '2035-01-22');
+            input.dispatchEvent(new Event('input', {bubbles:true}));
+        });
+        await clickText(page, 'Add play day');
+        await clickText(page, 'Review playing hours');
+        assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'native_save_event_play_days')), false);
+        await clickText(page, 'Confirm draw action');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Playing hours and courts saved.');
+        const payload = await page.evaluate(() => window.calls.find(call => call[0] === 'native_save_event_play_days')[1]);
+        assert.equal(payload.p_event_id,11);
+        assert.deepEqual(payload.p_expected, { '2035-01-21':'day-v1','2035-01-22':null });
+        assert.deepEqual(payload.p_days.map(day => day.play_date), ['2035-01-21','2035-01-22']);
+    } finally { await page.close(); }
+
+    const remove = await open('special-remove');
+    try {
+        await clickText(remove, 'Play days & courts');
+        await clickText(remove, 'Remove 2035-01-21');
+        assert.equal(await remove.evaluate(() => window.calls.some(call => call[0] === 'remove_event_play_day')), false);
+        await clickText(remove, 'Confirm draw action');
+        await remove.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Play day removed.');
+        assert.deepEqual(await remove.evaluate(() => window.calls.find(call => call[0] === 'remove_event_play_day')),
+            ['remove_event_play_day',{p_event_id:11,p_play_date:'2035-01-21'}]);
+    } finally { await remove.close(); }
+});
+
+test('division schedule never offers another event and preserves its shared player review fields', async () => {
+    const page = await open('special-division');
+    try {
+        await clickText(page, 'Division schedule');
+        await page.waitForFunction(() => [...document.querySelectorAll('dialog label')].some(label => label.textContent.startsWith('Scheduling priority')));
+        assert.doesNotMatch(await page.$eval('dialog', element => element.textContent), /Other Event Open/);
+        await page.evaluate(() => [...document.querySelectorAll('dialog label')].find(label => label.textContent.startsWith('Scheduling priority')).querySelector('input').focus());
+        await page.keyboard.type('2');
+        await page.evaluate(() => [...document.querySelectorAll('dialog label')].find(label => label.textContent === 'Rounds').querySelector('input').focus());
+        await page.keyboard.type('3');
+        await clickText(page, 'Review division plan');
+        assert.equal(await page.evaluate(() => window.calls.some(call => call[0] === 'update')), false);
+        await clickText(page, 'Confirm draw action');
+        await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent === 'Division schedule saved.');
+        const mutation = await page.evaluate(() => window.calls.find(call => call[0] === 'update'));
+        assert.deepEqual(mutation.slice(1,3), ['draw_player_reviews',{event_id:11,division_id:51,updated_at:'review-v1'}]);
+        assert.equal(mutation[3].confirmed_by,'fixture-user');
+        assert.deepEqual(mutation[3].state,{fingerprint:'retain-fingerprint',workflow:{format:'knockout',schedule_days:{'2035-01-21':{start_time:'',rounds:3}},schedule_priority:2}});
+    } finally { await page.close(); }
 });

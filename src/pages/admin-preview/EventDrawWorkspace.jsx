@@ -18,7 +18,7 @@ export default function EventDrawWorkspace({
         {canOpen('draws') && <button className="ap-primary" onClick={() => onOpenTournament(firstPending, 'draws')}><Trophy size={16} /> Draw generator</button>}
         {canOpen('schedule') && <button className="ap-secondary" onClick={() => onOpenTournament(undefined, 'schedule')}>Open court schedule</button>}
         {canOpen('results') && <button className="ap-secondary" onClick={() => onOpenTournament(undefined, 'results')}>Open results</button>}
-        {onNativeOperations && draws.length > 0 && <button className="ap-secondary" onClick={onNativeOperations}>Manage native draw</button>}
+        {onNativeOperations && <button className="ap-secondary" onClick={onNativeOperations}>Manage native draw</button>}
         {onRehearsal && <button className="ap-secondary" onClick={onRehearsal}>Private rehearsal</button>}
         {event.rankedin_url && <a className="ap-secondary" href={event.rankedin_url} target="_blank" rel="noreferrer">Open RankedIn <ExternalLink size={15} /></a>}
       </div>
