@@ -4,7 +4,7 @@ import { CLUB_MEMBER_ROLES } from './clubMemberRpc.js';
 import { clubMemberAddApi, clubMemberAddArguments } from './clubMemberAdd.js';
 
 export default function ClubMemberAdd({ clubId, members, client, scopeId, session, onBusyChange, onSaved, onCancel, addApi = clubMemberAddApi }) {
-  const [query, setQuery] = useState(''), [results, setResults] = useState([]), [searching, setSearching] = useState(false), [player, setPlayer] = useState(null), [role, setRole] = useState('owner');
+  const [query, setQuery] = useState(''), [results, setResults] = useState([]), [searching, setSearching] = useState(false), [player, setPlayer] = useState(null), [role, setRole] = useState(addApi.exactEmail ? 'staff' : 'owner');
   const [review, setReview] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false), [blocked, setBlocked] = useState(false), [saved, setSaved] = useState(null);
   const generation = useRef(0), lock = useRef(false), latest = useRef(null);
   latest.current = { clubId, client, scopeId, userId: session?.user?.id, onBusyChange, onSaved };
@@ -15,12 +15,12 @@ export default function ClubMemberAdd({ clubId, members, client, scopeId, sessio
     if (query.trim().length < 2 || player || busy || blocked || saved) return () => abort.abort();
     const timer = setTimeout(async () => {
       setSearching(true); setError('');
-      try { const rows = await addApi.search({ client, scopeId, userId: session?.user?.id, query, members, signal: abort.signal }); if (!abort.signal.aborted) setResults(rows); }
+      try { const rows = await addApi.search({ client, scopeId, clubId, userId: session?.user?.id, query, members, signal: abort.signal }); if (!abort.signal.aborted) setResults(rows); }
       catch (err) { if (!abort.signal.aborted) setError(err.message); }
       finally { if (!abort.signal.aborted) setSearching(false); }
     }, 350);
     return () => { clearTimeout(timer); abort.abort(); };
-  }, [query, player, client, scopeId, session?.user?.id, members, addApi, busy, blocked, saved]);
+  }, [query, player, client, scopeId, clubId, session?.user?.id, members, addApi, busy, blocked, saved]);
   const enabled = addApi.enabled(client);
   const confirm = async () => {
     if (!enabled || !review || lock.current || blocked || saved) return;
@@ -34,11 +34,11 @@ export default function ClubMemberAdd({ clubId, members, client, scopeId, sessio
   return <section className="clubs-draft" aria-label="Add club member" style={{ padding: 20, display: 'grid', gap: 16, minWidth: 0, overflowWrap: 'anywhere' }}>
     <h4 style={{ fontSize: 18, margin: 0 }}>Add club member</h4>
     <p className="fo-note">{addApi.live ? 'The selected player gets access as soon as you confirm.' : enabled ? 'Staging only. Confirmation grants access immediately and queues a notification. No acceptance step is required.' : 'Local review preview only. Search existing players and review access; nothing is saved and no notification is queued.'}</p>
-    {saved ? <p role="status">Member added. {({ pending: 'Notification queued.', submitted: 'Notification submitted.', unconfirmed: 'Email delivery could not be confirmed.' })[saved.notification] || 'Access granted.'}</p> : <>
+    {saved ? <p role="status">Member added. {({ pending: 'Notification queued.', submitted: 'Notification submitted.', unconfirmed: 'Email delivery could not be confirmed.', platform_only: 'Access granted. Member notifications require platform access.' })[saved.notification] || 'Access granted.'}</p> : <>
       <fieldset disabled={busy || blocked} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: 'grid', gap: 16 }}>
         {player ? <div><strong>{player.name || 'Name unavailable'}</strong><p>{player.email}</p><button type="button" className="ap-secondary" onClick={() => { setPlayer(null); setReview(null); }}>Change player</button></div> : <>
-          <label className="clubs-feedback">Search existing players<input type="search" value={query} placeholder="Name or email…" onChange={e => setQuery(e.target.value)} /></label>
-          <p role="status">{query.trim().length < 2 ? 'Type at least 2 characters to search.' : searching ? 'Searching players…' : `${results.length} available players`}</p>
+          <label className="clubs-feedback">{addApi.exactEmail ? 'Find player by exact email' : 'Search existing players'}<input type="search" value={query} placeholder={addApi.exactEmail ? 'player@example.com' : 'Name or email…'} onChange={e => setQuery(e.target.value)} /></label>
+          <p role="status">{searching ? 'Searching players…' : addApi.exactEmail && !results.length ? 'Enter the full email of a player visible to this account. A platform admin can help with players outside this scope.' : query.trim().length < 2 ? 'Type at least 2 characters to search.' : `${results.length} available players`}</p>
           <ul className="clubs-management-list">{results.map(row => <li key={row.id}><div><strong>{row.name || 'Name unavailable'}</strong><p>{row.email}</p></div><button type="button" className="ap-secondary" onClick={() => { setPlayer(structuredClone(row)); setReview(null); }}>Select player</button></li>)}</ul>
         </>}
         <label className="fo-status-filter">Member role<SearchableDropdown value={role} onChange={e => { setRole(e.target.value); setReview(null); }}>{CLUB_MEMBER_ROLES.map(value => <option key={value} value={value}>{value}</option>)}</SearchableDropdown></label>

@@ -8,7 +8,7 @@ import { clubMemberApi } from './clubMemberRpc.js';
 import ClubMemberAdd from './ClubMemberAdd.jsx';
 import { clubMemberAddApi } from './clubMemberAdd.js';
 
-export default function ClubManagement({ client, session, permissions, scopeId, clubId, onBusyChange, onDecisionSaved, decisionApi = clubDecisionApi, memberApi = clubMemberApi, addApi = clubMemberAddApi }) {
+export default function ClubManagement({ client, session, permissions, scopeId, clubId, onBusyChange, onDecisionSaved, decisionApi = clubDecisionApi, memberApi = clubMemberApi, addApi = clubMemberAddApi, membersOnly = false }) {
   const [adding, setAdding] = useState(false);
   const [opened, setOpened] = useState(false), [state, setState] = useState({ loading: true }), [reload, setReload] = useState(0);
   const [tab, setTab] = useState('members'), [query, setQuery] = useState(''), [page, setPage] = useState(1);
@@ -21,18 +21,19 @@ export default function ClubManagement({ client, session, permissions, scopeId, 
     const controller = new AbortController();
     setState({ loading: true });
     const timer = setTimeout(() => { controller.abort(); setState({ error: 'Loading took too long. Try again.' }); }, 20000);
-    loadClubManagement(client, session, permissions, scopeId, clubId, controller.signal)
+    loadClubManagement(client, session, permissions, scopeId, clubId, controller.signal, membersOnly)
       .then(data => { if (!controller.signal.aborted) setState({ data }); })
       .catch(err => { if (!controller.signal.aborted) setState({ error: err.message }); })
       .finally(() => clearTimeout(timer));
     return () => { controller.abort(); clearTimeout(timer); };
-  }, [opened, client, session?.user?.id, permissions?.role, scopeId, clubId, reload]);
+  }, [opened, client, session?.user?.id, permissions?.role, scopeId, clubId, reload, membersOnly]);
   const rows = (state.data?.[tab] || []).filter(row => [row.players?.name, row.full_name, row.user_email, row.requester_email, row.role, row.status].some(value => String(value || '').toLowerCase().includes(query.trim().toLowerCase())));
   const pages = Math.max(1, Math.ceil(rows.length / 5)), current = Math.min(page, pages);
-  return <section className="clubs-management"><h3>Members & claims</h3>{!decisionApi.live && <p className="fo-note">Member changes: {memberApi.enabled(client) ? 'staging confirmation available' : 'local preview only; no access changes'}. Claim decisions: {enabled ? 'staging confirmation available' : 'local preview only; no access changes'}.</p>}
-    {!opened ? <button className="ap-secondary" onClick={() => setOpened(true)}>Load members and claims</button> : state.loading ? <section className="ap-section"><RecordLoading label="Loading members and claims…" detail="Reading records linked to this club only."/></section> : state.error ? <div role="alert"><p>{state.error}</p><button className="ap-secondary" onClick={() => setReload(n => n + 1)}>Retry members and claims</button></div> : <>
-      <div className="fo-report-actions">{['members','claims'].map(value => <button key={value} className="ap-secondary" disabled={busy} aria-pressed={tab===value} onClick={() => { setTab(value); setPage(1); setQuery(''); setSelected(null); if (value === 'members' && enabled) setReload(n => n + 1); }}>{value === 'members' ? 'Members' : 'Claims'} ({state.data[value].length})</button>)}</div>
-      <label className="fo-search"><input disabled={busy} aria-label="Search members or claims" placeholder="Search name, email, role or status…" value={query} onChange={event => { setQuery(event.target.value); setPage(1); }}/></label>
+  const recordsLabel = membersOnly ? 'club members' : 'members and claims';
+  return <section className="clubs-management"><h3>{membersOnly ? 'Club members' : 'Members & claims'}</h3>{!membersOnly && !decisionApi.live && <p className="fo-note">Member changes: {memberApi.enabled(client) ? 'staging confirmation available' : 'local preview only; no access changes'}. Claim decisions: {enabled ? 'staging confirmation available' : 'local preview only; no access changes'}.</p>}
+    {!opened ? <button className="ap-secondary" onClick={() => setOpened(true)}>{`Load ${recordsLabel}`}</button> : state.loading ? <section className="ap-section"><RecordLoading label={`Loading ${recordsLabel}…`} detail="Reading records linked to this club only."/></section> : state.error ? <div role="alert"><p>{state.error}</p><button className="ap-secondary" onClick={() => setReload(n => n + 1)}>{`Retry ${recordsLabel}`}</button></div> : <>
+      <div className="fo-report-actions">{(membersOnly ? ['members'] : ['members','claims']).map(value => <button key={value} className="ap-secondary" disabled={busy} aria-pressed={tab===value} onClick={() => { setTab(value); setPage(1); setQuery(''); setSelected(null); if (value === 'members' && enabled) setReload(n => n + 1); }}>{value === 'members' ? 'Members' : 'Claims'} ({state.data[value].length})</button>)}</div>
+      <label className="fo-search"><input disabled={busy} aria-label={membersOnly ? 'Search club members' : 'Search members or claims'} placeholder="Search name, email, role or status…" value={query} onChange={event => { setQuery(event.target.value); setPage(1); }}/></label>
       {tab === 'members' && <button type="button" className="ap-secondary" disabled={busy || adding} onClick={() => { setSelected(null); setAdding(true); }}>{addApi.enabled(client) ? 'Add member' : 'Preview adding member'}</button>}
       {adding && tab === 'members' && <ClubMemberAdd clubId={clubId} members={state.data.members} client={client} session={session} scopeId={scopeId} addApi={addApi} onBusyChange={value => { setBusy(value); onBusyChange?.(value); }} onCancel={needsReload => { setAdding(false); if (needsReload) setReload(n => n + 1); }} onSaved={outcome => { setState(previous => ({ ...previous, data: { ...previous.data, members: [...previous.data.members.filter(row => row.id !== outcome.member.id), outcome.member] } })); setQuery(''); setPage(1); }}/ >}
       <ul className="clubs-management-list">{rows.slice((current-1)*5,current*5).map(row => <li key={row.id}><div><strong>{row.players?.name || row.full_name || row.user_email || row.requester_email || 'Name unavailable'}</strong><p>{row.user_email || row.requester_email}</p><span className="ap-status ap-status--neutral">{tab==='members' ? row.role : row.status}</span></div>{tab === 'members' && <button className="ap-secondary" disabled={busy} onClick={() => setSelected(row)}>{memberApi.enabled(client) ? 'Manage member' : 'Preview member change'}</button>}{tab==='claims' && row.status==='pending' && <button className="ap-secondary" disabled={busy} onClick={() => setSelected(row)}>{enabled ? 'Review claim' : 'Preview decision'}</button>}</li>)}</ul>

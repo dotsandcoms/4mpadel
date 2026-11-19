@@ -11,6 +11,7 @@ import ClubInvitations from './ClubInvitations.jsx';
 import ClubOrganisations from './ClubOrganisations.jsx';
 import ClubApplicationDecision from './ClubApplicationDecision.jsx';
 import ClubLifecycleDialog from './ClubLifecycleDialog.jsx';
+import { delegatedClubMemberApi, delegatedClubMemberAddApi } from './delegatedClubMembers.js';
 import { liveClubDecisionApi, liveClubMemberApi, liveClubMemberAddApi, liveClubInvitationApi } from './liveClubOperations.js';
 
 function Fields({ rows }) {
@@ -90,6 +91,10 @@ export default function ClubDetails({ club, client, session, permissions, scopeI
         {platform && <><ClubOrganisations club={{ ...club, ...data }} client={client} session={session} scopeId={scopeId}/>
         <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}><ClubManagement key={`management-${club.id}`} client={client} session={session} permissions={permissions} scopeId={scopeId} clubId={club.id} onBusyChange={decisionBusy} onDecisionSaved={refreshDecision} decisionApi={liveClubDecisionApi} memberApi={liveClubMemberApi} addApi={liveClubMemberAddApi}/></fieldset>
         <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}><ClubInvitations key={`invitations-${club.id}`} client={client} session={session} scopeId={scopeId} clubId={club.id} creationApi={liveClubInvitationApi} onBusyChange={decisionBusy}/></fieldset></>}
+        {!platform && canEdit && <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
+          <ClubManagement key={`scoped-members-${club.id}`} client={client} session={session} permissions={permissions} scopeId={scopeId}
+            clubId={club.id} onBusyChange={decisionBusy} membersOnly memberApi={delegatedClubMemberApi} addApi={delegatedClubMemberAddApi}/>
+        </fieldset>}
         <section><h3>Record information</h3><Fields rows={[['Created', data.created_at], ['Last updated', data.updated_at]]}/></section>
         {platform && onLifecycleCompleted && <section><h3>Club record actions</h3><div className="fo-report-actions">
           <button className="ap-secondary" type="button" disabled={saving} onClick={() => setLifecycle('merge')}>Merge duplicate club</button>

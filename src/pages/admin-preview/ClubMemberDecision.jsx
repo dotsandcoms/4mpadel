@@ -9,12 +9,13 @@ export default function ClubMemberDecision({ record, ownerCount, client, session
   latest.current = { record, client, scopeId, userId: session?.user?.id, onBusyChange, onSaved };
   useEffect(() => { generation.current++; setReview(null); setResult(null); setBlocked(false); setError(''); setAction('change_role'); setRole(record.role); return () => { generation.current++; }; }, [record, client, scopeId, session?.user?.id]);
   const enabled = memberApi.enabled(client);
+  const heldOwner = memberApi.protectOwners && record.role === 'owner';
   const reviewChange = () => {
     if (lock.current || blocked) return;
     try { setReview(clubMemberArguments(record, action, role, crypto.randomUUID())); setError(''); } catch (err) { setError(err.message); }
   };
   const confirm = async () => {
-    if (!enabled || !review || lock.current || blocked || result) return;
+    if (!enabled || !review || heldOwner || lock.current || blocked || result) return;
     const token = generation.current, identity = latest.current;
     const isCurrent = () => token === generation.current && latest.current.record === identity.record && latest.current.client === identity.client && latest.current.scopeId === identity.scopeId && latest.current.userId === identity.userId;
     lock.current = true; setBusy(true); latest.current.onBusyChange?.(true);
@@ -34,8 +35,9 @@ export default function ClubMemberDecision({ record, ownerCount, client, session
         <button type="button" className="ap-secondary" onClick={reviewChange}>Review member change</button>
       </fieldset>
       {review && <div role="status" style={{ display: 'grid', gap: 16 }}><p><strong>{review.p_expected_member.user_email || 'Member without a recorded email'}</strong><br/>{review.p_action === 'remove' ? `Remove this ${review.p_expected_member.role} membership from this club. The player account is not deleted.` : `Change this member’s role from ${review.p_expected_member.role} to ${review.p_role}.`}</p>
-        {record.role === 'owner' && ownerCount <= 1 && (action === 'remove' || role !== 'owner') && <p className="fo-note">Warning: this is the last recorded owner. This change will leave this club without an owner unless another owner has been added since this list loaded.</p>}
-        {enabled ? <button type="button" className={action === 'remove' ? 'ap-danger-button' : 'ap-primary'} disabled={busy || blocked} onClick={confirm}>{busy ? 'Saving member change…' : memberApi.live ? 'Confirm member change' : 'Confirm staging member change'}</button> : <p>Preview only — nothing has been saved.</p>}
+        {heldOwner && <p className="fo-note">Existing owner changes require a platform super admin.</p>}
+        {!heldOwner && record.role === 'owner' && ownerCount <= 1 && (action === 'remove' || role !== 'owner') && <p className="fo-note">Warning: this is the last recorded owner. This change will leave this club without an owner unless another owner has been added since this list loaded.</p>}
+        {enabled ? <button type="button" className={action === 'remove' ? 'ap-danger-button' : 'ap-primary'} disabled={busy || blocked || heldOwner} onClick={confirm}>{busy ? 'Saving member change…' : memberApi.live ? 'Confirm member change' : 'Confirm staging member change'}</button> : <p>Preview only — nothing has been saved.</p>}
       </div>}
     </>}
     {error && <p role="alert">{error}</p>}
