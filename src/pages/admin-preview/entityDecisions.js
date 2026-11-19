@@ -132,7 +132,7 @@ export async function loadEntityDecision(client, kind, entity, action, target, c
 }
 
 const escape = value => String(value??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-async function notify(client, address, template, variables) {
+export async function notifyEntityDecision(client, address, template, variables) {
   if (!String(address??'').includes('@')) return 'No notification address is on file.';
   try {
     const result = await client.functions.invoke('send-email',{body:{to:address,template,variables:Object.fromEntries(Object.entries(variables).map(([key,value])=>[key,escape(value)]))}});
@@ -196,11 +196,11 @@ export async function saveEntityDecision(client,kind,entity,review,outcome,notes
   ensureCurrent(context);
   let delivery;
   if (action === 'application') {
-    delivery = await notify(client,row.contact_email,approved?'org_approved':'org_rejected',{orgName:row.name,notes:normalizedNotes});
+    delivery = await notifyEntityDecision(client,row.contact_email,approved?'org_approved':'org_rejected',{orgName:row.name,notes:normalizedNotes});
   } else if (row.organisation_id) {
     const organisation = await client.from('organisations').select('contact_email').eq('id',row.organisation_id).maybeSingle();
     ensureCurrent(context);
-    delivery = organisation.error ? 'Decision saved. The notification address could not be loaded.' : await notify(client,organisation.data?.contact_email,
+    delivery = organisation.error ? 'Decision saved. The notification address could not be loaded.' : await notifyEntityDecision(client,organisation.data?.contact_email,
       approved?'event_sanctioned':'event_rejected',{eventName:action==='amendment'?`Amendment ${status} — ${row.event_name}`:row.event_name,notes:normalizedNotes});
   }
   return {message:delivery || `${action === 'application'?'Application':action === 'amendment'?'Amendment':'Sanction request'} ${status}.`,warning:Boolean(delivery),targetId:row.id,action,status};

@@ -23,19 +23,20 @@ function ReviewValue({ value, field, image = false }) {
   return <span>{String(value)}</span>;
 }
 
-export default function FullClubProfileEditor({ record, client, scopeId, onClose, onSaved, onBusyChange }) {
+export default function FullClubProfileEditor({ record, client, session, scopeId, onClose, onSaved, onBusyChange }) {
   const [snapshot, setSnapshot] = useState(null), [draft, setDraft] = useState(null), [error, setError] = useState('');
   const [review, setReview] = useState(null), [busy, setBusy] = useState(false), [blocked, setBlocked] = useState(false), [discard, setDiscard] = useState(false);
   const generation = useRef(0), lock = useRef(false), uploads = useRef(new Map()), form = useRef(null), busyCallback = useRef(onBusyChange);
+  const expectedUserId = session?.user?.id;
   busyCallback.current = onBusyChange;
   useEffect(() => {
     const current = ++generation.current;
-    loadFullClubEditor(client, scopeId, record.id).then(value => {
+    loadFullClubEditor(client, scopeId, record.id, expectedUserId).then(value => {
       if (current !== generation.current) return;
       setSnapshot(value); setDraft(createFullClubDraft(value.record));
     }).catch(err => { if (current === generation.current) setError(err.message); });
     return () => { generation.current++; busyCallback.current?.(false); uploads.current.forEach((_, url) => URL.revokeObjectURL(url)); uploads.current.clear(); };
-  }, [client, scopeId, record.id]);
+  }, [client, scopeId, record.id, expectedUserId]);
   const dirty = Boolean(snapshot && draft && serialize(draft) !== serialize(createFullClubDraft(snapshot.record)));
   useEffect(() => {
     if (!dirty) return;
@@ -54,7 +55,7 @@ export default function FullClubProfileEditor({ record, client, scopeId, onClose
     event.preventDefault(); if (!snapshot || lock.current || blocked) return;
     const current = generation.current;
     try {
-      const patch = fullClubProfilePatch(snapshot.record, draft, snapshot.groups);
+      const patch = fullClubProfilePatch(snapshot.record, draft, snapshot.groups, { scoped: snapshot.scoped });
       if (!Object.keys(patch).length) throw new Error('No changes to save.');
       if (!review) { setReview(patch); setError(''); form.current?.closest('dialog')?.scrollTo({ top: 0 }); return; }
       lock.current = true; setBusy(true); busyCallback.current?.(true); setError('');
@@ -63,12 +64,12 @@ export default function FullClubProfileEditor({ record, client, scopeId, onClose
       // or removed local previews never reach storage.
       for (const [url, upload] of uploads.current) {
         if (!proposed.includes(JSON.stringify(url))) continue;
-        const publicUrl = await uploadFullClubImage({ client, scopeId, original: snapshot.record, ...upload });
+        const publicUrl = await uploadFullClubImage({ client, scopeId, expectedUserId, original: snapshot.record, ...upload });
         if (current !== generation.current) return;
         replacements.set(url, publicUrl);
       }
       if (current !== generation.current) return;
-      const result = await saveFullClubProfile({ client, scopeId, original: snapshot.record, draft: replaceUploads(draft, replacements), groups: snapshot.groups });
+      const result = await saveFullClubProfile({ client, scopeId, expectedUserId, original: snapshot.record, draft: replaceUploads(draft, replacements), groups: snapshot.groups });
       if (current === generation.current) onSaved(result.record);
     } catch (err) {
       if (current === generation.current) {
@@ -81,7 +82,7 @@ export default function FullClubProfileEditor({ record, client, scopeId, onClose
     <form ref={form} className="clubs-full-form" onSubmit={submit}>
       {error && <p className="clubs-full-error" role="alert">{error}</p>}
       {!draft && !error && <RecordLoading label="Loading full club editor…" detail="Checking access and reading the current club, groups and federations."/>}
-      {discard ? <section className="clubs-discard"><h3>Discard unsaved club changes?</h3><p>Your edits and image previews have not been saved.</p><div className="pp-actions"><button type="button" className="ap-secondary" onClick={() => setDiscard(false)}>Keep editing</button><button type="button" className="ap-danger" onClick={onClose}>Discard changes</button></div></section> : draft && (review ? <section className="clubs-full-review"><h3>Review club changes</h3><p>Confirming saves these changes to the live club. Status, verification and federation changes can affect its public listing. Status changes also affect existing members’ dashboard access. This does not grant memberships, approve claims or send emails.</p>{Object.entries(review).map(([field, value]) => <article key={field}><h4>{label(field)}</h4><div className="clubs-review-columns"><section><h5>Current</h5><ReviewValue field={field} value={snapshot.record[field]}/></section><section><h5>Updated</h5><ReviewValue field={field} value={value}/></section></div></article>)}<p>Selected images upload only after confirmation. Previous images remain in storage. If an upload or save fails, close and reload before retrying.</p></section> : <><p className="clubs-editor-intro">Edit the club profile, facilities and media using the live club fields. Review before saving; selected images stay local until you confirm.</p><fieldset disabled={busy || blocked}><FullClubEditorFields draft={draft} onChange={change} groups={snapshot.groups} federations={snapshot.federations} onUpload={stageUpload} uploading={busy}/></fieldset></>)}
+      {discard ? <section className="clubs-discard"><h3>Discard unsaved club changes?</h3><p>Your edits and image previews have not been saved.</p><div className="pp-actions"><button type="button" className="ap-secondary" onClick={() => setDiscard(false)}>Keep editing</button><button type="button" className="ap-danger" onClick={onClose}>Discard changes</button></div></section> : draft && (review ? <section className="clubs-full-review"><h3>Review club changes</h3><p>Confirming saves these changes to the live club. {snapshot.scoped ? 'The public club profile updates after saving.' : 'Status, verification and federation settings can affect the public listing and member access.'}</p>{Object.entries(review).map(([field, value]) => <article key={field}><h4>{label(field)}</h4><div className="clubs-review-columns"><section><h5>Current</h5><ReviewValue field={field} value={snapshot.record[field]}/></section><section><h5>Updated</h5><ReviewValue field={field} value={value}/></section></div></article>)}<p>Selected images upload only after confirmation. Previous images remain in storage. If an upload or save fails, close and reload before retrying.</p></section> : <><p className="clubs-editor-intro">Edit the club profile, facilities and media using the live club fields. Review before saving; selected images stay local until you confirm.</p><fieldset disabled={busy || blocked}><FullClubEditorFields scoped={snapshot.scoped} draft={draft} onChange={change} groups={snapshot.groups} federations={snapshot.federations} onUpload={stageUpload} uploading={busy}/></fieldset></>)}
       {!discard && <footer className="clubs-full-footer"><button type="button" className="ap-secondary" disabled={busy} onClick={close}>{blocked ? 'Close editor' : 'Cancel'}</button>{review && <button type="button" className="ap-secondary" disabled={busy || blocked} onClick={() => { setReview(null); setError(''); }}>Back to editing</button>}{draft && <button className="ap-primary" disabled={busy || blocked}>{busy ? 'Saving club…' : review ? 'Confirm club changes' : 'Review changes'}</button>}</footer>}
     </form>
   </Dialog>;

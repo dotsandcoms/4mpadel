@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 import { build } from 'esbuild';
 import puppeteer from 'puppeteer';
 
-let browser, directory, bundle;
+let browser, directory, bundle, photo;
 const fixture = `
   import { createRoot } from 'react-dom/client';
   import ClubsWorkspace from './src/pages/admin-preview/ClubsWorkspace.jsx';
@@ -17,12 +17,15 @@ const fixture = `
   const snapshot = club => club ? {...club,events:1,members:1,organisations:0,claims:0,invitations:0,favourites:1,places:0} : null;
   const result = data => ({ data, error:null });
   window.clubCalls = [];
+  window.clubWrites = [];
+  window.clubUploads = [];
   const client = {
     auth: { getUser: async () => result({user:session.user}) },
     rpc(name,args) {
       const response = (async () => {
         if (name === 'is_super_admin') return result(!window.clubTenant && !window.clubRevoked);
         if (name === 'account_is_active') return result(true);
+        if (name === 'can_manage_club') return result(args.p_club_id === 'source' && !window.clubRevoked);
         if (name !== 'manage_reviewed_club') return result([]);
         window.clubCalls.push(args);
         const source = clubs.find(row=>row.id===args.p_source), target = clubs.find(row=>row.id===args.p_target);
@@ -36,13 +39,27 @@ const fixture = `
       return response;
     },
     from(table) {
-      let filters = {}, start = 0, end;
-      const data = () => (table==='clubs'?clubs:[]).filter(row=>Object.entries(filters).every(([key,value])=>row[key]===value)).slice(start,end);
+      let filters = {}, start = 0, end, patch;
+      const data = () => (table==='clubs'?clubs:[]).filter(row=>Object.entries(filters).every(([key,value])=>(row[key]??null)===value)).slice(start,end);
+      const one = async () => {
+        const row = data()[0];
+        if (row && patch) {
+          window.clubWrites.push({id:row.id,...patch});
+          clubs = clubs.map(value=>value.id===row.id?{...row,...patch}:value);
+          return result(clubs.find(value=>value.id===row.id));
+        }
+        return result(row||null);
+      };
       const query = {select(){return query;}, eq(k,v){filters[k]=v;return query;}, order(){return query;}, ilike(){return query;},
+        is(k,v){filters[k]=v;return query;}, update(values){patch=values;return query;}, single:one,
         in(){return query;}, limit(){return query;}, range(first,last){start=first;end=last+1;return query;}, abortSignal(){return query;},
-        maybeSingle:async()=>result(data()[0]||null), then(resolve,reject){return Promise.resolve(result(data())).then(resolve,reject);}};
+        maybeSingle:one, then(resolve,reject){return Promise.resolve(result(data())).then(resolve,reject);}};
       return query;
-    }
+    },
+    storage:{from:()=>({
+      upload:async(path)=>{window.clubUploads.push(path);return result({path});},
+      getPublicUrl:path=>result({publicUrl:'https://fixture.test/club/'+path}),
+    })},
   };
   const permissions = window.clubTenant ? {role:'club_admin',clubs:[{id:'source',member_role:'owner'}]} : {role:'super_admin'};
   createRoot(document.getElementById('root')).render(<ClubsWorkspace session={session} client={client}
@@ -52,12 +69,16 @@ const fixture = `
 before(async () => {
   directory = await mkdtemp(join(tmpdir(), 'fourm-club-lifecycle-ui-'));
   bundle = join(directory, 'fixture.js');
+  photo = join(directory, 'crest.png');
+  await writeFile(photo, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2vQAAAAASUVORK5CYII=', 'base64'));
   await build({
     stdin: { contents: fixture, resolveDir: process.cwd(), loader: 'jsx' },
     bundle: true, outfile: bundle, format: 'iife', jsx: 'automatic', platform: 'browser', define: { 'import.meta.env': '{}' },
     plugins: [{ name: 'fixture-connector', setup(build) {
-      build.onResolve({ filter: /\/supabaseClient(?:\.js)?$/ }, () => ({ path: 'no-network', namespace: 'fixture' }));
-      build.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: 'export const supabase = null; export const isSupabaseConfigured = () => false;' }));
+      build.onResolve({ filter: /\/(supabaseClient|googleMaps)(?:\.js)?$/ }, args => ({ path: args.path.includes('googleMaps') ? 'maps' : 'client', namespace: 'fixture' }));
+      build.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ contents: args.path === 'maps'
+        ? 'export const attachPlacesAutocomplete = async () => ({ destroy() {} }); export const loadGoogleMaps = async () => null;'
+        : 'export const supabase = null; export const isSupabaseConfigured = () => false;' }));
     } }],
   });
   browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
@@ -152,4 +173,29 @@ test('confirmed deletion refreshes the directory while a scoped owner sees only 
   await click(platform, 'Done', review);
   await platform.waitForSelector('[aria-label="View club details for Destination club"]');
   assert.equal(await platform.$('[aria-label="View club details for Source club"]'), null);
+});
+
+test('a club owner can review and save their own profile and media with platform settings hidden', async t => {
+  const page = await open(t, {clubTenant:true});
+  const editor = 'dialog.clubs-full-dialog[open]';
+  await page.setRequestInterception(true);
+  page.on('request', request => request.abort());
+  await click(page, 'Edit club details');
+  await page.waitForSelector(editor + ' input[name=city]');
+  assert.equal(await page.$(editor + ' input[name=slug]'), null);
+  assert.equal(await page.$$eval(editor + ' summary', rows => rows.some(row => row.textContent === 'Federation')), false);
+  await page.type(editor + ' input[name=city]', ' City');
+  const upload = await page.$(editor + ' input[aria-label="Upload Club logo"]');
+  await upload.uploadFile(photo);
+  await page.waitForSelector(editor + ' img[src^=blob]');
+  await click(page, 'Review changes', editor);
+  assert.deepEqual(await page.evaluate(() => [window.clubWrites, window.clubUploads]), [[], []]);
+  await click(page, 'Confirm club changes', editor);
+  await page.waitForSelector(editor, { hidden:true });
+  const [writes, uploads] = await page.evaluate(() => [window.clubWrites, window.clubUploads]);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].id, 'source');
+  assert.equal(writes[0].city, 'Coast City');
+  assert.match(uploads[0], /^clubs\/logo\/source_/);
+  assert.deepEqual(Object.keys(writes[0]).sort(), ['city','id','logo_url','updated_at']);
 });

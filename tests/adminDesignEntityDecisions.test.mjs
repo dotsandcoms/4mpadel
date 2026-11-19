@@ -197,6 +197,9 @@ test('organisation creation reviews an existing owner before one atomic RPC',asy
         assert.equal(payload.p_data.player_id,7);
         assert.equal(payload.p_data.slug,'fixture-training-organisation');
         assert.equal(payload.p_data.email,'owner@example.invalid');
+        await text(page,'Owner approval email submitted.');
+        const [notice] = (await calls(page)).filter(([kind]) => kind === 'function');
+        assert.deepEqual(notice, ['function','send-email',{to:'owner@example.invalid',template:'org_approved',variables:{orgName:payload.p_data.name}}]);
     });
 });
 

@@ -1,6 +1,7 @@
 import { readAll } from './playersData.js';
 import { verifyEntityAccess } from './organisationFederationData.js';
 import { searchClubMemberPlayers } from './clubMemberAdd.js';
+import { notifyEntityDecision } from './entityDecisions.js';
 
 export const organisationRoles = ['owner','admin','staff'];
 const operations = ['create','delete','add_member','change_role','remove_member'];
@@ -64,5 +65,12 @@ export async function submitOrganisationRecord(client, review, context) {
   context.onAttempt?.();
   const {data,error}=await client.rpc('admin_organisation_records',{p_action:review.action,p_organisation_id:review.id,p_expected:review.expected,p_data:review.input});
   if (error || data?.id !== review.id || data?.action !== review.action) throw new Error(error?.message || 'The organisation action could not be confirmed.');
-  return data;
+  if (review.action !== 'create' || data.reused) return data;
+  try {
+    await platform(client, context);
+    const issue = await notifyEntityDecision(client, review.input.email, 'org_approved', { orgName: review.input.name });
+    return { ...data, email: issue ? 'unconfirmed' : 'submitted' };
+  } catch {
+    return { ...data, email: 'unconfirmed' };
+  }
 }

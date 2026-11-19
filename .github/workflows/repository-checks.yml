@@ -146,6 +146,8 @@ jobs:
           psql -X -q -d fourm_club_lifecycle_test -f tests/adminClubLifecycle.sql
           createdb fourm_admin_organisation_test
           psql -X -q -d fourm_admin_organisation_test -f tests/adminOrganisationRecords.sql
+          createdb fourm_admin_club_group_team_test
+          psql -X -q -d fourm_admin_club_group_team_test -f tests/adminClubGroupTeam.sql
       - name: Verify Paystack receipt recovery and checkout compatibility
         env:
           PGPORT: '55444'

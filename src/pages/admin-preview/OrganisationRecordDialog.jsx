@@ -59,11 +59,13 @@ export default function OrganisationRecordDialog({ client, session, scopeId, mod
   return <dialog ref={bindDialog} className="ap-payment-dialog of-dialog" aria-label={titles[mode]} onCancel={event=>{event.preventDefault();close();}}>
     <header><h2>{titles[mode]}</h2><button type="button" aria-label="Close organisation action" className="ap-secondary" onClick={close} disabled={busy}>×</button></header>
     <form onSubmit={submit}>
-      {result ? <p role="status">{result.action==='invite_owner'?'Login link requested. After the owner signs in, return to create their organisation.':'Organisation action confirmed.'}</p> : review ? <section className="of-notice">
+      {result ? <div role="status"><p>{result.action==='invite_owner'?'Login link requested. After the owner signs in, return to create their organisation.':'Organisation action confirmed.'}</p>
+        {result.email === 'submitted' && <p>Owner approval email submitted.</p>}
+        {result.email === 'unconfirmed' && <p>Owner approval email delivery could not be confirmed.</p>}</div> : review ? <section className="of-notice">
         <h3>Review {actions[review.action].toLowerCase()}</h3><p>{review.input?.name||organisation?.name||review.player?.email}</p>
         {review.label&&<p>{review.label} {review.input?.role&&`· ${review.input.role}`}</p>}
         {review.action==='invite_owner'&&<p>The selected account will receive the usual 4M Padel sign-in link. The organisation can be created after the owner confirms their login.</p>}
-        {review.action==='create'&&<p>The organisation will be published and the selected account will receive owner access.</p>}
+        {review.action==='create'&&<p>The organisation will be published. The selected account will receive owner access and an approval email.</p>}
         {review.action==='delete'&&<p>Linked albums and events will be unlinked. Membership and club access links will be removed. Organisations with banking or payout records cannot be deleted.</p>}
       </section> : mode==='create' ? <fieldset className="of-fields">
         <label>Organisation name<input name="name" required value={details.name} onChange={event=>update('name',event.target.value)}/></label>

@@ -1,3 +1,5 @@
+import { verifyClubCreationAccess } from './clubCreation.js';
+
 // Mappings mirror CURRENT MAIN ClubManager emptyForm, hydration and handleSave.
 // No creation, membership, organisation-link, claim or approval-email side effects.
 const clone = value => structuredClone(value);
@@ -10,16 +12,19 @@ const courts = value => Object.fromEntries(['indoor', 'outdoor'].map(side => [si
 const hours = () => Object.fromEntries(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((day, i) => [day, { open: i < 5 ? '06:00' : '07:00', close: i < 5 ? '22:00' : i === 5 ? '21:00' : '20:00', closed: false }]));
 const defaults = () => ({ name: '', short_name: '', slug: '', about: '', website_url: '', brand_color: '#CC1414', status: 'unclaimed', contact_email: '', contact_phone: '', whatsapp_number: '', city: '', address: '', lat: '', lng: '', logo_url: '', cover_image_url: '', verified: false, sapa_registered: false, federation_id: '', group_id: '', socials: socials(), contacts: [], opening_hours: hours(), courts: courts(), services: [], cafe: null, sponsors: [], principal_sponsor: null, gallery: [], stats: {} });
 export const FULL_CLUB_FIELDS = Object.keys(defaults());
+const platformFields = new Set(['slug', 'status', 'verified', 'sapa_registered', 'federation_id', 'group_id']);
 export function createFullClubDraft(record) {
   return clone({ ...defaults(), ...record, status: statusValue(record.status), lat: record.lat ?? '', lng: record.lng ?? '', federation_id: record.federation_id || '', group_id: record.group_id || '', socials: socials(record.socials), contacts: Array.isArray(record.contacts) ? record.contacts : [], opening_hours: { ...hours(), ...(record.opening_hours || {}) }, courts: courts(record.courts), services: Array.isArray(record.services) ? record.services : [], cafe: record.cafe || null, sponsors: Array.isArray(record.sponsors) ? record.sponsors : [], principal_sponsor: record.principal_sponsor || null, gallery: Array.isArray(record.gallery) ? record.gallery : [], stats: record.stats && typeof record.stats === 'object' ? record.stats : {} });
 }
-export function fullClubProfilePatch(original, draft, groups = []) {
+export function fullClubProfilePatch(original, draft, groups = [], { scoped = false } = {}) {
   if (!original?.id) throw new Error('Select an existing club.');
-  if (!String(draft.name || '').trim() || !String(draft.slug || '').trim()) throw new Error('Name and slug are required.');
+  if (!String(draft.name || '').trim()) throw new Error('Name is required.');
+  if (!scoped && !String(draft.slug || '').trim()) throw new Error('Page slug is required.');
   const base = createFullClubDraft(original), patch = {};
   const changed = key => Object.hasOwn(draft, key) && !same(draft[key], base[key]);
   for (const key of FULL_CLUB_FIELDS) {
     if (!changed(key)) continue;
+    if (scoped && platformFields.has(key)) throw new Error('Platform club settings require a platform administrator.');
     const value = draft[key];
     if (['name', 'short_name'].includes(key)) patch[key] = String(value || '').trim() || null;
     else if (key === 'slug') { patch.slug = slug(value); if (!patch.slug) throw new Error('Enter a valid page URL slug.'); }
@@ -42,13 +47,16 @@ export function fullClubProfilePatch(original, draft, groups = []) {
   }
   return Object.fromEntries(Object.entries(patch).filter(([key, value]) => !same(value, original[key])));
 }
-async function authority(client, scopeId) {
-  if (scopeId !== 'all') throw new Error('Platform Clubs access is required.');
+async function authority(client, scopeId, clubId, expectedUserId) {
+  if (!expectedUserId) throw new Error('Sign in before editing a club.');
+  if (scopeId === 'all') return verifyClubCreationAccess(client, scopeId, expectedUserId);
+  if (!clubId || scopeId !== `club:${clubId}`) throw new Error('Choose the matching club workspace.');
   const { data, error } = await client.auth.getUser();
-  if (error || !data?.user?.email) throw new Error('Sign in before editing clubs.');
-  const email = data.user.email.replace(/[\\%_]/g, '\\$&');
-  const { data: grant, error: grantError } = await client.from('admin_sidebar_permissions').select('role').ilike('email', email).maybeSingle();
-  if (grantError || grant?.role !== 'super_admin') throw new Error('A verified super-admin account is required.');
+  if (error || data?.user?.id !== expectedUserId || !data.user.email) throw new Error('The signed-in account changed. Reopen the club.');
+  const [active, allowed] = await Promise.all([client.rpc('account_is_active'), client.rpc('can_manage_club', { p_club_id: clubId })]);
+  if (active.error || active.data !== true || allowed.error || allowed.data !== true) throw new Error('Current permission to manage this club is required.');
+  const actor = await client.auth.getUser();
+  if (actor.error || actor.data?.user?.id !== expectedUserId || actor.data.user.email !== data.user.email) throw new Error('The signed-in account changed. Reopen the club.');
 }
 async function pages(makeQuery) {
   const rows = [];
@@ -59,28 +67,38 @@ async function record(client, id) {
   if (error || !data) throw new Error('The club could not be loaded.');
   return data;
 }
-const loadGroups = client => pages(() => client.from('club_groups').select('id,name,slug,short_name,logo_url,status,share_logo,share_website,website_url').order('name').order('id'));
-export async function loadFullClubEditor(client, scopeId, clubId) {
-  await authority(client, scopeId);
-  const [current, groups, federations] = await Promise.all([record(client, clubId), loadGroups(client), pages(() => client.from('federations').select('id,name,short_name,slug').order('name').order('id'))]);
-  return { record: current, groups, federations };
+const loadGroups = (client, scopeId, groupId) => {
+  if (scopeId !== 'all' && !groupId) return [];
+  return pages(() => {
+    const query = client.from('club_groups').select('id,name,slug,short_name,logo_url,status,share_logo,share_website,website_url').order('name').order('id');
+    return scopeId === 'all' ? query : query.eq('id', groupId);
+  });
+};
+export async function loadFullClubEditor(client, scopeId, clubId, expectedUserId) {
+  await authority(client, scopeId, clubId, expectedUserId);
+  const current = await record(client, clubId);
+  const scoped = scopeId !== 'all';
+  const [groups, federations] = await Promise.all([loadGroups(client, scopeId, current.group_id),
+    scoped ? [] : pages(() => client.from('federations').select('id,name,short_name,slug').order('name').order('id'))]);
+  return { record: current, groups, federations, scoped };
 }
-async function verifyRecord(client, scopeId, original) {
+async function verifyRecord(client, scopeId, original, expectedUserId) {
   if (!original?.id) throw new Error('Select an existing club.');
-  await authority(client, scopeId);
+  await authority(client, scopeId, original.id, expectedUserId);
   const fresh = await record(client, original.id);
   if ([...FULL_CLUB_FIELDS, 'updated_at'].some(key => !same(original[key], fresh[key]))) throw new Error('Club details changed since opening. Reopen before saving.');
   return fresh;
 }
-export async function saveFullClubProfile({ client, scopeId, original, draft, groups = [] }) {
-  const fresh = await verifyRecord(client, scopeId, original);
-  const refreshed = await loadGroups(client);
+export async function saveFullClubProfile({ client, scopeId, expectedUserId, original, draft, groups = [] }) {
+  const fresh = await verifyRecord(client, scopeId, original, expectedUserId);
+  const refreshed = await loadGroups(client, scopeId, fresh.group_id);
   for (const id of [original.group_id, draft.group_id].filter(Boolean)) {
     const before = groups.find(group => String(group.id) === String(id)), after = refreshed.find(group => String(group.id) === String(id));
     if (!before || !after || !same(before, after)) throw new Error('Club group settings changed or are unavailable. Reopen to review inherited branding.');
   }
-  const patch = fullClubProfilePatch(original, draft, refreshed);
+  const patch = fullClubProfilePatch(original, draft, refreshed, { scoped: scopeId !== 'all' });
   if (!Object.keys(patch).length) return { changed: false, record: fresh };
+  await authority(client, scopeId, original.id, expectedUserId);
   const updatedAt = new Date().toISOString();
   let query = client.from('clubs').update({ ...patch, updated_at: updatedAt }).eq('id', original.id);
   for (const key of new Set(['updated_at', ...Object.keys(patch)])) {
@@ -91,10 +109,10 @@ export async function saveFullClubProfile({ client, scopeId, original, draft, gr
   if (error || !data) throw new Error('Club save could not be confirmed. Reopen before retrying.');
   return { changed: true, record: data };
 }
-export async function uploadFullClubImage({ client, scopeId, original, file, kind }) {
+export async function uploadFullClubImage({ client, scopeId, expectedUserId, original, file, kind }) {
   if (!['logo', 'cover', 'gallery', 'indoor', 'outdoor', 'cafe', 'principal'].includes(kind)) throw new Error('Unknown club image type.');
   if (!file?.type?.startsWith('image/') || !file.size) throw new Error('Choose a non-empty image.');
-  await verifyRecord(client, scopeId, original);
+  await verifyRecord(client, scopeId, original, expectedUserId);
   const extension = String(file.name?.split('.').pop() || 'jpg').toLowerCase();
   if (!/^[a-z0-9]{1,8}$/.test(extension) || !/^[a-zA-Z0-9_-]+$/.test(String(original.id))) throw new Error('Invalid image filename or club identifier.');
   const path = `clubs/${kind}/${original.id}_${Date.now()}_${crypto.randomUUID()}.${extension}`;
