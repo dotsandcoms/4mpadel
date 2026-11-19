@@ -61,3 +61,9 @@ entrypoint = "./functions/event-finance-summary/index.ts"
 [functions.admin-authenticator-recovery]
 # The handler validates Auth, then SQL checks the current session and fresh MFA.
 verify_jwt = false
+
+[functions.admin-paystack-backfill]
+enabled = true
+# Validate the caller with Auth in the handler, including newer JWT signing keys.
+verify_jwt = false
+entrypoint = "./functions/admin-paystack-backfill/index.ts"

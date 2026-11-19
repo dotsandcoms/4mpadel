@@ -8,6 +8,8 @@ import { loadGatewayPage } from './paystackGatewayData.js';
 import { loadGatewayLinks, gatewayLinkLabel } from './gatewayLinks.js';
 import { canConfirmGatewayCheckout, canReadPlatformPaystack, confirmGatewayCheckout, loadPlatformGatewayTransactions } from './platformPaystack.js';
 import { financeStatusTone } from './financePresentation.js';
+import { canReviewGatewayBackfill } from './paystackBackfill.js';
+import GatewayBackfillReview from './GatewayBackfillReview.jsx';
 import GatewayComparisonCell from './GatewayComparisonCell.jsx';
 import RecordLoading from './RecordLoading.jsx';
 import DatePicker from './DatePicker.jsx';
@@ -30,6 +32,8 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
   const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState('');
   const [review, setReview] = useState(null);
+  const [backfill, setBackfill] = useState(null);
+  const [backfillBusy, setBackfillBusy] = useState(false);
   const [action, setAction] = useState(null);
   const lifetime = useRef(null);
   const running = useRef(false);
@@ -89,6 +93,9 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
   const result = linked?.key === linkKey ? linked : null;
   const data = result?.data;
   const eligible = (data?.transactions || []).filter(canConfirmGatewayCheckout);
+  const backfillReview = backfill?.key === linkKey ? backfill.rows : null;
+  const missing = (data?.transactions || []).filter(row => canReviewGatewayBackfill(actor, grant, scopeId, row));
+  const openBackfill = rows => { setReview(null); setBackfill({ key:linkKey, rows }); };
   const loading = !response || (!response.error && !result);
   const error = response?.error || result?.error;
   const update = (name, value) => { setFilters(current => ({ ...current, [name]: value })); setPage(1); setReview(null); setNotice(''); };
@@ -135,14 +142,14 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
   return <section className="fo-root">
     <header className="fo-heading"><div><p className="ap-kicker">Money / Payments / Gateway</p><h1>Paystack gateway</h1><p>{mode === 'live' ? 'Live' : 'Test'} transactions from Paystack.</p></div>
       <div className="fo-report-actions"><button className="ap-secondary" disabled={loading || exporting || !data?.transactions.length} onClick={exportPage}>{exporting ? 'Preparing Excel…' : 'Export page to Excel'}</button>
-        <button className="ap-secondary" disabled={loading || action?.busy} onClick={() => setReload(n => n + 1)}>Refresh gateway</button>
+        <button className="ap-secondary" disabled={loading || action?.busy || backfillBusy} onClick={() => setReload(n => n + 1)}>Refresh gateway</button>
       </div>
     </header>
     {notice && <p className="fo-note" role="status">{notice}</p>}
     <div className="fo-ledger-filters">
       {!staging && <label className="fo-status-filter">Environment<SearchableDropdown value={mode} onChange={event => {
         setMode(event.target.value); setPage(1); setReview(null); setAction(null); setNotice(''); setExporting(false);
-      }} disabled={action?.busy}><option value="live">Live</option><option value="test">Test</option></SearchableDropdown></label>}
+      }} disabled={action?.busy || backfillBusy}><option value="live">Live</option><option value="test">Test</option></SearchableDropdown></label>}
       <DatePicker label="Start date" value={from} onChange={value => update('from', value)} />
       <DatePicker label="End date" value={to} onChange={value => update('to', value)} />
       <label className="fo-status-filter">Gateway status<SearchableDropdown value={status} onChange={event => update('status', event.target.value)}><option value="">All statuses</option><option value="success">Success</option><option value="failed">Failed</option><option value="abandoned">Abandoned</option>{!staging && <option value="pending">Unsuccessful or pending</option>}</SearchableDropdown></label>
@@ -155,6 +162,9 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
       </div>}
     </div>
     <p className="fo-note">Date filters use South African time. {staging ? 'Test gateway access is read-only.' : 'The gateway returns a bounded history. Narrow the date range to review more transactions.'}</p>
+    {backfillReview && <GatewayBackfillReview key={linkKey} client={client} session={actor} permissions={grant} scopeId={scopeId}
+      rows={backfillReview} onBusyChange={setBackfillBusy} onClose={() => setBackfill(null)}
+      onRecorded={() => { setBackfill(null); setReload(value => value + 1); }}/>}
     {review && <section className="ap-section" style={{ padding: 18 }} aria-label="Review checkout reconciliation"><h2>Confirm checkout reconciliation</h2>
       <p>4M verifies each chosen reference against its saved event checkout and Paystack.</p><ul>{review.map(row => <li key={row.reference}>{row.reference}</li>)}</ul>
       <div className="fo-report-actions"><button className="ap-primary" disabled={action?.busy} onClick={reconcile}>{action?.busy ? 'Reconciling…' : 'Confirm reconciliation'}</button>
@@ -165,18 +175,22 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
     {loading && <section className="ap-section"><RecordLoading label="Loading Paystack transactions…" detail="Fetching Paystack history and matching saved 4M references." /></section>}
     {error && <section className="ap-section" role="alert" style={{ padding: 18 }}><h2>Gateway could not be loaded</h2><p>{error}</p><button className="ap-secondary" onClick={() => setReload(n => n + 1)}>Try again</button></section>}
     {data && <>
-      <div className="fo-actions fo-report-actions"><p role="status">{data.pagination.total.toLocaleString()} matching {mode} transactions</p>{!staging && mode === 'live' && <button className="ap-secondary" disabled={!eligible.length || action?.busy} onClick={() => setReview(eligible)}>Review page reconciliation</button>}</div>
+      <div className="fo-actions fo-report-actions"><p role="status">{data.pagination.total.toLocaleString()} matching {mode} transactions</p>{!staging && mode === 'live' && <button className="ap-secondary" disabled={!eligible.length || action?.busy || backfillBusy} onClick={() => { setBackfill(null); setReview(eligible); }}>Review page reconciliation</button>}
+        {!!missing.length && !staging && <button className="ap-secondary" disabled={backfillBusy || action?.busy || Boolean(backfillReview)}
+          onClick={() => openBackfill(missing)}>Review missing receipts on this page</button>}</div>
       <div className="fo-table-scroll" role="region" aria-label="Paystack gateway transactions" tabIndex={0}><table className="fo-detail-table"><thead><tr><th>Date</th><th>Reference</th><th>Player / event in 4M</th><th>Status</th><th>4M comparison</th><th>Amount</th>{!staging && mode === 'live' && <th>Actions</th>}</tr></thead>
         <tbody>{data.transactions.map(row => <tr key={row.reference}><td>{financeDate(row.createdAt) || 'Not provided'}</td><td>{row.reference}</td>
           <td><div className="fo-player-copy">{row.link?.state === 'matched' && <><span className="fo-player-name">{row.link.playerName || 'Player details unavailable'}</span><small>{row.link.eventName || 'Event details unavailable'}</small></>}<small>{gatewayLinkLabel(row.link)}</small></div></td>
           <td><span className={`ap-status ap-status--${financeStatusTone(row.status)}`}>{row.status}</span></td><td>{row.channel && <small>{row.channel}</small>}<GatewayComparisonCell link={row.link}/></td>
           <td>{(row.amountMinor / 100).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {row.currency}</td>
-          {!staging && mode === 'live' && <td>{canConfirmGatewayCheckout(row) ? <button className="fo-type-link" disabled={action?.busy} onClick={() => setReview([row])}>Verify checkout</button> : <small>{row.status === 'success' && row.link?.state !== 'matched' ? 'Saved checkout required' : '—'}</small>}</td>}
+          {!staging && mode === 'live' && <td>{canConfirmGatewayCheckout(row) ? <button className="fo-type-link" disabled={action?.busy || backfillBusy} onClick={() => { setBackfill(null); setReview([row]); }}>Verify checkout</button>
+            : canReviewGatewayBackfill(actor, grant, scopeId, row) ? <button className="fo-type-link" disabled={action?.busy || backfillBusy || Boolean(backfillReview)}
+              onClick={() => openBackfill([row])}>Review missing receipt</button> : <small>—</small>}</td>}
         </tr>)}</tbody></table></div>
       {!data.transactions.length && <p>No gateway transactions match these filters.</p>}
       <nav className="fo-pagination" aria-label="Gateway pages"><span>Page {page} of {Math.max(1, data.pagination.pageCount)}</span>
-        <button className="ap-secondary" disabled={page === 1 || action?.busy} onClick={() => { setPage(n => n - 1); setReview(null); }}>Previous</button>
-        <button className="ap-secondary" disabled={!data.pagination.hasMore || action?.busy} onClick={() => { setPage(n => n + 1); setReview(null); }}>Next</button>
+        <button className="ap-secondary" disabled={page === 1 || action?.busy || backfillBusy} onClick={() => { setPage(n => n - 1); setReview(null); }}>Previous</button>
+        <button className="ap-secondary" disabled={!data.pagination.hasMore || action?.busy || backfillBusy} onClick={() => { setPage(n => n + 1); setReview(null); }}>Next</button>
       </nav>
     </>}
   </section>;

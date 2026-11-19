@@ -44,6 +44,7 @@ export function canConfirmGatewayCheckout(row) {
   return row?.environment === 'live' && row.status === 'success' && row.link?.state === 'matched'
     // Native checkout aliases can differ from the stored gateway reference.
     // The exact local receipt source establishes the same event checkout type.
+    && !row.link.recovered && !row.link.gatewayAlias
     && (row.link.savedEventCheckout === true || isEventCheckoutReference(row.reference));
 }
 

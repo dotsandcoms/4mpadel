@@ -35,7 +35,7 @@ function select(table) {
         return {data: structuredClone(mode==='single'?result[0]||null:result.slice(from,to+1))};
     };
     return { select(){return this}, eq(key,value){predicates.push(row=>(row[key] !== null && typeof row[key] === 'object' ? JSON.stringify(row[key]) : String(row[key]))===String(value));return this}, neq(key,value){predicates.push(row=>row[key]!==value);return this},
-        in(key,ids){predicates.push(row=>ids.includes(row[key]));return this}, is(key,val){predicates.push(row=>row[key]===val);return this},
+        in(key,ids){predicates.push(row=>ids.includes(key === 'metadata->>client_reference' ? row.client_reference : row[key]));return this}, is(key,val){predicates.push(row=>row[key]===val);return this},
         order(){return this}, limit(){return this}, abortSignal(){return this},
         update(value){update=value;return this}, delete(){remove=true;return this},
         range(start,end){counters.push(['table',table]);from=start;to=end;return this}, async single(){counters.push(['event',table]);return execute('single')},
@@ -83,6 +83,12 @@ export const supabase = {
             {id:'unmatched-reference',user:player.email,amount:'R 45.00',status:'Success',rawDate:pay.created_at,is_test:false},
         ]}};
         if(name==='confirm-manual-payment')return {data:{processed:true}};
+        if(name==='admin-paystack-backfill') {
+            if(args.body.action==='review')return {data:{state:'review',token:'a'.repeat(64),kind:'unallocated',reference:args.body.reference,amountMinor:4500,payer:player.email}};
+            tables.payments.push({...pay, reference:'700000',id:'backfilled',event_id:null,payment_type:'other',amount:45,
+                 checkout_source:'admin_paystack_backfill',client_reference:args.body.reference,verified_gateway_amount_minor:'4500'});
+            return {data:{state:'recorded',kind:'unallocated'}};
+        }
         if(name==='event-cash-receipts')return {data:{next_offset:null,receipts:[{reference:pay.reference,amount:600,status:'success',verified:true}]}};
         if(name==='event-finance-summary')return {data:{summaries:[{id:14,
             stats:{entries:1,billed:600,collected:600,outstanding:0,paidCount:1,compedCount:0,uniquePlayersCount:1,licenses:{full:1,temp:0,none:0}},
@@ -303,5 +309,23 @@ test('recording and removing an interim payout changes only the selected event a
         assert.deepEqual(updates.map(([,table,ids])=>[table,ids]),[['calendar',[14]],['calendar',[14]]]);
         assert.equal(updates[0][3].organiser_interim_payments[0].amount,45);
         assert.deepEqual(updates[1][3].organiser_interim_payments,[]);
+    });
+});
+
+test('the original gateway confirms reviewed unmatched funds and links the recorded alias after refresh',async()=>{
+    await withPage('gateway',platform,'all',async page=>{
+        await click(page,'Paystack gateway');await includesText(page,'unmatched-reference');
+        await click(page,'Review missing receipt');
+        await includesText(page,'Record as unallocated funds.');
+        const first=(await calls(page)).filter(([name])=>name==='admin-paystack-backfill');
+        assert.deepEqual(first,[['admin-paystack-backfill',{action:'review',scopeId:'all',reference:'unmatched-reference'}]]);
+        assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].find(node=>node.textContent==='Confirm receipt recording').disabled),true);
+        await input(page,'section[aria-label="Review missing Paystack receipts"] textarea','Reviewed source receipt');
+        await click(page,'Confirm receipt recording');await includesText(page,'Receipt recorded in the 4M ledger.');
+        const after=(await calls(page)).filter(([name])=>name==='admin-paystack-backfill');
+        assert.deepEqual(after[1],['admin-paystack-backfill',{action:'record',token:'a'.repeat(64),reason:'Reviewed source receipt',scopeId:'all',reference:'unmatched-reference'}]);
+        await click(page,'Close and refresh gateway');
+        await includesText(page,'Exact 4M gateway alias match');
+        assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].some(node=>node.textContent==='Review missing receipt')),false);
     });
 });
