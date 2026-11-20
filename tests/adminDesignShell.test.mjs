@@ -437,6 +437,8 @@ test('verified platform permission reaches the Players page and its account cont
   await page.keyboard.press('Escape');
   await page.waitForSelector(deletion, { hidden: true });
   await page.keyboard.press('Escape');
+  await page.waitForSelector('dialog[open][aria-label="Player record"]', { hidden: true });
+  await route(page, '/admin-preview/players');
   await clickText(page, '.pp-heading button', 'Add player');
   await page.waitForSelector('dialog[open][aria-label="Add player profile"] input[name="name"]');
 });
