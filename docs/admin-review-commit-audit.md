@@ -116,3 +116,10 @@ The source comparison uses New Admin candidate `68c318a7437701314e4b779163e0183c
 | [`44d3bdb7`](https://github.com/dotsandcoms/4mpadel/commit/44d3bdb76c0e51be672f5075eb2be0b96552830d) | Main | Include event names in web Paystack checkout references (#12) | 4 / 0 | **Money.** Event-name web reference introduced; current unambiguous prefix handled by later commit. |
 | [`a90a0e43`](https://github.com/dotsandcoms/4mpadel/commit/a90a0e439bf84dd395da66494f2bd89de05afe95) | Main | Use event-name-first Paystack references (#13) | 4 / 0 | **Money.** Event-name-first gateway reference and classifier; independently review unmatched receipt backfill. |
 | [`f17c90b6`](https://github.com/dotsandcoms/4mpadel/commit/f17c90b655f522e7188c81c85f1195c048427b03) | Main | Use readable Paystack references for native event payments (#14) | 7 / 1 | **Money.** Canonical mobile reference and legacy alias; compare both formats through exact saved-checkout reconciliation. |
+
+## Main updates after the 103-commit comparison
+
+| Commit | Effect on New Admin |
+| --- | --- |
+| [`4a5f2f97`](https://github.com/dotsandcoms/4mpadel/commit/4a5f2f97c5c63c617f54801030a0a992f28d6ad7) | Apple relay recovery and EAS Update are app workflows. The shared changes prevent duplicate player profiles, preserve deletion anonymisation for historical entries and receipts, and scope messaging erasure to the departing account’s groups and direct messages. New Admin continues to use the shared records and existing permissions. |
+| [`88f1fddb`](https://github.com/dotsandcoms/4mpadel/commit/88f1fddbe9e5d8615671c99e418b090739b1e0fa) | The Court Sport benefit is displayed to eligible full SAPA licence holders in the app. New Admin uses the existing full-licence entitlements, pricing, receipts and grant controls. |
