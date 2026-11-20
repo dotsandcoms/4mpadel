@@ -1,6 +1,7 @@
 import SearchableDropdown from '../../../components/SearchableDropdown';
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowRight, CheckCircle2, Users, ChevronRight, ArrowUp, ArrowDown, Download } from 'lucide-react';
+import HostRotationResults from './HostRotationResults';
 import HostGroupQualification from './HostGroupQualification';
 import DrawBracketPreview from './DrawBracketPreview';
 import AdminPlayerProfileModal from './PlayerProfile';
@@ -63,6 +64,7 @@ function DivisionPanel({ data, workspace, division, confirmation, draw, client, 
     const hostPreparation = data.hostDrawPreparation === true;
     const canEditRegistrations = !hostPreparation;
     const rotationFormat = ['americano', 'team_americano'].includes(config.format);
+    const hostRotation = hostPreparation && locked && draw?.format === 'americano' && Boolean(draw.scoring_rules?.americano);
     const entries = divisionEntries(data, division.id, review, config.ranking_source || 'active');
     const colours = divisionColorMap(data.divisions, data.settings.divisionColors);
     const setField = (key, value) => setConfig(current => ({ ...current, [key]: value }));
@@ -120,11 +122,12 @@ function DivisionPanel({ data, workspace, division, confirmation, draw, client, 
                 {!ready && !locked && <div className="tm-notice"><p>Confirm the player list, format and any required seeding before generating this draw.</p>
                     <div className="tm-actions">{(hostPreparation || data.capabilities.includes('players')) && <button className="tm-button quiet" onClick={() => go('players', division.id)}>Review player list <ArrowRight size={12} /></button>}{data.capabilities.includes('seeds') && <button className="tm-button quiet" onClick={() => go('divisions', division.id)}>Review format and seeds <ArrowRight size={12} /></button>}</div></div>}
                 {previewMatches.length > 0 && <><DrawBracketPreview matches={previewMatches} title={division.name + ' · Draw preview'} /><div className="tm-table-wrap"><table><thead><tr><th>Round</th><th>Team 1</th><th>Team 2</th></tr></thead><tbody>{previewMatches.filter(m => m.stage !== 'knockout').map(m => <tr key={m.id}><td>{m.round_label}</td><td>{m.entry_one?.team_name || 'Awaiting qualifier'}</td><td>{m.entry_two?.team_name || 'Awaiting qualifier'}</td></tr>)}</tbody></table></div></>}
-                {(preview?.rotation || draw?.scoring_rules?.americano) && <RotationPreview state={preview?.rotation || draw.scoring_rules.americano} />}
+                {!hostRotation && (preview?.rotation || draw?.scoring_rules?.americano) && <RotationPreview state={preview?.rotation || draw.scoring_rules.americano} />}
                 {draw?.status === 'draft' && !preview && <><label className="tm-check"><input type="checkbox" checked={reviewed} onChange={e => setReviewed(e.target.checked)} />{rotationFormat ? 'I have checked the players and rotation.' : 'I have checked the entrants, byes and matchups.'}</label><button className="tm-button primary" disabled={busy || !reviewed || (hostPreparation && !data.event.is_visible)} onClick={() => act(() => client.publishDraw(data, draw), hostPreparation ? 'Draw published' : 'Draw published. Scheduling unlocks when every division is ready.')}>Publish draw</button>{hostPreparation && !data.event.is_visible && <p className="muted">Make the event public before publishing its draw.</p>}</>}
-                {locked && <p className="muted">{hostPreparation ? 'The published draw is locked.' : 'The published draw is locked. Results and schedules are managed in their own workspaces.'}</p>}
+                {locked && !hostRotation && <p className="muted">{hostPreparation ? 'The published draw is locked.' : 'The published draw is locked. Results and schedules are managed in their own workspaces.'}</p>}
             </section>
         </>}
+        {workspace === 'draws' && hostRotation && <HostRotationResults {...{ data, draw, client, act, busy, saving, error }} />}
         {workspace === 'draws' && hostPreparation && draw?.format === 'group_knockout' && ['published', 'in_progress'].includes(draw.status)
             && !matchRows.some(match => match.stage === 'knockout') && <HostGroupQualification {...{ data, draw, client, act, busy }} />}
         {profile && <AdminPlayerProfileModal registration={profile} initialProfile={profiles.get(profile.email?.trim().toLowerCase())} eventId={data.event.id} eventRegistrations={data.registrations} onClose={() => setProfile(null)} />}

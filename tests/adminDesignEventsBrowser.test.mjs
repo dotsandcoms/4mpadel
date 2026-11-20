@@ -130,7 +130,7 @@ before(async () => {
                     if (name==='correct_manual_event_payment') return {data:{paymentId:receipt.id,method:args.p_method,recipient:args.p_recipient}};
                     if (name==='reopen_native_draw_for_corrections') { nativeDraw.status='draft'; return { data:null }; }
                     if (name==='account_is_active' || name==='is_super_admin') return { data:true };
-                    if (['tm_host_draw_preparation','tm_host_rotation_preparation','tm_host_group_qualification'].includes(name)) {
+                    if (['tm_host_draw_preparation','tm_host_rotation_preparation','tm_host_group_qualification','tm_host_rotation_result'].includes(name)) {
                         if (args.p_organisation!=='org-a' || String(args.p_event)!=='505') {
                             return {error:{message:'No access to this host event'}};
                         }
@@ -160,6 +160,27 @@ before(async () => {
                             hostTournament.entries=fields.p_draw.entries.map(entry=>({...entry,draw_id:'saved-host-draft'}));
                             hostTournament.matches=fields.p_draw.matches.map(match=>({...match,draw_id:'saved-host-draft'}));
                             return {data:{...receipt,drawId:'saved-host-draft'}};
+                        }
+                        if (args.p_action==='record_rotation_score' || args.p_action==='complete_rotation') {
+                            const d=hostTournament.draws.find(row=>row.id===fields.p_draw);
+                            if (!d || d.updated_at!==fields.p_expected) return {error:{message:'The Americano draw changed or is closed.'}};
+                            if (args.p_action==='record_rotation_score') {
+                                const m=hostTournament.matches.find(row=>row.id===fields.p_match && row.draw_id===d.id);
+                                if (window.hostScoreStale) {
+                                    window.hostScoreStale=false;
+                                    m.updated_at='match-reloaded';
+                                    return {error:{message:'The reviewed rotation match changed'}};
+                                }
+                                if (!m || m.updated_at!==fields.p_expected_match) return {error:{message:'The reviewed rotation match changed'}};
+                                d.scoring_rules.americano.fixtures.find(f=>f.id===m.americano_fixture_key).score=fields.p_score;
+                                m.status='completed';
+                                m.updated_at='score-'+window.calls.length;
+                                d.status='in_progress';
+                                d.updated_at='draw-'+window.calls.length;
+                                return {data:{...receipt,drawId:d.id,matchId:m.id,status:d.status}};
+                            }
+                            d.status='completed';
+                            return {data:{...receipt,drawId:d.id,status:d.status}};
                         }
                         if (args.p_action==='qualify') {
                             if (window.staleGroupReview) {
@@ -313,6 +334,22 @@ before(async () => {
                 }
                 if (kind.startsWith('payment-')) return <EventPaymentDialog action={{ type:'correct', registration:{...paid, _editablePayment:receipt} }} client={client} session={session}
                     event={event} divisions={[division]} scopeId={kind==='payment-tenant'?'org:org-a':'all'} onClose={result=>window.calls.push(['closed',result])}/>;
+                if (kind==='host-rotation-results') {
+                    if (!hostTournament.draws.length) {
+                        generator.divisions=[generatorDivision];
+                        hostTournament.divisions=[generatorDivision];
+                        const id='host-rotation-play';
+                        const rounds=2;
+                        const players=['Asha','Ben','Carla','Dev'].map((name,index)=>({id:'player-'+index,name}));
+                        const fixtures=[{id:'r1-m1',round:1,one:['player-0','player-3'],two:['player-1','player-2'],score:null},
+                            {id:'r2-m1',round:2,one:['player-0','player-2'],two:['player-3','player-1'],score:null}];
+                        hostTournament.draws=[{id,event_id:505,division_id:generatorDivision.id,draw_kind:'main',status:'published',
+                            format:'americano',updated_at:'rotation-original',scoring_rules:{americano:{players,fixtures,rounds,points:24,courts:1}}}];
+                        hostTournament.matches=fixtures.map(f=>({id:'stored-'+f.id,draw_id:id,stage:'group',status:'pending',
+                            round_number:f.round,americano_fixture_key:f.id,updated_at:'initial-'+f.id}));
+                    }
+                    return <MemoryRouter initialEntries={['/admin-preview/event?event=505&tab=draws']}><HostGeneratorFixture /></MemoryRouter>;
+                }
                 if (kind==='host-fixed-qualification') {
                     if (!hostTournament.draws.length) {
                         generator.divisions=[generatorDivision];
@@ -1152,5 +1189,72 @@ test('hosts review fixed group qualifiers and regenerate a stale elimination pre
             assert.deepEqual(new Set([final.entry_one_id, final.entry_two_id]), new Set(['team-1','team-3']));
         }
         assert.deepEqual(changes.map(([, args]) => args.p_payload.p_group_versions['qualifying-group-0']), ['group-version-1','group-version-2']);
+    } finally { await page.close(); }
+});
+
+test('hosts enter and correct reviewed Americano scores and complete only when every stored fixture is scored', async () => {
+    const page = await open('host-rotation-results');
+    const panel = 'section[aria-label="Americano results"]';
+    const dialog = 'dialog[open]';
+    const completeDisabled = () => page.$$eval(panel + ' button', buttons => buttons.find(b=>b.textContent === 'Complete rotation')?.disabled);
+    const fill = async (selector, value) => {
+        await page.$eval(selector, input => { input.focus(); input.select(); });
+        await page.keyboard.type(String(value));
+    };
+    const scores = async (one,two) => {
+        await page.waitForSelector(dialog);
+        await fill(dialog + ' [aria-label="Pair 1 rally points"]', one);
+        await fill(dialog + ' [aria-label="Pair 2 rally points"]', two);
+    };
+    const saved = message => page.waitForFunction(text => document.querySelector('.tm-body [role=status]')?.textContent === text, {}, message);
+    try {
+        await clickText(page, 'Draw generator');
+        await page.waitForSelector(panel);
+        assert.equal(await completeDisabled(), true);
+        await clickText(page, 'Enter score');
+        await scores(14,11);
+        assert.equal(await page.$eval(dialog + ' [type=submit]', button => button.disabled), true);
+        await scores(14,10);
+        await page.evaluate(() => { window.hostScoreStale=true; });
+        await clickText(page, 'Save score');
+        await page.waitForFunction(() => document.querySelector('dialog[open] [role=alert]')?.textContent.includes('rotation match changed'));
+        await clickText(page, 'Cancel');
+        await clickText(page, 'Refresh');
+        await saved('Tournament refreshed');
+
+        await clickText(page, 'Enter score');
+        await scores(14,10);
+        await clickText(page, 'Save score');
+        await saved('Score saved');
+        assert.equal(await completeDisabled(), true);
+        await clickText(page, 'Correct score');
+        await scores(12,12);
+        assert.equal(await page.$eval(dialog + ' [type=submit]', button => button.disabled), true);
+        await page.type(dialog + ' input[maxlength]', 'Checked the scorecard');
+        await clickText(page, 'Save score');
+        await saved('Score corrected');
+        assert.match(await page.$eval(panel, section => section.textContent), /12–12/);
+
+        await clickText(page, 'Enter score');
+        await scores(16,8);
+        await clickText(page, 'Save score');
+        await saved('Score saved');
+        assert.equal(await completeDisabled(), false);
+        await clickText(page, 'Complete rotation');
+        await clickText(page, 'Cancel');
+        await clickText(page, 'Complete rotation');
+        await clickText(page, 'Confirm completion');
+        await saved('Americano rotation completed');
+        assert.match(await page.$eval(panel, section => section.textContent), /This rotation is complete/);
+        const writes = (await page.evaluate(() => window.calls)).filter(([method])=>method==='tm_host_rotation_result');
+        assert.deepEqual(writes.map(([, args])=>args.p_action), [
+            'record_rotation_score','record_rotation_score','record_rotation_score','record_rotation_score','complete_rotation',
+        ]);
+        assert.ok(writes.every(([, args]) => args.p_organisation==='org-a' && String(args.p_event)==='505' && args.p_payload.p_draw==='host-rotation-play'));
+        assert.deepEqual(writes.slice(0,2).map(([, args])=>args.p_payload.p_expected_match), ['initial-r1-m1','match-reloaded']);
+        assert.deepEqual(writes[2][1].p_payload.p_score,[12,12]);
+        assert.equal(writes[2][1].p_payload.p_reason,'Checked the scorecard');
+        assert.deepEqual(Object.keys(writes[4][1].p_payload.p_match_versions).sort(), ['stored-r1-m1','stored-r2-m1']);
+        assert.equal(await page.$$eval(panel + ' button', buttons => buttons.some(b=>/Enter score|Correct score|Complete rotation/.test(b.textContent))), false);
     } finally { await page.close(); }
 });
