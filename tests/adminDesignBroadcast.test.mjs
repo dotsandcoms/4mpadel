@@ -25,9 +25,14 @@ const fixture = `
     from(table) {
       let offset = 0;
       let ids;
+      let calendarDateOrder;
       window.emailReads.push(table);
       const query = {
-        select() { return query; }, ilike() { return query; }, order() { return query; },
+        select() { return query; }, ilike() { return query; },
+        order(column, options) {
+          if (table === 'calendar' && column === 'start_date') calendarDateOrder = options;
+          return query;
+        },
         in(_column, values) { ids = values.map(String); return query; },
         range(first) { offset = first; return query; }, abortSignal() { return query; },
         then(resolve) {
@@ -35,7 +40,11 @@ const fixture = `
             admin_sidebar_permissions: [{ email: actor.email, allowed_tabs: window.emailFinance ? ['email-broadcast','finance'] : ['email-broadcast'],
               role: window.emailPlatform ? 'super_admin' : 'custom',
               module_permissions: window.emailFinance ? { finance:{ allowedEvents:[61] } } : {} }],
-            calendar: [{ id: 61, event_name: 'Synthetic coastal open', start_date: '2030-01-15' }, { id: 62, event_name: 'Synthetic inland open' }],
+            calendar: [
+              { id: 62, event_name: 'Synthetic inland open', start_date: '2029-01-15' },
+              { id: 63, event_name: 'Synthetic undated open' },
+              { id: 61, event_name: 'Synthetic coastal open', start_date: '2030-01-15' },
+            ],
             event_registrations: [
               { id: 1, event_id: 61, email: 'paid@example.test', payment_status: 'paid', partner_name: 'Fixture partner' },
               { id: 2, event_id: 61, email: 'pending@example.test', payment_status: 'pending' },
@@ -53,6 +62,12 @@ const fixture = `
           }
           const rows = (tables[table] || []).filter(row => (!ids || ids.includes(String(row.event_id ?? row.id)))
             && !(table === 'event_registrations' && window.emailRemovePending && row.email === 'pending@example.test'));
+          if (calendarDateOrder) rows.sort((a, b) => {
+            const first = calendarDateOrder.nullsFirst ? -1 : 1;
+            if (!a.start_date) return b.start_date ? first : 0;
+            if (!b.start_date) return -first;
+            return a.start_date.localeCompare(b.start_date) * (calendarDateOrder.ascending ? 1 : -1);
+          });
           resolve(result(rows.slice(offset)));
         },
       };
@@ -290,6 +305,8 @@ test('Email audience controls select, filter, remove, restore and reset reviewed
     await page.evaluate(() => { window.useEmail = true; window.emailManagedEvent = '61'; });
     await page.addScriptTag({ path: bundle });
     await page.waitForSelector('.email-broadcast-events input');
+    assert.deepEqual(await page.$$eval('.email-broadcast-events label > span', labels => labels.map(label => label.firstChild.textContent)),
+      ['Synthetic coastal open', 'Synthetic inland open', 'Synthetic undated open']);
     await enter(page, 'input[placeholder="Event name…"]', 'nonexistent');
     await page.waitForFunction(() => document.querySelector('section [role=status]')?.textContent === 'No events match your search.');
     await enter(page, 'input[placeholder="Event name…"]', 'coastal');
@@ -500,7 +517,7 @@ test('Email links selected words in the existing message and keeps appending a s
   await page.click(input);
   await enter(page, input, 'javascript:alert(1)');
   await click(page, 'Link selected text');
-  await page.waitForFunction(() => document.body.textContent.includes('Enter a valid http or https URL.'));
+  await page.waitForFunction(() => document.body.textContent.includes('Enter a web address, a mailto link or a tel link.'));
   assert.equal(await page.$(editor+' a'), null);
 
   await enter(page, input, 'https://example.test/course');
@@ -515,10 +532,24 @@ test('Email links selected words in the existing message and keeps appending a s
   assert.deepEqual(await page.$$eval(editor+' a', anchors => anchors.map(anchor => anchor.textContent)),
     ['course notes', 'https://example.test/fixtures']);
 
+  await enter(page, input, 'mailto:events@example.test?subject=Fixture%20question');
+  await click(page, 'Add image preview');
+  await page.waitForFunction(() => document.body.textContent.includes('Enter a valid http or https image URL.'));
+  assert.equal(await page.$(editor+' img'), null);
+  await click(page, 'Add link');
+  await page.waitForSelector(editor+' a[href="mailto:events@example.test?subject=Fixture%20question"]');
+  await enter(page, input, 'tel:+27111234567');
+  await click(page, 'Add link');
+  await page.waitForSelector(editor+' a[href="tel:+27111234567"]');
+
   await page.evaluate(() => [...document.querySelectorAll('label')].find(label => label.textContent.trim() === 'Include a manual email list').querySelector('input').click());
   await enter(page, 'label textarea[rows="3"]', 'manual@example.test');
   await click(page, 'Review broadcast');
   await page.waitForSelector('.email-broadcast-preview a[href="https://example.test/course"]');
   assert.equal(await page.$eval('.email-broadcast-preview a', anchor => anchor.textContent), 'course notes');
+  assert.deepEqual(await page.$$eval('.email-broadcast-preview a', anchors => anchors.map(anchor => anchor.getAttribute('href'))), [
+    'https://example.test/course', 'https://example.test/fixtures',
+    'mailto:events@example.test?subject=Fixture%20question', 'tel:+27111234567',
+  ]);
   assert.deepEqual(await deliveries(page), []);
 });

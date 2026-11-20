@@ -1,6 +1,7 @@
 import { readAll } from './playersData.js';
 import { verifyPublishingAccess } from './publishingAccess.js';
 import { hasTenantMembership } from '../../../supabase/functions/_shared/admin-finance-access.mjs';
+import { safeUrl } from '../../utils/sanitizeHtml.js';
 
 export const canReviewBroadcast = permissions => permissions?.role === 'super_admin' || (!hasTenantMembership(permissions)
   && Array.isArray(permissions?.allowed_tabs) && permissions.allowed_tabs.includes('email-broadcast'));
@@ -21,6 +22,15 @@ export function parseBroadcastEmails(text) {
   const values = String(text || '').split(/[,\n]/).map(normalizeBroadcastEmail).filter(Boolean);
   return { emails: [...new Set(values.filter(valid))], invalid: [...new Set(values.filter(email => !valid(email)))] };
 }
+export function emailBroadcastLink(value) {
+  const url = String(value || '').trim();
+  if (/^mailto:/i.test(url)) {
+    const [email] = url.slice(7).split('?', 1);
+    return valid(email) && !/[^\x21-\x7e]|[<>"]|%0[ad]/i.test(url) ? url : null;
+  }
+  if (/^tel:/i.test(url)) return /^tel:\+?(?=[\d().-]*\d)[\d().-]+(?:;ext=\d+)?$/i.test(url) ? url : null;
+  return safeUrl(url);
+}
 export function broadcastAudience(registrations, participants, payment = 'all', partner = 'all') {
   if (!['all','paid','pending'].includes(payment) || !['all','has_partner','solo'].includes(partner)) throw new Error('Choose valid audience filters.');
   const filtered = registrations.filter(row => {
@@ -33,7 +43,8 @@ export function broadcastAudience(registrations, participants, payment = 'all', 
 }
 export async function loadBroadcastEvents({ client, userId, scopeId, signal }) {
   await verifyBroadcastAccess(client, userId, scopeId, signal);
-  return readAll(() => client.from('calendar').select('id,event_name,start_date').order('start_date', { ascending: true }).order('id'), signal);
+  return readAll(() => client.from('calendar').select('id,event_name,start_date')
+    .order('start_date', { ascending: false, nullsFirst: false }).order('id'), signal);
 }
 
 async function mayReadBroadcastEvent(client, rpc, args, signal) {

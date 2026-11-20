@@ -3,10 +3,11 @@ import SearchableDropdown from '../../components/SearchableDropdown';
 import EventRichTextEditor from '../../components/admin/EventRichTextEditor';
 import { sanitizeHtml, safeUrl } from '../../utils/sanitizeHtml';
 import RecordLoading from './RecordLoading';
-import { canReviewBroadcast, verifyBroadcastAccess, loadBroadcastEvents, loadBroadcastAudience, parseBroadcastEmails, combineBroadcastAudience, emailBroadcastCapability, sendReviewedBroadcastBatch, broadcastAttemptKey, readBroadcastAttempt, writeBroadcastAttempt, readInterruptedBroadcast, writeInterruptedBroadcast } from './emailBroadcastData.js';
+import { canReviewBroadcast, verifyBroadcastAccess, loadBroadcastEvents, loadBroadcastAudience, parseBroadcastEmails, emailBroadcastLink, combineBroadcastAudience, emailBroadcastCapability, sendReviewedBroadcastBatch, broadcastAttemptKey, readBroadcastAttempt, writeBroadcastAttempt, readInterruptedBroadcast, writeInterruptedBroadcast } from './emailBroadcastData.js';
 import './EmailBroadcastWorkspace.css';
 
 const empty = { events: [], payment: 'all', partner: 'all', manual: false, manualText: '', subject: '', html: '', tests: '', excluded: [] };
+const invalidLink = 'Enter a web address, a mailto link or a tel link.';
 export default function EmailBroadcastWorkspace({ client, session, permissions, scopeId = 'all', refreshRevision = 0 }) {
   const [draft, setDraft] = useState(empty), [catalog, setCatalog] = useState({ loading: true }), [audience, setAudience] = useState({ emails: [] });
   const [search, setSearch] = useState(''), [list, setList] = useState(false), [review, setReview] = useState(null), [error, setError] = useState(''), [checking, setChecking] = useState(false), [resetting, setResetting] = useState(false), [revision, setRevision] = useState(0);
@@ -178,8 +179,8 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
     }
   };
   const linkSelectedText = () => {
-    const href = safeUrl(url);
-    if (!href) { setError('Enter a valid http or https URL.'); return; }
+    const href = emailBroadcastLink(url);
+    if (!href) { setError(invalidLink); return; }
     const editor = messageEditor.current, saved = selectedText.current, selection = document.getSelection();
     if (!editor || !saved || !selection || editor.innerHTML !== saved.html || saved.range.collapsed
       || !editor.contains(saved.range.startContainer) || !editor.contains(saved.range.endContainer)) {
@@ -198,7 +199,8 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
     setUrl('');
   };
   const insertMedia = image => {
-    const href = safeUrl(url); if (!href) { setError('Enter a valid http or https URL.'); return; }
+    const href = image ? safeUrl(url) : emailBroadcastLink(url);
+    if (!href) { setError(image ? 'Enter a valid http or https image URL.' : invalidLink); return; }
     const node = document.createElement(image ? 'img' : 'a');
     if (image) { node.src = href; node.alt = caption || ''; } else { node.href = href; node.textContent = caption || href; node.rel = 'noopener noreferrer'; }
     change('html', draft.html + `<p>${node.outerHTML}</p>`); setUrl(''); setCaption('');
