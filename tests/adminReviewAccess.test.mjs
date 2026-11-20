@@ -66,6 +66,29 @@ test('staff and separately assigned event managers receive distinct navigation',
   assert.equal(canOpenReviewPage(assigned, 'licenses'), false);
 });
 
+test('verified Event Manager grants open communications without widening tenant workspaces', async () => {
+  const grant = (allowed_tabs, allowedEvents = []) => [{
+    email: actor.email, role: 'custom', allowed_tabs,
+    module_permissions: { 'event-mgmt': { allowedEvents } },
+  }];
+  const ownClub = { user_email: actor.email, role: 'admin', clubs: { id: 'own-venue', name: 'Own venue', status: 'published' } };
+  const fixtures = [
+    [true, { admin_sidebar_permissions: grant(['event-mgmt']) }],
+    [true, { admin_sidebar_permissions: grant([], [42]), club_members: [ownClub] }],
+    [true, { admin_sidebar_permissions: grant(['event-mgmt']), club_members: [ownClub] }],
+    [false, { admin_sidebar_permissions: grant([], ['invalid']), club_members: [ownClub] }],
+    [false, { club_members: [ownClub] }],
+  ];
+  for (const [canCommunicate, tables] of fixtures) {
+    const { permissions } = await verifyHostedReviewAccess(clientFixture({ tables }).client, actor);
+    for (const page of ['messaging', 'help']) assert.equal(canOpenReviewPage(permissions, page), canCommunicate, page);
+    for (const page of ['email', 'push', 'players', 'reports', 'payouts', 'payments', 'team-access']) {
+      assert.equal(canOpenReviewPage(permissions, page), false, page);
+    }
+    if (tables.club_members) assert.deepEqual(previewScopes(permissions, 'events').map(scope => scope.id), ['club:own-venue']);
+  }
+});
+
 test('ordinary accounts, inactive actors, mismatched identities and false elevated grants fail closed', async () => {
   await assert.rejects(verifyHostedReviewAccess(clientFixture().client, actor), /no Admin workspaces/);
   await assert.rejects(verifyHostedReviewAccess(clientFixture({ active: false }).client, actor), /active 4M account/);

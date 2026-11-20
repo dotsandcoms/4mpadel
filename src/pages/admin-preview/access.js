@@ -55,7 +55,15 @@ export function canOpenReviewPage(permissions, page) {
   if (page === 'payments') return !tenant && hasExplicitPlatformPaystackGrant(permissions);
   if (page === 'events' || page === 'registrations' || page === 'audit-log') return organisationAdmin || clubAdmin || (!tenant && (assignedEvents.length > 0 || tabs.includes('event-mgmt')));
   if (page === 'calendar') return organisationAdmin || clubAdmin || (!tenant && tabs.includes('calendar'));
-  if (page === 'messaging' || page === 'help') return organisationAdmin || (!tenant && assignedEvents.length > 0);
+  if (page === 'messaging' || page === 'help') {
+    // The legacy Event Manager exposed both launchers to explicit grants.
+    // Messaging and Help RPCs separately verify each event and thread.
+    const assigned = Array.isArray(assignedEvents) && assignedEvents.some(id => {
+      if (typeof id !== 'number' && (typeof id !== 'string' || !/^\d+$/.test(id))) return false;
+      return Number.isSafeInteger(Number(id)) && Number(id) > 0;
+    });
+    return organisationAdmin || tabs.includes('event-mgmt') || assigned;
+  }
   if (page === 'gallery') return !tenant && (tabs.includes('gallery') || permissions.module_permissions?.gallery?.allowedAlbums?.length > 0);
   return !tenant && tabs.includes(moduleTabs[page] || page);
 }

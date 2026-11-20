@@ -18,10 +18,16 @@ const listeners = new Set();
 const result = data => ({ data, error: null });
 const calls = () => window.fixtureCalls;
 const tenant = () => window.fixtureAccount === 'tenant';
+const eventCoAdmin = () => window.fixtureAccount === 'event-co-admin';
+const clubAssignee = () => window.fixtureAccount === 'club-event-assignee';
+const clubFixture = () => clubAssignee() || window.fixtureAccount === 'club-no-assignment';
+const communicationsFixture = () => eventCoAdmin() || clubFixture();
+const canManageCommunications = () => eventCoAdmin() || clubAssignee();
 const playerFixture = () => window.fixturePlayersRoute === true;
 const player = { id: 12, name: 'Fixture Player', email: 'player@example.invalid', home_club: 'Fixture Club', approved: true };
 const north = { id: 'north-fixture', name: 'North organisation', status: 'approved' };
 const south = { id: 'south-fixture', name: 'South organisation', status: 'approved' };
+const club = { id: 'own-club', name: 'Own club', status: 'published' };
 let signedIn = true;
 const session = () => signedIn ? { user, access_token: 'synthetic-token' } : null;
 const ticket = {
@@ -38,7 +44,8 @@ function query(table) {
   let rows = table === 'organisation_members' ? [
     { role: 'admin', user_email: email, organisation_id: north.id, organisations: north },
     { role: 'owner', user_email: 'other@example.invalid', organisation_id: south.id, organisations: south },
-  ].filter(row => window.fixtureAccount !== 'players-only' || row.user_email !== email)
+  ].filter(row => (window.fixtureAccount !== 'players-only' && !communicationsFixture()) || row.user_email !== email)
+   : table === 'club_members' && clubFixture() ? [{ role: 'admin', user_email: email, clubs: club }]
    : table === 'calendar' || table === 'events' ? [event]
    : table === 'organisations' ? [north, south]
    : table === 'tournament_divisions' && window.fixtureEventDraw ? [drawDivision]
@@ -48,6 +55,8 @@ function query(table) {
   if (table === 'admin_sidebar_permissions') {
     if (window.fixtureAccount === 'platform') rows = [{ email, role: 'super_admin' }];
     else if (playerFixture()) rows = [{ email, role: 'custom', allowed_tabs: ['players'] }];
+    else if (eventCoAdmin()) rows = [{ email, role: 'custom', allowed_tabs: ['event-mgmt'] }];
+    else if (clubAssignee()) rows = [{ email, role: 'custom', allowed_tabs: [], module_permissions: { 'event-mgmt': { allowedEvents: [event.id] } } }];
   }
   let fields = '';
   let single = false;
@@ -104,12 +113,27 @@ export const supabase = {
     if (name === 'account_is_active') return result(window.fixtureAccount !== 'inactive');
     if (name === 'is_super_admin') return result(window.fixtureAccount === 'platform');
     if (name === 'help_api') {
+      if (communicationsFixture() && action === 'read' && (!canManageCommunications() || args.p_data.id !== ticket.id)) {
+        return { error: { code: '42501', message: 'This help request is unavailable.' } };
+      }
       if (action === 'read') return result({ request: ticket, messages: [], next: null });
-      if (action === 'list') return result({ rows: [ticket], next: null });
+      if (action === 'list') {
+        const permitted = !communicationsFixture() || (canManageCommunications() && (!args.p_data.eventId || String(args.p_data.eventId) === String(event.id)));
+        return result({ rows: permitted ? [ticket] : [], next: null });
+      }
       return result({ unread: 0, topics: [] });
+    }
+    if (communicationsFixture() && name === 'messaging_event_directory') return result(canManageCommunications() ? [event] : []);
+    if (communicationsFixture() && name === 'messaging_event_analytics') {
+      return canManageCommunications() && Number(args.p_event) === event.id
+        ? result({ event, announcements: [] })
+        : { error: { code: '42501', message: 'Event messaging access denied.' } };
     }
     if (name === 'messaging_api') {
       if (action === 'status') return result({ enabled: true, rulesAccepted: true, groupsEnabled: true, interactive: true });
+      if (communicationsFixture() && action === 'open_event' && canManageCommunications() && Number(args.p_data.eventId) === event.id) {
+        return result([{ id: 'exact-announcements', kind: 'event_announcements', manager: true }]);
+      }
       return result({ rows: [], next: null });
     }
     if (name === 'can_manage_event') return result(Number(args.p_event_id) === event.id);
@@ -319,6 +343,38 @@ test('a tenant sees only its authorised scopes and cannot open platform tools fr
   await page.click('[aria-label="Open notifications"]');
   await route(page, '/admin-preview/help');
   await heading(page, 'Help requests');
+});
+
+test('Event Manager co-admins and explicit venue assignees can open their exact Messaging and Help records', async t => {
+  for (const account of ['event-co-admin', 'club-event-assignee']) {
+    const page = await open(t, '/admin-preview/messaging?event=101', account);
+    await heading(page, 'Messaging');
+    await page.waitForFunction(() => window.fixtureCalls.some(call => call[1] === 'messaging_api'
+      && call[2]?.p_action === 'read' && call[2]?.p_data?.conversationId === 'exact-announcements'));
+    await page.evaluate(() => window.fixtureNavigate('/admin-preview/help?event=101&ticket=11111111-1111-4111-8111-000000000010'));
+    await heading(page, 'Help requests');
+    await page.waitForSelector('#help-reply');
+    await page.evaluate(() => window.fixtureNavigate('/admin-preview/help?event=202&ticket=11111111-1111-4111-8111-000000000020'));
+    await page.waitForFunction(() => Array.from(document.querySelectorAll('[role="alert"]')).some(alert => alert.textContent === 'This help request is unavailable.'));
+    assert.equal(await page.$('#help-reply'), null);
+    await page.evaluate(() => window.fixtureNavigate('/admin-preview/messaging?event=202'));
+    await page.waitForFunction(() => Array.from(document.querySelectorAll('[role="alert"]')).some(alert => alert.textContent === 'Event messaging access denied.'));
+    assert.equal(await page.evaluate(() => window.fixtureCalls.some(call => call[1] === 'messaging_api'
+      && call[2]?.p_action === 'open_event' && call[2]?.p_data?.eventId === 202)), false);
+    const visible = await page.$$eval('.ap-nav-destination', nodes => nodes.map(node => node.textContent.trim()));
+    for (const blocked of ['Payments', 'Players', 'Email broadcast', 'Push broadcasts', 'Payouts', 'Access & permissions']) {
+      assert.equal(visible.includes(blocked), false, blocked);
+    }
+  }
+});
+
+test('a club admin with no explicit event grant cannot mount Messaging or Help through direct links', async t => {
+  const page = await open(t, '/admin-preview/messaging?event=101', 'club-no-assignment');
+  await heading(page, 'Workspace unavailable');
+  await page.evaluate(() => window.fixtureNavigate('/admin-preview/help?event=101'));
+  await route(page, '/admin-preview/help?event=101');
+  await heading(page, 'Workspace unavailable');
+  assert.equal(await page.evaluate(() => window.fixtureCalls.some(call => ['help_api', 'messaging_api', 'messaging_event_directory'].includes(call[1]))), false);
 });
 
 test('platform notifications open a live native destination', async t => {
