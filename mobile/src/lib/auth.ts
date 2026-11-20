@@ -1,5 +1,6 @@
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import { CryptoDigestAlgorithm, digestStringAsync, randomUUID } from 'expo-crypto';
 import { Platform } from 'react-native';
 
 import { unregisterPushToken } from './notifications';
@@ -49,11 +50,12 @@ export async function isAppleAvailable(): Promise<boolean> {
   return AppleAuthentication.isAvailableAsync();
 }
 
-export async function signInWithApple() {
+async function requestAppleCredential(nonce?: string) {
   let credential: AppleAuthentication.AppleAuthenticationCredential;
 
   try {
     credential = await AppleAuthentication.signInAsync({
+      nonce,
       requestedScopes: [
         AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
         AppleAuthentication.AppleAuthenticationScope.EMAIL,
@@ -67,7 +69,17 @@ export async function signInWithApple() {
   if (!credential.identityToken) {
     throw new Error('Apple did not return an identity token.');
   }
+  return { ...credential, identityToken: credential.identityToken };
+}
 
+export async function signInWithApple(confirmPrivateRelay?: () => Promise<boolean>) {
+  const credential = await requestAppleCredential();
+  // Apple supplies the email on first authorization. Ask before exchanging
+  // that credential, so existing players can link without creating an Auth user.
+  if (credential.email?.toLowerCase().endsWith('@privaterelay.appleid.com') &&
+      confirmPrivateRelay && !await confirmPrivateRelay()) {
+    throw new AuthCancelled();
+  }
   const { data, error } = await supabase.auth.signInWithIdToken({
     provider: 'apple',
     token: credential.identityToken,
@@ -92,6 +104,23 @@ export async function signInWithApple() {
   }
 
   return data;
+}
+
+export async function linkAppleToAccount(userId: string) {
+  const nonce = randomUUID();
+  const credential = await requestAppleCredential(
+    await digestStringAsync(CryptoDigestAlgorithm.SHA256, nonce)
+  );
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || user?.id !== userId) {
+    throw new Error('Sign in to your 4M Padel account and try again.');
+  }
+  const { error } = await supabase.auth.linkIdentity({
+    provider: 'apple',
+    token: credential.identityToken,
+    nonce,
+  });
+  if (error) throw error;
 }
 
 export async function signInWithGoogle() {

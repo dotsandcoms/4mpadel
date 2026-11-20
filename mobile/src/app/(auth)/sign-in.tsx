@@ -14,6 +14,7 @@ import {
 } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -192,6 +193,23 @@ export default function SignInScreen() {
     setEmailOpen(true);
   }
 
+  function confirmApplePrivateRelay() {
+    return new Promise<boolean>((resolve) => {
+      Alert.alert(
+        'Already have a 4M Padel profile?',
+        'Sign in the way you usually do, then link Apple in Account & settings.',
+        [
+          { text: 'Use my existing account', style: 'cancel', onPress: () => {
+            setMode('signin');
+            setEmailOpen(true);
+            resolve(false);
+          } },
+          { text: "I'm new to 4M Padel", onPress: () => resolve(true) },
+        ]
+      );
+    });
+  }
+
   useEffect(() => {
     if (!emailOpen || !pendingPasswordFocus.current) return;
     pendingPasswordFocus.current = false;
@@ -314,7 +332,7 @@ export default function SignInScreen() {
           {appleReady ? (
             <FocusRing>
               <PressableScale
-                onPress={() => run('apple', signInWithApple)}
+                onPress={() => run('apple', () => signInWithApple(confirmApplePrivateRelay))}
                 disabled={!!busy}
                 accessibilityRole="button"
                 accessibilityState={{ busy: busy === 'apple', disabled: !!busy }}

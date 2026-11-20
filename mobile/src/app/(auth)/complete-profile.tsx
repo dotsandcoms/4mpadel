@@ -348,6 +348,18 @@ export default function CompleteProfileScreen() {
     catch { setFormError('Your draft could not be saved securely. Please try again before signing out.'); }
   }
 
+  async function useExistingAccount() {
+    if (busy || savingStep || proofSaving) return;
+    setBusy(true);
+    try {
+      await signOut();
+    } catch {
+      flash('Unable to sign out. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function finish() {
     if (busy || proofSaving) return;
     const next = validateStep2();
@@ -451,6 +463,17 @@ export default function CompleteProfileScreen() {
           keyboardDismissMode="interactive"
           automaticallyAdjustKeyboardInsets
           contentContainerStyle={{ paddingHorizontal: 28, paddingBottom: 16 }}>
+          {email.toLowerCase().endsWith('@privaterelay.appleid.com') && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityHint="Sign out and return to sign in"
+              disabled={saving}
+              onPress={useExistingAccount}
+              className="mb-5 min-h-11 rounded-xl border border-court-edge px-4 py-3">
+              <Text style={{ color: brand.accent, fontWeight: '700' }}>Sign in to an existing profile</Text>
+              <Text className="mt-1 text-court-muted">Use your usual sign-in, then link Apple in Account &amp; settings.</Text>
+            </Pressable>
+          )}
           <StepSlide key={step} step={step} animate={hasStepped}>
             {step === 1 ? (
               <>
