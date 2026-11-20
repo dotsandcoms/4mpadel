@@ -100,29 +100,31 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
     const addresses = [...review.recipients].sort();
     const signature = JSON.stringify([review.kind, review.subject, review.html, addresses]);
     let attempt = deliveryAttempts.current.get(signature);
+    const recheckAudience = async () => {
+      if (review.kind !== 'broadcast' || !draft.events.length) return current();
+      let emails;
+      try {
+        emails = await loadBroadcastAudience({ client, userId, scopeId, eventIds: draft.events,
+          payment: draft.payment, partner: draft.partner, signal: abort.signal });
+      } catch (issue) {
+        if (current()) {
+          setReview(null);
+          setAudience({ emails: [], error: issue.message });
+        }
+        throw issue;
+      }
+      if (!current()) return false;
+      const checkedRecipients = new Set(combineBroadcastAudience(emails, manual.emails, draft.excluded));
+      if (checkedRecipients.size !== review.recipients.length || review.recipients.some(email => !checkedRecipients.has(email))) {
+        setReview(null);
+        setAudience({ emails });
+        throw new Error('The event audience changed. Review the updated recipients before sending.');
+      }
+      return true;
+    };
     try {
       const signedIn = await verifyBroadcastAccess(client, userId, scopeId, abort.signal);
       if (signedIn.email !== userEmail?.trim().toLowerCase() || !current()) throw new Error('The signed-in account changed. Reopen the review.');
-      if (review.kind === 'broadcast' && draft.events.length) {
-        let emails;
-        try {
-          emails = await loadBroadcastAudience({ client, userId, scopeId, eventIds: draft.events,
-            payment: draft.payment, partner: draft.partner, signal: abort.signal });
-        } catch (issue) {
-          if (current()) {
-            setReview(null);
-            setAudience({ emails: [], error: issue.message });
-          }
-          throw issue;
-        }
-        if (!current()) return;
-        const checkedRecipients = new Set(combineBroadcastAudience(emails, manual.emails, draft.excluded));
-        if (checkedRecipients.size !== review.recipients.length || review.recipients.some(email => !checkedRecipients.has(email))) {
-          setReview(null);
-          setAudience({ emails });
-          throw new Error('The event audience changed. Review the updated recipients before sending.');
-        }
-      }
       await emailBroadcastCapability(client, abort.signal);
       if (!current()) return;
       const storageKey = await broadcastAttemptKey(userId, scopeId, signature);
@@ -136,7 +138,7 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
       }
       if (Date.now() - attempt.startedAt > 23 * 60 * 60 * 1000) throw new Error('This delivery review expired. Check the original delivery result before sending again.');
       for (let index = attempt.completed; index < attempt.batchIds.length; index++) {
-        if (!current()) return;
+        if (!current() || !await recheckAudience()) return;
         const emails = addresses.slice(index * batchSize, (index + 1) * batchSize);
         await sendReviewedBroadcastBatch(client, { signal: abort.signal, requestId: attempt.batchIds[index], emails, subject: review.subject, html: review.html });
         if (!current()) return;

@@ -40,6 +40,9 @@ const fixture = `
               { id: 2, event_id: 61, email: 'pending@example.test', payment_status: 'pending' },
               { id: 3, event_id: 61, email: 'withdrawn@example.test', payment_status: 'paid', status: 'withdrawn' },
               { id: 4, event_id: 62, email: 'other-event@example.test', payment_status: 'paid' },
+              ...(window.emailLargeAudience ? Array.from({ length: 48 }, (_, index) => ({
+                id: index + 10, event_id: 61, email: 'fixture-' + index + '@example.test', payment_status: 'paid',
+              })) : []),
             ],
             tournament_participants: [{ id: 7, event_id: 61, email: 'PAID@example.test' }, { id: 8, event_id: 61, email: 'provider@example.test' }],
           };
@@ -62,6 +65,11 @@ const fixture = `
         if (body.template === 'broadcast' && body.bcc.length === 1 && window.failSecondEmail) {
           window.failSecondEmail = false;
           return { data: null, error: new Error('Fictional network interruption') };
+        }
+        if (body.template === 'broadcast' && window.emailAfterFirstBatch) {
+          if (window.emailAfterFirstBatch === 'revoke') window.emailManagedEvent = '';
+          if (window.emailAfterFirstBatch === 'remove') window.emailRemovePending = true;
+          window.emailAfterFirstBatch = null;
         }
         return result({ success: true, messageId: 'fictional-receipt' });
       },
@@ -391,6 +399,44 @@ test('revoked event access clears the confirmed audience before any delivery', a
   assert.equal(await page.$('.email-broadcast-recipient-list'),null);
   assert.deepEqual(await deliveries(page),[]);
   assert.deepEqual(await rowReads(page),[]);
+});
+
+test('revoking event access after an accepted batch stops delivery until the same audience is reviewed again', async t => {
+  const page = await openBroadcast(t, { emailManagedEvent: '61', emailLargeAudience: true, emailAfterFirstBatch: 'revoke' });
+  await enterMessage(page);
+  await page.click('.email-broadcast-events input');
+  await audienceCount(page, 51);
+  await click(page, 'Review broadcast');
+  await click(page, 'Send broadcast');
+  await audienceCount(page, 'Unavailable');
+  await page.waitForFunction(() => document.body.textContent.includes('The provider accepted 1 earlier batch.'));
+  assert.equal(await page.$('section[aria-label="Broadcast review"]'), null);
+  const accepted = await deliveries(page);
+  assert.deepEqual(accepted.map(batch => batch.bcc.length), [49]);
+
+  await page.evaluate(() => { window.emailManagedEvent = '61'; });
+  await click(page, 'Reload events and audience');
+  await audienceCount(page, 51);
+  await click(page, 'Review broadcast');
+  await click(page, 'Send broadcast');
+  await page.waitForFunction(() => document.body.textContent.includes('Email accepted by the provider for 51 recipients.'));
+  const complete = await deliveries(page);
+  assert.deepEqual(complete.map(batch => batch.bcc.length), [49, 2]);
+  assert.deepEqual(complete[0], accepted[0]);
+  assert.equal(new Set(complete.flatMap(batch => batch.bcc)).size, 51);
+});
+
+test('an event roster change after an accepted batch invalidates the original audience', async t => {
+  const page = await openBroadcast(t, { emailManagedEvent: '61', emailLargeAudience: true, emailAfterFirstBatch: 'remove' });
+  await enterMessage(page);
+  await page.click('.email-broadcast-events input');
+  await audienceCount(page, 51);
+  await click(page, 'Review broadcast');
+  await click(page, 'Send broadcast');
+  await page.waitForFunction(() => document.body.textContent.includes('The event audience changed.'));
+  await audienceCount(page, 50);
+  assert.equal(await page.$('section[aria-label="Broadcast review"]'), null);
+  assert.deepEqual((await deliveries(page)).map(batch => batch.bcc.length), [49]);
 });
 
 test('a provider roster read failure discards the event recipient list as a whole', async t => {

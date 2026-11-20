@@ -21,6 +21,8 @@ const tenant = () => window.fixtureAccount === 'tenant';
 const paymentFixture = () => window.fixtureAccount === 'platform-payment';
 const platform = () => window.fixtureAccount === 'platform' || paymentFixture();
 const dashboardOnly = () => window.fixtureAccount === 'dashboard-only';
+const emailOnly = () => window.fixtureAccount === 'email-only';
+const tenantEmailGrant = () => window.fixtureAccount === 'tenant-email-grant';
 const eventCoAdmin = () => window.fixtureAccount === 'event-co-admin';
 const clubAssignee = () => window.fixtureAccount === 'club-event-assignee';
 const clubFixture = () => clubAssignee() || window.fixtureAccount === 'club-no-assignment';
@@ -50,7 +52,7 @@ function query(table) {
   let rows = table === 'organisation_members' ? [
     { role: 'admin', user_email: email, organisation_id: north.id, organisations: north },
     { role: 'owner', user_email: 'other@example.invalid', organisation_id: south.id, organisations: south },
-  ].filter(row => (window.fixtureAccount !== 'players-only' && !dashboardOnly() && !communicationsFixture()) || row.user_email !== email)
+  ].filter(row => (window.fixtureAccount !== 'players-only' && !dashboardOnly() && !emailOnly() && !communicationsFixture()) || row.user_email !== email)
    : table === 'club_members' && clubFixture() ? [{ role: 'admin', user_email: email, clubs: club }]
    : table === 'calendar' || table === 'events' ? (paymentFixture() ? [event,paymentEvent] : [event])
    : table === 'organisations' ? [north, south]
@@ -62,6 +64,9 @@ function query(table) {
   if (table === 'admin_sidebar_permissions') {
     if (platform()) rows = [{ email, role: 'super_admin' }];
     else if (dashboardOnly()) rows = [{ email, role: 'custom', allowed_tabs: ['dashboard'] }];
+    else if ((emailOnly() || tenantEmailGrant()) && !window.fixtureEmailRevoked) {
+      rows = [{ email, role: 'custom', allowed_tabs: ['email-broadcast'] }];
+    }
     else if (playerFixture()) rows = [{ email, role: 'custom', allowed_tabs: ['players'] }];
     else if (eventCoAdmin()) rows = [{ email, role: 'custom', allowed_tabs: ['event-mgmt'] }];
     else if (clubAssignee()) rows = [{ email, role: 'custom', allowed_tabs: [], module_permissions: { 'event-mgmt': { allowedEvents: [event.id] } } }];
@@ -156,6 +161,10 @@ export const supabase = {
   },
   functions: { invoke: async (name, options) => {
     calls().push(['function', name, options]);
+    if (name === 'send-email' && emailOnly() && !window.fixtureEmailRevoked) {
+      if (options.body?.action === 'broadcast_capability') return result({ version: 1, batchSize: 49 });
+      return result({ success: true, messageId: 'synthetic-email-acceptance' });
+    }
     return { data: null, error: { message: 'Synthetic fixture has no external side effects.' } };
   }},
   realtime: { setAuth() {} },
@@ -192,7 +201,8 @@ before(async () => {
       build.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: mock }));
     } }],
   });
-  browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'], protocolTimeout: 20000 });
+  browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox',
+    '--unsafely-treat-insecure-origin-as-secure=http://fixture.invalid'], protocolTimeout: 20000 });
 });
 
 after(async () => {
@@ -379,6 +389,36 @@ test('a tenant sees only its authorised scopes and cannot open platform tools fr
   await page.click('[aria-label="Open notifications"]');
   await route(page, '/admin-preview/help');
   await heading(page, 'Help requests');
+});
+
+test('the standalone Email Broadcast route sends a reviewed test only while its exact grant is current', async t => {
+  const page = await open(t, '/admin-preview/email', 'email-only');
+  await heading(page, 'Email broadcast');
+  await page.type('input[placeholder="Your announcement…"]', 'Synthetic announcement');
+  await page.type('[aria-label="Broadcast message"][contenteditable]', 'Reviewed body');
+  await page.type('.email-broadcast textarea[rows="2"]', 'review@example.invalid');
+  await clickText(page, '.email-broadcast button', 'Review test');
+  await page.waitForSelector('[aria-label="Broadcast review"]');
+  const sent = () => page.evaluate(() => window.fixtureCalls.filter(([kind, name, options]) =>
+    kind === 'function' && name === 'send-email' && options.body.template === 'broadcast').map(([, , options]) => options.body));
+  assert.equal((await sent()).length, 0);
+  await clickText(page, '[aria-label="Broadcast review"] button', 'Send test email');
+  await page.waitForFunction(() => document.body.textContent.includes('Email accepted by the provider for 1 recipient.'));
+  const [delivery] = await sent();
+  assert.deepEqual(delivery.bcc, ['review@example.invalid']);
+  assert.equal(delivery.variables.subject, 'Synthetic announcement (TEST)');
+  assert.match(delivery.variables.message, /Reviewed body/);
+
+  await clickText(page, '.email-broadcast button', 'Review test');
+  await page.waitForSelector('[aria-label="Broadcast review"]');
+  await page.evaluate(() => { window.fixtureEmailRevoked = true; });
+  await clickText(page, '[aria-label="Broadcast review"] button', 'Send test email');
+  await page.waitForFunction(() => document.body.textContent.includes('A current publishing permission is required.'));
+  assert.equal((await sent()).length, 1);
+
+  const tenantPage = await open(t, '/admin-preview/email', 'tenant-email-grant');
+  await heading(tenantPage, 'Workspace unavailable');
+  assert.equal(await tenantPage.evaluate(() => window.fixtureCalls.some(([kind, name]) => kind === 'function' && name === 'send-email')), false);
 });
 
 test('Event Manager co-admins and explicit venue assignees can open their exact Messaging and Help records', async t => {
