@@ -57,7 +57,8 @@ BEGIN
 
     IF p_reconcile_only IS NOT TRUE THEN
         SELECT coalesce(sum(r.amount), 0) INTO reserved FROM public.payment_refunds r
-         WHERE r.payment_id = p_payment_id AND r.status IS DISTINCT FROM 'failed';
+         WHERE r.payment_id = p_payment_id AND r.id <> refund.id
+           AND (r.status IS DISTINCT FROM 'failed' OR r.metadata->'verified_switch_reservation' = 'true'::jsonb);
         IF ledger.amount IS NULL OR reserved + refund.amount > ledger.amount THEN
             RETURN jsonb_build_object('unavailable', 'ledger_allowance');
         END IF;
@@ -66,7 +67,8 @@ BEGIN
             SELECT coalesce(sum(r.amount), 0) INTO reserved
               FROM public.payment_refunds r
               JOIN public.payments p ON p.id = r.payment_id
-             WHERE r.status IS DISTINCT FROM 'failed'
+             WHERE r.id <> refund.id
+               AND (r.status IS DISTINCT FROM 'failed' OR r.metadata->'verified_switch_reservation' = 'true'::jsonb)
                AND (r.paystack_reference = p_transaction_ref OR coalesce(nullif(btrim(p.metadata->>'parent_reference'), ''),
                     CASE WHEN p.reference LIKE 'LIC-%' THEN substr(p.reference, 5) ELSE p.reference END) = p_transaction_ref)
                AND coalesce(r.metadata->'reviewed_retry'->>'domain', CASE
@@ -116,7 +118,8 @@ BEGIN
         IF component_amount ~ '^[0-9]+(\.[0-9]{1,2})?$' THEN
             SELECT coalesce(sum(r.amount), 0) INTO reserved FROM public.payment_refunds r
              WHERE r.payment_id = p_payment_id AND r.event_registration_id = p_registration_id
-               AND r.status IS DISTINCT FROM 'failed'
+               AND r.id <> refund.id
+               AND (r.status IS DISTINCT FROM 'failed' OR r.metadata->'verified_switch_reservation' = 'true'::jsonb)
                AND (r.metadata->>'cover_type' = component
                     OR (component = 'entry' AND nullif(r.metadata->>'cover_type', '') IS NULL));
             IF reserved + refund.amount > component_amount::numeric THEN

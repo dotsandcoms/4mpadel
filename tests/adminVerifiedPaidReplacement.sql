@@ -306,3 +306,116 @@ begin
     from public.payments p join private.event_checkout_security_quotes q on q.payment_id=p.id where p.id=event_payment);
   assert not has_function_privilege('authenticated','private.move_registration_division_before_transfer(uuid[],uuid,boolean)','execute');
 end $$;
+
+ALTER TABLE public.calendar ADD COLUMN is_manual boolean DEFAULT true;
+ALTER TABLE public.payment_refunds ADD COLUMN paystack_reference text, ADD COLUMN currency text,
+  ADD COLUMN reason text, ADD COLUMN initiated_by text;
+ALTER TABLE private.event_checkout_security_quotes ALTER CONSTRAINT event_checkout_security_quotes_payment_id_fkey
+  DEFERRABLE INITIALLY DEFERRED;
+CREATE OR REPLACE FUNCTION private.current_entry_fee(bigint,uuid,text) RETURNS numeric LANGUAGE sql STABLE AS $$
+  SELECT d.entry_fee FROM public.tournament_divisions d WHERE d.event_id=$1 AND d.id=$2;
+$$;
+
+\ir ../supabase/migrations/20261120120800_verified_entry_division_switch.sql
+
+INSERT INTO public.tournament_divisions(id,event_id,name,entry_limit,entry_fee) VALUES
+  ('30000000-0000-0000-0000-000000000005',101,'Higher',1,550),
+  ('30000000-0000-0000-0000-000000000006',101,'Lower',8,300);
+INSERT INTO public.event_registrations(id,event_id,email,full_name,division,division_id) VALUES
+  ('20000000-0000-0000-0000-000000000008',101,'filler@example.com','Occupant','Open','30000000-0000-0000-0000-000000000001');
+
+CREATE FUNCTION pg_temp.review_switch(target uuid, gateway_reference text DEFAULT NULL, email text DEFAULT 'latest@example.com')
+RETURNS jsonb LANGUAGE sql AS $$
+  SELECT public.review_verified_entry_switch(101,'20000000-0000-0000-0000-000000000002',target,email,false,gateway_reference);
+$$;
+CREATE FUNCTION pg_temp.commit_switch(target uuid, amount numeric, gateway_reference text DEFAULT NULL,
+  evidence jsonb DEFAULT NULL) RETURNS jsonb LANGUAGE sql AS $$
+  SELECT public.commit_verified_entry_switch(101,'20000000-0000-0000-0000-000000000002',target,
+    'latest@example.com',false,gateway_reference,amount,evidence);
+$$;
+
+DO $$
+DECLARE
+  slot_id constant uuid := '20000000-0000-0000-0000-000000000002';
+  teammate_id constant uuid := '20000000-0000-0000-0000-000000000001';
+  original_id constant uuid := '40000000-0000-0000-0000-000000000001';
+  top_up_id constant uuid := '40000000-0000-0000-0000-000000000005';
+  from_id constant uuid := '30000000-0000-0000-0000-000000000002';
+  higher_id constant uuid := '30000000-0000-0000-0000-000000000005';
+  lower_id constant uuid := '30000000-0000-0000-0000-000000000006';
+  foreign_id constant uuid := '30000000-0000-0000-0000-000000000003';
+  filler_id constant uuid := '20000000-0000-0000-0000-000000000008';
+  saved_reference constant text := 'MSWITCH-synthetic-higher';
+  evidence constant jsonb := '{"reference":"MSWITCH-synthetic-higher","amount":15000,"currency":"ZAR","domain":"live","customer_email":"latest@example.com","id":"99173"}';
+  quote jsonb;
+  result jsonb;
+  lower_result jsonb;
+  recorded_refund uuid;
+BEGIN
+  ASSERT NOT has_function_privilege('authenticated','public.review_verified_entry_switch(bigint,uuid,uuid,text,boolean,text)','execute');
+  ASSERT NOT has_function_privilege('anon','public.commit_verified_entry_switch(bigint,uuid,uuid,text,boolean,text,numeric,jsonb)','execute');
+  ASSERT NOT has_table_privilege('service_role','private.verified_entry_division_switches','insert');
+  SET LOCAL ROLE authenticated;
+  PERFORM pg_temp.must_fail(format('select pg_temp.review_switch(%L)',higher_id),'permission denied');
+  RESET ROLE;
+  PERFORM set_config('request.jwt.claims','{"role":"service_role"}',true);
+  UPDATE private.security_release_state SET verified_paid_replacements_enabled=false;
+  SET LOCAL ROLE service_role;
+  ASSERT public.review_verified_entry_switch(101,filler_id,higher_id,'filler@example.com',false) IS NULL;
+  PERFORM pg_temp.must_fail(format('select pg_temp.review_switch(%L)',higher_id),'unavailable');
+  RESET ROLE;
+  UPDATE private.security_release_state SET verified_paid_replacements_enabled=true;
+  SET LOCAL ROLE service_role;
+  PERFORM pg_temp.must_fail(format('select pg_temp.review_switch(%L,NULL,%L)',higher_id,'former@example.com'),'cannot change');
+  PERFORM pg_temp.must_fail(format('select pg_temp.review_switch(%L)',foreign_id),'available division');
+  quote:=pg_temp.review_switch(higher_id);
+  ASSERT quote->>'delta'='150.00' AND quote->>'from_division_id'=from_id::text;
+  RESET ROLE;
+
+  INSERT INTO public.payments(id,event_id,amount,status,reference,metadata) VALUES(top_up_id,101,150,'processing',saved_reference,
+    jsonb_build_object('source','division_switch','registration_id',slot_id,'registrant_email','latest@example.com',
+      'from_division_id',from_id,'target_division_id',higher_id,'verified_division_switch',jsonb_build_object('amount',150)));
+  ASSERT (SELECT NOT (metadata ? 'verified_division_switch') FROM public.payments WHERE id=top_up_id);
+  UPDATE public.event_registrations SET division='Higher',division_id=higher_id WHERE id=filler_id;
+  SET LOCAL ROLE service_role;
+  PERFORM pg_temp.must_fail(format('select pg_temp.commit_switch(%L,150,%L,%L)',higher_id,saved_reference,evidence),'full');
+  RESET ROLE;
+  ASSERT (SELECT status='processing' AND NOT (metadata ? 'verified_division_switch') FROM public.payments WHERE id=top_up_id);
+  ASSERT (SELECT division_id=from_id AND partner_email IS NOT NULL FROM public.event_registrations WHERE id=slot_id);
+  ASSERT NOT EXISTS(SELECT 1 FROM private.verified_entry_division_switches);
+  UPDATE public.event_registrations SET status='withdrawn' WHERE id=filler_id;
+  SET LOCAL ROLE service_role;
+  PERFORM pg_temp.must_fail(format('select pg_temp.commit_switch(%L,149,%L,%L)',higher_id,saved_reference,evidence),'price changed');
+  PERFORM pg_temp.must_fail(format('select pg_temp.commit_switch(%L,150,%L,%L)',higher_id,saved_reference,
+    jsonb_set(evidence,'{amount}','14999')),'exact Paystack top-up');
+  PERFORM pg_temp.must_fail(format('select pg_temp.commit_switch(%L,150,%L,%L)',higher_id,saved_reference,
+    jsonb_set(evidence,'{customer_email}','"former@example.com"')),'exact Paystack top-up');
+  result:=pg_temp.commit_switch(higher_id,150,saved_reference,evidence);
+  ASSERT result->>'completed'='true' AND result->>'replayed'='false' AND (result->>'charged_rands')::numeric=150;
+  ASSERT pg_temp.commit_switch(higher_id,150,saved_reference,evidence)->>'replayed'='true';
+  RESET ROLE;
+  SET CONSTRAINTS verify_transferred_registration_division IMMEDIATE;
+  ASSERT (SELECT payment_status='paid' AND division_id=higher_id AND partner_email IS NULL FROM public.event_registrations WHERE id=slot_id);
+  ASSERT (SELECT status='success' AND metadata->'verified_division_switch'=
+     jsonb_build_object('registration_id',slot_id,'event_id',101,'division_id',higher_id,'division','Higher',
+        'from_division_id',from_id,'amount',150) FROM public.payments WHERE id=top_up_id);
+
+  SET CONSTRAINTS verify_transferred_registration_division DEFERRED;
+  SET LOCAL ROLE service_role;
+  quote:=pg_temp.review_switch(lower_id);
+  ASSERT (quote->>'delta')::numeric=-250;
+  lower_result:=pg_temp.commit_switch(lower_id,-250);
+  recorded_refund:=(lower_result->>'refund_id')::uuid;
+  ASSERT recorded_refund IS NOT NULL AND (pg_temp.commit_switch(lower_id,-250)->>'refund_id')::uuid=recorded_refund;
+  RESET ROLE;
+  SET CONSTRAINTS verify_transferred_registration_division IMMEDIATE;
+  ASSERT (SELECT count(*)=1 FROM public.payment_refunds WHERE event_registration_id=slot_id);
+  ASSERT (SELECT payment_id=original_id AND amount=250 AND reason='division_switch' AND status='failed'
+    AND metadata->>'verify_failed'='true' AND metadata->>'verified_switch_reservation'='true' FROM public.payment_refunds WHERE id=recorded_refund);
+  ASSERT (SELECT metadata->'verified_division_switch'->>'division_id'=lower_id::text FROM public.payments WHERE id=top_up_id);
+  ASSERT (SELECT metadata->'verified_entry_switch_refunds'=jsonb_build_array(jsonb_build_object(
+    'registration_id',slot_id,'event_id',101,'division_id',lower_id,'amount',250)) FROM public.payments WHERE id=original_id);
+  ASSERT (SELECT division_id=from_id AND payment_status='paid' FROM public.event_registrations WHERE id=teammate_id);
+  ASSERT (SELECT amount=800 AND reference='REGEV-verified-fixture' FROM public.payments WHERE id=original_id);
+  ASSERT (SELECT count(*)=2 FROM private.verified_entry_division_switches);
+END $$;

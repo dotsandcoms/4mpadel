@@ -42,6 +42,17 @@ function getPaymentMetadataLayers(metadata = {}) {
   const inner = normalizePaymentMetadata(top.original_trx?.metadata);
   return { top, inner };
 }
+function isDivisionSwitchPayment(payment) {
+  return normalizePaymentMetadata(payment?.metadata).source === "division_switch";
+}
+function verifiedDivisionSwitchAmount(payment, reg) {
+  const meta = normalizePaymentMetadata(payment?.metadata);
+  const allocation = meta.verified_division_switch;
+  const amount = Number(payment?.amount);
+  if (meta.source !== "division_switch" || payment.status !== "success" || payment.payment_type !== "event_entry_fee" || payment.payment_method !== "paystack" || payment.is_test || meta.is_test || !allocation || !reg?.id || !Number.isFinite(amount) || amount <= 0 || Number(allocation.amount) !== amount || !allocation.from_division_id || !allocation.division_id || !allocation.event_id || !reg.event_id || String(payment.event_id) !== String(allocation.event_id) || String(reg.event_id) !== String(allocation.event_id) || reg.id !== allocation.registration_id) return 0;
+  const archived = reg.status === "withdrawn" && !reg.division_id && reg.division === `__archived__/${reg.id}`;
+  return reg.division_id === allocation.division_id || archived ? amount : 0;
+}
 var verifiedEntryTransfer = /* @__PURE__ */ Symbol("verified entry transfer");
 function hasVerifiedPaymentEntryTransfers(payment) {
   const transfers = normalizePaymentMetadata(payment?.metadata).verified_entry_transfers;
@@ -135,6 +146,7 @@ function entryCoverMatchesRegistration(cover, reg, meta = {}) {
 function paymentMatchesRegistration(payment, reg) {
   if (!payment || payment.status !== "success") return false;
   if (isLicensePaymentRow(payment)) return false;
+  if (isDivisionSwitchPayment(payment)) return verifiedDivisionSwitchAmount(payment, reg) > 0;
   const meta = normalizePaymentMetadata(payment.metadata);
   const email = norm(reg.email);
   const division = reg.division || reg.class_name;
@@ -156,6 +168,7 @@ function paymentMatchesRegistration(payment, reg) {
 function paymentHasEntryCoverForRegistration(payment, reg, opts = {}) {
   const { requireDivision = true } = opts;
   if (!payment || payment.status !== "success" || isLicensePaymentRow(payment)) return false;
+  if (isDivisionSwitchPayment(payment)) return verifiedDivisionSwitchAmount(payment, reg) > 0;
   const meta = normalizePaymentMetadata(payment.metadata);
   const email = norm(reg.email);
   const division = reg.division || reg.class_name;
@@ -186,6 +199,7 @@ function getRegistrationEntryFeePaid(payment, reg, fallbackFee = 0) {
   const fallback = Number(fallbackFee) || 0;
   if (!reg) return fallback;
   if (!payment || String(payment.status || "").toLowerCase() !== "success") return fallback;
+  if (isDivisionSwitchPayment(payment)) return verifiedDivisionSwitchAmount(payment, reg);
   const meta = normalizePaymentMetadata(payment.metadata);
   const paymentWithMeta = { ...payment, metadata: meta };
   if (isCompedEntryPayment(paymentWithMeta)) return 0;
@@ -275,7 +289,8 @@ function findStrictPaystackEntryPayment(payments, reg) {
   );
   const exact = paystackEntries.filter((payment) => paymentStrictlyCoversRegistration(payment, reg));
   if (exact.length > 0) {
-    return [...exact].sort((a, b) => scorePayment(b) - scorePayment(a))[0];
+    const original = exact.filter((payment) => !isDivisionSwitchPayment(payment));
+    return (original.length ? original : exact).sort((a, b) => scorePayment(b) - scorePayment(a))[0];
   }
   const moved = paystackEntries.filter((payment) => paymentHasEntryCoverForRegistration(payment, reg, { requireDivision: false }));
   if (moved.length > 0) {
@@ -341,7 +356,7 @@ function isCompedEntryPayment(payment) {
 function registrationIsCompedEntry(reg, payments) {
   if (!reg) return false;
   const candidates = (payments || []).filter((p) => {
-    if (p.status !== "success") return false;
+    if (p.status !== "success" || isDivisionSwitchPayment(p)) return false;
     if (!isCompedEntryPayment(p)) return true;
     const meta = normalizePaymentMetadata(p.metadata);
     if (meta.registration_id && meta.registration_id !== reg.id) return paymentStrictlyCoversRegistration(p, reg);
@@ -377,17 +392,24 @@ var fullyRefundedForAnotherRegistration = (payment, reg, refunds) => {
   const refunded = entryRefunds.reduce((total2, refund) => total2 + Number(refund.amount || 0), 0);
   return Number(payment.amount) > 0 && refunded >= Number(payment.amount) - 0.01;
 };
+function findWithdrawnOriginalPayment(payments, reg, refunds) {
+  if (reg.status !== "withdrawn") return null;
+  const originals = new Map(payments.filter((payment) => !isDivisionSwitchPayment(payment) && !isLicensePaymentRow(payment)).map((payment) => [payment.id, payment]));
+  const refund = refunds.find((row) => row.event_registration_id === reg.id && row.status !== "failed" && normalizePaymentMetadata(row.metadata).cover_type !== "license" && originals.has(row.payment_id));
+  return refund ? originals.get(refund.payment_id) : null;
+}
 function findFinancePayment(payments, reg, refunds = []) {
-  if (reg.status === "withdrawn") {
-    const refund = refunds.find((r) => r.event_registration_id === reg.id && r.status !== "failed" && normalizePaymentMetadata(r.metadata).cover_type !== "license");
-    const original = refund && payments.find((p) => p.id === refund.payment_id && p.status === "success" && !isLicensePaymentRow(p));
-    if (original) return original;
-  }
+  const withdrawnOriginal = findWithdrawnOriginalPayment((payments || []).filter((p) => p.status === "success"), reg, refunds);
+  if (withdrawnOriginal) return withdrawnOriginal;
   const candidates = (payments || []).filter((p) => {
     const meta = normalizePaymentMetadata(p.metadata);
-    return p.status === "success" && !isLicensePaymentRow(p) && (!meta.registration_id || meta.registration_id === reg.id || hasVerifiedEntryTransfer(p, reg)) && !(Number(meta.unallocated_credit_amount) > 0 && Number(meta.unallocated_credit_amount) >= Number(p.amount)) && !fullyRefundedForAnotherRegistration(p, reg, refunds);
+    return p.status === "success" && !isLicensePaymentRow(p) && !isDivisionSwitchPayment(p) && (!meta.registration_id || meta.registration_id === reg.id || hasVerifiedEntryTransfer(p, reg)) && !(Number(meta.unallocated_credit_amount) > 0 && Number(meta.unallocated_credit_amount) >= Number(p.amount)) && !fullyRefundedForAnotherRegistration(p, reg, refunds);
   });
   const latest = (rows) => [...rows].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0] || null;
+  if ((payments || []).some((payment) => verifiedDivisionSwitchAmount(payment, reg) > 0)) {
+    const originals = candidates.filter((payment) => paymentStrictlyCoversRegistration(payment, reg));
+    if (originals.length) return originals.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))[0];
+  }
   const direct = latest(candidates.filter((p) => {
     const meta = normalizePaymentMetadata(p.metadata);
     return hasVerifiedEntryTransfer(p, reg) || meta.registration_id === reg.id && (!hasVerifiedPaymentEntryTransfers(p) || paymentStrictlyCoversRegistration(p, reg));
@@ -500,7 +522,7 @@ function calculateEventSettlement({ event = {}, registrations = [], divisions = 
     const aliases = [...refsFor(payment)].filter((ref) => ref !== payment.reference);
     let reference = aliases.find((ref) => verified.has(ref) || success.some((p) => p.reference === ref && !isExplicitAdminMarkedPayment(p))) || aliases.find((ref) => /^T\d{10,}$/.test(ref)) || payment.reference || payment.id;
     if (norm2(payment.payment_method) === "paystack" && isExplicitAdminMarkedPayment(payment) && reference === payment.reference) {
-      const original = success.find((p) => !isExplicitAdminMarkedPayment(p) && norm2(p.payment_method) === "paystack" && registrations.some((reg) => paymentMatchesRegistration(payment, reg) && paymentMatchesRegistration(p, reg)));
+      const original = success.find((p) => !isExplicitAdminMarkedPayment(p) && norm2(p.payment_method) === "paystack" && !isDivisionSwitchPayment(p) && registrations.some((reg) => paymentMatchesRegistration(payment, reg) && paymentMatchesRegistration(p, reg)));
       if (!original) {
         issues.push(`Link the original Paystack reference: ${payment.reference || payment.id}`);
         continue;
@@ -569,7 +591,7 @@ function calculateEventSettlement({ event = {}, registrations = [], divisions = 
     for (const row of rows) {
       if (isLicenseRefund(row, paymentById.get(row.payment_id))) continue;
       const status = norm2(row.status);
-      if (!["processed", "pending", "processing", "needs-attention", "needs_attention"].includes(status)) continue;
+      if (!["processed", "pending", "processing", "needs-attention", "needs_attention"].includes(status) && !(status === "failed" && normalizePaymentMetadata(row.metadata).verified_switch_reservation === true)) continue;
       const key = row.paystack_refund_id ? `provider-${row.paystack_refund_id}` : row.id;
       if (key && usedRefunds.has(key)) continue;
       if (key) usedRefunds.add(key);
@@ -590,42 +612,72 @@ function calculateEventSettlement({ event = {}, registrations = [], divisions = 
     receipt.unallocatedCredit = Math.min(receipt.unallocatedCredit, positive(receipt.net));
   }
   for (const refund of refunds) {
-    if (norm2(refund.status) === "failed" || isLicenseRefund(refund, paymentById.get(refund.payment_id))) continue;
+    if (norm2(refund.status) === "failed" && normalizePaymentMetadata(refund.metadata).verified_switch_reservation !== true || isLicenseRefund(refund, paymentById.get(refund.payment_id))) continue;
     const key = refund.paystack_refund_id ? `provider-${refund.paystack_refund_id}` : refund.id;
     if (!usedRefunds.has(key)) issues.push(`Entry refund has no collected receipt: ${refund.id}`);
   }
   const active = activeSettlementRegistrations(registrations, divisions);
+  const switchPaymentRows = receiptRows.filter(isDivisionSwitchPayment);
+  const switchRebates = /* @__PURE__ */ new Map();
+  for (const refund of [...processedRefundRows, ...reservedRefundRows]) {
+    if (!refund.event_registration_id || normalizePaymentMetadata(refund.metadata).verified_switch_reservation !== true) continue;
+    const key = `${refund.event_registration_id}:${refund.receipt.reference}`;
+    switchRebates.set(key, money2((switchRebates.get(key) || 0) + refund.amount));
+  }
   const invoices = active.map((reg) => {
     const comped = registrationIsCompedEntry(reg, payments);
     const payment = findFinancePayment(success, reg, refunds);
     const fallback = entryFeeForRegistration ? entryFeeForRegistration(reg) : resolveRegistrationDivision(reg, divisions)?.entry_fee ?? reg.tournament_divisions?.entry_fee ?? event.category_fees?.[reg.division] ?? event.entry_fee ?? 0;
-    return { registration: reg, amount: comped ? 0 : positive(getRegistrationEntryFeePaid(payment, reg, fallback)), comped };
+    const originalAmount = positive(getRegistrationEntryFeePaid(payment, reg, fallback));
+    const switchReceipts = /* @__PURE__ */ new Map();
+    for (const receipt of switchPaymentRows) {
+      const amount = verifiedDivisionSwitchAmount(receipt, reg);
+      if (amount > 0) switchReceipts.set(receipt.reference, amount);
+    }
+    const topUps = payment ? [...switchReceipts.values()].reduce((total2, amount) => total2 + amount, 0) : 0;
+    return {
+      registration: reg,
+      amount: comped ? 0 : money2(originalAmount + topUps),
+      comped,
+      originalPaymentId: payment?.id,
+      originalAmount,
+      switchReceipts
+    };
   });
   let paid4M = 0, paidClub = 0, pendingCount = 0, pendingAmount = 0;
   const available = new Map(receiptRows.map((r) => [r.reference, positive(r.net - r.unallocatedCredit)]));
   const priority = (invoice) => receiptRows.some((r) => norm2(r.gateway?.payer_email || r.metadata?.email) === norm2(invoice.registration.email)) ? 1 : 0;
-  const allocations = [...invoices].sort((a, b) => priority(b) - priority(a)).map((invoice) => {
+  const allocations = [...invoices].sort((a, b) => priority(b) - priority(a)).map(({ originalPaymentId, originalAmount, switchReceipts, ...invoice }) => {
     const reg = invoice.registration;
     if (invoice.comped) return { ...invoice, holder: "comped" };
     const onlyEntryForEmail = invoices.filter((i) => norm2(i.registration.email) === norm2(reg.email)).length === 1;
-    const matches = receiptRows.filter((r) => r.claims.some((p) => {
-      const registrationId = normalizePaymentMetadata(p.metadata).registration_id;
-      if (registrationId && registrationId !== reg.id && !hasVerifiedEntryTransfer(p, reg)) return false;
-      return paymentMatchesRegistration(p, reg) || onlyEntryForEmail && paymentHasEntryCoverForRegistration(p, reg, { requireDivision: false });
-    })).sort((a, b) => {
+    const matches = receiptRows.filter((r) => {
+      if (isDivisionSwitchPayment(r)) return switchReceipts.has(r.reference);
+      if (switchReceipts.size && originalPaymentId) return r.paymentIds.includes(originalPaymentId);
+      return r.claims.some((p) => {
+        const registrationId = normalizePaymentMetadata(p.metadata).registration_id;
+        if (registrationId && registrationId !== reg.id && !hasVerifiedEntryTransfer(p, reg)) return false;
+        return !isDivisionSwitchPayment(p) && (paymentMatchesRegistration(p, reg) || onlyEntryForEmail && paymentHasEntryCoverForRegistration(p, reg, { requireDivision: false }));
+      });
+    }).sort((a, b) => {
       const direct = (receipt) => Number(receipt.claims.some((p) => normalizePaymentMetadata(p.metadata).registration_id === reg.id));
       return direct(b) - direct(a) || new Date(b.created_at || 0) - new Date(a.created_at || 0);
     });
     let remaining = invoice.amount;
     const shares = [];
     for (const receipt of matches) {
-      const amount = Math.min(remaining, available.get(receipt.reference));
+      const rebate = switchRebates.get(`${reg.id}:${receipt.reference}`) || 0;
+      const receiptLimit = switchReceipts.get(receipt.reference) ?? (switchReceipts.size || rebate > 0 ? positive(originalAmount - rebate) : remaining);
+      const amount = Math.min(remaining, available.get(receipt.reference), receiptLimit);
       if (amount <= 0) continue;
       available.set(receipt.reference, money2(available.get(receipt.reference) - amount));
       remaining = money2(remaining - amount);
       shares.push({ receipt, amount });
     }
-    const refundsForEntry = (rows) => rows.filter((r) => r.event_registration_id === reg.id || !r.event_registration_id && matches.includes(r.receipt) && invoices.filter((i) => r.receipt.claims.some((p) => paymentMatchesRegistration(p, i.registration))).length === 1);
+    const refundsForEntry = (rows) => rows.filter((r) => {
+      if (isDivisionSwitchPayment(r.receipt) && !switchReceipts.has(r.receipt.reference)) return false;
+      return r.event_registration_id === reg.id || !r.event_registration_id && matches.includes(r.receipt) && invoices.filter((i) => r.receipt.claims.some((p) => paymentMatchesRegistration(p, i.registration))).length === 1;
+    });
     const returned = sum(refundsForEntry(processedRefundRows));
     const reserved = sum(refundsForEntry(reservedRefundRows));
     remaining = positive(remaining - returned - reserved);
@@ -660,7 +712,10 @@ function calculateEventSettlement({ event = {}, registrations = [], divisions = 
   const unallocatedCredit4M = money2(receiptRows.filter((r) => r.recipient === "4m").reduce((total2, r) => total2 + r.unallocatedCredit, 0));
   const payoutRows = completedOrganiserPayouts(interimPayments);
   const interimPaid = sum(payoutRows);
-  const refundFundingAdjustment = money2([...processedRefundRows, ...reservedRefundRows].reduce((n, r) => n + (r.receipt.recipient === "4m" && ["club", "organiser"].includes(r.fundedBy) ? r.amount : 0) - (r.receipt.recipient !== "4m" && r.fundedBy === "4m" ? r.amount : 0), 0));
+  const refundFundingAdjustment = money2([...processedRefundRows, ...reservedRefundRows].reduce((n, r) => {
+    if (isDivisionSwitchPayment(r.receipt) && !registrations.some((reg) => verifiedDivisionSwitchAmount(r.receipt, reg) > 0)) return n;
+    return n + (r.receipt.recipient === "4m" && ["club", "organiser"].includes(r.fundedBy) ? r.amount : 0) - (r.receipt.recipient !== "4m" && r.fundedBy === "4m" ? r.amount : 0);
+  }, 0));
   const current = summarizeRegistrationFinance(allocations.map(registrationFinanceAmounts), { interimPaid, refundFundingAdjustment });
   const activeShares = allocations.flatMap((a) => a.shares || []);
   const currentManual = money2(activeShares.filter((s) => s.receipt.recipient === "4m" && norm2(s.receipt.payment_method) !== "paystack").reduce((n, s) => n + s.amount, 0));

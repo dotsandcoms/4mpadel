@@ -409,6 +409,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const [switchMode, setSwitchMode] = useState(false);
     const [switchWholeTeam, setSwitchWholeTeam] = useState(false);
     const [switchTargetDivId, setSwitchTargetDivId] = useState('');
+    const [switchQuote, setSwitchQuote] = useState(null);
+    const capturedSwitchRefs = useRef(new Map());
     const [switching, setSwitching] = useState(false);
 
     const [selected, setSelected] = useState({});
@@ -3207,6 +3209,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setSwitchMode(false);
         setSwitchWholeTeam(false);
         setSwitchTargetDivId('');
+        setSwitchQuote(null);
         setWithdrawTarget(null);
         loadMyRegs();
         loadDivisionRegs();
@@ -3221,10 +3224,46 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const currentDiv = divisions.find((d) => d.id === reg.division_id || d.name === reg.division);
         const oldFee = resolveDivisionEntryFee(currentDiv, event);
         const newFee = resolveDivisionEntryFee(targetDiv, event);
-        const delta = Math.round((newFee - oldFee) * 100) / 100;
+        const listedDelta = Math.round((newFee - oldFee) * 100) / 100;
+        const selection = `${reg.id}:${targetDiv.id}`;
+        const receiptKey = `4m:captured-division-switch:${normEmail(userEmail)}:${event.id}:${selection}`;
+        const capturedReference = () => {
+            if (capturedSwitchRefs.current.has(receiptKey)) return capturedSwitchRefs.current.get(receiptKey);
+            try { return window.sessionStorage.getItem(receiptKey); } catch { return null; }
+        };
+        const rememberCapture = (reference) => {
+            capturedSwitchRefs.current.set(receiptKey, reference);
+            try { window.sessionStorage.setItem(receiptKey, reference); } catch { /* In-memory recovery remains available. */ }
+        };
+        const finalizeTopUp = async (reference) => {
+            const result = await invokePaystackRefund({
+                action: 'switch_division', registration_id: reg.id, target_division_id: targetDiv.id,
+                top_up_reference: reference, move_team: false,
+            });
+            if (!result?.switched) throw new Error('Payment verification is pending. Check this switch again before paying.');
+            capturedSwitchRefs.current.delete(receiptKey);
+            try { window.sessionStorage.removeItem(receiptKey); } catch { /* Exact receipt replays are safe. */ }
+            toast.success(`Switched to ${targetDiv.name}`);
+            finishSwitch();
+        };
 
         setSwitching(true);
         try {
+            const savedReference = !switchWholeTeam && capturedReference();
+            if (savedReference) {
+                await finalizeTopUp(savedReference);
+                return;
+            }
+            const { quote } = !switchWholeTeam && reg.payment_status === 'paid'
+                ? await invokePaystackRefund({ action: 'switch_division_quote', registration_id: reg.id, target_division_id: targetDiv.id })
+                : {};
+            const delta = quote ? Number(quote.delta) : listedDelta;
+            const shownDelta = switchQuote?.selection === selection ? switchQuote.delta : listedDelta;
+            if (delta !== shownDelta) {
+                setSwitchQuote(quote ? { selection, delta, newFee: Number(quote.new_fee) } : null);
+                setSwitching(false);
+                return;
+            }
             if (delta > 0 && reg.payment_status === 'paid' && !switchWholeTeam) {
                 if (!isPaystackConfigured()) { toast.error('Payments not configured'); setSwitching(false); return; }
                 const reference = `SWITCH-${String(reg.id).slice(0, 8)}-${Date.now()}`;
@@ -3236,6 +3275,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     target_division_id: targetDiv.id,
                     target_division: targetDiv.name,
                     from_division: reg.division,
+                    ...(quote && currentDiv?.id ? { from_division_id: currentDiv.id } : {}),
                     email: userEmail,
                     registrant_email: userEmail,
                     registrant_name: profile?.name,
@@ -3265,15 +3305,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     onSuccess: async (response) => {
                         try {
                             const paidRef = resolvePaystackReference(response, reference);
-                            await invokePaystackRefund({
-                                action: 'switch_division',
-                                registration_id: reg.id,
-                                target_division_id: targetDiv.id,
-                                top_up_reference: paidRef,
-                                move_team: false,
-                            });
-                            toast.success(`Switched to ${targetDiv.name}`);
-                            finishSwitch();
+                            if (quote) rememberCapture(paidRef);
+                            await finalizeTopUp(paidRef);
                         } catch (err) {
                             console.error('Switch finalize failed:', err);
                             toast.error(err.message || 'Payment taken but switch failed — contact support.');
@@ -3296,7 +3329,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 toast.success(switchWholeTeam
                     ? `Team switched to ${targetDiv.name}`
                     : refunded > 0
-                    ? `Switched to ${targetDiv.name} — R ${refunded.toLocaleString('en-ZA')} difference refunded`
+                    ? `Switched to ${targetDiv.name} — R ${refunded.toLocaleString('en-ZA')} refund initiated`
+                    : res?.refund_status
+                    ? `Switched to ${targetDiv.name} — refund awaiting review`
                     : `Switched to ${targetDiv.name}`);
                 finishSwitch();
             }
@@ -5635,7 +5670,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     {!switchMode && (
                                         <button
                                             type="button"
-                                            onClick={() => { setSwitchMode(true); setSwitchWholeTeam(false); setSwitchTargetDivId(''); }}
+                                            onClick={() => { setSwitchMode(true); setSwitchWholeTeam(false); setSwitchTargetDivId(''); setSwitchQuote(null); }}
                                             disabled={switching || withdrawing}
                                             className="text-xs font-semibold text-violet-700 hover:underline disabled:opacity-50"
                                         >
@@ -5646,8 +5681,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                         const cur = divisions.find((d) => d.id === withdrawTarget.division_id || d.name === withdrawTarget.division);
                                         const oldFee = resolveDivisionEntryFee(cur, event);
                                         const tgt = divisions.find((d) => d.id === switchTargetDivId);
-                                        const newFee = resolveDivisionEntryFee(tgt, event);
-                                        const delta = tgt ? Math.round((newFee - oldFee) * 100) / 100 : 0;
+                                        const reviewed = !switchWholeTeam && tgt && switchQuote?.selection === `${withdrawTarget.id}:${tgt.id}` ? switchQuote : null;
+                                        const newFee = reviewed?.newFee ?? resolveDivisionEntryFee(tgt, event);
+                                        const delta = reviewed?.delta ?? (tgt ? Math.round((newFee - oldFee) * 100) / 100 : 0);
                                         return (
                                             <div className="mt-2 space-y-2">
                                                 {switchPartnerRegistration && (
@@ -5655,6 +5691,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                         <button
                                                             type="button"
                                                             onClick={() => setSwitchWholeTeam(false)}
+                                                            disabled={switching}
                                                             className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${!switchWholeTeam ? 'border-violet-500 bg-violet-50 text-violet-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
                                                         >
                                                             Just me
@@ -5662,6 +5699,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                         <button
                                                             type="button"
                                                             onClick={() => setSwitchWholeTeam(true)}
+                                                            disabled={switching}
                                                             className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${switchWholeTeam ? 'border-violet-500 bg-violet-50 text-violet-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
                                                         >
                                                             Whole team
@@ -5670,7 +5708,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                 )}
                                                 <select
                                                     value={switchTargetDivId}
-                                                    onChange={(e) => setSwitchTargetDivId(e.target.value)}
+                                                    onChange={(e) => { setSwitchTargetDivId(e.target.value); setSwitchQuote(null); }}
                                                     disabled={switching}
                                                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white outline-none focus:border-emerald-400"
                                                 >

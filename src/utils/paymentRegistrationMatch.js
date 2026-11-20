@@ -51,6 +51,28 @@ export function getPaymentMetadataLayers(metadata = {}) {
     return { top, inner };
 }
 
+export function isDivisionSwitchPayment(payment) {
+    return normalizePaymentMetadata(payment?.metadata).source === 'division_switch';
+}
+
+// The database projects this allocation only after the charged move commits.
+export function verifiedDivisionSwitchAmount(payment, reg) {
+    const meta = normalizePaymentMetadata(payment?.metadata);
+    const allocation = meta.verified_division_switch;
+    const amount = Number(payment?.amount);
+    if (meta.source !== 'division_switch' || payment.status !== 'success'
+        || payment.payment_type !== 'event_entry_fee' || payment.payment_method !== 'paystack'
+        || payment.is_test || meta.is_test || !allocation || !reg?.id
+        || !Number.isFinite(amount) || amount <= 0 || Number(allocation.amount) !== amount
+        || !allocation.from_division_id || !allocation.division_id
+        || !allocation.event_id || !reg.event_id
+        || String(payment.event_id) !== String(allocation.event_id)
+        || String(reg.event_id) !== String(allocation.event_id)
+        || reg.id !== allocation.registration_id) return 0;
+    const archived = reg.status === 'withdrawn' && !reg.division_id && reg.division === `__archived__/${reg.id}`;
+    return reg.division_id === allocation.division_id || archived ? amount : 0;
+}
+
 const verifiedEntryTransfer = Symbol('verified entry transfer');
 
 export function hasVerifiedPaymentEntryTransfers(payment) {
@@ -180,6 +202,7 @@ export function paymentMatchesRegistration(payment, reg) {
     // for an entry-fee payment — they only cover SAPA license and carry the
     // "License portion split from REGEV-…" note that was leaking into Manual.
     if (isLicensePaymentRow(payment)) return false;
+    if (isDivisionSwitchPayment(payment)) return verifiedDivisionSwitchAmount(payment, reg) > 0;
 
     const meta = normalizePaymentMetadata(payment.metadata);
     const email = norm(reg.email);
@@ -222,6 +245,7 @@ export function paymentMatchesRegistration(payment, reg) {
 export function paymentHasEntryCoverForRegistration(payment, reg, opts = {}) {
     const { requireDivision = true } = opts;
     if (!payment || payment.status !== 'success' || isLicensePaymentRow(payment)) return false;
+    if (isDivisionSwitchPayment(payment)) return verifiedDivisionSwitchAmount(payment, reg) > 0;
 
     const meta = normalizePaymentMetadata(payment.metadata);
     const email = norm(reg.email);
@@ -265,6 +289,7 @@ export function getRegistrationEntryFeePaid(payment, reg, fallbackFee = 0) {
     const fallback = Number(fallbackFee) || 0;
     if (!reg) return fallback;
     if (!payment || String(payment.status || '').toLowerCase() !== 'success') return fallback;
+    if (isDivisionSwitchPayment(payment)) return verifiedDivisionSwitchAmount(payment, reg);
 
     const meta = normalizePaymentMetadata(payment.metadata);
     const paymentWithMeta = { ...payment, metadata: meta };
@@ -386,7 +411,8 @@ export function findStrictPaystackEntryPayment(payments, reg) {
 
     const exact = paystackEntries.filter((payment) => paymentStrictlyCoversRegistration(payment, reg));
     if (exact.length > 0) {
-        return [...exact].sort((a, b) => scorePayment(b) - scorePayment(a))[0];
+        const original = exact.filter(payment => !isDivisionSwitchPayment(payment));
+        return (original.length ? original : exact).sort((a, b) => scorePayment(b) - scorePayment(a))[0];
     }
 
     // Same player, entry cover email match after an admin division move.
@@ -501,7 +527,7 @@ export function isCompedEntryPayment(payment) {
 export function registrationIsCompedEntry(reg, payments) {
     if (!reg) return false;
     const candidates = (payments || []).filter((p) => {
-        if (p.status !== 'success') return false;
+        if (p.status !== 'success' || isDivisionSwitchPayment(p)) return false;
         if (!isCompedEntryPayment(p)) return true;
         const meta = normalizePaymentMetadata(p.metadata);
         if (meta.registration_id && meta.registration_id !== reg.id) return paymentStrictlyCoversRegistration(p, reg);

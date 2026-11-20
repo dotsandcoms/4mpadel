@@ -82,7 +82,9 @@ export function matchReviewedRefund(raw: unknown, { reference, transactionRefere
     return { id, status };
 }
 
-async function findByReference(ref: string, transaction: { reference: string; id: string; domain: string; secret: string }, amountCents: number) {
+type RefundTransaction = { reference: string; id: string; domain: string; secret: string };
+
+async function findReviewedRefundByReference(ref: string, transaction: RefundTransaction, amountCents: number) {
     const response = await paystack(`/refund?reference=${encodeURIComponent(ref)}`, transaction.secret);
     if (!response.ok || response.body.status !== true || !Array.isArray(response.body.data) || response.body.data.length !== 1) return null;
     return matchReviewedRefund(response.body.data[0], {
@@ -90,12 +92,24 @@ async function findByReference(ref: string, transaction: { reference: string; id
     });
 }
 
+async function submitReviewedPaystackRefund(reference: string, transaction: RefundTransaction, amountCents: number) {
+    const response = await paystack('/refund', transaction.secret, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transaction: transaction.reference, amount: amountCents, currency: 'ZAR', reference }),
+    });
+    const direct = response.ok && response.body.status === true ? matchReviewedRefund(response.body.data, {
+        reference, transactionReference: transaction.reference, transactionId: transaction.id, domain: transaction.domain, amountCents,
+    }) : null;
+    return direct || await findReviewedRefundByReference(reference, transaction, amountCents);
+}
+
 export async function handleReviewedRefundRetry(service: SupabaseClient, opts: {
     refundId?: string; registrationId?: string; eventId?: string | number; email: string; review: boolean; reconcile: boolean;
+    initialDivisionSwitch?: boolean; eventManager?: boolean;
     json: (status: number, body: unknown) => Response;
 }) {
-    const { refundId, registrationId, eventId, email, review, reconcile, json } = opts;
-    if (!refundId || ((review || reconcile || eventId != null || registrationId != null)
+    const { refundId, registrationId, eventId, email, review, json, initialDivisionSwitch } = opts;
+    if (!refundId || ((review || opts.reconcile || eventId != null || registrationId != null)
         && (!registrationId || !Number.isSafeInteger(Number(eventId)) || Number(eventId) <= 0))) {
         return json(400, { error: 'Choose a saved refund and its exact event registration.' });
     }
@@ -119,7 +133,19 @@ export async function handleReviewedRefundRetry(service: SupabaseClient, opts: {
     if (!Number.isSafeInteger(amountCents) || amountCents <= 0 || refund.currency !== 'ZAR') {
         return json(400, { error: 'Refund requires a positive recorded ZAR amount.' });
     }
-    const prior = reviewedRefundClaim(refund.metadata);
+    const metadata = readObject(refund.metadata);
+    const prior = reviewedRefundClaim(metadata);
+    if (initialDivisionSwitch) {
+        if (refund.reason !== 'division_switch' || metadata.verify_failed !== true || metadata.verified_switch_reservation !== true) {
+            return json(409, { error: 'This refund requires organiser review.' });
+        }
+        // Self-service can start the reserved refund once, or reconcile a
+        // previously held request. A definitive failure requires admin review.
+        if (prior.phase !== 'held' && (prior.reference || refund.paystack_refund_id || refund.status !== 'failed')) {
+            return json(200, { status: refund.status });
+        }
+    }
+    const reconcile = opts.reconcile || Boolean(initialDivisionSwitch && prior.phase === 'held');
     const method = String(payment.payment_method || 'paystack').toLowerCase();
     const held = () => json(409, {
         error: 'Refund outcome is unconfirmed. The refund remains held for Paystack reconciliation.',
@@ -148,7 +174,7 @@ export async function handleReviewedRefundRetry(service: SupabaseClient, opts: {
             return json(409, { error: 'No Paystack retry reference is available for this refund.' });
         }
         const transaction = { domain, secret, reference: String(prior.transaction_reference), id: String(prior.transaction_id) };
-        let evidence = await findByReference(reference, transaction, amountCents);
+        let evidence = await findReviewedRefundByReference(reference, transaction, amountCents);
         if (!evidence && prior.phase === 'verified' && refund.paystack_refund_id) {
             const response = await paystack(`/refund/${encodeURIComponent(refund.paystack_refund_id)}`, secret);
             if (response.ok && response.body.status === true) evidence = matchReviewedRefund(response.body.data, {
@@ -164,7 +190,6 @@ export async function handleReviewedRefundRetry(service: SupabaseClient, opts: {
     if (!cash && method !== 'paystack') return json(409, { error: 'This refund method requires a manual review.' });
     if (cash && refund.paystack_refund_id) return json(409, { error: 'This cash refund has a Paystack record and requires a manual review.' });
 
-    const metadata = readObject(refund.metadata);
     if (!cash && !refund.paystack_refund_id && !(metadata.verify_failed === true && !metadata.retried_at)) {
         return json(409, { error: 'The earlier refund has no Paystack ID or confirmed pre-submission failure. Verify it manually before a new attempt.' });
     }
@@ -185,7 +210,8 @@ export async function handleReviewedRefundRetry(service: SupabaseClient, opts: {
         p_amount: Number(refund.amount), p_previous_id: refund.paystack_refund_id || null, p_previous_retry: prior.reference || null,
         p_method: method, p_transaction_ref: transaction?.reference || null, p_transaction_id: transaction?.id || null,
         p_transaction_cents: transaction?.cents || null, p_domain: transaction?.domain || null,
-        p_actor: email === 'service-role' ? email : `admin:${email}`, p_reconcile_only: Boolean(previous && previous.status !== 'failed'),
+        p_actor: email === 'service-role' || (initialDivisionSwitch && !opts.eventManager) ? email : `admin:${email}`,
+        p_reconcile_only: Boolean(previous && previous.status !== 'failed'),
     });
     if (claimError) throw claimError;
     if (claim?.unavailable) return json(409, { error: 'The saved refund exceeds the remaining allowance on its original payment.' });
@@ -194,14 +220,7 @@ export async function handleReviewedRefundRetry(service: SupabaseClient, opts: {
     if (!transaction) return await apply(reference, null, 'processed');
     if (previous && previous.status !== 'failed') return await apply(reference, previous.id, previous.status);
 
-    const response = await paystack('/refund', transaction.secret, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transaction: transaction.reference, amount: amountCents, currency: 'ZAR', reference }),
-    });
-    const direct = response.ok && response.body.status === true ? matchReviewedRefund(response.body.data, {
-        reference, transactionReference: transaction.reference, transactionId: transaction.id, domain: transaction.domain, amountCents,
-    }) : null;
-    const evidence = direct || await findByReference(reference, transaction, amountCents);
+    const evidence = await submitReviewedPaystackRefund(reference, transaction, amountCents);
     if (!evidence) return held();
     return await apply(reference, evidence.id, evidence.status);
 }

@@ -1,4 +1,5 @@
 import { canReviewEventRefund, handleReviewedRefundRetry } from './reviewed-refund-retry.ts';
+import { completeVerifiedEntrySwitch, dispatchVerifiedSwitchRefund, reviewVerifiedEntrySwitch } from './verified-entry-switch.ts';
 import { belongsToDivision, cancellationRefundStatus } from './division-cancellation.js';
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -15,6 +16,7 @@ import {
     isLedgerSplitPayment,
     paymentCoversRefundEntry,
     paymentUsesVerifiedEntryTransfer,
+    verifiedDivisionSwitchAmount,
     canManageRefundEvent,
     verifyRefundActor,
     ownsRefundRegistration,
@@ -47,13 +49,14 @@ type Action =
     | 'cancel_event'
     | 'cancel_division'
     | 'switch_division'
+    | 'switch_division_quote'
     | 'retry_failed'
     | 'reviewed_retry_failed'
     | 'reconcile_retry';
 
 const supportedActions = new Set<Action>([
     'withdraw', 'withdraw_all', 'remove_partner', 'admin_remove', 'cancel_event',
-    'cancel_division', 'switch_division', 'retry_failed', 'reviewed_retry_failed', 'reconcile_retry',
+    'cancel_division', 'switch_division', 'switch_division_quote', 'retry_failed', 'reviewed_retry_failed', 'reconcile_retry',
 ]);
 
 type RefundReason =
@@ -204,7 +207,7 @@ async function resolvePaystackRefundTarget(
     }
 
     const paystackStatus = String(primary.status || '').toLowerCase();
-    if (item.cover_type === 'entry' && paymentUsesVerifiedEntryTransfer(payment, reg)) {
+    if (item.cover_type === 'entry' && (paymentUsesVerifiedEntryTransfer(payment, reg) || verifiedDivisionSwitchAmount(payment, reg) > 0)) {
         return { ok: false, payment_id: item.payment_id, reference: gatewayRef,
             message: `The original checkout for this transferred entry is not refundable (${paystackStatus}). Review that receipt.` };
     }
@@ -529,6 +532,43 @@ async function findLinkedRefundPartner(client: SupabaseClient, entry: Registrati
     return matches.length === 1 ? matches[0] : null;
 }
 
+async function sendSoloDivisionSwitchEmail(reg: RegistrationRow, event: {
+    event_name?: string; event_dates?: string; slug?: string;
+} | null, opts: {
+    fromDivision: string; toDivision: string; newFee: number; delta: number;
+    chargedRands: number; refundedRands: number; refundStatus?: string | null;
+}) {
+    const { fromDivision, toDivision, newFee, delta, chargedRands, refundedRands, refundStatus } = opts;
+    let feeNote = 'There was no change to your entry fee.';
+    if (chargedRands > 0) {
+        feeNote = `An additional <strong style="color:#FFFFFF;">${fmtR(chargedRands)}</strong> was charged for the higher entry fee of your new division.`;
+    } else if (refundedRands > 0) {
+        feeNote = `The <strong style="color:#FFFFFF;">${fmtR(refundedRands)}</strong> entry-fee difference is being refunded to you.`;
+    } else if (refundStatus) {
+        feeNote = 'The entry-fee refund is awaiting review.';
+    } else if (reg.payment_status !== 'paid' && delta !== 0) {
+        feeNote = `Your registration remains payment pending at the new division fee of <strong style="color:#FFFFFF;">${fmtR(newFee)}</strong>.`;
+    }
+    await sendEmailViaEdge({
+        to: reg.email,
+        template: 'division_changed',
+        variables: {
+            eventId: reg.event_id,
+            playerName: reg.full_name || 'Player',
+            eventName: event?.event_name || 'Tournament',
+            fromDivision,
+            toDivision,
+            division: toDivision,
+            partnerName: 'TBD',
+            eventDates: event?.event_dates || '',
+            paid: reg.payment_status === 'paid',
+            amount: fmtR(newFee),
+            feeNote,
+            eventUrl: `https://4mpadel.co.za/calendar/${event?.slug || reg.event_id}`,
+        },
+    });
+}
+
 async function handleSwitchDivision(
     supabaseAdmin: SupabaseClient,
     opts: {
@@ -536,21 +576,49 @@ async function handleSwitchDivision(
         targetDivisionId?: string;
         topUpReference?: string;
         moveTeam?: boolean;
+        quoteOnly?: boolean;
         callerEmail: string;
         isAdmin: boolean;
         json: (status: number, body: unknown) => Response;
     },
 ): Promise<Response> {
-    const { registration: reg, targetDivisionId, topUpReference, moveTeam = false, callerEmail, isAdmin, json } = opts;
+    const { registration: reg, targetDivisionId, topUpReference, moveTeam = false, quoteOnly = false, callerEmail, isAdmin, json } = opts;
     if (!targetDivisionId) return json(400, { error: 'target_division_id is required' });
     if (reg.status === 'withdrawn') return json(400, { error: 'Registration already withdrawn' });
     if (!isAdmin && !ownsRefundRegistration(reg, callerEmail)) return json(403, { error: 'Not authorized for this registration' });
 
     const eventId = reg.event_id;
+    const switchInput = { eventId, registrationId: reg.id, targetDivisionId, actorEmail: callerEmail, eventManager: isAdmin, topUpReference };
+    if (quoteOnly && (moveTeam || topUpReference)) return json(400, { error: 'Choose a solo division switch to review.' });
+    const reviewed = !moveTeam && (reg.payment_status === 'paid' || topUpReference)
+        ? await reviewVerifiedEntrySwitch(supabaseAdmin, switchInput) : null;
+    if (quoteOnly) {
+        return json(200, { quote: reviewed ? { delta: reviewed.delta, old_fee: reviewed.old_fee, new_fee: reviewed.new_fee } : null });
+    }
+
     const [{ data: event }, { data: divisions }] = await Promise.all([
         supabaseAdmin.from('calendar').select('id, event_name, event_dates, slug, is_manual, registration_closes_at').eq('id', eventId).maybeSingle(),
         supabaseAdmin.from('tournament_divisions').select('id, name, entry_fee, entries_close_at, is_active, gender').eq('event_id', eventId),
     ]);
+    if (reviewed) {
+        const switched = await completeVerifiedEntrySwitch(supabaseAdmin, switchInput, reviewed, json);
+        if (switched instanceof Response) return switched;
+        const refundStatus = switched.refund_id
+            ? await dispatchVerifiedSwitchRefund(supabaseAdmin, switchInput, switched.refund_id, json) : null;
+        const refundedRands = refundStatus === 'processing' || refundStatus === 'processed' ? Math.abs(switched.delta) : 0;
+        const chargedRands = Number(switched.charged_rands || 0);
+        if (!switched.replayed) {
+            await sendSoloDivisionSwitchEmail(reg, event, {
+                fromDivision: switched.from_division, toDivision: switched.division, newFee: switched.new_fee,
+                delta: switched.delta, chargedRands, refundedRands, refundStatus,
+            });
+        }
+        return json(200, {
+            switched: true, from_division: switched.from_division, to_division: switched.division,
+            delta: switched.delta, charged_rands: chargedRands, refunded_rands: refundedRands,
+            ...(refundStatus ? { refund_status: refundStatus } : {}),
+        });
+    }
     if (event?.is_manual === false) return json(400, { error: 'Not a manual event' });
 
     const divList = divisions || [];
@@ -754,41 +822,9 @@ async function handleSwitchDivision(
         successPayments,
     );
 
-    // ---- Division-changed email ----
-    // A dedicated template (not a fresh "Registration Confirmed") so the player
-    // clearly sees they moved FROM their old division TO the new one, rather than
-    // being confused by what looks like a brand-new registration.
-    const eventUrl = `https://4mpadel.co.za/calendar/${event?.slug || eventId}`;
-    let feeNote = 'There was no change to your entry fee.';
-    if (chargedRands > 0) {
-        feeNote = `An additional <strong style="color:#FFFFFF;">${fmtR(chargedRands)}</strong> was charged for the higher entry fee of your new division.`;
-    } else if (refundedRands > 0) {
-        feeNote = `The <strong style="color:#FFFFFF;">${fmtR(refundedRands)}</strong> entry-fee difference is being refunded to you.`;
-    } else if (reg.payment_status !== 'paid' && delta !== 0) {
-        feeNote = `Your registration remains payment pending at the new division fee of <strong style="color:#FFFFFF;">${fmtR(newFee)}</strong>.`;
-    }
-    try {
-        await sendEmailViaEdge({
-            to: reg.email,
-            template: 'division_changed',
-            variables: {
-                eventId,
-                playerName: reg.full_name || 'Player',
-                eventName: event?.event_name || 'Tournament',
-                fromDivision: reg.division,
-                toDivision: targetDiv.name,
-                division: targetDiv.name,
-                // A division switch is a solo move — the partner link is cleared,
-                // so the new entry starts without a partner.
-                partnerName: 'TBD',
-                eventDates: event?.event_dates || '',
-                paid: reg.payment_status === 'paid',
-                amount: fmtR(newFee),
-                feeNote,
-                eventUrl,
-            },
-        });
-    } catch (_e) { /* email best-effort */ }
+    await sendSoloDivisionSwitchEmail(reg, event, {
+        fromDivision: reg.division, toDivision: targetDiv.name, newFee, delta, chargedRands, refundedRands,
+    });
 
     return json(200, {
         switched: true,
@@ -962,12 +998,13 @@ serve(async (req: Request) => {
         const skipPaystack = skip_paystack === true && isAdmin && action === 'admin_remove';
         const noRefund = no_refund === true && isAdmin && action === 'admin_remove';
 
-        if (action === 'switch_division' && targetRegistration) {
+        if ((action === 'switch_division' || action === 'switch_division_quote') && targetRegistration) {
             return await handleSwitchDivision(supabaseAdmin, {
                 registration: targetRegistration,
                 targetDivisionId: target_division_id,
                 topUpReference: top_up_reference,
                 moveTeam: move_team === true,
+                quoteOnly: action === 'switch_division_quote',
                 callerEmail,
                 isAdmin,
                 json,

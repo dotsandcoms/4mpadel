@@ -26,9 +26,11 @@ export type Cover = {
 
 export type PaymentRow = {
     id: string;
+    event_id?: string | number | null;
     reference: string;
     amount: number;          // RANDS
     status: string;
+    payment_method?: string | null;
     is_test?: boolean | null;
     created_at?: string | null;
     metadata: unknown;
@@ -150,6 +152,19 @@ export function paymentUsesVerifiedEntryTransfer(payment: PaymentRow, registrati
     return refundEntryCover(payment, registration)?.transferred === true;
 }
 
+export function verifiedDivisionSwitchAmount(payment: PaymentRow, registration: RegistrationRow): number {
+    const meta = parseMeta(payment.metadata);
+    const allocation = parseMeta(meta.verified_division_switch);
+    const amount = Number(payment.amount);
+    if (meta.source !== 'division_switch' || payment.payment_method !== 'paystack' || !allocation.from_division_id
+        || !registration.division_id || allocation.division_id !== registration.division_id
+        || allocation.registration_id !== registration.id || registration.event_id == null
+        || String(allocation.event_id) !== String(registration.event_id)
+        || String(payment.event_id) !== String(registration.event_id)
+        || !Number.isSafeInteger(toPaystackCents(amount)) || amount <= 0 || Number(allocation.amount) !== amount) return 0;
+    return amount;
+}
+
 /**
  * Paystack only knows about the original checkout reference. License splits
  * create ledger-only rows (`LIC-<parent>` with metadata.parent_reference) that
@@ -227,7 +242,7 @@ export function resolveRefundableItems(
     const drawnByPayment = new Map<string, number>();
     const entryDrawnByPayment = new Map<string, number>();
     for (const r of existingRefunds) {
-        if (!r.payment_id || r.status === 'failed') continue;
+        if (!r.payment_id || (r.status === 'failed' && parseMeta(r.metadata).verified_switch_reservation !== true)) continue;
         drawnByPayment.set(
             r.payment_id,
             roundRands((drawnByPayment.get(r.payment_id) || 0) + Number(r.amount || 0)),
@@ -268,8 +283,8 @@ export function resolveRefundableItems(
 
     // --- Entry fee: refund once ---
     const entryPayments = successPayments
-        .filter(p => parseMeta(p.metadata).source !== 'native_entry_balance')
-        .filter(p => paymentCoversRefundEntry(p, registration))
+        .filter(p => !['native_entry_balance', 'division_switch'].includes(String(parseMeta(p.metadata).source)))
+        .filter(p => refundEntryCover(p, registration))
         // A previous partial identifies the receipt for this entry. Finish that
         // allocation before considering any other successful checkout.
         .sort((a, b) => Number(entryDrawnByPayment.has(b.id)) - Number(entryDrawnByPayment.has(a.id)) || byRoomThenRecent(a, b));
@@ -300,8 +315,10 @@ export function resolveRefundableItems(
     // original checkouts. Refund each once to its own original payment reference.
     for (const payment of successPayments) {
         const meta = parseMeta(payment.metadata);
-        if (meta.source !== 'native_entry_balance' || meta.verified_balance !== true || meta.registration_id !== registration.id) continue;
-        const amount = remainingOf(payment);
+        const additional = verifiedDivisionSwitchAmount(payment, registration)
+            || (meta.source === 'native_entry_balance' && meta.verified_balance === true && meta.registration_id === registration.id
+                && String(payment.event_id ?? registration.event_id) === String(registration.event_id) ? Number(payment.amount) : 0);
+        const amount = Math.min(additional, remainingOf(payment));
         if (amount <= 0) continue;
         items.push({ payment_id: payment.id, reference: resolvePaystackGatewayReference(payment), refund_amount_rands: amount, cover_type: 'entry', already_refunded_rands: drawnByPayment.get(payment.id) || 0, is_test: paymentTestMode(payment) });
         drawnByPayment.set(payment.id, roundRands((drawnByPayment.get(payment.id) || 0) + amount));

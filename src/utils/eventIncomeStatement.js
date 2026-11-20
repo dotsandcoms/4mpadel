@@ -2,7 +2,7 @@ import { findFinancePayment } from './eventFinanceReconciliation.js';
 import { buildEventReceiptReport } from './eventReceiptReport.js';
 import { collectionBucket } from './eventSettlement.js';
 import {
-    findExpectedEntryPayment, findParentEntryPayment, getRegistrationEntryFeePaid, isCompedEntryPayment,
+    findExpectedEntryPayment, findParentEntryPayment, getRegistrationEntryFeePaid, isCompedEntryPayment, isDivisionSwitchPayment,
     isExplicitAdminMarkedPayment, isLicensePaymentRow, isLicenseRefund, isPaystackPaymentMethod, normalizePaymentMetadata,
     paymentMatchesRegistration, registrationCountsAsPaid, registrationHasPaystackEntryPayment, registrationIsCompedEntry,
     resolveRegistrationPayer, resolveRegistrationPaymentMethod,
@@ -92,7 +92,7 @@ export function buildEventIncomeLines({ event, registrations, payments, refunds,
     const teamLabel = (r) => [r.full_name, r.partner_name].filter(Boolean).join(' / ') || r.email || '—';
     reportStats.receiptRows.forEach(payment => {
         payment.paymentIds.forEach(id => usedPaymentIds.add(id));
-        const matched = registrations.filter(r => payment.claims.some(p => p.metadata?.registration_id === r.id
+        const matched = registrations.filter(r => payment.claims.some(p => (!isDivisionSwitchPayment(p) && p.metadata?.registration_id === r.id)
             || paymentMatchesRegistration(p, r)));
         rows.push({ id: `entry-${payment.reference}`, date: payment.created_at,
             description: `${matched.map(r => r.division).filter((v, i, a) => a.indexOf(v) === i).join(', ') || 'Unallocated entry'} — Entry Fee`,

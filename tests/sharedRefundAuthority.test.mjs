@@ -58,7 +58,7 @@ function fixture(evaluate, { email = sourceEntry.email, platform = false, eventG
   const service = {
     async rpc(name, args) {
       calls.push(['service', name, args]);
-      if (name === 'move_registration_division' || name === 'reassign_tournament_participant_division') return { data: null };
+      if (name === 'review_verified_entry_switch' || name === 'move_registration_division' || name === 'reassign_tournament_participant_division') return { data: null };
       throw new Error('Unexpected service operation ' + name);
     },
     from(table) {
@@ -122,6 +122,7 @@ for (const [version, evaluate] of versions) {
       { action: 'admin_remove', registration_id: foreignEntry.id, no_refund: true, skip_paystack: true },
       { action: 'remove_partner', registration_id: foreignEntry.id },
       { action: 'switch_division', registration_id: foreignEntry.id, target_division_id: 'other-202' },
+      { action: 'switch_division_quote', registration_id: foreignEntry.id, target_division_id: 'other-202' },
     ]) {
       const { send, calls } = fixture(evaluate, { email: 'finance-custom@example.invalid', eventGrants: [101] });
       assert.equal((await send(input)).status, 403);
@@ -190,7 +191,7 @@ for (const [version, evaluate] of versions) {
     const payload = { action: 'switch_division', registration_id: sourceEntry.id, target_division_id: 'other-101', top_up_reference: payment.reference };
     const unrelated = fixture(evaluate, { entries, payments: [payment] });
     assert.equal((await unrelated.send(payload)).status, 400);
-    assert.equal(unrelated.calls.some(call => ['write', 'service', 'synthetic-email'].includes(call[0])), false);
+    assert.equal(unrelated.calls.some(call => ['write', 'synthetic-email'].includes(call[0]) || call[1] === 'move_registration_division'), false);
     const exact = fixture(evaluate, { entries, payments: [{ ...payment, metadata: {
       ...payment.metadata, registration_id: sourceEntry.id, from_division_id: 'open-101',
     } }] });
