@@ -96,6 +96,15 @@ for (const example of [
     const bracket = generateRankedElimination(ranked.advancing, { id: drawId, scoring_rules: {} });
     const payload = { drawId, groups, entries, matches, matchSets, lotRules, lotOrdered, bracket,
         ranked: ranked.advancing.map(row=>row.id) };
+    if (example.mode === 'best_placed') {
+        const entryIds = [id(12)];
+        const overridden = rankGroupQualifiers({ ...input, overrideIds: entryIds });
+        payload.override = {
+            ranked: overridden.advancing.map(row => row.id),
+            bracket: generateRankedElimination(overridden.advancing, { id: drawId, scoring_rules: {} }),
+            request: { candidate_ids: ranked.comparison.map(row => row.entry_id), entry_ids: entryIds, reason: '  Checked with both group referees  ' },
+        };
+    }
     sql.push(`INSERT INTO ranked_fixture_reference VALUES (${q(example.mode)},${q(payload)});`);
 }
 writeFileSync('tests/tournament/fixtures.generated.sql',sql.join('\n')+'\n');

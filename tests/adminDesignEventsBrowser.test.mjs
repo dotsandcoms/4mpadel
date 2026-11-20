@@ -1314,3 +1314,63 @@ test('hosts review ranked all and best-placed groups, including the adjustment f
         } finally { await page.close(); }
     }
 });
+
+test('hosts can review and confirm exactly the eligible best-placed override with a reason', async () => {
+    const page = await open('host-ranked-best');
+    const panel = 'section[aria-label="Elimination phase"]';
+    const reason = panel + ' textarea';
+    const confirmation = panel + ' input[type="checkbox"]:not([aria-label])';
+    const reviewDisabled = () => page.$$eval(panel + ' button',
+        buttons => buttons.find(button => button.textContent === 'Review elimination bracket').disabled);
+    const calls = () => page.evaluate(() => window.calls.filter(([method]) => method === 'tm_host_group_qualification'));
+    try {
+        await clickText(page, 'Draw generator');
+        await clickText(page, 'Override selection', panel + ' button');
+        assert.deepEqual(await page.$$eval(panel + ' input[aria-label]', inputs =>
+            inputs.map(input => [input.getAttribute('aria-label'), input.checked])), [['Advance Team 5', true], ['Advance Team 2', false]]);
+        await page.click(panel + ' input[aria-label="Advance Team 2"]');
+        assert.equal(await reviewDisabled(), true);
+        await page.click(panel + ' input[aria-label="Advance Team 5"]');
+        assert.equal(await reviewDisabled(), true);
+        await page.type(reason, 'Reviewed the group scorecards');
+        assert.equal(await reviewDisabled(), false);
+
+        await clickText(page, 'Use automatic selection', panel + ' button');
+        assert.equal(await page.$(reason), null);
+        assert.deepEqual(await page.$$eval(panel + ' ol li', items => items.map(item => item.textContent)), ['Team 1', 'Team 4', 'Team 5']);
+
+        await clickText(page, 'Override selection', panel + ' button');
+        await page.click(panel + ' input[aria-label="Advance Team 5"]');
+        await page.click(panel + ' input[aria-label="Advance Team 2"]');
+        await page.type(reason, 'Reviewed the group scorecards');
+        await clickText(page, 'Review elimination bracket', panel + ' button');
+        assert.deepEqual(await page.$$eval(panel + ' ol li', items => items.map(item => item.textContent)), ['Team 1', 'Team 4', 'Team 2']);
+        assert.equal(await page.$$eval(panel + ' button',
+            buttons => buttons.find(button => button.textContent === 'Create elimination phase').disabled), true);
+        assert.deepEqual(await calls(), []);
+
+        await page.click(confirmation);
+        await page.type(reason, ' with both referees');
+        assert.equal(await page.$(confirmation), null);
+        await clickText(page, 'Review elimination bracket', panel + ' button');
+        assert.match(await page.$eval(panel, section => section.textContent), /Reviewed the group scorecards with both referees/);
+        await page.click(confirmation);
+        await clickText(page, 'Create elimination phase', panel + ' button');
+        await page.waitForFunction(() => document.querySelector('.tm-body [role=status]')?.textContent.includes('Elimination matches created'));
+
+        const writes = await calls();
+        assert.equal(writes.length, 1);
+        const [, args] = writes[0];
+        assert.equal(args.p_organisation, 'org-a');
+        assert.equal(String(args.p_event), '505');
+        assert.equal(args.p_payload.p_expected, 'published-v1');
+        assert.deepEqual(args.p_payload.p_ranked_override, {
+            candidate_ids: ['team-5', 'team-2'], entry_ids: ['team-2'], reason: 'Reviewed the group scorecards with both referees',
+        });
+        assert.deepEqual(args.p_payload.p_ranked_qualifiers, ['team-1', 'team-4', 'team-2']);
+        assert.deepEqual(args.p_payload.p_group_results['qualifying-group-1'], ['ga', 'team-1', 'team-3', 'team-1', 'retired', [2, 0]]);
+        const actual = args.p_payload.p_matches.filter(match => match.round_number === 1)
+            .flatMap(match => [match.entry_one_id, match.entry_two_id]).filter(Boolean).sort();
+        assert.deepEqual(actual, ['team-1', 'team-2', 'team-4']);
+    } finally { await page.close(); }
+});

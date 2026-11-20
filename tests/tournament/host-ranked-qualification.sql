@@ -104,6 +104,7 @@ set role authenticated;
 select pg_temp.ranked_qualify(pg_temp.ranked_request('all'));
 reset role;
 insert into host_review select 'ranked-plan-mapped',to_jsonb(s) from tournament_schedules s where event_id=9901;
+\ir host-ranked-override.sql
 set role authenticated;
 select pg_temp.ranked_qualify(pg_temp.ranked_request('best_placed'));
 reset role;
