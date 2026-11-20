@@ -1,5 +1,5 @@
 // Exact current MAIN tm_* contracts, isolated from the legacy admin.
-const HOST_ACTIONS = new Set(['snapshot', 'confirm', 'save_draw', 'publish_draw']);
+const HOST_ACTIONS = new Set(['snapshot', 'confirm', 'save_draw', 'publish_draw', 'qualify']);
 const isRotation = format => ['americano', 'team_americano'].includes(format);
 const CONTEXT_CHANGED = 'Tournament context changed. No further changes were sent.';
 
@@ -23,7 +23,8 @@ async function tournamentRpc(name, args = {}) {
         const { p_event, rotation, ...fields } = args;
         const preparingRotation = rotation || (name === 'confirm' && args.p_kind === 'format' && isRotation(args.p_payload?.format))
             || (name === 'save_draw' && isRotation(args.p_draw?.format));
-        operation = preparingRotation ? 'tm_host_rotation_preparation' : 'tm_host_draw_preparation';
+        if (name === 'qualify') operation = 'tm_host_group_qualification';
+        else operation = preparingRotation ? 'tm_host_rotation_preparation' : 'tm_host_draw_preparation';
         payload = { p_organisation: hostEvent.organisationId, p_event, p_action: name, p_payload: fields };
     } else if (!['list_events', 'snapshot'].includes(name)) {
         if (!isCurrent()) throw new Error(CONTEXT_CHANGED);
@@ -42,7 +43,7 @@ async function tournamentRpc(name, args = {}) {
         const matchesAction = name === 'snapshot' ? data?.hostDrawPreparation === true : data?.action === name;
         if (data?.organisationId !== hostEvent.organisationId || String(receivedEvent) !== String(hostEvent.id) || !matchesAction
             || (args.p_division && args.p_division !== data?.divisionId)
-            || (name === 'publish_draw' && args.p_draw !== data?.drawId)
+            || (['publish_draw', 'qualify'].includes(name) && args.p_draw !== data?.drawId)
             || (name === 'save_draw' && !data?.drawId)) {
             throw new Error('The host tournament response did not match the reviewed event and draw.');
         }
@@ -52,7 +53,16 @@ async function tournamentRpc(name, args = {}) {
 return {
     saveRegistration: (data, division, registration, payload) => tournamentRpc('save_registration', { p_event: data.event.id, p_division: division, p_registration: registration?.id || null, p_payload: payload, p_expected: registration?._revision || null }),
     saveDivision: (data, division, name, active) => tournamentRpc('save_division', { p_event: data.event.id, p_division: division, p_name: name, p_active: active }),
-    qualify: (data, draw, matches) => tournamentRpc('qualify', { p_event: data.event.id, p_draw: draw.id, p_expected: draw.updated_at, p_matches: matches }),
+    qualify: (data, draw, matches) => {
+        const payload = { p_event: data.event.id, p_draw: draw.id, p_expected: draw.updated_at, p_matches: matches };
+        if (hostEvent) {
+            const groupMatches = new Map(data.matches.filter(m => m.draw_id === draw.id && m.stage === 'group').map(m => [m.id, m.updated_at]));
+            payload.p_group_versions = Object.fromEntries(groupMatches);
+            payload.p_group_sets = Object.fromEntries(data.sets.filter(set => groupMatches.has(set.match_id))
+                .map(set => [set.match_id + ':' + set.set_number, [set.entry_one_games, set.entry_two_games, set.is_match_tiebreak]]));
+        }
+        return tournamentRpc('qualify', payload);
+    },
     list: () => tournamentRpc('list_events'),
     load: eventId => tournamentRpc('snapshot', { p_event: eventId }),
     saveSettings: (data, settings, days) => tournamentRpc('save_settings', { p_event: data.event.id, p_expected: data.settingsRevision, p_settings: settings, p_days: days }),

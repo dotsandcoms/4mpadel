@@ -130,7 +130,7 @@ before(async () => {
                     if (name==='correct_manual_event_payment') return {data:{paymentId:receipt.id,method:args.p_method,recipient:args.p_recipient}};
                     if (name==='reopen_native_draw_for_corrections') { nativeDraw.status='draft'; return { data:null }; }
                     if (name==='account_is_active' || name==='is_super_admin') return { data:true };
-                    if (['tm_host_draw_preparation','tm_host_rotation_preparation'].includes(name)) {
+                    if (['tm_host_draw_preparation','tm_host_rotation_preparation','tm_host_group_qualification'].includes(name)) {
                         if (args.p_organisation!=='org-a' || String(args.p_event)!=='505') {
                             return {error:{message:'No access to this host event'}};
                         }
@@ -160,6 +160,17 @@ before(async () => {
                             hostTournament.entries=fields.p_draw.entries.map(entry=>({...entry,draw_id:'saved-host-draft'}));
                             hostTournament.matches=fields.p_draw.matches.map(match=>({...match,draw_id:'saved-host-draft'}));
                             return {data:{...receipt,drawId:'saved-host-draft'}};
+                        }
+                        if (args.p_action==='qualify') {
+                            if (window.staleGroupReview) {
+                                window.staleGroupReview=false;
+                                hostTournament.matches[0].updated_at='group-version-2';
+                                return {error:{message:'Finish and review every group result before creating elimination'}};
+                            }
+                            if (fields.p_group_versions['qualifying-group-0']!==hostTournament.matches[0].updated_at)
+                                return {error:{message:'Group versions did not match'}};
+                            hostTournament.matches.push(...fields.p_matches.map(match=>({...match,draw_id:'host-published-group'})));
+                            return {data:{...receipt,drawId:'host-published-group',divisionId:generatorDivision.id}};
                         }
                         if (args.p_action==='publish_draw') {
                             if (window.hostStale) {
@@ -302,6 +313,25 @@ before(async () => {
                 }
                 if (kind.startsWith('payment-')) return <EventPaymentDialog action={{ type:'correct', registration:{...paid, _editablePayment:receipt} }} client={client} session={session}
                     event={event} divisions={[division]} scopeId={kind==='payment-tenant'?'org:org-a':'all'} onClose={result=>window.calls.push(['closed',result])}/>;
+                if (kind==='host-fixed-qualification') {
+                    if (!hostTournament.draws.length) {
+                        generator.divisions=[generatorDivision];
+                        hostTournament.divisions=[generatorDivision];
+                        const drawId='host-published-group';
+                        hostTournament.draws=[{id:drawId,event_id:505,division_id:generatorDivision.id,draw_kind:'main',
+                            status:'published',format:'group_knockout',group_count:2,advancers_per_group:1,updated_at:'published-v1',scoring_rules:{}}];
+                        hostTournament.entries=groupRows.flatMap(group=>group.entries.map(entry=>({...entry,draw_id:drawId})));
+                        hostTournament.standings=groupRows.flatMap(group=>group.entries.map((entry,index)=>({
+                            draw_id:drawId,group_id:group.id,entry_id:entry.id,position:index+1,requires_manual_resolution:false,
+                        })));
+                        hostTournament.matches=groupRows.map((group,index)=>({id:'qualifying-group-'+index,draw_id:drawId,
+                            stage:'group',status:'completed',round_label:'Group match',round_number:1,bracket_position:1,
+                            group_id:group.id,entry_one_id:group.entries[0].id,entry_two_id:group.entries[1].id,
+                            winner_entry_id:group.entries[0].id,updated_at:'group-version-1',
+                        }));
+                    }
+                    return <MemoryRouter initialEntries={['/admin-preview/event?event=505&tab=draws']}><HostGeneratorFixture /></MemoryRouter>;
+                }
                 if (['host-americano','host-team-americano'].includes(kind)) {
                     if (kind==='host-americano' && hostTournament.registrations.length===2) {
                         hostTournament.registrations.push(...[5,6].map(n=>({id:'solo-'+n,division_id:generatorDivision.id,
@@ -1084,4 +1114,43 @@ test('organisation hosts review and publish both Americano rotation variants ins
             assert.equal(writes[3][1].p_payload.p_draw_token, 'host-token-v1');
         } finally { await page.close(); }
     }
+});
+
+test('hosts review fixed group qualifiers and regenerate a stale elimination preview before placing the exact bracket', async () => {
+    const page = await open('host-fixed-qualification');
+    try {
+        await clickText(page, 'Draw generator');
+        const panel = 'section[aria-label="Elimination phase"]';
+        await page.waitForSelector(panel);
+        assert.match(await page.$eval(panel, section => section.textContent), /Group 1 · Team 1.*Group 2 · Team 3/);
+        await clickText(page, 'Review elimination bracket');
+        await page.waitForSelector(panel + ' input[type=checkbox]');
+        await page.$eval(panel + ' input', input => input.click());
+        await page.evaluate(() => { window.staleGroupReview=true; });
+        await clickText(page, 'Create elimination phase');
+        await page.waitForFunction(() => document.querySelector('.tm-body [role=alert]')?.textContent.includes('review every group result'));
+        await clickText(page, 'Refresh');
+        await page.waitForFunction(() => document.querySelector('.tm-body [role=status]')?.textContent.includes('Tournament refreshed'));
+        assert.equal(await page.$(panel + ' input[type=checkbox]'), null);
+        await clickText(page, 'Review elimination bracket');
+        await page.waitForSelector(panel + ' input[type=checkbox]');
+        await page.$eval(panel + ' input', input => input.click());
+        await clickText(page, 'Create elimination phase');
+        await page.waitForFunction(() => document.querySelector('.tm-body [role=status]')?.textContent.includes('Elimination matches created'));
+        assert.equal(await page.$(panel), null);
+        const changes = (await page.evaluate(() => window.calls)).filter(([, args]) => args.p_action !== 'snapshot');
+        assert.equal(changes.length, 2);
+        for (const [method, args] of changes) {
+            assert.equal(method, 'tm_host_group_qualification');
+            assert.equal(args.p_organisation, 'org-a');
+            assert.equal(String(args.p_event), '505');
+            assert.equal(args.p_payload.p_draw, 'host-published-group');
+            assert.equal(args.p_payload.p_expected, 'published-v1');
+            assert.deepEqual(args.p_payload.p_group_sets, {});
+            const [final] = args.p_payload.p_matches;
+            assert.equal(final.key, 'r1-m1');
+            assert.deepEqual(new Set([final.entry_one_id, final.entry_two_id]), new Set(['team-1','team-3']));
+        }
+        assert.deepEqual(changes.map(([, args]) => args.p_payload.p_group_versions['qualifying-group-0']), ['group-version-1','group-version-2']);
+    } finally { await page.close(); }
 });

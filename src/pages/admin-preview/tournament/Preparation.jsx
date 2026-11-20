@@ -1,6 +1,7 @@
 import SearchableDropdown from '../../../components/SearchableDropdown';
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowRight, CheckCircle2, Users, ChevronRight, ArrowUp, ArrowDown, Download } from 'lucide-react';
+import HostGroupQualification from './HostGroupQualification';
 import DrawBracketPreview from './DrawBracketPreview';
 import AdminPlayerProfileModal from './PlayerProfile';
 import RegistrationLicenseBadge from './RegistrationLicenseBadge';
@@ -124,6 +125,8 @@ function DivisionPanel({ data, workspace, division, confirmation, draw, client, 
                 {locked && <p className="muted">{hostPreparation ? 'The published draw is locked.' : 'The published draw is locked. Results and schedules are managed in their own workspaces.'}</p>}
             </section>
         </>}
+        {workspace === 'draws' && hostPreparation && draw?.format === 'group_knockout' && ['published', 'in_progress'].includes(draw.status)
+            && !matchRows.some(match => match.stage === 'knockout') && <HostGroupQualification {...{ data, draw, client, act, busy }} />}
         {profile && <AdminPlayerProfileModal registration={profile} initialProfile={profiles.get(profile.email?.trim().toLowerCase())} eventId={data.event.id} eventRegistrations={data.registrations} onClose={() => setProfile(null)} />}
         {editing && <RegistrationDialog registration={editing} busy={busy} saving={saving} error={error} onClose={() => setEditing(null)} onSave={async payload => { const ok = await act(() => client.saveRegistration(data, division.id, editing, payload), 'Registration saved; player list needs reconfirmation'); if (ok) setEditing(null); return ok; }} />}
     </div>;
