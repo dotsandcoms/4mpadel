@@ -12,6 +12,7 @@ import FinanceTypeDetails from './FinanceTypeDetails.jsx';
 import RecordLoading from './RecordLoading.jsx';
 import EventSettlementOverview from './EventSettlementOverview.jsx';
 import FinanceUserLedger from './FinanceUserLedger.jsx';
+import FinanceCollectionsWorkspace from './FinanceCollectionsWorkspace.jsx';
 
 const money = cents => new Intl.NumberFormat('en-ZA', {style:'currency',currency:'ZAR'}).format(cents / 100);
 function ReceiptOverview({session, permissions, scopeId, client = supabase, refreshRevision = 0}) {
@@ -106,8 +107,10 @@ export default function FinanceOverview(props) {
       <button type="button" className="ap-secondary" aria-pressed={view === 'receipts'} onClick={() => setView('receipts')}>Receipts and refunds</button>
       <button type="button" className="ap-secondary" aria-pressed={view === 'settlements'} onClick={() => setView('settlements')}>Event settlements</button>
       <button type="button" className="ap-secondary" aria-pressed={view === 'users'} onClick={() => setView('users')}>User ledger</button>
+      <button type="button" className="ap-secondary" aria-pressed={view === 'collections'} onClick={() => setView('collections')}>Collections</button>
     </nav>
     {view === 'receipts' ? <ReceiptOverview {...props} /> : view === 'users'
-      ? <FinanceUserLedger client={supabase} {...props} /> : <EventSettlementOverview client={supabase} {...props} />}
+      ? <FinanceUserLedger client={supabase} {...props} /> : view === 'collections'
+        ? <FinanceCollectionsWorkspace client={supabase} {...props} /> : <EventSettlementOverview client={supabase} {...props} />}
   </div>;
 }
