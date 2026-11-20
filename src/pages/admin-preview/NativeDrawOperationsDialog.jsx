@@ -8,9 +8,11 @@ import { canReviewNativeRanking } from './nativeDrawRanking.js';
 import NativeDrawRankingReview, { NativeDrawAwardReceiptReview } from './NativeDrawRankingReview.jsx';
 import NativeDrawPlayPlan, { NativeDrawPlayPlanReview } from './NativeDrawPlayPlan.jsx';
 import NativeDrawCourtSetup, { NativeDrawCourtReview } from './NativeDrawCourtSetup.jsx';
+import NativePlateResult, { NativePlateResultReview } from './NativePlateResult.jsx';
 import { useEventOperation } from './useEventOperation.js';
 import {
-  canReadPublishedNativeDraw, canReopenNativeDraw, canScheduleNativeDraw, canUpdateNativeMatches, listNativeDrawOperations, loadNativeDrawOperations,
+  canReadPublishedNativeDraw, canReopenNativeDraw, canScheduleNativeDraw, canScoreNativePlate, canScoreNativePlateMatch,
+  canUpdateNativeMatches, hasNativePlateResult, listNativeDrawOperations, loadNativeDrawOperations,
   saveNativeDrawOperation, saveNativeEventCalendarPlan, validNativeLiveMatch,
 } from './nativeDrawOperations.js';
 import './EventPaymentDialog.css';
@@ -40,6 +42,7 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
   const [calendarReview, setCalendarReview] = useState(null);
   const [rankingOpen, setRankingOpen] = useState(false);
   const [rankingOverrides, setRankingOverrides] = useState({});
+  const [scoreDraft, setScoreDraft] = useState(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -74,6 +77,7 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
   const changeDraw = id => {
     setDrawId(id);
     setMatchId('');
+    setScoreDraft(null);
     setCourtReview(null);
     setRankingOpen(false);
     setRankingOverrides({});
@@ -95,10 +99,12 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
   const changeMatch = id => {
     setMatchId(id);
     setCourtReview(null);
+    setScoreDraft(null);
   };
   const back = () => {
     if (review.type === 'schedule') setCourtReview(review);
     if (planActions.includes(review.type)) setCalendarReview(review.type === 'automatic-courts' ? null : review);
+    if (review.type === 'plate-result') setScoreDraft({ draft: review.draft });
     setReview(null);
   };
   const reviewMatch = (type, heading) => setReview({ type, match, heading, summary: match.label });
@@ -113,6 +119,7 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
         {planActions.includes(review.type) && <NativeDrawPlayPlanReview action={review} />}
         {review.type === 'enable-silver' && <p className="ap-payment-live-note">Confirmation enables Silver for this main draw. When the opening results are complete, use Create Silver plate to review and publish the new bracket.</p>}
         {review.type === 'plate' && <><p role="status">The new plate will be published after confirmation.</p><ul>{review.plate.teams.map((team, index) => <li key={index}>{team}</li>)}</ul></>}
+        {review.type === 'plate-result' && <NativePlateResultReview action={review} entries={selected?.entries || []} />}
         {review.type === 'rank' && <NativeDrawAwardReceiptReview rows={review.rows} />}
         {review.type === 'complete' && <p className="ap-payment-live-note">Complete this draw to confirm final placements and restrict changes to recorded scores.</p>}
         {review.type === 'schedule' && <NativeDrawCourtReview plan={review.plan} />}
@@ -134,7 +141,7 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
         {selected && <>
           {publicDrawUrl && <a className="ap-secondary" href={publicDrawUrl} target="_blank" rel="noreferrer">View public draw</a>}
           {platform && canReopenNativeDraw(selected.draw) && <button type="button" className="ap-secondary" onClick={() => setReview({ type: 'reopen', heading: 'Reopen draw for corrections', summary: drawLabel(selected.draw) })}>Reopen draw for corrections</button>}
-          {(canUpdateNativeMatches(selected.draw) || platform && canScheduleNativeDraw(selected.draw)) && selected.matches.length > 0 && <>
+          {(canUpdateNativeMatches(selected.draw) || canScoreNativePlate(selected.draw) || platform && canScheduleNativeDraw(selected.draw)) && selected.matches.length > 0 && <>
             <label>Match<SearchableDropdown value={matchId} onChange={event => changeMatch(event.target.value)}><option value="">Choose a match</option>
               {selected.matches.map(row => <option key={row.id} value={row.id}>{row.round_label} · {row.label}{row.is_featured ? ' · Featured' : ''}</option>)}
             </SearchableDropdown></label>
@@ -142,6 +149,12 @@ export default function NativeDrawOperationsDialog({ client, session, scopeId, e
               {validNativeLiveMatch(match) && <button type="button" className="ap-secondary" onClick={() => reviewMatch('live', matchLive ? 'Clear live status' : 'Mark match live')}>{matchLive ? 'Clear live status' : 'Mark match live'}</button>}
               {selected.featuredAvailable && <button type="button" className="ap-secondary" onClick={() => reviewMatch('feature', match.is_featured ? 'Remove featured match' : 'Feature match')}>{match.is_featured ? 'Remove featured match' : 'Feature match'}</button>}
             </div>}
+            {canScoreNativePlateMatch(selected.draw, match) && (scoreDraft
+              ? <NativePlateResult draw={selected.draw} match={match} entries={selected.entries} previous={scoreDraft.draft}
+                onCancel={() => setScoreDraft(null)} onReview={setReview} />
+              : <button type="button" className="ap-secondary" onClick={() => setScoreDraft({})}>
+                {hasNativePlateResult(match) ? 'Correct result' : 'Enter result'}
+              </button>)}
             {canUpdateNativeMatches(selected.draw) && !selected.featuredAvailable && <p>Featured-match controls are unavailable on this connection.</p>}
           </>}
           {canManagePlates && enableSilver && <button type="button" className="ap-secondary" onClick={() => setReview({

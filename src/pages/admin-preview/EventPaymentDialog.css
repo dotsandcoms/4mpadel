@@ -23,6 +23,14 @@
 .ap-draw-announcements textarea { min-height: 78px; }
 .ap-payment-dialog .ap-draw-pinned { display: flex; align-items: center; gap: 8px; }
 
+.ap-plate-score { display: grid; gap: 12px; }
+.ap-plate-score h3 { margin: 0; }
+.ap-plate-score fieldset { display: grid; gap: 10px; min-width: 0; border: 1px solid var(--ap-line, #d9ded8); border-radius: 8px; }
+.ap-plate-score-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.ap-plate-score input { min-width: 0; width: 100%; padding: 10px; border: 1px solid var(--ap-line-strong, #b9c1b8); border-radius: 8px; background: transparent; color: inherit; font: inherit; }
+.ap-plate-score details { display: grid; gap: 10px; }
+.ap-plate-score summary { cursor: pointer; padding-block: 8px; }
+
 .ap-native-court-setup { display: grid; gap: 12px; }
 .ap-native-court-setup input:not([type=checkbox]) { width: 100%; padding: 10px; border: 1px solid var(--ap-line-strong, #b9c1b8); border-radius: 8px; background: transparent; color: inherit; font: inherit; }
 .ap-native-court-review { display: grid; gap: 8px; max-height: 240px; margin: 0; overflow-y: auto; padding-inline-start: 24px; }

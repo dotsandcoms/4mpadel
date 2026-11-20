@@ -118,6 +118,10 @@ before(async () => {
                         return {data:{organisation_id:args.p_organisation_id,event_id:args.p_event_id,draw_id:args.p_draw_id,
                             match_id:args.p_match_id,action:args.p_action,status:args.p_action==='complete'?'completed':'in_progress',featured:true}};
                     }
+                    if (name==='native_record_reviewed_plate_result') {
+                        return {data:{organisation_id:args.p_organisation_id,event_id:args.p_event_id,draw_id:args.p_draw_id,
+                            match_id:args.p_match_id,status:'completed',winner_entry_id:args.p_result.winner,updated_at:'match-v2'}};
+                    }
                     if (name==='native_manage_organisation_draw_plate') {
                         const scope={organisation_id:args.p_organisation_id,event_id:args.p_event_id,
                             source_draw_id:args.p_draw_id,action:args.p_action};
@@ -268,12 +272,20 @@ before(async () => {
                     if ((['special-silver','special-bronze'].includes(window.kind) || window.kind.startsWith('special-enable-silver')) && table==='draw_entries') rows=linkedPlateEntries;
                     if (window.kind.startsWith('host-plate-')) {
                         if (table==='draws') {
-                            nativeDraw.status='completed';
-                            nativeDraw.draw_kind=window.kind==='host-plate-bronze'?'silver':'main';
+                            nativeDraw.status=window.kind==='host-plate-score-silver'?'published':'completed';
+                            nativeDraw.draw_kind=({
+                                'host-plate-bronze':'silver', 'host-plate-score-silver':'silver', 'host-plate-score-bronze':'bronze',
+                            })[window.kind]||'main';
                             nativeDraw.scoring_rules={plate_mode:window.kind==='host-plate-enable-route'
-                                ? (window.silverEnabled?'double':'none') : 'triple'};
+                                ? (window.silverEnabled?'double':'none') : 'triple',sets_to_win:2};
                         }
-                        if (table==='draw_matches') rows=linkedPlateMatches;
+                        if (table==='draw_matches') {
+                            rows=window.kind==='host-plate-score-silver'
+                                ? [{...linkedPlateMatches[0],status:'scheduled',winner_entry_id:null}, linkedPlateMatches[1]]
+                                : window.kind==='host-plate-score-bronze'
+                                    ? [{...linkedPlateMatches[0],result_type:'played',result_summary:[2,0]}, linkedPlateMatches[1]]
+                                    : linkedPlateMatches;
+                        }
                         if (table==='draw_entries') rows=linkedPlateEntries;
                     }
                     if (window.kind.startsWith('special-') && table==='event_play_days') rows=[
@@ -437,7 +449,7 @@ before(async () => {
                 if (kind.startsWith('public-draw-')) return <EventDrawWorkspace event={event} divisions={[division]}
                     draws={[kind==='public-draw-live'?nativeDraw:{...nativeDraw,status:'draft'},otherNativeDraw]}
                     registrationCount={()=>4} onDrawDetails={()=>{}} />;
-                if (kind==='host-plate-enable-route') return <LiveEventCommandCentre event={event} divisions={[division]}
+                if (['host-plate-enable-route','host-plate-score-silver'].includes(kind)) return <LiveEventCommandCentre event={event} divisions={[division]}
                     registrations={[]} activity={[]} payments={[]} draws={[{...nativeDraw,status:'completed'}]} go={()=>{}}
                     canOperateHostDraw client={client} session={session} scopeId="org:org-a" initialTab="draws" />;
                 if (kind==='native-draw' || kind.startsWith('special-') || kind.startsWith('court-') || kind.startsWith('host-') || ['draw-complete','draw-ranking'].includes(kind)) return <NativeDrawOperationsDialog client={client} session={session} event={['host-foreign','host-plate-foreign'].includes(kind)?other:event}
@@ -1060,6 +1072,67 @@ test('approved organisation owners and admins review Silver and Bronze plates in
         await clickText(revoked, 'Confirm draw action');
         await revoked.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('host organisation is required'));
         assert.equal(await revoked.evaluate(() => window.calls.some(([name]) => name === 'native_manage_organisation_draw_plate')), false);
+    } finally { await revoked.close(); }
+});
+
+test('host scores Silver matches and corrects completed Bronze results through the exact reviewed plate action', async () => {
+    const selectFirstMatch = async page => {
+        await page.waitForFunction(() => [...document.querySelectorAll('dialog label')].some(label => label.textContent.startsWith('Match')));
+        await page.evaluate(() => [...document.querySelectorAll('dialog label')].find(label => label.textContent.startsWith('Match')).querySelector('button').click());
+        await clickText(page, 'Final · Plate Team 1 vs Plate Team 2', '[role=option]');
+    };
+    const scores = page => page.evaluate(() => window.calls.filter(([name]) => name === 'native_record_reviewed_plate_result'));
+    const silver = await open('host-plate-score-silver');
+    try {
+        await clickText(silver, 'Manage native draw');
+        await selectFirstMatch(silver);
+        await clickText(silver, 'Enter result');
+        await clickText(silver, 'Review result');
+        assert.match(await silver.$eval('dialog [role=alert]', node => node.textContent), /Enter the overall set score/);
+        await silver.select('section[aria-label="Enter plate result"] label:nth-of-type(2) select', 'sets');
+        const inputs = await silver.$$('section[aria-label="Enter plate result"] input');
+        await inputs[0].type('2');
+        await inputs[1].type('0');
+        await clickText(silver, 'Review result');
+        assert.match(await silver.$eval('dialog', node => node.textContent), /Winner · Plate Team 1/);
+        assert.deepEqual(await scores(silver), []);
+        await clickText(silver, 'Back');
+        assert.deepEqual(await silver.$$eval('section[aria-label="Enter plate result"] input', inputs => inputs.map(input => input.value)), ['2', '0']);
+        await clickText(silver, 'Review result');
+        await clickText(silver, 'Confirm draw action');
+        await silver.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent.includes('Plate result saved'));
+        assert.deepEqual(await scores(silver), [['native_record_reviewed_plate_result', {
+            p_organisation_id:'org-a',p_event_id:11,p_draw_id:'draw-a',p_expected_draw:'draw-v1',p_match_id:'plate-first',p_expected_match:'match-v1',
+            p_result:{ kind:'played',winner:'plate-1',summary:[2,0],sets:[] },
+        }]]);
+    } finally { await silver.close(); }
+
+    const bronze = await open('host-plate-score-bronze');
+    try {
+        await selectFirstMatch(bronze);
+        await clickText(bronze, 'Correct result');
+        await clickText(bronze, 'Review correction');
+        assert.match(await bronze.$eval('dialog [role=alert]', node => node.textContent), /Enter a correction reason/);
+        await bronze.type('dialog textarea', 'Checked with officials');
+        await clickText(bronze, 'Review correction');
+        assert.deepEqual(await scores(bronze), []);
+        await clickText(bronze, 'Confirm draw action');
+        await bronze.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent.includes('Plate result corrected'));
+        assert.equal((await scores(bronze))[0][1].p_result.reason, 'Checked with officials');
+    } finally { await bronze.close(); }
+
+    const revoked = await open('host-plate-score-silver');
+    try {
+        await clickText(revoked, 'Manage native draw');
+        await selectFirstMatch(revoked);
+        await clickText(revoked, 'Enter result');
+        await revoked.select('section[aria-label="Enter plate result"] label:nth-of-type(1) select', 'walkover');
+        await revoked.select('section[aria-label="Enter plate result"] label:nth-of-type(2) select', '1');
+        await clickText(revoked, 'Review result');
+        await revoked.evaluate(() => { window.hostPlatesRevoked = true; });
+        await clickText(revoked, 'Confirm draw action');
+        await revoked.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('Current owner or admin access'));
+        assert.deepEqual(await scores(revoked), []);
     } finally { await revoked.close(); }
 });
 

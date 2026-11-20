@@ -14,9 +14,10 @@ create schema auth;
 grant usage on schema auth to authenticated, anon;
 create function auth.email() returns text language sql stable as $$ select nullif(current_setting('host_draw.email', true), '') $$;
 create function auth.uid() returns uuid language sql stable as $$ select case when auth.email() is not null then '11111111-1111-4111-8111-111111111111'::uuid end $$;
+create function auth.jwt() returns jsonb language sql stable as $$ select jsonb_build_object('email', auth.email()) $$;
 create function public.account_is_active() returns boolean language sql stable as $$ select auth.email() is distinct from 'inactive@example.invalid' $$;
-create function public.is_super_admin(email text) returns boolean language sql stable as $$ select false $$;
-create function public.is_4m_admin() returns boolean language sql stable as $$ select false $$;
+create function public.is_super_admin(email text) returns boolean language sql stable as $$ select email = 'platform@example.invalid' $$;
+create function public.is_4m_admin() returns boolean language sql stable as $$ select coalesce(public.is_super_admin(auth.email()), false) $$;
 create function public.is_org_admin(id bigint) returns boolean language sql stable as $$ select false $$;
 create table public.organisations(id uuid primary key,status text);
 create table public.organisation_members(organisation_id uuid,user_email text,role text);
@@ -26,9 +27,12 @@ create table public.event_registrations(id uuid primary key);
 create table public.players(id bigint primary key);
 
 \ir ../supabase/migrations/20260819_native_draw_data_model.sql
+\ir ../supabase/migrations/20261019101901_native_match_result_scoring.sql
+\ir ../supabase/migrations/20261019104418_native_partial_set_validation.sql
 alter table public.draw_matches add column is_featured boolean default false;
 \ir ../supabase/migrations/20261120070002_reviewed_organisation_native_draw_actions.sql
 \ir ../supabase/migrations/20261120120915_scope_reviewed_organisation_draw_plates.sql
+\ir ../supabase/migrations/20261120120930_reviewed_linked_plate_results.sql
 
 insert into public.organisations values
   ('aaaaaaaa-1111-4111-8111-111111111111','approved'), ('bbbbbbbb-2222-4222-8222-222222222222','approved');
@@ -254,31 +258,134 @@ begin
   if receipt->>'created' <> 'false' or receipt->>'id' <> silver_id::text then raise exception 'Identical review duplicated a plate'; end if;
 end $$;
 
-reset role;
-update public.draw_matches m set winner_entry_id=entry_one_id,loser_entry_id=entry_two_id,
-  status='completed',result_type='played',updated_at='2035-01-20T03:00:00Z'
-where m.draw_id=(select id from public.draws where event_id=101 and draw_kind='silver')
-  and m.round_number=1 and m.entry_one_id is not null and m.entry_two_id is not null;
-
-set local role authenticated;
 do $$
 declare
   org uuid := 'aaaaaaaa-1111-4111-8111-111111111111';
+  foreign_org uuid := 'bbbbbbbb-2222-4222-8222-222222222222';
   source_draw public.draws;
+  opening public.draw_matches;
+  bronze public.draws;
+  bronze_match public.draw_matches;
+  actor text;
+  score jsonb;
   versions jsonb;
   receipt jsonb;
-  bronze_id uuid;
 begin
+  if has_function_privilege('anon','public.native_record_reviewed_plate_result(uuid,bigint,uuid,timestamptz,uuid,timestamptz,jsonb)','EXECUTE')
+    or has_function_privilege('service_role','public.native_record_reviewed_plate_result(uuid,bigint,uuid,timestamptz,uuid,timestamptz,jsonb)','EXECUTE') then
+    raise exception 'Plate scoring exposed beyond current authenticated hosts';
+  end if;
   select * into source_draw from public.draws where event_id=101 and draw_kind='silver';
+  select * into opening from public.draw_matches where draw_id=source_draw.id and round_number=1
+    and entry_one_id is not null and entry_two_id is not null order by bracket_position limit 1;
+  score := jsonb_build_object('kind','played','winner',opening.entry_one_id,'sets','[{"games":[6,4]},{"games":[7,6],"tiebreak":[7,5],"duration":33}]'::jsonb);
+  foreach actor in array array['staff@example.invalid','inactive@example.invalid','other-admin@example.invalid',''] loop
+    perform set_config('host_draw.email',actor,true);
+    begin
+      perform public.native_record_reviewed_plate_result(org,101,source_draw.id,source_draw.updated_at,opening.id,opening.updated_at,score);
+      raise exception 'Unapproved current actor could score an opening match';
+    exception when insufficient_privilege then null;
+    end;
+  end loop;
+  perform set_config('host_draw.email','host-admin@example.invalid',true);
+  begin
+    perform public.native_record_reviewed_plate_result(org,101,source_draw.id,source_draw.updated_at,
+        '44444444-0000-4000-8000-000000000102',opening.updated_at,score);
+    raise exception 'A match from a different event could be scored';
+  exception when raise_exception then if sqlerrm not like 'The reviewed match changed%' then raise; end if;
+  end;
+  begin
+    perform public.native_record_reviewed_plate_result(null,101,source_draw.id,source_draw.updated_at,opening.id,opening.updated_at,score);
+    raise exception 'A host could score through the platform scope';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.native_record_reviewed_plate_result(org,101,'22222222-0000-4000-8000-000000000101',
+        source_draw.updated_at,opening.id,opening.updated_at,score);
+    raise exception 'A main draw could be scored by the plates-only action';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.native_record_reviewed_plate_result(foreign_org,102,source_draw.id,source_draw.updated_at,
+        opening.id,opening.updated_at,score);
+    raise exception 'A host could supply another organisation';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.native_record_reviewed_plate_result(org,101,source_draw.id,source_draw.updated_at,
+        opening.id,opening.updated_at-interval '1 day',score);
+    raise exception 'A stale result could be submitted';
+  exception when raise_exception then if sqlerrm not like 'The reviewed match changed%' then raise; end if;
+  end;
+  for opening in select * from public.draw_matches where draw_id=source_draw.id and round_number=1
+    and entry_one_id is not null and entry_two_id is not null loop
+    receipt := public.native_record_reviewed_plate_result(org,101,source_draw.id,source_draw.updated_at,
+        opening.id,opening.updated_at,jsonb_set(score,'{winner}',to_jsonb(opening.entry_one_id)));
+    if receipt->>'status' <> 'completed' or receipt->>'match_id' <> opening.id::text
+      or receipt->>'winner_entry_id' <> opening.entry_one_id::text or (receipt->>'updated_at')::timestamptz = opening.updated_at
+      or (select count(*) from public.draw_match_sets where match_id=opening.id) <> 2
+      or not exists (select 1 from public.draw_matches where id=opening.winner_to_match_id
+        and opening.entry_one_id in (entry_one_id,entry_two_id)) then
+      raise exception 'Recording Silver scores did not preserve sets, route winners or return a fresh receipt';
+    end if;
+  end loop;
   select jsonb_object_agg(id::text,updated_at) into versions
     from public.draw_matches where draw_id=source_draw.id and round_number=1;
   receipt := public.native_manage_organisation_draw_plate(org,101,source_draw.id,source_draw.updated_at,'create-plate',versions);
-  bronze_id := (receipt->>'id')::uuid;
+  select * into bronze from public.draws where id=(receipt->>'id')::uuid;
   if receipt->>'kind' <> 'bronze' or receipt->>'entry_count' <> '2'
-    or (select scoring_rules->>'parent_draw_id' from public.draws where id=bronze_id) <> source_draw.id::text
-    or (select count(*) from public.draw_matches where draw_id=bronze_id) <> 1
+    or bronze.scoring_rules->>'parent_draw_id' <> source_draw.id::text
+    or (select count(*) from public.draw_matches where draw_id=bronze.id) <> 1
     or exists (select 1 from public.draws where event_id=102 and draw_kind in ('silver','bronze')) then
     raise exception 'The host Bronze plate used an incorrect parent or event';
+  end if;
+
+  select * into opening from public.draw_matches where draw_id=source_draw.id and round_number=1
+    and entry_one_id is not null and entry_two_id is not null order by bracket_position limit 1;
+  begin
+    perform public.native_record_reviewed_plate_result(org,101,source_draw.id,source_draw.updated_at,opening.id,opening.updated_at,
+      jsonb_build_object('kind','played','winner',opening.entry_two_id,'sets','[]'::jsonb,'summary','[0,2]'::jsonb,'reason','Changed winner'));
+    raise exception 'Silver winner changed after Bronze was created';
+  exception when raise_exception then if sqlerrm not like 'The Bronze plate uses this result%' then raise; end if;
+  end;
+  if (select winner_entry_id from public.draw_matches where id=opening.id) <> opening.entry_one_id then
+    raise exception 'Rejected Silver correction left the changed winner behind';
+  end if;
+  receipt := public.native_record_reviewed_plate_result(org,101,source_draw.id,source_draw.updated_at,opening.id,opening.updated_at,
+      jsonb_build_object('kind','played','winner',opening.entry_one_id,'sets','[]'::jsonb,'summary','[2,1]'::jsonb,'reason','Corrected totals'));
+  if receipt->>'status' <> 'completed' or (select result_summary from public.draw_matches where id=opening.id)
+     is distinct from array[2,1]::smallint[] then raise exception 'Silver scores could not be corrected with the same winner'; end if;
+
+  perform set_config('host_draw.email','owner@example.invalid',true);
+  select * into bronze_match from public.draw_matches where draw_id=bronze.id;
+  receipt := public.native_record_reviewed_plate_result(org,101,bronze.id,bronze.updated_at,bronze_match.id,bronze_match.updated_at,
+      '{"kind":"live","sets":[{"games":[4,4]}]}'::jsonb);
+  if receipt->>'status' <> 'in_progress' or receipt->>'winner_entry_id' is not null then
+    raise exception 'An organisation owner could not save a live Bronze score';
+  end if;
+  select * into bronze_match from public.draw_matches where id=bronze_match.id;
+  receipt := public.native_record_reviewed_plate_result(org,101,bronze.id,bronze.updated_at,bronze_match.id,bronze_match.updated_at,
+      jsonb_build_object('kind','walkover','winner',bronze_match.entry_two_id,'sets','[]'::jsonb));
+  if receipt->>'status' <> 'walkover' or receipt->>'winner_entry_id' <> bronze_match.entry_two_id::text then
+    raise exception 'An organisation owner could not record the Bronze walkover';
+  end if;
+  perform set_config('host_draw.email','platform@example.invalid',true);
+  select * into bronze_match from public.draw_matches where id=bronze_match.id;
+  receipt := public.native_record_reviewed_plate_result(null,101,bronze.id,bronze.updated_at,bronze_match.id,bronze_match.updated_at,
+      jsonb_build_object('kind','withdrawal','winner',bronze_match.entry_two_id,'sets','[]'::jsonb,'reason','Confirmed withdrawal'));
+  if receipt->>'status' <> 'walkover' or receipt->>'organisation_id' is not null
+      or (select result_type from public.draw_matches where id=bronze_match.id) <> 'withdrawal' then
+    raise exception 'Platform staff could not correct the Bronze result';
+  end if;
+end $$;
+
+reset role;
+do $$ begin
+  if not exists (select 1 from public.draw_match_audit a join public.draw_matches m on m.id=a.match_id
+      join public.draws d on d.id=m.draw_id where d.event_id=101 and d.draw_kind='silver'
+      and a.action='score_corrected' and a.actor_email='host-admin@example.invalid'
+      and a.after_state->>'reason'='Corrected totals') then
+    raise exception 'Plate corrections did not retain the real operator and reason in the native audit';
   end if;
 end $$;
 rollback;
