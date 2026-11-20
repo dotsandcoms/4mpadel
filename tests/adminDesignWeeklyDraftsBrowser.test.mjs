@@ -150,6 +150,7 @@ test('Calendar saves, resumes, publishes and discards weekly series through the 
     await wait(() => document.body.textContent.includes('4 weeks'));
     await click(page,'Continue draft');
     await click(page,'Date & Venue');
+    await page.waitForSelector('[name=weekly_count]', {visible:true});
     assert.equal(await page.$eval('[name=weekly_count]',input=>input.value),'4');
     assert.equal(await page.$eval('[name=event_name]',input=>input.value),'Friday Social');
     await click(page,'Next');
