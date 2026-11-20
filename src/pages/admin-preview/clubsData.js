@@ -69,9 +69,10 @@ export const clubStatusLabel = status => ({
   rejected: 'Rejected', archived: 'Archived',
 }[status] || (status ? `Unknown status: ${String(status)}` : 'Status unavailable'));
 
-export function filterClubDirectory(rows, { query = '', status = '', province = '', verification = '' } = {}) {
+export function filterClubDirectory(rows, { query = '', status = '', province = '', verification = '', claim = '' } = {}, claimStatuses) {
   const needle = query.trim().toLowerCase();
   return rows.filter(row => (!status || row.status === status) && (!province || row.province === province)
+    && (!claim || claimStatuses?.get(row.id) === claim)
     && (!verification || (verification === 'verified' ? row.verified === true : row.verified === false))
     && (!needle || [row.name, row.short_name, row.city, row.province, row.country, row.id].some(value => String(value ?? '').toLowerCase().includes(needle))))
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')) || String(a.id).localeCompare(String(b.id)));

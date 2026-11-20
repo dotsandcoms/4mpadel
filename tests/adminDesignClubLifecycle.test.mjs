@@ -14,11 +14,19 @@ const fixture = `
   const session = { user: { id:'fixture-ops', email:'ops@example.test' } };
   let clubs = [{id:'source',name:'Source club',city:'Coast',status:'published',players:window.clubHasPlayers ? 1 : 0},
     {id:'target',name:'Destination club',city:'Inland',status:'published',players:0}];
+  if (window.clubClaimFixture) clubs.push({id:'unclaimed',name:'Unclaimed club',status:'published'});
+  const clubMembers = [
+    {club_id:'source',role:'owner'}, {club_id:'unclaimed',role:'staff'}, {club_id:'foreign',role:'admin'},
+  ];
+  const clubInvites = [
+    {club_id:'source',status:'pending'}, {club_id:'target',status:'pending'}, {club_id:'unclaimed',status:'expired'},
+  ];
   const snapshot = club => club ? {...club,events:1,members:1,organisations:0,claims:0,invitations:0,favourites:1,places:0} : null;
   const result = data => ({ data, error:null });
   window.clubCalls = [];
   window.clubWrites = [];
   window.clubUploads = [];
+  window.clubClaimReads = [];
   const client = {
     auth: { getUser: async () => result({user:session.user}) },
     rpc(name,args) {
@@ -39,8 +47,11 @@ const fixture = `
       return response;
     },
     from(table) {
-      let filters = {}, start = 0, end, patch;
-      const data = () => (table==='clubs'?clubs:[]).filter(row=>Object.entries(filters).every(([key,value])=>(row[key]??null)===value)).slice(start,end);
+      let filters = {}, inFilters = {}, start = 0, end, patch, projection;
+      const source = () => table==='clubs'?clubs:window.clubClaimFixture
+        ? (table==='club_members'?clubMembers:table==='club_claim_invites'?clubInvites:[]) : [];
+      const data = () => source().filter(row=>Object.entries(filters).every(([key,value])=>(row[key]??null)===value)
+        && Object.entries(inFilters).every(([key,values])=>values.includes(row[key]))).slice(start,end);
       const one = async () => {
         const row = data()[0];
         if (row && patch) {
@@ -50,10 +61,13 @@ const fixture = `
         }
         return result(row||null);
       };
-      const query = {select(){return query;}, eq(k,v){filters[k]=v;return query;}, order(){return query;}, ilike(){return query;},
+      const query = {select(fields){projection=fields;return query;}, eq(k,v){filters[k]=v;return query;}, order(){return query;}, ilike(){return query;},
         is(k,v){filters[k]=v;return query;}, update(values){patch=values;return query;}, single:one,
-        in(){return query;}, limit(){return query;}, range(first,last){start=first;end=last+1;return query;}, abortSignal(){return query;},
-        maybeSingle:one, then(resolve,reject){return Promise.resolve(result(data())).then(resolve,reject);}};
+        in(key,values){inFilters[key]=values;return query;}, limit(){return query;}, range(first,last){start=first;end=last+1;return query;}, abortSignal(){return query;},
+        maybeSingle:one, then(resolve,reject){
+          if (['club_members','club_claim_invites'].includes(table)) window.clubClaimReads.push({table,projection,filters,inFilters});
+          return Promise.resolve(result(data())).then(resolve,reject);
+        }};
       return query;
     },
     storage:{from:()=>({
@@ -85,13 +99,17 @@ before(async () => {
 });
 after(async () => { await browser?.close(); if (directory) await rm(directory, { recursive: true, force: true }); });
 
-async function open(t, flags = {}) {
+async function openDirectory(t, flags = {}) {
   const page = await browser.newPage();
   t.after(() => page.close());
   await page.setContent('<div id="root"></div>');
   await page.evaluate(flags => Object.assign(window, flags), flags);
   await page.addScriptTag({ path: bundle });
   await page.waitForSelector('[aria-label="View club details for Source club"]');
+  return page;
+}
+async function open(t, flags = {}) {
+  const page = await openDirectory(t, flags);
   await page.click('[aria-label="View club details for Source club"]');
   await page.waitForSelector('dialog.fo-ledger-drawer[open]');
   return page;
@@ -102,6 +120,39 @@ async function click(page, label, scope = 'body') {
 }
 const review = 'dialog.ap-payment-dialog[open]';
 const actionList = page => page.evaluate(() => window.clubCalls.map(call => call.p_action));
+
+test('platform claim triage filters exact clubs using only role and pending status', async t => {
+  const page = await openDirectory(t, { clubClaimFixture:true });
+  const choose = async text => {
+    await page.waitForFunction(() => [...document.querySelectorAll('label')].some(label =>
+      label.firstChild?.textContent.trim() === 'Claim status' && !label.querySelector('button')?.disabled));
+    await page.evaluate(() => [...document.querySelectorAll('label')].find(label => label.firstChild?.textContent.trim() === 'Claim status').querySelector('button').click());
+    await page.waitForFunction(text => [...document.querySelectorAll('[role="option"]')].some(option => option.textContent.trim() === text), {}, text);
+    await page.evaluate(text => [...document.querySelectorAll('[role="option"]')].find(option => option.textContent.trim() === text).click(), text);
+  };
+  const visible = () => page.$$eval('.clubs-open-row .fo-type-link', links => links.map(link => link.getAttribute('aria-label')));
+  await choose('Claimed');
+  assert.deepEqual(await visible(), ['View club details for Source club']);
+  await choose('Invite pending');
+  assert.deepEqual(await visible(), ['View club details for Destination club']);
+  await choose('Unclaimed');
+  assert.deepEqual(await visible(), ['View club details for Unclaimed club']);
+  await click(page, 'Reset filters');
+  assert.equal((await visible()).length, 3);
+  const reads = await page.evaluate(() => window.clubClaimReads);
+  assert.ok(reads.length >= 2);
+  assert.ok(reads.every(read => ['club_id,role','club_id,status'].includes(read.projection)
+    && read.inFilters.club_id.length === 3 && !read.inFilters.club_id.includes('foreign')));
+});
+
+test('linked tenant and revoked platform role cannot load claim directory data', async t => {
+  const tenant = await openDirectory(t, { clubClaimFixture:true, clubTenant:true });
+  assert.doesNotMatch(await tenant.$eval('body', node => node.innerText), /Claim status|Claim ·/);
+  assert.deepEqual(await tenant.evaluate(() => window.clubClaimReads), []);
+  const revoked = await openDirectory(t, { clubClaimFixture:true, clubRevoked:true });
+  await revoked.waitForFunction(() => document.body.innerText.includes('Claim status could not be loaded'));
+  assert.deepEqual(await revoked.evaluate(() => window.clubClaimReads), []);
+});
 
 test('club directory requires a typed confirmation and refreshes after an exact merge', async t => {
   const page = await open(t, {clubHasPlayers:true});
