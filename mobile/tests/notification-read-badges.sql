@@ -17,9 +17,20 @@ reset role;
 select messaging.unread_total('00000000-0000-0000-0000-000000000051') as chat_unread \gset
 set local role authenticated;
 select pg_temp.expect(public.own_app_badge_unread()=:'chat_unread'::bigint+2,'icon badge combines notification and chat unread only');
+select public.player_notification_api('list_drawer') as drawer_before \gset
+select pg_temp.expect((:'drawer_before'::jsonb->>'unread')::int=2,'drawer starts with the same two unread updates');
+select public.player_notification_api('read_drawer',null,(:'drawer_before'::jsonb->>'through')::timestamptz) as drawer_after \gset
+select pg_temp.expect((:'drawer_after'::jsonb->>'unread')::int=0,'the drawer bulk action clears unread app updates');
+select pg_temp.expect((:'drawer_after'::jsonb->'items'->0->>'badge_unread')::boolean,'the update remains unread for the app icon');
+select pg_temp.expect(public.own_app_badge_unread()=:'chat_unread'::bigint+2,'drawer bulk read preserves the icon badge');
+select pg_temp.expect((public.player_notification_api('list')->>'unread')::int=2,'existing clients retain their notification state');
+select pg_temp.login(52);
+select pg_temp.expect((public.player_notification_api('list_drawer')->>'unread')::int=1,'drawer read cannot clear another account');
+select pg_temp.login(51);
+
 select pg_temp.reject($q$select public.player_notification_api('read',array['70000000-0000-0000-0000-000000000001','70000000-0000-0000-0000-000000000003']::uuid[])$q$,'unavailable');
 select pg_temp.expect((public.player_notification_api('list')->>'unread')::int=2,'a mixed-account read fails atomically');
-select public.player_notification_api('read',array['70000000-0000-0000-0000-000000000001']::uuid[]);
+select public.player_notification_api('read_drawer_items',array['70000000-0000-0000-0000-000000000001']::uuid[]);
 select pg_temp.expect(public.own_app_badge_unread()=:'chat_unread'::bigint+1,'reading one notification removes exactly one from the badge');
 select public.player_notification_api('read',array['70000000-0000-0000-0000-000000000001']::uuid[]);
 select pg_temp.expect(public.own_app_badge_unread()=:'chat_unread'::bigint+1,'reading again is idempotent');
@@ -28,6 +39,9 @@ insert into public.push_outbox(email,type,title,created_at) values('group-51@tes
 set local role authenticated;
 select public.player_notification_api('read',null,(:'notice_snapshot'::jsonb->>'through')::timestamptz);
 select pg_temp.expect((public.player_notification_api('list')->>'unread')::int=1,'mark-all read retains notifications arriving after its snapshot');
+select public.player_notification_api('read_drawer',null,(:'drawer_before'::jsonb->>'through')::timestamptz);
+select pg_temp.expect((public.player_notification_api('list_drawer')->>'unread')::int=1,'a later update remains unread in the drawer');
+
 select pg_temp.login(52);
 select pg_temp.expect((public.player_notification_api('list')->>'unread')::int=1,'reading one account cannot clear another account');
 reset role;

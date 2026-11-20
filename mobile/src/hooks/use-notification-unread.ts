@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import * as Notifications from 'expo-notifications';
-import { fetchNotificationSnapshot, subscribeNotificationReads } from '@/lib/notification-read-state';
+import { fetchNotificationSnapshot, subscribeDrawerNotificationReads } from '@/lib/notification-read-state';
 
 /** Bell counts represent unread updates, independent of outstanding account actions. */
 export function useNotificationUnread(owner: string | null) {
@@ -19,7 +19,7 @@ export function useNotificationUnread(owner: string | null) {
       } catch { /* Keep this account's last known unread count until the next refresh. */ }
     };
     void refresh();
-    const stopReads = subscribeNotificationReads(() => { void refresh(); });
+    const stopReads = subscribeDrawerNotificationReads(() => { void refresh(); });
     const received = Notifications.addNotificationReceivedListener(() => { void refresh(); });
     const app = AppState.addEventListener('change', value => { if (value === 'active') void refresh(); else version.current++; });
     return () => { alive = false; version.current++; stopReads(); received.remove(); app.remove(); };
