@@ -31,7 +31,9 @@ const fixture = `
         range(first) { offset = first; return query; }, abortSignal() { return query; },
         then(resolve) {
           const tables = {
-            admin_sidebar_permissions: [{ email: actor.email, allowed_tabs: ['email-broadcast'], role: 'custom' }],
+            admin_sidebar_permissions: [{ email: actor.email, allowed_tabs: window.emailFinance ? ['email-broadcast','finance'] : ['email-broadcast'],
+              role: window.emailPlatform ? 'super_admin' : 'custom',
+              module_permissions: window.emailFinance ? { finance:{ allowedEvents:[61] } } : {} }],
             calendar: [{ id: 61, event_name: 'Synthetic coastal open', start_date: '2030-01-15' }, { id: 62, event_name: 'Synthetic inland open' }],
             event_registrations: [
               { id: 1, event_id: 61, email: 'paid@example.test', payment_status: 'paid', partner_name: 'Fixture partner' },
@@ -41,7 +43,12 @@ const fixture = `
             ],
             tournament_participants: [{ id: 7, event_id: 61, email: 'PAID@example.test' }, { id: 8, event_id: 61, email: 'provider@example.test' }],
           };
-          const rows = (tables[table] || []).filter(row => !ids || ids.includes(String(row.event_id ?? row.id)));
+          if (table === 'tournament_participants' && window.emailProviderReadFails) {
+            resolve({ data:null, error:new Error('Fictional roster read failed') });
+            return;
+          }
+          const rows = (tables[table] || []).filter(row => (!ids || ids.includes(String(row.event_id ?? row.id)))
+            && !(table === 'event_registrations' && window.emailRemovePending && row.email === 'pending@example.test'));
           resolve(result(rows.slice(offset)));
         },
       };
@@ -62,6 +69,8 @@ const fixture = `
     async rpc(name, args = {}) {
       window.calls.push({ name, args });
       if (name === 'account_is_active') return result(window.active !== false);
+      if (name === 'is_super_admin') return result(window.emailPlatform === true);
+      if (name === 'can_manage_event') return result(String(args.p_event_id) === window.emailManagedEvent);
       if (name === 'admin_push_broadcast_events') return result([{ id: 61, event_name: 'Synthetic event', start_date: null }]);
       if (name === 'admin_push_broadcast_players') return result([player]);
       if (name === 'preview_push_broadcast') {
@@ -81,7 +90,7 @@ const fixture = `
     },
   };
   createRoot(document.getElementById('root')).render(window.useEmail
-    ? <EmailBroadcastWorkspace client={client} session={{ user: actor }} scopeId="all" permissions={{ role: 'custom', allowed_tabs: ['email-broadcast'],
+    ? <EmailBroadcastWorkspace client={client} session={{ user: actor }} scopeId="all" permissions={{ role: window.emailPlatform ? 'super_admin' : 'custom', allowed_tabs: ['email-broadcast'],
         orgs: window.emailTenant ? [{ id: 'own-only', member_role: 'admin' }] : [] }} />
     : <PushBroadcastWorkspace client={client} session={{ user: actor }} scopeId="all" />);
 `;
@@ -210,7 +219,7 @@ test('Email audience controls select, filter, remove, restore and reset reviewed
   const count = value => page.waitForFunction(total => document.querySelector('.email-broadcast-count')?.textContent === total, {}, String(value));
   try {
     await page.setContent('<div id="root"></div>');
-    await page.evaluate(() => { window.useEmail = true; });
+    await page.evaluate(() => { window.useEmail = true; window.emailManagedEvent = '61'; });
     await page.addScriptTag({ path: bundle });
     await page.waitForSelector('.email-broadcast-events input');
     await enter(page, 'input[placeholder="Event name…"]', 'coastal');
@@ -239,6 +248,106 @@ test('Email audience controls select, filter, remove, restore and reset reviewed
     assert.equal(await page.$$eval('.email-broadcast-events input', inputs => inputs.some(input => input.checked)), false);
     assert.equal(await page.evaluate(() => window.emailCalls.length), 0);
   } finally { await page.close(); }
+});
+
+async function openBroadcast(t, options = {}) {
+  const page = await browser.newPage();
+  t.after(() => page.close());
+  page.setDefaultTimeout(7000);
+  await page.setRequestInterception(true);
+  page.on('request', request => /^https?:/.test(request.url()) ? request.abort() : request.continue());
+  await page.setContent('<div id="root"></div>');
+  await page.evaluate(flags => Object.assign(window, { useEmail: true, emailReady: true, ...flags }), options);
+  await page.addScriptTag({ path: bundle });
+  await page.waitForSelector('.email-broadcast-events input');
+  return page;
+}
+const audienceCount = (page, count) => page.waitForFunction(count => document.querySelector('.email-broadcast-count')?.textContent === String(count), {}, count);
+const rowReads = page => page.evaluate(() => window.emailReads.filter(table => ['event_registrations','tournament_participants'].includes(table)));
+const deliveries = page => page.evaluate(() => window.emailCalls.filter(call => call.template === 'broadcast'));
+async function enterMessage(page) {
+  await enter(page, 'input[placeholder="Your announcement…"]', 'Fictional campaign');
+  await page.$eval('[aria-label="Broadcast message"]', editor => {
+    editor.innerHTML = '<p>Fictional campaign content</p>';
+    editor.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  });
+}
+
+test('a standalone broadcast grant cannot substitute a partial event audience for manual recipients', async t => {
+  const page = await openBroadcast(t);
+  await enterMessage(page);
+  await page.evaluate(() => [...document.querySelectorAll('label')].find(label => label.textContent.trim() === 'Include a manual email list').querySelector('input').click());
+  await enter(page, 'textarea[rows="3"]', 'manual@example.test');
+  await page.click('.email-broadcast-events input');
+  await audienceCount(page,'Unavailable');
+  assert.deepEqual(await rowReads(page),[]);
+  assert.equal(await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent === 'Review broadcast').disabled),true);
+  await enter(page, 'textarea[rows="2"]', 'test-reader@example.test');
+  await click(page,'Review test');
+  await click(page,'Send test email');
+  await audienceCount(page,'Unavailable');
+  await click(page,'Clear selected events');
+  await audienceCount(page,1);
+  await click(page,'Review broadcast');
+  await click(page,'Send broadcast');
+  await page.waitForFunction(() => window.emailCalls.filter(call => call.template === 'broadcast').length === 2);
+  assert.deepEqual((await deliveries(page)).map(call => call.bcc),[['test-reader@example.test'],['manual@example.test']]);
+  assert.deepEqual(await rowReads(page),[]);
+});
+
+test('a Finance event grant permits only registration-filtered event audiences', async t => {
+  const page = await openBroadcast(t, { emailFinance: true });
+  await page.click('.email-broadcast-events input');
+  await audienceCount(page,'Unavailable');
+  assert.deepEqual(await rowReads(page),[]);
+  await page.select('.email-broadcast-filters label:first-child select','paid');
+  await audienceCount(page,1);
+  assert.ok((await rowReads(page)).includes('event_registrations'));
+  assert.equal((await rowReads(page)).includes('tournament_participants'),false);
+  await page.evaluate(() => { window.emailReads = []; });
+  await page.click('.email-broadcast-events label:nth-child(2) input');
+  await audienceCount(page,'Unavailable');
+  assert.deepEqual(await rowReads(page),[]);
+});
+
+test('platform confirmation stops when the exact event recipients change after review', async t => {
+  const page = await openBroadcast(t, { emailPlatform: true });
+  await enterMessage(page);
+  await page.click('.email-broadcast-events input');
+  await audienceCount(page,3);
+  await click(page,'Review broadcast');
+  await page.waitForSelector('section[aria-label="Broadcast review"]');
+  await page.evaluate(() => { window.emailRemovePending = true; });
+  await click(page,'Send broadcast');
+  await page.waitForFunction(() => document.body.textContent.includes('The event audience changed.'));
+  assert.deepEqual(await deliveries(page),[]);
+  await audienceCount(page,2);
+  assert.equal(await page.$('section[aria-label="Broadcast review"]'),null);
+});
+
+test('revoked event access clears the confirmed audience before any delivery', async t => {
+  const page = await openBroadcast(t, { emailManagedEvent:'61' });
+  await enterMessage(page);
+  await page.click('.email-broadcast-events input');
+  await audienceCount(page,3);
+  await click(page,'Review recipients');
+  await click(page,'Review broadcast');
+  await page.waitForSelector('section[aria-label="Broadcast review"]');
+  await page.evaluate(() => { window.emailManagedEvent = ''; window.emailReads = []; });
+  await click(page,'Send broadcast');
+  await audienceCount(page,'Unavailable');
+  assert.equal(await page.$('.email-broadcast-recipient-list'),null);
+  assert.deepEqual(await deliveries(page),[]);
+  assert.deepEqual(await rowReads(page),[]);
+});
+
+test('a provider roster read failure discards the event recipient list as a whole', async t => {
+  const page = await openBroadcast(t, { emailPlatform:true, emailProviderReadFails:true });
+  await page.click('.email-broadcast-events input');
+  await audienceCount(page,'Unavailable');
+  assert.equal(await page.$('.email-broadcast-recipient-list'),null);
+  assert.equal(await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent === 'Review broadcast').disabled),true);
+  assert.deepEqual(await deliveries(page),[]);
 });
 
 test('an organisation with a stale broadcast tab cannot load the email audience or use a send button', async () => {

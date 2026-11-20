@@ -35,19 +35,56 @@ export async function loadBroadcastEvents({ client, userId, scopeId, signal }) {
   await verifyBroadcastAccess(client, userId, scopeId, signal);
   return readAll(() => client.from('calendar').select('id,event_name,start_date').order('start_date', { ascending: true }).order('id'), signal);
 }
+
+async function mayReadBroadcastEvent(client, rpc, args, signal) {
+  signal?.throwIfAborted();
+  let request = client.rpc(rpc, args);
+  if (signal && request.abortSignal) request = request.abortSignal(signal);
+  const result = await request;
+  signal?.throwIfAborted();
+  return !result.error && result.data === true;
+}
+
+async function requireCompleteEventAccess(client, grant, ids, registrationsOnly, signal) {
+  if (grant.role === 'super_admin' && await mayReadBroadcastEvent(client, 'is_super_admin', { user_email: grant.email }, signal)) return;
+  // Finance scopes cover registrations only. Unfiltered broadcasts also need
+  // the RankedIn roster, which authorises exact Event Manager access.
+  const financeGranted = registrationsOnly && grant.allowed_tabs?.includes('finance');
+  const financeIds = financeGranted ? grant.module_permissions?.finance?.allowedEvents : null;
+  if (financeGranted && (financeIds === undefined || (Array.isArray(financeIds) && !financeIds.length))) return;
+  const exactFinanceIds = new Set(Array.isArray(financeIds) ? financeIds.filter(Number.isSafeInteger).map(String) : []);
+  const remaining = ids.filter(id => !exactFinanceIds.has(id));
+  for (let offset = 0; offset < remaining.length; offset += 20) {
+    const available = await Promise.all(remaining.slice(offset, offset + 20).map(id =>
+      mayReadBroadcastEvent(client, 'can_manage_event', { p_event_id: id }, signal)));
+    if (available.some(allowed => !allowed)) {
+      throw new Error('At least one selected event’s full audience could not be verified. Remove that event or confirm your event access.');
+    }
+  }
+}
+
 export async function loadBroadcastAudience({ client, userId, scopeId, eventIds, payment = 'all', partner = 'all', signal }) {
-  await verifyBroadcastAccess(client, userId, scopeId, signal);
+  const grant = await verifyBroadcastAccess(client, userId, scopeId, signal);
   // Validate options before any recipient read, even when no events are selected.
   broadcastAudience([], [], payment, partner);
   const ids = [...new Set(eventIds.map(String))];
+  if (!ids.length) return [];
+  if (ids.some(id => !/^[1-9][0-9]*$/.test(id))) throw new Error('Select valid event records before reviewing.');
+  const registrationsOnly = payment !== 'all' || partner !== 'all';
+  await requireCompleteEventAccess(client, grant, ids, registrationsOnly, signal);
   const registrations = [], participants = [];
   for (let offset = 0; offset < ids.length; offset += 50) {
     const batch = ids.slice(offset, offset + 50);
     const events = await readAll(() => client.from('calendar').select('id').in('id', batch).order('id'), signal);
     if (events.length !== batch.length || batch.some(id => !events.some(event => String(event.id) === id))) throw new Error('A selected event is unavailable. Reload events before reviewing.');
-    registrations.push(...await readAll(() => client.from('event_registrations').select('id,email,payment_status,partner_name,partner_email,status').in('event_id', batch).order('id'), signal));
-    if (payment === 'all' && partner === 'all') participants.push(...await readAll(() => client.from('tournament_participants').select('id,email').in('event_id', batch).order('id'), signal));
+    const eventRegs = await readAll(() => client.from('event_registrations').select('id,event_id,email,payment_status,partner_name,partner_email,status').in('event_id', batch).order('id'), signal);
+    const provider = registrationsOnly ? [] : await readAll(() => client.from('tournament_participants').select('id,event_id,email').in('event_id', batch).order('id'), signal);
+    if ([...eventRegs, ...provider].some(row => !batch.includes(String(row.event_id)))) throw new Error('The event audience could not be verified. Reload events before reviewing.');
+    registrations.push(...eventRegs);
+    participants.push(...provider);
   }
+  const current = await verifyBroadcastAccess(client, userId, scopeId, signal);
+  await requireCompleteEventAccess(client, current, ids, registrationsOnly, signal);
   return broadcastAudience(registrations, participants, payment, partner);
 }
 export function combineBroadcastAudience(eventEmails, manualEmails, excluded = []) {

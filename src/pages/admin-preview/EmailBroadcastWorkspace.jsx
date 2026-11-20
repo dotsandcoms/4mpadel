@@ -43,6 +43,8 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
   const pool = combineBroadcastAudience(audience.emails, manual.emails);
   const activeExcluded = draft.excluded.filter(email => pool.includes(email));
   const recipients = combineBroadcastAudience(audience.emails, manual.emails, activeExcluded);
+  const eventAudienceError = draft.events.length > 0 && (audience.error || catalog.error);
+  const eventAudienceUnavailable = Boolean(eventAudienceError || (draft.events.length > 0 && audience.loading));
   useEffect(() => { if (!audience.loading && !audience.error) setDraft(old => { const excluded = old.excluded.filter(email => pool.includes(email)); return excluded.length === old.excluded.length ? old : { ...old, excluded }; }); }, [audience, manual]);
   const buildReview = async kind => {
     if (guard.current || !allowed) return;
@@ -78,11 +80,31 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
     guard.current = true;
     setSending(true); setError(''); setDeliveryStatus('');
     const batchSize = review.delivery.batchSize;
-    const signature = JSON.stringify([review.kind, review.subject, review.html, review.recipients]);
-    let attempt;
+    const signature = JSON.stringify([review.kind, review.subject, review.html, [...review.recipients].sort()]);
+    let attempt = deliveryAttempts.current.get(signature);
     try {
       const signedIn = await verifyBroadcastAccess(client, userId, scopeId, abort.signal);
       if (signedIn.email !== userEmail?.trim().toLowerCase() || !current()) throw new Error('The signed-in account changed. Reopen the review.');
+      if (review.kind === 'broadcast' && draft.events.length) {
+        let emails;
+        try {
+          emails = await loadBroadcastAudience({ client, userId, scopeId, eventIds: draft.events,
+            payment: draft.payment, partner: draft.partner, signal: abort.signal });
+        } catch (issue) {
+          if (current()) {
+            setReview(null);
+            setAudience({ emails: [], error: issue.message });
+          }
+          throw issue;
+        }
+        if (!current()) return;
+        const checkedRecipients = new Set(combineBroadcastAudience(emails, manual.emails, draft.excluded));
+        if (checkedRecipients.size !== review.recipients.length || review.recipients.some(email => !checkedRecipients.has(email))) {
+          setReview(null);
+          setAudience({ emails });
+          throw new Error('The event audience changed. Review the updated recipients before sending.');
+        }
+      }
       await emailBroadcastCapability(client, abort.signal);
       if (!current()) return;
       if (!deliveryAttempts.current.has(signature)) {
@@ -132,7 +154,18 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
       <section><h2>Manual recipients</h2><label className="email-broadcast-check"><input type="checkbox" checked={draft.manual} onChange={e => change('manual', e.target.checked)}/>Include a manual email list</label>{draft.manual && <label>Email addresses<textarea rows={3} value={draft.manualText} onChange={e => change('manualText', e.target.value)} placeholder="Comma or newline separated…"/></label>}{manual.invalid.length > 0 && <p role="alert">{manual.invalid.length} invalid address(es). Correct these before review.</p>}</section>
       <section><h2>Message</h2><label>Subject<input value={draft.subject} onChange={e => change('subject', e.target.value)} placeholder="Your announcement…"/></label><p className="fo-note">The existing broadcast template wraps this content as an “Important Announcement”. The preview below shows the message body, not the final email template.</p><div inert={sending || undefined}><EventRichTextEditor theme="preview" value={draft.html} onChange={html => change('html', html)} label="Broadcast message" minHeight={240}/></div><div className="email-broadcast-urls"><label>Link or image URL<input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…"/></label><label>Link text / image description<input value={caption} onChange={e => setCaption(e.target.value)}/></label><div className="email-broadcast-actions"><button className="ap-secondary" type="button" onClick={() => insertMedia(false)}>Add link</button><button className="ap-secondary" type="button" onClick={() => insertMedia(true)}>Add image preview</button></div></div></section>
     </div><aside className="email-broadcast-stack">
-      <section><h2>Audience summary</h2><p className="email-broadcast-count" role="status">{audience.loading ? 'Loading…' : audience.error ? 'Unavailable' : recipients.length}</p><p>Unique recipients · BCC</p><p className="fo-note">{audience.emails.length} event addresses + {manual.emails.length} manual · {activeExcluded.length} removed</p><button type="button" className="ap-secondary" onClick={() => setList(!list)}>{list ? 'Hide recipients' : 'Review recipients'}</button>{list && <ul className="email-broadcast-recipient-list">{recipients.map(email => <li key={email}><span>{email}</span><button className="ap-secondary" type="button" aria-label={`Remove ${email}`} onClick={() => change('excluded', [...draft.excluded, email])}>Remove</button></li>)}</ul>}{activeExcluded.length > 0 && <button type="button" className="ap-secondary" onClick={() => change('excluded', [])}>Restore removed recipients</button>}<p className="fo-note">No recipient export is available.</p><button type="button" className="ap-primary" disabled={checking || audience.loading || Boolean(audience.error || catalog.error)} onClick={() => buildReview('broadcast')}>{checking ? 'Checking access…' : 'Review broadcast'}</button></section>
+      <section>
+        <h2>Audience summary</h2>
+        <p className="email-broadcast-count" role="status">{eventAudienceUnavailable ? audience.loading ? 'Loading…' : 'Unavailable' : recipients.length}</p>
+        <p>Unique recipients · BCC</p>
+        <p className="fo-note">{audience.emails.length} event addresses + {manual.emails.length} manual · {activeExcluded.length} removed</p>
+        <button type="button" className="ap-secondary" disabled={eventAudienceUnavailable} onClick={() => setList(!list)}>{list ? 'Hide recipients' : 'Review recipients'}</button>
+        {list && !eventAudienceUnavailable && <ul className="email-broadcast-recipient-list">{recipients.map(email => <li key={email}><span>{email}</span><button className="ap-secondary" type="button" aria-label={`Remove ${email}`} onClick={() => change('excluded', [...draft.excluded, email])}>Remove</button></li>)}</ul>}
+        {activeExcluded.length > 0 && <button type="button" className="ap-secondary" onClick={() => change('excluded', [])}>Restore removed recipients</button>}
+        {eventAudienceError && <button type="button" className="ap-secondary" onClick={() => change('events', [])}>Clear selected events</button>}
+        <p className="fo-note">No recipient export is available.</p>
+        <button type="button" className="ap-primary" disabled={checking || eventAudienceUnavailable} onClick={() => buildReview('broadcast')}>{checking ? 'Checking access…' : 'Review broadcast'}</button>
+      </section>
       <section><h2>Test review</h2><label>Test email addresses<textarea rows={2} value={draft.tests} onChange={e => change('tests', e.target.value)} placeholder="Comma or newline separated…"/></label><p className="fo-note">Test subjects end with “(TEST)”.</p><button type="button" className="ap-secondary" disabled={checking} onClick={() => buildReview('test')}>Review test</button></section>
       <section><h2>Draft controls</h2>{resetting ? <><p>Discard this local draft, audience and exclusions?</p><div className="email-broadcast-actions"><button type="button" className="ap-danger-button" onClick={() => { pending.current?.abort(); setDraft(empty); setReview(null); setError(''); setResetting(false); setUrl(''); setCaption(''); }}>Discard draft</button><button type="button" className="ap-secondary" onClick={() => setResetting(false)}>Keep draft</button></div></> : <button type="button" className="ap-secondary" onClick={() => setResetting(true)}>Reset draft</button>}</section>
     </aside></fieldset>
