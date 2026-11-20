@@ -1,5 +1,5 @@
 import { financeDate } from './financeOverviewData.js';
-import { gatewayLinkLabel } from './gatewayLinks.js';
+import { gatewayLinkLabel, gatewayReceiptTypeLabels } from './gatewayLinks.js';
 import { gatewayComparisonLabel } from './gatewayComparison.js';
 
 export async function gatewayPageExcel(data, filters) {
@@ -25,6 +25,7 @@ export async function gatewayPageExcel(data, filters) {
     ['Generated at (UTC)', new Date().toISOString()],
     ['Date boundaries', 'Africa/Johannesburg, inclusive selected days'],
   ]);
+  if (Object.hasOwn(gatewayReceiptTypeLabels, filters.receiptType)) context.addRow(['Stored 4M receipt type', gatewayReceiptTypeLabels[filters.receiptType]]);
   const sheet = workbook.addWorksheet('Gateway page');
   sheet.columns = [18, 44, 22, 20, 24, 16, 24, 32, 44, 44, 65].map(width => ({ width }));
   sheet.addRow(['Date (SA)', 'Reference', 'Status', 'Channel', 'Amount', 'Currency', 'Amount (minor units)', 'Player', 'Event', '4M reference match', 'Record comparison — not settlement verification']);

@@ -5,7 +5,7 @@ import { southAfricanToday } from '../../utils/licenseReporting';
 import { gatewayPageExcel } from './gatewayExport.js';
 import { financeDate } from './financeOverviewData.js';
 import { loadGatewayPage } from './paystackGatewayData.js';
-import { loadGatewayLinks, gatewayLinkLabel } from './gatewayLinks.js';
+import { loadGatewayLinks, loadGatewayReceiptTypes, gatewayLinkLabel, gatewayReceiptTypeLabels } from './gatewayLinks.js';
 import { canConfirmGatewayCheckout, canReadPlatformPaystack, confirmGatewayCheckout, loadPlatformGatewayTransactions } from './platformPaystack.js';
 import { financeStatusTone } from './financePresentation.js';
 import { canReviewGatewayBackfill } from './paystackBackfill.js';
@@ -19,7 +19,7 @@ import './FinanceOverview.css';
 const STAGING_URL = 'https://cefmzkwabdqqoagxhekc.supabase.co';
 const PER_PAGE = 10;
 const ago = days => new Date(Date.now() - days * 86400000).toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' });
-const baseFilters = staging => ({ from: staging ? '' : ago(30), to: '', status: '', query: '' });
+const baseFilters = staging => ({ from: staging ? '' : ago(30), to: '', status: '', query: '', receiptType:'' });
 
 export default function PaystackGateway({ client, session, permissions, scopeId, refreshRevision = 0 }) {
   const allowed = canReadPlatformPaystack(session, permissions, scopeId);
@@ -30,6 +30,7 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
   const [reload, setReload] = useState(0);
   const [records, setRecords] = useState(null);
   const [linked, setLinked] = useState(null);
+  const [classified, setClassified] = useState(null);
   const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState('');
   const [review, setReview] = useState(null);
@@ -44,7 +45,7 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
   const actor = useMemo(() => ({ user: { id: userId } }), [userId]);
   const permissionsKey = JSON.stringify(permissions ?? null);
   const grant = useMemo(() => JSON.parse(permissionsKey), [permissionsKey]);
-  const { from, to, status, query } = filters;
+  const { from, to, status, query, receiptType } = filters;
   const stageStatus = staging ? status : '';
   const stagePage = staging ? page : 1;
   const filterKey = JSON.stringify([userId, scopeId, permissionsKey, mode, from, to, stageStatus, stagePage, reload, refreshRevision]);
@@ -69,6 +70,22 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
     return response.data.filter(row => (!status || (status === 'pending' ? row.status !== 'success' : row.status === status))
       && (!filter || [row.reference, row.payerEmail].some(value => String(value).toLowerCase().includes(filter))));
   }, [response, query, staging, status]);
+  const typeKey = JSON.stringify([filterKey, status, query]);
+  const typeEnabled = !staging && Boolean(receiptType);
+  const typeResult = typeEnabled && classified?.key === typeKey ? classified : null;
+  useEffect(() => {
+    if (!allowed || !typeEnabled || !filteredRows) return;
+    const controller = new AbortController();
+    loadGatewayReceiptTypes(client, actor, grant, scopeId, filteredRows, controller.signal)
+      .then(data => { if (!controller.signal.aborted) setClassified({ key:typeKey, data }); })
+      .catch(error => { if (!controller.signal.aborted) setClassified({ key:typeKey, error:error.message }); });
+    return () => controller.abort();
+  }, [allowed, typeEnabled, filteredRows, client, actor, grant, scopeId, typeKey]);
+  const matchingRows = useMemo(() => {
+    if (!typeEnabled) return filteredRows;
+    if (typeResult?.data) return filteredRows?.filter(row => typeResult.data.get(row.reference) === receiptType);
+    return null;
+  }, [typeEnabled, typeResult, filteredRows, receiptType]);
   const screen = useMemo(() => {
     if (!response?.data) return null;
     const filter = query.trim().toLowerCase();
@@ -76,14 +93,15 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
       ...response.data,
       transactions: response.data.transactions.filter(row => !filter || row.reference.toLowerCase().includes(filter)),
     };
-    const rows = filteredRows;
+    const rows = matchingRows;
+    if (!rows) return null;
     const pageCount = Math.ceil(rows.length / PER_PAGE);
     return { environment: mode, transactions: rows.slice((page - 1) * PER_PAGE, page * PER_PAGE), pagination: {
       page, perPage: PER_PAGE, total: rows.length, pageCount, hasMore: page < pageCount,
     } };
-  }, [response, query, staging, filteredRows, mode, page]);
-  const resultKey = JSON.stringify([filterKey, status, query]);
-  const linkKey = JSON.stringify([filterKey, page, query, screen?.transactions.map(row => row.reference)]);
+  }, [response, query, staging, matchingRows, mode, page]);
+  const resultKey = JSON.stringify([typeKey, receiptType]);
+  const linkKey = JSON.stringify([resultKey, page, screen?.transactions.map(row => row.reference)]);
   useEffect(() => {
     if (!allowed || !screen) return;
     const controller = new AbortController();
@@ -112,7 +130,7 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
   const backfillBusy = Boolean(recordingKey && recordingKey === backfillReview?.key);
   const trackRecording = busy => setRecordingKey(previous => busy ? backfillReview.key : previous === backfillReview.key ? null : previous);
   const canLookup = !staging && mode === 'live' && canSelectGatewayBackfill(actor, grant, scopeId)
-    && filteredRows?.some(row => row.status === 'success');
+    && (!receiptType || receiptType === 'other') && matchingRows?.some(row => row.status === 'success');
   const openBackfill = rows => { setReview(null); setBackfill({ key:linkKey, rows }); };
   async function reviewAllMissing() {
     const controller = bulkRequest.current;
@@ -121,7 +139,7 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
     setNotice('');
     setSelection({ key:resultKey, busy:true });
     try {
-      const rows = await selectMissingGatewayReceipts(client, actor, grant, scopeId, filteredRows, controller.signal);
+      const rows = await selectMissingGatewayReceipts(client, actor, grant, scopeId, matchingRows, controller.signal);
       if (controller.signal.aborted) return;
       if (rows.length) {
         setBackfill({ key:resultKey, rows, bulk:true });
@@ -131,8 +149,8 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
       if (!controller.signal.aborted) setSelection({ key:resultKey, error:failure.message });
     }
   }
-  const loading = !response || (!response.error && !result);
-  const error = response?.error || result?.error;
+  const error = response?.error || typeResult?.error || result?.error;
+  const loading = !error && (!response || !result);
   const update = (name, value) => { setFilters(current => ({ ...current, [name]: value })); setPage(1); setReview(null); setNotice(''); };
   const setRange = bounds => { setFilters(current => ({ ...current, ...bounds })); setPage(1); setNotice(''); };
   async function exportPage() {
@@ -191,6 +209,9 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
       <DatePicker label="Start date" value={from} onChange={value => update('from', value)} />
       <DatePicker label="End date" value={to} onChange={value => update('to', value)} />
       <label className="fo-status-filter">Gateway status<SearchableDropdown value={status} onChange={event => update('status', event.target.value)}><option value="">All statuses</option><option value="success">Success</option><option value="failed">Failed</option><option value="abandoned">Abandoned</option>{!staging && <option value="pending">Unsuccessful or pending</option>}</SearchableDropdown></label>
+      {!staging && <label className="fo-status-filter">Receipt type<SearchableDropdown aria-label="Receipt type" value={receiptType}
+        onChange={event => update('receiptType', event.target.value)}><option value="">All receipt types</option>
+        {Object.entries(gatewayReceiptTypeLabels).map(([value,label]) => <option value={value} key={value}>{label}</option>)}</SearchableDropdown></label>}
       <button className="ap-secondary" onClick={() => { setFilters(baseFilters(staging)); setPage(1); setReview(null); }}>Reset filters</button>
     </div>
     <div className="fo-ledger-filters"><label className="fo-search"><input aria-label="Search gateway transactions" value={query} onChange={event => update('query', event.target.value)} placeholder={staging ? 'Search references on this page…' : 'Search reference or payer…'} /></label>
@@ -201,6 +222,7 @@ export default function PaystackGateway({ client, session, permissions, scopeId,
     </div>
     </fieldset>
     <p className="fo-note">Date filters use South African time. {staging ? 'Test gateway access is read-only.' : 'The gateway returns a bounded history. Narrow the date range to review more transactions.'}</p>
+    {receiptType && <p className="fo-note">Licence types come from the matching payment stored in 4M.</p>}
     {backfillReview && <GatewayBackfillReview key={backfillReview.key} client={client} session={actor} permissions={grant} scopeId={scopeId}
       rows={backfillReview.rows} bulk={backfillReview.bulk} onBusyChange={trackRecording} onClose={() => setBackfill(null)}
       onRecorded={() => { setBackfill(null); setReload(value => value + 1); }}/>}

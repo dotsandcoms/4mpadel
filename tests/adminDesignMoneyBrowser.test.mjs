@@ -2,6 +2,7 @@ import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 import puppeteer from 'puppeteer';
+import ExcelJS from 'exceljs';
 
 const platform = { role:'super_admin' };
 const owner = { role:'org_owner', orgs:[{ id:'our-org', name:'Our organisation', member_role:'owner' }] };
@@ -23,6 +24,11 @@ let banking = { saved:true, bank_name:'Fixture Bank', last_four:'0155', version:
 const platform = fb.permissions.role === 'super_admin';
 const ledgerScopeTest = fb.mode.startsWith('finance-ledger-');
 const gatewayBulk = fb.mode === 'gateway-bulk';
+const gatewayTypes = fb.mode === 'gateway-types';
+const typedRefs = ['full', 'temporary', ...Array.from({length:9},(_,index)=>'other-'+index),'full-alias','ambiguous','missing'];
+const typeRef = label => 'type-fixture-'+label;
+const typedGatewayRows = typedRefs.map(label=>({id:typeRef(label),user:player.email,amount:'R 650.00',
+    status:label==='full-alias'?'Failed':'Success',rawDate:pay.created_at,is_test:false}));
 const retrievalFailures = new Set(gatewayBulk ? ['bulk-12'] : []);
 const otherPlayer = {id:6,name:'Outside ledger player',email:'outside@example.invalid'};
 const failed = {...pay,id:'failed-own',reference:'assigned-entry-failed',status:'failed',amount:20};
@@ -35,20 +41,33 @@ if (ledgerScopeTest) {
     tables.payments.push(failed,otherPayment,{...otherPayment,id:'other-pay-same-player',player_id:5,reference:'outside-for-same-player'});
 }
 if (gatewayBulk) tables.payments.push({...pay,id:'linked-bulk',reference:'bulk-linked'});
+if (gatewayTypes) tables.payments.push(
+    {...pay,id:'full-kind',reference:typeRef('full'),payment_type:'full_license',amount:650},
+    {...pay,id:'temp-kind',reference:typeRef('temporary'),payment_type:'temporary_license',amount:650},
+    {...pay,id:'full-alias-kind',reference:'600899',client_reference:typeRef('full-alias'),payment_type:'membership',amount:650},
+    {...pay,id:'full-ambiguous-kind',reference:typeRef('ambiguous'),payment_type:'full_license',amount:650},
+    {...pay,id:'temp-ambiguous-kind',reference:'600900',client_reference:typeRef('ambiguous'),payment_type:'temp_license',amount:650},
+    {...pay,id:'known-other-kind',reference:typeRef('other-0'),payment_type:'event_entry_fee',amount:650},
+    {...pay,id:'wrong-environment-kind',reference:typeRef('other-1'),payment_type:'full_license',amount:650,is_test:true},
+);
 function select(table) {
     const predicates = [];
-    let remove=false, update, from=0, to=Infinity;
+    let remove=false, update, from=0, to=Infinity, fields='';
     const filters = [];
     const rows=()=> (table==='admin_sidebar_permissions' && ledgerScopeTest
         ? [{...fb.liveGrant,email:actor.email}] : tables[table] || []).filter(row => predicates.every(fn=>fn(row)));
     const execute=(mode='all')=>{
         const result=rows();
+        if (gatewayTypes && table==='payments' && !fields.includes('players!') && fields.includes('client_reference:metadata->>client_reference')) {
+            counters.push(['type-projection',fields,filters]);
+            if (fb.failClassification) return {error:new Error('Fixture type lookup failed')};
+        }
         if(update && table==='calendar') counters.push(['update',table,result.map(r=>r.id),update]);
         if(remove) tables[table]=tables[table].filter(row=>!result.includes(row));
         if(update) for(const row of result) Object.assign(row,update);
         return {data: structuredClone(mode==='single'?result[0]||null:result.slice(from,to+1))};
     };
-    return { select(){return this}, ilike(key,value){predicates.push(row=>String(row[key]||'').toLowerCase()===value.toLowerCase());return this}, eq(key,value){filters.push(['eq',key,value]);predicates.push(row=>(row[key] !== null && typeof row[key] === 'object' ? JSON.stringify(row[key]) : String(row[key]))===String(value));return this}, neq(key,value){predicates.push(row=>row[key]!==value);return this},
+    return { select(value){fields=value;return this}, ilike(key,value){predicates.push(row=>String(row[key]||'').toLowerCase()===value.toLowerCase());return this}, eq(key,value){filters.push(['eq',key,value]);predicates.push(row=>(row[key] !== null && typeof row[key] === 'object' ? JSON.stringify(row[key]) : String(row[key]))===String(value));return this}, neq(key,value){predicates.push(row=>row[key]!==value);return this},
         in(key,ids){filters.push(['in',key,ids]);predicates.push(row=>ids.includes(key === 'metadata->>client_reference' ? row.client_reference : row[key]));return this}, is(key,val){predicates.push(row=>row[key]===val);return this},
         order(){return this}, limit(){return this}, abortSignal(){return this},
         update(value){update=value;return this}, delete(){remove=true;return this},
@@ -97,6 +116,7 @@ export const supabase = {
         if(name.startsWith('paystack-transactions?'))return {data:{mode:'live',transactions:[
             {id:pay.reference,user:player.email,amount:'R 600.00',status:'Success',rawDate:pay.created_at,is_test:false},
             {id:'unmatched-reference',user:player.email,amount:'R 45.00',status:'Success',rawDate:pay.created_at,is_test:false},
+            ...(gatewayTypes ? typedGatewayRows : []),
             ...(gatewayBulk ? [...Array.from({length:12}, (_,index)=>({id:'bulk-'+String(index+1).padStart(2,'0'),user:player.email,
                 amount:'R 45.00',status:'Success',rawDate:pay.created_at,is_test:false})),
                 {id:'bulk-linked',user:player.email,amount:'R 600.00',status:'Success',rawDate:pay.created_at,is_test:false},
@@ -146,7 +166,7 @@ before(async()=>{
         plugins:[{name:'synthetic-finance',setup(builder){
             builder.onResolve({filter:/\/supabaseClient(?:\.js)?$/},()=>({path:'data',namespace:'fixture'}));
             builder.onResolve({filter:/^file-saver$/},()=>({path:'export',namespace:'fixture'}));
-            builder.onLoad({filter:/.*/,namespace:'fixture'},args=>({contents:args.path==='data'?dataFixture:'export const saveAs=(_blob,name)=>window.fixture.calls.push(["download",name]);'}));
+            builder.onLoad({filter:/.*/,namespace:'fixture'},args=>({contents:args.path==='data'?dataFixture:'export const saveAs=(blob,name)=>{window.fixture.exportBlob=blob;window.fixture.calls.push(["download",name]);};'}));
         }}],
     });
     bundle = built.outputFiles[0].text;
@@ -461,5 +481,76 @@ test('organisation owners receive no scoped or platform User Ledger from a direc
         await includesText(page,'Our fixture event');
         assert.equal(await page.evaluate(()=>document.body.innerText.includes('User ledger')),false);
         assert.equal((await calls(page)).some(([type,table])=>type==='filtered-read'&&['payments','players'].includes(table)),false);
+    });
+});
+
+async function gatewayDropdown(page, label, option) {
+    const selector = 'button[aria-label="'+label+'"]';
+    await page.waitForSelector(selector);
+    await page.$eval(selector,node=>node.click());
+    await page.waitForFunction(option=>[...document.querySelectorAll('[role="option"] span:first-child')].some(node=>node.textContent===option),{},option);
+    await page.evaluate(option=>[...document.querySelectorAll('[role="option"] span:first-child')].find(node=>node.textContent===option).click(),option);
+}
+
+test('gateway receipt type filters exact stored licence types across pages and keeps unknown or ambiguous receipts unclassified',async()=>{
+    await withPage('gateway-types',platform,'all',async page=>{
+        const checkTable = async () => page.$eval('[aria-label="Paystack gateway transactions"] tbody',tbody=>tbody.innerText);
+        await click(page,'Paystack gateway');
+        await input(page,'input[aria-label="Search gateway transactions"]','type-fixture-');
+        await includesText(page,'14 matching live transactions');
+        assert.equal((await checkTable()).includes('type-fixture-full-alias'),false);
+        assert.equal((await calls(page)).some(([name])=>name==='type-projection'),false);
+        await gatewayDropdown(page,'Receipt type','Full licence');
+        await includesText(page,'2 matching live transactions');
+        assert.match(await checkTable(),/type-fixture-full-alias/);
+        assert.doesNotMatch(await checkTable(),/type-fixture-temporary|type-fixture-ambiguous|type-fixture-missing/);
+        await click(page,'Export page to Excel');
+        await includesText(page,'Excel prepared with 2 transactions from this page.');
+        const bytes = await page.evaluate(async()=>[...new Uint8Array(await window.fixture.exportBlob.arrayBuffer())]);
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(Buffer.from(bytes));
+        assert.equal(workbook.getWorksheet('Gateway page').rowCount,3);
+        assert.ok(workbook.getWorksheet('Export details').getRows(1,20).some(row=>
+            row.getCell(1).value==='Stored 4M receipt type'&&row.getCell(2).value==='Full licence'));
+        await gatewayDropdown(page,'Gateway status','Failed');
+        await includesText(page,'1 matching live transactions');
+        assert.match(await checkTable(),/type-fixture-full-alias/);
+        assert.doesNotMatch(await checkTable(),/type-fixture-full\s/);
+        await gatewayDropdown(page,'Gateway status','All statuses');
+        await gatewayDropdown(page,'Receipt type','Temporary licence');
+        await includesText(page,'1 matching live transactions');
+        assert.match(await checkTable(),/type-fixture-temporary/);
+        assert.doesNotMatch(await checkTable(),/type-fixture-full/);
+        await gatewayDropdown(page,'Receipt type','Unclassified / other');
+        await includesText(page,'11 matching live transactions');
+        await click(page,'Next');
+        await includesText(page,'type-fixture-missing');
+        await click(page,'Previous');
+        await includesText(page,'type-fixture-ambiguous');
+        assert.match(await checkTable(),/Multiple 4M records/);
+        assert.doesNotMatch(await checkTable(),/type-fixture-full|type-fixture-temporary/);
+        const selections = (await calls(page)).filter(([name])=>name==='type-projection');
+        assert.ok(selections.length);
+        for (const [,fields,filters] of selections) {
+            assert.equal(fields,'id,reference,is_test,payment_method,payment_type,client_reference:metadata->>client_reference');
+            assert.ok(filters.some(([operator,key,ids])=>operator==='in'&&['reference','metadata->>client_reference'].includes(key)
+                &&ids.every(id=>id.startsWith('type-fixture-'))));
+        }
+        assert.equal((await calls(page)).some(([name])=>name==='admin-paystack-backfill'),false);
+    });
+});
+
+test('gateway errors do not silently assign stored receipt types',async()=>{
+    await withPage('gateway-types',platform,'all',async page=>{
+        await click(page,'Paystack gateway');
+        await input(page,'input[aria-label="Search gateway transactions"]','type-fixture-');
+        await includesText(page,'14 matching live transactions');
+        await page.evaluate(()=>{window.fixture.failClassification=true});
+        await gatewayDropdown(page,'Receipt type','Unclassified / other');
+        await includesText(page,'Stored receipt types could not be verified.');
+        assert.equal(await page.$('[aria-label="Paystack gateway transactions"]'),null);
+        await page.evaluate(()=>{window.fixture.failClassification=false});
+        await click(page,'Try again');
+        await includesText(page,'11 matching live transactions');
     });
 });
