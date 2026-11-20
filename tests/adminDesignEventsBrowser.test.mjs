@@ -119,8 +119,9 @@ before(async () => {
                             match_id:args.p_match_id,action:args.p_action,status:args.p_action==='complete'?'completed':'in_progress',featured:true}};
                     }
                     if (name==='native_record_reviewed_plate_result') {
+                        const status = { live:'in_progress', played:'completed', walkover:'walkover', withdrawal:'walkover', retirement:'retired' }[args.p_result.kind];
                         return {data:{organisation_id:args.p_organisation_id,event_id:args.p_event_id,draw_id:args.p_draw_id,
-                            match_id:args.p_match_id,status:'completed',winner_entry_id:args.p_result.winner,updated_at:'match-v2'}};
+                            match_id:args.p_match_id,status,winner_entry_id:args.p_result.winner,updated_at:'match-v2'}};
                     }
                     if (name==='native_manage_organisation_draw_plate') {
                         const scope={organisation_id:args.p_organisation_id,event_id:args.p_event_id,
@@ -1120,6 +1121,34 @@ test('host scores Silver matches and corrects completed Bronze results through t
         await bronze.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent.includes('Plate result corrected'));
         assert.equal((await scores(bronze))[0][1].p_result.reason, 'Checked with officials');
     } finally { await bronze.close(); }
+
+    const live = await open('host-plate-score-silver');
+    try {
+        await clickText(live, 'Manage native draw');
+        await selectFirstMatch(live);
+        await clickText(live, 'Enter result');
+        await clickText(live, 'Add set');
+        assert.equal((await live.$$('section[aria-label="Enter plate result"] fieldset')).length, 3);
+        await clickText(live, 'Cancel score entry');
+        assert.equal(await live.$('section[aria-label="Enter plate result"]'), null);
+        await clickText(live, 'Enter result');
+        const games = await live.$$('section[aria-label="Enter plate result"] fieldset:first-of-type > .ap-plate-score-pair input');
+        await games[0].type('7');
+        await games[1].type('6');
+        await live.click('section[aria-label="Enter plate result"] fieldset:first-of-type summary');
+        const tiebreak = await live.$$('section[aria-label="Enter plate result"] fieldset:first-of-type details input');
+        await tiebreak[0].type('7');
+        await tiebreak[1].type('5');
+        await tiebreak[2].type('33');
+        await clickText(live, 'Review live score');
+        assert.match(await live.$eval('dialog', node => node.textContent), /7–6 \(7–5\)/);
+        assert.deepEqual(await scores(live), []);
+        await clickText(live, 'Confirm draw action');
+        await live.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent.includes('Live score saved'));
+        assert.deepEqual((await scores(live))[0][1].p_result, {
+            kind:'live', winner:null, summary:[1,0], sets:[{ games:[7,6], tiebreak:[7,5], duration:33, match_tiebreak:false }],
+        });
+    } finally { await live.close(); }
 
     const revoked = await open('host-plate-score-silver');
     try {
