@@ -18,6 +18,7 @@ BEGIN;
 \ir ../../supabase/migrations/20261120075155_scope_host_fixed_group_qualification.sql
 \ir ../../supabase/migrations/20261120080334_scope_host_americano_results.sql
 \ir ../../supabase/migrations/20261120081256_scope_host_ranked_group_qualification.sql
+\ir ../../supabase/migrations/20261120083443_scope_host_americano_court_schedule.sql
 \ir ../../supabase/migrations/20261120083448_scope_host_best_placed_qualification_override.sql
 CREATE FUNCTION pg_temp.expect_denied(query text) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
@@ -31,4 +32,5 @@ END $$;
 \ir host-group-qualification.sql
 \ir host-rotation-results.sql
 \ir host-ranked-qualification.sql
+\ir host-rotation-schedule.sql
 ROLLBACK;

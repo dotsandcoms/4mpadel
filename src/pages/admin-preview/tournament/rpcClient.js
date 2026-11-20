@@ -1,6 +1,7 @@
 // Exact current MAIN tm_* contracts, isolated from the legacy admin.
 const HOST_ROTATION_RESULTS = ['record_rotation_score', 'complete_rotation'];
-const HOST_ACTIONS = new Set(['snapshot', 'confirm', 'save_draw', 'publish_draw', 'qualify', ...HOST_ROTATION_RESULTS]);
+const HOST_ROTATION_SCHEDULE = ['preview_rotation_schedule', 'apply_rotation_schedule'];
+const HOST_ACTIONS = new Set(['snapshot', 'confirm', 'save_draw', 'publish_draw', 'qualify', ...HOST_ROTATION_RESULTS, ...HOST_ROTATION_SCHEDULE]);
 const isRotation = format => ['americano', 'team_americano'].includes(format);
 const CONTEXT_CHANGED = 'Tournament context changed. No further changes were sent.';
 
@@ -26,6 +27,7 @@ async function tournamentRpc(name, args = {}) {
             || (name === 'save_draw' && isRotation(args.p_draw?.format));
         if (name === 'qualify') operation = 'tm_host_group_qualification';
         else if (HOST_ROTATION_RESULTS.includes(name)) operation = 'tm_host_rotation_result';
+        else if (HOST_ROTATION_SCHEDULE.includes(name)) operation = 'tm_host_rotation_schedule';
         else operation = preparingRotation ? 'tm_host_rotation_preparation' : 'tm_host_draw_preparation';
         payload = { p_organisation: hostEvent.organisationId, p_event, p_action: name, p_payload: fields };
     } else if (!['list_events', 'snapshot'].includes(name)) {
@@ -45,7 +47,8 @@ async function tournamentRpc(name, args = {}) {
         const matchesAction = name === 'snapshot' ? data?.hostDrawPreparation === true : data?.action === name;
         if (data?.organisationId !== hostEvent.organisationId || String(receivedEvent) !== String(hostEvent.id) || !matchesAction
             || (args.p_division && args.p_division !== data?.divisionId)
-            || (['publish_draw', 'qualify', ...HOST_ROTATION_RESULTS].includes(name) && args.p_draw !== data?.drawId)
+            || (['publish_draw', 'qualify', ...HOST_ROTATION_RESULTS, ...HOST_ROTATION_SCHEDULE].includes(name) && args.p_draw !== data?.drawId)
+            || (HOST_ROTATION_SCHEDULE.includes(name) && (!Array.isArray(data?.bookings) || typeof data?.review !== 'string'))
             || (name === 'record_rotation_score' && (args.p_match !== data?.matchId || data?.status !== 'in_progress'))
             || (name === 'complete_rotation' && data?.status !== 'completed')
             || (name === 'save_draw' && !data?.drawId)) {
@@ -54,6 +57,14 @@ async function tournamentRpc(name, args = {}) {
     }
     return data;
 }
+function rotationSchedule(name, data, draw, minutes, rest, review) {
+    return tournamentRpc(name, {
+        p_event: data.event.id, p_draw: draw.id, p_expected: draw.updated_at, p_minutes: minutes, p_rest: rest,
+        p_match_versions: Object.fromEntries(data.matches.filter(m => m.draw_id === draw.id).map(m => [m.id, m.updated_at])),
+        ...(review ? { p_review: review } : {}),
+    });
+}
+
 return {
     saveRegistration: (data, division, registration, payload) => tournamentRpc('save_registration', { p_event: data.event.id, p_division: division, p_registration: registration?.id || null, p_payload: payload, p_expected: registration?._revision || null }),
     saveDivision: (data, division, name, active) => tournamentRpc('save_division', { p_event: data.event.id, p_division: division, p_name: name, p_active: active }),
@@ -78,6 +89,8 @@ return {
     saveSettings: (data, settings, days) => tournamentRpc('save_settings', { p_event: data.event.id, p_expected: data.settingsRevision, p_settings: settings, p_days: days }),
     confirm: (data, division, kind, payload) => tournamentRpc('confirm', { p_event: data.event.id, p_division: division, p_kind: kind, p_payload: payload, p_expected: data.confirmations.find(c => c.division_id === division)?.revision || 0 }),
     ...(hostEvent ? {
+        previewRotationSchedule: (data, draw, minutes, rest) => rotationSchedule('preview_rotation_schedule', data, draw, minutes, rest),
+        applyRotationSchedule: (data, draw, minutes, rest, review) => rotationSchedule('apply_rotation_schedule', data, draw, minutes, rest, review),
         recordRotationScore: (data, draw, match, score, reason) => tournamentRpc('record_rotation_score', {
             p_event: data.event.id, p_draw: draw.id, p_expected: draw.updated_at,
             p_match: match.id, p_expected_match: match.updated_at, p_score: score, p_reason: reason || null,

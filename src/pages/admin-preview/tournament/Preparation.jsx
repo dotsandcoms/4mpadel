@@ -1,6 +1,7 @@
 import SearchableDropdown from '../../../components/SearchableDropdown';
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowRight, CheckCircle2, Users, ChevronRight, ArrowUp, ArrowDown, Download } from 'lucide-react';
+import HostRotationSchedule from './HostRotationSchedule';
 import HostRotationResults from './HostRotationResults';
 import HostGroupQualification from './HostGroupQualification';
 import DrawBracketPreview from './DrawBracketPreview';
@@ -127,6 +128,8 @@ function DivisionPanel({ data, workspace, division, confirmation, draw, client, 
                 {locked && !hostRotation && <p className="muted">{hostPreparation ? 'The published draw is locked.' : 'The published draw is locked. Results and schedules are managed in their own workspaces.'}</p>}
             </section>
         </>}
+        {workspace === 'draws' && hostRotation && data.event.is_visible && draw.status !== 'completed'
+            && <HostRotationSchedule {...{ data, draw, client, act, busy }} />}
         {workspace === 'draws' && hostRotation && <HostRotationResults {...{ data, draw, client, act, busy, saving, error }} />}
         {workspace === 'draws' && hostPreparation && draw?.format === 'group_knockout' && ['published', 'in_progress'].includes(draw.status)
             && !matchRows.some(match => match.stage === 'knockout') && <HostGroupQualification {...{ data, draw, client, act, busy }} />}

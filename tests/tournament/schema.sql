@@ -16,6 +16,7 @@ GRANT SELECT ON auth.users TO authenticated;
 CREATE TABLE calendar(id bigint PRIMARY KEY,event_name text,start_date date,end_date date,venue text,slug text,is_manual boolean DEFAULT true,organization_id uuid,organisation_id uuid,event_status text,is_visible boolean DEFAULT true);
 CREATE TABLE organisations(id uuid PRIMARY KEY,status text);
 CREATE TABLE organisation_members(organisation_id uuid REFERENCES organisations(id),user_email text,role text);
+CREATE TABLE draw_player_reviews(division_id uuid PRIMARY KEY,event_id bigint,state jsonb);
 CREATE TABLE tournament_divisions(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),event_id bigint REFERENCES calendar(id),name text,sort_order integer DEFAULT 0,is_active boolean DEFAULT true,entry_fee numeric DEFAULT 0);
 CREATE TABLE event_registrations(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),event_id bigint,division_id uuid REFERENCES tournament_divisions(id),division text,full_name text,email text,partner_name text,partner_email text,payment_status text,status text DEFAULT 'registered');
 CREATE TABLE players(id bigint PRIMARY KEY,name text,email text,license_type text,points numeric);
