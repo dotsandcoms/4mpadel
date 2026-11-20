@@ -248,8 +248,14 @@ async function withPage(mode, permissions, scopeId, run) {
 const calls = page => page.evaluate(()=>window.fixture.calls);
 const includesText = (page, text) => page.waitForFunction(value=>document.body.innerText.includes(value),{},text);
 const click = async (page, name, selector='button') => {
-    await page.waitForFunction((name,selector)=>[...document.querySelectorAll(selector)].some(node=>node.textContent.trim().includes(name)&&!node.disabled),{},name,selector);
-    await page.evaluate((name,selector)=>[...document.querySelectorAll(selector)].find(node=>node.textContent.trim().includes(name)&&!node.disabled).click(),name,selector);
+    const activated = await page.waitForFunction((label, target) => {
+        const control = [...document.querySelectorAll(target)].find(node => node.textContent.trim().includes(label)
+            && !node.disabled && !node.closest('[inert]') && node.getClientRects().length);
+        if (!control) return false;
+        control.click();
+        return true;
+    }, {}, name, selector);
+    await activated.dispose();
 };
 const input = async (page, selector, value) => {
     await page.waitForSelector(selector);
