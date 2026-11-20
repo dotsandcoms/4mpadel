@@ -12,6 +12,7 @@ CREATE SCHEMA public;
 \ir ../../supabase/migrations/20260916130000_tournament_preparation.sql
 \ir ../../supabase/migrations/20261120071852_reconcile_hosted_tournament_event_year_licences.sql
 \ir ../../supabase/migrations/20261120072537_scope_host_tournament_draw_preparation.sql
+\ir ../../supabase/migrations/20261120074419_scope_host_tournament_rotation.sql
 CREATE FUNCTION pg_temp.expect_denied(query text) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
  BEGIN EXECUTE query; EXCEPTION WHEN insufficient_privilege THEN RETURN; END;
@@ -20,4 +21,5 @@ END $$;
 \ir fixtures.generated.sql
 \ir event-year-licences.sql
 \ir host-draw-preparation.sql
+\ir host-rotation-preparation.sql
 ROLLBACK;

@@ -130,7 +130,7 @@ before(async () => {
                     if (name==='correct_manual_event_payment') return {data:{paymentId:receipt.id,method:args.p_method,recipient:args.p_recipient}};
                     if (name==='reopen_native_draw_for_corrections') { nativeDraw.status='draft'; return { data:null }; }
                     if (name==='account_is_active' || name==='is_super_admin') return { data:true };
-                    if (name==='tm_host_draw_preparation') {
+                    if (['tm_host_draw_preparation','tm_host_rotation_preparation'].includes(name)) {
                         if (args.p_organisation!=='org-a' || String(args.p_event)!=='505') {
                             return {error:{message:'No access to this host event'}};
                         }
@@ -149,13 +149,14 @@ before(async () => {
                             if (fields.p_kind==='players') Object.assign(c,{players_confirmed_at:'checked',players_valid:true,review:fields.p_payload});
                             if (fields.p_kind==='format_and_seeds') Object.assign(c,{format_confirmed_at:'checked',seeds_confirmed_at:'checked',
                                 configuration:fields.p_payload.configuration,review:{...c.review,seeds:fields.p_payload.seeds}});
+                            if (fields.p_kind==='format') Object.assign(c,{format_confirmed_at:'checked',configuration:fields.p_payload});
                             c.revision+=fields.p_kind==='format_and_seeds'?2:1;
                             hostTournament.confirmations=[c];
                             return {data:receipt};
                         }
                         if (args.p_action==='save_draw') {
                             hostTournament.draws=[{id:'saved-host-draft',event_id:505,division_id:fields.p_division,format:fields.p_draw.format,
-                                status:'draft',draw_kind:'main',updated_at:'saved-at',_review_token:'host-token-v1'}];
+                                status:'draft',draw_kind:'main',updated_at:'saved-at',_review_token:'host-token-v1',scoring_rules:{americano:fields.p_draw.rotation}}];
                             hostTournament.entries=fields.p_draw.entries.map(entry=>({...entry,draw_id:'saved-host-draft'}));
                             hostTournament.matches=fields.p_draw.matches.map(match=>({...match,draw_id:'saved-host-draft'}));
                             return {data:{...receipt,drawId:'saved-host-draft'}};
@@ -301,6 +302,14 @@ before(async () => {
                 }
                 if (kind.startsWith('payment-')) return <EventPaymentDialog action={{ type:'correct', registration:{...paid, _editablePayment:receipt} }} client={client} session={session}
                     event={event} divisions={[division]} scopeId={kind==='payment-tenant'?'org:org-a':'all'} onClose={result=>window.calls.push(['closed',result])}/>;
+                if (['host-americano','host-team-americano'].includes(kind)) {
+                    if (kind==='host-americano' && hostTournament.registrations.length===2) {
+                        hostTournament.registrations.push(...[5,6].map(n=>({id:'solo-'+n,division_id:generatorDivision.id,
+                            full_name:'Individual '+n,email:'solo-'+n+'@example.invalid',payment_status:'paid',status:'registered'})));
+                        hostTournament.players.push(...hostTournament.registrations.slice(2).map(row=>({email:row.email,license_type:'full'})));
+                    }
+                    return <MemoryRouter initialEntries={['/admin-preview/event?event=505&tab=draws']}><HostGeneratorFixture /></MemoryRouter>;
+                }
                 if (kind==='host-tournament-generator') return <MemoryRouter initialEntries={['/admin-preview/event?event=505&tab=draws']}><HostGeneratorFixture /></MemoryRouter>;
                 if (kind==='draw-generator') return <MemoryRouter initialEntries={['/admin-preview/event?event=505']}><GeneratorFixture /></MemoryRouter>;
                 if (kind.startsWith('public-draw-')) return <EventDrawWorkspace event={event} divisions={[division]}
@@ -1034,4 +1043,45 @@ test('the organisation Draw generator reviews eligibility and seeds, saves priva
         await page.waitForSelector('.ap-primary');
         assert.match(await page.$eval('output', output => output.getAttribute('data-query')), /event=505&tab=draws$/);
     } finally { await page.close(); }
+});
+
+test('organisation hosts review and publish both Americano rotation variants inside the Draw generator', async () => {
+    for (const [kind, label, expectedVariant] of [
+        ['host-americano', 'Americano', undefined], ['host-team-americano', 'Team Americano', 'team'],
+    ]) {
+        const page = await open(kind);
+        try {
+            await clickText(page, 'Draw generator');
+            await page.waitForSelector('.tm-tabs');
+            await clickText(page, 'Review player list');
+            await clickText(page, 'Confirm player list');
+            await page.waitForFunction(() => document.querySelector('.tm-body [role=status]')?.textContent.includes('Player list confirmed'));
+            await page.$eval('.tm-tabs a:nth-child(3)', link => link.click());
+            await clickText(page, 'Review format and seeds');
+            await page.waitForSelector('button[aria-label="Competition format"]');
+            await page.click('button[aria-label="Competition format"]');
+            await page.waitForSelector('[role=listbox][aria-label="Competition format"] [role=option]', { visible: true });
+            await page.$$eval('[role=listbox][aria-label="Competition format"] [role=option]', (options, text) => options.find(o => o.firstChild.textContent === text).click(), label);
+            await clickText(page, 'Confirm format');
+            await page.waitForFunction(() => document.querySelector('.tm-body [role=status]')?.textContent.includes('Format and rules confirmed'));
+            await page.$eval('.tm-tabs a:nth-child(3)', link => link.click());
+            await clickText(page, 'Generate draw preview');
+            await clickText(page, 'Save draft');
+            await page.waitForFunction(() => document.querySelector('.tm-body [role=status]')?.textContent.includes('Private draw saved'));
+            await page.$eval('input[type=checkbox]', input => input.click());
+            await clickText(page, 'Publish draw');
+            await page.waitForFunction(() => document.querySelector('.tm-body [role=status]')?.textContent === 'Draw published');
+            assert.deepEqual(await page.$$eval('.tm-tabs a', links => links.map(link => link.textContent)), ['Players','Divisions','Draws']);
+            const writes = (await page.evaluate(() => window.calls)).filter(([, args]) => args.p_action !== 'snapshot');
+            assert.ok(writes.every(([, args]) => args.p_organisation === 'org-a' && String(args.p_event)==='505'));
+            assert.deepEqual(writes.map(([method, args]) => [method, args.p_action]), [
+                ['tm_host_draw_preparation', 'confirm'], ['tm_host_rotation_preparation', 'confirm'],
+                ['tm_host_rotation_preparation', 'save_draw'], ['tm_host_rotation_preparation', 'publish_draw'],
+            ]);
+            const preview = writes[2][1].p_payload.p_draw.rotation;
+            assert.equal(preview.variant, expectedVariant);
+            assert.ok(preview.fixtures.every(row => row.score === null && !row.scheduled_start));
+            assert.equal(writes[3][1].p_payload.p_draw_token, 'host-token-v1');
+        } finally { await page.close(); }
+    }
 });

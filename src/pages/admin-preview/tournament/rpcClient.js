@@ -1,5 +1,6 @@
 // Exact current MAIN tm_* contracts, isolated from the legacy admin.
 const HOST_ACTIONS = new Set(['snapshot', 'confirm', 'save_draw', 'publish_draw']);
+const isRotation = format => ['americano', 'team_americano'].includes(format);
 const CONTEXT_CHANGED = 'Tournament context changed. No further changes were sent.';
 
 export function createTournamentClient(supabase, { userId, scopeId = 'all', hostEvent, isCurrent = () => true } = {}) {
@@ -19,8 +20,10 @@ async function tournamentRpc(name, args = {}) {
             throw new Error('Open the requested draw in its authorised organisation workspace.');
         }
         await verifyActor();
-        const { p_event, ...fields } = args;
-        operation = 'tm_host_draw_preparation';
+        const { p_event, rotation, ...fields } = args;
+        const preparingRotation = rotation || (name === 'confirm' && args.p_kind === 'format' && isRotation(args.p_payload?.format))
+            || (name === 'save_draw' && isRotation(args.p_draw?.format));
+        operation = preparingRotation ? 'tm_host_rotation_preparation' : 'tm_host_draw_preparation';
         payload = { p_organisation: hostEvent.organisationId, p_event, p_action: name, p_payload: fields };
     } else if (!['list_events', 'snapshot'].includes(name)) {
         if (!isCurrent()) throw new Error(CONTEXT_CHANGED);
@@ -66,7 +69,7 @@ return {
     }),
     publishDraw: (data, draw) => tournamentRpc('publish_draw', {
         p_event: data.event.id, p_draw: draw.id, p_expected: draw.updated_at,
-        ...(hostEvent ? { p_draw_token: draw._review_token } : {}),
+        ...(hostEvent ? { p_draw_token: draw._review_token, rotation: isRotation(draw.format) } : {}),
     }),
     saveSchedule: (data, plan) => tournamentRpc('save_schedule', { p_event: data.event.id, p_expected: data.schedule?.revision || 0, p_source: data.sourceFingerprint, p_assignments: plan.assignments, p_fixtures: plan.fixtures, p_settings: plan.settings }),
     publishSchedule: data => tournamentRpc('publish_schedule', { p_event: data.event.id, p_expected: data.schedule.revision }),
