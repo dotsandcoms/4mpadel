@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useId, useRef, useState } from 'reac
 import { X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import EventBuilder from '../../components/admin/EventBuilder';
-import { loadEventAdvancedSnapshot, verifyEventAdvancedAccess } from './eventAdvancedGuard';
+import { hasPendingDivisionAmendment, loadEventAdvancedSnapshot, verifyEventAdvancedAccess } from './eventAdvancedGuard';
 import RecordLoading from './RecordLoading';
 import './EventDetailsDialog.css';
 import { eventContinuation } from './eventContinuation';
@@ -43,6 +43,16 @@ export default function AdvancedEventDetailsDialog({ event, onClose, client = su
   if (!snapshot) return <EditorFrame event={event} onClose={() => onClose({ refresh: false })}>{error ? <p role="alert">{error}</p> : <RecordLoading label="Loading event workflows…" detail="Reading the event, divisions and any linked weekly occurrences."/>}</EditorFrame>;
   if (snapshot.event.is_quick_event) return <EditorFrame event={event} onClose={() => onClose({ refresh: true })}><p role="alert">This is a quick event. Close to refresh its editor selection, then reopen it.</p></EditorFrame>;
   if (snapshot.event.event_status === 'cancelled' || !snapshot.event.is_manual) return <EditorFrame event={event} onClose={() => onClose({ refresh: false })}><p role="alert">{snapshot.event.event_status === 'cancelled' ? 'This event is cancelled. Reopening it requires a separate workflow.' : 'Imported events are managed by their source system.'}</p></EditorFrame>;
+  if (hasPendingDivisionAmendment(snapshot.event)) {
+    const reviewWorkspace = snapshot.event.federation_id ? 'Federations' : snapshot.event.organisation_id ? 'Organisations' : null;
+    return <EditorFrame event={event} onClose={() => onClose({ refresh: false })}>
+      <p role="status">This event has a pending division amendment.</p>
+      {reviewWorkspace ? <>
+        <p>Open the {reviewWorkspace === 'Federations' ? 'event’s federation' : 'host organisation'} profile, then choose Pending decisions and Review amendment.</p>
+        <a className="ap-primary" href={`/admin-preview/${reviewWorkspace.toLowerCase()}`}>Open {reviewWorkspace}</a>
+      </> : <p>A host organisation or federation is required to review this amendment.</p>}
+    </EditorFrame>;
+  }
   return <Builder isOpen theme="preview" editingEvent={snapshot.event} beforeSave={beforeSave}
     onClose={() => onClose({ refresh: attempted.current })}
     onSaved={async () => { attempted.current = true; try { const next = await load(client, event.id); if (live.current === snapshot.contextToken) setSnapshot({ ...next, actorId: snapshot.actorId, contextToken: snapshot.contextToken }); } catch { if (live.current === snapshot.contextToken) onClose({ refresh: true }); } }}/ >;

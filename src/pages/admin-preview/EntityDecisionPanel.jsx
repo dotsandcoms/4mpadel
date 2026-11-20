@@ -8,6 +8,15 @@ const options = [
   ['amendments','amendment','Event amendments','Review amendment'],
 ];
 
+function AmendmentChanges({ fields }) {
+  return <dl>{Object.entries(fields).map(([field, { from, to }])=><div key={field}><dt>{field.replaceAll('_',' ')}</dt>
+    <dd className="of-review-pair">
+      <div><small>Current</small><EntityProfileReviewValue field={field} value={from}/></div>
+      <div><small>Proposed</small><EntityProfileReviewValue field={field} value={to}/></div>
+    </dd>
+  </div>)}</dl>;
+}
+
 export default function EntityDecisionPanel({ kind, client, session, scopeId, entity, profileBusy, onBusyChange, onSaved }) {
   const [snapshot, setSnapshot] = useState(null);
   const [revision, setRevision] = useState(0);
@@ -92,10 +101,14 @@ export default function EntityDecisionPanel({ kind, client, session, scopeId, en
       {review.action === 'sanction' && <p>Approval publishes the sanctioned event.</p>}
       {review.action === 'amendment' && <><p>Review the proposed field changes. The current event stays live during review.</p>
         {review.approvalBlock && <p role="status">{review.approvalBlock}</p>}
-        <dl>{Object.entries(review.patch || {}).map(([field,next])=><div key={field}><dt>{field.replaceAll('_',' ')}</dt><dd className="of-review-pair">
-          <div><small>Current</small><EntityProfileReviewValue field={field} value={review.row[field]}/></div>
-          <div><small>Proposed</small><EntityProfileReviewValue field={field} value={next}/></div>
-        </dd></div>)}</dl>
+        <AmendmentChanges fields={review.plan?.fields ?? Object.fromEntries(Object.entries(review.patch || {})
+          .map(([field,to])=>[field,{from:review.row[field],to}]))}/>
+        {review.plan?.divisions.length > 0 && <section aria-label="Division changes"><h4>Division changes</h4>
+          {review.plan.divisions.map(({action,id,name,changes},index)=><div key={id ?? index}>
+            <h5>{({add:'Add',update:'Update',remove:'Remove'})[action]} {name}</h5>
+            {changes && <AmendmentChanges fields={changes}/>}
+          </div>)}
+        </section>}
       </>}
       <div className="of-decision-actions">
         <button type="button" className="ap-secondary" aria-pressed={outcome==='approve'} disabled={disabled || attempt.current || Boolean(review.approvalBlock)} onClick={()=>setOutcome('approve')}>Approve</button>

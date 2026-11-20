@@ -2,6 +2,7 @@ import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 import puppeteer from 'puppeteer';
+import { verifyEventAdvancedAccess } from '../src/pages/admin-preview/eventAdvancedGuard.js';
 
 const mocked = `
 const view=window.fixture.mode, actor={id:'fixture-account',email:'operator@example.invalid'};
@@ -14,7 +15,7 @@ if(view==='organisation-profile-sponsor')org.sponsors=[
 ];
 const sanction={id:10,event_name:'Fixture sanction',organisation_id:'our-org',federation_id:'our-fed',sanction_status:'pending',federation_sanction_status:'pending',is_visible:false};
 const amendment={id:11,event_name:'Fixture amendment',city:'Old city',organisation_id:'our-org',federation_id:null,sanction_status:'approved',pending_changes_status:'pending',
- pending_changes_submitted_at:'2026-11-01T12:00:00Z',pending_changes:{payload:{city:'New city'},removed_division_ids:view==='federation-complex'?['division-5']:[]},is_visible:true};
+ pending_changes_submitted_at:'2026-11-01T12:00:00Z',pending_changes:{payload:{city:'New city'},removed_division_ids:view.startsWith('federation-complex')?['division-5']:null},is_visible:true};
 const data={albums:[{id:'album-a',title:'Fixture album',parent_album_id:null,organisation_id:null},{id:'album-other',title:'Foreign album',parent_album_id:null,organisation_id:'other-org'}],organisations:[org,{id:'other-org',name:'Foreign organisation',federation_id:'other-fed',status:'pending'}],
  federations:[federation,{id:'other-fed',name:'Foreign federation',slug:'other-fed',status:'published'}],
  calendar:[sanction,amendment,{...sanction,id:88,event_name:'Foreign event',organisation_id:'other-org',federation_id:'other-fed'}],
@@ -31,6 +32,19 @@ export const client={
    if(args.p_action==='add_member')data.organisation_members.push({id:'new-member',organisation_id:args.p_organisation_id,role:args.p_data.role,user_email:args.p_data.email,player_id:args.p_data.player_id});
    if(args.p_action==='delete')data.organisations=data.organisations.filter(org=>org.id!==args.p_organisation_id);
    return {data:{id:args.p_organisation_id,action:args.p_action}};
+ }if(name==='admin_review_event_amendment'){
+   if(view==='federation-complex')return {error:{code:'PGRST202',message:'Function unavailable'}};
+   if(view==='federation-complex-denied')return {error:{code:'42501',message:'Calendar and division edit access is required for this event.'}};
+   const token=(window.fixture.revision?'b':'a').repeat(64);
+   if(!args.p_expected)return {data:{event_id:11,token,fields:{city:{from:'Old city',to:'New city'}},divisions:[
+     {action:'update',id:'division-1',name:'Main Draw',changes:{entry_fee:{from:100,to:120}}},
+     {action:'remove',id:'division-5',name:'Unused division'},
+     {action:'add',id:null,name:'Mixed Open',changes:{entry_fee:{from:null,to:80}}},
+   ]}};
+   if(view==='federation-complex-rollback')return {error:{message:'The event update was rolled back.'}};
+   if(args.p_event_id!==11 || args.p_entity_id!=='our-fed' || args.p_kind!=='federations' || args.p_expected!==token) return {error:{message:'Incorrect approved review'}};
+   Object.assign(amendment,{city:'New city',pending_changes:null,pending_changes_status:null});
+   return {data:{event_id:11,status:'approved'}};
  }if(name==='is_super_admin')return {data:view.startsWith('organisation')&&!view.startsWith('organisation-profile')};if(name==='is_organisation_admin')return {data:!window.fixture.revoked};return {data:true}},
  storage:{from(bucket){return {async upload(path,file,options){calls.push(['upload',bucket,path,file.type,options]);return {data:{path}}},getPublicUrl(path){return {data:{publicUrl:'https://fixture.invalid/'+path}}}}}},
  functions:{async invoke(name,args){calls.push(['function',name,args.body]);return {data:{messageId:'synthetic'}}}},
@@ -63,14 +77,30 @@ before(async()=>{
       stdin:{contents:`
         import {createRoot} from 'react-dom/client';
         import Entity from './src/pages/admin-preview/OrganisationFederationWorkspace';
+        import AdvancedEventDetailsDialog from './src/pages/admin-preview/AdvancedEventDetailsDialog';
         import { client } from 'synthetic-entity';
-        const kind=window.fixture.mode.startsWith('organisation')?'organisations':'federations';
-        createRoot(document.getElementById('root')).render(<Entity kind={kind} client={client} session={{user:{id:'fixture-account'}}} scopeId={window.fixture.mode.startsWith('organisation-profile')?'org:our-org':'all'} />);
+        const {mode}=window.fixture;
+        const session={user:{id:'fixture-account'}};
+        const root=createRoot(document.getElementById('root'));
+        if(mode.startsWith('calendar-amendment')){
+          const event={id:11,event_name:'Calendar amendment',is_manual:true,organisation_id:'our-org',
+            federation_id:mode.endsWith('federation')?'our-fed':null,pending_changes_status:'pending',
+            pending_changes:{payload:{city:'Proposed city'},divisions:mode.endsWith('field-only')?null:[{name:'New division'}]}};
+          root.render(<AdvancedEventDetailsDialog event={event} client={client} session={session}
+            onClose={()=>{}} load={async()=>({event,divisions:[],siblings:[]})}/>);
+        }else{
+          const kind=mode.startsWith('organisation')?'organisations':'federations';
+          root.render(<Entity kind={kind} client={client} session={session} scopeId={mode.startsWith('organisation-profile')?'org:our-org':'all'} />);
+        }
       `,resolveDir:process.cwd(),loader:'jsx',sourcefile:'entity-test.jsx'},
       write:false,bundle:true,format:'iife',jsx:'automatic',loader:{'.css':'empty'},define:{'import.meta.env':'{}'},
       plugins:[{name:'entity-test',setup(build){
         build.onResolve({filter:/^synthetic-entity$/},()=>({path:'synthetic',namespace:'fixture'}));
-        build.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:mocked}));
+        build.onResolve({filter:/^\.\.\/\.\.\/components\/admin\/EventBuilder$/},()=>({path:'event-builder',namespace:'fixture'}));
+        build.onResolve({filter:/^\.\.\/\.\.\/supabaseClient$/},()=>({path:'supabase',namespace:'fixture'}));
+        build.onLoad({filter:/.*/,namespace:'fixture'},({path})=>path==='event-builder'
+          ? {contents:'export default function FixtureBuilder(){return "Synthetic event builder"}'}
+          : path==='supabase' ? {contents:'export const supabase = {}'} : {contents:mocked});
       }}],
     });
     bundle=result.outputFiles[0].text;
@@ -90,7 +120,7 @@ async function withPage(mode,run){
           if (!crypto.randomUUID) crypto.randomUUID=()=> '10000000-0000-4000-8000-000000000001';
         },mode);
         await page.addScriptTag({content:bundle});
-        await click(page,'View profile');
+        if(!mode.startsWith('calendar-amendment'))await click(page,'View profile');
         await run(page);
     } catch(error) {
         error.message+='\nSynthetic screen: '+await page.evaluate(()=>document.body.innerText);
@@ -100,7 +130,7 @@ async function withPage(mode,run){
 const calls=page=>page.evaluate(()=>window.fixture.calls);
 const text=(page,value)=>page.waitForFunction(value=>document.body.innerText.includes(value),{},value);
 async function click(page,name,selector='button'){
-    await page.waitForFunction((name,selector)=>[...document.querySelectorAll(selector)].some(node=>node.textContent.trim().includes(name)&&!node.disabled),{},name,selector);
+    await page.waitForFunction((name,selector)=>[...document.querySelectorAll(selector)].some(node=>node.textContent.trim().includes(name)&&!node.disabled),{polling:50},name,selector);
     await page.evaluate((name,selector)=>[...document.querySelectorAll(selector)].find(node=>node.textContent.trim().includes(name)&&!node.disabled).click(),name,selector);
 }
 async function notes(page,value){
@@ -168,6 +198,87 @@ test('division amendments can be rejected with feedback while the live event and
         assert.equal(event.pending_changes.payload.city,'New city');
         assert.equal(event.pending_changes_notes,'Review divisions');
     });
+});
+
+test('division approval displays all operations and sends one reviewed transaction for the exact event',async()=>{
+    await withPage('federation-complex-approval',async page=>{
+        await review(page,'Review amendment');await text(page,'New city');
+        await text(page,'Update Main Draw');await text(page,'Remove Unused division');await text(page,'Add Mixed Open');
+        await text(page,'120');
+        await click(page,'Approve');await click(page,'Confirm approval');await text(page,'Amendment approved.');
+        const activity=await calls(page);
+        const amendments=activity.filter(([kind,name])=>kind==='rpc'&&name==='admin_review_event_amendment');
+        assert.deepEqual(amendments.map(entry=>entry[2]),[
+          {p_kind:'federations',p_entity_id:'our-fed',p_event_id:11,p_expected:null},
+          {p_kind:'federations',p_entity_id:'our-fed',p_event_id:11,p_expected:null},
+          {p_kind:'federations',p_entity_id:'our-fed',p_event_id:11,p_expected:'a'.repeat(64)},
+        ]);
+        assert.equal(activity.filter(([kind])=>kind==='update').length,0);
+        assert.equal(activity.filter(([kind,name])=>kind==='function'&&name==='send-email').length,1);
+    });
+});
+
+test('a changed division token requires fresh review before any write or notification',async()=>{
+    await withPage('federation-complex-stale',async page=>{
+        await review(page,'Review amendment');await text(page,'Add Mixed Open');
+        await page.evaluate(()=>{window.fixture.revision=1});
+        await click(page,'Approve');await click(page,'Confirm approval');
+        await text(page,'The reviewed amendment changed.');
+        const activity=await calls(page);
+        assert.equal(activity.some(([kind,name,args])=>kind==='update'||kind==='function'||(kind==='rpc'&&name==='admin_review_event_amendment'&&args.p_expected)),false);
+    });
+});
+
+test('federation membership without event-edit authority cannot approve a multi-table draft',async()=>{
+    await withPage('federation-complex-denied',async page=>{
+        await review(page,'Review amendment');await text(page,'Calendar and division edit access is required for this event.');
+        assert.equal(await page.$eval('section[aria-label="Decision review"] button',node=>node.disabled),true);
+        assert.equal((await calls(page)).some(([kind,name,args])=>kind==='update'||kind==='function'||(kind==='rpc'&&name==='admin_review_event_amendment'&&args.p_expected)),false);
+    });
+});
+
+test('a failed transaction leaves the draft available and skips notification',async()=>{
+    await withPage('federation-complex-rollback',async page=>{
+        await review(page,'Review amendment');await text(page,'Add Mixed Open');
+        await click(page,'Approve');await click(page,'Confirm approval');await text(page,'The event update was rolled back.');
+        const event=await page.evaluate(()=>window.fixture.data.calendar.find(row=>row.id===11));
+        assert.equal(event.city,'Old city');
+        assert.equal(event.pending_changes_status,'pending');
+        assert.equal((await calls(page)).some(([kind])=>kind==='function'||kind==='update'),false);
+    });
+});
+
+test('Calendar routes pending division changes to the appropriate light review workspace',async()=>{
+    for(const [mode,path] of [['federation','/admin-preview/federations'],['organisation','/admin-preview/organisations']]){
+        await withPage('calendar-amendment-'+mode,async page=>{
+            await text(page,'This event has a pending division amendment.');
+            assert.equal(await page.$eval('dialog a',link=>link.getAttribute('href')),path);
+            assert.equal(await page.evaluate(()=>document.body.innerText.includes('Synthetic event builder')),false);
+            assert.equal((await calls(page)).some(([kind])=>kind==='update'||kind==='function'),false);
+        });
+    }
+    await withPage('calendar-amendment-field-only',async page=>{
+        await text(page,'Synthetic event builder');
+        assert.equal(await page.$('dialog a'),null);
+    });
+});
+
+test('a multi-table draft submitted after an editor opens aborts Calendar save preflight',async()=>{
+    const original={id:11,is_manual:true};
+    const pending={...original,pending_changes_status:'pending',pending_changes:{payload:{city:'New city'},removed_division_ids:['fixture-division']}};
+    const client={
+        auth:{getUser:async()=>({data:{user:{id:'test-user',email:'fixture@example.invalid'}}})},
+        from(table){
+            return {select(){return this},eq(){return this},order(){return this},
+                async maybeSingle(){assert.equal(table,'admin_sidebar_permissions');return {data:{role:'super_admin'}}},
+                async single(){assert.equal(table,'calendar');return {data:pending}},
+                async range(){assert.equal(table,'tournament_divisions');return {data:[]}},
+            };
+        },
+    };
+    await assert.rejects(verifyEventAdvancedAccess({
+        client,original,divisions:[],siblings:[],expectedUserId:'test-user',scopeId:'all',
+    }),/Review the pending division amendment before editing this event/);
 });
 
 test('federation staff sees only its records and receives no decision controls',async()=>{

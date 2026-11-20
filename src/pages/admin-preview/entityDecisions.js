@@ -22,7 +22,6 @@ const reserved = [
 // These reserved columns are part of the current EventBuilder payload. Unknown
 // policy fields are still blocked without including them in the query.
 const reservedProjection = reserved.filter(key => key !== 'is_featured');
-const divisionFields = ['name','entry_fee','format','entries_close_at','license_required','age_category','gender','suggested_level','entry_limit','details','sort_order','is_active'];
 const normal = value => String(value??'').trim().toLowerCase();
 const same = (a,b) => String(a??'') === String(b??'');
 const ensureCurrent = context => {
@@ -116,20 +115,27 @@ export async function loadEntityDecision(client, kind, entity, action, target, c
   const changed = key => Object.hasOwn(payload ?? {},key) && !entityEqual(payload[key] ?? null,data[key] ?? null);
   const patch = Object.fromEntries(amendmentFields.filter(changed).map(key => [key,payload[key]]));
   const restricted = reserved.some(changed);
-  let divisionChanges = Boolean(draft?.removed_division_ids?.length);
-  if (!divisionChanges && draft?.divisions?.length) {
-    const existing = await readAll(() => client.from('tournament_divisions')
-      .select(['id',...divisionFields].join(',')).eq('event_id',data.id).order('id'),context.signal);
-    divisionChanges = draft.divisions.some(division => !division.id || !existing.some(row => same(row.id,division.id)
-      && divisionFields.every(key => !Object.hasOwn(division,key) || entityEqual(division[key]??null,row[key]??null))));
-  }
-  ensureCurrent(context);
-  const approvalBlock = !payload || Array.isArray(payload) || typeof payload !== 'object' ? 'This draft has no valid event changes.'
-    : restricted ? 'This draft changes access, banking or publication controls.'
-    : divisionChanges ? 'Division changes require an atomic event and division update.'
-    : !Object.keys(patch).length ? 'This draft has no changes that can be applied.' : '';
-  return { action,name:data.event_name,row:data,scope,viaHost,decisionField,patch,approvalBlock };
+  // Both review and approval are tied to the server's exact division plan.
+  // Older deployments may still review and reject a multi-table draft.
+  const hasDivisions = ['divisions','removed_division_ids'].some(key =>
+    draft?.[key] != null && (!Array.isArray(draft[key]) || draft[key].length > 0));
+  let plan, approvalBlock;
+  if (!payload || Array.isArray(payload) || typeof payload !== 'object') approvalBlock = 'This draft has no valid event changes.';
+  else if (restricted) approvalBlock = 'This draft changes access, banking or publication controls.';
+  else if (hasDivisions) {
+    const {data:preview,error:previewError} = await requestAmendment(client,kind,entity.id,data.id);
+    ensureCurrent(context);
+    if (same(preview?.event_id,data.id) && /^[a-f0-9]{64}$/.test(preview?.token) && Array.isArray(preview?.divisions)) plan = preview;
+    else approvalBlock = previewError?.message && !['PGRST202','42883'].includes(previewError.code)
+      ? previewError.message : 'Division changes require an atomic amendment service. Approval is unavailable here.';
+  } else if (!Object.keys(patch).length) approvalBlock = 'This draft has no changes that can be applied.';
+  return { action,name:data.event_name,row:data,scope,viaHost,decisionField,patch,plan,approvalBlock };
+
 }
+
+const requestAmendment = (client,kind,entityId,eventId,token=null) => client.rpc('admin_review_event_amendment',{
+  p_kind:kind,p_entity_id:entityId,p_event_id:eventId,p_expected:token,
+});
 
 const escape = value => String(value??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export async function notifyEntityDecision(client, address, template, variables) {
@@ -153,6 +159,7 @@ export async function saveEntityDecision(client,kind,entity,review,outcome,notes
     throw new Error('This record changed after you opened the review.');
   }
   if (approved && fresh.approvalBlock) throw new Error(fresh.approvalBlock);
+  if (approved && review.plan?.token !== fresh.plan?.token) throw new Error('The reviewed amendment changed. Refresh before approving.');
 
   let patch, predicates = [decisionField];
   if (action === 'application') {
@@ -177,11 +184,18 @@ export async function saveEntityDecision(client,kind,entity,review,outcome,notes
   const returning = [...new Set(['id',...Object.keys(patch)])].join(',');
   ensureCurrent(context);
   context.onAttempt?.();
-  const saved = await applyScope(client.from(table).update(patch).eq('id',row.id),{...scope,record:row},predicates)
-    .select(returning).maybeSingle();
-  if (saved.error || !saved.data || !same(saved.data.id,row.id)
-      || Object.entries(patch).some(([key,value])=>key!=='approved_at' && !entityEqual(saved.data[key]??null,value??null))) {
-    throw new Error('The backend did not confirm this decision. Check current access and record status.');
+  if (approved && fresh.plan) {
+    const {data,error} = await requestAmendment(client,kind,entity.id,row.id,review.plan.token);
+    if (error || !same(data?.event_id,row.id) || data?.status !== 'approved') {
+      throw new Error(error?.message || 'The backend did not confirm this amendment. Refresh decisions.');
+    }
+  } else {
+    const saved = await applyScope(client.from(table).update(patch).eq('id',row.id),{...scope,record:row},predicates)
+      .select(returning).maybeSingle();
+    if (saved.error || !saved.data || !same(saved.data.id,row.id)
+        || Object.entries(patch).some(([key,value])=>key!=='approved_at' && !entityEqual(saved.data[key]??null,value??null))) {
+      throw new Error('The backend did not confirm this decision. Check current access and record status.');
+    }
   }
   ensureCurrent(context);
   if (action === 'application' && approved) {

@@ -25,6 +25,13 @@ function assertEditable(event) {
   if (!event.is_manual) throw new Error('Imported events cannot be edited with the manual event builder.');
 }
 
+export function hasPendingDivisionAmendment(event) {
+  const draft = event?.pending_changes;
+  return event?.pending_changes_status === 'pending' && Boolean(draft?.payload)
+    && ['divisions','removed_division_ids'].some(key =>
+      draft[key] != null && (!Array.isArray(draft[key]) || draft[key].length > 0));
+}
+
 export async function loadEventAdvancedSnapshot(client, eventId) {
   const { data: event, error } = await client.from('calendar').select('*').eq('id', eventId).single();
   if (error || !event) throw new Error('The event could not be loaded. Close and try again.');
@@ -63,6 +70,9 @@ export async function verifyEventAdvancedAccess({ client, original, divisions, s
   if (permissionError || permission?.role !== 'super_admin') throw new Error('A verified super-admin account is required.');
   assertEditable(original);
   const fresh = await loadEventAdvancedSnapshot(client, original.id);
+  if (hasPendingDivisionAmendment(fresh.event)) {
+    throw new Error('Review the pending division amendment before editing this event.');
+  }
   if (fingerprint(original) !== fingerprint(fresh.event)) throw new Error('Event details changed since opening. Close and reload before saving.');
   if (checkDivisions) assertRowsUnchanged(divisions, fresh.divisions, 'Divisions');
   if (checkSiblings) assertRowsUnchanged(siblings, fresh.siblings, 'Weekly series');
