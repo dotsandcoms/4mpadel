@@ -3,7 +3,7 @@ import SearchableDropdown from '../../components/SearchableDropdown';
 import EventRichTextEditor from '../../components/admin/EventRichTextEditor';
 import { sanitizeHtml, safeUrl } from '../../utils/sanitizeHtml';
 import RecordLoading from './RecordLoading';
-import { canReviewBroadcast, verifyBroadcastAccess, loadBroadcastEvents, loadBroadcastAudience, parseBroadcastEmails, combineBroadcastAudience, emailBroadcastCapability, sendReviewedBroadcastBatch, broadcastAttemptKey, readBroadcastAttempt, writeBroadcastAttempt } from './emailBroadcastData.js';
+import { canReviewBroadcast, verifyBroadcastAccess, loadBroadcastEvents, loadBroadcastAudience, parseBroadcastEmails, combineBroadcastAudience, emailBroadcastCapability, sendReviewedBroadcastBatch, broadcastAttemptKey, readBroadcastAttempt, writeBroadcastAttempt, readInterruptedBroadcast, writeInterruptedBroadcast } from './emailBroadcastData.js';
 import './EmailBroadcastWorkspace.css';
 
 const empty = { events: [], payment: 'all', partner: 'all', manual: false, manualText: '', subject: '', html: '', tests: '', excluded: [] };
@@ -13,6 +13,7 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
   const [url, setUrl] = useState(''), [caption, setCaption] = useState('');
   const [sending, setSending] = useState(false), [deliveryStatus, setDeliveryStatus] = useState('');
   const deliveryAttempts = useRef(new Map());
+  const interruptedDeliveries = useRef(new Map());
   const messageEditor = useRef(null), selectedText = useRef(null);
   const latest = useRef(null), pending = useRef(null), guard = useRef(false), reviewRef = useRef(null);
   const userId = session?.user?.id, userEmail = session?.user?.email, allowed = scopeId === 'all' && canReviewBroadcast(permissions);
@@ -41,7 +42,7 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [changed]);
-  useEffect(() => { setDraft(empty); setReview(null); setError(''); setSearch(''); setUrl(''); setCaption(''); setDeliveryStatus(''); setSending(false); deliveryAttempts.current.clear(); pending.current?.abort(); return () => pending.current?.abort(); }, [client, userId, userEmail, scopeId]);
+  useEffect(() => { setDraft(empty); setReview(null); setError(''); setSearch(''); setUrl(''); setCaption(''); setDeliveryStatus(''); setSending(false); deliveryAttempts.current.clear(); interruptedDeliveries.current.clear(); pending.current?.abort(); return () => pending.current?.abort(); }, [client, userId, userEmail, scopeId]);
   useEffect(() => {
     const abort = new AbortController(); setCatalog({ loading: true });
     if (!allowed) { setCatalog({ error: 'Platform Email Broadcast permission is required.' }); return () => abort.abort(); }
@@ -63,6 +64,10 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
   const eventAudienceError = draft.events.length > 0 && (audience.error || catalog.error);
   const eventAudienceUnavailable = Boolean(eventAudienceError || (draft.events.length > 0 && audience.loading));
   useEffect(() => { if (!audience.loading && !audience.error) setDraft(old => { const excluded = old.excluded.filter(email => pool.includes(email)); return excluded.length === old.excluded.length ? old : { ...old, excluded }; }); }, [audience, manual]);
+  const hasInterruptedDelivery = candidate => {
+    const previous = interruptedDeliveries.current.get(candidate.messageSignature) ?? readInterruptedBroadcast(candidate.interruptionKey);
+    return Boolean(previous && previous !== (candidate.storageKey ?? candidate.signature));
+  };
   const buildReview = async kind => {
     if (guard.current || !allowed) return;
     setError(''); setReview(null); setDeliveryStatus('');
@@ -82,23 +87,35 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
       let delivery, unavailable;
       try { delivery = await emailBroadcastCapability(client, abort.signal); }
       catch (issue) { unavailable = issue.message; }
+      const subject = draft.subject.trim() + (kind === 'test' ? ' (TEST)' : '');
+      const addresses = [...final].sort();
+      const messageSignature = JSON.stringify([kind, subject, clean]);
+      const signature = JSON.stringify([kind, subject, clean, addresses]);
+      const [storageKey, interruptionKey] = await Promise.all([
+        broadcastAttemptKey(userId, scopeId, signature),
+        broadcastAttemptKey(userId, scopeId, messageSignature, 'interrupted')
+      ]);
       if (!current()) return;
       if (kind === 'broadcast') setAudience({ emails });
-      setReview({ kind, recipients: final, count: final.length, subject: draft.subject.trim() + (kind === 'test' ? ' (TEST)' : ''), html: clean, delivery, unavailable });
+      const candidate = { kind, recipients: addresses, count: addresses.length, subject, html: clean, delivery, unavailable, signature, storageKey, interruptionKey, messageSignature };
+      setReview({ ...candidate, duplicateRisk: hasInterruptedDelivery(candidate), acknowledged: false });
       requestAnimationFrame(() => reviewRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
     } catch (err) { if (latest.current === identity || ['client','userId','userEmail','scopeId','draft'].every(key => latest.current[key] === identity[key])) setError(err.message); }
     finally { clearTimeout(timer); guard.current = false; setChecking(false); }
   };
   const sendReview = async () => {
     if (guard.current || !allowed || !review?.delivery) return;
+    if (!review.acknowledged && hasInterruptedDelivery(review)) {
+      setReview({ ...review, duplicateRisk: true });
+      return;
+    }
     const identity = latest.current, abort = new AbortController();
     const current = () => !abort.signal.aborted && ['client','userId','userEmail','scopeId','draft'].every(key => latest.current[key] === identity[key]);
     pending.current = abort;
     guard.current = true;
     setSending(true); setError(''); setDeliveryStatus('');
     const batchSize = review.delivery.batchSize;
-    const addresses = [...review.recipients].sort();
-    const signature = JSON.stringify([review.kind, review.subject, review.html, addresses]);
+    const { recipients: addresses, signature, storageKey, interruptionKey, messageSignature } = review;
     let attempt = deliveryAttempts.current.get(signature);
     const recheckAudience = async () => {
       if (review.kind !== 'broadcast' || !draft.events.length) return current();
@@ -127,8 +144,6 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
       if (signedIn.email !== userEmail?.trim().toLowerCase() || !current()) throw new Error('The signed-in account changed. Reopen the review.');
       await emailBroadcastCapability(client, abort.signal);
       if (!current()) return;
-      const storageKey = await broadcastAttemptKey(userId, scopeId, signature);
-      if (!current()) return;
       const batchCount = Math.ceil(addresses.length / batchSize);
       if (!attempt) {
         const saved = readBroadcastAttempt(storageKey, batchCount);
@@ -140,12 +155,16 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
       for (let index = attempt.completed; index < attempt.batchIds.length; index++) {
         if (!current() || !await recheckAudience()) return;
         const emails = addresses.slice(index * batchSize, (index + 1) * batchSize);
+        interruptedDeliveries.current.set(messageSignature, storageKey ?? signature);
+        writeInterruptedBroadcast(interruptionKey, storageKey);
         await sendReviewedBroadcastBatch(client, { signal: abort.signal, requestId: attempt.batchIds[index], emails, subject: review.subject, html: review.html });
         if (!current()) return;
         attempt.completed++;
       }
       deliveryAttempts.current.delete(signature);
       writeBroadcastAttempt(storageKey, null);
+      interruptedDeliveries.current.delete(messageSignature);
+      writeInterruptedBroadcast(interruptionKey, null);
       setDeliveryStatus(`Email accepted by the provider for ${review.count} recipient${review.count === 1 ? '' : 's'}.`);
       setReview(null);
       if (review.kind === 'broadcast') setDraft(empty);
@@ -218,10 +237,14 @@ export default function EmailBroadcastWorkspace({ client, session, permissions, 
     </aside></fieldset>
     {error && <p role="alert">{error}</p>}{deliveryStatus && <p role="status">{deliveryStatus}</p>}
     {review && <section ref={reviewRef} className="email-broadcast-review" aria-label="Broadcast review"><h2>{review.kind === 'test' ? 'Test review' : 'Broadcast review'}</h2><p><strong>{review.subject}</strong></p><p>{review.count} recipient(s) · {review.kind === 'test' ? 'test list' : 'BCC audience'}</p><div className="email-broadcast-preview" dangerouslySetInnerHTML={{ __html: review.html }}/>{review.unavailable && <p className="fo-note" role="status">{review.unavailable}</p>}
+      {review.duplicateRisk && <>
+        <p className="fo-note">Some recipients may already have received this message during an earlier send.</p>
+        <label className="email-broadcast-check"><input type="checkbox" checked={review.acknowledged} disabled={sending} onChange={event => setReview({ ...review, acknowledged: event.target.checked })}/>Send to the updated audience even if some recipients receive the message again</label>
+      </>}
       <div className="email-broadcast-actions">
         <button type="button" className="ap-secondary" disabled={sending} onClick={() => setReview(null)}>Back to draft</button>
         {review.delivery
-          ? <button type="button" className="ap-primary" disabled={sending} onClick={sendReview}>{sending ? 'Sending…' : review.kind === 'test' ? 'Send test email' : 'Send broadcast'}</button>
+          ? <button type="button" className="ap-primary" disabled={sending || (review.duplicateRisk && !review.acknowledged)} onClick={sendReview}>{sending ? 'Sending…' : review.kind === 'test' ? 'Send test email' : 'Send broadcast'}</button>
           : <button type="button" className="ap-secondary" disabled={checking} onClick={() => void buildReview(review.kind)}>Check delivery access</button>}
       </div></section>}
   </div>;

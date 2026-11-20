@@ -18,7 +18,8 @@ const fixture = `
   window.calls = [];
   window.emailCalls = [];
   window.emailReads = [];
-  window.crypto.randomUUID ??= () => '12340000-0000-4000-8000-000000000001';
+  let requestSequence = 0;
+  window.crypto.randomUUID ??= () => '12340000-0000-4000-8000-' + String(++requestSequence).padStart(12, '0');
   const client = {
     auth: { getUser: async () => result({ user: actor }) },
     from(table) {
@@ -220,7 +221,7 @@ test('Email requires server capability and resumes an interrupted reviewed BCC d
   } finally { await page.close(); }
 });
 
-test('a browser reload retains batch IDs for the same reviewed BCC delivery without saving its content', async () => {
+test('a browser reload retains retry IDs and guards changed audiences without saving content', async () => {
   const page = await browser.newPage();
   const fixtureUrl = 'https://broadcast-fixture.test/';
   const recipients = Array.from({ length: 50 }, (_, index) => 'retry-reader' + index + '@example.test');
@@ -259,6 +260,15 @@ test('a browser reload retains batch IDs for the same reviewed BCC delivery with
     assert.match(saved[0][0], /^4m-admin:email-review:[a-f0-9]{64}$/);
     assert.deepEqual(Object.keys(JSON.parse(saved[0][1])).sort(), ['batchIds', 'startedAt']);
     assert.doesNotMatch(JSON.stringify(saved), /retry-reader|Fictional retry/);
+    const interrupted = await page.evaluate(() => Object.entries(sessionStorage).filter(([key]) => key.startsWith('4m-admin:email-interrupted:')));
+    assert.equal(interrupted.length, 1);
+    assert.match(interrupted[0][0], /^4m-admin:email-interrupted:[a-f0-9]{64}$/);
+    assert.equal(interrupted[0][1], saved[0][0]);
+
+    await page.reload();
+    await reconstruct([...recipients.slice(1), 'new-reader@example.test']);
+    await page.waitForSelector('section[aria-label="Broadcast review"] button.ap-primary:disabled');
+    assert.deepEqual(await page.evaluate(() => window.emailCalls.filter(call => call.template === 'broadcast')), []);
 
     await page.reload();
     await reconstruct([...recipients].reverse());
@@ -266,7 +276,7 @@ test('a browser reload retains batch IDs for the same reviewed BCC delivery with
     await page.waitForFunction(() => document.body.textContent.includes('Email accepted by the provider for 50 recipients.'));
     const retried = await page.evaluate(() => window.emailCalls.filter(call => call.template === 'broadcast'));
     assert.deepEqual(retried, first);
-    assert.equal(await page.evaluate(() => Object.keys(sessionStorage).some(key => key.startsWith('4m-admin:email-review:'))), false);
+    assert.equal(await page.evaluate(() => Object.keys(sessionStorage).some(key => key.startsWith('4m-admin:email-'))), false);
   } finally { await page.close(); }
 });
 
@@ -426,7 +436,7 @@ test('revoking event access after an accepted batch stops delivery until the sam
   assert.equal(new Set(complete.flatMap(batch => batch.bcc)).size, 51);
 });
 
-test('an event roster change after an accepted batch invalidates the original audience', async t => {
+test('an event roster change after an accepted batch requires acknowledgement before sending to the new audience', async t => {
   const page = await openBroadcast(t, { emailManagedEvent: '61', emailLargeAudience: true, emailAfterFirstBatch: 'remove' });
   await enterMessage(page);
   await page.click('.email-broadcast-events input');
@@ -436,7 +446,18 @@ test('an event roster change after an accepted batch invalidates the original au
   await page.waitForFunction(() => document.body.textContent.includes('The event audience changed.'));
   await audienceCount(page, 50);
   assert.equal(await page.$('section[aria-label="Broadcast review"]'), null);
-  assert.deepEqual((await deliveries(page)).map(batch => batch.bcc.length), [49]);
+  const accepted = await deliveries(page);
+  assert.deepEqual(accepted.map(batch => batch.bcc.length), [49]);
+
+  await click(page, 'Review broadcast');
+  await page.waitForSelector('section[aria-label="Broadcast review"] button.ap-primary:disabled');
+  assert.deepEqual(await deliveries(page), accepted);
+  await page.click('section[aria-label="Broadcast review"] input[type="checkbox"]');
+  await click(page, 'Send broadcast');
+  await page.waitForFunction(() => document.body.textContent.includes('Email accepted by the provider for 50 recipients.'));
+  const complete = await deliveries(page);
+  assert.deepEqual(complete.map(batch => batch.bcc.length), [49, 49, 1]);
+  assert.notEqual(complete[0].broadcastRequestId, complete[1].broadcastRequestId);
 });
 
 test('a provider roster read failure discards the event recipient list as a whole', async t => {

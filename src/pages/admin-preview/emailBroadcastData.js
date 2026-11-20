@@ -108,13 +108,13 @@ export async function sendReviewedBroadcastBatch(client, { signal, requestId, em
   }
 }
 
-// Only the provider request IDs survive navigation. Retrying a reconstructed
-// review asks the provider to confirm every batch using its original key.
-export async function broadcastAttemptKey(userId, scopeId, signature) {
+// Request identifiers and review digests survive navigation. Reconstructing
+// the same review asks the provider to confirm every batch with its original key.
+export async function broadcastAttemptKey(userId, scopeId, signature, purpose = 'review') {
   try {
     const bytes = new TextEncoder().encode(JSON.stringify([userId, scopeId, signature]));
     const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
-    return '4m-admin:email-review:' + Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+    return `4m-admin:email-${purpose}:` + Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
   } catch {
     return null;
   }
@@ -140,4 +140,22 @@ export function writeBroadcastAttempt(key, attempt) {
     if (attempt) globalThis.sessionStorage.setItem(key, JSON.stringify({ batchIds: attempt.batchIds, startedAt: attempt.startedAt }));
     else globalThis.sessionStorage.removeItem(key);
   } catch { /* The current workspace can still retry with its in-memory IDs. */ }
+}
+
+export function readInterruptedBroadcast(key) {
+  if (!key) return null;
+  try {
+    const attempt = globalThis.sessionStorage.getItem(key);
+    return /^4m-admin:email-review:[a-f0-9]{64}$/.test(attempt ?? '') ? attempt : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeInterruptedBroadcast(key, attempt) {
+  if (!key) return;
+  try {
+    if (attempt) globalThis.sessionStorage.setItem(key, attempt);
+    else globalThis.sessionStorage.removeItem(key);
+  } catch { /* The current workspace keeps its review state in memory. */ }
 }
