@@ -23,6 +23,8 @@ const event={id:1,is_manual:true,event_name:'Reconciliation test',entry_fee:600,
 const tables={calendar:[event],event_registrations:[reg('a'),reg('b'),reg('c'),reg('d',{payment_status:'pending'}),reg('old',{status:'withdrawn',payment_status:'refunded'})],payments:[pay('a',600),pay('b',600,'eft'),pay('c',600,'eft','organiser'),pay('old',550)],tournament_divisions:[{id:'open',event_id:1,name:'Open',entry_fee:600}],payment_refunds:[{id:'refund-old',event_registration_id:'old',payment_id:'old',amount:550,status:'processed',metadata:{cover_type:'entry'},processed_at:'2026-10-02'}],tournament_participants:[]};
 window.__tables=tables;window.__writes=[];
 export const supabase={async rpc(name,args){
+ if(name==='account_is_active')return {data:true};
+ if(name==='is_super_admin')return {data:!window.__revoked};
  if(name!=='correct_manual_event_payment')throw new Error('Unexpected RPC '+name);
  window.__rpcCalls=(window.__rpcCalls||[]).concat({name,args});
  if(window.__failCorrection)return {error:{message:'Payment correction denied.'}};
@@ -31,12 +33,13 @@ export const supabase={async rpc(name,args){
  Object.assign(receipt,{payment_method:args.p_method,metadata});entry.payment_method=args.p_method;
  window.__writes.push({table:'payments',operation:'update',values:{metadata}});
  return {data:{paymentId:receipt.id,method:args.p_method,recipient:args.p_recipient},error:null};
-},auth:{getUser:async()=>({data:{user:{email:'admin@example.com'}}})},functions:{invoke:async(name)=>{
+},auth:{getUser:async()=>({data:{user:{id:'fixture-admin',email:'admin@example.com'}}})},functions:{invoke:async(name)=>{
  if(name!=='event-cash-receipts') throw new Error('Unexpected endpoint '+name);
  return {data:{receipts:tables.payments.filter(p=>p.payment_method==='paystack').map(p=>({reference:p.reference,status:'success',amount:p.amount,currency:'ZAR'})),non_receipts:[],unresolved:[],next_offset:null}};
 }},from(table){
  let operation='select',values,filters=[],ordering=null;
  const execute=(from=0,to=Infinity)=>{
+  (window.__reads ||= []).push(table);
   if(window.__fail===table)return {data:null,error:{message:table+' unavailable'}};
   let rows=(tables[table]||[]).filter(r=>filters.every(f=>f(r)));
   if(operation==='update'){rows.forEach(r=>Object.assign(r,values));window.__writes.push({table,operation,values});}
@@ -44,14 +47,27 @@ export const supabase={async rpc(name,args){
   if(ordering)rows=[...rows].sort((a,b)=>String(a[ordering]).localeCompare(String(b[ordering])));
   return {data:structuredClone(rows.slice(from,to+1)),error:null};
  };
- const q={select(){return q},eq(k,v){filters.push(r=>typeof r[k]==='object'?JSON.stringify(r[k])===v:r[k]===v);return q},neq(k,v){filters.push(r=>r[k]!==v);return q},is(k,v){filters.push(r=>r[k]===v||r[k]==null&&v===null);return q},in(k,v){filters.push(r=>v.includes(r[k]));return q},lt(k,v){filters.push(r=>r[k]<v);return q},order(k){ordering=k;return q},update(v){operation='update';values=v;return q},insert(v){operation='insert';values=v;return q},async range(f,t){return execute(f,t)},async maybeSingle(){const r=execute();return {...r,data:r.data?.[0]||null}},async single(){return q.maybeSingle()},then(resolve,reject){return Promise.resolve(execute()).then(resolve,reject)}};return q;
+ const q={select(){return q},eq(k,v){filters.push(r=>typeof r[k]==='object'?JSON.stringify(r[k])===v:r[k]===v);return q},neq(k,v){filters.push(r=>r[k]!==v);return q},is(k,v){filters.push(r=>r[k]===v||r[k]==null&&v===null);return q},in(k,v){filters.push(r=>v.includes(r[k]));return q},lt(k,v){filters.push(r=>r[k]<v);return q},order(k){ordering=k;return q},update(v){operation='update';values=v;return q},insert(v){operation='insert';values=v;return q},abortSignal(){return q},async range(f,t){return execute(f,t)},async maybeSingle(){const r=execute();return {...r,data:r.data?.[0]||null}},async single(){return q.maybeSingle()},then(resolve,reject){return Promise.resolve(execute()).then(resolve,reject)}};return q;
 }};`;
 
 before(async () => {
-    await build({ stdin: { contents: `import React from 'react';import{createRoot}from'react-dom/client';import Manager from './src/components/admin/ManualEventRegistrations.jsx';import Dashboard from './src/components/admin/FinancialDashboard.jsx';const root=createRoot(document.getElementById('root'));const allowed=[1];window.__showManager=()=>root.render(<Manager variant="inline" isOpen event={structuredClone(window.__tables.calendar[0])}/>);window.__showDashboard=()=>root.render(<Dashboard allowedEvents={allowed} onSelectEvent={id=>window.__selected=id}/>);window.__showManager();`, resolveDir: root, loader: 'jsx' }, outfile: output, bundle: true, platform: 'browser', format: 'iife', define: { 'process.env.NODE_ENV': '"test"' },
+    await build({ stdin: { contents: `
+        import React from 'react';
+        import {createRoot} from 'react-dom/client';
+        import {MemoryRouter} from 'react-router-dom';
+        import Manager from './src/components/admin/ManualEventRegistrations.jsx';
+        import Dashboard from './src/components/admin/FinancialDashboard.jsx';
+        import FinanceOverview from './src/pages/admin-preview/FinanceOverview.jsx';
+        import {supabase} from './src/supabaseClient.js';
+        const root=createRoot(document.getElementById('root'));
+        const allowed=[1];
+        window.__showManager=()=>root.render(<Manager variant="inline" isOpen event={structuredClone(window.__tables.calendar[0])}/>);
+        window.__showDashboard=()=>root.render(<Dashboard allowedEvents={allowed} onSelectEvent={id=>window.__selected=id}/>);
+        window.__showNewFinance=()=>root.render(<MemoryRouter><FinanceOverview client={supabase} session={{user:{id:'fixture-admin'}}} scopeId="all" permissions={{role:'super_admin'}}/></MemoryRouter>);
+        window.__showManager();`, resolveDir: root, loader: 'jsx' }, outfile: output, bundle: true, platform: 'browser', format: 'iife', jsx: 'automatic', define: { 'process.env.NODE_ENV': '"test"', 'import.meta.env': '{}' },
         plugins: [{ name: 'isolated-financial-records', setup(builder) {
-            builder.onResolve({ filter: /supabaseClient$/ }, () => ({ path: 'supabase', namespace: 'mock' }));
-            for (const [filter, name] of [[/useAdminPermissions$/, 'permissions'], [/\/utils\/playerLookup$/, 'players'], [/\/utils\/commerce$/, 'commerce'], [/\/utils\/eventActivityLog$/, 'activity'], [/\/utils\/emails$/, 'emails'], [/\/utils\/eventFinanceExport$/, 'export']]) builder.onResolve({ filter }, () => ({ path: name, namespace: 'mock' }));
+            builder.onResolve({ filter: /supabaseClient(?:\.js)?$/ }, () => ({ path: 'supabase', namespace: 'mock' }));
+            for (const [filter, name] of [[/useAdminPermissions$/, 'permissions'], [/\/utils\/playerLookup$/, 'players'], [/\/commerce(?:\.js)?$/, 'commerce'], [/\/utils\/eventActivityLog$/, 'activity'], [/\/utils\/emails$/, 'emails'], [/\/utils\/eventFinanceExport$/, 'export']]) builder.onResolve({ filter }, () => ({ path: name, namespace: 'mock' }));
             builder.onResolve({ filter: /^\.\/[A-Z][^/]*$/ }, args => args.importer.endsWith('ManualEventRegistrations.jsx') ? ({ path: 'component', namespace: 'mock' }) : null);
             builder.onLoad({ filter: /.*/, namespace: 'mock' }, args => ({ contents: {
                 supabase: mock, permissions: "export const useAdminPermissions=()=>({permissions:{role:'super_admin'}})",
@@ -232,6 +248,44 @@ test('finance overview fails visibly instead of replacing an unavailable refund 
         await page.waitForSelector('[role="alert"]');
         assert.match(await page.$eval('[role="alert"]', e => e.textContent), /payment_refunds unavailable/);
         assert.equal(await metric(page, 'Total balance owed'), undefined);
+    } finally { await page.close(); }
+});
+
+test('New Admin Collections matches the current Admin totals and denies revoked platform access', async () => {
+    const page = await open();
+    try {
+        await page.evaluate(() => {
+            window.__tables.payments.push(
+                {id:'annual',amount:650,payment_type:'full_license',status:'success',created_at:new Date().toISOString()},
+                {id:'temporary',amount:100,payment_type:'temp_license',status:'success',created_at:new Date().toISOString()},
+                {id:'test-licence',amount:200,payment_type:'full_license',status:'success',is_test:true},
+            );
+            window.__tables.payment_refunds.push({id:'lic-refund',payment_id:'annual',amount:50,status:'processed',processed_at:new Date().toISOString()});
+            window.__showNewFinance();
+        });
+        await page.waitForSelector('nav[aria-label="Finance report views"]');
+        await clickText(page, 'Collections');
+        await page.waitForSelector('section[aria-label="Collection totals"]');
+        const newMetric = name => page.$$eval('.fo-card', (cards, label) =>
+            cards.find(card=>card.querySelector('h2').textContent===label).querySelector('strong').textContent.replace(/\s/g,''), name);
+        assert.equal(await newMetric('Current entry payments'), 'R1800,00');
+        assert.equal(await newMetric('Balance owed'), 'R940,00');
+        assert.equal(await newMetric('Full licence collections'), 'R600,00');
+        assert.equal(await newMetric('Temporary licence collections'), 'R100,00');
+        const eventLink = await page.$eval('[aria-label="Event collection figures"] tbody a', link => link.getAttribute('href'));
+        assert.equal(eventLink, '/admin-preview/event?event=1&tab=statement');
+        await page.select('select[aria-label="Filter collection events"]', 'settled');
+        assert.equal(await newMetric('Current entry payments'), 'R0,00');
+        await page.select('select[aria-label="Filter collection events"]', 'outstanding');
+        assert.equal(await newMetric('Balance owed'), 'R940,00');
+        await page.evaluate(() => { window.__fail = 'payment_refunds'; });
+        await clickText(page, 'Refresh collections');
+        await page.waitForSelector('[role="alert"]');
+        assert.match(await page.$eval('[role="alert"]', alert => alert.textContent), /payment_refunds unavailable/);
+        await page.evaluate(() => { window.__fail = null; window.__revoked = true; window.__reads = []; });
+        await clickText(page, 'Try again');
+        await page.waitForFunction(() => document.querySelector('[role="alert"]')?.textContent.includes('Current platform Finance access'));
+        assert.deepEqual(await page.evaluate(() => window.__reads), []);
     } finally { await page.close(); }
 });
 

@@ -9,10 +9,8 @@ import {
     ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area
 } from 'recharts';
 import { supabase } from '../../supabaseClient';
-import { isLicensePaymentRow, normalizePaymentMetadata } from '../../utils/paymentRegistrationMatch';
-import { fetchCommerceConfig, matchLicenseTypeByAmount } from '../../utils/commerce';
-import { fetchAllRows } from '../../utils/fetchAllRows';
-import { buildEventSettlements, summarizeEventSettlements } from '../../utils/eventSettlement';
+import { summarizeEventSettlements } from '../../utils/eventSettlement';
+import { filterCollectionEvents, loadFinanceCollections } from '../../utils/financeCollections';
 
 const EMPTY_EVENTS = Object.freeze([]);
 const money = n => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -59,61 +57,19 @@ const FinancialDashboard = ({ allowedEvents = EMPTY_EVENTS, onSelectEvent }) => 
     const [eventFilter, setEventFilter] = useState('all');
     const [eventStatements, setEventStatements] = useState([]);
 
-    const isRestricted = allowedEvents.length > 0;
-
     useEffect(() => {
         let cancelled = false;
         const fetchDashboardData = async () => {
             setLoading(true); setError('');
             try {
-                const scope = query => isRestricted ? query.in('event_id', allowedEvents) : query;
-                const [payments, refunds, events, registrations, participants, divisions, commerce] = await Promise.all([
-                    fetchAllRows(() => scope(supabase.from('payments').select('*')).order('id', { ascending: true })),
-                    fetchAllRows(() => supabase.from('payment_refunds').select('*').order('id', { ascending: true })),
-                    fetchAllRows(() => {
-                        const query = supabase.from('calendar').select('*').order('id', { ascending: true });
-                        return isRestricted ? query.in('id', allowedEvents) : query;
-                    }),
-                    fetchAllRows(() => scope(supabase.from('event_registrations').select('*')).order('id', { ascending: true })),
-                    fetchAllRows(() => scope(supabase.from('tournament_participants').select('*, players(email)')).order('id', { ascending: true })),
-                    fetchAllRows(() => scope(supabase.from('tournament_divisions').select('*')).order('id', { ascending: true })),
-                    fetchCommerceConfig().catch(() => null),
-                ]);
-                const statements = buildEventSettlements({ events, registrations, participants, payments, refunds, divisions });
-                const receipts = statements.flatMap(e => e.settlement.receiptRows);
-                const currentShares = statements.flatMap(e => e.settlement.allocations.flatMap(a => a.shares || []));
-                const licenses = payments.filter(p => p.status === 'success' && !p.is_test && !normalizePaymentMetadata(p.metadata).is_test && isLicensePaymentRow(p));
-                const licenseById = new Map(licenses.map(p => [p.id, p]));
-                const licenseRefunds = [...new Map(refunds.filter(r => r.status === 'processed' && licenseById.has(r.payment_id))
-                    .map(r => [r.paystack_refund_id || r.id, r])).values()];
-                const sum = (rows, key = 'amount') => Math.round(rows.reduce((n, r) => n + Number(r[key] || 0), 0) * 100) / 100;
-                const full = p => ['full_license', 'membership'].includes(p.payment_type)
-                    || normalizePaymentMetadata(p.metadata).license_type === 'full'
-                    || (!['temp_license', 'temporary_license'].includes(p.payment_type) && matchLicenseTypeByAmount(Number(p.amount), commerce) === 'full');
-                const fullLicRev = sum(licenses.filter(full)) - sum(licenseRefunds.filter(r => full(licenseById.get(r.payment_id))));
-                const tempLicRev = sum(licenses.filter(p => !full(p))) - sum(licenseRefunds.filter(r => !full(licenseById.get(r.payment_id))));
-                const totals = summarizeEventSettlements(statements);
-                const eventEntryRev = totals.collected;
-                const totalRevenue = eventEntryRev + fullLicRev + tempLicRev;
-                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                const monthlyData = months.map((name, i) => {
-                    const inMonth = value => {
-                        const date = new Date(value);
-                        return date.getFullYear() === new Date().getFullYear() && date.getMonth() === i;
-                    };
-                    const entries = sum(currentShares.filter(s => inMonth(s.receipt.created_at)));
-                    const licenseTotal = sum(licenses.filter(p => inMonth(p.created_at))) - sum(licenseRefunds.filter(r => inMonth(r.processed_at || r.created_at)));
-                    return { name, revenue: entries + licenseTotal, entries, licenses: licenseTotal };
-                });
+                const collections = await loadFinanceCollections(supabase, allowedEvents);
                 if (cancelled) return;
-                setEventStatements(statements);
-                setStats({ totalRevenue, fullLicRev, tempLicRev, allLicRev: fullLicRev + tempLicRev, eventEntryRev,
-                    totalTransactions: receipts.length + licenses.length,
-                    activePlayers: new Set([...registrations.filter(r => !['withdrawn', 'cancelled'].includes(r.status)).map(r => r.email), ...participants.map(p => p.email || p.players?.email)].filter(Boolean).map(v => v.toLowerCase())).size });
-                setPieData([{ name: 'Event entries', value: Math.max(0, eventEntryRev), color: '#beff00' },
-                    { name: 'Full licences', value: Math.max(0, fullLicRev), color: '#3b82f6' },
-                    { name: 'Temporary licences', value: Math.max(0, tempLicRev), color: '#f59e0b' }]);
-                setChartData(monthlyData);
+                setEventStatements(collections.statements);
+                setStats(collections);
+                setPieData([{ name: 'Event entries', value: Math.max(0, collections.eventEntryRev), color: '#beff00' },
+                    { name: 'Full licences', value: Math.max(0, collections.fullLicRev), color: '#3b82f6' },
+                    { name: 'Temporary licences', value: Math.max(0, collections.tempLicRev), color: '#f59e0b' }]);
+                setChartData(collections.monthly);
             } catch (err) {
                 if (!cancelled) setError(err.message || 'Could not load financial records');
             } finally {
@@ -122,18 +78,9 @@ const FinancialDashboard = ({ allowedEvents = EMPTY_EVENTS, onSelectEvent }) => 
         };
         fetchDashboardData();
         return () => { cancelled = true; };
-    }, [allowedEvents, isRestricted, retryKey]);
+    }, [allowedEvents, retryKey]);
 
-    const displayedEvents = useMemo(() => eventStatements.filter(event => {
-        const balance = event.settlement.dueToOrg;
-        if (eventFilter === 'outstanding') return balance > 0;
-        if (eventFilter === 'settled') return balance === 0 && !event.settlement.issues.length && !event.settlement.refundReserve;
-        if (eventFilter === 'month') {
-            const now = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' }).slice(0, 7);
-            return String(event.start_date || '').slice(0, 7) === now;
-        }
-        return true;
-    }), [eventStatements, eventFilter]);
+    const displayedEvents = useMemo(() => filterCollectionEvents(eventStatements, eventFilter), [eventStatements, eventFilter]);
     const eventTotals = summarizeEventSettlements(displayedEvents);
 
     if (error) return <div role="alert" className="rounded-xl border border-red-400/30 p-6 text-red-200">

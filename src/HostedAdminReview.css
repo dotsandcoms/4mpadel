@@ -1,0 +1,9 @@
+/* The review notice uses the existing admin's information and border tokens. */
+body { margin: 0; background: #f4f5f2; }
+.hosted-review-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; padding: 12px 24px; border-bottom: 1px solid var(--ap-line, #d8dcd5); background: var(--ap-info-bg, #e3f2f7); color: var(--ap-ink, #171a17); font: 13px/1.5 ui-sans-serif, system-ui, sans-serif; }
+.hosted-review-notice p { margin: 0; display: grid; gap: 2px; }
+.hosted-review-notice a { flex-shrink: 0; padding: 8px 0; color: var(--ap-info, #126b88); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.hosted-review-notice a:focus-visible { outline: 2px solid var(--ap-info, #126b88); outline-offset: 4px; }
+.hosted-review-gate { display: grid; justify-items: center; align-content: center; gap: 16px; padding: 32px; text-align: center; }
+.hosted-review-gate p { max-width: 60ch; }
+@media (max-width: 640px) { .hosted-review-notice { align-items: flex-start; flex-direction: column; gap: 4px; padding: 12px 16px; } }

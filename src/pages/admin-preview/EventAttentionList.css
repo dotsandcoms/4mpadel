@@ -1,0 +1,11 @@
+.ap-attention-list { padding:24px; border-radius:14px; display:grid; gap:20px; }
+.ap-attention-list header { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; }
+.ap-attention-list h2 { margin:0; font-size:1.25rem; }
+.ap-attention-list p { color:var(--ap-muted); margin:8px 0; line-height:1.5; }
+.ap-attention-list ul { list-style:none; margin:0; padding:0; }
+.ap-attention-list .ap-filter-search { display:flex; min-width:0; min-height:44px; padding:0 14px; }
+.ap-attention-list .ap-filter-search input { flex:1 1 auto; width:100%; min-width:0; min-height:42px; padding:8px 0; font-size:14px; }
+.ap-attention-list .ap-filter-search input:focus-visible { outline:none; box-shadow:none; }
+.ap-attention-list li { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:18px 0; border-bottom:1px solid var(--ap-line); overflow-wrap:anywhere; }
+.ap-attention-list li button,.ap-attention-list header button { flex-shrink:0; }
+@media(max-width:600px) { .ap-attention-list { padding:20px 16px; }.ap-attention-list header,.ap-attention-list li { flex-direction:column; align-items:flex-start; } }

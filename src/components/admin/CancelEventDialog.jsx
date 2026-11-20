@@ -1,22 +1,31 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion as Motion } from 'framer-motion';
 import { AlertTriangle, Ban, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../supabaseClient';
 
-export default function CancelEventDialog({ event, divisions, onClose, onCancelled }) {
+export default function CancelEventDialog({ event, divisions, onClose, onCancelled, beforeCancel, onBusyChange, theme }) {
     const [divisionId, setDivisionId] = useState('');
     const division = divisions?.find((d) => String(d.id) === divisionId);
     const isDivision = Boolean(divisions);
     const subject = isDivision ? 'division' : 'event';
     const [cancelling, setCancelling] = useState(false);
     const [cancellationReason, setCancellationReason] = useState('');
+    const requestLock = useRef(false);
+    const [uncertain, setUncertain] = useState(false);
 
     const handleCancelEvent = async () => {
-        if (!event?.id || cancelling || (isDivision && !division)) return;
+        if (!event?.id || requestLock.current || uncertain || (isDivision && !division)) return;
+        requestLock.current = true;
         setCancelling(true);
+        onBusyChange?.(true);
+        let attempted = false;
         try {
+            const checkpoint = await beforeCancel?.();
+            if (checkpoint === false) throw new Error('Cancellation was not authorised.');
+            if (typeof checkpoint === 'function') await checkpoint();
+            attempted = true;
             const { data, error } = await supabase.functions.invoke('paystack-refund', {
                 body: {
                     action: isDivision ? 'cancel_division' : 'cancel_event',
@@ -25,6 +34,7 @@ export default function CancelEventDialog({ event, divisions, onClose, onCancell
                     cancellation_reason: cancellationReason.trim() || undefined,
                 },
             });
+            if (typeof checkpoint === 'function') await checkpoint();
             if (error) {
                 const details = await error.context?.json?.().catch(() => null);
                 throw new Error(details?.error || error.message);
@@ -54,10 +64,13 @@ export default function CancelEventDialog({ event, divisions, onClose, onCancell
             data?.refund_status === 'needs_attention' ? toast.warning(refundMessage) : toast.success(refundMessage);
             onCancelled(updatedEvent);
         } catch (err) {
+            if (beforeCancel && attempted) setUncertain(true);
             console.error('Event cancellation failed:', err);
             toast.error(err?.message || `Could not cancel the ${subject}. Refresh to check cancellation and refund status.`);
         } finally {
+            requestLock.current = false;
             setCancelling(false);
+            onBusyChange?.(false);
         }
     };
 
@@ -65,7 +78,7 @@ export default function CancelEventDialog({ event, divisions, onClose, onCancell
         <Motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="fixed inset-0 z-[1300] bg-black/80 flex items-center justify-center p-4"
+            className={`${theme === 'preview' ? 'ap-live-event-editor ' : ''}fixed inset-0 z-[1300] bg-black/80 flex items-center justify-center p-4`}
             onClick={(e) => { e.stopPropagation(); if (!cancelling) onClose(); }}
         >
             <div role="dialog" aria-modal="true" aria-labelledby="cancel-event-title" className="w-full max-w-lg rounded-2xl border border-red-500/30 bg-[#111] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -97,11 +110,12 @@ export default function CancelEventDialog({ event, divisions, onClose, onCancell
                 />
                 <div className="mt-6 flex justify-end gap-3">
                     <button type="button" disabled={cancelling} onClick={() => onClose()} className="px-4 py-2 rounded-xl border border-white/10 text-gray-300 hover:bg-white/5 disabled:opacity-50">Keep {subject}</button>
-                    <button type="button" disabled={cancelling || (isDivision && !division)} onClick={handleCancelEvent} className="px-4 py-2 rounded-xl bg-red-500 text-white font-bold flex items-center gap-2 hover:bg-red-400 disabled:opacity-50">
+                    <button type="button" disabled={cancelling || uncertain || (isDivision && !division)} onClick={handleCancelEvent} className="px-4 py-2 rounded-xl bg-red-500 text-white font-bold flex items-center gap-2 hover:bg-red-400 disabled:opacity-50">
                         {cancelling ? <Loader2 size={16} className="animate-spin" /> : <Ban size={16} />}
                         {cancelling ? 'Cancelling and refunding…' : `Cancel ${subject} and refund players`}
                     </button>
                 </div>
+                {uncertain && <p role="alert" className="mt-4 text-sm text-red-300">A cancellation request was attempted. Close and refresh the event to check its status before retrying.</p>}
             </div>
         </Motion.div>,
         document.body

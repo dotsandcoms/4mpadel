@@ -1,0 +1,9 @@
+.ap-event-player-search { display: grid; gap: 12px; min-width: 0; }
+.ap-event-player-search p { margin: 0; color: var(--ap-muted, #687069); font-size: 13px; }
+.ap-event-player-search ul { list-style: none; padding: 0; margin: 0; max-height: 260px; overflow-y: auto; scrollbar-gutter: stable; }
+.ap-event-player-search li button, .ap-selected-player { display: flex; align-items: center; gap: 12px; padding: 14px; width: 100%; text-align: left; border: 1px solid #d9ded8; border-radius: 8px; background: transparent; }
+.ap-event-player-search li + li { margin-top: 8px; }
+.ap-event-player-search span { min-width: 0; }
+.ap-event-player-search span small { display: block; overflow-wrap: anywhere; color: #687069; }
+.ap-event-player-search li button > span:last-child { margin-left: auto; }
+.ap-selected-player { flex-wrap: wrap; }

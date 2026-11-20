@@ -44,44 +44,11 @@ export function buildPersistedRegistrationRows(
 export async function persistManualEventRegistrations(
     supabaseAdmin: SupabaseClient,
     payment: Record<string, unknown>,
-    meta: Record<string, unknown>,
-    covers: ManualPaymentCover[],
 ): Promise<{ savedRows: ManualRegistrationRow[]; persisted: boolean; needsReview?: boolean }> {
     const { data, error } = await supabaseAdmin.rpc('finalize_paid_event_checkout', { p_payment_id: payment.id });
     if (error) throw error;
     if (!data || !Array.isArray(data.savedRows)) throw new Error('Payment registration could not be confirmed.');
     return { savedRows: data.savedRows, persisted: data.persisted === true, needsReview: data.needsReview === true };
-}
-
-/** Apply covers and partner mirrors using the stable division identity. */
-export async function markManualEventEntryCoversPaid(
-    supabaseAdmin: SupabaseClient,
-    payment: Record<string, unknown>,
-    meta: Record<string, unknown>,
-    covers: ManualPaymentCover[],
-): Promise<void> {
-    const snapshots = Array.isArray(meta.registration_rows) ? meta.registration_rows as ManualRegistrationRow[] : [];
-    for (const cover of covers.filter((item) => item.type === 'entry')) {
-        const snapshot = snapshots.find((row) => String(row.email).toLowerCase() === cover.email.toLowerCase()
-            && row.division === cover.division
-            && (cover.event_id == null || String(row.event_id) === String(cover.event_id)));
-        const eventId = cover.event_id ?? snapshot?.event_id ?? meta.event_id ?? payment.event_id;
-        const divisionId = snapshot?.division_id || snapshots.find((row) => row.division === cover.division
-            && String(row.event_id) === String(eventId))?.division_id;
-        for (const [emailColumn, values] of [
-            ['email', { payment_status: 'paid', payment_method: 'paystack' }],
-            ['partner_email', { partner_payment_status: 'paid' }],
-        ] as const) {
-            let query = supabaseAdmin.from('event_registrations').update(values)
-                .eq('event_id', eventId).ilike(emailColumn, cover.email).neq('status', 'withdrawn');
-            query = divisionId ? query.eq('division_id', divisionId) : query.eq('division', cover.division);
-            const { data: updated, error } = await query.select('id');
-            if (error) throw error;
-            if (emailColumn === 'email' && !updated?.length) {
-                throw new Error('The paid entry cover did not match an active registration');
-            }
-        }
-    }
 }
 
 /**

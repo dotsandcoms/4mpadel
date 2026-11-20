@@ -1,3 +1,5 @@
+import { canReviewEventRefund, handleReviewedRefundRetry } from './reviewed-refund-retry.ts';
+import { completeVerifiedEntrySwitch, dispatchVerifiedSwitchRefund, reviewVerifiedEntrySwitch } from './verified-entry-switch.ts';
 import { belongsToDivision, cancellationRefundStatus } from './division-cancellation.js';
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -12,8 +14,14 @@ import {
     cancelEventTempLicense,
     checkRefundEligibility,
     isLedgerSplitPayment,
-    resolveCanManageEvent,
-    resolveIsAdmin,
+    paymentCoversRefundEntry,
+    paymentUsesVerifiedEntryTransfer,
+    verifiedDivisionSwitchAmount,
+    canManageRefundEvent,
+    verifyRefundActor,
+    ownsRefundRegistration,
+    refundEventId,
+    literalRefundEmail,
     resolvePaystackGatewayReference,
     resolveRefundableItems,
     roundRands,
@@ -41,7 +49,15 @@ type Action =
     | 'cancel_event'
     | 'cancel_division'
     | 'switch_division'
-    | 'retry_failed';
+    | 'switch_division_quote'
+    | 'retry_failed'
+    | 'reviewed_retry_failed'
+    | 'reconcile_retry';
+
+const supportedActions = new Set<Action>([
+    'withdraw', 'withdraw_all', 'remove_partner', 'admin_remove', 'cancel_event',
+    'cancel_division', 'switch_division', 'switch_division_quote', 'retry_failed', 'reviewed_retry_failed', 'reconcile_retry',
+]);
 
 type RefundReason =
     | 'owner_withdraw'
@@ -191,6 +207,11 @@ async function resolvePaystackRefundTarget(
     }
 
     const paystackStatus = String(primary.status || '').toLowerCase();
+    if (item.cover_type === 'entry' && (paymentUsesVerifiedEntryTransfer(payment, reg) || verifiedDivisionSwitchAmount(payment, reg) > 0)) {
+        return { ok: false, payment_id: item.payment_id, reference: gatewayRef,
+            message: `The original checkout for this transferred entry is not refundable (${paystackStatus}). Review that receipt.` };
+    }
+
     // Demote local success that Paystack never settled — but never demote
     // LIC-* ledger splits or partially-refunded ("reversed") gateway charges.
     if (!ledgerSplit
@@ -213,7 +234,6 @@ async function resolvePaystackRefundTarget(
     }
 
     const regEmail = normEmail(reg.email);
-    const regDivision = String(reg.division || '');
     const parentRef = String(parseMeta(payment.metadata).parent_reference || '').trim();
 
     const candidates = ctx.payments
@@ -229,10 +249,7 @@ async function resolvePaystackRefundTarget(
                     && normEmail(c.email) === regEmail
                     && c.license !== 'full');
             }
-            return covers.some((c: Record<string, unknown>) =>
-                c.type === 'entry'
-                && normEmail(c.email) === regEmail
-                && String(c.division || '') === regDivision);
+            return paymentCoversRefundEntry(p, reg);
         })
         .sort((a, b) => {
             // Parent of a ledger split first, then most recent.
@@ -455,7 +472,7 @@ async function processRegistration(
         await supabaseAdmin
             .from('event_registrations')
             .update({ refund_amount: refundedTotal })
-            .eq('id', reg.id);
+            .eq('id', reg.id).eq('event_id', ctx.eventId);
     }
 
     if (aggregateStatus === 'processing' && !anyPaystack && refundedTotal > 0) {
@@ -492,39 +509,116 @@ function divisionClosed(div: Record<string, unknown>, event: Record<string, unkn
  * fee (requires a verified Paystack top-up of the difference). Solo move:
  * the partner is unlinked and stays in the original division.
  */
+async function findLinkedRefundPartner(client: SupabaseClient, entry: RegistrationRow, allowReverse = false) {
+    const expectedEmail = normEmail(entry.partner_email);
+    const sourceEmail = normEmail(entry.email);
+    if (!sourceEmail || (!expectedEmail && !allowReverse)) return null;
+    const byEmail = Boolean(expectedEmail);
+    const { data, error } = await client.from('event_registrations').select('*').eq('event_id', entry.event_id)
+        .ilike(byEmail ? 'email' : 'partner_email', literalRefundEmail(byEmail ? expectedEmail : sourceEmail))
+        .neq('status', 'withdrawn');
+    if (error) throw error;
+    const matches = ((data || []) as RegistrationRow[]).filter(candidate => {
+        const sameDivision = entry.division_id && candidate.division_id
+            ? entry.division_id === candidate.division_id : Boolean(entry.division && entry.division === candidate.division);
+        const originalOwner = normEmail(entry.registered_by);
+        const partnerOwner = normEmail(candidate.registered_by);
+        const reciprocal = normEmail(candidate.partner_email) === sourceEmail;
+        return candidate.id !== entry.id && sameDivision && (byEmail
+            ? normEmail(candidate.email) === expectedEmail && (reciprocal || partnerOwner === sourceEmail
+                || originalOwner === expectedEmail || Boolean(originalOwner && partnerOwner === originalOwner))
+            : reciprocal);
+    });
+    return matches.length === 1 ? matches[0] : null;
+}
+
+async function sendSoloDivisionSwitchEmail(reg: RegistrationRow, event: {
+    event_name?: string; event_dates?: string; slug?: string;
+} | null, opts: {
+    fromDivision: string; toDivision: string; newFee: number; delta: number;
+    chargedRands: number; refundedRands: number; refundStatus?: string | null;
+}) {
+    const { fromDivision, toDivision, newFee, delta, chargedRands, refundedRands, refundStatus } = opts;
+    let feeNote = 'There was no change to your entry fee.';
+    if (chargedRands > 0) {
+        feeNote = `An additional <strong style="color:#FFFFFF;">${fmtR(chargedRands)}</strong> was charged for the higher entry fee of your new division.`;
+    } else if (refundedRands > 0) {
+        feeNote = `The <strong style="color:#FFFFFF;">${fmtR(refundedRands)}</strong> entry-fee difference is being refunded to you.`;
+    } else if (refundStatus) {
+        feeNote = 'The entry-fee refund is awaiting review.';
+    } else if (reg.payment_status !== 'paid' && delta !== 0) {
+        feeNote = `Your registration remains payment pending at the new division fee of <strong style="color:#FFFFFF;">${fmtR(newFee)}</strong>.`;
+    }
+    await sendEmailViaEdge({
+        to: reg.email,
+        template: 'division_changed',
+        variables: {
+            eventId: reg.event_id,
+            playerName: reg.full_name || 'Player',
+            eventName: event?.event_name || 'Tournament',
+            fromDivision,
+            toDivision,
+            division: toDivision,
+            partnerName: 'TBD',
+            eventDates: event?.event_dates || '',
+            paid: reg.payment_status === 'paid',
+            amount: fmtR(newFee),
+            feeNote,
+            eventUrl: `https://4mpadel.co.za/calendar/${event?.slug || reg.event_id}`,
+        },
+    });
+}
+
 async function handleSwitchDivision(
     supabaseAdmin: SupabaseClient,
     opts: {
-        registrationId?: string;
+        registration: RegistrationRow;
         targetDivisionId?: string;
         topUpReference?: string;
         moveTeam?: boolean;
+        quoteOnly?: boolean;
         callerEmail: string;
         isAdmin: boolean;
         json: (status: number, body: unknown) => Response;
     },
 ): Promise<Response> {
-    const { registrationId, targetDivisionId, topUpReference, moveTeam = false, callerEmail, isAdmin, json } = opts;
-    if (!registrationId || !targetDivisionId) {
-        return json(400, { error: 'registration_id and target_division_id are required' });
-    }
-
-    const { data: reg } = await supabaseAdmin
-        .from('event_registrations')
-        .select('*')
-        .eq('id', registrationId)
-        .maybeSingle();
-    if (!reg) return json(404, { error: 'Registration not found' });
+    const { registration: reg, targetDivisionId, topUpReference, moveTeam = false, quoteOnly = false, callerEmail, isAdmin, json } = opts;
+    if (!targetDivisionId) return json(400, { error: 'target_division_id is required' });
     if (reg.status === 'withdrawn') return json(400, { error: 'Registration already withdrawn' });
-
-    const isOwnerOrSelf = normEmail(reg.registered_by) === callerEmail || normEmail(reg.email) === callerEmail;
-    if (!isAdmin && !isOwnerOrSelf) return json(403, { error: 'Not authorized for this registration' });
+    if (!isAdmin && !ownsRefundRegistration(reg, callerEmail)) return json(403, { error: 'Not authorized for this registration' });
 
     const eventId = reg.event_id;
+    const switchInput = { eventId, registrationId: reg.id, targetDivisionId, actorEmail: callerEmail, eventManager: isAdmin, topUpReference };
+    if (quoteOnly && (moveTeam || topUpReference)) return json(400, { error: 'Choose a solo division switch to review.' });
+    const reviewed = !moveTeam && (reg.payment_status === 'paid' || topUpReference)
+        ? await reviewVerifiedEntrySwitch(supabaseAdmin, switchInput) : null;
+    if (quoteOnly) {
+        return json(200, { quote: reviewed ? { delta: reviewed.delta, old_fee: reviewed.old_fee, new_fee: reviewed.new_fee } : null });
+    }
+
     const [{ data: event }, { data: divisions }] = await Promise.all([
         supabaseAdmin.from('calendar').select('id, event_name, event_dates, slug, is_manual, registration_closes_at').eq('id', eventId).maybeSingle(),
         supabaseAdmin.from('tournament_divisions').select('id, name, entry_fee, entries_close_at, is_active, gender').eq('event_id', eventId),
     ]);
+    if (reviewed) {
+        const switched = await completeVerifiedEntrySwitch(supabaseAdmin, switchInput, reviewed, json);
+        if (switched instanceof Response) return switched;
+        const refundStatus = switched.refund_id
+            ? await dispatchVerifiedSwitchRefund(supabaseAdmin, switchInput, switched.refund_id, json) : null;
+        const refundedRands = refundStatus === 'processing' || refundStatus === 'processed' ? Math.abs(switched.delta) : 0;
+        const chargedRands = Number(switched.charged_rands || 0);
+        if (!switched.replayed) {
+            await sendSoloDivisionSwitchEmail(reg, event, {
+                fromDivision: switched.from_division, toDivision: switched.division, newFee: switched.new_fee,
+                delta: switched.delta, chargedRands, refundedRands, refundStatus,
+            });
+        }
+        return json(200, {
+            switched: true, from_division: switched.from_division, to_division: switched.division,
+            delta: switched.delta, charged_rands: chargedRands, refunded_rands: refundedRands,
+            ...(refundStatus ? { refund_status: refundStatus } : {}),
+        });
+    }
     if (event?.is_manual === false) return json(400, { error: 'Not a manual event' });
 
     const divList = divisions || [];
@@ -558,26 +652,10 @@ async function handleSwitchDivision(
     // and mark paid entries pending when the new division costs more. This
     // avoids charging one team member's card for another player's difference.
     if (moveTeam) {
-        const { data: sourceRows } = await supabaseAdmin
-            .from('event_registrations')
-            .select('*')
-            .eq('event_id', eventId)
-            .eq('division', reg.division)
-            .neq('status', 'withdrawn');
-        const partnerReg = (sourceRows || []).find((row) =>
-            row.id !== reg.id
-            && (
-                (reg.partner_email && normEmail(row.email) === normEmail(reg.partner_email))
-                || normEmail(row.partner_email) === normEmail(reg.email)
-            )
-        );
-        if (!partnerReg) return json(404, { error: 'Team mate registration not found' });
-        const pairIsLinked = normEmail(partnerReg.partner_email) === normEmail(reg.email)
-            || normEmail(partnerReg.registered_by) === normEmail(reg.email)
-            || normEmail(reg.registered_by) === normEmail(partnerReg.email);
-        if (!pairIsLinked) return json(400, { error: 'The selected registrations are not a linked team' });
-
+        const partnerReg = await findLinkedRefundPartner(supabaseAdmin, reg, true);
+        if (!partnerReg) return json(400, { error: 'The selected registrations are not a linked team' });
         const moving = [reg as RegistrationRow, partnerReg as RegistrationRow];
+        const preserveQuotedCovers = successPayments.some(payment => moving.some(player => paymentUsesVerifiedEntryTransfer(payment, player)));
         for (const player of moving) {
             const { data: targetRows } = await supabaseAdmin
                 .from('event_registrations')
@@ -592,34 +670,17 @@ async function handleSwitchDivision(
             if (conflict) return json(400, { error: `${player.full_name || player.email} is already entered in that division` });
         }
 
-        for (const player of moving) {
-            const { error: parkError } = await supabaseAdmin
-                .from('event_registrations')
-                .update({ division: `__moving__/${player.id}`, division_id: null })
-                .eq('id', player.id);
-            if (parkError) throw parkError;
-        }
+        const { error: moveError } = await supabaseAdmin.rpc('move_registration_division', {
+            p_registration_ids: moving.map((player) => player.id),
+            p_target_division_id: targetDiv.id,
+            p_reset_payment: true,
+        });
+        if (moveError) throw moveError;
 
         for (const player of moving) {
             const teamMate = moving.find((candidate) => candidate.id !== player.id)!;
             const owesMore = newFee > oldFee && player.payment_status === 'paid';
             const newStatus = owesMore ? 'pending' : player.payment_status;
-            const teamMateOwesMore = newFee > oldFee && teamMate.payment_status === 'paid';
-            const teamMateNewStatus = teamMateOwesMore ? 'pending' : teamMate.payment_status;
-            const { error: moveError } = await supabaseAdmin
-                .from('event_registrations')
-                .update({
-                    division_id: targetDiv.id,
-                    division: targetDiv.name,
-                    registered_by: player.email,
-                    payment_status: newStatus,
-                    partner_name: teamMate.full_name,
-                    partner_email: teamMate.email,
-                    partner_payment_status: teamMateNewStatus,
-                })
-                .eq('id', player.id);
-            if (moveError) throw moveError;
-
             await supabaseAdmin.rpc('reassign_tournament_participant_division', {
                 p_event_id: eventId,
                 p_email: player.email,
@@ -629,7 +690,7 @@ async function handleSwitchDivision(
                 p_is_paid: newStatus === 'paid',
             });
 
-            for (const payment of successPayments) {
+            for (const payment of preserveQuotedCovers ? [] : successPayments) {
                 const meta = parseMeta(payment.metadata);
                 const covers = Array.isArray(meta.covers) ? meta.covers as Record<string, unknown>[] : [];
                 let changed = false;
@@ -687,9 +748,18 @@ async function handleSwitchDivision(
     // ---- Higher fee: verify the top-up payment before moving ----
     if (delta > 0 && reg.payment_status === 'paid') {
         if (!topUpReference) return json(402, { error: 'top_up_required', delta, message: 'A top-up payment is required for this division.' });
-        const { data: topPay } = await supabaseAdmin.from('payments').select('*').eq('reference', topUpReference).maybeSingle();
-        if (!topPay || Number(topPay.event_id) !== Number(eventId)) return json(404, { error: 'Top-up payment not found' });
-        if (parseMeta(topPay.metadata).source !== 'division_switch') return json(400, { error: 'Invalid top-up payment' });
+        const { data: topPay, error: topUpError } = await supabaseAdmin.from('payments').select('*')
+            .eq('reference', topUpReference).eq('event_id', eventId).maybeSingle();
+        if (topUpError) throw topUpError;
+        if (!topPay) return json(404, { error: 'Top-up payment not found' });
+        const metadata = parseMeta(topPay.metadata);
+        const matchingSource = metadata.from_division_id ? metadata.from_division_id === currentDiv?.id : metadata.from_division === reg.division;
+        if (metadata.source !== 'division_switch' || metadata.registration_id !== reg.id
+            || metadata.target_division_id !== targetDiv.id || !matchingSource
+            || normEmail(metadata.registrant_email || metadata.email) !== normEmail(reg.email)
+            || !['pending', 'processing', 'success'].includes(topPay.status)) {
+            return json(400, { error: 'The saved top-up belongs to a different registration or division.' });
+        }
 
         if (topPay.status !== 'success') {
             const { secrets, configError } = resolvePaystackVerifySecrets(topPay);
@@ -697,7 +767,7 @@ async function handleSwitchDivision(
             const verification = await verifyPaystackReference(topUpReference, secrets);
             if (!verification.ok) return json(200, { switched: false, retry: true, error: 'Top-up not verified', status: verification.status });
             assertPaystackPayment(topPay, verification.data);
-            await supabaseAdmin.from('payments').update({ status: 'success' }).eq('id', topPay.id);
+            await supabaseAdmin.from('payments').update({ status: 'success' }).eq('id', topPay.id).eq('event_id', eventId);
         }
         if (Number(topPay.amount) + 0.01 < delta) return json(400, { error: 'Top-up amount is less than the fee difference' });
         chargedRands = Number(topPay.amount);
@@ -752,41 +822,9 @@ async function handleSwitchDivision(
         successPayments,
     );
 
-    // ---- Division-changed email ----
-    // A dedicated template (not a fresh "Registration Confirmed") so the player
-    // clearly sees they moved FROM their old division TO the new one, rather than
-    // being confused by what looks like a brand-new registration.
-    const eventUrl = `https://4mpadel.co.za/calendar/${event?.slug || eventId}`;
-    let feeNote = 'There was no change to your entry fee.';
-    if (chargedRands > 0) {
-        feeNote = `An additional <strong style="color:#FFFFFF;">${fmtR(chargedRands)}</strong> was charged for the higher entry fee of your new division.`;
-    } else if (refundedRands > 0) {
-        feeNote = `The <strong style="color:#FFFFFF;">${fmtR(refundedRands)}</strong> entry-fee difference is being refunded to you.`;
-    } else if (reg.payment_status !== 'paid' && delta !== 0) {
-        feeNote = `Your registration remains payment pending at the new division fee of <strong style="color:#FFFFFF;">${fmtR(newFee)}</strong>.`;
-    }
-    try {
-        await sendEmailViaEdge({
-            to: reg.email,
-            template: 'division_changed',
-            variables: {
-                eventId,
-                playerName: reg.full_name || 'Player',
-                eventName: event?.event_name || 'Tournament',
-                fromDivision: reg.division,
-                toDivision: targetDiv.name,
-                division: targetDiv.name,
-                // A division switch is a solo move — the partner link is cleared,
-                // so the new entry starts without a partner.
-                partnerName: 'TBD',
-                eventDates: event?.event_dates || '',
-                paid: reg.payment_status === 'paid',
-                amount: fmtR(newFee),
-                feeNote,
-                eventUrl,
-            },
-        });
-    } catch (_e) { /* email best-effort */ }
+    await sendSoloDivisionSwitchEmail(reg, event, {
+        fromDivision: reg.division, toDivision: targetDiv.name, newFee, delta, chargedRands, refundedRands,
+    });
 
     return json(200, {
         switched: true,
@@ -795,267 +833,6 @@ async function handleSwitchDivision(
         delta,
         charged_rands: chargedRands,
         refunded_rands: refundedRands,
-    });
-}
-
-/**
- * Re-issue a failed payment_refunds row against the correct Paystack gateway
- * reference (parent REGEV-* for LIC-* ledger splits). Admin only.
- */
-async function handleRetryFailedRefund(
-    supabaseAdmin: SupabaseClient,
-    opts: {
-        paymentRefundId?: string;
-        callerEmail: string;
-        json: (status: number, body: unknown) => Response;
-    },
-): Promise<Response> {
-    const { paymentRefundId, callerEmail, json } = opts;
-    if (!paymentRefundId) {
-        return json(400, { error: 'payment_refund_id is required' });
-    }
-
-    const { data: refundRow, error: refundErr } = await supabaseAdmin
-        .from('payment_refunds')
-        .select('*')
-        .eq('id', paymentRefundId)
-        .maybeSingle();
-    if (refundErr) return json(500, { error: refundErr.message });
-    if (!refundRow) return json(404, { error: 'Refund row not found' });
-    if (String(refundRow.status || '') !== 'failed') {
-        return json(400, {
-            error: `Refund is status "${refundRow.status}", only failed rows can be retried`,
-        });
-    }
-    if (!refundRow.payment_id) {
-        return json(400, { error: 'Refund row has no payment_id' });
-    }
-
-    const { data: payment, error: payErr } = await supabaseAdmin
-        .from('payments')
-        .select('*')
-        .eq('id', refundRow.payment_id)
-        .maybeSingle();
-    if (payErr) return json(500, { error: payErr.message });
-    if (!payment) return json(404, { error: 'Payment not found' });
-
-    const method = String(payment.payment_method || 'paystack');
-    const isCash = method === 'cash' || method === 'manual';
-    const gatewayRef = resolvePaystackGatewayReference(payment as PaymentRow);
-    const amountRands = roundRands(Number(refundRow.amount || 0));
-    if (amountRands <= 0) return json(400, { error: 'Refund amount must be > 0' });
-
-    const coverType = String(parseMeta(refundRow.metadata).cover_type || '');
-    const prevMeta = parseMeta(refundRow.metadata);
-
-    if (isCash) {
-        await supabaseAdmin
-            .from('payment_refunds')
-            .update({
-                status: 'processed',
-                paystack_reference: gatewayRef || refundRow.paystack_reference,
-                processed_at: new Date().toISOString(),
-                metadata: {
-                    ...prevMeta,
-                    method,
-                    retried_at: new Date().toISOString(),
-                    retried_by: `admin:${callerEmail}`,
-                    ledger_reference: payment.reference,
-                    previous_paystack_reference: refundRow.paystack_reference,
-                },
-            })
-            .eq('id', refundRow.id);
-
-        if (coverType === 'license' && refundRow.event_registration_id) {
-            const { data: reg } = await supabaseAdmin
-                .from('event_registrations')
-                .select('email, event_id')
-                .eq('id', refundRow.event_registration_id)
-                .maybeSingle();
-            if (reg?.email) {
-                await cancelEventTempLicense(supabaseAdmin, reg.email, reg.event_id);
-            }
-        }
-
-        return json(200, {
-            retried: true,
-            status: 'processed',
-            paystack_reference: gatewayRef,
-            amount_rands: amountRands,
-            cash: true,
-        });
-    }
-
-    if (!gatewayRef) {
-        return json(400, { error: 'Could not resolve Paystack gateway reference' });
-    }
-
-    const { secrets, configError } = resolvePaystackVerifySecrets(payment as Record<string, unknown>);
-    if (secrets.length === 0) {
-        return json(500, { error: configError || 'Paystack not configured' });
-    }
-
-    // Parent checkout may already be partially refunded (entry fee), which
-    // Paystack often reports as status "reversed" even when balance remains.
-    // Locate the transaction, then attempt the remaining refund.
-    let gatewayAmountCents: number | null = null;
-    let gatewayStatus = 'unknown';
-    let gatewayFound = false;
-    for (const secret of secrets) {
-        try {
-            const inspectRes = await fetch(
-                `https://api.paystack.co/transaction/verify/${encodeURIComponent(gatewayRef)}`,
-                { headers: { Authorization: `Bearer ${secret}` } },
-            );
-            const inspectBody = await inspectRes.json();
-            if (inspectBody?.data?.reference || inspectBody?.data?.id != null) {
-                gatewayFound = true;
-                gatewayStatus = String(inspectBody.data.status || 'unknown');
-                gatewayAmountCents = inspectBody.data.amount != null
-                    ? Number(inspectBody.data.amount)
-                    : null;
-                break;
-            }
-            gatewayStatus = String(inspectBody?.data?.status || inspectBody?.status || gatewayStatus);
-        } catch {
-            /* try next secret */
-        }
-    }
-
-    if (!gatewayFound) {
-        await supabaseAdmin
-            .from('payment_refunds')
-            .update({
-                paystack_reference: gatewayRef,
-                metadata: {
-                    ...prevMeta,
-                    method,
-                    retried_at: new Date().toISOString(),
-                    retried_by: `admin:${callerEmail}`,
-                    ledger_reference: payment.reference,
-                    previous_paystack_reference: refundRow.paystack_reference,
-                    verify_failed: true,
-                    paystack_error: `Transaction not found for ${gatewayRef}`,
-                    gateway_status: gatewayStatus,
-                },
-            })
-            .eq('id', refundRow.id);
-        return json(400, {
-            error: `Paystack transaction not found for ${gatewayRef}`,
-            paystack_reference: gatewayRef,
-            gateway_status: gatewayStatus,
-        });
-    }
-
-    const secret = getPaystackSecretForPayment(payment as Record<string, unknown>);
-    const result = await paystackRefund(secret, gatewayRef, toPaystackCents(amountRands));
-
-    // Fully consumed on gateway — settle ledger without inventing a second refund.
-    const fullyGone = !result.ok && /fully\s+(reversed|refunded)|no\s+refundable|already\s+refunded/i.test(result.message || '');
-    if (fullyGone) {
-        await supabaseAdmin
-            .from('payment_refunds')
-            .update({
-                paystack_reference: gatewayRef,
-                status: 'processed',
-                processed_at: new Date().toISOString(),
-                metadata: {
-                    ...prevMeta,
-                    method,
-                    retried_at: new Date().toISOString(),
-                    retried_by: `admin:${callerEmail}`,
-                    ledger_reference: payment.reference,
-                    previous_paystack_reference: refundRow.paystack_reference,
-                    settled_without_paystack_call: true,
-                    settle_reason: 'no_refundable_balance_on_gateway',
-                    gateway_status: gatewayStatus,
-                    gateway_amount_cents: gatewayAmountCents,
-                    paystack_error: result.message,
-                },
-            })
-            .eq('id', refundRow.id);
-        return json(200, {
-            retried: true,
-            status: 'processed',
-            settled_without_paystack_call: true,
-            settle_reason: 'no_refundable_balance_on_gateway',
-            paystack_reference: gatewayRef,
-            amount_rands: amountRands,
-            gateway_amount_cents: gatewayAmountCents,
-            ledger_reference: payment.reference,
-            paystack_message: result.message,
-        });
-    }
-
-    await supabaseAdmin
-        .from('payment_refunds')
-        .update({
-            paystack_reference: gatewayRef,
-            paystack_refund_id: result.refundId,
-            status: result.ok ? 'processing' : 'failed',
-            metadata: {
-                ...prevMeta,
-                method,
-                retried_at: new Date().toISOString(),
-                retried_by: `admin:${callerEmail}`,
-                ledger_reference: payment.reference,
-                previous_paystack_reference: refundRow.paystack_reference,
-                gateway_status: gatewayStatus,
-                gateway_amount_cents: gatewayAmountCents,
-                ...(isLedgerSplitPayment(payment as PaymentRow)
-                    ? { ledger_split_parent: gatewayRef }
-                    : {}),
-                ...(result.ok ? { paystack_error: null } : { paystack_error: result.message }),
-            },
-        })
-        .eq('id', refundRow.id);
-
-    if (!result.ok) {
-        console.error('retry_failed Paystack refund failed:', gatewayRef, result.message);
-        return json(502, {
-            retried: false,
-            error: result.message,
-            paystack_reference: gatewayRef,
-            amount_rands: amountRands,
-            gateway_status: gatewayStatus,
-            gateway_amount_cents: gatewayAmountCents,
-        });
-    }
-
-    if (refundRow.event_registration_id) {
-        const { data: reg } = await supabaseAdmin
-            .from('event_registrations')
-            .select('id, email, event_id, refund_amount')
-            .eq('id', refundRow.event_registration_id)
-            .maybeSingle();
-        if (reg) {
-            if (coverType === 'license' && reg.email) {
-                await cancelEventTempLicense(supabaseAdmin, reg.email, reg.event_id);
-            }
-            const nextRefunded = roundRands(Number(reg.refund_amount || 0) + amountRands);
-            await supabaseAdmin
-                .from('event_registrations')
-                .update({
-                    refund_amount: nextRefunded,
-                    payment_status: 'refunded',
-                })
-                .eq('id', reg.id);
-        }
-    }
-
-    console.log(
-        `retry_failed ok: ${refundRow.id} ledger=${payment.reference} → paystack=${gatewayRef} R${amountRands}`,
-    );
-
-    return json(200, {
-        retried: true,
-        status: 'processing',
-        paystack_reference: gatewayRef,
-        paystack_refund_id: result.refundId,
-        amount_rands: amountRands,
-        gateway_status: gatewayStatus,
-        gateway_amount_cents: gatewayAmountCents,
-        ledger_reference: payment.reference,
     });
 }
 
@@ -1074,13 +851,14 @@ serve(async (req: Request) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
 
-    let divisionFailureContext: { client: SupabaseClient; id: string } | null = null;
+    let divisionFailureContext: { client: SupabaseClient; id: string; eventId: number } | null = null;
     try {
         const authHeader = req.headers.get('Authorization');
         if (!authHeader) return json(401, { error: 'Unauthorized' });
 
         const {
             registration_id,
+            reviewed_registration_id,
             action,
             event_id,
             skip_paystack,
@@ -1093,6 +871,7 @@ serve(async (req: Request) => {
             division_id,
         } = await req.json() as {
             registration_id?: string;
+            reviewed_registration_id?: string;
             action?: Action;
             event_id?: string;
             skip_paystack?: boolean;
@@ -1104,65 +883,52 @@ serve(async (req: Request) => {
             cancellation_reason?: string;
             division_id?: string;
         };
-        if (!action) return json(400, { error: 'Missing action' });
+        if (!action || !supportedActions.has(action)) return json(400, { error: 'Unsupported action' });
 
         const supabaseAdmin = createClient(supabaseUrl, serviceKey);
         const bearer = authHeader.replace(/^Bearer\s+/i, '').trim();
-        // Prefer JWT role claim — edge SUPABASE_SERVICE_ROLE_KEY can differ in
-        // format from the dashboard api-keys value even for the same project.
-        let isServiceRole = !!serviceKey && bearer === serviceKey;
-        if (!isServiceRole && bearer.split('.').length === 3) {
-            try {
-                const payload = JSON.parse(atob(bearer.split('.')[1]!));
-                isServiceRole = payload?.role === 'service_role';
-            } catch {
-                /* ignore */
-            }
-        }
-
-        // Service-role callers may retry failed refunds (ops / one-off reprocess).
-        // All other actions still require a logged-in user.
+        const review = action === 'reviewed_retry_failed' || action === 'reconcile_retry';
+        const retryAction = action === 'retry_failed' || review;
+        const servicesOwnRetry = retryAction && !!serviceKey && bearer === serviceKey;
         let callerEmail = 'service-role';
-        let isAdmin = false;
-        if (isServiceRole && action === 'retry_failed') {
-            isAdmin = true;
-        } else {
-            const supabaseUser = createClient(supabaseUrl, anonKey, {
+        let supabaseUser: SupabaseClient | undefined;
+        if (!servicesOwnRetry) {
+            supabaseUser = createClient(supabaseUrl, anonKey, {
                 global: { headers: { Authorization: authHeader } },
             });
             const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
             if (userError || !user?.email) return json(401, { error: 'Unauthorized' });
             callerEmail = normEmail(user.email);
-            isAdmin = await resolveIsAdmin(supabaseAdmin, user.email);
         }
-
-        // retry_failed stays platform-admin / service-role only.
-        if (action === 'retry_failed' && !isAdmin) {
-            return json(403, { error: 'Admin only' });
-        }
-
-        // ===== Retry a failed payment_refunds row (admin / service role) =====
-        if (action === 'retry_failed') {
-            return await handleRetryFailedRefund(supabaseAdmin, {
-                paymentRefundId: payment_refund_id,
-                callerEmail,
-                json,
+        if (retryAction) {
+            if (!await canReviewEventRefund({ bearer, serviceKey, actor: supabaseUser, email: callerEmail })) {
+                return json(403, { error: 'A verified platform administrator is required to review refunds.' });
+            }
+            return await handleReviewedRefundRetry(supabaseAdmin, {
+                refundId: payment_refund_id, registrationId: review ? reviewed_registration_id : registration_id, eventId: event_id, email: callerEmail,
+                review, reconcile: action === 'reconcile_retry', json,
             });
         }
 
-        // ----- Load the target registration(s) -----
+        if (!supabaseUser) return json(401, { error: 'Unauthorized' });
+        const actor = await verifyRefundActor(supabaseUser, callerEmail);
+        if (!actor) return json(403, { error: 'An active account is required.' });
+
+        // Resolve scope from the selected event or saved registration before any
+        // privileged operation. A sidebar record cannot authorize money movement.
         let targets: RegistrationRow[] = [];
-        let eventId: string | number | undefined;
+        let eventId: number;
+        let isAdmin = false;
+        let targetRegistration: RegistrationRow | null = null;
+        const requestedEventId = refundEventId(event_id);
+        if (event_id != null && requestedEventId === null) return json(400, { error: 'Choose a valid event.' });
 
         let cancelledDivision: { id: string; name: string } | null = null;
         if (action === 'cancel_event' || action === 'cancel_division') {
-            if (!event_id) return json(400, { error: 'event_id required for cancel_event' });
-            eventId = event_id;
-            if (!isAdmin) {
-                const canManage = await resolveCanManageEvent(supabaseAdmin, callerEmail, eventId);
-                if (!canManage) return json(403, { error: 'You do not have permission to cancel this event' });
-                isAdmin = true;
-            }
+            if (requestedEventId === null) return json(400, { error: 'event_id required for cancellation' });
+            eventId = requestedEventId;
+            isAdmin = await canManageRefundEvent(supabaseUser, actor, eventId);
+            if (!isAdmin) return json(403, { error: 'Current event management access is required.' });
             if (action === 'cancel_division') {
                 if (!division_id) return json(400, { error: 'division_id required' });
                 // Claim once before refunding: concurrent clicks cannot issue duplicate refunds.
@@ -1181,7 +947,7 @@ serve(async (req: Request) => {
                 if (claimError) throw claimError;
                 if (!claimed) return json(409, { error: 'Division cancellation is already underway' });
                 cancelledDivision = claimed;
-                divisionFailureContext = { client: supabaseAdmin, id: claimed.id };
+                divisionFailureContext = { client: supabaseAdmin, id: claimed.id, eventId };
             }
             const { data, error: registrationsError } = await supabaseAdmin
                 .from('event_registrations')
@@ -1191,72 +957,54 @@ serve(async (req: Request) => {
             if (registrationsError) throw registrationsError;
             targets = (cancelledDivision ? (data || []).filter((reg) => belongsToDivision(reg, cancelledDivision)) : (data || [])) as RegistrationRow[];
         } else if (action === 'withdraw_all') {
-            if (!event_id) return json(400, { error: 'event_id required for withdraw_all' });
-            eventId = event_id;
-            const { data } = await supabaseAdmin
-                .from('event_registrations')
-                .select('*')
-                .eq('event_id', event_id)
-                .neq('status', 'withdrawn');
-            // The caller's own active registrations (rows they own or are the player on).
-            targets = (data || []).filter(
-                (r) => normEmail(r.registered_by) === callerEmail || normEmail(r.email) === callerEmail,
-            ) as RegistrationRow[];
+            if (requestedEventId === null) return json(400, { error: 'event_id required for withdraw_all' });
+            eventId = requestedEventId;
+            isAdmin = await canManageRefundEvent(supabaseUser, actor, eventId);
+            const { data, error } = await supabaseAdmin.from('event_registrations')
+                .select('*').eq('event_id', eventId).neq('status', 'withdrawn');
+            if (error) throw error;
+            targets = ((data || []) as RegistrationRow[]).filter(reg => ownsRefundRegistration(reg, actor.email));
         } else {
             if (!registration_id) return json(400, { error: 'registration_id required' });
-            const { data: reg } = await supabaseAdmin
-                .from('event_registrations')
-                .select('*')
-                .eq('id', registration_id)
-                .maybeSingle();
-            if (!reg) return json(404, { error: 'Registration not found' });
-            eventId = reg.event_id;
-
+            const { data, error } = await supabaseAdmin.from('event_registrations')
+                .select('*').eq('id', registration_id).maybeSingle();
+            if (error) throw error;
+            const reg = data as RegistrationRow | null;
+            const storedEventId = refundEventId(reg?.event_id);
+            if (!reg || storedEventId === null || (requestedEventId !== null && requestedEventId !== storedEventId)) {
+                return json(404, { error: 'Registration not found in this event' });
+            }
+            eventId = storedEventId;
+            targetRegistration = reg;
+            isAdmin = await canManageRefundEvent(supabaseUser, actor, eventId);
             if (action === 'remove_partner') {
-                // Caller must own the booking; the target is the partner's active row.
-                if (!isAdmin && normEmail(reg.registered_by) !== callerEmail) {
-                    return json(403, { error: 'Only the booking owner can remove a partner' });
+                if (!isAdmin && normEmail(reg.registered_by) !== actor.email) {
+                    return json(403, { error: 'Only the booking owner or event manager can remove a partner' });
                 }
-                if (!reg.partner_email) return json(400, { error: 'No partner on this registration' });
-                const { data: partnerReg } = await supabaseAdmin
-                    .from('event_registrations')
-                    .select('*')
-                    .eq('event_id', reg.event_id)
-                    .eq('division', reg.division)
-                    .ilike('email', reg.partner_email)
-                    .neq('status', 'withdrawn')
-                    .maybeSingle();
-                if (!partnerReg) return json(404, { error: 'Partner registration not found' });
-                targets = [partnerReg as RegistrationRow];
+                const partner = await findLinkedRefundPartner(supabaseAdmin, reg);
+                if (!partner) return json(404, { error: 'Linked partner registration not found in this division' });
+                targets = [partner];
+            } else if (action === 'admin_remove') {
+                if (!isAdmin) return json(403, { error: 'Current event management access is required.' });
+                targets = [reg];
             } else {
-                targets = [reg as RegistrationRow];
+                if (!isAdmin && !ownsRefundRegistration(reg, actor.email)) {
+                    return json(403, { error: 'Not authorized for this registration' });
+                }
+                targets = [reg];
             }
         }
 
-        // Org owners/admins managing their own event (not in admin_sidebar_permissions)
-        // need admin_remove + cash/no-refund flags for ManualEventRegistrations.
-        if (action === 'admin_remove' && !isAdmin) {
-            const canManage = await resolveCanManageEvent(supabaseAdmin, callerEmail, eventId);
-            if (!canManage) return json(403, { error: 'Admin only' });
-            isAdmin = true;
-        }
+        const skipPaystack = skip_paystack === true && isAdmin && action === 'admin_remove';
+        const noRefund = no_refund === true && isAdmin && action === 'admin_remove';
 
-        // skip_paystack and no_refund are admin / event-manager only. [CORRECTION 4]
-        const skipPaystack = !!skip_paystack && isAdmin && action === 'admin_remove';
-        const noRefund = !!no_refund && isAdmin && action === 'admin_remove';
-
-        // ===== Division switch (move the entry instead of refunding) =====
-        if (action === 'switch_division') {
-            // Org managers may move any entry on their event; players still use
-            // the existing owner/self path inside handleSwitchDivision.
-            if (!isAdmin) {
-                isAdmin = await resolveCanManageEvent(supabaseAdmin, callerEmail, eventId);
-            }
+        if ((action === 'switch_division' || action === 'switch_division_quote') && targetRegistration) {
             return await handleSwitchDivision(supabaseAdmin, {
-                registrationId: registration_id,
+                registration: targetRegistration,
                 targetDivisionId: target_division_id,
                 topUpReference: top_up_reference,
-                moveTeam: move_team,
+                moveTeam: move_team === true,
+                quoteOnly: action === 'switch_division_quote',
                 callerEmail,
                 isAdmin,
                 json,
@@ -1294,7 +1042,7 @@ serve(async (req: Request) => {
         if (paymentIds.length) {
             const { data: refs, error: refundsReadError } = await supabaseAdmin
                 .from('payment_refunds')
-                .select('id, payment_id, amount, status')
+                .select('id, payment_id, event_registration_id, amount, status, metadata')
                 .in('payment_id', paymentIds);
             if (refundsReadError) throw refundsReadError;
             existingRefunds = (refs || []) as RefundRow[];
@@ -1354,14 +1102,7 @@ serve(async (req: Request) => {
             if ((action === 'withdraw' || action === 'withdraw_all')
                 && normEmail(reg.registered_by) === callerEmail
                 && reg.partner_email) {
-                const { data: partnerReg } = await supabaseAdmin
-                    .from('event_registrations')
-                    .select('*')
-                    .eq('event_id', reg.event_id)
-                    .eq('division', reg.division)
-                    .ilike('email', reg.partner_email)
-                    .neq('status', 'withdrawn')
-                    .maybeSingle();
+                const partnerReg = await findLinkedRefundPartner(supabaseAdmin, reg);
                 if (partnerReg) {
                     await transferBookingOwnership(supabaseAdmin, reg, partnerReg as RegistrationRow);
                 }
@@ -1435,7 +1176,7 @@ serve(async (req: Request) => {
             // (Re-query is simplest and safe for the small per-event volume.)
             const { data: refs, error: refundsReadError } = await supabaseAdmin
                 .from('payment_refunds')
-                .select('id, payment_id, amount, status')
+                .select('id, payment_id, event_registration_id, amount, status, metadata')
                 .in('payment_id', paymentIds.length ? paymentIds : ['00000000-0000-0000-0000-000000000000']);
             if (refundsReadError) throw refundsReadError;
             existingRefunds = (refs || []) as RefundRow[];
@@ -1445,7 +1186,7 @@ serve(async (req: Request) => {
         if (cancelledDivision) {
             const refundStatus = cancellationRefundStatus(results);
             const { error } = await supabaseAdmin.from('tournament_divisions')
-                .update({ cancellation_refund_status: refundStatus }).eq('id', cancelledDivision.id);
+                .update({ cancellation_refund_status: refundStatus }).eq('id', cancelledDivision.id).eq('event_id', eventId);
             if (error) throw error;
             return json(200, { processed: true, cancelled: true, division_id: cancelledDivision.id,
                 refund_status: refundStatus, registrations_processed: results.length,
@@ -1489,7 +1230,7 @@ serve(async (req: Request) => {
     } catch (error) {
         if (divisionFailureContext) {
             await divisionFailureContext.client.from('tournament_divisions')
-                .update({ cancellation_refund_status: 'needs_attention' }).eq('id', divisionFailureContext.id);
+                .update({ cancellation_refund_status: 'needs_attention' }).eq('id', divisionFailureContext.id).eq('event_id', divisionFailureContext.eventId);
         }
         console.error('paystack-refund error:', error);
         return json(500, { error: (error as Error).message });

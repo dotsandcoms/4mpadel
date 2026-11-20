@@ -9,7 +9,7 @@ const source = ts.transpileModule(fs.readFileSync('supabase/functions/native-div
 const ref = 'MSWITCH-' + 'a'.repeat(48);
 function server(options = {}) {
   let handler;
-  const calls = [], writes = [];
+  const calls = [], writes = [], reviews = [];
   const reg = { id: 'r1', event_id: 1, email: 'me@example.com', division_id: 'd1', division: 'Open', payment_status: 'paid', status: 'registered', updated_at: '2026-01-01', ...options.reg };
   const tables = {
     event_registrations: [reg], calendar: [{ id: 1, event_name: 'Test', is_manual: true, start_date: '2099-01-01', ...options.event }],
@@ -18,6 +18,7 @@ function server(options = {}) {
   };
   const client = {
     auth: { getUser: async () => ({ data: { user: options.noUser ? null : { id: 'u1', email: 'me@example.com' } } }) },
+    async rpc(name) { assert.equal(name, 'account_is_active'); return { data: !options.inactive }; },
     from(table) {
       let filters = [], op, payload, single = false;
       const q = {
@@ -34,17 +35,30 @@ function server(options = {}) {
       }; return q;
     },
   };
-  vm.runInNewContext(source, { exports: {}, require: name => name.endsWith('/balance.ts') ? balanceExports : ({ createClient: () => client }), Request, Response, URL, TextEncoder, crypto: webcrypto, console,
+  vm.runInNewContext(source, { exports: {}, require: name => {
+    if (name.endsWith('/balance.ts')) return balanceExports;
+    if (name.endsWith('/verified-entry-switch.ts')) return { reviewVerifiedEntrySwitch: async (_admin, input) => {
+      reviews.push(input);
+      if (options.reviewError) throw new Error(options.reviewError);
+      return options.review || null;
+    } };
+    return { createClient: () => client };
+  }, Request, Response, URL, TextEncoder, crypto: webcrypto, console,
     Deno: { env: { get: n => n === 'PAYSTACK_SECRET_KEY' ? 'sk_live_mock' : 'https://example.test' }, serve: f => handler = f },
     fetch: async (url, init) => {
       calls.push({ url, body: init.body ? JSON.parse(init.body) : null });
       if (url.endsWith('/initialize')) return Response.json({ status: true, data: { authorization_url: 'https://checkout.paystack.com/mock' } });
       if (url.includes('/verify/')) return Response.json({ status: true, data: { reference: options.payment?.reference || ref, currency: 'ZAR', amount: 15000, status: 'success', customer: { email: 'me@example.com' }, domain: 'live', ...options.verification } });
-      if (url.endsWith('/paystack-refund')) { if (options.moveFailure) return Response.json({ error: 'Registration closed' }, { status: 400 }); reg.division_id = 'd2'; reg.division = 'Advanced'; return Response.json({ switched: true }); }
+      if (url.endsWith('/paystack-refund')) {
+        if (options.moveFailure) return Response.json({ error: 'Registration closed' }, { status: 400 });
+        if (options.unverified) return Response.json({ switched: false, retry: true, error: 'Top-up not verified' });
+        reg.division_id = 'd2'; reg.division = 'Advanced';
+        return Response.json({ switched: true });
+      }
       throw new Error('Unexpected external call');
     },
   });
-  return { calls, writes, tables, get: url => handler(new Request(url)), async call(input = {}) { const r = await handler(new Request('https://example.test/native-division-switch', { method: 'POST', body: JSON.stringify({ action: 'quote', registrationId: 'r1', targetDivisionId: 'd2', ...input }) })); return { status: r.status, body: await r.json() }; } };
+  return { calls, writes, reviews, tables, get: url => handler(new Request(url)), async call(input = {}) { const r = await handler(new Request('https://example.test/native-division-switch', { method: 'POST', body: JSON.stringify({ action: 'quote', registrationId: 'r1', targetDivisionId: 'd2', ...input }) })); return { status: r.status, body: await r.json() }; } };
 }
 function payment(overrides = {}) { return { id: 'p1', reference: ref, event_id: 1, amount: 150, status: 'processing', metadata: { source: 'division_switch', native_switch: true, registrant_email: 'me@example.com', registration_id: 'r1', from_division_id: 'd1', target_division_id: 'd2', quote: { total: 150 }, native_authorization_url: 'https://checkout.paystack.com/saved' }, ...overrides }; }
 test('quotes server prices; rejects changed accepted totals before initialization', async () => {
@@ -54,7 +68,7 @@ test('quotes server prices; rejects changed accepted totals before initializatio
   assert.equal(app.calls.length, 0); assert.equal(app.writes.length, 0);
 });
 test('requires authentication, own active paid entry, and open target', async () => {
-  for (const o of [{ noUser: true }, { reg: { email: 'another@example.com' } }, { reg: { status: 'withdrawn' } }, { reg: { payment_status: 'pending' } }, { target: { is_active: false } }, { event: { event_status: 'cancelled' } }, { event: { registration_closes_at: '2000-01-01' } }]) {
+  for (const o of [{ noUser: true }, { inactive: true }, { reg: { email: 'another@example.com' } }, { reg: { status: 'withdrawn' } }, { reg: { payment_status: 'pending' } }, { target: { is_active: false } }, { event: { event_status: 'cancelled' } }, { event: { registration_closes_at: '2000-01-01' } }]) {
     const app = server(o); assert.ok((await app.call({ action: 'checkout', acceptedTotal: 150 })).status >= 400); assert.equal(app.calls.length, 0);
   }
 });
@@ -65,6 +79,7 @@ test('checkout initializes only the difference, with app return, and resumes the
   assert.equal(app.calls[0].body.amount, 15000);
   assert.match(app.calls[0].body.callback_url, /native-division-switch\/return$/);
   assert.equal(app.calls[0].body.metadata.registration_id, 'r1');
+  assert.equal(app.calls[0].body.metadata.user_id, 'u1');
   const second = await app.call({ action: 'checkout', acceptedTotal: 150 });
   assert.equal(second.body.reference, first.body.reference);
   assert.equal(app.calls.length, 1);
@@ -110,4 +125,50 @@ test('return route is fixed and does not mutate payment or registration', async 
   assert.equal(response.headers.get('location'), `fourmpadel://events/switch-division?reference=${ref}`);
   assert.equal((await app.get('https://example.test/native-division-switch/return?reference=bad')).status, 400);
   assert.equal(app.calls.length, 0); assert.equal(app.writes.length, 0);
+});
+
+const verifiedQuote = { from_division_id: 'd1', from_division: 'Open', division_id: 'd2', division: 'Advanced', delta: 75, old_fee: 425, new_fee: 500 };
+test('protected app checkout uses the reviewed credit and retained phone response shape', async () => {
+  const app = server({ review: verifiedQuote });
+  const quote = await app.call();
+  assert.equal(quote.body.quote.total, 75);
+  assert.equal(quote.body.quote.oldFee, 425);
+  const result = await app.call({ action: 'checkout', acceptedTotal: 75 });
+  assert.equal(result.status, 200);
+  assert.equal(app.calls[0].body.amount, 7500);
+  assert.equal(app.reviews[0].eventManager, false);
+  assert.equal(app.reviews[0].actorEmail, 'me@example.com');
+});
+test('protected app confirmation defers provider and ledger checks to the shared Edge action', async () => {
+  const app = server({ review: verifiedQuote, payment: payment({ amount: 75 }) });
+  const result = await app.call({ action: 'confirm', reference: ref });
+  assert.deepEqual(result.body, { switched: true, eventId: 1, targetName: 'Advanced' });
+  assert.equal(app.calls.length, 1);
+  assert.equal(app.calls[0].body.top_up_reference, ref);
+  assert.equal(app.writes.length, 0);
+  const pending = server({ review: verifiedQuote, payment: payment({ amount: 75 }), unverified: true });
+  assert.equal((await pending.call({ action: 'confirm', reference: ref })).body.pending, true);
+  assert.equal(pending.writes.length, 0);
+});
+test('protected app replay uses the completed receipt and a held quote never starts checkout', async () => {
+  const replay = server({ review: { ...verifiedQuote, completed: true, replayed: true }, payment: payment({ amount: 75 }) });
+  assert.equal((await replay.call({ action: 'confirm', reference: ref })).body.switched, true);
+  assert.equal(replay.calls.length, 0);
+  assert.equal(replay.writes.length, 0);
+  const held = server({ reviewError: 'The reviewed switch is unavailable.' });
+  assert.equal((await held.call({ action: 'checkout', acceptedTotal: 150 })).status, 400);
+  assert.equal(held.calls.length, 0);
+  assert.equal(held.writes.length, 0);
+});
+
+test('the authenticated native account can resume its exact checkout after its email changes', async () => {
+  const saved = { ...payment().metadata, user_id: 'u1', registrant_email: 'previous@example.invalid' };
+  const app = server({ review: verifiedQuote, payment: payment({ amount: 75, metadata: saved }) });
+  const selected = await app.call();
+  assert.equal(selected.body.reference, ref);
+  assert.equal((await app.call({ action: 'confirm', reference: ref })).body.switched, true);
+  assert.equal(app.calls[0].body.top_up_reference, ref);
+  const wrong = server({ review: verifiedQuote, payment: payment({ amount: 75, metadata: { ...saved, user_id: 'u2' } }) });
+  assert.equal((await wrong.call({ action: 'confirm', reference: ref, user_id: 'u2' })).status, 400);
+  assert.equal(wrong.calls.length, 0);
 });

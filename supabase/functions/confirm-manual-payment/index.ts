@@ -6,7 +6,7 @@ import {
     verifyPaystackReference,
     assertPaystackPayment,
 } from './paystack.ts';
-import { persistManualEventRegistrations, recordLicensePaymentSplit, markManualEventEntryCoversPaid } from './manual-event-payment.ts';
+import { persistManualEventRegistrations, recordLicensePaymentSplit } from './manual-event-payment.ts';
 import { canConfirmEventCheckout } from './checkout-access.ts';
 
 const corsHeaders = {
@@ -53,12 +53,7 @@ async function finalizeManualEventPayment(
     const covers: Array<{ type: string; email: string; division?: string; license?: string }> =
         Array.isArray(meta.covers) ? meta.covers : [];
 
-    // Atomically claim this payment. This edge function (triggered by the browser)
-    // and the Paystack webhook both run identical persist + email logic, and either
-    // can be retried. They race on this single conditional UPDATE: only the caller
-    // that flips status from non-'success' -> 'success' gets a row back and proceeds.
-    // The losers return immediately, which is what stops the duplicate
-    // registration/payment confirmation emails.
+    // Claim verified success or reload the receipt a concurrent callback claimed.
     const { data: claimed, error: claimError } = await supabaseAdmin
         .from('payments')
         .update({ status: 'success' })
@@ -75,16 +70,14 @@ async function finalizeManualEventPayment(
     meta = parseMetadata(receipt.metadata);
     payment = receipt;
     try {
+    // The checkout transaction owns roster writes and partner status. A replay
+    // can retry the licence split without reapplying the original entry covers.
     const { savedRows, persisted, needsReview } = await persistManualEventRegistrations(
         supabaseAdmin,
         payment,
-        meta,
-        covers,
     );
 
     if (needsReview) return { processed: false, needsReview: true, message: 'Payment received after checkout closed. Contact support before paying again.' };
-
-    await markManualEventEntryCoversPaid(supabaseAdmin, payment, meta, covers);
 
     // Annual and temporary licenses are finalized atomically by the verified payment ledger trigger.
 

@@ -108,6 +108,19 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      backfill:
+        image: postgres:17
+        env:
+          POSTGRES_USER: fixture_owner
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fourm_permission_boundary_test
+        ports:
+          - 55444:5432
+        options: >-
+          --health-cmd "pg_isready -U fixture_owner"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       PGHOST: 127.0.0.1
       PGPORT: '55443'
@@ -125,6 +138,68 @@ jobs:
         run: |
           createdb fourm_native_checkout_test
           psql -X -q -d fourm_native_checkout_test -f tests/nativeCheckoutReferences.sql
+      - name: Verify reviewed draw, club and organisation operations
+        run: |
+          createdb fourm_native_draw_specialist_test
+          psql -X -q -d fourm_native_draw_specialist_test -f tests/adminNativeDrawSpecialist.sql
+          createdb fourm_organisation_native_draw_test
+          psql -X -q -d fourm_organisation_native_draw_test -f tests/adminOrganisationNativeDraw.sql
+          createdb fourm_club_lifecycle_test
+          psql -X -q -d fourm_club_lifecycle_test -f tests/adminClubLifecycle.sql
+          createdb fourm_reviewed_club_decisions_test
+          psql -X -q -d fourm_reviewed_club_decisions_test -f tests/adminReviewedClubDecisions.sql
+          createdb fourm_club_google_match_test
+          psql -X -q -d fourm_club_google_match_test -f tests/adminReviewedClubGoogleMatch.sql
+          createdb fourm_manual_club_google_match_test
+          psql -X -q -d fourm_manual_club_google_match_test -f tests/adminReviewedManualClubGoogleMatch.sql
+          createdb fourm_club_google_scan_test
+          psql -X -q -d fourm_club_google_scan_test -f tests/adminClubGoogleScan.sql
+          createdb fourm_club_google_unlink_test
+          psql -X -q -d fourm_club_google_unlink_test -f tests/adminReviewedClubGoogleUnlink.sql
+          createdb fourm_admin_organisation_test
+          psql -X -q -d fourm_admin_organisation_test -f tests/adminOrganisationRecords.sql
+          createdb fourm_admin_club_group_team_test
+          psql -X -q -d fourm_admin_club_group_team_test -f tests/adminClubGroupTeam.sql
+          createdb fourm_admin_event_amendments_test
+          psql -X -q -d fourm_admin_event_amendments_test -f tests/adminReviewedEventAmendments.sql
+          createdb fourm_admin_calendar_duplicate_test
+          psql -X -q -d fourm_admin_calendar_duplicate_test -f tests/adminCalendarDuplicate.sql
+          createdb fourm_admin_rankedin_roster_test
+          psql -X -q -d fourm_admin_rankedin_roster_test -f tests/adminRankedinRoster.sql
+          createdb fourm_admin_imported_payment_test
+          psql -X -q -d fourm_admin_imported_payment_test -f tests/adminReviewedImportedPayments.sql
+          createdb fourm_admin_calendar_weekly_series_test
+          psql -X -q -d fourm_admin_calendar_weekly_series_test -f tests/adminCalendarWeeklySeries.sql
+          createdb fourm_admin_weekly_event_drafts_test
+          psql -X -q -d fourm_admin_weekly_event_drafts_test -f tests/adminWeeklyEventDrafts.sql
+          createdb fourm_imported_calendar_test
+          psql -X -q -d fourm_imported_calendar_test -f tests/adminImportedCalendarEditing.sql
+          createdb fourm_refund_retry_test
+          psql -X -q -d fourm_refund_retry_test -f tests/adminReviewedRefundRetry.sql
+          createdb fourm_admin_registry_profile_test
+          psql -X -q -d fourm_admin_registry_profile_test -f tests/adminRegistryProfileAndReceipt.sql
+          createdb fourm_admin_organisation_host_test
+          psql -X -q -d fourm_admin_organisation_host_test -f tests/adminOrganisationHostBuilder.sql
+          createdb fourm_admin_organisation_attachments_test
+          psql -X -q -d fourm_admin_organisation_attachments_test -f tests/adminOrganisationEventAttachments.sql
+          createdb fourm_admin_verified_replacement_test
+          psql -X -q -d fourm_admin_verified_replacement_test -f tests/adminVerifiedPaidReplacement.sql
+          createdb fourm_admin_membership_identity_test
+          psql -X -q -d fourm_admin_membership_identity_test -f tests/adminExactMembershipIdentity.sql
+      - name: Verify Tournament Manager and scoped organiser draws
+        run: |
+          node tests/tournament/build-fixtures.mjs
+          createdb fourm_tournament_integration_test
+          psql -X -q -d fourm_tournament_integration_test -f tests/tournament/integration.sql
+      - name: Verify Push broadcast authority and queue operations
+        run: |
+          createdb fourm_push_broadcast_test
+          psql -X -q -d fourm_push_broadcast_test -f tests/pushBroadcast.sql
+      - name: Verify Paystack receipt recovery and checkout compatibility
+        env:
+          PGPORT: '55444'
+          PGUSER: fixture_owner
+        run: psql -X -q -d fourm_permission_boundary_test -f tests/adminPaystackBackfill.sql
 
   gate:
     name: Repository checks

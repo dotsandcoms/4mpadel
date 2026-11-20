@@ -1,3 +1,4 @@
+import { reviewVerifiedEntrySwitch } from '../paystack-refund/verified-entry-switch.ts';
 import { entryBalance } from '../native-entry-balance/balance.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
@@ -21,14 +22,18 @@ Deno.serve(async req => {
     const client = createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: auth } } });
     const { data: { user }, error } = await client.auth.getUser();
     if (error || !user?.email) return json({ error: 'Sign in to manage your entry.' }, 401);
+    const { data: active, error: activeError } = await client.rpc('account_is_active');
+    if (activeError || active !== true) return json({ error: 'An active account is required to manage your entry.' }, 403);
     const email = norm(user.email), input = await req.json();
     if (!['quote', 'checkout', 'confirm'].includes(input.action)) fail('Invalid switch action.');
     const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const ownsCheckout = (metadata: { user_id?: string; registrant_email?: string } | null | undefined) =>
+      metadata?.user_id ? metadata.user_id === user.id : norm(metadata?.registrant_email) === email;
     let payment: any = null;
     if (input.reference) {
       if (!referenceOK(input.reference)) fail('Invalid payment reference.');
       payment = await checked(admin.from('payments').select('*').eq('reference', input.reference).maybeSingle());
-      if (!payment || payment.metadata?.native_switch !== true || norm(payment.metadata?.registrant_email) !== email) fail('This checkout does not belong to your account.');
+      if (!payment || payment.metadata?.native_switch !== true || !ownsCheckout(payment.metadata)) fail('This checkout does not belong to your account.');
     }
     const regId = payment?.metadata.registration_id || input.registrationId;
     const targetId = payment?.metadata.target_division_id || input.targetDivisionId;
@@ -40,7 +45,20 @@ Deno.serve(async req => {
     const divisions = await checked(admin.from('tournament_divisions').select('*').eq('event_id', reg.event_id));
     const target = divisions?.find((d: any) => d.id === targetId);
     const from = divisions?.find((d: any) => d.id === reg.division_id || d.name === reg.division);
-    if (!event || !target || !from) fail('This entry or division is no longer available.');
+    if (!event || !target) fail('This entry or division is no longer available.');
+    const reviewed = await reviewVerifiedEntrySwitch(admin, {
+      eventId: reg.event_id, registrationId: reg.id, targetDivisionId: target.id,
+      actorEmail: email, eventManager: false, topUpReference: payment?.reference,
+    });
+    if (!from && !reviewed) fail('This entry or division is no longer available.');
+    const moveEntry = async () => {
+      const response = await fetch(`${url}/functions/v1/paystack-refund`, {
+        method: 'POST', headers: { Authorization: auth, apikey: Deno.env.get('SUPABASE_ANON_KEY')!, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'switch_division', registration_id: reg.id, target_division_id: target.id, top_up_reference: payment.reference, move_team: false }),
+      });
+      return { ok: response.ok, result: await response.json() };
+    };
+    const completed = () => json({ switched: true, eventId: reg.event_id, targetName: target.name });
     const secret = Deno.env.get('PAYSTACK_SECRET_KEY');
     const gateway = async (path: string, body?: any) => {
       if (!secret?.startsWith('sk_live_')) fail('Payments are not configured.');
@@ -51,14 +69,21 @@ Deno.serve(async req => {
     };
     if (input.action === 'confirm') {
       if (!payment) fail('No saved checkout found.');
+      if (reviewed) {
+        if (reviewed.completed) return completed();
+        const { ok, result } = await moveEntry();
+        if (ok && result.retry) return json({ pending: true, message: 'Payment is not confirmed yet. If you cancelled, your original entry is unchanged.' });
+        if (!ok || !result.switched) fail(`This entry has not switched: ${result.message || result.error || 'Please retry.'} If you paid, do not pay again.`);
+        return completed();
+      }
       const verified = await gateway(`verify/${encodeURIComponent(payment.reference)}`);
       if (verified.status !== 'success') return json({ pending: true, message: 'Payment is not confirmed yet. If you cancelled, your original entry is unchanged.' });
-      if (verified.reference !== payment.reference || verified.currency !== 'ZAR' || verified.amount !== cents(payment.amount) || norm(verified.customer?.email) !== email || verified.domain !== 'live') fail('Payment verification did not match this checkout.');
-      if (payment.metadata.switch_completed === true) return json({ switched: true, eventId: reg.event_id, targetName: target.name });
+      if (verified.reference !== payment.reference || verified.currency !== 'ZAR' || verified.amount !== cents(payment.amount) || norm(verified.customer?.email) !== norm(payment.metadata.registrant_email) || verified.domain !== 'live') fail('Payment verification did not match this checkout.');
+      if (payment.metadata.switch_completed === true) return completed();
       if (reg.division_id === target.id && reg.status !== 'withdrawn') {
         const latest = await checked(admin.from('payments').select('metadata').eq('id', payment.id).maybeSingle());
         await checked(admin.from('payments').update({ metadata: { ...latest.metadata, switch_completed: true } }).eq('id', payment.id));
-        return json({ switched: true, eventId: reg.event_id, targetName: target.name });
+        return completed();
       }
       if (reg.division_id !== payment.metadata.from_division_id || reg.status === 'withdrawn' || reg.payment_status !== 'paid') fail('Payment received, but your entry changed. Contact the organiser; do not pay again.');
       if (cents(target.entry_fee || 0) - cents(from.entry_fee || 0) !== cents(payment.amount)) fail('Payment received, but division pricing changed. Contact the organiser; do not pay again.');
@@ -69,14 +94,12 @@ Deno.serve(async req => {
       const claimed = await checked(admin.from('payments').update({ metadata: { ...payment.metadata, native_switch_lock: lockId, native_switch_lock_at: Date.now() } }).eq('id', payment.id).eq('metadata', JSON.stringify(payment.metadata)).select('id').maybeSingle());
       if (!claimed) return json({ pending: true, message: 'Your division switch is processing. Check again shortly.' });
       try {
-      // The established service owns the actual move, partner unlinking, ledger
-      // allocation, notifications and deadline validation. Forward the user JWT.
-      const response = await fetch(`${url}/functions/v1/paystack-refund`, { method: 'POST', headers: { Authorization: auth, apikey: Deno.env.get('SUPABASE_ANON_KEY')!, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'switch_division', registration_id: reg.id, target_division_id: target.id, top_up_reference: payment.reference, move_team: false }) });
-      const result = await response.json();
-      if (!response.ok || !result.switched) fail(`Payment received, but the switch is not complete: ${result.message || result.error || 'Please retry.'} Do not pay again.`);
-      const latest = await checked(admin.from('payments').select('metadata').eq('id', payment.id).maybeSingle());
+        // The shared service owns the move. Forward the authenticated user JWT.
+        const { ok, result } = await moveEntry();
+        if (!ok || !result.switched) fail(`Payment received, but the switch is not complete: ${result.message || result.error || 'Please retry.'} Do not pay again.`);
+        const latest = await checked(admin.from('payments').select('metadata').eq('id', payment.id).maybeSingle());
         await checked(admin.from('payments').update({ metadata: { ...latest.metadata, switch_completed: true } }).eq('id', payment.id));
-      return json({ switched: true, eventId: reg.event_id, targetName: target.name });
+        return completed();
       } finally {
         const latest = await checked(admin.from('payments').select('metadata').eq('id', payment.id).maybeSingle());
         if (latest?.metadata?.native_switch_lock === lockId) await checked(admin.from('payments').update({ metadata: { ...latest.metadata, native_switch_lock: null } }).eq('id', payment.id).eq('metadata->>native_switch_lock', lockId));
@@ -91,15 +114,20 @@ Deno.serve(async req => {
     if (String(event.end_date || event.start_date || '9999').slice(0, 10) < today) fail('This event has finished.');
     const existing = await checked(admin.from('event_registrations').select('email, partner_email').eq('event_id', reg.event_id).eq('division', target.name).neq('status', 'withdrawn'));
     if (existing?.some((r: any) => norm(r.email) === email || norm(r.partner_email) === email)) fail('You are already entered in that division.');
-    const paidRows = await checked(admin.from('payments').select('*').eq('event_id', reg.event_id));
-    const existingBalance = entryBalance(event, from, reg, paidRows);
-    if (Number(existingBalance.due) > 0) fail('Pay your current entry balance before switching divisions.');
-    const amountCents = cents(target.entry_fee || 0) - cents(from.entry_fee || 0);
+    if (!reviewed) {
+      const paidRows = await checked(admin.from('payments').select('*').eq('event_id', reg.event_id));
+      const existingBalance = entryBalance(event, from, reg, paidRows);
+      if (Number(existingBalance.due) > 0) fail('Pay your current entry balance before switching divisions.');
+    }
+    const amountCents = reviewed ? cents(reviewed.delta) : cents(target.entry_fee || 0) - cents(from.entry_fee || 0);
     if (!Number.isSafeInteger(amountCents) || amountCents <= 0) fail('No additional payment is required for this switch.');
-    const quote = { eventId: event.id, eventName: event.event_name, registrationId: reg.id, targetDivisionId: target.id, fromName: from.name, targetName: target.name, oldFee: Number(from.entry_fee || 0), newFee: Number(target.entry_fee || 0), total: amountCents / 100, partnerName: reg.partner_name || null };
+    const quote = { eventId: event.id, eventName: event.event_name, registrationId: reg.id, targetDivisionId: target.id, fromName: reviewed?.from_division || from.name, targetName: target.name, oldFee: reviewed ? Number(reviewed.old_fee) : Number(from.entry_fee || 0), newFee: reviewed ? Number(reviewed.new_fee) : Number(target.entry_fee || 0), total: amountCents / 100, partnerName: reg.partner_name || null };
     // Recover one pending attempt across app restarts and changed selections.
-    const attempts = await checked(admin.from('payments').select('*').eq('event_id', reg.event_id).contains('metadata', { native_switch: true, registration_id: reg.id, registrant_email: email }).order('created_at', { ascending: false }).limit(20));
-    const pending = attempts?.find((p: any) => !p.metadata.switch_completed && ['processing', 'success'].includes(p.status));
+    const attempts = await checked(admin.from('payments').select('*').eq('event_id', reg.event_id).contains('metadata', { native_switch: true, registration_id: reg.id }).order('created_at', { ascending: false }).limit(20));
+    const pending = attempts?.find((p: any) => ownsCheckout(p.metadata) && !p.metadata.switch_completed && !p.metadata.verified_division_switch && ['processing', 'success'].includes(p.status));
+    if (reviewed && pending && (pending.metadata.target_division_id !== target.id || cents(pending.amount) !== amountCents)) {
+      fail('Your earlier switch checkout needs review. If you paid, do not pay again.');
+    }
     if (pending && (input.action === 'quote' || pending.metadata.native_authorization_url)) return json({ quote: pending.metadata.quote, reference: pending.reference, authorizationUrl: pending.metadata.native_authorization_url || null });
     if (pending && (pending.metadata.target_division_id !== target.id || cents(pending.amount) !== amountCents)) fail('Resume your previous switch before starting another.');
     if (input.action === 'quote') return json({ quote });
@@ -108,7 +136,7 @@ Deno.serve(async req => {
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(fingerprint));
     const reference = pending?.reference || 'MSWITCH-' + Array.from(new Uint8Array(digest)).map(v => v.toString(16).padStart(2, '0')).join('').slice(0, 48);
     const profile = await checked(admin.from('players').select('id').ilike('email', email).maybeSingle());
-    const metadata = { source: 'division_switch', native_switch: true, registration_id: reg.id, from_division_id: from.id, from_division: from.name, target_division_id: target.id, target_division: target.name, event_id: event.id, event_name: event.event_name, email, registrant_email: email, reference, quote };
+    const metadata = { source: 'division_switch', native_switch: true, user_id: user.id, registration_id: reg.id, from_division_id: reviewed?.from_division_id || from.id, from_division: quote.fromName, target_division_id: target.id, target_division: target.name, event_id: event.id, event_name: event.event_name, email, registrant_email: email, reference, quote };
     if (!pending) await checked(admin.from('payments').insert({ player_id: profile?.id || null, event_id: event.id, amount: quote.total, currency: 'ZAR', status: 'processing', payment_type: 'event_entry_fee', payment_method: 'paystack', reference, is_test: false, metadata }));
     const result = await gateway('initialize', { email, amount: amountCents, currency: 'ZAR', reference, metadata, callback_url: `${url}/functions/v1/native-division-switch/return` });
     if (!result.authorization_url?.startsWith('https://checkout.paystack.com/')) fail('Checkout returned an invalid payment URL.');

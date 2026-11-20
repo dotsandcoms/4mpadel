@@ -1,0 +1,25 @@
+.ap-event-media { display:grid; gap:22px; min-width:0; grid-column:1/-1; }
+.ap-event-media h3,.ap-event-media h4,.ap-event-media p { margin:0; }
+.ap-event-media h3 { font-size:19px; }
+.ap-event-media h4 { font-size:15px; }
+.ap-event-media p,.ap-event-media small { font-size:13px; line-height:1.5; color:var(--ap-muted,#687069); }
+.ap-event-media .ap-media-intro { display:grid; gap:8px; }
+.ap-event-media .ap-media-primary-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.ap-event-media .ap-media-card { display:flex; flex-direction:column; gap:12px; min-width:0; padding:16px; border:1px solid var(--ap-line,#d9ded8); border-radius:10px; }
+.ap-event-media .ap-media-preview,.ap-event-media .ap-media-document { display:flex; align-items:center; justify-content:center; min-height:150px; height:150px; overflow:hidden; border-radius:6px; background:var(--ap-wash,#edf0eb); color:var(--ap-muted,#687069); font-size:13px; }
+.ap-event-media .ap-media-preview img { display:block; width:100%; height:100%; object-fit:cover; }
+.ap-event-media .ap-media-preview.is-logo img { object-fit:contain; padding:12px; }
+.ap-event-media .ap-media-preview span { padding:16px; text-align:center; }
+.ap-event-media .ap-media-document { flex-direction:column; gap:10px; padding:16px; }
+.ap-event-media a { color:inherit; text-underline-offset:3px; }
+.ap-event-media .ap-media-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.ap-event-media .ap-media-actions button,.ap-event-media .ap-media-collection-heading button { min-height:36px; padding:8px 10px; font-size:12px; white-space:normal; }
+.ap-event-media .ap-media-file-input { display:none; }
+.ap-event-media .ap-media-collection { display:grid; gap:14px; padding-top:20px; border-top:1px solid var(--ap-line,#d9ded8); }
+.ap-event-media .ap-media-collection-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.ap-event-media .ap-media-collection-heading p { margin-top:5px; }
+.ap-event-media .ap-media-thumbnails { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
+.ap-event-media [role=alert] { color:#a3352b; }
+.ap-event-media.ap-media-review { grid-template-columns:repeat(auto-fit,minmax(90px,1fr)); gap:8px; }
+.ap-event-media.ap-media-review .ap-media-preview { min-height:90px; height:110px; }
+@media(max-width:600px) { .ap-event-media .ap-media-primary-grid { grid-template-columns:1fr; } .ap-event-media .ap-media-collection-heading { align-items:flex-start; flex-direction:column; } }

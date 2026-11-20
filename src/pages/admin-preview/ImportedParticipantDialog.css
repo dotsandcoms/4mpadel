@@ -1,0 +1,10 @@
+.ap-imported-dialog { width:min(660px,calc(100vw - 32px));overscroll-behavior:contain; }
+.ap-imported-dialog input[type=search] { box-sizing:border-box;width:100%;min-height:44px;padding:12px;border:1px solid var(--ap-line,#c9cec7);border-radius:8px;background:var(--ap-surface,#fbfcf9);color:inherit; }
+.ap-imported-dialog header > button { width:42px;min-height:42px;border:1px solid var(--ap-line,#c9cec7);border-radius:8px;background:transparent;font-size:24px; }
+.ap-imported-results { display:grid;gap:8px;max-height:280px;overflow:auto; }
+.ap-imported-results label { display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--ap-line,#c9cec7);border-radius:8px; }
+.ap-imported-results input { width:18px;height:18px;flex:0 0 18px; }
+.ap-imported-results span { display:grid;gap:4px;overflow-wrap:anywhere; }
+.ap-imported-results small { color:var(--ap-muted,#626861); }
+.ap-imported-actions { display:flex;gap:8px;flex-wrap:wrap; }
+.ap-imported-actions button { min-height:40px; }

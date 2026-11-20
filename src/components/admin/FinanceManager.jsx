@@ -14,7 +14,10 @@ import EventFinance from './EventFinance';
 import { useAdminPermissions } from '../../hooks/useAdminPermissions';
 import { useCommerceConfig } from '../../hooks/useCommerceConfig';
 import { licenseQuote, matchLicenseTypeByAmount } from '../../utils/commerce';
-import { classifyPaystackTransaction, paystackMetadata } from '../../utils/paystackClassification';
+import {
+    classifyPaystackTransaction, hasRecordedPaystackEntryTransfer, paystackMetadata, recordedPaystackReferences,
+} from '../../utils/paystackClassification';
+import { hasVerifiedPaymentEntryTransfers } from '../../utils/paymentRegistrationMatch';
 
 const FinanceManager = () => {
     const { config: commerce } = useCommerceConfig();
@@ -30,6 +33,7 @@ const FinanceManager = () => {
     const [players, setPlayers] = useState([]);
     const [syncingId, setSyncingId] = useState(null);
     const [recordedRefs, setRecordedRefs] = useState(new Set());
+    const [transferredRefs, setTransferredRefs] = useState(new Set());
     const [bulkSyncing, setBulkSyncing] = useState(false);
     const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
 
@@ -119,13 +123,8 @@ const FinanceManager = () => {
             const data = await fetchAllRows((from, to) =>
                 supabase.from('payments').select('reference, metadata').range(from, to)
             );
-            const refs = new Set();
-            data.forEach(p => {
-                if (p.reference) refs.add(p.reference);
-                if (p.metadata?.paystack_ref) refs.add(p.metadata.paystack_ref);
-                if (p.metadata?.original_trx?.id) refs.add(p.metadata.original_trx.id);
-            });
-            setRecordedRefs(refs);
+            setRecordedRefs(new Set(data.flatMap(recordedPaystackReferences)));
+            setTransferredRefs(new Set(data.filter(hasVerifiedPaymentEntryTransfers).flatMap(recordedPaystackReferences)));
         } catch (error) {
             console.error('Error fetching payments:', error);
         }
@@ -241,6 +240,11 @@ const FinanceManager = () => {
 
             const enrichedEventId = trx.metadata?.event_id || localMetadata?.event_id || existingPayment?.event_id
                 || legacyEventIdFromPaymentReference(reference);
+            if (await hasRecordedPaystackEntryTransfer(supabase, reference, existingPayment)) {
+                setTransferredRefs(previous => new Set([...previous, reference]));
+                setRecordedRefs(previous => new Set([...previous, reference]));
+                return;
+            }
             let enrichedEventName = trx.metadata?.event_name || localMetadata?.event_name || null;
             let enrichedEventDate = trx.metadata?.event_date || localMetadata?.event_date || trx.rawDate;
             let enrichedDivision = trx.metadata?.division || localMetadata?.division || null;
@@ -278,7 +282,8 @@ const FinanceManager = () => {
                     .neq('reference', reference)
                     .order('created_at', { ascending: false })
                     .limit(10);
-                siblingMeta = (siblings || []).find((s) => Array.isArray(s.metadata?.covers) && s.metadata.covers.length > 0)?.metadata || null;
+                siblingMeta = (siblings || []).find(s => !hasVerifiedPaymentEntryTransfers(s)
+                    && Array.isArray(s.metadata?.covers) && s.metadata.covers.length > 0)?.metadata || null;
                 if (siblingMeta) {
                     enrichedEventName = enrichedEventName || siblingMeta.event_name || null;
                     enrichedDivision = enrichedDivision || siblingMeta.division || null;
@@ -976,7 +981,10 @@ const FinanceManager = () => {
                                                             (() => {
                                                                 const p = players.find(pl => pl.email?.toLowerCase() === trx.user?.toLowerCase());
                                                                 const isRecorded = recordedRefs.has(trx.id);
-                                                                
+                                                                if (transferredRefs.has(trx.id)) {
+                                                                    return <span className="text-[10px] font-bold text-padel-green">Recorded · Entry transferred</span>;
+                                                                }
+
                                                                 if (!p) return <span className="text-[10px] text-gray-600">No Profile</span>;
                                                                 
                                                                 // Allow re-syncing if it's an event registration that might have been misidentified

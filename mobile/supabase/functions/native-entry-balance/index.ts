@@ -60,25 +60,25 @@ Deno.serve(async req => {
     if (!event.is_manual || event.event_status === 'cancelled' || reg.status === 'withdrawn') fail('This entry is not available for payment.');
     await checked(admin.rpc('assert_event_registration_payments_open', { p_rows: [{ event_id: eventId, division_id: reg.division_id, division: reg.division }] }));
     const balance = balanceFor(reg);
-    if (!balance.known) fail('The original entry payment needs reconciliation. Contact the organiser; do not pay the full entry fee again.');
-    const quote = { ...balance, eventId, eventName: event.event_name, total: balance.due };
+    const due = balance.due ?? fail('The original entry payment needs reconciliation. Contact the organiser; do not pay the full entry fee again.');
+    const quote = { ...balance, eventId, eventName: event.event_name, total: due };
     const pending = payments.find((p: any) => p.metadata?.source === 'native_entry_balance' && p.metadata?.registration_id === reg.id && p.metadata?.user_id === user.id && p.status === 'processing');
     if (pending && (input.action === 'quote' || pending.metadata.authorization_url)) return json({ quote: pending.metadata.quote, reference: pending.reference, authorizationUrl: pending.metadata.authorization_url || null });
     if (input.action === 'quote') return json({ quote });
     if (!['platform', undefined, null].includes(event.payment_method) || event.allow_payments === false) fail('This event accepts payment through the organiser.');
     if (reg.payment_status !== 'paid') fail('Complete your original entry checkout before paying an adjustment.');
-    if (!balance.due || balance.due <= 0) fail('Your entry has no outstanding balance.');
-    if (balance.due < 1) fail('Your outstanding balance is below Paystack’s R1.00 minimum payment. It remains outstanding; you have not been charged. Contact the organiser to settle this small balance.');
-    if (Number(input.acceptedTotal) !== balance.due || (pending && Number(pending.amount) !== balance.due)) fail('The entry balance changed. Refresh the payment review.');
+    if (!Number.isFinite(due) || due <= 0) fail('Your entry has no outstanding balance.');
+    if (due < 1) fail('Your outstanding balance is below Paystack’s R1.00 minimum payment. It remains outstanding; you have not been charged. Contact the organiser to settle this small balance.');
+    if (Number(input.acceptedTotal) !== due || (pending && Number(pending.amount) !== due)) fail('The entry balance changed. Refresh the payment review.');
     // Keep an in-progress checkout resumable, but never recycle the reference of
     // an abandoned or failed attempt. Paystack and payments.reference both treat
     // that reference as already used.
     const reference = pending?.reference || 'MBAL-' + Array.from(crypto.getRandomValues(new Uint8Array(24))).map(v => v.toString(16).padStart(2, '0')).join('');
     const profile = await checked(admin.from('players').select('id').ilike('email', email.replace(/[\\%_]/g, '\\$&')).maybeSingle());
     const metadata = { source: 'native_entry_balance', user_id: user.id, registrant_email: email, registration_id: reg.id, event_id: eventId, event_name: event.event_name, division: reg.division, quote,
-      covers: [{ type: 'entry', email, division: reg.division }], division_entry_fees: { [reg.division]: balance.due } };
-    if (!pending) await checked(admin.from('payments').insert({ reference, player_id: profile?.id || null, event_id: eventId, amount: balance.due, currency: 'ZAR', status: 'processing', payment_type: 'event_entry_fee', payment_method: 'paystack', is_test: false, metadata }));
-    const result = await gateway('initialize', { reference, email, amount: Math.round(balance.due * 100), currency: 'ZAR', metadata, callback_url: `${url}/functions/v1/native-entry-balance/return` });
+      covers: [{ type: 'entry', email, division: reg.division }], division_entry_fees: { [reg.division]: due } };
+    if (!pending) await checked(admin.from('payments').insert({ reference, player_id: profile?.id || null, event_id: eventId, amount: due, currency: 'ZAR', status: 'processing', payment_type: 'event_entry_fee', payment_method: 'paystack', is_test: false, metadata }));
+    const result = await gateway('initialize', { reference, email, amount: Math.round(due * 100), currency: 'ZAR', metadata, callback_url: `${url}/functions/v1/native-entry-balance/return` });
     if (!result.authorization_url?.startsWith('https://checkout.paystack.com/')) fail('Invalid checkout address.');
     await checked(admin.from('payments').update({ metadata: { ...metadata, authorization_url: result.authorization_url } }).eq('reference', reference));
     return json({ quote, reference, authorizationUrl: result.authorization_url });

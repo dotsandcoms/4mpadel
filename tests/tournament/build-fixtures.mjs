@@ -1,4 +1,6 @@
 import { writeFileSync } from 'node:fs';
+import { rankGroupQualifiers } from '../../src/utils/drawQualification.js';
+import { generateRankedElimination } from '../../src/pages/admin-preview/tournament/utils/tournament/draws.js';
 import { sampleTournament } from '../../sandbox/tournament-manager/data.js';
 import { generateTournamentSchedule } from '../../src/utils/tournament/scheduling.js';
 import { generateDivisionDraw, generateElimination } from '../../src/utils/tournament/draws.js';
@@ -10,6 +12,10 @@ insert('auth.users',[{id:'00000000-0000-4000-8000-000000000001',email:'admin@exa
 insert('calendar',[d.event],['id','event_name','start_date','end_date','venue','is_manual']);
 insert('tournament_divisions',d.divisions,['id','event_id','name','sort_order','is_active']);
 insert('players',d.players,['id','name','email','license_type','points']);
+const fixtureSeason = Number(d.event.start_date.slice(0, 4));
+insert('annual_licenses', d.players.filter(player => player.license_type === 'full').map(player => ({
+    player_id: player.id, season_year: fixtureSeason, valid_from: fixtureSeason + '-01-01',
+})), ['player_id', 'season_year', 'valid_from']);
 insert('event_registrations',d.registrations,['id','event_id','division_id','full_name','email','partner_name','partner_email','payment_status','status']);
 insert('event_play_days',d.playDays.map(x=>({...x,event_id:d.event.id})),['id','event_id','play_date','start_time','end_time','courts_count','minimum_break_minutes','match_duration_minutes','is_active']);
 insert('draws',d.draws,['id','event_id','division_id','draw_kind','format','status','scoring_rules']);
@@ -59,4 +65,63 @@ gd.standings=groupDraft.groups.flatMap(g=>gd.entries.filter(e=>e.group_id===g.id
 const elimination=generateElimination(gd,draw);
 sql.push(`SELECT tm_qualify(${d.event.id},${q(draw.id)},(SELECT updated_at FROM draws WHERE id=${q(draw.id)}),${q(elimination)}); DO $$ BEGIN IF (SELECT count(*) FROM draw_matches WHERE draw_id=${q(draw.id)} AND stage='knockout' AND scheduled_start IS NOT NULL)<>3 THEN RAISE EXCEPTION 'Reserved elimination slots were lost'; END IF; END $$;`);
 sql.push("SELECT 'Tournament integration assertions passed' AS result;");
+// The deployed native JS implementation serves as the independent reference
+// for the SQL ranking calculator. Use unequal groups and a custom lots tie.
+const hostId = number => '71110000-0000-4000-8000-' + String(number).padStart(12, '0');
+sql.push('CREATE TEMPORARY TABLE ranked_fixture_reference(mode text PRIMARY KEY,payload jsonb);');
+for (const example of [
+    { mode: 'all', drawNumber: 310, offset: 1000 },
+    { mode: 'best_placed', drawNumber: 311, offset: 2000 },
+]) {
+    const drawId = hostId(example.drawNumber);
+    const id = number => hostId(example.offset + number);
+    const groups = ['Large group', 'Small group'].map((name, index) => ({ id: id(index + 1), name }));
+    const entries = [1, 2, 3, 4, 5].map((n, index) => ({
+        id: id(10 + n), draw_id: drawId, group_id: groups[n < 4 ? 0 : 1].id,
+        team_name: 'Team ' + n, seed_number: n,
+    }));
+    const matches = [[1, 2, 6, 1], [1, 3, 6, 2], [2, 3, 6, 0], [4, 5, 6, 4]].map(([one, two], index) => ({
+        id: id(31 + index), draw_id: drawId, group_id: groups[one < 4 ? 0 : 1].id,
+        entry_one_id: entries[one - 1].id, entry_two_id: entries[two - 1].id,
+        winner_entry_id: entries[one - 1].id, status: index === 1 ? 'retired' : 'completed',
+        result_summary: index === 1 ? [2, 0] : null,
+    }));
+    const matchSets = [[6,1],[6,2],[6,0],[6,4]].map(([one,two],index) => ({
+        match_id: matches[index].id, set_number:1, entry_one_games:one, entry_two_games:two,
+    }));
+    const input = { ...example, drawId, groups, entries, matches, matchSets, places: 1, extras: 1 };
+    const ranked = rankGroupQualifiers(input);
+    const lotRules = ['won','unsupported','won','draw'];
+    const lotOrdered = rankGroupQualifiers({ ...input, rules: lotRules }).advancing.map(row=>row.id);
+    const bracket = generateRankedElimination(ranked.advancing, { id: drawId, scoring_rules: {} });
+    const payload = { drawId, groups, entries, matches, matchSets, lotRules, lotOrdered, bracket,
+        ranked: ranked.advancing.map(row=>row.id) };
+    if (example.mode === 'best_placed') {
+        const entryIds = [id(12)];
+        const overridden = rankGroupQualifiers({ ...input, overrideIds: entryIds });
+        const placementDividers = rankGroupQualifiers({ ...input, extras: 2 }).advancing;
+        payload.finishingPlaces = {
+            ranked: placementDividers.map(row => row.id),
+            bracket: generateRankedElimination(placementDividers, {
+                id: drawId, scoring_rules: { plate_mode: 'double', playoff_mode: 'top4' },
+            }),
+        };
+        payload.override = {
+            ranked: overridden.advancing.map(row => row.id),
+            bracket: generateRankedElimination(overridden.advancing, { id: drawId, scoring_rules: {} }),
+            request: { candidate_ids: ranked.comparison.map(row => row.entry_id), entry_ids: entryIds, reason: '  Checked with both group referees  ' },
+        };
+    }
+    sql.push(`INSERT INTO ranked_fixture_reference VALUES (${q(example.mode)},${q(payload)});`);
+}
+sql.push('create temporary table finishing_place_reference(teams integer, plate jsonb, playoff text, qualifies uuid[], bracket jsonb);');
+for (const count of [2, 3, 4, 5, 8, 9, 16, 17, 32]) {
+    const qualifiers = Array.from({ length: count }, (_, i) => ({ id: hostId(4000 + i), seed_number: i + 1 }));
+    const modes = ['none', 'double', 'triple', 'all', [], ['places_3_4'], ['places_7_8', 'places_13_16']];
+    for (const plate of modes) for (const playoff of count < 5 ? ['none','top4'] : ['none','top4','top8']) {
+        const matches = generateRankedElimination(qualifiers, { scoring_rules: { plate_mode: plate, playoff_mode: playoff } });
+        const ids = 'array[' + qualifiers.map(row => q(row.id) + '::uuid').join(',') + ']';
+        sql.push(`INSERT INTO finishing_place_reference VALUES (${count},${q(JSON.stringify(plate))},${q(playoff)},${ids},${q(matches)});`);
+    }
+}
 writeFileSync('tests/tournament/fixtures.generated.sql',sql.join('\n')+'\n');

@@ -1,0 +1,11 @@
+.ap-settings-workspace { display: grid; gap: 16px; }
+.ap-settings-content { display: grid; gap: 16px; padding: 16px; margin: 0; }
+.ap-settings-fields, .ap-settings-quotes { border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr)); gap: 14px; }
+.ap-settings-fields label { min-width: 0; display: grid; gap: 6px; font-size: 12px; font-weight: 700; }
+.ap-settings-fields input, .ap-settings-fields textarea, .ap-settings-fields select { min-height: 38px; min-width: 0; border: 1px solid var(--ap-line-strong); border-radius: var(--ap-radius); background: var(--ap-surface); color: var(--ap-ink); padding: 8px 10px; }
+.ap-settings-fields input:focus-visible, .ap-settings-fields textarea:focus-visible, .ap-settings-fields select:focus-visible { outline: 2px solid var(--ap-accent); outline-offset: 1px; }
+.ap-settings-social { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+.ap-settings-quotes div { padding: 10px; background: var(--ap-surface-2); }
+.ap-settings-quotes dt { font-size: 11px; color: var(--ap-muted); margin-bottom: 5px; }
+.ap-settings-quotes dd { margin: 0; font-size: 12px; font-weight: 700; }
+.ap-settings-content footer { display: flex; justify-content: flex-end; gap: 8px; }

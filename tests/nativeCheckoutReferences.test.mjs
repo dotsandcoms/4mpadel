@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { build, transform } from 'esbuild';
@@ -44,10 +45,12 @@ async function compileHandler(file) {
   };
 }
 
-const [nativeHandler, confirmHandler, refundHandler] = await Promise.all([
+const [nativeHandler, confirmHandler, refundHandler, mobileRefundHandler, refundWebhook] = await Promise.all([
   compileHandler('../mobile/supabase/functions/native-event-checkout/index.ts'),
   compileHandler('../supabase/functions/confirm-manual-payment/index.ts'),
   compileHandler('../supabase/functions/paystack-refund/index.ts'),
+  compileHandler('../mobile/supabase/functions/paystack-refund/index.ts'),
+  compileHandler('../supabase/functions/paystack-webhook/index.ts'),
 ]);
 const appSource = await readFile(new URL('../mobile/src/lib/payment-return.ts', import.meta.url), 'utf8');
 const parser = await transform(appSource, { loader: 'ts', format: 'esm' });
@@ -58,7 +61,7 @@ function query(resolve) {
   let changes;
   const builder = {
     eq: (column, value) => { filters[column] = value; return builder; },
-    select: () => builder, ilike: () => builder, neq: () => builder,
+    select: () => builder, ilike: () => builder, neq: () => builder, in: () => builder,
     update: value => { changes = value; return builder; },
     maybeSingle: () => builder,
     then: (fulfilled, rejected) => Promise.resolve().then(() => ok(resolve(filters, changes))).then(fulfilled, rejected),
@@ -200,42 +203,206 @@ for (const [requested, reference] of [[appToken, namedReference], [oldToken, old
   });
 }
 
-for (const reference of [oldToken, namedReference]) {
-  for (const licence of [false, true]) {
-    test(`retries a ${reference === oldToken ? 'legacy' : 'named'} ${licence ? 'split licence' : 'entry'} refund using the parent Paystack charge`, async () => {
-      const payment = { id: 'payment', reference: licence ? `LIC-${reference}` : reference, is_test: false,
-        metadata: licence ? { parent_reference: reference } : {} };
-      const refund = { id: 'refund', payment_id: payment.id, amount: licence ? 120 : 300, status: 'failed' };
-      let refundUpdates;
-      const service = { from: table => query((filters, changes) => {
-        if (table === 'payments') {
-          assert.equal(filters.id, payment.id);
-          return payment;
-        }
-        assert.equal(table, 'payment_refunds');
-        assert.equal(filters.id, refund.id);
-        if (changes) refundUpdates = changes;
-        return refund;
-      }) };
-      const providerCalls = [];
-      const handler = refundHandler(() => service, async (url, options) => {
-        providerCalls.push(url);
-        if (url === `https://api.paystack.co/transaction/verify/${reference}`) {
-          return Response.json({ data: { reference, status: 'success', amount: 42000 } });
-        }
-        assert.equal(url, 'https://api.paystack.co/refund');
-        assert.deepEqual(JSON.parse(options.body), { transaction: reference, amount: refund.amount * 100 });
-        return Response.json({ status: true, data: { id: 42, status: 'pending' } });
-      });
-      const result = await handler(new Request(`${endpoint}/paystack-refund`, {
-        method: 'POST', headers: { Authorization: 'Bearer service' },
-        body: JSON.stringify({ action: 'retry_failed', payment_refund_id: refund.id }),
-      }));
-      assert.equal(result.status, 200);
-      assert.equal((await result.json()).paystack_reference, reference);
-      assert.equal(refundUpdates.paystack_reference, reference);
-      assert.equal(refundUpdates.status, 'processing');
-      assert.equal(providerCalls.length, 2);
-    });
-  }
+const reviewedReference = '4m-refund-41aa2db7fe2045b3b79c5cb4de523479';
+const refundId = '7121a425-0cc5-44f5-b8a0-85830db37a4d';
+const regId = '32faf63b-8aa3-4c48-9bd5-6376fcff41e9';
+const payId = 'ccb2cfb0-05bb-4753-be89-601dbe176949';
+const gatewayId = 16723;
+
+function refundFixture({ reference = namedReference, licence = false, metadata = { verify_failed: true }, previousId = null, mode = 'live' } = {}) {
+  const amount = licence ? 120 : 300;
+  const payment = { id: payId, event_id: 517, reference: licence ? `LIC-${reference}` : reference,
+    is_test: mode === 'test', status: 'success', payment_method: 'paystack', metadata: licence ? { parent_reference: reference } : {} };
+  const refund = { id: refundId, event_registration_id: regId, payment_id: payment.id, amount, currency: 'ZAR', status: 'failed', metadata, paystack_refund_id: previousId };
+  const registration = { id: regId, event_id: 517 };
+  const calls = [];
+  const service = {
+    from: table => query((filters, changes) => {
+      if (table === 'payments') { assert.equal(filters.id, payment.id); return { ...payment }; }
+      if (table === 'event_registrations') { assert.equal(filters.id, registration.id); return registration; }
+      assert.equal(table, 'payment_refunds');
+      if (filters.paystack_reference === reference) return [{ ...refund }];
+      assert.ok(filters.id === refund.id || filters.paystack_refund_id === refund.paystack_refund_id
+        || filters['metadata->reviewed_retry->>reference'] === refund.metadata.reviewed_retry?.reference);
+      if (changes) Object.assign(refund, changes);
+      return { ...refund, metadata: { ...refund.metadata } };
+    }),
+    async rpc(name, args) {
+      assert.equal(args.p_refund_id, refundId);
+      assert.equal(args.p_event_id, 517);
+      assert.equal(args.p_registration_id, regId);
+      calls.push([name,args]);
+      if (name === 'claim_event_refund_retry') {
+        assert.equal(args.p_transaction_ref, reference);
+        assert.equal(args.p_amount, amount);
+        if (refund.status !== 'failed') return ok(null);
+        refund.status = 'needs_attention';
+        refund.paystack_refund_id = null;
+        refund.metadata.reviewed_retry = { reference: reviewedReference, phase: 'held', method: 'paystack', domain: mode,
+          transaction_reference: reference, transaction_id: String(gatewayId) };
+        return ok(refund.metadata.reviewed_retry);
+      }
+      assert.equal(name, 'apply_event_refund_retry_evidence');
+      assert.equal(args.p_reference, reviewedReference);
+      refund.status = args.p_status;
+      refund.paystack_refund_id = args.p_provider_id;
+      refund.metadata.reviewed_retry.phase = 'verified';
+      return ok({ id: refund.id, status: refund.status, paystack_refund_id: refund.paystack_refund_id });
+    },
+  };
+  const transaction = () => Response.json({ status: true, data: { id: gatewayId, reference, status: 'success', currency: 'ZAR', domain: mode, amount: 42000 } });
+  const receipt = (extra = {}) => ({ reference: reviewedReference, id: 42, status: 'pending', amount: amount * 100,
+    currency: 'ZAR', domain: mode, transaction: gatewayId, ...extra });
+  return { service, calls, refund, payment, receipt, transaction, reference };
 }
+
+function sendRefund(action, body = {}, bearer = 'service') {
+  return new Request(`${endpoint}/paystack-refund`, { method: 'POST', headers: { Authorization: `Bearer ${bearer}` },
+    body: JSON.stringify({ action, payment_refund_id: refundId, ...body }) });
+}
+const exact = { event_id: 517, reviewed_registration_id: regId };
+
+for (const [name, edge] of [['web', refundHandler], ['installed app', mobileRefundHandler]]) {
+  for (const reference of [oldToken, namedReference]) {
+    for (const licence of [false, true]) {
+      test(`${name} legacy retry keeps the ${reference === oldToken ? 'legacy' : 'named'} ${licence ? 'split licence' : 'entry'} checkout parent`, async () => {
+        const fixture = refundFixture({ reference, licence });
+        const calls = [];
+        const handler = edge(() => fixture.service, async (url, options) => {
+          calls.push(url);
+          if (url === `https://api.paystack.co/transaction/verify/${reference}`) return fixture.transaction();
+          assert.equal(url, 'https://api.paystack.co/refund');
+          assert.equal(fixture.refund.status, 'needs_attention');
+          assert.deepEqual(JSON.parse(options.body), { transaction: reference, amount: fixture.refund.amount * 100, currency: 'ZAR', reference: reviewedReference });
+          return Response.json({ status: true, data: fixture.receipt() });
+        });
+        const result = await handler(sendRefund('retry_failed'));
+        assert.equal(result.status, 200);
+        const body = await result.json();
+        assert.equal(body.paystack_reference, reference);
+        assert.equal(body.status, 'processing');
+        assert.equal(body.retried, true);
+        assert.equal(calls.length, 2);
+      });
+    }
+  }
+
+  test(`${name} concurrent retry claims send one POST and reconcile an ambiguous attempt without resubmission`, async () => {
+    const fixture = refundFixture();
+    let submitted = 0;
+    let statusChecks = 0;
+    let providerCanVerify = false;
+    let received;
+    const started = new Promise(resolve => { received = resolve; });
+    let release;
+    const hold = new Promise(resolve => { release = resolve; });
+    const handler = edge(() => fixture.service, async (url, options) => {
+      if (url.includes('/transaction/verify/')) return fixture.transaction();
+      if (options.method === 'POST') { submitted++; received(); await hold; throw new Error('Fixture network disconnected'); }
+      assert.equal(url, `https://api.paystack.co/refund?reference=${reviewedReference}`);
+      statusChecks++;
+      return Response.json({ status: true, data: providerCanVerify ? [fixture.receipt({status:'processed'})] : [] });
+    });
+    const first = handler(sendRefund('reviewed_retry_failed', exact));
+    await started;
+    const concurrent = await handler(sendRefund('retry_failed'));
+    assert.equal(concurrent.status, 409);
+    assert.equal((await concurrent.json()).retry_held, true);
+    release();
+    const indeterminate = await first;
+    assert.equal(indeterminate.status, 409);
+    assert.equal(fixture.refund.status, 'needs_attention');
+    assert.equal(fixture.refund.metadata.reviewed_retry.phase, 'held');
+    assert.equal((await handler(sendRefund('reconcile_retry', exact))).status, 409);
+    providerCanVerify = true;
+    const proven = await handler(sendRefund('reconcile_retry', exact));
+    assert.equal(proven.status, 200);
+    assert.equal((await proven.json()).status, 'processed');
+    assert.equal(submitted, 1);
+    assert.equal(statusChecks, 3);
+  });
+
+  test(`${name} handles Paystack's duplicate-reference response by fetching the same refund`, async () => {
+    const fixture = refundFixture();
+    let submitted = 0;
+    const handler = edge(() => fixture.service, async (url, options) => {
+      if (url.includes('/transaction/verify/')) return fixture.transaction();
+      if (options.method === 'POST') {
+        submitted++;
+        return Response.json({ status: false, message: 'Refund reference already exists' }, { status: 409 });
+      }
+      assert.equal(url, `https://api.paystack.co/refund?reference=${reviewedReference}`);
+      return Response.json({ status: true, data: [fixture.receipt()] });
+    });
+    const result = await handler(sendRefund('reviewed_retry_failed', exact));
+    assert.equal(result.status, 200);
+    assert.equal((await result.json()).status, 'processing');
+    assert.equal(submitted, 1);
+  });
+
+  test(`${name} denies delegated roles, wrong event and unknown history before any upstream request`, async () => {
+    const fixture = refundFixture({ metadata: { paystack_error: 'connection timeout' } });
+    const actor = { auth: { getUser: async () => ok({user}) }, rpc: async name => ok(name === 'account_is_active') };
+    const handler = edge((_url, key) => key === 'service' ? fixture.service : actor, async () => { throw new Error('unexpected network request'); });
+    assert.equal((await handler(sendRefund('reviewed_retry_failed', exact, 'tenant'))).status, 403);
+    assert.equal((await handler(sendRefund('reviewed_retry_failed', { ...exact, event_id: 518 }))).status, 404);
+    assert.equal((await handler(sendRefund('reviewed_retry_failed', { event_id: 517, registration_id: regId }))).status, 400);
+    assert.equal((await handler(sendRefund('unknown_operation', { event_id: 517, registration_id: regId }))).status, 400);
+    assert.equal((await handler(sendRefund('retry_failed'))).status, 409);
+    assert.equal(fixture.calls.length, 0);
+  });
+
+  test(`${name} existing Paystack retry fetches exact provider evidence, rejects mismatches and preserves an already processed refund`, async () => {
+    const fixture = refundFixture({ metadata: {}, previousId: '42', mode: 'test' });
+    let confirmed = false;
+    const handler = edge(() => fixture.service, async (url, options) => {
+      assert.equal(options.headers.Authorization, 'Bearer synthetic-test-key');
+      if (url.includes('/transaction/verify/')) return fixture.transaction();
+      assert.equal(url, 'https://api.paystack.co/refund/42');
+      assert.notEqual(options.method, 'POST');
+      return Response.json({ status: true, data: fixture.receipt({ id: 42, status: 'processed', domain: confirmed ? 'test' : 'live' }) });
+    }, { PAYSTACK_SECRET_KEY_TEST: 'synthetic-test-key' });
+    assert.equal((await handler(sendRefund('reviewed_retry_failed', exact))).status, 409);
+    assert.equal(fixture.calls.length, 0);
+    confirmed = true;
+    const result = await handler(sendRefund('reviewed_retry_failed', exact));
+    assert.equal(result.status, 200);
+    assert.equal((await result.json()).status, 'processed');
+    assert.equal(fixture.refund.paystack_refund_id, '42');
+  });
+}
+
+test('signed Paystack webhook accepts an exact reviewed reference and preserves legacy known-provider-ID refunds', async () => {
+  const fixture = refundFixture();
+  await fixture.service.rpc('claim_event_refund_retry', {
+    p_refund_id: refundId, p_event_id: 517, p_registration_id: regId, p_amount: 300, p_transaction_ref: fixture.reference,
+  });
+  const handler = refundWebhook(() => fixture.service, () => { throw new Error('unexpected network request'); });
+  function webhook(data, event = 'refund.processed') {
+    const body = JSON.stringify({ event, data });
+    const signature = createHmac('sha512', 'mock-paystack-key').update(body).digest('hex');
+    return new Request(`${endpoint}/paystack-webhook`, { method: 'POST', headers: { 'x-paystack-signature': signature }, body });
+  }
+  const data = fixture.receipt({ status: 'processed' });
+  const wrong = await handler(webhook({ ...data, amount: data.amount + 1 }));
+  assert.equal((await wrong.json()).updated, false);
+  assert.equal(fixture.refund.status, 'needs_attention');
+  const ambiguous = await handler(webhook({ transaction_reference: fixture.reference, amount: 30000 }));
+  assert.equal((await ambiguous.json()).reason, 'reviewed_refund_requires_exact_reference');
+  assert.equal(fixture.refund.status, 'needs_attention');
+  const result = await handler(webhook(data));
+  assert.equal((await result.json()).updated, true);
+  assert.equal(fixture.refund.status, 'processed');
+  // An existing refund with no claim continues to use its known provider ID.
+  fixture.refund.metadata = {};
+  fixture.refund.status = 'processing';
+  fixture.refund.event_registration_id = null;
+  const legacy = await handler(webhook({ id: 42, transaction_reference: fixture.reference, amount: 30000 }));
+  assert.equal((await legacy.json()).updated, true);
+  assert.equal(fixture.refund.status, 'processed');
+  fixture.refund.status = 'pending';
+  fixture.refund.paystack_refund_id = null;
+  const legacyByReference = await handler(webhook({ transaction_reference: fixture.reference, amount: 30000 }));
+  assert.equal((await legacyByReference.json()).updated, true);
+  assert.equal(fixture.refund.status, 'processed');
+});
