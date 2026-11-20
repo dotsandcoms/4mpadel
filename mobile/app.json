@@ -2,7 +2,7 @@
   "expo": {
     "name": "FourM Padel",
     "slug": "4m-padel",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "runtimeVersion": {
       "policy": "fingerprint"
     },
