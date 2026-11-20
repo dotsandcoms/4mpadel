@@ -18,6 +18,12 @@ const database={organisations:[{id:'org-a',name:'Fixture organiser',status:'appr
  club_claim_requests:[claim,{...claim,id:'claim-b',club_id:'club-b',full_name:'Other claimant'}],club_claim_invites:[],
  club_members:[member,{...member,id:'member-b',club_id:'club-b',players:{name:'Other member'}}],
  players:[{id:7,name:'Applicant',email:'applicant@example.invalid'},{id:8,name:'Claimant',email:'claimant@example.invalid'},{id:10,name:'New teammate',email:'teammate@example.invalid'}]};
+if (fixture.mode==='invitation-history') {
+  const pending={id:'pending-a',club_id:'club-a',email:'teammate@example.invalid',status:'pending',created_at:now,token:'fixture-pending-claim',invited_by:actor.id};
+  database.club_claim_invites.push(pending,{...pending,id:'accepted-a',email:'accepted@example.invalid',status:'accepted'},
+    {...pending,id:'pending-b',club_id:'club-b',email:'other-club@example.invalid'},
+    {...pending,id:'pending-c',invited_by:'other-operator',email:'other-operator-invitation@example.invalid'});
+}
 if (['group-branding','group-team'].includes(fixture.mode)) for (const club of database.clubs) club.group_id=group.id;
 if (fixture.mode==='group-team') database.club_members.push({id:'exact-owner',club_id:'club-b',player_id:10,role:'owner',user_email:'teammate@example.invalid'});
 fixture.data=database;
@@ -51,7 +57,7 @@ export const client={
    return {data:name==='is_super_admin'?fixture.mode!=='denied'&&!fixture.revoked:true};
  },
  storage:{from(bucket){return {async upload(path,file,options){fixture.calls.push(['upload',bucket,path,file.type,options]);return {data:{path}}},getPublicUrl(path){return {data:{publicUrl:'https://fixture.invalid/'+path}}}}}},
- functions:{async invoke(name,args){fixture.calls.push(['function',name,args.body]);return {data:{success:true}}}},
+ functions:{async invoke(name,args){fixture.calls.push(['function',name,args.body]);return fixture.deliveryUnknown ? {error:{message:'Unconfirmed'}} : {data:{success:true}}}},
  from(table){
     const predicates=[]; let operation, patch, start=0, end=Infinity, projection;
     function select(row){
@@ -62,6 +68,7 @@ export const client={
     }
     function execute(single=false){
       let selected=database[table].filter(row=>predicates.every(filter=>filter(row)));
+      if (table==='club_claim_invites') selected=selected.filter(row=>row.invited_by===actor.id || row.email===actor.email);
       if(operation){
         fixture.calls.push([operation,table,selected.map(row=>row.id),patch]);
         if(operation==='insert'){
@@ -100,7 +107,7 @@ before(async () => {
       import {application,client} from 'fixture-club';
       const context={client,scopeId:'all',session:{user:{id:'fixture-account'}},permissions:{role:'super_admin'}};
       const {mode}=window.fixture;
-      const component=mode==='relationship'? <ClubOrganisations {...context} club={application}/> : mode==='queue'? <ClubClaimsQueue {...context}/>: mode.startsWith('group')? <ClubGroupsView {...context}/> : mode==='invitation'? <ClubInvitations {...context} clubId={application.id} creationApi={liveClubInvitationApi}/>
+      const component=mode==='relationship'? <ClubOrganisations {...context} club={application}/> : mode==='queue'? <ClubClaimsQueue {...context}/>: mode.startsWith('group')? <ClubGroupsView {...context}/> : mode.startsWith('invitation')? <ClubInvitations {...context} clubId={application.id} creationApi={liveClubInvitationApi}/>
         : mode.startsWith('application')||mode==='owner-failure'||mode==='denied' ? <ClubApplicationDecision {...context} record={application} decisionApi={liveClubDecisionApi}/>
         : <ClubManagement {...context} clubId={application.id} decisionApi={liveClubDecisionApi} memberApi={liveClubMemberApi} addApi={liveClubMemberAddApi}/>;
       createRoot(document.getElementById('root')).render(component);
@@ -242,6 +249,60 @@ test('claim invitation submits the correct recipient and setup link without rend
     await page.locator('form input[placeholder="Search players or enter an email…"]').fill('new-claimant@example.invalid');
     await click(page,'Review invitation'); await click(page,'Confirm and send invitation'); await text(page,'Existing invitation confirmed.');
     assert.equal((await writes(page)).length,3);
+    await click(page,'Review resend','form button');
+    await text(page,'This sends the existing claim link again.');
+    assert.equal((await writes(page)).length,3);
+    await click(page,'Resend claim invitation'); await text(page,'Profile-setup email submitted.');
+    assert.deepEqual((await writes(page)).slice(3), actions.slice(1));
+    assert.equal(await page.evaluate(() => window.fixture.data.club_claim_invites.length), 1);
+  });
+});
+test('pending claim resend stays with the selected venue and only sends the claim to an existing player', async () => {
+  await withPage('invitation-history',async page=>{
+    await click(page,'Load claim invitations');
+    await text(page,'accepted@example.invalid');
+    assert.equal(await page.$$('button[aria-label^="Review resend to"]').then(buttons => buttons.length), 1);
+    assert.equal(await page.$eval('#root', root => root.innerHTML.includes('other-club@example.invalid')),false);
+    assert.equal(await page.$eval('#root', root => root.innerHTML.includes('other-operator-invitation@example.invalid')),false);
+    await click(page,'Review resend'); await text(page,'An existing player profile was found.');
+    assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Review resending a claim invitation');
+    await expectNoMutation(page);
+    await page.evaluate(() => {
+      const button = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Resend claim invitation');
+      button.click();
+      button.click();
+    });
+    await text(page,'Claim email submitted.');
+    assert.deepEqual(await writes(page), [['function','send-email', {
+      to: 'teammate@example.invalid', template: 'club_claim_invite', variables: {
+        clubName: 'Fixture venue', inviterName: '4M Padel Admin', accept_url: 'https://4mpadel.co.za/claim-club?token=fixture-pending-claim',
+      },
+    }]]);
+    assert.equal(await page.$eval('#root', root => root.innerHTML.includes('fixture-pending-claim')),false);
+  });
+});
+test('claim resend stops if acceptance or access changes after review', async () => {
+  for (const revoke of [false,true]) await withPage('invitation-history',async page=>{
+    await click(page,'Load claim invitations');
+    await click(page,'Review resend'); await text(page,'This sends the existing claim link again.');
+    await page.evaluate(revoke => {
+      if (revoke) window.fixture.revoked=true;
+      else window.fixture.data.club_claim_invites[0].status='accepted';
+    }, revoke);
+    await click(page,'Resend claim invitation');
+    await text(page,revoke ? 'verified super-admin account is required' : 'This invitation is no longer pending for this club.');
+    await expectNoMutation(page);
+  });
+});
+test('claim resend with unknown delivery only makes the reviewed send attempt', async () => {
+  await withPage('invitation-history',async page=>{
+    await click(page,'Load claim invitations');
+    await click(page,'Review resend'); await text(page,'This sends the existing claim link again.');
+    await page.evaluate(() => { window.fixture.deliveryUnknown=true; });
+    await click(page,'Resend claim invitation');
+    await text(page,'Check with the recipient before sending again.');
+    assert.equal((await writes(page)).length, 1);
+    assert.equal(await page.evaluate(() => [...document.querySelectorAll('button')].some(button => button.textContent.trim() === 'Resend claim invitation')), false);
   });
 });
 test('group membership links with branding and unlinks while retaining the venue record', async () => {

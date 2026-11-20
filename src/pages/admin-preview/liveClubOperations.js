@@ -155,10 +155,48 @@ function invitationReceipt(invite, profileSetup, extra) {
   return { invite_id: invite.id, club_id: invite.club_id, email: invite.email, created_at: invite.created_at,
     status: invite.status, profile_setup_required: profileSetup, ...extra };
 }
-async function submitInvitation({ client, scopeId, userId, args, isCurrent }) {
-  const payload = clubInvitationCreationArguments({
+function reviewedInvitationArguments(args) {
+  return clubInvitationCreationArguments({
     clubId: args.p_club_id, normalizedEmail: args.p_email, expectedClub: args.p_expected_club, expectedPlayer: args.p_expected_player,
   }, args.p_operation_id);
+}
+
+async function verifyInvitationRecipient(client, scopeId, userId, payload) {
+  const fresh = await prepareClubInvitationCreation({ client, scopeId, userId, clubId: payload.p_club_id, email: payload.p_email });
+  if (!entityEqual(fresh.expectedClub, payload.p_expected_club) || !entityEqual(fresh.expectedPlayer, payload.p_expected_player)) {
+    throw new Error('The club or recipient changed after review. Reload before inviting.');
+  }
+  return fresh;
+}
+
+async function sendSavedInvitation(client, invite, fresh, isCurrent) {
+  const { normalizedEmail, expectedClub, profileSetupRequired } = fresh;
+  const receipt = invitationReceipt(invite, profileSetupRequired, {
+    already_applied: false, notification_status: 'unconfirmed', profile_setup_status: profileSetupRequired ? 'unconfirmed' : 'not_required',
+  });
+  if (isCurrent?.() === false || typeof invite.token !== 'string' || !invite.token) return receipt;
+
+  const acceptLink = new URL('/claim-club', publicSite);
+  acceptLink.searchParams.set('token', invite.token);
+  receipt.notification_status = await clubEmail(client, normalizedEmail, 'club_claim_invite', {
+    clubName: esc(expectedClub.name), inviterName: '4M Padel Admin', accept_url: acceptLink.href,
+  });
+  if (profileSetupRequired && isCurrent?.() !== false) {
+    const profileLink = new URL('/profile', publicSite);
+    profileLink.searchParams.set('new_invite', 'true');
+    profileLink.searchParams.set('claim_token', invite.token);
+    try {
+      const { error } = await client.auth.signInWithOtp({ email: normalizedEmail, options: { emailRedirectTo: profileLink.href } });
+      if (!error) receipt.profile_setup_status = 'submitted';
+    } catch { /* The saved invitation remains available in history. */ }
+  }
+  return receipt;
+}
+
+const invitationFieldsWithToken = `${CLUB_INVITATION_FIELDS},token`;
+
+async function submitInvitation({ client, scopeId, userId, args, isCurrent }) {
+  const payload = reviewedInvitationArguments(args);
   const setup = !payload.p_expected_player;
   await verifyPlatformClubAction(client, scopeId, userId, isCurrent);
   const table = () => client.from('club_claim_invites');
@@ -166,8 +204,7 @@ async function submitInvitation({ client, scopeId, userId, args, isCurrent }) {
     .eq('id', payload.p_operation_id).eq('club_id', payload.p_club_id).eq('email', payload.p_email).eq('invited_by', userId).maybeSingle();
   if (previousError) throw new Error('The invitation history could not be checked.');
   if (previous) return invitationReceipt(previous, setup, { already_applied: true, notification_status: 'unconfirmed' });
-  const fresh = await prepareClubInvitationCreation({ client, scopeId, userId, clubId: payload.p_club_id, email: payload.p_email });
-  if (!entityEqual(fresh.expectedClub, payload.p_expected_club) || !entityEqual(fresh.expectedPlayer, payload.p_expected_player)) throw new Error('The club or recipient changed after review. Reload before inviting.');
+  const fresh = await verifyInvitationRecipient(client, scopeId, userId, payload);
   const { data: pending, error: pendingError } = await table().select(CLUB_INVITATION_FIELDS).eq('club_id', payload.p_club_id)
     .eq('email', payload.p_email).eq('status', 'pending').limit(1);
   if (pendingError) throw new Error('Existing pending invitations could not be checked.');
@@ -179,27 +216,25 @@ async function submitInvitation({ client, scopeId, userId, args, isCurrent }) {
   if (invite.id !== payload.p_operation_id || invite.club_id !== payload.p_club_id || invite.email !== payload.p_email || invite.status !== 'pending') {
     throw new Error('The saved invitation could not be verified.');
   }
-  const receipt = invitationReceipt(invite, setup, { already_applied: false, notification_status: 'unconfirmed', profile_setup_status: setup ? 'unconfirmed' : 'not_required' });
-  if (isCurrent?.() === false || typeof invite.token !== 'string' || !invite.token) return receipt;
-  const acceptLink = new URL('/claim-club', publicSite);
-  acceptLink.searchParams.set('token', invite.token);
-  receipt.notification_status = await clubEmail(client, payload.p_email, 'club_claim_invite', {
-    clubName: esc(fresh.expectedClub.name), inviterName: '4M Padel Admin', accept_url: acceptLink.href,
-  });
-  if (setup && isCurrent?.() !== false) {
-    const profileLink = new URL('/profile', publicSite);
-    profileLink.searchParams.set('new_invite', 'true');
-    profileLink.searchParams.set('claim_token', invite.token);
-    try {
-      const { error } = await client.auth.signInWithOtp({ email: payload.p_email, options: { emailRedirectTo: profileLink.href } });
-      if (!error) receipt.profile_setup_status = 'submitted';
-    } catch { /* The saved invitation remains available in history. */ }
-  }
-  return receipt;
+  return sendSavedInvitation(client, invite, fresh, isCurrent);
 }
-const invitationFieldsWithToken = `${CLUB_INVITATION_FIELDS},token`;
+
+async function resendInvitation({ client, scopeId, userId, args, invitation, isCurrent }) {
+  if (!invitation?.id || !invitation.created_at) throw new Error('Select a pending invitation before resending it.');
+  const payload = reviewedInvitationArguments(args);
+  await verifyPlatformClubAction(client, scopeId, userId, isCurrent);
+  const fresh = await verifyInvitationRecipient(client, scopeId, userId, payload);
+  const invite = await confirmRow(client.from('club_claim_invites').select(invitationFieldsWithToken)
+    .eq('id', invitation.id).eq('club_id', payload.p_club_id).eq('status', 'pending').eq('created_at', invitation.created_at),
+  'This invitation is no longer pending for this club. Reload the invitation history.');
+  if (normalizeClubInvitationEmail(invite.email) !== payload.p_email) {
+    throw new Error('The invitation recipient changed after review. Reload the invitation history.');
+  }
+  await verifyPlatformClubAction(client, scopeId, userId, isCurrent);
+  return { ...await sendSavedInvitation(client, invite, fresh, isCurrent), resent: true };
+}
 
 export const liveClubDecisionApi = { enabled: available, live: true, load: loadDecision, submit: submitDecision };
 export const liveClubMemberApi = { enabled: available, live: true, submit: submitMember };
 export const liveClubMemberAddApi = { enabled: available, live: true, search: searchClubMemberPlayers, submit: submitMemberAdd };
-export const liveClubInvitationApi = { enabled: available, live: true, prepare: prepareClubInvitationCreation, submit: submitInvitation };
+export const liveClubInvitationApi = { enabled: available, live: true, prepare: prepareClubInvitationCreation, submit: submitInvitation, resend: resendInvitation };

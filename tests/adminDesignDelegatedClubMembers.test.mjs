@@ -148,17 +148,14 @@ test('direct club admin sees its own members and can review a role change withou
 test('scoped member addition searches only the complete visible email and grants reviewed access',async t=>{
   const page=await open(t);
   await click(page,'Add member');
-  await page.type('section[aria-label="Add club member"] input[type=search]','Scoped');
+  const search = page.locator('section[aria-label="Add club member"] input[type=search]');
+  await search.fill('Scoped');
   await bodyIncludes(page,'Enter the full email');
   assert.equal(await page.evaluate(()=>window.fixture.calls.some(call=>call.table==='players')),false);
-  const searchEmail = value => page.$eval('section[aria-label="Add club member"] input[type=search]', (input,value)=>{
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);
-    input.dispatchEvent(new Event('input',{bubbles:true}));
-  },value);
-  await searchEmail('unrelated@example.invalid');
+  await search.fill('unrelated@example.invalid');
   await page.waitForFunction(()=>window.fixture.calls.some(call=>call.table==='players'&&call.keys.email==='unrelated@example.invalid'));
   assert.equal(await page.evaluate(()=>document.body.textContent.includes('Unrelated player')),false);
-  await searchEmail('new_player@example.invalid');
+  await search.fill('new_player@example.invalid');
   await click(page,'Select player');
   await click(page,'Review new member');
   assert.deepEqual(await writes(page),[]);
