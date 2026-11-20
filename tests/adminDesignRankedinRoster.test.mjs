@@ -5,6 +5,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { build } from 'esbuild';
 import puppeteer from 'puppeteer';
+import ExcelJS from 'exceljs';
 import { loadRankedinParticipantSnapshot } from '../src/pages/admin-preview/importedParticipantSync.js';
 
 test('a repeated division or conflicting participant identity stops the roster review', async () => {
@@ -23,24 +24,41 @@ const fixture = String.raw`
   import { createRoot } from 'react-dom/client';
   import EventParticipantsWorkspace from './src/pages/admin-preview/EventParticipantsWorkspace.jsx';
   import './src/pages/AdminPreview.css';
-  const event = {id:41,event_name:'Fixture RankedIn Cup',rankedin_id:'300',is_manual:false,organisation_id:'org-a'};
+  const event = {id:41,event_name:'Fixture RankedIn Cup',rankedin_id:'300',is_manual:false,organisation_id:'org-a',entry_fee:600};
   const session = {user:{id:'fixture-admin',email:'operator@example.invalid'}};
   const token = 'a'.repeat(64);
   let participant = {id:'participant-fixture',event_id:41,full_name:'Local Fixture Player',class_name:'Open',
     rankedin_participant_id:'20',profile_id:null,whatsapp_added:false,is_paid:false};
   const player = {id:55,name:'Fixture Linked Player',email:'linked@example.invalid'};
+  const confirmed = { id:'confirmed-player', event_id:41, full_name:'Verified Fixture Player', class_name:'Advanced',
+    is_paid:true, whatsapp_added:true, profile_id:55, players:player };
+  const payment = {id:'synthetic-payment', event_id:41, payment_type:'event_entry_fee', payment_method:'manual', status:'success',
+    amount:123.45, currency:'ZAR', reference:'synthetic-receipt',metadata:{participant_id:confirmed.id,collection_recipient:'organiser'}};
+  const anchorClick = HTMLAnchorElement.prototype.click;
+  HTMLAnchorElement.prototype.click = function () {
+    if (this.download) { window.downloaded = this.download; return; }
+    anchorClick.call(this);
+  };
+  const makeURL = URL.createObjectURL;
+  URL.createObjectURL = blob => { window.workbookBlob=blob; return makeURL(blob); };
   window.rosterCalls = [];
   window.failure = false;
   window.revoked = false;
   window.stale = false;
   const client = {
     auth:{getUser:async()=>({data:{user:session.user}})},
+    functions:{async invoke(name,{body}) { window.rosterCalls.push([name,body]); return {data:{receipts:[],unresolved:[]}}; }},
     rpc(name,args = {}) {
       window.rosterCalls.push([name,args]);
       let result;
       if (name === 'account_is_active') result = {data:true};
       else if (name === 'is_super_admin') result = {data:!window.fixtureTenant && !window.revoked};
       else if (name === 'can_manage_event') result = {data:Number(args.p_event_id) === event.id};
+      else if (name === 'is_organisation_admin') result = {data:window.fixtureFinance === 'owner' && args.p_organisation_id === 'org-a'};
+      else if (name === 'event_license_status') result = {data:args.p_player_ids.map(player_id=>({player_id,eligibility:{full:true,temporary:false}}))};
+      else if (name === 'event_finance_overview_source' && window.fixtureFinance) result = {data:{
+        events:[event],participants:[participant, confirmed],payments:[payment],divisions:[],refunds:[],
+      }};
       else if (name === 'admin_import_rankedin_participants' && !args.p_expected) result = {data:{
         event_id:41,token,changes:args.p_entries.map(row=>({action:'add',source_id:row.id,name:row.name,division:row.division})),
       }};
@@ -55,7 +73,7 @@ const fixture = String.raw`
       return Object.assign(query,{abortSignal:()=>query});
     },
     from(table) {
-      let rows = table === 'calendar' ? [event] : table === 'tournament_participants' ? [participant] : table === 'players' ? [player] : [];
+      let rows = table === 'calendar' ? [event] : table === 'tournament_participants' ? (window.fixtureFinance ? [participant, confirmed] : [participant]) : table === 'players' ? [player] : [];
       let patch;
       const q = {select(){return q;},eq(key,value){rows=rows.filter(row=>String(row[key])===String(value));return q;},
         is(key,value){ rows=rows.filter(row=>(row[key]??null)===value);return q; },
@@ -74,10 +92,11 @@ const fixture = String.raw`
       return q;
     },
   };
-  window.renderRoster = tenant => {
+  window.renderRoster = (tenant, finance) => {
     window.fixtureTenant = tenant;
+    window.fixtureFinance = finance;
     createRoot(document.getElementById('root')).render(<EventParticipantsWorkspace client={client} event={event}
-      session={session} scopeId={tenant?'org:org-a':'all'} go={()=>{}}/>);
+      session={session} scopeId={tenant?'org:org-a':'all'} initialView={finance?'dashboard':'table'} go={()=>{}}/>);
   };
 `;
 
@@ -100,7 +119,7 @@ test('New Admin reviews every RankedIn division, protects the roster on failure 
       } }],
     });
     browser = await puppeteer.launch({ headless: true, protocolTimeout: 20000, args: ['--no-sandbox'] });
-    const open = async (tenant = false) => {
+    const open = async (tenant = false, finance = '') => {
       const page = await browser.newPage();
       const requests = [];
       const errors = [];
@@ -125,7 +144,7 @@ test('New Admin reviews every RankedIn division, protects the roster on failure 
       await page.goto(fixtureUrl);
       await page.addStyleTag({ path: path.join(directory, 'fixture.css') });
       await page.addScriptTag({ path: outfile });
-      await page.evaluate(value => window.renderRoster(value), tenant);
+      await page.evaluate((tenant, finance) => window.renderRoster(tenant, finance), tenant, finance);
       return { page, requests, errors, failDivision: value => { failedDivision = value; } };
     };
     const admin = await open();
@@ -194,6 +213,44 @@ test('New Admin reviews every RankedIn division, protects the roster on failure 
     assert.equal(await tenant.page.evaluate(labels => [...document.querySelectorAll('button')].some(node => labels.includes(node.textContent.trim())), restrictedControls), false);
     assert.deepEqual(tenant.requests, []);
     assert.deepEqual(tenant.errors, []);
+
+    const finance = await open(true,'owner');
+    const board = finance.page;
+    await board.waitForFunction(() => document.body.innerText.includes('Financial summary'), {polling:75});
+    assert.equal(await board.$('.pp-table'), null);
+    assert.match(await board.$eval('.ap-imported-dashboard', node=>node.innerText), /123[.,]45/);
+    assert.equal(await board.$eval('a[href*="rankedin.com"]', node=>node.href), 'https://www.rankedin.com/en/tournament/300');
+    await click(board, 'Participant table');
+    const choose = async (label, value) => {
+      await board.$eval('button[aria-label="'+label+'"]', node=>node.click());
+      await board.waitForFunction(value=>[...document.querySelectorAll('[role="option"]')].some(node=>node.getClientRects().length&&node.firstChild.textContent===value),{polling:75},value);
+      await board.evaluate(value=>[...document.querySelectorAll('[role="option"]')].find(node=>node.getClientRects().length&&node.firstChild.textContent===value).click(),value);
+    };
+    await choose('Participant profile','Linked profiles');
+    await choose('Participant division','Advanced');
+    await choose('Participant licence','Full licence');
+    await choose('Participant payment','Paid');
+    await choose('Participant WhatsApp','Added to WhatsApp');
+    await board.waitForFunction(() => document.body.textContent.includes('Showing 1 of 2'), {polling:75});
+    await click(board, 'Dashboard cards');
+    await click(board, 'Participant table');
+    assert.equal(await board.$eval('.pp-table tbody td b', node=>node.textContent), 'Verified Fixture Player');
+    await click(board, 'Export Excel');
+    await board.waitForFunction(() => Boolean(window.downloaded), {polling:75});
+    const exported = await board.evaluate(async()=>({name:window.downloaded,bytes:[...new Uint8Array(await window.workbookBlob.arrayBuffer())]}));
+    assert.equal(exported.name,'fixture-rankedin-cup-participants.xlsx');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(Buffer.from(exported.bytes));
+    const sheet = workbook.getWorksheet('Event Finance');
+    assert.equal(sheet.getCell('A4').value,'Verified Fixture Player');
+    assert.equal(sheet.getCell('I4').value,123.45);
+    assert.equal(sheet.getCell('I6').value,123.45);
+    await click(board, 'Clear filters');
+    await board.waitForFunction(() => document.body.textContent.includes('Showing 2 of 2'), {polling:75});
+    assert.deepEqual(finance.requests, []);
+    assert.deepEqual(finance.errors, []);
+    assert.deepEqual(await board.evaluate(() => window.rosterCalls.filter(([name])=>name==='event-cash-receipts')),
+      [['event-cash-receipts',{event_id:41,verify_all:true,verify_refunds:true,offset:0}]]);
   } finally {
     await browser?.close();
     await rm(directory, { recursive: true, force: true });

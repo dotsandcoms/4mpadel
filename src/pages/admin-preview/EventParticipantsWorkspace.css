@@ -1,0 +1,19 @@
+.ap-imported-filter-tools {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr));
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.ap-imported-filter-tools .ap-filter-search { grid-column: span 2; }
+.ap-imported-toolbar { margin-bottom: 12px; }
+.ap-imported-toolbar:empty { display: none; }
+.ap-imported-toolbar p { margin: 0; }
+.ap-imported-toolbar [role='alert'] { color: var(--ap-danger); }
+.ap-imported-dashboard { display: grid; gap: 14px; margin-top: 14px; }
+.ap-record-tabs[aria-label='Participant views'] [aria-pressed='true'] { color: var(--ap-ink); border-bottom-color: var(--ap-ink); }
+
+@media (max-width: 400px) {
+  .ap-imported-filter-tools .ap-filter-search { grid-column: 1 / -1; }
+}
