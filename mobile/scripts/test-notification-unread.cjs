@@ -16,7 +16,7 @@ test('bell refreshes after a read and ignores a late count from before the read 
     'expo-router': { useFocusEffect: callback => React.useEffect(callback, [callback]) },
     'react-native': { AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) } },
     'expo-notifications': { addNotificationReceivedListener: () => ({ remove() {} }) },
-    '@/lib/notification-read-state': { fetchNotificationSnapshot: () => { const d = deferred(); requests.push(d); return d.promise; }, subscribeNotificationReads: listener => { listeners.add(listener); return () => listeners.delete(listener); } },
+    '@/lib/notification-read-state': { fetchNotificationSnapshot: () => { const d = deferred(); requests.push(d); return d.promise; }, subscribeDrawerNotificationReads: listener => { listeners.add(listener); return () => listeners.delete(listener); } },
   });
   function Screen({ owner }) { latest = hook.useNotificationUnread(owner); return null; }
   let renderer;
@@ -36,6 +36,7 @@ test('bell refreshes after a read and ignores a late count from before the read 
 });
 test('expanding notification updates marks them read and queues a second group while the first is saving', async () => {
   const first = deferred(), calls = [];
+  let bulkReads = 0;
   const groups = ['one','two'].map((key, i) => ({ key, title: key, eventId: null, actions: [], notifications: [{ id: String(i), title: key, body: 'Update', read_at: null }] }));
   const native = Object.fromEntries(['ActivityIndicator','Pressable','Text','View','RefreshControl'].map(name => [name,name]));
   native.StyleSheet = { create: value => value };
@@ -44,12 +45,16 @@ test('expanding notification updates marks them read and queues a second group w
     'react-native': native, 'expo-router': { useRouter: () => ({}) }, 'expo-symbols': { SymbolView: 'Symbol' },
     '@/components/help-inbox-provider': { useHelpInbox: () => ({ unread: 0 }) }, '@/theme/tokens': { lightBrand: {} },
     '@/components/home-action': { HomeAction: 'Action' }, '@/components/native-segmented-control': { NativeSegmentedControl: 'Segment' }, '@/components/error-banner': { ErrorBanner: 'Error' },
-    '@/hooks/use-notification-centre': { useNotificationCentre: () => ({ ownerKey: 'a', actions: [], notifications: [], events: [], markRead: ids => { calls.push(Array.from(ids)); return calls.length === 1 ? first.promise : Promise.resolve(true); } }) },
+    '@/hooks/use-notification-centre': { useNotificationCentre: () => ({ ownerKey: 'a', actions: [], notifications: [], events: [], drawerReadAvailable: true, unread: 2, through: '2026-11-10T10:00:00Z', markRead: ids => { if (!ids) { bulkReads++; return Promise.resolve(true); } calls.push(Array.from(ids)); return calls.length === 1 ? first.promise : Promise.resolve(true); } }) },
     '@/lib/notification-centre': { groupNotifications: () => groups }, '@/lib/following-feed': { feedTime: () => 'Now' },
   });
   let renderer;
   try {
     await act(async () => { renderer = create(React.createElement(screen.default)); });
+    const markAllRead = renderer.root.findByProps({ accessibilityLabel: 'Mark all in-app updates as read' });
+    assert.equal(renderer.root.findByType('Segment').props.value, 'actions');
+    await act(async () => { markAllRead.props.onPress(); await settle(); });
+    assert.equal(bulkReads, 1);
     await act(async () => renderer.root.findByType('Segment').props.onChange('all'));
     await act(async () => renderer.root.findByProps({ accessibilityLabel: 'one. 1 update. Expand' }).props.onPress());
     await act(async () => renderer.root.findByProps({ accessibilityLabel: 'two. 1 update. Expand' }).props.onPress());

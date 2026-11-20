@@ -19,6 +19,7 @@ import { loadingBlue, lightBrand as b } from '@/theme/tokens';
 export default function NotificationsSheet() {
   const router = useRouter(), centre = useNotificationCentre(), help = useHelpInbox();
   const [filter, setFilter] = useState('actions'), [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [markingAll, setMarkingAll] = useState(false);
   const readQueue = useRef<Promise<unknown>>(Promise.resolve());
   useEffect(() => { setExpanded(new Set()); setFilter('actions'); }, [centre.ownerKey]);
   const groups = useMemo(() => groupNotifications(centre.actions, centre.notifications, centre.events), [centre.actions, centre.notifications, centre.events]);
@@ -35,13 +36,19 @@ export default function NotificationsSheet() {
     readQueue.current = task.catch(() => false);
     return task;
   }
+  async function markAllRead() {
+    setMarkingAll(true);
+    try { await readNotifications(); }
+    finally { setMarkingAll(false); }
+  }
   function leave() { if (router.canDismiss()) router.dismiss(); }
   function openAction(action: PendingAction) {
     leave();
     if (action.kind === 'profile') router.push('/edit-profile'); else void openSitePath(action.path);
   }
   async function openNotification(notification: PlayerNotification) {
-    if (notification.read_at === null && !await readNotifications([notification.id])) return;
+    const unreadOnIcon = notification.badge_unread ?? notification.read_at === null;
+    if (unreadOnIcon && !await readNotifications([notification.id])) return;
     const path = pathFromNotificationData({ type: notification.type, path: notification.path });
     if (path) { leave(); router.navigate(path as never); }
   }
@@ -89,8 +96,20 @@ export default function NotificationsSheet() {
   return <>
     <View collapsable={false} style={s.sheetHeader}>
       <Text accessibilityRole="header" style={s.sheetTitle}>Notifications</Text>
-      <HomeAction label="Settings" onPress={() => router.push('/notification-settings')} />
-      <HomeAction kind="icon" icon="close" label="Close notifications" onPress={() => router.back()} />
+      <View style={s.sheetActions}>
+        {centre.drawerReadAvailable && centre.unread > 0 && <HomeAction
+          kind="primary"
+          compact
+          size="small"
+          accentColor={b.messagingAction}
+          label={help.unread ? 'Mark updates read' : 'Mark all read'}
+          accessibilityLabel="Mark all in-app updates as read"
+          disabled={markingAll || centre.loading || !centre.through}
+          onPress={() => void markAllRead()}
+        />}
+        <HomeAction size="small" label="Settings" onPress={() => router.push('/notification-settings')} />
+        <HomeAction kind="icon" size="small" icon="close" label="Close notifications" onPress={() => router.back()} />
+      </View>
     </View>
     <FlatList data={visible} keyExtractor={group => group.key} renderItem={({ item }) => renderGroup(item)} extraData={expanded}
       style={{ flex: 1, backgroundColor: b.page }}
@@ -101,7 +120,6 @@ export default function NotificationsSheet() {
         <View><Text style={s.summary}>{actionCount ? `${actionCount} ${actionCount === 1 ? 'action' : 'actions'} to review` : 'My event updates'}</Text><Text style={s.meta}>Entries, payments and account updates</Text></View>
         {help.unread > 0 && <Pressable accessibilityRole="button" accessibilityLabel={`Help messages, ${help.unread} unread`} onPress={() => { leave(); router.navigate({ pathname: '/(tabs)/messages', params: { filter: 'Help' } }); }} style={s.following}><Text style={{ flex: 1, color: b.accent, fontSize: 15, fontWeight: '500' }}>Help messages ({help.unread})</Text><Text style={{ color: b.muted }}>View replies ›</Text></Pressable>}
         <NativeSegmentedControl label="Notification view" value={filter} onChange={setFilter} options={[{ value: 'actions', label: actionCount ? `Action needed (${actionCount})` : 'Action needed' }, { value: 'all', label: centre.unread + help.unread ? `All updates (${centre.unread + help.unread > 99 ? '99+' : centre.unread + help.unread})` : 'All updates' }]} />
-        {filter === 'all' && centre.unread > 0 && <HomeAction kind="outline" label={help.unread ? 'Mark event updates read' : 'Mark all read'} disabled={centre.loading || !centre.through} onPress={() => void readNotifications()} />}
         {filter === 'all' && <Pressable accessibilityRole="button" onPress={() => { leave(); router.navigate('/following'); }} style={s.following}>
           <SymbolView name={{ ios: 'heart', android: 'favorite_border', web: 'favorite_border' }} size={20} tintColor={b.accent} />
           <Text style={{ flex: 1, color: b.accent, fontSize: 14, fontWeight: '500' }}>My following activity</Text>
@@ -114,8 +132,9 @@ export default function NotificationsSheet() {
 }
 
 const s = StyleSheet.create({
-  sheetHeader: { minHeight: 64, flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, backgroundColor: b.page },
-  sheetTitle: { flex: 1, minWidth: 0, color: b.premium, fontSize: 20, lineHeight: 26, fontWeight: '600' },
+  sheetHeader: { minHeight: 64, flexShrink: 0, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 6, rowGap: 2, paddingLeft: 20, paddingRight: 12, paddingTop: 12, paddingBottom: 8, backgroundColor: b.page },
+  sheetActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', maxWidth: '100%', marginLeft: 'auto', gap: 4 },
+  sheetTitle: { flexGrow: 1, maxWidth: '100%', color: b.premium, fontSize: 20, lineHeight: 26, fontWeight: '600' },
   summary: { color: b.premium, fontSize: 16, fontWeight: '600', lineHeight: 22, marginBottom: 4 },
   following: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44, paddingHorizontal: 4 },
   group: { backgroundColor: b.elevated, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: b.edge, overflow: 'hidden' },

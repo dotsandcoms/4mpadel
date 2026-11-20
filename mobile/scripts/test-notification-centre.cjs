@@ -118,3 +118,35 @@ test('notification reads use only owned IDs and notify badge listeners after suc
   await assert.rejects(reads.markNotificationsRead(), /Refresh/);
   stop(); await reads.markNotificationsRead([id]); assert.equal(changes, 1);
 });
+
+test('drawer bulk reads refresh the bell without notifying the app icon', async () => {
+  const calls = [], data = { items: [], unread: 0, through: '2026-11-10T10:00:00Z', drawerReadAvailable: true };
+  const reads = load('src/lib/notification-read-state.ts', () => ({ supabase: { rpc: async (_name, input) => {
+    calls.push(input);
+    return { data, error: null };
+  } } }));
+  let iconChanges = 0, drawerChanges = 0;
+  reads.subscribeNotificationReads(() => iconChanges++);
+  reads.subscribeDrawerNotificationReads(() => drawerChanges++);
+  await reads.markDrawerNotificationsRead(data.through);
+  assert.equal(calls[0].p_action, 'read_drawer');
+  assert.equal(calls[0].p_before, data.through);
+  assert.equal(drawerChanges, 1);
+  assert.equal(iconChanges, 0);
+  await reads.markDrawerItemsRead(['70000000-0000-0000-0000-000000000001']);
+  assert.equal(calls[1].p_action, 'read_drawer_items');
+  assert.equal(drawerChanges, 2);
+  assert.equal(iconChanges, 1);
+});
+
+test('the drawer uses the existing notification list before the database update', async () => {
+  const calls = [], data = { items: [], unread: 1, through: '2026-11-10T10:00:00Z' };
+  const reads = load('src/lib/notification-read-state.ts', () => ({ supabase: { rpc: async (_name, input) => {
+    calls.push(input.p_action);
+    return input.p_action === 'list_drawer'
+      ? { error: { code: 'P0001', message: 'Unsupported notification action.' } }
+      : { data, error: null };
+  } } }));
+  assert.equal((await reads.fetchNotificationSnapshot()).unread, 1);
+  assert.deepEqual(calls, ['list_drawer', 'list']);
+});
