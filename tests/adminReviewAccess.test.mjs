@@ -181,6 +181,12 @@ test('a standalone Finance grant requires explicit unscoped access to Paystack',
   const eventOnly = { ...allowed, module_permissions: { finance: { allowedTabs: ['transactions'], allowedEvents: [42] } } };
   assert.equal(canOpenReviewPage(eventOnly, 'payments'), false);
   assert.equal(canOpenReviewPage(eventOnly, 'reports'), true);
+  const legacy = { role:'custom', allowed_tabs:['finance'] };
+  assert.equal(canOpenReviewPage(legacy, 'reports'), true);
+  assert.equal(canOpenReviewPage(legacy, 'payments'), false);
+  assert.equal(canOpenReviewPage({ ...legacy, clubs:[{ id:'club', member_role:'staff' }] }, 'reports'), false);
+  const configured = { ...legacy, module_permissions:{ finance:{ allowedTabs:[] } } };
+  assert.equal(canOpenReviewPage(configured, 'reports'), false);
 });
 
 test('tournament rights come from the tournament capability RPC', async () => {

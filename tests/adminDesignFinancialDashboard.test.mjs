@@ -151,6 +151,20 @@ test('a Dashboard-only Finance assignment opens the managed scope with existing 
   });
 });
 
+test('a legacy Finance grant opens event-scoped reports without a platform Paystack feed', async () => {
+  const legacy = { role:'custom', allowed_tabs:['finance'] };
+  assert.equal(canOpenReviewPage(legacy, 'payments'), false);
+  await withPage(legacy, {}, async page => {
+    await textMatches(page, 'Finance-managed events');
+    await textMatches(page, 'Managed event with balance');
+    assert.doesNotMatch(await eventTable(page), /Other event|9.?000/);
+    assert.deepEqual(await sources(page), [[14,16]]);
+    assert.ok((await page.$$eval('[aria-label="Finance report views"] button', nodes => nodes.map(node => node.textContent)))
+      .includes('Summary report'));
+    assert.equal((await calls(page)).some(([kind,table]) => kind === 'table' && ['payments','payment_refunds'].includes(table)), false);
+  });
+});
+
 test('explicit Finance event IDs and existing Event Manager assignment take precedence over dashboard defaults',async()=>{
   await withPage(grant([15],[14]), {}, async page=>{
     await textMatches(page,'Other event');
