@@ -73,7 +73,7 @@ function readReportRows(client, table, fields, signal, filter = query => query) 
   return readAll(() => filter(client.from(table).select(fields)).order('id'), signal);
 }
 
-async function readEventSource(client, ids, signal) {
+export async function readEventSource(client, ids, signal) {
   let request = client.rpc('event_finance_overview_source', { p_event_ids: ids });
   if (signal) request = request.abortSignal(signal);
   const { data, error } = await request;

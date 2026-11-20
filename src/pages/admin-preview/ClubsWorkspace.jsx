@@ -7,7 +7,7 @@ import ClubGroupsView from './ClubGroupsView.jsx';
 import ClubClaimsQueue from './ClubClaimsQueue.jsx';
 import { clubsExcel } from './clubsExport.js';
 import { supabase } from '../../supabaseClient';
-import { canReadClubDirectory, loadClubDirectory, clubStatusLabel, filterClubDirectory, clubDirectorySummary } from './clubsData.js';
+import { canReadClubDirectory, loadClubDirectory, clubStatusLabel, filterClubDirectory, clubDirectoryScope, clubDirectorySummary, verifyClubDirectoryManagement } from './clubsData.js';
 import RecordLoading from './RecordLoading.jsx';
 import './FinanceOverview.css';
 import './ClubsWorkspace.css';
@@ -64,6 +64,8 @@ export default function ClubsWorkspace({ session, permissions, scopeId, client =
     if (!token?.active || loading || exporting || !rows.length) return;
     setExporting(true); setExportStatus('');
     try {
+      await verifyClubDirectoryManagement(client, session, clubDirectoryScope(permissions, scopeId));
+      if (!token.active) return;
       const buffer = await clubsExcel(rows, filters);
       if (!token.active) return;
       saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), '4m-clubs.xlsx');

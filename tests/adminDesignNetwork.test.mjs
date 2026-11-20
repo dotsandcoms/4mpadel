@@ -1,19 +1,23 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { previewScopes } from '../src/pages/admin-preview/access.js';
-import { canReadClubDirectory, loadClubDirectory } from '../src/pages/admin-preview/clubsData.js';
+import { canManageDirectClub, canReadClubDirectory, loadClubDirectory } from '../src/pages/admin-preview/clubsData.js';
 import { loadClubDetails } from '../src/pages/admin-preview/clubDetailsData.js';
 
-const session = { user: { id: 'synthetic-north-member' } };
+const session = { user: { id: 'synthetic-north-member', email: 'north@example.invalid' } };
 const member = { role: 'custom', allowed_tabs: ['clubs'], clubs: [
   { id: 'north-club', name: 'North Padel', member_role: 'admin' },
   { id: 'visit-club', name: 'Visitor Club', member_role: 'member' },
 ] };
-const directory = [{id:'north-club',name:'North Padel'},{id:'south-club',name:'South Padel'}];
+const directory = [{id:'north-club',name:'North Padel',status:'published'},{id:'south-club',name:'South Padel',status:'published'}];
 
-function databaseFixture() {
+function databaseFixture({ allowed = true } = {}) {
   const requests = [];
-  return { requests, client: { from: table => {
+  const rpcs = [];
+  return { requests, rpcs, client: {
+    auth: { getUser: async () => ({ data: { user: session.user } }) },
+    rpc: async (name, args) => { rpcs.push([name, args]); return { data: name === 'account_is_active' || (allowed && args?.p_club_id === 'north-club') }; },
+    from: table => {
     let id, offset;
     const query = {
       select: () => query, order: () => query, abortSignal: () => query,
@@ -48,4 +52,23 @@ test('an organisation membership cannot turn an additional club tab into a platf
   await assert.rejects(loadClubDirectory(client, session, orgMember, 'all'), /Current Clubs access/);
   assert.equal(requests.length, 0);
   assert.equal((await loadClubDirectory(client, session, { role: 'super_admin' }, 'all')).length, 2);
+});
+
+test('a linked venue is a checked exact profile scope and does not admit club member administration', async () => {
+  const permissions = { role: 'org_owner', orgs: [{ id: 'north', member_role: 'admin' }],
+    clubDirectoryClubs: [{ id: 'north-club', directory_authority: 'organisation' }] };
+  const scope = 'club:north-club';
+  assert.equal(canManageDirectClub(permissions, 'north-club'), false);
+  assert.equal(canReadClubDirectory(session, permissions, 'all'), false);
+  assert.equal(canReadClubDirectory(session, permissions, 'club:south-club'), false);
+  const { client, requests, rpcs } = databaseFixture();
+  const rows = await loadClubDirectory(client, session, permissions, scope);
+  assert.deepEqual(rows, [directory[0]]);
+  assert.deepEqual(await loadClubDetails(client, session, permissions, scope, 'north-club'), directory[0]);
+  assert.deepEqual(rpcs.filter(([name]) => name === 'can_manage_club').map(([,args]) => args.p_club_id), ['north-club','north-club']);
+  assert.ok(requests.every(row => row.join(':') === 'clubs:id:north-club'));
+  const revoked = databaseFixture({ allowed: false });
+  await assert.rejects(loadClubDirectory(revoked.client, session, permissions, scope), /permission to manage this club/);
+  await assert.rejects(loadClubDetails(revoked.client, session, permissions, scope, 'north-club'), /permission to manage this club/);
+  assert.deepEqual(revoked.requests, []);
 });

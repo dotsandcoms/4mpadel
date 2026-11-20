@@ -3,6 +3,9 @@ import { RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SearchableDropdown from '../../components/SearchableDropdown';
 import { summarizeEventSettlements } from '../../utils/eventSettlement.js';
+import { loadScopedFinanceDashboard } from './financeDashboardData.js';
+import { resolveEventWorkspace } from '../../utils/adminCalendarScope.js';
+import { canOpenReviewPage } from './access.js';
 import { filterCollectionEvents, loadFinanceCollections } from '../../utils/financeCollections.js';
 import RecordLoading from './RecordLoading.jsx';
 
@@ -23,28 +26,38 @@ async function verifyAuthority(client, userId, scopeId) {
   }
 }
 
-export default function FinanceCollectionsWorkspace({ client, session, scopeId, refreshRevision = 0 }) {
+export default function FinanceCollectionsWorkspace({ client, session, permissions, scopeId, dashboardScope, refreshRevision = 0 }) {
   const [filter, setFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [revision, setRevision] = useState(0);
   const userId = session?.user?.id;
-  const key = JSON.stringify([userId, scopeId, revision, refreshRevision]);
+  const dashboardKey = JSON.stringify(dashboardScope ?? null);
+  const key = JSON.stringify([userId, scopeId, dashboardKey, revision, refreshRevision]);
   const [state, setState] = useState(null);
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
-      await verifyAuthority(client, userId, scopeId);
-      controller.signal.throwIfAborted();
-      const result = await loadFinanceCollections(client, [], controller.signal);
-      await verifyAuthority(client, userId, scopeId);
+      const dashboard = JSON.parse(dashboardKey);
+      let result;
+      if (dashboard) {
+        result = await loadScopedFinanceDashboard(client, userId, dashboard, controller.signal);
+      } else {
+        await verifyAuthority(client, userId, scopeId);
+        controller.signal.throwIfAborted();
+        result = await loadFinanceCollections(client, [], controller.signal);
+        await verifyAuthority(client, userId, scopeId);
+      }
       if (!controller.signal.aborted) setState({ key, result });
     }
     load().catch(error => {
       if (!controller.signal.aborted) setState({ key, error: error.message || 'Collections could not be loaded.' });
     });
     return () => controller.abort();
-  }, [client, key, scopeId, userId]);
+  }, [client, dashboardKey, key, scopeId, userId]);
 
+  const eventAccess = dashboardScope && canOpenReviewPage(permissions, 'events')
+    ? resolveEventWorkspace(permissions, scopeId, 'event-mgmt') : null;
+  const canOpenEvent = id => !dashboardScope || (eventAccess && (!eventAccess.allowedEvents.length || eventAccess.allowedEvents.includes(Number(id))));
   const current = state?.key === key ? state : null;
   const collections = current?.result;
   const events = collections ? filterCollectionEvents(collections.statements, filter) : [];
@@ -62,7 +75,8 @@ export default function FinanceCollectionsWorkspace({ client, session, scopeId, 
 
   return <section className="fo-root">
     <header className="fo-heading">
-      <div><h1>Collections</h1><p>Event entry collections, licence revenue and organiser balances.</p></div>
+      <div><h1>{dashboardScope ? 'Finance dashboard' : 'Collections'}</h1><p>Event entry collections, licence revenue and organiser balances.</p>
+        {dashboardScope && <p>{dashboardScope.label}</p>}</div>
       <button className="ap-secondary" type="button" onClick={refresh} disabled={!current}><RefreshCw size={16} aria-hidden="true" /> Refresh collections</button>
     </header>
     {!current && <section className="ap-section"><RecordLoading label="Loading collection and settlement records…" /></section>}
@@ -85,7 +99,8 @@ export default function FinanceCollectionsWorkspace({ client, session, scopeId, 
           <table className="fo-detail-table">
             <thead><tr>{['Event', 'Entries', 'Current entry payments', 'Refund history', '4M fees', 'Direct to organiser', 'Paid out', 'Balance'].map(label => <th scope="col" key={label}>{label}</th>)}</tr></thead>
             <tbody>{visible.map(event => <tr key={event.id}>
-              <th scope="row"><Link className="fo-type-link" to={`/admin-preview/event?event=${encodeURIComponent(event.id)}&tab=statement`}>{event.event_name}</Link>
+              <th scope="row">{canOpenEvent(event.id)
+                ? <Link className="fo-type-link" to={`/admin-preview/event?event=${encodeURIComponent(event.id)}&tab=statement`}>{event.event_name}</Link> : event.event_name}
                 {!!event.settlement.issues.length && <small>Needs review</small>}
                 {event.settlement.unallocatedCredit4M > 0 && <small>{money.format(event.settlement.unallocatedCredit4M)} unallocated credit</small>}
               </th>

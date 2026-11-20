@@ -1,15 +1,18 @@
-import { canReadClubDirectory, clubDirectoryScope } from './clubsData.js';
+import { canReadClubDirectory, clubDirectoryScope, isClubDirectoryStatus, verifyClubDirectoryManagement } from './clubsData.js';
 
 export async function loadClubDetails(client, session, permissions, scopeId, id, signal) {
   if (!canReadClubDirectory(session, permissions, scopeId)) throw new Error('Current Clubs access is required.');
   if (!id) throw new Error('A club must be selected.');
-  const { clubId } = clubDirectoryScope(permissions, scopeId);
-  if (clubId && clubId !== String(id)) throw new Error('This club is outside the selected workspace.');
+  const scope = clubDirectoryScope(permissions, scopeId);
+  if (scope.clubId && scope.clubId !== String(id)) throw new Error('This club is outside the selected workspace.');
+  await verifyClubDirectoryManagement(client, session, scope, signal);
   signal?.throwIfAborted();
-  const { data, error } = await client.from('clubs').select('id,name,short_name,city,about,tagline,address,website_url,contact_email,contact_phone,whatsapp_number,courts,services,cafe,opening_hours,socials,gallery,sponsors,principal_sponsor,created_at,updated_at').eq('id', id).abortSignal(signal).maybeSingle();
+  const { data, error } = await client.from('clubs').select('id,name,short_name,status,city,about,tagline,address,website_url,contact_email,contact_phone,whatsapp_number,courts,services,cafe,opening_hours,socials,gallery,sponsors,principal_sponsor,created_at,updated_at').eq('id', id).abortSignal(signal).maybeSingle();
   signal?.throwIfAborted();
   if (error) throw new Error(error.message || 'Club details could not be loaded.');
-  if (!data) throw new Error('This club is no longer available to your account.');
+  if (!data || (scope.verifyManagement && (data.id !== scope.clubId || !isClubDirectoryStatus(data.status)))) {
+    throw new Error('This club is no longer available to your account.');
+  }
   return data;
 }
 

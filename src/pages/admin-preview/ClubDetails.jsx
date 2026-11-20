@@ -3,7 +3,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import RecordLoading from './RecordLoading.jsx';
 import { loadClubDetails, recordedText, safeClubWebsite, clubFlag } from './clubDetailsData.js';
-import { clubStatusLabel } from './clubsData.js';
+import { canManageDirectClub, clubDirectoryScope, clubStatusLabel } from './clubsData.js';
 import ClubMedia from './ClubMedia.jsx';
 import FullClubProfileEditor from './FullClubProfileEditor.jsx';
 import ClubManagement from './ClubManagement.jsx';
@@ -42,8 +42,10 @@ export default function ClubDetails({ club, client, session, permissions, scopeI
     return () => { controller.abort(); clearTimeout(timer); };
   }, [client, session?.user?.id, permissions?.role, scopeId, club.id, reload]);
   const platform = permissions?.role === 'super_admin' && scopeId === 'all';
-  const canEdit = platform || (scopeId === `club:${club.id}` && permissions?.clubs?.some(
-    entry => String(entry.id) === String(club.id) && ['owner', 'admin'].includes(entry.member_role)));
+  const matchingScope = scopeId === `club:${club.id}`;
+  const directManager = matchingScope && canManageDirectClub(permissions, String(club.id));
+  const canEdit = platform || directManager
+    || (matchingScope && permissions?.role !== 'super_admin' && Boolean(clubDirectoryScope(permissions, scopeId)));
   const data = state.data, website = safeClubWebsite(data?.website_url);
   const decisionBusy = value => { busyRef.current = value; setSaving(value); };
   const refreshDecision = async () => {
@@ -91,7 +93,7 @@ export default function ClubDetails({ club, client, session, permissions, scopeI
         {platform && <><ClubOrganisations club={{ ...club, ...data }} client={client} session={session} scopeId={scopeId}/>
         <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}><ClubManagement key={`management-${club.id}`} client={client} session={session} permissions={permissions} scopeId={scopeId} clubId={club.id} onBusyChange={decisionBusy} onDecisionSaved={refreshDecision} decisionApi={liveClubDecisionApi} memberApi={liveClubMemberApi} addApi={liveClubMemberAddApi}/></fieldset>
         <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}><ClubInvitations key={`invitations-${club.id}`} client={client} session={session} scopeId={scopeId} clubId={club.id} creationApi={liveClubInvitationApi} onBusyChange={decisionBusy}/></fieldset></>}
-        {!platform && canEdit && <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
+        {!platform && directManager && <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
           <ClubManagement key={`scoped-members-${club.id}`} client={client} session={session} permissions={permissions} scopeId={scopeId}
             clubId={club.id} onBusyChange={decisionBusy} membersOnly memberApi={delegatedClubMemberApi} addApi={delegatedClubMemberAddApi}/>
         </fieldset>}

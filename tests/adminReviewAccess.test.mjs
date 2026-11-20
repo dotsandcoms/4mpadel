@@ -17,13 +17,16 @@ function clientFixture({ tables = {}, superAdmin = false, active = true, tournam
     },
     from: table => {
       const rows = tables[table] || [];
+      let start = 0, end = rows.length;
       const builder = {
         select: () => builder,
         eq: (column, value) => { calls.push([table, 'eq', column, value]); return builder; },
         ilike: (column, value) => { calls.push([table, 'ilike', column, value]); return builder; },
+        in: (column, values) => { calls.push([table, 'in', column, values]); return builder; },
         order: () => builder,
+        range: (first, last) => { start = first; end = last + 1; return builder; },
         maybeSingle: async () => ({ data: rows[0] || null }),
-        then: resolve => Promise.resolve({ data: rows }).then(resolve),
+        then: resolve => Promise.resolve({ data: rows.slice(start, end) }).then(resolve),
       };
       return builder;
     },
@@ -64,6 +67,51 @@ test('staff and separately assigned event managers receive distinct navigation',
   assert.equal(canOpenReviewPage(assigned, 'events'), true);
   assert.equal(canOpenReviewPage(assigned, 'payouts'), false);
   assert.equal(canOpenReviewPage(assigned, 'licenses'), false);
+});
+
+test('nonpublic club owners have venue tools and cannot use stale standalone platform grants', async () => {
+  const direct = (id, status, role = 'owner', email = actor.email) => ({ user_email: email, role, clubs: { id, name: id, status } });
+  const { client } = clientFixture({ tables: {
+    club_members: [direct('unclaimed', 'unclaimed'), direct('draft', 'draft', 'admin'), direct('archived', 'archived', 'admin'),
+      direct('pending', 'pending'), direct('rejected', 'rejected'), direct('staff', 'draft', 'staff'), direct('foreign', 'unclaimed', 'owner', other.email)],
+    admin_sidebar_permissions: [{ email: actor.email, role: 'custom', allowed_tabs: ['clubs', 'finance', 'email-broadcast'],
+      module_permissions: { finance: { allowedTabs: ['transactions', 'summary', 'users'] } } }],
+  } });
+  const { permissions } = await verifyHostedReviewAccess(client, actor);
+  assert.equal(permissions.hasDirectClubMembership, true);
+  assert.deepEqual(permissions.clubs, []);
+  assert.equal(canOpenReviewPage(permissions, 'clubs'), true);
+  assert.deepEqual(previewScopes(permissions, 'clubs').map(scope => scope.id), ['club:archived', 'club:draft', 'club:unclaimed']);
+  for (const page of ['events', 'registrations', 'calendar', 'reports', 'payments', 'email', 'push']) {
+    assert.equal(canOpenReviewPage(permissions, page), false, page);
+  }
+});
+
+test('the Clubs grant discovers only exact manageable venues linked to a directly managed organisation', async () => {
+  const north = organisation('north', 'North');
+  const south = organisation('south', 'South');
+  const link = (organisation_id, club_id, status = 'published', id = club_id) => ({ organisation_id, club_id, clubs: { id, name: club_id, status } });
+  const tables = {
+    organisation_members: [membership(north, 'admin'), membership(south, 'owner', other.email)],
+    club_organisations: [link('north', 'north-venue'), link('north', 'under-review', 'in_review'),
+      link('north', 'invalid', 'published', 'different'), link('south', 'south-venue')],
+  };
+  const withoutGrant = clientFixture({ tables });
+  const { permissions: denied } = await verifyHostedReviewAccess(withoutGrant.client, actor);
+  assert.equal(canOpenReviewPage(denied, 'clubs'), false);
+  assert.equal(withoutGrant.calls.some(([table]) => table === 'club_organisations'), false);
+  const { client, calls } = clientFixture({ tables: { ...tables,
+    admin_sidebar_permissions: [{ email: actor.email, role: 'custom', allowed_tabs: ['clubs'] }],
+  } });
+  const { permissions } = await verifyHostedReviewAccess(client, actor);
+  assert.deepEqual(calls.find(([table]) => table === 'club_organisations'), ['club_organisations', 'in', 'organisation_id', ['north']]);
+  assert.equal(canOpenReviewPage(permissions, 'clubs'), true);
+  assert.equal(permissions.hasDirectClubMembership, false);
+  assert.deepEqual(permissions.clubDirectoryClubs.map(club => [club.id, club.directory_authority]), [['north-venue', 'organisation']]);
+  assert.deepEqual(previewScopes(permissions, 'clubs').map(scope => scope.id), ['club:north-venue']);
+  for (const page of ['events', 'calendar', 'registrations', 'reports']) {
+    assert.deepEqual(previewScopes(permissions, page).map(scope => scope.id), ['org:north']);
+  }
 });
 
 test('verified Event Manager grants open communications without widening tenant workspaces', async () => {

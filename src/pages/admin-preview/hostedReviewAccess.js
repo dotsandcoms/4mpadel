@@ -1,6 +1,10 @@
 import { readTournamentAssignments } from '../../utils/tournamentAccess.js';
 import { REHEARSAL_TESTER_EMAIL } from '../../utils/privateDrawRehearsal.js';
 import { canOpenReviewPage, reviewPages } from './access.js';
+import { isClubDirectoryStatus, canManageClubRole } from './clubsData.js';
+import { readAll } from './playersData.js';
+
+const publicClubStatuses = ['published', '4m_approved', '4m_premium'];
 
 function matchUser(actual, expected) {
   return Boolean(actual?.id && actual.email && actual.id === expected?.id && actual.email === expected.email);
@@ -20,6 +24,20 @@ function ownMemberships(rows, key, email, include = () => true) {
     }
   }
   return [...unique.values()].sort((left, right) => String(left.name).localeCompare(String(right.name)));
+}
+
+async function organisationClubs(client, organisationIds, excludedIds, signal) {
+  if (!organisationIds.length) return [];
+  const rows = await readAll(() => client.from('club_organisations')
+    .select('organisation_id, club_id, clubs(id,name,status)')
+    .in('organisation_id', organisationIds).order('id'), signal);
+  const clubs = new Map();
+  for (const { organisation_id, club_id, clubs: club } of rows) {
+    if (!organisationIds.includes(organisation_id) || !club_id || club?.id !== club_id
+      || !isClubDirectoryStatus(club.status) || excludedIds.has(club_id)) continue;
+    clubs.set(club_id, { ...club, directory_authority: 'organisation' });
+  }
+  return [...clubs.values()];
 }
 
 // Row-level security still applies. A public directory record is never a membership.
@@ -54,7 +72,12 @@ export async function verifyHostedReviewAccess(client, expectedUser, signal) {
     ]);
     check();
     const orgs = ownMemberships(orgRows, 'organisations', user.email, record => record.status === 'approved');
-    const clubs = ownMemberships(clubRows, 'clubs', user.email, record => ['published', '4m_approved', '4m_premium'].includes(record.status));
+    const managedOrgIds = orgs.filter(org => canManageClubRole(org.member_role)).map(org => org.id);
+    const directClubs = ownMemberships(clubRows, 'clubs', user.email);
+    const clubs = directClubs.filter(club => publicClubStatuses.includes(club.status));
+    const additionalDirectClubs = directClubs
+      .filter(club => !publicClubStatuses.includes(club.status) && isClubDirectoryStatus(club.status) && canManageClubRole(club.member_role))
+      .map(club => ({ ...club, directory_authority: 'direct' }));
     const federations = ownMemberships(federationRows, 'federations', user.email);
     if (ownPlayer?.id && ownPlayer.email?.toLowerCase() === user.email.toLowerCase()) {
       const created = read(await client.from('organisations').select('*').eq('created_by', ownPlayer.id).eq('status', 'approved').order('name'));
@@ -66,12 +89,20 @@ export async function verifyHostedReviewAccess(client, expectedUser, signal) {
     const tournamentAssignments = superAdmin ? [] : await readTournamentAssignments(client, user.email).catch(() => []);
     check();
     const direct = permissionRow?.email === user.email && permissionRow.role === 'custom' ? permissionRow : null;
+    const allowedTabs = Array.isArray(direct?.allowed_tabs) ? direct.allowed_tabs : [];
+    const canDiscoverLinkedClubs = superAdmin || clubs.length > 0 || additionalDirectClubs.length > 0 || allowedTabs.includes('clubs');
+    const knownClubIds = new Set([...clubs.filter(club => superAdmin || canManageClubRole(club.member_role)), ...additionalDirectClubs].map(club => club.id));
+    const linkedClubs = canDiscoverLinkedClubs
+      ? await organisationClubs(client, managedOrgIds, knownClubIds, signal).catch(() => [])
+      : [];
+    check();
     permissions = {
-      role: superAdmin ? 'super_admin' : direct ? 'custom' : orgs.length ? 'org_owner' : clubs.length ? 'club_admin' : federations.length ? 'federation_admin' : 'custom',
-      allowed_tabs: Array.isArray(direct?.allowed_tabs) ? direct.allowed_tabs : [],
+      role: superAdmin ? 'super_admin' : direct ? 'custom' : orgs.length ? 'org_owner' : clubs.length || additionalDirectClubs.length ? 'club_admin' : federations.length ? 'federation_admin' : 'custom',
+      allowed_tabs: allowedTabs,
       module_permissions: direct?.module_permissions || {},
       orgs, org: orgs[0], orgRole: orgs[0]?.member_role,
-      clubs, clubRole: clubs[0]?.member_role, hasDirectClubMembership: Boolean(clubs.length),
+      clubs, clubRole: clubs[0]?.member_role, hasDirectClubMembership: directClubs.length > 0,
+      clubDirectoryClubs: [...additionalDirectClubs, ...linkedClubs],
       tournamentAssignments, federations, federation: federations[0], federationRole: federations[0]?.member_role,
     };
     if (!reviewPages.some(page => page !== 'security' && canOpenReviewPage(permissions, page))) {

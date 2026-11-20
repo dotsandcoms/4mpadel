@@ -12,7 +12,7 @@ const fixture = `
   const options=window.fixture;
   crypto.randomUUID ??= () => '00000000-0000-4000-8000-000000000023';
   const actor={id:'fixture-actor',email:'owner_scope@example.invalid'};
-  const club={id:'club-a',name:'Scoped venue',status:'published'};
+  const club={id:'club-a',name:'Scoped venue',status:options.nonpublic?'unclaimed':'published'};
   const second={id:'club-b',name:'Foreign venue',status:'published'};
   const session={user:actor};
   const date='2026-11-19T10:00:00Z';
@@ -29,6 +29,7 @@ const fixture = `
     async rpc(name,args){options.calls.push({rpc:name,args});
       if(name==='account_is_active')return ok(!options.inactive);
       if(name==='is_club_owner_or_admin')return ok(args.p_club_id===club.id&&!options.revoked);
+      if(name==='can_manage_club')return ok(args.p_club_id===club.id&&!options.revoked);
       return ok(false);
     },
     from(table){
@@ -40,7 +41,7 @@ const fixture = `
         ilike(key,pattern){keys[key]=pattern;const expected=pattern.replace(/\\\\([%_*\\\\])/g,'$1').toLowerCase();predicates.push(row=>row[key]?.toLowerCase()===expected);return builder;},
         range(min,max){start=min;end=max+1;return builder;},limit(max){end=max;return builder;},
         update(fields){operation='update';patch=fields;return builder;},insert(fields){operation='insert';patch=fields;return builder;},
-        delete(){operation='delete';return builder;},maybeSingle(){one=true;return builder;},
+        delete(){operation='delete';return builder;},maybeSingle(){one=true;return builder;},single(){one=true;return builder;},
         then(resolve,reject){
           const data=table==='clubs'?[club,second]:table==='club_members'?members:table==='players'?players.filter(row=>row.id===32):[];
           let results=data.filter(row=>predicates.every(check=>check(row)));
@@ -60,7 +61,11 @@ const fixture = `
     args:clubMemberArguments({...targetMember,club_id:second.id},'remove',null,crypto.randomUUID())
   }).catch(error=>error.message);
   window.lateOwner=()=>{targetMember.role='owner';};
-  const permissions={role:'club_admin',clubs:[{id:club.id,member_role:options.role||'owner'}]};
+  const permissions=options.linked||options.nonpublic
+    ? {role:options.linked?'org_owner':'club_admin',clubDirectoryClubs:[{
+      id:club.id,directory_authority:options.linked?'organisation':'direct',member_role:options.linked?undefined:(options.role||'owner')
+    }]}
+    : {role:'club_admin',clubs:[{id:club.id,member_role:options.role||'owner'}]};
   createRoot(document.getElementById('root')).render(<ClubDetails client={client} session={session}
     permissions={permissions} scopeId={scopeId} club={club} onClose={()=>{}}/>);
 `;
@@ -88,7 +93,7 @@ async function open(t, flags={}) {
   await page.setContent('<div id="root"></div>');
   await page.evaluate(flags=>{window.fixture={calls:[],...flags};},flags);
   await page.addScriptTag({content:bundle});
-  await click(page,'Load club members');
+  if (!flags.linked) await click(page,'Load club members');
   return page;
 }
 
@@ -103,6 +108,23 @@ async function dropdown(page,label,option) {
   await click(page,option,'[role=option]');
 }
 const manageFirstMember=page=>click(page,'Manage member','.clubs-management-list li:has(p) button');
+
+test('an organisation-linked venue opens its reviewed profile editor without club membership controls', async t => {
+  const page = await open(t, { linked: true });
+  await click(page, 'Edit club details');
+  await bodyIncludes(page, 'Edit the club profile, facilities and media');
+  const calls = await page.evaluate(() => window.fixture.calls);
+  assert.ok(calls.filter(call => call.rpc === 'can_manage_club').length >= 2);
+  assert.ok(calls.filter(call => call.table === 'clubs').every(call => call.keys.id === 'club-a'));
+  assert.ok(!calls.some(call => call.table === 'club_members'));
+  assert.doesNotMatch(await page.$eval('body', node => node.innerText), /Load club members|Delete club|Merge duplicate club/);
+});
+
+test('an unclaimed venue with a direct owner still offers exact membership controls', async t => {
+  const page = await open(t, { nonpublic: true });
+  await bodyIncludes(page, 'Unclaimed');
+  await bodyIncludes(page, 'staff@example.invalid');
+});
 
 test('direct club admin sees its own members and can review a role change without opening claims or the player directory', async t=>{
   const page=await open(t,{role:'admin'});

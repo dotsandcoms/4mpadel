@@ -10,5 +10,6 @@ export function hasExplicitPlatformPaystackGrant(permissions) {
 }
 
 export function hasTenantMembership(permissions) {
-    return [permissions?.orgs, permissions?.clubs, permissions?.federations].some(rows => Array.isArray(rows) && rows.length > 0);
+    return permissions?.hasDirectClubMembership === true
+        || [permissions?.orgs, permissions?.clubs, permissions?.federations].some(rows => Array.isArray(rows) && rows.length > 0);
 }

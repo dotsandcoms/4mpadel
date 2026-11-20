@@ -40,9 +40,10 @@ export function canOpenReviewPage(permissions, page) {
   if (page === 'team-access') return false;
   if (page === 'payouts') return organisationAdmin;
   if (page === 'organisations') return Boolean(permissions.orgs?.length) || (!tenant && tabs.includes('organisations'));
-  if (page === 'clubs') return clubAdmin || (!tenant && tabs.includes('clubs'));
+  if (page === 'clubs') return clubAdmin || Boolean(permissions.clubDirectoryClubs?.length) || (!tenant && tabs.includes('clubs'));
   if (page === 'federations') return federationAdmin || (!tenant && tabs.includes('federations'));
-  if (page === 'reports') return organisationAdmin || Boolean(standaloneFinanceSummary(permissions) || standaloneFinanceEventGrant(permissions, 'users'))
+  if (page === 'reports') return organisationAdmin
+    || ['summary', 'users', 'dashboard'].some(tab => standaloneFinanceEventGrant(permissions, tab))
     || (!tenant && tabs.includes('finance') && permissions.module_permissions?.finance?.allowedEvents?.length > 0);
   if (page === 'payments') return !tenant && hasExplicitPlatformPaystackGrant(permissions);
   if (page === 'events' || page === 'registrations' || page === 'audit-log') return organisationAdmin || clubAdmin || (!tenant && (assignedEvents.length > 0 || tabs.includes('event-mgmt')));
@@ -72,6 +73,11 @@ export function previewScopes(permissions, page) {
   if (!['organisations', 'payouts', 'reports'].includes(page) || (platform && page === 'reports')) {
     for (const club of permissions.clubs || []) {
       if (platform || managed(club)) memberships.push({ id: `club:${club.id}`, recordId: club.id, label: club.name, kind: 'club', type: 'Club' });
+    }
+  }
+  if (page === 'clubs') {
+    for (const club of permissions.clubDirectoryClubs || []) {
+      memberships.push({ id: `club:${club.id}`, recordId: club.id, label: club.name, kind: 'club', type: 'Club' });
     }
   }
   return platform || !isReviewTenant(permissions) ? [account, ...memberships] : memberships;
