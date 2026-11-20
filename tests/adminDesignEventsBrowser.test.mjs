@@ -109,7 +109,7 @@ before(async () => {
                     const request = (async()=>{
                     if (name==='admin_organisation_host_builder') {
                         if ((window.kind==='host-native' || window.kind==='host-draw-complete'
-                            || window.kind.startsWith('host-plate-')) && !window.hostPlatesRevoked) {
+                            || window.kind.startsWith('host-plate-') || window.kind.startsWith('host-main-result-')) && !window.hostPlatesRevoked) {
                             return {data:{organisation:{id:'org-a',status:'approved'},event_id:11}};
                         }
                         return {error:{message:'Current owner or admin access to the host organisation is required.'}};
@@ -118,7 +118,7 @@ before(async () => {
                         return {data:{organisation_id:args.p_organisation_id,event_id:args.p_event_id,draw_id:args.p_draw_id,
                             match_id:args.p_match_id,action:args.p_action,status:args.p_action==='complete'?'completed':'in_progress',featured:true}};
                     }
-                    if (name==='native_record_reviewed_plate_result') {
+                    if (['native_record_reviewed_plate_result','native_record_reviewed_main_result'].includes(name)) {
                         const status = { live:'in_progress', played:'completed', walkover:'walkover', withdrawal:'walkover', retirement:'retired' }[args.p_result.kind];
                         return {data:{organisation_id:args.p_organisation_id,event_id:args.p_event_id,draw_id:args.p_draw_id,
                             match_id:args.p_match_id,status,winner_entry_id:args.p_result.winner,updated_at:'match-v2'}};
@@ -289,6 +289,19 @@ before(async () => {
                         }
                         if (table==='draw_entries') rows=linkedPlateEntries;
                     }
+                    if (window.kind.startsWith('host-main-result-')) {
+                        const knockout = window.kind==='host-main-result-knockout';
+                        const resolved = window.kind==='host-main-result-group-locked';
+                        if (table==='draws') {
+                            nativeDraw.format=knockout?'knockout':'group_knockout';
+                            nativeDraw.scoring_rules={sets_to_win:2};
+                        }
+                        if (table==='draw_matches' && !knockout) {
+                            const group={...nativeMatch,id:'match-group',group_id:'group-a',stage:'group',round_label:'Group A',
+                                ...(resolved?{status:'completed',winner_entry_id:'tm-1',result_summary:[2,0]}:{})};
+                            rows=resolved?[group,nativeMatch]:[group];
+                        }
+                    }
                     if (window.kind.startsWith('special-') && table==='event_play_days') rows=[
                         { id:501,event_id:11,play_date:'2035-01-21',start_time:'08:00',end_time:'18:00',courts_count:1,
                           match_duration_minutes:45,minimum_break_minutes:10,is_active:true,updated_at:'day-v1' },
@@ -450,7 +463,7 @@ before(async () => {
                 if (kind.startsWith('public-draw-')) return <EventDrawWorkspace event={event} divisions={[division]}
                     draws={[kind==='public-draw-live'?nativeDraw:{...nativeDraw,status:'draft'},otherNativeDraw]}
                     registrationCount={()=>4} onDrawDetails={()=>{}} />;
-                if (['host-plate-enable-route','host-plate-score-silver'].includes(kind)) return <LiveEventCommandCentre event={event} divisions={[division]}
+                if (['host-plate-enable-route','host-plate-score-silver'].includes(kind) || kind.startsWith('host-main-result-')) return <LiveEventCommandCentre event={event} divisions={[division]}
                     registrations={[]} activity={[]} payments={[]} draws={[{...nativeDraw,status:'completed'}]} go={()=>{}}
                     canOperateHostDraw client={client} session={session} scopeId="org:org-a" initialTab="draws" />;
                 if (kind==='native-draw' || kind.startsWith('special-') || kind.startsWith('court-') || kind.startsWith('host-') || ['draw-complete','draw-ranking'].includes(kind)) return <NativeDrawOperationsDialog client={client} session={session} event={['host-foreign','host-plate-foreign'].includes(kind)?other:event}
@@ -1132,7 +1145,7 @@ test('host scores Silver matches and corrects completed Bronze results through t
         await clickText(live, 'Cancel score entry');
         assert.equal(await live.$('section[aria-label="Enter plate result"]'), null);
         await clickText(live, 'Enter result');
-        const games = await live.$$('section[aria-label="Enter plate result"] fieldset:first-of-type > .ap-plate-score-pair input');
+        const games = await live.$$('section[aria-label="Enter plate result"] fieldset:first-of-type > .ap-native-match-score-pair input');
         await games[0].type('7');
         await games[1].type('6');
         await live.click('section[aria-label="Enter plate result"] fieldset:first-of-type summary');
@@ -1163,6 +1176,43 @@ test('host scores Silver matches and corrects completed Bronze results through t
         await revoked.waitForFunction(() => document.querySelector('dialog [role=alert]')?.textContent.includes('Current owner or admin access'));
         assert.deepEqual(await scores(revoked), []);
     } finally { await revoked.close(); }
+});
+
+test('host enters group and knockout results from Event Manager and cannot correct groups after elimination', async () => {
+    const writes = page => page.evaluate(() => window.calls.filter(([name]) => name === 'native_record_reviewed_main_result'));
+    for (const [kind, round, match] of [
+        ['host-main-result-group', 'Group A', 'match-group'],
+        ['host-main-result-knockout', 'Final', 'match-tm-1'],
+        ['host-main-result-group-locked', 'Group A', 'match-group'],
+    ]) {
+        const page = await open(kind);
+        try {
+            await clickText(page, 'Manage native draw');
+            await page.waitForFunction(() => [...document.querySelectorAll('dialog label')].some(label => label.textContent.startsWith('Match')));
+            await page.evaluate(() => [...document.querySelectorAll('dialog label')].find(label => label.textContent.startsWith('Match')).querySelector('button').click());
+            await clickText(page, round + ' · First Pair vs Second Pair', '[role=option]');
+            if (kind.endsWith('-locked')) {
+                assert.match(await page.$eval('dialog', node => node.textContent), /Group results are locked after elimination is created/);
+                assert.equal(await page.evaluate(() => [...document.querySelectorAll('dialog button')].some(node => node.textContent.trim() === 'Correct result')), false);
+                assert.deepEqual(await writes(page), []);
+                continue;
+            }
+            await clickText(page, 'Enter result');
+            await page.select('section[aria-label="Enter match result"] label:nth-of-type(2) select', 'sets');
+            const inputs = await page.$$('section[aria-label="Enter match result"] input');
+            await inputs[0].type('2');
+            await inputs[1].type('1');
+            await clickText(page, 'Review result');
+            assert.match(await page.$eval('dialog', node => node.textContent), /Winner · First Pair/);
+            assert.deepEqual(await writes(page), []);
+            await clickText(page, 'Confirm draw action');
+            await page.waitForFunction(() => document.querySelector('dialog [role=status]')?.textContent.includes('Match result saved'));
+            assert.deepEqual(await writes(page), [['native_record_reviewed_main_result', {
+                p_organisation_id:'org-a',p_event_id:11,p_draw_id:'draw-a',p_expected_draw:'draw-v1',
+                p_match_id:match,p_expected_match:'match-v1',p_result:{ kind:'played',winner:'tm-1',summary:[2,1],sets:[] },
+            }]]);
+        } finally { await page.close(); }
+    }
 });
 
 test('legacy main draw enables Silver after confirmation and keeps plate creation as a separate reviewed action', async () => {

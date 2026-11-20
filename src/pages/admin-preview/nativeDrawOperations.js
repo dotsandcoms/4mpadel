@@ -15,6 +15,11 @@ const scoreFields = 'result_summary,result_type,score_sets:draw_match_sets(match
 const announcementFields = 'id,event_id,division_id,draw_id,title,message,is_pinned,is_active,created_at,updated_at';
 const liveStatuses = ['pending', 'scheduled', 'in_progress'];
 const recordedStatuses = ['completed', 'walkover', 'retired'];
+const mainScoreStages = {
+  group_only: ['group'],
+  group_knockout: ['group', 'knockout', 'placement'],
+  knockout: ['knockout', 'placement'],
+};
 const optionalSchema = new Set(['42P01', '42703', 'PGRST204', 'PGRST205']);
 
 async function verifyNativeEvent({ client, event, expectedUserId, scopeId, isCurrent, signal }) {
@@ -66,7 +71,7 @@ function featuredMatches(client, draw, signal) {
 }
 
 function nativeMatches(client, draw, signal) {
-  const fields = canScoreNativePlate(draw) ? matchFields + ',' + scoreFields : matchFields;
+  const fields = canScoreNativeDraw(draw) ? matchFields + ',' + scoreFields : matchFields;
   return readAll(() => client.from('draw_matches').select(fields).eq('draw_id', draw.id).order('id'), signal);
 }
 
@@ -104,12 +109,16 @@ export async function loadNativeDrawOperations({ client, event, drawId, signal, 
 
 export const canUpdateNativeMatches = draw => ['published', 'in_progress'].includes(draw.status);
 export const canReadPublishedNativeDraw = draw => canUpdateNativeMatches(draw) || draw.status === 'completed';
-export const canScoreNativePlate = draw => draw?.format === 'knockout' && ['silver', 'bronze'].includes(draw.draw_kind)
-  && draw.tournament_divisions?.is_active !== false && canReadPublishedNativeDraw(draw);
-export const hasNativePlateResult = match => recordedStatuses.includes(match?.status);
-export const canScoreNativePlateMatch = (draw, match) => canScoreNativePlate(draw) && match?.draw_id === draw.id
-  && match.stage === 'knockout' && Boolean(match.entry_one_id && match.entry_two_id)
-  && (hasNativePlateResult(match) || draw.status !== 'completed' && liveStatuses.includes(match.status));
+function nativeScoreStages(draw) {
+  if (draw.draw_kind === 'main') return mainScoreStages[draw.format] || [];
+  return draw.format === 'knockout' && ['silver', 'bronze'].includes(draw.draw_kind) ? ['knockout'] : [];
+}
+export const canScoreNativeDraw = draw => draw?.tournament_divisions?.is_active !== false
+  && Boolean(draw && canReadPublishedNativeDraw(draw) && nativeScoreStages(draw).length);
+export const hasNativeMatchResult = match => recordedStatuses.includes(match?.status);
+export const canScoreNativeMatch = (draw, match) => canScoreNativeDraw(draw) && match?.draw_id === draw.id
+  && nativeScoreStages(draw).includes(match.stage) && Boolean(match.entry_one_id && match.entry_two_id)
+  && (hasNativeMatchResult(match) || draw.status !== 'completed' && liveStatuses.includes(match.status));
 export const canScheduleNativeDraw = draw => draw.format !== 'americano' && ['draft', 'published', 'in_progress'].includes(draw.status);
 export const canReopenNativeDraw = draw => draw.draw_kind === 'main' && draw.status === 'published';
 
@@ -252,8 +261,8 @@ export async function saveNativeDrawOperation({ client, event, draw, operation, 
   if (operation.type === 'enable-silver' || operation.type === 'plate') {
     return saveReviewedPlate({ client, event, draw: fresh, operation, onAttempt, ...access });
   }
-  if (operation.type === 'plate-result') {
-    return saveNativePlateResult({ client, event, draw: fresh, operation, onAttempt, ...access });
+  if (operation.type === 'match-result') {
+    return saveNativeMatchResult({ client, event, draw: fresh, operation, onAttempt, ...access });
   }
   if (organisationDrawScope(access.scopeId)) return saveOrganisationDrawOperation({ client, event, draw: fresh, operation, onAttempt, ...access });
 
@@ -333,12 +342,14 @@ export async function saveNativeDrawOperation({ client, event, draw, operation, 
 
 export const validNativeLiveMatch = match => Boolean(match?.entry_one_id && match.entry_two_id && liveStatuses.includes(match.status));
 
-async function saveNativePlateResult({ client, event, draw, operation, onAttempt, scopeId, isCurrent }) {
+async function saveNativeMatchResult({ client, event, draw, operation, onAttempt, scopeId, isCurrent }) {
   const { match, score } = operation;
-  if (!isCurrent() || !canScoreNativePlateMatch(draw, match)) throw new Error('Choose a match in this published plate.');
+  if (!isCurrent() || !canScoreNativeMatch(draw, match)) throw new Error('Choose a match in this published draw.');
   const organisationId = organisationDrawScope(scopeId);
+  const main = draw.draw_kind === 'main';
+  const action = main ? 'native_record_reviewed_main_result' : 'native_record_reviewed_plate_result';
   onAttempt();
-  const { data, error } = await client.rpc('native_record_reviewed_plate_result', {
+  const { data, error } = await client.rpc(action, {
     p_organisation_id: organisationId, p_event_id: event.id, p_draw_id: draw.id, p_expected_draw: draw.updated_at,
     p_match_id: match.id, p_expected_match: match.updated_at, p_result: score,
   });
@@ -347,8 +358,9 @@ async function saveNativePlateResult({ client, event, draw, operation, onAttempt
   if (!isCurrent() || data?.organisation_id !== organisationId || String(data.event_id) !== String(event.id)
     || data.draw_id !== draw.id || data.match_id !== match.id || data.status !== expectedStatus
     || data.winner_entry_id !== score.winner || !data.updated_at || data.updated_at === match.updated_at) {
-    throw new Error('Could not verify the saved plate result.');
+    throw new Error('Could not verify the saved result.');
   }
   if (score.kind === 'live') return 'Live score saved.';
-  return hasNativePlateResult(match) ? 'Plate result corrected.' : 'Plate result saved.';
+  const subject = main ? 'Match' : 'Plate';
+  return subject + (hasNativeMatchResult(match) ? ' result corrected.' : ' result saved.');
 }

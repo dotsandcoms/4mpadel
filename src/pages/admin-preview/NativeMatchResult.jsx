@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { matchScoreText, prepareMatchResult } from '../../utils/matchResult.js';
-import { hasNativePlateResult } from './nativeDrawOperations.js';
+import { hasNativeMatchResult } from './nativeDrawOperations.js';
 
 const outcomes = { played: 'Played', walkover: 'Walkover', retirement: 'Retirement', withdrawal: 'Withdrawal' };
 const emptySet = () => ({ games: ['', ''], tiebreak: ['', ''], duration: '' });
@@ -17,10 +17,11 @@ const defaults = match => ({
   reason: '',
 });
 
-export default function NativePlateResult({ draw, match, entries, previous, onReview, onCancel }) {
+export default function NativeMatchResult({ draw, match, entries, previous, onReview, onCancel }) {
   const [draft, setDraft] = useState(() => previous || defaults(match));
   const [error, setError] = useState('');
-  const correcting = hasNativePlateResult(match);
+  const correcting = hasNativeMatchResult(match);
+  const resultLabel = draw.draw_kind === 'main' ? 'match result' : 'plate result';
   const setsToWin = Number(draw.scoring_rules?.sets_to_win ?? 2);
   const matchTiebreak = Boolean(draw.scoring_rules?.match_tiebreak);
   const teams = [match.entry_one_id, match.entry_two_id].map(id => entries.find(entry => entry.id === id));
@@ -41,13 +42,14 @@ export default function NativePlateResult({ draw, match, entries, previous, onRe
         if (draw.status === 'completed' && score.winner !== match.winner_entry_id) throw new Error('Keep the original winner when correcting a completed draw.');
         score.reason = draft.reason.trim();
       }
-      onReview({ type: 'plate-result', match, score, draft, heading: kind === 'live' ? 'Review live score' : correcting ? 'Review result correction' : 'Review plate result', summary: match.label });
+      const heading = kind === 'live' ? 'Review live score' : correcting ? 'Review result correction' : 'Review ' + resultLabel;
+      onReview({ type: 'match-result', match, score, draft, heading, summary: match.label });
     } catch (issue) {
       setError(issue.message);
     }
   };
 
-  return <section className="ap-plate-score" aria-label={correcting ? 'Correct plate result' : 'Enter plate result'}>
+  return <section className="ap-native-match-score" aria-label={(correcting ? 'Correct ' : 'Enter ') + resultLabel}>
     <h3>{correcting ? 'Correct result' : 'Enter result'}</h3>
     <label>Match outcome<select value={draft.kind} onChange={event => update('kind', event.target.value)}>
       {Object.entries(outcomes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -63,13 +65,13 @@ export default function NativePlateResult({ draw, match, entries, previous, onRe
       {draft.detailed ? <>
         {setRows.map((row, index) => <fieldset key={index}>
           <legend>{matchTiebreak && index === setsToWin * 2 - 2 ? 'Match tiebreak' : 'Set ' + (index + 1)}</legend>
-          <div className="ap-plate-score-pair">{teams.map((team, side) => <label key={team.id}>
+          <div className="ap-native-match-score-pair">{teams.map((team, side) => <label key={team.id}>
             {team.team_name} games<input type="number" inputMode="numeric" min="0" value={row.games[side]}
               onChange={event => updateSet(index, { games: row.games.map((value, i) => i === side ? event.target.value : value) })} />
           </label>)}</div>
           <details open={row.tiebreak.some(value => value !== '') || row.duration !== '' ? true : undefined}>
             <summary>Tiebreak and duration</summary>
-            <div className="ap-plate-score-pair">{teams.map((team, side) => <label key={team.id}>
+            <div className="ap-native-match-score-pair">{teams.map((team, side) => <label key={team.id}>
               {team.team_name} tiebreak<input type="number" inputMode="numeric" min="0" value={row.tiebreak[side]}
                 onChange={event => updateSet(index, { tiebreak: row.tiebreak.map((value, i) => i === side ? event.target.value : value) })} />
             </label>)}</div>
@@ -78,7 +80,7 @@ export default function NativePlateResult({ draw, match, entries, previous, onRe
           </details>
         </fieldset>)}
         {setRows.length < setsToWin * 2 - 1 && <button type="button" className="ap-secondary" onClick={() => update('sets', [...setRows, emptySet()])}>Add set</button>}
-      </> : <div className="ap-plate-score-pair">{teams.map((team, index) => <label key={team.id}>
+      </> : <div className="ap-native-match-score-pair">{teams.map((team, index) => <label key={team.id}>
         {team.team_name} sets won<input type="number" inputMode="numeric" min="0" max={setsToWin} value={draft.totals[index]}
           onChange={event => update('totals', draft.totals.map((value, i) => i === index ? event.target.value : value))} />
       </label>)}</div>}
@@ -93,7 +95,7 @@ export default function NativePlateResult({ draw, match, entries, previous, onRe
   </section>;
 }
 
-export function NativePlateResultReview({ action, entries }) {
+export function NativeMatchResultReview({ action, entries }) {
   const { match, score } = action;
   const scoreText = matchScoreText({ id: match.id, result_summary: score.summary, result_type: score.kind }, score.sets.map((set, index) => ({
     match_id: match.id, set_number: index + 1, entry_one_games: set.games[0], entry_two_games: set.games[1],

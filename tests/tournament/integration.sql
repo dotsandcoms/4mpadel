@@ -12,6 +12,7 @@ BEGIN;
 \ir ../../supabase/migrations/20260916110000_tournament_schedule.sql
 \ir ../../supabase/migrations/20260916120000_tournament_operations.sql
 \ir ../../supabase/migrations/20260916130000_tournament_preparation.sql
+\ir ../../supabase/migrations/20261019101901_native_match_result_scoring.sql
 \ir ../../supabase/migrations/20261120071852_reconcile_hosted_tournament_event_year_licences.sql
 \ir ../../supabase/migrations/20261120072537_scope_host_tournament_draw_preparation.sql
 \ir ../../supabase/migrations/20261120074419_scope_host_tournament_rotation.sql
@@ -22,6 +23,8 @@ BEGIN;
 \ir ../../supabase/migrations/20261120083448_scope_host_best_placed_qualification_override.sql
 \ir ../../supabase/migrations/20261120085840_publish_reviewed_private_rotation_schedules.sql
 \ir ../../supabase/migrations/20261120085850_scope_host_group_placement_and_reservations.sql
+\ir ../../supabase/migrations/20261120121020_preserve_linked_plate_score_sources.sql
+\ir ../../supabase/migrations/20261120121030_reviewed_main_native_draw_results.sql
 CREATE FUNCTION pg_temp.expect_denied(query text) RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
  BEGIN EXECUTE query; EXCEPTION WHEN insufficient_privilege THEN RETURN; END;
